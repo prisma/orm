@@ -48,8 +48,17 @@ describe('cacheAnnotation handle', () => {
     expect(cacheAnnotation.read(plan)).toBeUndefined();
   });
 
-  it('preserves all CachePayload fields (ttl, skip, key)', () => {
-    const payload: CachePayload = { ttl: 120, skip: false, key: 'custom-key' };
+  it('preserves all CachePayload fields (enabled, ttl, skip, key, namespace, dedupe, tags, store)', () => {
+    const payload: CachePayload = {
+      enabled: true,
+      ttl: 120,
+      skip: false,
+      key: 'custom-key',
+      namespace: 'tenant-a',
+      dedupe: true,
+      tags: ['users', 'tenant-a'],
+      store: 'primary',
+    };
     const applied = cacheAnnotation(payload);
     const plan = planWith({ cache: applied });
 

@@ -2858,6 +2858,9 @@ importers:
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.7
         version: link:../../1-framework/1-core/framework-components
+      '@prisma-next/utils':
+        specifier: workspace:0.14.0
+        version: link:../../1-framework/0-foundation/utils
     devDependencies:
       '@internal/contract':
         specifier: workspace:8.0.0-rc.7

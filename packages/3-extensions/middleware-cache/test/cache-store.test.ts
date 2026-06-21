@@ -40,6 +40,25 @@ describe('createInMemoryCacheStore', () => {
       const store: CacheStore = createInMemoryCacheStore({ maxEntries: 10 });
       expect(typeof store.get).toBe('function');
       expect(typeof store.set).toBe('function');
+      expect(typeof store.list).toBe('function');
+      expect(typeof store.del).toBe('function');
+    });
+
+    it('lists keys and supports prefix filtering', async () => {
+      const store = createInMemoryCacheStore({ maxEntries: 10 });
+      await store.set('ns:user:1', entry([{ id: 1 }]), 60_000);
+      await store.set('ns:post:1', entry([{ id: 2 }]), 60_000);
+      await store.set('global:1', entry([{ id: 3 }]), 60_000);
+
+      expect(await store.list!()).toEqual(['ns:user:1', 'ns:post:1', 'global:1']);
+      expect(await store.list!('ns:')).toEqual(['ns:user:1', 'ns:post:1']);
+    });
+
+    it('deletes a key via del()', async () => {
+      const store = createInMemoryCacheStore({ maxEntries: 10 });
+      await store.set('k', entry([{ id: 1 }]), 60_000);
+      await store.del!('k');
+      expect(await store.get('k')).toBeUndefined();
     });
   });
 

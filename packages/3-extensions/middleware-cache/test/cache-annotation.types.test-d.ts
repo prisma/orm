@@ -40,9 +40,12 @@ test('cacheAnnotation declares applicableTo = "read" only', () => {
   expectTypeOf(cacheAnnotation.applicableTo).toEqualTypeOf<ReadonlySet<'read'>>();
 });
 
-test('CachePayload has optional ttl, skip, and key', () => {
+test('CachePayload has optional enabled, ttl, skip, key, namespace, and dedupe', () => {
   const empty: CachePayload = {};
   void empty;
+
+  const enabledOnly: CachePayload = { enabled: true };
+  void enabledOnly;
 
   const ttlOnly: CachePayload = { ttl: 60 };
   void ttlOnly;
@@ -53,7 +56,20 @@ test('CachePayload has optional ttl, skip, and key', () => {
   const keyOnly: CachePayload = { key: 'k' };
   void keyOnly;
 
-  const all: CachePayload = { ttl: 60, skip: false, key: 'k' };
+  const namespaceOnly: CachePayload = { namespace: 'tenant-a' };
+  void namespaceOnly;
+
+  const dedupeOnly: CachePayload = { dedupe: true };
+  void dedupeOnly;
+
+  const all: CachePayload = {
+    enabled: true,
+    ttl: 60,
+    skip: false,
+    key: 'k',
+    namespace: 'tenant-a',
+    dedupe: true,
+  };
   void all;
 });
 
