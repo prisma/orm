@@ -1138,3 +1138,110 @@ describe('withTransaction', () => {
     expect(driver.__spies.transactionRollback).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('RuntimeTransaction.registerPreCommitHook', () => {
+  function createRuntimeForHooks() {
+    const { stackInstance, context, driver } = createTestSetup();
+    const runtime = createRuntime({ stackInstance, context, driver, verifyMarker: false });
+    return { runtime, driver };
+  }
+
+  it('runs the hook before driverTx.commit()', async () => {
+    const { runtime, driver } = createRuntimeForHooks();
+    const order: string[] = [];
+    driver.__spies.transactionCommit.mockImplementation(async () => {
+      order.push('commit');
+    });
+
+    const conn = await runtime.connection();
+    const tx = await conn.transaction();
+    tx.registerPreCommitHook(async () => {
+      order.push('hook');
+    });
+    await tx.commit();
+    await conn.release();
+
+    expect(order).toEqual(['hook', 'commit']);
+  });
+
+  it('runs multiple hooks in registration order before commit', async () => {
+    const { runtime, driver } = createRuntimeForHooks();
+    const order: string[] = [];
+    driver.__spies.transactionCommit.mockImplementation(async () => {
+      order.push('commit');
+    });
+
+    const conn = await runtime.connection();
+    const tx = await conn.transaction();
+    tx.registerPreCommitHook(async () => {
+      order.push('hook-1');
+    });
+    tx.registerPreCommitHook(async () => {
+      order.push('hook-2');
+    });
+    tx.registerPreCommitHook(async () => {
+      order.push('hook-3');
+    });
+    await tx.commit();
+    await conn.release();
+
+    expect(order).toEqual(['hook-1', 'hook-2', 'hook-3', 'commit']);
+  });
+
+  it('aborts commit and propagates the error when a hook throws', async () => {
+    const { runtime, driver } = createRuntimeForHooks();
+    const hookError = new Error('hook failed');
+
+    const conn = await runtime.connection();
+    const tx = await conn.transaction();
+    tx.registerPreCommitHook(async () => {
+      throw hookError;
+    });
+
+    await expect(tx.commit()).rejects.toBe(hookError);
+    expect(driver.__spies.transactionCommit).not.toHaveBeenCalled();
+    await conn.release();
+  });
+
+  it('does not invoke subsequent hooks after an earlier hook throws', async () => {
+    const { runtime, driver } = createRuntimeForHooks();
+    const hook2 = vi.fn();
+
+    const conn = await runtime.connection();
+    const tx = await conn.transaction();
+    tx.registerPreCommitHook(async () => {
+      throw new Error('hook-1 failed');
+    });
+    tx.registerPreCommitHook(hook2);
+
+    await tx.commit().catch(() => {});
+
+    expect(hook2).not.toHaveBeenCalled();
+    expect(driver.__spies.transactionCommit).not.toHaveBeenCalled();
+    await conn.release();
+  });
+
+  it('does not invoke hooks on rollback', async () => {
+    const { runtime } = createRuntimeForHooks();
+    const hook = vi.fn();
+
+    const conn = await runtime.connection();
+    const tx = await conn.transaction();
+    tx.registerPreCommitHook(hook);
+    await tx.rollback();
+    await conn.release();
+
+    expect(hook).not.toHaveBeenCalled();
+  });
+
+  it('no hooks registered — commit proceeds normally', async () => {
+    const { runtime, driver } = createRuntimeForHooks();
+
+    const conn = await runtime.connection();
+    const tx = await conn.transaction();
+    await tx.commit();
+    await conn.release();
+
+    expect(driver.__spies.transactionCommit).toHaveBeenCalledOnce();
+  });
+});
