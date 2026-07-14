@@ -10,6 +10,7 @@ import {
   identifier,
   int,
   interpretAttribute,
+  json,
   list,
   modelAttribute,
   nodePslSpan,
@@ -81,6 +82,45 @@ describe('str', () => {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
     }
+  });
+
+  it('matches only the pinned string literal', () => {
+    const { expr, ctx } = argOf('"hashed"');
+
+    const result = str('hashed').parse(expr, ctx);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toBe('hashed');
+  });
+
+  it('rejects a string literal other than the pinned value', () => {
+    const { expr, ctx } = argOf('"2dsphere"');
+
+    const result = str('hashed').parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
+  });
+
+  it('rejects a bare identifier carrying the pinned characters', () => {
+    const { expr, ctx } = argOf('hashed');
+
+    const result = str('hashed').parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toHaveLength(1);
+  });
+
+  it('rejects a number literal against the pinned value', () => {
+    const { expr, ctx } = argOf('2');
+
+    const result = str('hashed').parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toHaveLength(1);
   });
 });
 
@@ -273,6 +313,68 @@ describe('num', () => {
     const { expr, ctx } = argOf('"4"');
 
     const result = num(4).parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toHaveLength(1);
+  });
+});
+
+describe('json', () => {
+  it('parses a quoted JSON object string into a record', () => {
+    const { expr, ctx } = argOf('"{\\"a\\": 1}"');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual({ a: 1 });
+  });
+
+  it('rejects a JSON array string', () => {
+    const { expr, ctx } = argOf('"[1,2]"');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
+  });
+
+  it('rejects a JSON scalar string', () => {
+    const { expr, ctx } = argOf('"5"');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toHaveLength(1);
+  });
+
+  it('rejects an invalid-JSON string', () => {
+    const { expr, ctx } = argOf('"{not json}"');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toHaveLength(1);
+  });
+
+  it('rejects a bare identifier', () => {
+    const { expr, ctx } = argOf('Cascade');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
+  });
+
+  it('rejects a number literal', () => {
+    const { expr, ctx } = argOf('5');
+
+    const result = json().parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);

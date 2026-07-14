@@ -45,6 +45,7 @@ export type { FuncCallSig, TypedFuncCall } from '../attribute-spec/combinators/f
 export { funcCall } from '../attribute-spec/combinators/func-call';
 export { identifier } from '../attribute-spec/combinators/identifier';
 export { int } from '../attribute-spec/combinators/int';
+export { json } from '../attribute-spec/combinators/json';
 export type { ListOptions } from '../attribute-spec/combinators/list';
 export { list } from '../attribute-spec/combinators/list';
 export { num } from '../attribute-spec/combinators/num';
