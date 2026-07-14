@@ -631,7 +631,7 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       expect(conflict?.span?.end.offset).toBeGreaterThan(conflict?.span?.start.offset ?? 0);
     });
 
-    it('emits PSL_INDEX_FIELD_NOT_FOUND when a variant indexes a base-inherited field', () => {
+    it('rejects a variant indexing a base-inherited field', () => {
       const result = interpret(`
         model Task {
           id    ObjectId @id @map("_id")
@@ -653,10 +653,15 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
+      // `title` is inherited from the base, not declared on Bug, so it is absent
+      // from Bug's own field set; `fieldRef('self')` rejects it at the grammar
+      // layer (Option A) as PSL_INVALID_ATTRIBUTE_SYNTAX rather than the
+      // downstream PSL_INDEX_FIELD_NOT_FOUND.
+      const diag = result.failure.diagnostics.find(
+        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+      );
       expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/title/);
-      expect(diag?.message).toMatch(/Bug/);
+      expect(diag?.message).toMatch(/Expected one of/);
       expect(diag?.span?.start.offset).toBeGreaterThan(0);
     });
   });

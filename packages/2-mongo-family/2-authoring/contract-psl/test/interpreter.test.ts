@@ -1380,6 +1380,22 @@ describe('interpretPslDocumentToMongoContract', () => {
       expect(indexes![0]!['unique']).toBe(true);
       expect(indexes![0]!['partialFilterExpression']).toEqual({ active: true });
     });
+
+    it('creates a distinct index per @@index on the same model', () => {
+      const ir = interpretOk(`
+        model User {
+          id    ObjectId @id @map("_id")
+          email String
+          name  String
+          @@index([email])
+          @@index([name])
+        }
+      `);
+      const indexes = getIndexes(ir, 'user');
+      expect(indexes).toHaveLength(2);
+      expect(indexes![0]!['keys']).toEqual([{ field: 'email', direction: 1 }]);
+      expect(indexes![1]!['keys']).toEqual([{ field: 'name', direction: 1 }]);
+    });
   });
 
   describe('index validation', () => {
@@ -1545,6 +1561,11 @@ describe('interpretPslDocumentToMongoContract', () => {
       }
     });
 
+    // With the spec migration, a field absent from the model is rejected at the
+    // grammar layer by `fieldRef('self')` (operator Option A): no field-element
+    // arm matches, so the element surfaces PSL_INVALID_ATTRIBUTE_SYNTAX with the
+    // `oneOf` "Expected one of" message. The downstream PSL_INDEX_FIELD_NOT_FOUND
+    // now guards only present-but-not-indexable fields (e.g. relation fields).
     it('rejects @@index that references an undeclared field', () => {
       const result = interpret(`
         model User {
@@ -1555,10 +1576,11 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
+      const diag = result.failure.diagnostics.find(
+        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+      );
       expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
-      expect(diag?.message).toMatch(/User/);
+      expect(diag?.message).toMatch(/Expected one of/);
       expect(diag?.span?.start.offset).toBeGreaterThan(0);
       expect(diag?.span?.end.offset).toBeGreaterThan(diag?.span?.start.offset ?? 0);
     });
@@ -1573,9 +1595,11 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
+      const diag = result.failure.diagnostics.find(
+        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+      );
       expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
+      expect(diag?.message).toMatch(/Expected one of/);
     });
 
     it('rejects @@textIndex that references an undeclared field', () => {
@@ -1603,12 +1627,14 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
+      const diag = result.failure.diagnostics.find(
+        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+      );
       expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
+      expect(diag?.message).toMatch(/Expected one of/);
     });
 
-    it('emits one diagnostic naming the missing field when one of multiple keys is undeclared', () => {
+    it('emits one diagnostic when one of multiple keys is undeclared', () => {
       const result = interpret(`
         model User {
           id    ObjectId @id @map("_id")
@@ -1619,10 +1645,9 @@ describe('interpretPslDocumentToMongoContract', () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       const diags = result.failure.diagnostics.filter(
-        (d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND',
+        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
       );
       expect(diags).toHaveLength(1);
-      expect(diags[0]?.message).toMatch(/nonexistent/);
       expect(diags[0]?.message).not.toMatch(/email/);
     });
 

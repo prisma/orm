@@ -46,6 +46,7 @@ import type {
   PslSpan,
   ResolvedAttribute,
   SymbolTable,
+  TypedFuncCall,
 } from '@internal/psl-parser';
 import { nodePslSpan } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
@@ -56,6 +57,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { deriveJsonSchema, derivePolymorphicJsonSchema } from './derive-json-schema';
 import {
   baseModelSpec,
+  buildIndexModelSpec,
   discriminatorModelSpec,
   findFieldAttributeNode,
   findModelAttributeNode,
@@ -70,6 +72,7 @@ import {
   getNamedArgument,
   getPositionalArgument,
   lowerFirst,
+  type ParsedIndexField,
   parseIndexFieldList,
 } from './psl-helpers';
 
@@ -528,14 +531,90 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function parseIndexDirection(raw: string | undefined): MongoIndexKeyDirection {
-  if (!raw) return 1;
-  const stripped = raw.replace(/^["']/, '').replace(/["']$/, '');
-  const num = Number(stripped);
-  if (num === 1 || num === -1) return num;
-  if (['text', '2dsphere', '2d', 'hashed'].includes(stripped))
-    return stripped as MongoIndexKeyDirection;
-  return 1;
+// The spec's pinned `type` combinators already constrain the value to the exact
+// index-direction alphabet at runtime; map it to the key-direction type,
+// defaulting to ascending (1) when absent. Replaces `parseIndexDirection` for
+// the `@@index`/`@@unique` spec path.
+function normalizeIndexType(value: number | string | undefined): MongoIndexKeyDirection {
+  switch (value) {
+    case -1:
+      return -1;
+    case 'text':
+      return 'text';
+    case '2dsphere':
+      return '2dsphere';
+    case '2d':
+      return '2d';
+    case 'hashed':
+      return 'hashed';
+    default:
+      return 1;
+  }
+}
+
+// Map one interpreted `@@index`/`@@unique` field element to the same
+// `ParsedIndexField` shape the loop consumes. Discriminates the element union
+// structurally (a bare string field, a `wildcard(scope?)` call, or a
+// `field(sort:)` call) so no cast is needed; `args` values are `unknown` and
+// narrowed by comparison.
+function normalizeIndexField(element: string | TypedFuncCall): ParsedIndexField {
+  if (typeof element === 'string') {
+    return { name: element, isWildcard: false };
+  }
+  if (element.fn === 'wildcard') {
+    const scope = element.args['scope'];
+    return {
+      name: typeof scope === 'string' ? `${scope}.$**` : '$**',
+      isWildcard: true,
+    };
+  }
+  const sort = element.args['sort'];
+  return { name: element.fn, isWildcard: false, direction: sort === 'Desc' ? -1 : 1 };
+}
+
+// Interpreted collation named-args of an `@@index`/`@@unique`. Mirrors
+// `parseCollation`'s semantics from spec values: `undefined` when no collation
+// arg is present, `null` when some are present but `collationLocale` is absent
+// (the semantic "collationLocale is required" rule), otherwise the options.
+interface SpecCollationArgs {
+  readonly collationLocale?: string;
+  readonly collationStrength?: number;
+  readonly collationCaseLevel?: boolean;
+  readonly collationCaseFirst?: string;
+  readonly collationNumericOrdering?: boolean;
+  readonly collationAlternate?: string;
+  readonly collationMaxVariable?: string;
+  readonly collationBackwards?: boolean;
+  readonly collationNormalization?: boolean;
+}
+
+function buildCollationFromSpec(args: SpecCollationArgs): CollationOptions | null | undefined {
+  const locale = args.collationLocale;
+  if (locale === undefined) {
+    const hasAnyCollationArg =
+      args.collationStrength !== undefined ||
+      args.collationCaseLevel !== undefined ||
+      args.collationCaseFirst !== undefined ||
+      args.collationNumericOrdering !== undefined ||
+      args.collationAlternate !== undefined ||
+      args.collationMaxVariable !== undefined ||
+      args.collationBackwards !== undefined ||
+      args.collationNormalization !== undefined;
+    return hasAnyCollationArg ? null : undefined;
+  }
+
+  const collation: CollationOptions = { locale };
+  if (args.collationStrength !== undefined) collation.strength = args.collationStrength;
+  if (args.collationCaseLevel !== undefined) collation.caseLevel = args.collationCaseLevel;
+  if (args.collationCaseFirst !== undefined) collation.caseFirst = args.collationCaseFirst;
+  if (args.collationNumericOrdering !== undefined)
+    collation.numericOrdering = args.collationNumericOrdering;
+  if (args.collationAlternate !== undefined) collation.alternate = args.collationAlternate;
+  if (args.collationMaxVariable !== undefined) collation.maxVariable = args.collationMaxVariable;
+  if (args.collationBackwards !== undefined) collation.backwards = args.collationBackwards;
+  if (args.collationNormalization !== undefined)
+    collation.normalization = args.collationNormalization;
+  return collation;
 }
 
 function parseNumericArg(raw: string | undefined): number | undefined {
@@ -628,6 +707,7 @@ function collectIndexes(
   fieldMappings: FieldMappings,
   modelNames: ReadonlySet<string>,
   sourceId: string,
+  sourceFile: SourceFile,
   diagnostics: ContractSourceDiagnostic[],
   indexSpans: Map<MongoIndex, PslSpan>,
 ): MongoIndex[] {
@@ -658,16 +738,76 @@ function collectIndexes(
     indexSpans.set(fieldUniqueIndex, uniqueAttr.span);
   }
 
-  for (const attr of pslModel.attributes) {
+  const specFieldNames = Object.keys(pslModel.fields);
+  const attributeNodes = Array.from(pslModel.node.attributes());
+
+  for (const [attrIndex, attr] of pslModel.attributes.entries()) {
     const isIndex = attr.name === 'index';
     const isUnique = attr.name === 'unique';
     const isTextIndex = attr.name === 'textIndex';
     if (!isIndex && !isUnique && !isTextIndex) continue;
 
-    const fieldsArg = getPositionalArgument(attr, 0);
-    if (!fieldsArg) continue;
-    const parsedFields = parseIndexFieldList(fieldsArg);
-    if (parsedFields.length === 0) continue;
+    // @@index/@@unique read arguments through the attribute spec; @@textIndex
+    // stays on the pre-spec parsing path (migrated later). Both produce the same
+    // normalized values the shared index-shape logic below consumes.
+    let parsedFields: readonly ParsedIndexField[];
+    let typeValue: number | string | undefined;
+    let sparse: boolean | undefined;
+    let expireAfterSeconds: number | undefined;
+    let partialFilterExpression: Record<string, unknown> | undefined;
+    let includeArg: string | undefined;
+    let excludeArg: string | undefined;
+    let collation: CollationOptions | null | undefined;
+    let weights: Record<string, number> | undefined;
+    let default_language: string | undefined;
+    let language_override: string | undefined;
+
+    if (isTextIndex) {
+      const fieldsArg = getPositionalArgument(attr, 0);
+      if (!fieldsArg) continue;
+      parsedFields = parseIndexFieldList(fieldsArg);
+      if (parsedFields.length === 0) continue;
+      typeValue = undefined;
+      sparse = undefined;
+      expireAfterSeconds = undefined;
+      partialFilterExpression = parseJsonArg(getNamedArgument(attr, 'filter'));
+      includeArg = getNamedArgument(attr, 'include');
+      excludeArg = getNamedArgument(attr, 'exclude');
+      collation = parseCollation(attr);
+      const rawWeights = parseJsonArg(getNamedArgument(attr, 'weights'));
+      if (rawWeights) {
+        weights = {};
+        for (const [k, v] of Object.entries(rawWeights)) {
+          if (typeof v === 'number') weights[k] = v;
+        }
+      }
+      default_language = stripQuotesHelper(getNamedArgument(attr, 'language'));
+      language_override = stripQuotesHelper(getNamedArgument(attr, 'languageOverride'));
+    } else {
+      const node = attributeNodes[attrIndex];
+      if (node === undefined) continue;
+      const parsed = interpretModelAttribute({
+        node,
+        spec: buildIndexModelSpec(isUnique ? 'unique' : 'index', specFieldNames),
+        model: pslModel,
+        sourceFile,
+        sourceId,
+        diagnostics,
+      });
+      if (parsed === undefined) continue;
+      parsedFields = parsed.fields.map(normalizeIndexField);
+      if (parsedFields.length === 0) continue;
+      typeValue = parsed.type;
+      sparse = parsed.sparse;
+      expireAfterSeconds = parsed.expireAfterSeconds;
+      partialFilterExpression = parsed.filter;
+      includeArg = parsed.include;
+      excludeArg = parsed.exclude;
+      collation = buildCollationFromSpec(parsed);
+      weights = undefined;
+      default_language = parsed.default_language;
+      language_override = parsed.languageOverride;
+    }
 
     const hasWildcard = parsedFields.some((f) => f.isWildcard);
     const wildcardCount = parsedFields.filter((f) => f.isWildcard).length;
@@ -716,10 +856,9 @@ function collectIndexes(
       }
     }
 
-    const typeArg = getNamedArgument(attr, 'type');
     const defaultDirection: MongoIndexKeyDirection = isTextIndex
       ? 'text'
-      : parseIndexDirection(typeArg);
+      : normalizeIndexType(typeValue);
 
     if (
       hasWildcard &&
@@ -783,10 +922,6 @@ function collectIndexes(
     });
 
     const unique = isUnique ? true : undefined;
-    const sparse = isTextIndex ? undefined : parseBooleanArg(getNamedArgument(attr, 'sparse'));
-    const expireAfterSeconds = isTextIndex
-      ? undefined
-      : parseNumericArg(getNamedArgument(attr, 'expireAfterSeconds'));
 
     if (hasWildcard && expireAfterSeconds != null) {
       diagnostics.push({
@@ -797,11 +932,6 @@ function collectIndexes(
       });
       continue;
     }
-
-    const partialFilterExpression = parseJsonArg(getNamedArgument(attr, 'filter'));
-
-    const includeArg = getNamedArgument(attr, 'include');
-    const excludeArg = getNamedArgument(attr, 'exclude');
 
     if (includeArg != null && excludeArg != null) {
       diagnostics.push({
@@ -831,7 +961,6 @@ function collectIndexes(
           ? parseProjectionList(excludeArg, 0)
           : undefined;
 
-    const collation = parseCollation(attr);
     if (collation === null) {
       diagnostics.push({
         code: 'PSL_INVALID_INDEX',
@@ -841,23 +970,6 @@ function collectIndexes(
       });
       continue;
     }
-
-    const rawWeights = parseJsonArg(getNamedArgument(attr, 'weights'));
-    let weights: Record<string, number> | undefined;
-    if (rawWeights) {
-      weights = {};
-      for (const [k, v] of Object.entries(rawWeights)) {
-        if (typeof v === 'number') weights[k] = v;
-      }
-    }
-
-    const rawDefaultLang = isTextIndex
-      ? getNamedArgument(attr, 'language')
-      : getNamedArgument(attr, 'default_language');
-    const default_language = stripQuotesHelper(rawDefaultLang);
-
-    const rawLangOverride = getNamedArgument(attr, 'languageOverride');
-    const language_override = stripQuotesHelper(rawLangOverride);
 
     const index = new MongoIndex({
       keys,
@@ -1201,6 +1313,7 @@ export function interpretPslDocumentToMongoContract(
       fieldMappings,
       modelNames,
       sourceId,
+      sourceFile,
       diagnostics,
       indexSpans,
     );

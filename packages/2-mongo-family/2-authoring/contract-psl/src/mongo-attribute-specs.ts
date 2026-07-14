@@ -1,18 +1,28 @@
 import type { ContractSourceDiagnostic } from '@prisma-next/config/config-types';
 import type {
+  ArgType,
   AttributeSpec,
   FieldSymbol,
+  FuncCallSig,
   InferAttr,
   InterpretCtx,
   ModelSymbol,
+  TypedFuncCall,
 } from '@prisma-next/psl-parser';
 import {
+  bool,
   entityRef,
   fieldAttribute,
   fieldRef,
+  funcCall,
+  identifier,
+  int,
   interpretAttribute,
+  json,
   list,
   modelAttribute,
+  num,
+  oneOf,
   optional,
   str,
 } from '@prisma-next/psl-parser';
@@ -153,3 +163,55 @@ export const baseModelSpec = modelAttribute('base', {
     { key: 'value', type: str() },
   ],
 });
+
+const sortSig = {
+  named: { sort: oneOf(identifier('Asc'), identifier('Desc')) },
+} satisfies FuncCallSig;
+
+// One element of an `@@index`/`@@unique` field list, composed per model from its
+// field names (like `buildDefaultSpec`): a bare field reference (`name`), a
+// `wildcard(scope?)` call, or a `field(sort: Asc|Desc)` call. Output is a field
+// name string or a `TypedFuncCall`; the wildcard and bare-field arms are fixed,
+// the sorted arms are one `funcCall(name, sortSig)` per field.
+function indexFieldElement(fieldNames: readonly string[]): ArgType<string | TypedFuncCall> {
+  const arms: readonly [ArgType<string | TypedFuncCall>, ...ArgType<string | TypedFuncCall>[]] = [
+    fieldRef('self'),
+    funcCall('wildcard', { positional: [{ key: 'scope', type: optional(fieldRef('self')) }] }),
+    ...fieldNames.map((name) => funcCall(name, sortSig)),
+  ];
+  return oneOf(...arms);
+}
+
+const collationNamedArgs = {
+  collationLocale: optional(str()),
+  collationStrength: optional(int()),
+  collationCaseLevel: optional(bool()),
+  collationCaseFirst: optional(str()),
+  collationNumericOrdering: optional(bool()),
+  collationAlternate: optional(str()),
+  collationMaxVariable: optional(str()),
+  collationBackwards: optional(bool()),
+  collationNormalization: optional(bool()),
+};
+
+// Argument spec shared by model-level `@@index` and `@@unique` — same argument
+// surface, only the attribute name differs. `fieldNames` seeds the per-field
+// sorted arms of each element.
+export function buildIndexModelSpec(name: 'index' | 'unique', fieldNames: readonly string[]) {
+  return modelAttribute(name, {
+    positional: [{ key: 'fields', type: list(indexFieldElement(fieldNames), { nonEmpty: true }) }],
+    named: {
+      type: optional(
+        oneOf(num(1), num(-1), str('text'), str('2dsphere'), str('2d'), str('hashed')),
+      ),
+      sparse: optional(bool()),
+      expireAfterSeconds: optional(int()),
+      filter: optional(json()),
+      include: optional(str()),
+      exclude: optional(str()),
+      default_language: optional(str()),
+      languageOverride: optional(str()),
+      ...collationNamedArgs,
+    },
+  });
+}
