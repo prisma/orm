@@ -1612,9 +1612,11 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
+      const diag = result.failure.diagnostics.find(
+        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+      );
       expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
+      expect(diag?.message).toMatch(/Expected one of/);
     });
 
     it('rejects @@index wildcard scope referencing an undeclared field', () => {

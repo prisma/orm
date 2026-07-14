@@ -215,3 +215,22 @@ export function buildIndexModelSpec(name: 'index' | 'unique', fieldNames: readon
     },
   });
 }
+
+// Argument spec for model-level `@@textIndex`. Shares the field-list element and
+// collation args with `@@index`/`@@unique`, but its text-search options differ:
+// `weights` (json), `language` (note: `language`, not `default_language`), and
+// `languageOverride`. It does not accept `type`/`sparse`/`expireAfterSeconds`.
+export function buildTextIndexModelSpec(fieldNames: readonly string[]) {
+  return modelAttribute('textIndex', {
+    positional: [{ key: 'fields', type: list(indexFieldElement(fieldNames), { nonEmpty: true }) }],
+    named: {
+      filter: optional(json()),
+      include: optional(str()),
+      exclude: optional(str()),
+      weights: optional(json()),
+      language: optional(str()),
+      languageOverride: optional(str()),
+      ...collationNamedArgs,
+    },
+  });
+}
