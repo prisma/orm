@@ -55,6 +55,8 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { deriveJsonSchema, derivePolymorphicJsonSchema } from './derive-json-schema';
 import {
+  baseModelSpec,
+  discriminatorModelSpec,
   findFieldAttributeNode,
   findModelAttributeNode,
   interpretFieldAttribute,
@@ -69,7 +71,6 @@ import {
   getPositionalArgument,
   lowerFirst,
   parseIndexFieldList,
-  parseQuotedStringLiteral,
 } from './psl-helpers';
 
 /**
@@ -218,54 +219,53 @@ function collectPolymorphismDeclarations(
   const baseDeclarations = new Map<string, BaseDeclaration>();
 
   for (const model of models) {
-    for (const attr of model.attributes) {
-      if (attr.name === 'discriminator') {
-        const fieldName = getPositionalArgument(attr);
-        if (!fieldName) {
-          diagnostics.push({
-            code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-            message: `Model "${model.name}" @@discriminator requires a field name argument`,
-            sourceId,
-            span: attr.span,
-          });
-          continue;
-        }
+    const discNode = findModelAttributeNode(model, 'discriminator');
+    if (discNode) {
+      const parsed = interpretModelAttribute({
+        node: discNode,
+        spec: discriminatorModelSpec,
+        model,
+        sourceFile,
+        sourceId,
+        diagnostics,
+      });
+      if (parsed) {
+        const fieldName = parsed.field;
         const discField = model.fields[fieldName];
+        // Semantic check — stays: the discriminator field must be a String.
         if (discField && discField.typeName !== 'String') {
           diagnostics.push({
             code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
             message: `Discriminator field "${fieldName}" on model "${model.name}" must be of type String, but is "${discField.typeName}"`,
             sourceId,
-            span: attr.span,
+            span: nodePslSpan(discNode.syntax, sourceFile),
           });
-          continue;
+        } else {
+          discriminatorDeclarations.set(model.name, {
+            fieldName,
+            span: nodePslSpan(discNode.syntax, sourceFile),
+          });
         }
-        discriminatorDeclarations.set(model.name, { fieldName, span: attr.span });
       }
-      if (attr.name === 'base') {
-        const baseName = getPositionalArgument(attr, 0);
-        const rawValue = getPositionalArgument(attr, 1);
-        if (!baseName || !rawValue) {
-          diagnostics.push({
-            code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-            message: `Model "${model.name}" @@base requires two arguments: base model name and discriminator value`,
-            sourceId,
-            span: attr.span,
-          });
-          continue;
-        }
-        const value = parseQuotedStringLiteral(rawValue);
-        if (value === undefined) {
-          diagnostics.push({
-            code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-            message: `Model "${model.name}" @@base discriminator value must be a quoted string literal`,
-            sourceId,
-            span: attr.span,
-          });
-          continue;
-        }
+    }
+    const baseNode = findModelAttributeNode(model, 'base');
+    if (baseNode) {
+      const parsed = interpretModelAttribute({
+        node: baseNode,
+        spec: baseModelSpec,
+        model,
+        sourceFile,
+        sourceId,
+        diagnostics,
+      });
+      if (parsed) {
         const collectionName = resolveCollectionName({ model, sourceFile, sourceId, diagnostics });
-        baseDeclarations.set(model.name, { baseName, value, collectionName, span: attr.span });
+        baseDeclarations.set(model.name, {
+          baseName: parsed.base,
+          value: parsed.value,
+          collectionName,
+          span: nodePslSpan(baseNode.syntax, sourceFile),
+        });
       }
     }
   }

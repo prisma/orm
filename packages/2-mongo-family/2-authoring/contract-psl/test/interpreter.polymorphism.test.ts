@@ -299,7 +299,40 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       if (result.ok) return;
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ code: 'PSL_DISCRIMINATOR_FIELD_NOT_FOUND' }),
+          expect.objectContaining({
+            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+            message: expect.stringContaining('does not exist'),
+          }),
+        ]),
+      );
+    });
+
+    it('diagnoses non-String discriminator field', () => {
+      const result = interpret(`
+        model Task {
+          id    ObjectId @id @map("_id")
+          title String
+          type  Int
+
+          @@discriminator(type)
+        }
+
+        model Bug {
+          id       ObjectId @id @map("_id")
+          severity String
+
+          @@base(Task, "bug")
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+            message: expect.stringContaining('must be of type String'),
+          }),
         ]),
       );
     });

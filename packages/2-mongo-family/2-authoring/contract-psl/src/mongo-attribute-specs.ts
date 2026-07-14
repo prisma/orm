@@ -7,6 +7,7 @@ import type {
   ModelSymbol,
 } from '@prisma-next/psl-parser';
 import {
+  entityRef,
   fieldAttribute,
   fieldRef,
   interpretAttribute,
@@ -142,3 +143,13 @@ export const relationFieldSpec = fieldAttribute('relation', {
   },
 });
 export type RelationFieldOutput = InferAttr<typeof relationFieldSpec>;
+
+export const discriminatorModelSpec = modelAttribute('discriminator', {
+  positional: [{ key: 'field', type: fieldRef('self') }],
+});
+export const baseModelSpec = modelAttribute('base', {
+  positional: [
+    { key: 'base', type: entityRef() },
+    { key: 'value', type: str() },
+  ],
+});
