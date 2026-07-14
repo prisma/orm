@@ -55,8 +55,15 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { deriveJsonSchema, derivePolymorphicJsonSchema } from './derive-json-schema';
 import {
+  findFieldAttributeNode,
+  findModelAttributeNode,
+  interpretFieldAttribute,
+  interpretModelAttribute,
+  mapFieldSpec,
+  mapModelSpec,
+} from './mongo-attribute-specs';
+import {
   getAttribute,
-  getMapName,
   getNamedArgument,
   getPositionalArgument,
   lowerFirst,
@@ -129,17 +136,52 @@ function fkRelationPairKey(declaringModel: string, targetModel: string): string 
   return `${declaringModel}::${targetModel}`;
 }
 
-function resolveFieldMappings(model: ModelSymbol): FieldMappings {
+function resolveFieldMappings(input: {
+  readonly model: ModelSymbol;
+  readonly sourceFile: SourceFile;
+  readonly sourceId: string;
+  readonly diagnostics: ContractSourceDiagnostic[];
+}): FieldMappings {
+  const { model, sourceFile, sourceId, diagnostics } = input;
   const pslNameToMapped = new Map<string, string>();
   for (const field of Object.values(model.fields)) {
-    const mapped = getMapName(field.attributes) ?? field.name;
+    const mapNode = findFieldAttributeNode(field, 'map');
+    const mapped =
+      (mapNode
+        ? interpretFieldAttribute({
+            node: mapNode,
+            spec: mapFieldSpec,
+            model,
+            field,
+            sourceFile,
+            sourceId,
+            diagnostics,
+          })?.name
+        : undefined) ?? field.name;
     pslNameToMapped.set(field.name, mapped);
   }
   return { pslNameToMapped };
 }
 
-function resolveCollectionName(model: ModelSymbol): string {
-  return getMapName(model.attributes) ?? lowerFirst(model.name);
+function resolveCollectionName(input: {
+  readonly model: ModelSymbol;
+  readonly sourceFile: SourceFile;
+  readonly sourceId: string;
+  readonly diagnostics: ContractSourceDiagnostic[];
+}): string {
+  const { model, sourceFile, sourceId, diagnostics } = input;
+  const mapNode = findModelAttributeNode(model, 'map');
+  const name = mapNode
+    ? interpretModelAttribute({
+        node: mapNode,
+        spec: mapModelSpec,
+        model,
+        sourceFile,
+        sourceId,
+        diagnostics,
+      })?.name
+    : undefined;
+  return name ?? lowerFirst(model.name);
 }
 
 interface MongoModelEntry {
@@ -165,6 +207,7 @@ function mongoCrossRef(modelName: string): CrossReference {
 
 function collectPolymorphismDeclarations(
   models: readonly ModelSymbol[],
+  sourceFile: SourceFile,
   sourceId: string,
   diagnostics: ContractSourceDiagnostic[],
 ): {
@@ -221,7 +264,7 @@ function collectPolymorphismDeclarations(
           });
           continue;
         }
-        const collectionName = resolveCollectionName(model);
+        const collectionName = resolveCollectionName({ model, sourceFile, sourceId, diagnostics });
         baseDeclarations.set(model.name, { baseName, value, collectionName, span: attr.span });
       }
     }
@@ -240,6 +283,7 @@ function resolvePolymorphism(input: {
   modelNames: ReadonlySet<string>;
   indexSpans: Map<MongoIndex, PslSpan>;
   modelIndexesByName: Map<string, readonly MongoIndex[]>;
+  sourceFile: SourceFile;
   sourceId: string;
 }): {
   models: Record<string, MongoModelEntry>;
@@ -251,6 +295,7 @@ function resolvePolymorphism(input: {
     discriminatorDeclarations,
     baseDeclarations,
     modelNames,
+    sourceFile,
     sourceId,
     allModels: allModelViews,
     indexSpans,
@@ -277,7 +322,12 @@ function resolvePolymorphism(input: {
 
     const modelView = allModelViews.find((m) => m.name === modelName);
     const mappedDiscriminatorField = modelView
-      ? (resolveFieldMappings(modelView).pslNameToMapped.get(decl.fieldName) ?? decl.fieldName)
+      ? (resolveFieldMappings({
+          model: modelView,
+          sourceFile,
+          sourceId,
+          diagnostics,
+        }).pslNameToMapped.get(decl.fieldName) ?? decl.fieldName)
       : decl.fieldName;
 
     if (!Object.hasOwn(model.fields, mappedDiscriminatorField)) {
@@ -340,7 +390,7 @@ function resolvePolymorphism(input: {
     const baseModel = patched[baseDecl.baseName];
     const variantModelView = allModelViews.find((m) => m.name === variantName);
     if (!variantModelView) continue;
-    const hasExplicitMap = getMapName(variantModelView.attributes) !== undefined;
+    const hasExplicitMap = getAttribute(variantModelView.attributes, 'map') !== undefined;
 
     if (hasExplicitMap && baseModel && baseDecl.collectionName !== baseModel.storage.collection) {
       diagnostics.push({
@@ -365,7 +415,12 @@ function resolvePolymorphism(input: {
       };
     }
 
-    const variantCollectionName = resolveCollectionName(variantModelView);
+    const variantCollectionName = resolveCollectionName({
+      model: variantModelView,
+      sourceFile,
+      sourceId,
+      diagnostics,
+    });
     if (roots[variantCollectionName]?.model === variantName) {
       if (variantCollectionName === baseCollection && baseModel) {
         roots = { ...roots, [variantCollectionName]: mongoCrossRef(baseDecl.baseName) };
@@ -1014,8 +1069,18 @@ export function interpretPslDocumentToMongoContract(
   const backrelationCandidates: BackrelationCandidate[] = [];
 
   for (const pslModel of allModels) {
-    const collectionName = resolveCollectionName(pslModel);
-    const fieldMappings = resolveFieldMappings(pslModel);
+    const collectionName = resolveCollectionName({
+      model: pslModel,
+      sourceFile,
+      sourceId,
+      diagnostics,
+    });
+    const fieldMappings = resolveFieldMappings({
+      model: pslModel,
+      sourceFile,
+      sourceId,
+      diagnostics,
+    });
 
     const fields: Record<string, ContractField> = {};
     const relations: Record<string, ContractReferenceRelation> = {};
@@ -1040,7 +1105,9 @@ export function interpretPslDocumentToMongoContract(
           const localMapped = relation.fields.map((f) => fieldMappings.pslNameToMapped.get(f) ?? f);
 
           const targetModel = allModels.find((m) => m.name === field.typeName);
-          const targetFieldMappings = targetModel ? resolveFieldMappings(targetModel) : undefined;
+          const targetFieldMappings = targetModel
+            ? resolveFieldMappings({ model: targetModel, sourceFile, sourceId, diagnostics })
+            : undefined;
           const targetMapped = relation.references.map(
             (f) => targetFieldMappings?.pslNameToMapped.get(f) ?? f,
           );
@@ -1208,6 +1275,7 @@ export function interpretPslDocumentToMongoContract(
 
   const { discriminatorDeclarations, baseDeclarations } = collectPolymorphismDeclarations(
     allModels,
+    sourceFile,
     sourceId,
     diagnostics,
   );
@@ -1221,6 +1289,7 @@ export function interpretPslDocumentToMongoContract(
     modelNames,
     indexSpans,
     modelIndexesByName,
+    sourceFile,
     sourceId,
   });
 

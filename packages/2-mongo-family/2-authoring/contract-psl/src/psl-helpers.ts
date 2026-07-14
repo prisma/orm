@@ -83,14 +83,6 @@ export function getAttribute(
   return attributes.find((attr) => attr.name === name);
 }
 
-export function getMapName(attributes: readonly ResolvedAttribute[]): string | undefined {
-  const mapAttr = getAttribute(attributes, 'map');
-  if (!mapAttr) return undefined;
-  const arg = mapAttr.args[0];
-  if (!arg) return undefined;
-  return stripQuotes(arg.value);
-}
-
 export interface ParsedRelationAttribute {
   readonly relationName?: string;
   readonly fields?: readonly string[];
