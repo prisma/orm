@@ -550,6 +550,27 @@ describe('interpretPslDocumentToMongoContract', () => {
         ]),
       );
     });
+
+    it('rejects @relation naming a field that does not exist on the model', () => {
+      const result = interpret(`
+        model User {
+          id ObjectId @id @map("_id")
+        }
+
+        model Post {
+          id       ObjectId @id @map("_id")
+          authorId ObjectId
+          author   User @relation(fields: [missing], references: [id])
+        }
+      `);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      const diag = result.failure.diagnostics.find(
+        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+      );
+      expect(diag).toBeDefined();
+      expect(diag?.message).toMatch(/missing/);
+    });
   });
 
   describe('@id validation', () => {

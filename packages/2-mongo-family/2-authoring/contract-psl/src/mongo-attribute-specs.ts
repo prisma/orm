@@ -2,10 +2,19 @@ import type { ContractSourceDiagnostic } from '@prisma-next/config/config-types'
 import type {
   AttributeSpec,
   FieldSymbol,
+  InferAttr,
   InterpretCtx,
   ModelSymbol,
 } from '@prisma-next/psl-parser';
-import { fieldAttribute, interpretAttribute, modelAttribute, str } from '@prisma-next/psl-parser';
+import {
+  fieldAttribute,
+  fieldRef,
+  interpretAttribute,
+  list,
+  modelAttribute,
+  optional,
+  str,
+} from '@prisma-next/psl-parser';
 import type {
   FieldAttributeAst,
   ModelAttributeAst,
@@ -123,3 +132,13 @@ export function interpretFieldAttribute<Out>(input: {
 
 export const mapModelSpec = modelAttribute('map', { positional: [{ key: 'name', type: str() }] });
 export const mapFieldSpec = fieldAttribute('map', { positional: [{ key: 'name', type: str() }] });
+
+export const relationFieldSpec = fieldAttribute('relation', {
+  positional: [{ key: 'name', type: optional(str()) }],
+  named: {
+    name: optional(str()),
+    fields: optional(list(fieldRef('self'), { nonEmpty: true, unique: true })),
+    references: optional(list(fieldRef('referenced'), { nonEmpty: true, unique: true })),
+  },
+});
+export type RelationFieldOutput = InferAttr<typeof relationFieldSpec>;

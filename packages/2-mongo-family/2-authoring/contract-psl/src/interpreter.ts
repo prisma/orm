@@ -61,6 +61,7 @@ import {
   interpretModelAttribute,
   mapFieldSpec,
   mapModelSpec,
+  relationFieldSpec,
 } from './mongo-attribute-specs';
 import {
   getAttribute,
@@ -69,7 +70,6 @@ import {
   lowerFirst,
   parseIndexFieldList,
   parseQuotedStringLiteral,
-  parseRelationAttribute,
 } from './psl-helpers';
 
 /**
@@ -1087,14 +1087,26 @@ export function interpretPslDocumentToMongoContract(
 
     for (const field of Object.values(pslModel.fields)) {
       if (isRelationField(field, modelNames)) {
-        const relation = parseRelationAttribute(field.attributes);
+        const relationNode = findFieldAttributeNode(field, 'relation');
+        const relation = relationNode
+          ? interpretFieldAttribute({
+              node: relationNode,
+              spec: relationFieldSpec,
+              model: pslModel,
+              field,
+              sourceFile,
+              sourceId,
+              diagnostics,
+              resolveReferencedModel: () => allModels.find((m) => m.name === field.typeName),
+            })
+          : undefined;
 
         if (field.list || !(relation?.fields && relation?.references)) {
           backrelationCandidates.push({
             modelName: pslModel.name,
             fieldName: field.name,
             targetModelName: field.typeName,
-            ...ifDefined('relationName', relation?.relationName),
+            ...ifDefined('relationName', relation?.name),
             cardinality: field.list ? '1:N' : '1:1',
             field,
           });
@@ -1125,7 +1137,7 @@ export function interpretPslDocumentToMongoContract(
             declaringModel: pslModel.name,
             fieldName: field.name,
             targetModel: field.typeName,
-            ...ifDefined('relationName', relation.relationName),
+            ...ifDefined('relationName', relation.name),
             localFields: localMapped,
             targetFields: targetMapped,
           });
