@@ -1469,12 +1469,17 @@ export function interpretPslDocumentToMongoContract(
     storage: storageWithoutHash,
     ...mongoContractCanonicalizationHooks,
   });
-  const storage = new MongoStorage({
-    storageHash,
-    namespaces: {
-      [UNBOUND_NAMESPACE_ID]: unboundNamespace,
-    },
-  }) as Contract['storage'];
+  const storage = blindCast<
+    Contract['storage'],
+    'MongoStorage is the Mongo family concrete storage class constructed here; it structurally satisfies the Contract storage slot.'
+  >(
+    new MongoStorage({
+      storageHash,
+      namespaces: {
+        [UNBOUND_NAMESPACE_ID]: unboundNamespace,
+      },
+    }),
+  );
   const capabilities: Record<string, Record<string, boolean>> = {};
 
   const hasEnums = Object.keys(builtEnums).length > 0;
