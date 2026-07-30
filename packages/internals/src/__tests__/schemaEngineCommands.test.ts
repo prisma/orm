@@ -3,7 +3,14 @@ import tempy from 'tempy'
 import { describe, expect, test, vi } from 'vitest'
 
 import { credentialsToUri, uriToCredentials } from '../convertCredentials'
-import { canConnectToDatabase, createDatabase, dropDatabase, execaCommand } from '../schemaEngineCommands'
+import {
+  canConnectToDatabase,
+  createDatabase,
+  dropDatabase,
+  execaCommand,
+  formatSchemaEngineError,
+  type SchemaEngineLogLine,
+} from '../schemaEngineCommands'
 
 if (process.env.CI) {
   // 5s is often not enough for the "postgresql - create database" test on macOS CI.
@@ -26,6 +33,31 @@ describe('execaCommand', () => {
       expect(message.includes('mysecret')).toBeFalsy()
       expect(message.includes('<REDACTED>')).toBeTruthy()
     }
+  })
+})
+
+describe('formatSchemaEngineError', () => {
+  const log = (message: string): SchemaEngineLogLine => ({
+    timestamp: '2021-06-11T15:35:34.084486+00:00',
+    level: 'ERROR',
+    target: 'schema_engine::logger',
+    fields: { message },
+  })
+
+  test('joins messages from multiple log lines', () => {
+    expect(formatSchemaEngineError([log('first'), log('second')], 'raw stderr')).toBe('first\nsecond')
+  })
+
+  test('falls back to the raw stderr when no log line has a message', () => {
+    // e.g. when parseJsonFromStderr's `.slice(1)` drops the engine's only stderr line,
+    // leaving no logs to extract a message from.
+    expect(formatSchemaEngineError([], 'the only line of stderr, with the real error')).toBe(
+      'the only line of stderr, with the real error',
+    )
+  })
+
+  test('falls back to the raw stderr when log lines have empty messages', () => {
+    expect(formatSchemaEngineError([log('')], 'raw stderr')).toBe('raw stderr')
   })
 })
 

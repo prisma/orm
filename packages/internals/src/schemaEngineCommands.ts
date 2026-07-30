@@ -64,6 +64,16 @@ function parseJsonFromStderr(stderr: string): SchemaEngineLogLine[] {
   return logs
 }
 
+// `parseJsonFromStderr` drops the engine's first stderr line as a discardable
+// preamble. When the engine only emits that one line for a given failure, the
+// only line with real information is dropped, `logs` ends up empty, and this
+// used to produce a bare "Schema engine error:" with nothing after it. Fall
+// back to the raw stderr so the error always carries some diagnostic content.
+export function formatSchemaEngineError(logs: SchemaEngineLogLine[], stderr: string): string {
+  const messages = logs.map((log) => log.fields.message).filter(Boolean)
+  return messages.length > 0 ? messages.join('\n') : stderr
+}
+
 // could be refactored with engines using JSON RPC instead and just passing the schema
 export async function canConnectToDatabase(
   connectionString: string,
@@ -94,7 +104,7 @@ export async function canConnectToDatabase(
           message: error.fields.message,
         }
       } else {
-        throw new Error(`Schema engine error:\n${logs.map((log) => log.fields.message).join('\n')}`)
+        throw new Error(`Schema engine error:\n${formatSchemaEngineError(logs, e.stderr)}`)
       }
     } else {
       throw new Error(`Schema engine exited. ${_e}`)
@@ -132,7 +142,7 @@ export async function createDatabase(connectionString: string, cwd = process.cwd
       if (error && error.fields.error_code && error.fields.message) {
         throw new Error(`${error.fields.error_code}: ${error.fields.message}`)
       } else {
-        throw new Error(`Schema engine error:\n${logs.map((log) => log.fields.message).join('\n')}`)
+        throw new Error(`Schema engine error:\n${formatSchemaEngineError(logs, e.stderr)}`)
       }
     } else {
       throw new Error(`Schema engine exited. ${_e}`)
@@ -158,7 +168,7 @@ export async function dropDatabase(connectionString: string, cwd = process.cwd()
     if (e.stderr) {
       const logs = parseJsonFromStderr(e.stderr)
 
-      throw new Error(`Schema engine error:\n${logs.map((log) => log.fields.message).join('\n')}`)
+      throw new Error(`Schema engine error:\n${formatSchemaEngineError(logs, String(e.stderr))}`)
     } else {
       throw new Error(`Schema engine exited. ${e}`)
     }
