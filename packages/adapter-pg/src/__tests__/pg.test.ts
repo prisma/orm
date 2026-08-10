@@ -1,7 +1,7 @@
 import { getLogs } from '@prisma/debug'
 import type { SqlQuery } from '@prisma/driver-adapter-utils'
 import pg, { DatabaseError } from 'pg'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { PrismaPgAdapterFactory } from '../pg'
 
@@ -151,5 +151,118 @@ describe('PrismaPgAdapterFactory', () => {
     expect(mockQuery).toHaveBeenCalledWith(expect.objectContaining({ name: undefined }))
 
     await adapter.dispose()
+  })
+})
+
+describe('PgTransaction', () => {
+  // Regression tests for https://github.com/prisma/prisma/issues/29952: when an
+  // interactive transaction timeout expires while COMMIT is in flight, the query
+  // engine settles the transaction twice (the abandoned commit chain and the
+  // compensating rollback), which must not release the pooled client twice or
+  // dispatch SQL on a client the pool may have re-lent.
+  //
+  // No database is needed: pg.Client's connect/query/end are stubbed and the
+  // engine's settlement sequences are scripted directly against the adapter.
+
+  const statements: string[] = []
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  async function setup(queryImpl?: (text: string) => Promise<unknown> | undefined) {
+    statements.length = 0
+
+    vi.spyOn(pg.Client.prototype, 'connect').mockImplementation(function (cb?: (err?: Error) => void) {
+      process.nextTick(() => cb?.())
+    } as never)
+    vi.spyOn(pg.Client.prototype, 'end').mockImplementation((() => Promise.resolve()) as never)
+    vi.spyOn(pg.Client.prototype, 'query').mockImplementation(((query: string | { text: string }) => {
+      const text = typeof query === 'string' ? query : query.text
+      statements.push(text)
+      return queryImpl?.(text) ?? Promise.resolve({ rowCount: 0, rows: [], fields: [] })
+    }) as never)
+
+    const pool = new pg.Pool({
+      connectionString: 'postgresql://user:pass@localhost:5432/db',
+      max: 1,
+    })
+    const releases: unknown[] = []
+    pool.on('release', (err) => releases.push(err))
+    const adapter = await new PrismaPgAdapterFactory(pool).connect()
+
+    return { pool, adapter, releases }
+  }
+
+  it('should release the client exactly once when COMMIT is sent before commit()', async () => {
+    const { pool, adapter, releases } = await setup()
+    const tx = await adapter.startTransaction()
+
+    await tx.executeRaw({ sql: 'COMMIT', args: [], argTypes: [] })
+    await tx.commit()
+
+    expect(statements).toEqual(['BEGIN', 'COMMIT'])
+    expect(releases).toEqual([undefined])
+    expect(pool.idleCount).toBe(1)
+    expect(pool.totalCount).toBe(1)
+  })
+
+  it('should treat the second settlement as a no-op instead of releasing twice', async () => {
+    const { pool, adapter, releases } = await setup()
+    const tx = await adapter.startTransaction()
+
+    await tx.commit()
+    await expect(tx.rollback()).resolves.toBeUndefined()
+
+    expect(releases).toEqual([undefined])
+    expect(pool.idleCount).toBe(1)
+    expect(pool.totalCount).toBe(1)
+  })
+
+  it('should not release a client the pool has re-lent to a new owner', async () => {
+    const { pool, adapter } = await setup()
+    const tx = await adapter.startTransaction()
+
+    // The engine's compensation sequence when the transaction deadline drops an
+    // in-flight commit: rollback wins first, the pool re-lends the client, then
+    // the orphaned commit chain lands late.
+    await tx.rollback()
+    const nextOwner = await pool.connect()
+    await tx.commit()
+
+    expect(() => nextOwner.release()).not.toThrow()
+    expect(pool.idleCount).toBe(1)
+    expect(pool.totalCount).toBe(1)
+  })
+
+  it('should reject queries after settlement without dispatching SQL', async () => {
+    const { adapter } = await setup()
+    const tx = await adapter.startTransaction()
+
+    await tx.rollback()
+    statements.length = 0
+
+    await expect(tx.executeRaw({ sql: 'ROLLBACK', args: [], argTypes: [] })).rejects.toMatchObject({
+      name: 'DriverAdapterError',
+      cause: { kind: 'TransactionAlreadyClosed' },
+    })
+    await expect(tx.queryRaw({ sql: 'SELECT 1', args: [], argTypes: [] })).rejects.toMatchObject({
+      name: 'DriverAdapterError',
+      cause: { kind: 'TransactionAlreadyClosed' },
+    })
+    expect(statements).toEqual([])
+  })
+
+  it('should destroy the connection when settling with a query still in flight', async () => {
+    const { pool, adapter, releases } = await setup((text) =>
+      text === 'SELECT pending' ? new Promise(() => {}) : undefined,
+    )
+    const tx = await adapter.startTransaction()
+
+    void tx.executeRaw({ sql: 'SELECT pending', args: [], argTypes: [] })
+    await tx.rollback()
+
+    expect(releases).toEqual([expect.any(Error)])
+    expect(pool.totalCount).toBe(0)
   })
 })

@@ -98,7 +98,7 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
    * Should the query fail due to a connection error, the connection is
    * marked as unhealthy.
    */
-  private async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+  protected async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
     const { sql, args } = query
     const values = args.map((arg, i) => mapArg(arg, query.argTypes[i]))
 
@@ -132,6 +132,9 @@ class PgQueryable<ClientT extends StdClient | TransactionClient> implements SqlQ
 }
 
 class PgTransaction extends PgQueryable<TransactionClient> implements Transaction {
+  private settled = false
+  private inFlightQueries = 0
+
   constructor(
     client: pg.PoolClient,
     readonly options: TransactionOptions,
@@ -141,18 +144,56 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
     super(client, pgOptions)
   }
 
+  protected override async performIO(query: SqlQuery): Promise<pg.QueryArrayResult<any>> {
+    if (this.settled) {
+      throw new DriverAdapterError({
+        kind: 'TransactionAlreadyClosed',
+        cause: 'The transaction has already been committed or rolled back',
+      })
+    }
+
+    this.inFlightQueries++
+    try {
+      return await super.performIO(query)
+    } finally {
+      this.inFlightQueries--
+    }
+  }
+
+  /**
+   * Settles the transaction at most once. The query engine can settle twice when
+   * an interactive transaction timeout expires while COMMIT is in flight: the
+   * abandoned commit chain and the compensating rollback both reach the adapter
+   * (https://github.com/prisma/prisma/issues/29952). A second `release()` would
+   * corrupt pg-pool's accounting once the pool has re-lent the client, so it is
+   * skipped, and a client with statements still in flight is released with an
+   * error so the pool destroys the connection instead of re-lending a busy one.
+   */
+  private settle(): void {
+    if (this.settled) {
+      return
+    }
+    this.settled = true
+
+    this.cleanup?.()
+
+    if (this.inFlightQueries > 0) {
+      this.client.release(new Error('Transaction settled with statements still in flight'))
+    } else {
+      this.client.release()
+    }
+  }
+
   async commit(): Promise<void> {
     debug(`[js::commit]`)
 
-    this.cleanup?.()
-    this.client.release()
+    this.settle()
   }
 
   async rollback(): Promise<void> {
     debug(`[js::rollback]`)
 
-    this.cleanup?.()
-    this.client.release()
+    this.settle()
   }
 
   async createSavepoint(name: string): Promise<void> {
