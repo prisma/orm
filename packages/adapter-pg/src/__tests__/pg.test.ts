@@ -165,8 +165,11 @@ describe('PgTransaction', () => {
   // engine's settlement sequences are scripted directly against the adapter.
 
   const statements: string[] = []
+  const pools: pg.Pool[] = []
 
-  afterEach(() => {
+  afterEach(async () => {
+    await Promise.all(pools.map((pool) => pool.end()))
+    pools.length = 0
     vi.restoreAllMocks()
   })
 
@@ -187,6 +190,7 @@ describe('PgTransaction', () => {
       connectionString: 'postgresql://user:pass@localhost:5432/db',
       max: 1,
     })
+    pools.push(pool)
     const releases: unknown[] = []
     pool.on('release', (err) => releases.push(err))
     const adapter = await new PrismaPgAdapterFactory(pool).connect()
