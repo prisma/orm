@@ -85,12 +85,12 @@ pnpm fixtures:check        # Use this rather than ad-hoc emit-and-diff
 
 1. **Authoring**: Write `schema.psl` or use TypeScript builders → canonicalized Contract IR
 2. **Emission**: Emitter validates and generates `contract.json` + `contract.d.ts`
-3. **Validation**: `validateContract<Contract>(json)` validates structure and returns typed contract
+3. **Hydration**: the client factory (or a family `ContractSerializer`) validates `contract.json` and returns the typed contract
 4. **Usage**: DSL functions (`sql()`, `schema()`) accept the contract and propagate types
 
 ### Key Patterns
 
-- **Type Parameter Pattern**: JSON imports lose literal types. Import the precise types from `contract.d.ts` and validate the JSON at runtime: `validateContract<Contract>(contractJson)`. The type parameter must be the fully-typed `Contract`, not a generic like `SqlContract<SqlStorage>`.
+- **Type Parameter Pattern**: JSON imports lose literal types. Import the precise types from `contract.d.ts` and name them where the JSON enters: `postgres<Contract>({ contractJson, url })`. The type parameter must be the fully-typed `Contract`, not a generic like `SqlContract<SqlStorage>`. Tests that need the contract on its own hydrate it with `validateSqlContractFully<Contract>(contractJson)`.
 - **ExecutionContext**: Encapsulates contract, codecs, operations, and types. Pass to `schema()`, `sql()`, `orm()`.
 - **Interface + factory pattern for stateful services**: Stateful services (registries, runtimes, adapters, drivers) are exposed through an interface plus a `createX()` factory; the implementing class stays package-private. Consumers depend on the interface, never the implementation. Pattern reference: [`docs/architecture docs/patterns/interface-plus-factory.md`](docs/architecture%20docs/patterns/interface-plus-factory.md).
 - **Three-layer polymorphic IR for AST/IR class hierarchies**: AST/IR nodes (Contract IR, Schema IR, migration ops) are organised as framework interface → family abstract base → target concrete classes. Concrete classes are publicly exported as the target's IR alphabet; `freezeNode(this)` is called in the constructor. Target packs contribute new entity kinds via `AuthoringContributions.entityTypes` (see [`docs/reference/typescript-patterns.md`](docs/reference/typescript-patterns.md) § "AST/IR class hierarchies"). Pattern references: [`three-layer-polymorphic-ir.md`](docs/architecture%20docs/patterns/three-layer-polymorphic-ir.md), [`frozen-class-ast.md`](docs/architecture%20docs/patterns/frozen-class-ast.md), [`json-canonical-class-in-memory.md`](docs/architecture%20docs/patterns/json-canonical-class-in-memory.md).
