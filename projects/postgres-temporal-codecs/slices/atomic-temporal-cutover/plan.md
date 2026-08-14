@@ -133,3 +133,23 @@ Plan-side overlays from [`dod.md § Slice-DoD overlay`](../../../../drive/calibr
 ## Open items
 
 1. Manual QA — the slice changes a user-observable generated surface (`contract.d.ts` temporal field types), so the QA-side slice-DoD items apply. `drive-qa-plan` runs after D7, once behaviour is settled.
+2. **Pre-existing red, not ours** (surfaced at D1): `packages/1-framework/3-tooling/cli/test/migration-cli.test.ts` fails 9 tests with `CONFIG.FILE_NOT_FOUND`. Verified independent of this slice — `@internal/driver-postgres` is not resolvable from the CLI package at all, so it cannot be downstream of the driver change; likely fallout from `4df1c997c7`. **D7's "red set empty" gate excludes these 9 tests by name.** If they are still failing at slice close, they are called out in the PR description rather than silently absorbed.
+3. **Known flake** (surfaced at D1): `test/integration/test/cli.init-skill-distribution.integration.test.ts` `afterAll` `rmSync` hook can time out at 5000 ms. No temporal surface. Excluded from red-set accounting.
+
+## Known-red baseline (established at D1)
+
+9 files / 15 tests, all failing in the expected shape (a string where a `Date` was asserted, or `TypeError: Cannot read properties of undefined (reading 'codecId')` from a Date-typed codec receiving text). Every later dispatch's red set must be a subset of this.
+
+| File | Tests | Gate |
+| --- | --- | --- |
+| `packages/3-targets/6-adapters/postgres/test/scalar-list-codec-roundtrip.integration.test.ts` | 1 | `test:packages` |
+| `test/integration/test/infer-roundtrip-runtime.integration.test.ts` | 1 | `test:integration` |
+| `test/integration/test/scalar-lists/psl-list-roundtrip.integration.test.ts` | 1 | `test:integration` |
+| `test/integration/test/ports/prisma/functional/create-default-date/create-default-date.test.ts` | 1 | `test:integration` |
+| `test/integration/test/ports/prisma/functional/issues-14954-date-batch/issues-14954-date-batch.test.ts` | 2 | `test:integration` |
+| `test/integration/test/ports/prisma/functional/issues-23902/issues-23902.test.ts` | 1 | `test:integration` |
+| `test/integration/test/ports/prisma/functional/issues-28192-pg-historical-dates/issues-28192-pg-historical-dates.test.ts` | 5 | `test:integration` |
+| `test/integration/test/ports/prisma/functional/multiple-types/multiple-types.test.ts` | 1 | `test:integration` |
+| `test/e2e/framework/test/dml.test.ts` | 2 | `test:e2e` |
+
+`issues-28192-pg-historical-dates` is worth D3's attention specifically — historical dates are where the BC / expanded-year adaptation gets exercised.
