@@ -9,10 +9,9 @@ import { executeSql, queryRows } from './sql-queryable-test-utils';
 describe('@internal/driver-postgres', () => {
   let cleanup: (() => Promise<void>) | undefined;
 
-  // pg-mem rejects a query config that carries per-query type parsers whenever
-  // the query also carries values, and the driver attaches those parsers to
-  // every row-producing statement. Parameterized reads therefore need a real
-  // server; pg-mem still covers the parameterless paths.
+  // pg-mem rejects a query config that carries per-query type parsers whenever the query also
+  // carries values, and the driver attaches those parsers to every row-producing statement.
+  // Parameterized reads therefore need a real server; pg-mem still covers the parameterless paths.
   async function createRealPoolDriver() {
     const database = await createDevDatabase();
     const pool = new PgPool({ connectionString: database.connectionString });

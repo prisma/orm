@@ -1,7 +1,7 @@
 /**
- * The driver is the lossless transport boundary: PostgreSQL renders temporal
- * values as text and the driver hands that text on untouched, so no precision
- * is lost to a JavaScript `Date` before a codec ever sees the value.
+ * The driver is the lossless transport boundary: PostgreSQL renders temporal values as text and the
+ * driver hands that text on untouched, so no precision is lost to a JavaScript `Date` before a
+ * codec ever sees the value.
  */
 
 import type { SqlDriver, SqlExecuteRequest } from '@internal/sql-relational-core/ast';
