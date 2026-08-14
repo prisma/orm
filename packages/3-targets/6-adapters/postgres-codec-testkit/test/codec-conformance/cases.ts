@@ -233,6 +233,39 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: '03:04:05',
     setupSql: HOSTILE_TEMPORAL_SESSION,
   },
+  // The `*-string` codecs' application value is PostgreSQL's own rendering, so each case is written
+  // the way the server writes it — space separator, two-digit offset, microseconds. A value picked
+  // for looking tidy in JSON (a `T` separator, whole seconds) would agree with today's identity
+  // projection for the wrong reason and then disagree once the projection casts to text.
+  { codecId: 'pg/date-string@1', label: 'calendar date', value: '2026-01-02' },
+  {
+    codecId: 'pg/timestamp-string@1',
+    label: 'microsecond precision',
+    value: '2026-01-02 03:04:05.123456',
+    typeParams: { precision: 6 },
+    notYetCanonical: {
+      kind: 'mismatch',
+      reason:
+        'The identity projection lets PostgreSQL render the column as JSON, which uses a T separator. The text cast that makes the projection return the same rendering a flat read returns is not in place yet.',
+    },
+  },
+  {
+    codecId: 'pg/timestamptz-string@1',
+    label: 'microsecond precision at UTC',
+    value: '2026-01-02 03:04:05.123456+00',
+    typeParams: { precision: 6 },
+    notYetCanonical: {
+      kind: 'mismatch',
+      reason:
+        'As for pg/timestamp-string@1, plus an offset PostgreSQL renders as +00:00 in JSON against the +00 a flat read returns.',
+    },
+  },
+  {
+    codecId: 'pg/time-string@1',
+    label: 'microsecond precision',
+    value: '03:04:05.123456',
+    typeParams: { precision: 6 },
+  },
   { codecId: 'pg/timetz@1', label: 'time of day at UTC', value: '03:04:05+00' },
   {
     codecId: 'pg/timetz@1',
@@ -462,6 +495,33 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     codecId: 'pg/time@1',
     label: 'null',
     value: undefined,
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/date-string@1',
+    label: 'null',
+    value: undefined,
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/timestamp-string@1',
+    label: 'null',
+    value: undefined,
+    typeParams: { precision: 6 },
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/timestamptz-string@1',
+    label: 'null',
+    value: undefined,
+    typeParams: { precision: 6 },
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/time-string@1',
+    label: 'null',
+    value: undefined,
+    typeParams: { precision: 6 },
     nullValue: true,
   },
   {

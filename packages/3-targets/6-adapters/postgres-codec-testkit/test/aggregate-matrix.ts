@@ -131,6 +131,24 @@ export const FIXTURES: readonly AggregateFixture[] = [
   { codecId: 'pg/timestamp@1', samples: ["'2024-01-01T10:00:00'", "'2024-02-01T10:00:00'"] },
   { codecId: 'pg/timestamptz@1', samples: ["'2024-01-01T10:00:00Z'", "'2024-02-01T10:00:00Z'"] },
   { codecId: 'pg/time@1', samples: ["'10:00:00'", "'11:00:00'"] },
+  // The `*-string` samples carry microseconds so an aggregate that rounded to
+  // milliseconds would change the value it returns rather than pass unnoticed.
+  { codecId: 'pg/date-string@1', samples: ["'2024-01-01'", "'2024-02-01'"] },
+  {
+    codecId: 'pg/timestamp-string@1',
+    typeParams: { precision: 6 },
+    samples: ["'2024-01-01T10:00:00.123456'", "'2024-02-01T10:00:00.654321'"],
+  },
+  {
+    codecId: 'pg/timestamptz-string@1',
+    typeParams: { precision: 6 },
+    samples: ["'2024-01-01T10:00:00.123456Z'", "'2024-02-01T10:00:00.654321Z'"],
+  },
+  {
+    codecId: 'pg/time-string@1',
+    typeParams: { precision: 6 },
+    samples: ["'10:00:00.123456'", "'11:00:00.654321'"],
+  },
   { codecId: 'pg/timetz@1', samples: ["'10:00:00+00'", "'11:00:00+00'"] },
   { codecId: 'pg/bool@1', samples: ['true', 'false'] },
   { codecId: 'pg/bit@1', samples: ["B'1'", "B'0'"] },

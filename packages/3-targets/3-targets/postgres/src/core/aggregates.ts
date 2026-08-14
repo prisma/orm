@@ -20,6 +20,7 @@ import type { AggregateFn } from '@internal/sql-relational-core/ast';
 import { AggregateExpr, CastExpr } from '@internal/sql-relational-core/ast';
 import {
   PG_DATE_CODEC_ID,
+  PG_DATE_STRING_CODEC_ID,
   PG_FLOAT_CODEC_ID,
   PG_FLOAT4_CODEC_ID,
   PG_FLOAT8_CODEC_ID,
@@ -34,8 +35,11 @@ import {
   PG_TEXT_ARRAY_CODEC_ID,
   PG_TEXT_CODEC_ID,
   PG_TIME_CODEC_ID,
+  PG_TIME_STRING_CODEC_ID,
   PG_TIMESTAMP_CODEC_ID,
+  PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_CODEC_ID,
+  PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
   PG_UNBOUNDED_INT_CODEC_ID,
   PG_VARCHAR_CODEC_ID,
@@ -130,6 +134,12 @@ const MIN_MAX_PRESERVING_CODECS = [
   PG_INTERVAL_CODEC_ID,
   PG_INET_CODEC_ID,
   PG_TEXT_ARRAY_CODEC_ID,
+  // The extremum of a set of server renderings is one of those renderings, so the `*-string` codecs
+  // preserve their input exactly as the codecs over the same native types do.
+  PG_DATE_STRING_CODEC_ID,
+  PG_TIMESTAMP_STRING_CODEC_ID,
+  PG_TIMESTAMPTZ_STRING_CODEC_ID,
+  PG_TIME_STRING_CODEC_ID,
 ] as const;
 
 /**
@@ -194,6 +204,7 @@ export const postgresAggregateDescriptors: ReadonlyArray<SqlAggregateDescriptor>
   produces('sum', overCodec(PG_UNBOUNDED_INT_CODEC_ID), PG_UNBOUNDED_INT_CODEC_ID),
   produces('sum', overCodec(PG_INTERVAL_CODEC_ID), PG_INTERVAL_CODEC_ID),
   produces('sum', overCodec(PG_TIME_CODEC_ID), PG_INTERVAL_CODEC_ID),
+  produces('sum', overCodec(PG_TIME_STRING_CODEC_ID), PG_INTERVAL_CODEC_ID),
 
   // A mean is a fraction, so `avg` over any integer column reads as a `number`; `avgDecimal` reads the same `numeric` mean exactly.
   ...INTEGER_CODECS.map((codecId) =>
@@ -208,6 +219,7 @@ export const postgresAggregateDescriptors: ReadonlyArray<SqlAggregateDescriptor>
   produces('avg', overCodec(PG_NUMERIC_CODEC_ID), PG_NUMERIC_CODEC_ID),
   produces('avg', overCodec(PG_INTERVAL_CODEC_ID), PG_INTERVAL_CODEC_ID),
   produces('avg', overCodec(PG_TIME_CODEC_ID), PG_INTERVAL_CODEC_ID),
+  produces('avg', overCodec(PG_TIME_STRING_CODEC_ID), PG_INTERVAL_CODEC_ID),
 
   ...orderingDescriptors('min'),
   ...orderingDescriptors('max'),
