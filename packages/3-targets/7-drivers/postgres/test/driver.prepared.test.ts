@@ -4,6 +4,7 @@ import { timeouts } from '@repo/test-utils';
 import type { Client, Pool } from 'pg';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBoundDriverFromBinding, type PostgresBinding } from '../src/postgres-driver';
+import { temporalTextTypes } from '../src/temporal-text-parsers';
 
 interface MockQueryArg {
   readonly arg: unknown;
@@ -191,7 +192,12 @@ describe('postgres prepared statements', () => {
 
     expect(snapshot()).toBe('pn_1');
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.arg).toEqual({ name: 'pn_1', text: 'select id from t', values: [] });
+    expect(calls[0]?.arg).toEqual({
+      name: 'pn_1',
+      text: 'select id from t',
+      values: [],
+      types: temporalTextTypes,
+    });
   });
 
   it('uses and reuses a prepared name for execute requests with a handle', async () => {

@@ -1,6 +1,6 @@
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import type { Client, Pool } from 'pg';
-import { Pool as PgPool } from 'pg';
+import { Client as PgClient, Pool as PgPool } from 'pg';
 import { newDb } from 'pg-mem';
 import { afterEach, describe, expect, it } from 'vitest';
 import postgresRuntimeDriverDescriptor from '../src/exports/runtime';
@@ -8,6 +8,24 @@ import { executeSql, queryRows } from './sql-queryable-test-utils';
 
 describe('@internal/driver-postgres', () => {
   let cleanup: (() => Promise<void>) | undefined;
+
+  // pg-mem rejects a query config that carries per-query type parsers whenever
+  // the query also carries values, and the driver attaches those parsers to
+  // every row-producing statement. Parameterized reads therefore need a real
+  // server; pg-mem still covers the parameterless paths.
+  async function createRealPoolDriver() {
+    const database = await createDevDatabase();
+    const pool = new PgPool({ connectionString: database.connectionString });
+    const driver = postgresRuntimeDriverDescriptor.create();
+
+    cleanup = async () => {
+      await driver.close();
+      await database.close();
+    };
+
+    await driver.connect({ kind: 'pgPool', pool: pool as unknown as Pool });
+    return driver;
+  }
 
   async function createMemPoolDriver(options?: {
     readonly cursor?: { readonly batchSize?: number; readonly disabled?: boolean };
@@ -136,7 +154,7 @@ describe('@internal/driver-postgres', () => {
   it(
     'executes query with params',
     async () => {
-      const driver = await createMemPoolDriver();
+      const driver = await createRealPoolDriver();
       await executeSql(driver, 'create table items(id serial primary key, name text)');
       await executeSql(driver, 'insert into items(name) values ($1)', ['test']);
 
@@ -379,7 +397,7 @@ describe('@internal/driver-postgres', () => {
     it(
       'acquires and releases connections from pool',
       async () => {
-        const driver = await createMemPoolDriver();
+        const driver = await createRealPoolDriver();
         await executeSql(driver, 'create table items(id serial primary key, name text)');
 
         const connection = await driver.acquireConnection();
@@ -405,17 +423,17 @@ describe('@internal/driver-postgres', () => {
     it(
       'acquires and releases connections from direct client',
       async () => {
-        const db = newDb();
-        const { Client } = db.adapters.createPg();
-        const client = new Client();
+        const database = await createDevDatabase();
+        const client = new PgClient({ connectionString: database.connectionString });
 
         const driver = postgresRuntimeDriverDescriptor.create();
 
         cleanup = async () => {
           await driver.close();
+          await database.close();
         };
 
-        await driver.connect({ kind: 'pgClient', client: client as unknown as Client });
+        await driver.connect({ kind: 'pgClient', client });
         await executeSql(driver, 'create table items(id serial primary key, name text)');
 
         const connection = await driver.acquireConnection();
