@@ -4007,9 +4007,15 @@ importers:
       '@repo/tsdown':
         specifier: workspace:8.0.0-rc.5
         version: link:../../../0-config/tsdown
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.20.4
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      pg:
+        specifier: 'catalog:'
+        version: 8.22.0
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)

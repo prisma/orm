@@ -44,6 +44,21 @@ export type Time<P extends number | undefined = undefined> = BrandedString<{ __t
 export type Timetz<P extends number | undefined = undefined> = BrandedString<{
   __timetzPrecision: P;
 }>;
+/**
+ * Read types for the representation-explicit `*-string` temporal codecs, whose application value is
+ * PostgreSQL's own rendering of the column, forwarded in both directions without interpretation.
+ * The brand records which native type produced the text; the write side stays a plain `string`, so
+ * any value PostgreSQL accepts can be written without a cast.
+ */
+export type TimestampString<P extends number | undefined = undefined> = BrandedString<{
+  __timestampStringPrecision: P;
+}>;
+export type TimestamptzString<P extends number | undefined = undefined> = BrandedString<{
+  __timestamptzStringPrecision: P;
+}>;
+export type TimeString<P extends number | undefined = undefined> = BrandedString<{
+  __timeStringPrecision: P;
+}>;
 export type Interval<P extends number | undefined = undefined> = BrandedString<{
   __intervalPrecision: P;
 }>;

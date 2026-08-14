@@ -40,7 +40,9 @@
     "@repo/test-utils": "workspace:8.0.0-rc.5",
     "@repo/tsconfig": "workspace:8.0.0-rc.5",
     "@repo/tsdown": "workspace:8.0.0-rc.5",
+    "@types/pg": "catalog:",
     "pathe": "^2.0.3",
+    "pg": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
