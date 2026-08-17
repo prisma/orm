@@ -27,6 +27,16 @@ Threaded into the briefs that need them:
 - **[F26](../../../../drive/calibration/failure-modes.md#f26-review-comment-point-fixed-the-defect-class-re-ships-in-new-places-next-round)** — defect class re-ships. Eight near-identical codecs: a review comment on one is a comment on all eight.
 - **[F28](../../../../drive/calibration/failure-modes.md#f28-test-file-written-for-a-runner-no-suite-invokes--coverage-that-never-runs)** — test written for a runner no suite invokes. D3's Temporal tests need the polyfill global installed by the suite that actually runs them.
 
+## Standing validation gate for D3–D8 (added after D2 review)
+
+Every remaining dispatch runs **`pnpm lint:casts`** in addition to its per-package gates.
+
+The per-package `lint` gate structurally cannot catch cast-ratchet regressions: the `no-bare-cast` Biome plugin's severity is `info`, so `biome check --error-on-warnings` stays green while `scripts/lint-casts.mjs` — a separate CI job at `ci.yml:118` — fails on any increase. D2 added three `params as Record<string, unknown>` casts in `codecs.ts` by copying the pattern the existing temporal descriptors already use, taking the count from 17 to 20 and turning the branch CI-red while every reported gate was green.
+
+Per [F26](../../../../drive/calibration/failure-modes.md#f26-review-comment-point-fixed-the-defect-class-re-ships-in-new-places-next-round), this is a defect *class*: D3 adds four more descriptors of exactly the same shape, and D5 touches the same file again. Fixing only D2's three instances would reproduce it next dispatch.
+
+Note that D6 deletes the old Date-typed descriptors, which carry several of the pre-existing casts — the count should fall, not merely hold, by slice close.
+
 ## Applicable grep gates
 
 From [`grep-library.md`](../../../../drive/calibration/grep-library.md), plus slice-specific gates:
