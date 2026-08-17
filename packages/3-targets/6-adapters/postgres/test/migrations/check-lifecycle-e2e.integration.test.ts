@@ -86,12 +86,17 @@ type ColumnSpec = {
 function checksForColumn(
   tableName: string,
   columnName: string,
-  options: { readonly many: boolean; readonly memberValues?: readonly string[] },
+  options: {
+    readonly many: boolean;
+    readonly elementNullable?: boolean;
+    readonly memberValues?: readonly string[];
+  },
 ): CheckConstraint[] {
   return postgresRenderCheckExpressions({
     tableName,
     columnName,
     many: options.many,
+    elementNullable: options.elementNullable ?? false,
     memberValues: options.memberValues,
   }).map(
     (candidate) =>
@@ -250,6 +255,31 @@ function itemContractWithVarcharCheck(input: {
         models: {
           Item: m('Item', { fields: { id: f.text().id(), status: f.varchar() } }).sql({
             checks: [check(input)],
+          }),
+        },
+      }) as const,
+  ) as Contract<SqlStorage>;
+}
+
+function authoredScalarListContract(elementNullable: boolean): Contract<SqlStorage> {
+  return defineContract(
+    {
+      family: authoringFamilyPack,
+      target: authoringTargetPack,
+      createNamespace: postgresCreateNamespace,
+    },
+    ({ field: f, model: m }) =>
+      ({
+        models: {
+          Item: m('Item', {
+            fields: {
+              id: f.text().id(),
+              strictTags: f.text().many(),
+              nullableTags: f.text().many({ elementsNullable: true }),
+              transitioningTags: elementNullable
+                ? f.text().many({ elementsNullable: true })
+                : f.text().many({ elementsNullable: false }),
+            },
           }),
         },
       }) as const,
@@ -562,23 +592,58 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     await expect(
       driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('b', ARRAY['user','root'])`),
     ).rejects.toThrow(new RegExp(membershipName));
-    // `<@` does not match a NULL element either, so containment rejects this
-    // one too — the element-non-null check is belt for a different hole (a
-    // list column with no member set at all).
+    // Membership ignores NULL; the independently named element check rejects it.
     await expect(
       driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('c', ARRAY['user',NULL])`),
-    ).rejects.toThrow(/Item_roles/);
+    ).rejects.toThrow(new RegExp(checks[1]?.name ?? 'Item_roles_elem_not_null'));
 
     const schema = await familyInstance.introspect({ driver: driver!, contract });
     PostgresDatabaseSchemaNode.assert(schema);
     const live = schema.namespaces['public']?.tables['Item']?.checks ?? [];
     expect([...live.map((c) => c.expression)].sort()).toEqual([
       '(array_position(roles, NULL::text) IS NULL)',
-      `(roles <@ ARRAY['user'::text, 'admin'::text])`,
+      `(array_remove(roles, NULL::text) <@ ARRAY['user'::text, 'admin'::text])`,
     ]);
 
     expect((await verify(contract)).ok).toBe(true);
     // Reprint stability: the containment shape does not drift on re-verify.
+    expect((await verify(contract)).ok).toBe(true);
+  });
+
+  it('an element-nullable array domain enum accepts valid NULLs and rejects invalid non-null values', {
+    timeout: testTimeout,
+  }, async () => {
+    const checks = checksForColumn('Item', 'roles', {
+      many: true,
+      elementNullable: true,
+      memberValues: ['user', 'admin'],
+    });
+    expect(checks).toHaveLength(1);
+    const contract = contractOf(
+      {
+        id: idColumn,
+        roles: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+      },
+      checks,
+    );
+
+    await migrate(contract);
+
+    expect(await liveCheckNames()).toEqual([...declaredCheckNames(contract)]);
+    await driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('a', ARRAY['user',NULL])`);
+    expect(
+      (
+        await driver!.query<{ roles: Array<string | null> }>(
+          `SELECT roles FROM "Item" WHERE id = 'a'`,
+        )
+      ).rows,
+    ).toEqual([{ roles: ['user', null] }]);
+
+    const membershipName = checks[0]?.name;
+    assertDefined(membershipName, 'membership check must be named');
+    await expect(
+      driver!.query(`INSERT INTO "Item" (id, roles) VALUES ('b', ARRAY['root',NULL])`),
+    ).rejects.toThrow(new RegExp(membershipName));
     expect((await verify(contract)).ok).toBe(true);
   });
 
@@ -779,6 +844,62 @@ describe('check-constraint lifecycle', { concurrent: false }, () => {
     expect(await liveCheckNames('public')).toEqual([sharedName]);
     expect(await liveCheckNames(SECOND_NAMESPACE_ID)).toEqual([widenedName]);
     expect((await verify(changed)).ok).toBe(true);
+  });
+
+  it('authored scalar lists install element checks by element nullability and enforce them', {
+    timeout: testTimeout,
+  }, async () => {
+    const contract = authoredScalarListContract(true);
+    const table = contract.storage.namespaces['public']?.entries.table?.['Item'] as
+      | StorageTable
+      | undefined;
+    expect(table?.checks?.map((constraint) => constraint.prefix).sort()).toEqual([
+      'Item_strictTags_elem_not_null',
+    ]);
+
+    await migrate(contract);
+
+    expect(await liveCheckNames()).toEqual(table?.checks?.map((constraint) => constraint.name));
+    await driver!.query(
+      `INSERT INTO "Item" (id, "strictTags", "nullableTags", "transitioningTags") VALUES ('a', ARRAY['strict'], ARRAY['nullable',NULL], ARRAY['transitioning',NULL])`,
+    );
+    expect(
+      (
+        await driver!.query<{
+          nullableTags: Array<string | null>;
+          transitioningTags: Array<string | null>;
+        }>(`SELECT "nullableTags", "transitioningTags" FROM "Item" WHERE id = 'a'`)
+      ).rows,
+    ).toEqual([{ nullableTags: ['nullable', null], transitioningTags: ['transitioning', null] }]);
+    await expect(
+      driver!.query(
+        `INSERT INTO "Item" (id, "strictTags", "nullableTags", "transitioningTags") VALUES ('b', ARRAY['strict',NULL], ARRAY['nullable'], ARRAY['transitioning'])`,
+      ),
+    ).rejects.toThrow(/Item_strictTags_elem_not_null/);
+    expect((await verify(contract)).ok).toBe(true);
+  });
+
+  it('changing authored list element nullability drops and restores exactly one check', {
+    timeout: testTimeout,
+  }, async () => {
+    const strict = authoredScalarListContract(false);
+    await migrate(strict);
+    const strictTable = strict.storage.namespaces['public']?.entries.table?.['Item'] as
+      | StorageTable
+      | undefined;
+    const transitioningName = strictTable?.checks?.find(
+      (constraint) => constraint.prefix === 'Item_transitioningTags_elem_not_null',
+    )?.name;
+    assertDefined(transitioningName, 'transitioning element check must be named');
+
+    const nullable = authoredScalarListContract(true);
+    const toNullable = await migrate(nullable, { from: strict, policy: FULL_POLICY });
+    expect(toNullable.opIds).toEqual([`dropCheckConstraint.Item.${transitioningName}`]);
+    expect((await verify(nullable)).ok).toBe(true);
+
+    const toStrict = await migrate(strict, { from: nullable, policy: FULL_POLICY });
+    expect(toStrict.opIds).toEqual([`checkConstraint.Item.${transitioningName}`]);
+    expect((await verify(strict)).ok).toBe(true);
   });
 
   // Slice 3 (`@noCheck`): an opted-out contract simply does not declare the

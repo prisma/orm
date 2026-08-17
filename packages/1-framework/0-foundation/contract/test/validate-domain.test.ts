@@ -781,5 +781,65 @@ describe('validateContractDomain()', () => {
       });
       expect(() => validateContractDomain(contract)).toThrow(/many.*dict|dict.*many/i);
     });
+
+    it('accepts elementNullable on a many field', () => {
+      const contract = makeValidContract({
+        roots: {},
+        models: {
+          User: makeMinimalModel({
+            fields: {
+              tags: {
+                nullable: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                many: true,
+                elementNullable: true,
+              },
+            },
+          }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).not.toThrow();
+    });
+
+    it('rejects elementNullable without many on the same field', () => {
+      const contract = makeValidContract({
+        roots: {},
+        models: {
+          User: makeMinimalModel({
+            fields: {
+              tags: {
+                nullable: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                elementNullable: true,
+              },
+            },
+          }),
+        },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        /cannot have "elementNullable" modifier without "many"/,
+      );
+    });
+
+    it('rejects elementNullable without many on a value object field', () => {
+      const contract = makeValidContract({
+        roots: {},
+        models: {},
+        valueObjects: {
+          Address: {
+            fields: {
+              tags: {
+                nullable: false,
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                elementNullable: true,
+              },
+            },
+          },
+        },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        /Value object.*cannot have "elementNullable" modifier without "many"/,
+      );
+    });
   });
 });

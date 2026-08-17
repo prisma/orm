@@ -288,6 +288,10 @@ type FieldNullableOf<FieldState> = FieldState extends {
 
 type FieldManyOf<FieldState> = FieldState extends { readonly many?: true } ? true : false;
 
+type FieldElementNullableOf<FieldState> = FieldState extends { readonly elementNullable?: true }
+  ? true
+  : false;
+
 type FieldColumnOverrideOf<FieldState> = Present<
   FieldState extends { readonly columnName?: infer ColumnName } ? ColumnName : never
 >;
@@ -481,6 +485,7 @@ type StorageColumn<
   TypeRef extends string | undefined = undefined,
   TypeParams extends Record<string, unknown> | undefined = undefined,
   Many extends boolean = false,
+  ElementNullable extends boolean = false,
 > = {
   readonly nativeType: NativeType;
   readonly codecId: CodecId;
@@ -490,7 +495,8 @@ type StorageColumn<
   (TypeParams extends Record<string, unknown>
     ? { readonly typeParams: TypeParams }
     : Record<never, never>) &
-  (Many extends true ? { readonly many: true } : Record<never, never>);
+  (Many extends true ? { readonly many: true } : Record<never, never>) &
+  (ElementNullable extends true ? { readonly elementNullable: true } : Record<never, never>);
 
 type ModelStorageColumn<
   Definition,
@@ -508,7 +514,8 @@ type ModelStorageColumn<
         >,
         ResolveFieldColumnTypeRef<Definition, ModelFieldState<Definition, ModelName, FieldName>>,
         ResolveFieldColumnTypeParams<Definition, ModelFieldState<Definition, ModelName, FieldName>>,
-        FieldManyOf<ModelFieldState<Definition, ModelName, FieldName>>
+        FieldManyOf<ModelFieldState<Definition, ModelName, FieldName>>,
+        FieldElementNullableOf<ModelFieldState<Definition, ModelName, FieldName>>
       >
     : never;
 
@@ -529,7 +536,12 @@ type BuiltModels<Definition> = {
           readonly kind: 'scalar';
           readonly codecId: ModelStorageColumn<Definition, ModelName, FieldName>['codecId'];
         };
-      };
+      } & (FieldManyOf<ModelFieldState<Definition, ModelName, FieldName>> extends true
+        ? { readonly many: true }
+        : Record<never, never>) &
+        (FieldElementNullableOf<ModelFieldState<Definition, ModelName, FieldName>> extends true
+          ? { readonly elementNullable: true }
+          : Record<never, never>);
     };
     readonly relations: {
       readonly [RelName in StagedModelRelationNames<Definition, ModelName>]: ContractRelation;
@@ -691,6 +703,10 @@ type BuiltStorage<Definition> = {
 
 type StorageColumnManyOf<Col> = Col extends { readonly many: true } ? true : false;
 
+type StorageColumnElementNullableOf<Col> = Col extends { readonly elementNullable: true }
+  ? true
+  : false;
+
 // The enum value union for an enum-typed field, or `never` for a non-enum
 // field. The field's `typeRef` carries the authored `EnumTypeHandle`, whose
 // `Values` tuple preserves the literal member values (text or numeric).
@@ -738,7 +754,14 @@ type CodecChannelType<
   keyof CodecTypesFromDefinition<Definition>
   ? CodecTypesFromDefinition<Definition>[Id] extends { readonly [K in Channel]: infer T }
     ? StorageColumnManyOf<ModelStorageColumn<Definition, ModelName, FieldName>> extends true
-      ? ReadonlyArray<T>
+      ? ReadonlyArray<
+          | T
+          | (StorageColumnElementNullableOf<
+              ModelStorageColumn<Definition, ModelName, FieldName>
+            > extends true
+              ? null
+              : never)
+        >
       : T
     : unknown
   : unknown;
@@ -762,7 +785,14 @@ type FieldChannelType<
   | ([FieldValueUnion<ModelFieldState<Definition, ModelName, FieldName>>] extends [never]
       ? CodecChannelType<Definition, ModelName, FieldName, Channel>
       : StorageColumnManyOf<ModelStorageColumn<Definition, ModelName, FieldName>> extends true
-        ? ReadonlyArray<FieldValueUnion<ModelFieldState<Definition, ModelName, FieldName>>>
+        ? ReadonlyArray<
+            | FieldValueUnion<ModelFieldState<Definition, ModelName, FieldName>>
+            | (StorageColumnElementNullableOf<
+                ModelStorageColumn<Definition, ModelName, FieldName>
+              > extends true
+                ? null
+                : never)
+          >
         : FieldValueUnion<ModelFieldState<Definition, ModelName, FieldName>>)
   | (FieldNullableOf<ModelFieldState<Definition, ModelName, FieldName>> extends true
       ? null

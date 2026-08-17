@@ -667,6 +667,16 @@ describe('generateFieldResolvedType', () => {
     expect(generateFieldResolvedType(field)).toBe('ReadonlyArray<AddressOutput>');
   });
 
+  it('adds null to nullable list elements on output', () => {
+    const field: ContractField = {
+      nullable: false,
+      type: { kind: 'valueObject', name: 'Address' },
+      many: true,
+      elementNullable: true,
+    };
+    expect(generateFieldResolvedType(field)).toBe('ReadonlyArray<AddressOutput | null>');
+  });
+
   it('wraps in Readonly<Record> for dict: true', () => {
     const field: ContractField = {
       nullable: false,
@@ -695,6 +705,16 @@ describe('generateFieldResolvedType', () => {
     expect(generateFieldResolvedType(field)).toBe('ReadonlyArray<AddressOutput> | null');
   });
 
+  it('combines nullable elements and a nullable list on output', () => {
+    const field: ContractField = {
+      nullable: true,
+      type: { kind: 'valueObject', name: 'Address' },
+      many: true,
+      elementNullable: true,
+    };
+    expect(generateFieldResolvedType(field)).toBe('ReadonlyArray<AddressOutput | null> | null');
+  });
+
   it('handles union types with output side', () => {
     const field: ContractField = {
       nullable: false,
@@ -708,6 +728,18 @@ describe('generateFieldResolvedType', () => {
     };
     expect(generateFieldResolvedType(field)).toBe(
       'CodecTypes["mongo/string@1"]["output"] | AddressOutput',
+    );
+  });
+
+  it('generates nullable list elements on input', () => {
+    const field: ContractField = {
+      nullable: false,
+      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+      many: true,
+      elementNullable: true,
+    };
+    expect(generateFieldResolvedType(field, undefined, 'input')).toBe(
+      'ReadonlyArray<CodecTypes["mongo/string@1"]["input"] | null>',
     );
   });
 

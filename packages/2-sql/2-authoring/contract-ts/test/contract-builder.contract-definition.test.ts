@@ -315,6 +315,85 @@ describe('shared contract definition lowering', () => {
     });
   });
 
+  it('encodes nullable list defaults without invoking the element codec for null', () => {
+    const encoded: unknown[] = [];
+    const codecLookup: CodecLookup = {
+      get: (id) =>
+        id === 'app/value@1'
+          ? {
+              id,
+              encode: async (value: unknown) => value,
+              decode: async (wire: unknown) => wire,
+              encodeJson: (value: unknown) => {
+                encoded.push(value);
+                return `encoded:${String(value)}`;
+              },
+              decodeJson: (json: unknown) => json,
+            }
+          : undefined,
+      targetTypesFor: () => ['text'],
+      renderOutputTypeFor: () => undefined,
+    };
+
+    const contract = buildSqlContractFromDefinition(
+      {
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          {
+            modelName: 'Post',
+            tableName: 'post',
+            fields: [
+              {
+                fieldName: 'tags',
+                columnName: 'tags',
+                descriptor: { codecId: 'app/value@1', nativeType: 'text' },
+                nullable: false,
+                many: true,
+                elementNullable: true,
+                default: { kind: 'literal', value: ['value', null] },
+              },
+            ],
+          },
+        ],
+      },
+      codecLookup,
+    );
+
+    expect(unboundTables(contract.storage)['post']?.columns['tags']?.default).toEqual({
+      kind: 'literal',
+      value: ['encoded:value', null],
+    });
+    expect(encoded).toEqual(['value']);
+  });
+
+  it('rejects null elements in strict list defaults', () => {
+    expect(() =>
+      buildSqlContractFromDefinition({
+        warnings: undefined,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        models: [
+          {
+            modelName: 'Post',
+            tableName: 'post',
+            fields: [
+              {
+                fieldName: 'tags',
+                columnName: 'tags',
+                descriptor: { codecId: 'app/value@1', nativeType: 'text' },
+                nullable: false,
+                many: true,
+                default: { kind: 'literal', value: ['value', null] },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow('Literal default on a strict list column cannot contain null elements');
+  });
+
   it('builds phase-specific execution defaults', () => {
     const contract = buildSqlContractFromDefinition({
       warnings: undefined,

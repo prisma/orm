@@ -14,12 +14,26 @@ import {
   UniqueConstraint,
 } from './types';
 
+type ColumnMultiplicityOptions =
+  | { readonly many: true; readonly elementNullable: true }
+  | { readonly many?: boolean; readonly elementNullable?: never };
+
 export function col(
   nativeType: string,
   codecId: string,
   nullable = false,
-  opts?: { readonly many?: boolean },
+  opts?: ColumnMultiplicityOptions,
 ): StorageColumn {
+  if (opts?.elementNullable === true) {
+    return new StorageColumn({
+      nativeType,
+      codecId,
+      nullable,
+      many: opts.many,
+      elementNullable: true,
+    });
+  }
+
   return new StorageColumn({
     nativeType,
     codecId,

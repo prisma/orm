@@ -257,6 +257,7 @@ interface FieldTypeLike {
 interface FieldLike {
   readonly type?: FieldTypeLike;
   readonly many?: boolean;
+  readonly elementNullable?: boolean;
   readonly dict?: boolean;
 }
 
@@ -319,6 +320,11 @@ function validateFieldModifiers(
           `Model "${namespaceId}:${modelName}" field "${fieldName}" cannot have both "many" and "dict" modifiers`,
         );
       }
+      if (f?.elementNullable && !f?.many) {
+        errors.push(
+          `Model "${namespaceId}:${modelName}" field "${fieldName}" cannot have "elementNullable" modifier without "many"`,
+        );
+      }
     }
   }
   for (const [namespaceKey, namespace] of Object.entries(contract.domain.namespaces)) {
@@ -329,6 +335,11 @@ function validateFieldModifiers(
         if (f?.many && f?.dict) {
           errors.push(
             `Value object "${namespaceId}:${voName}" field "${fieldName}" cannot have both "many" and "dict" modifiers`,
+          );
+        }
+        if (f?.elementNullable && !f?.many) {
+          errors.push(
+            `Value object "${namespaceId}:${voName}" field "${fieldName}" cannot have "elementNullable" modifier without "many"`,
           );
         }
       }

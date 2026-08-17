@@ -44,6 +44,7 @@ interface RenderInput {
   readonly tableName: string;
   readonly columnName: string;
   readonly many: boolean;
+  readonly elementNullable: boolean;
   readonly memberValues: readonly (string | number)[] | undefined;
 }
 
@@ -76,11 +77,11 @@ function renderCheckExpressions(input: RenderInput): ReadonlyArray<{
       kind: 'membership',
       columnName: input.columnName,
       expression: input.many
-        ? `${column}::${arrayType}[] <@ ARRAY[${members}]::${arrayType}[]`
+        ? `array_remove(${column}::${arrayType}[], NULL) <@ ARRAY[${members}]::${arrayType}[]`
         : `${column} IN (${members})`,
     });
   }
-  if (input.many) {
+  if (input.many && !input.elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,
@@ -207,7 +208,10 @@ describe('check emission — array domain enum', () => {
     ) as Contract<SqlStorage>;
 
     expect(flatten(checksOf(contract))).toEqual([
-      wire('User_roles_check', `"roles"::text[] <@ ARRAY['user', 'admin']::text[]`),
+      wire(
+        'User_roles_check',
+        `array_remove("roles"::text[], NULL) <@ ARRAY['user', 'admin']::text[]`,
+      ),
       wire('User_roles_elem_not_null', `array_position("roles", NULL) IS NULL`),
     ]);
   });
@@ -298,6 +302,7 @@ describe('check emission — entity-ref-resolved value set (native enum shape)',
       tableName: 'User',
       columnName: 'role',
       many: false,
+      elementNullable: false,
       memberValues: undefined,
     });
   });
@@ -732,6 +737,31 @@ describe('noCheck — enforcement opt-out', () => {
     expect(columnOf(contract, 'roles')?.noCheck).toEqual(['membership']);
   });
 
+  it('element-nullable list domain enum + bare noCheck() resolves membership only', () => {
+    const contract = defineContract(
+      {
+        family: sqlFamilyPack,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        enums: { Role },
+      },
+      ({ field: f, model: m }) =>
+        ({
+          models: {
+            User: m('User', {
+              fields: {
+                id: f.text().id(),
+                roles: f.namedType(Role).many({ elementsNullable: true }).noCheck(),
+              },
+            }),
+          },
+        }) as const,
+    ) as Contract<SqlStorage>;
+
+    expect(checksOf(contract)).toEqual([]);
+    expect(columnOf(contract, 'roles')?.noCheck).toEqual(['membership']);
+  });
+
   it('list domain enum + bare noCheck() derives nothing and persists the canonical kind order', () => {
     const contract = defineContract(
       {
@@ -754,6 +784,65 @@ describe('noCheck — enforcement opt-out', () => {
     expect(columnOf(contract, 'roles')?.noCheck).toEqual(['elementNotNull', 'membership']);
   });
 
+  it('many elementsNullable controls semantic metadata and element enforcement', () => {
+    const contract = defineContract(
+      {
+        family: sqlFamilyPack,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+      },
+      ({ field: f, model: m }) =>
+        ({
+          models: {
+            User: m('User', {
+              fields: {
+                id: f.text().id(),
+                tags: f.text().many(),
+                labels: f.text().many({ elementsNullable: false }),
+                aliases: f.text().many({ elementsNullable: true }),
+                optionalAliases: f.text().many({ elementsNullable: true }).optional(),
+                waived: f.text().many().noCheck('elementNotNull'),
+              },
+            }),
+          },
+        }) as const,
+    ) as Contract<SqlStorage>;
+
+    const user = contract.domain.namespaces['public']?.models?.['User'];
+    expect(user?.fields['tags']).toEqual(user?.fields['labels']);
+    expect(user?.fields['tags']).not.toHaveProperty('elementNullable');
+    expect(user?.fields['labels']).not.toHaveProperty('elementNullable');
+    expect(columnOf(contract, 'tags')).toEqual(columnOf(contract, 'labels'));
+    expect(columnOf(contract, 'labels')).not.toHaveProperty('elementNullable');
+    expect(user?.fields['aliases']).toMatchObject({ many: true, elementNullable: true });
+    expect(user?.fields['optionalAliases']).toMatchObject({
+      nullable: true,
+      many: true,
+      elementNullable: true,
+    });
+    expect(columnOf(contract, 'aliases')).toMatchObject({
+      many: true,
+      elementNullable: true,
+    });
+    expect(columnOf(contract, 'aliases')).not.toHaveProperty('noCheck');
+    expect(columnOf(contract, 'optionalAliases')).toMatchObject({
+      nullable: true,
+      many: true,
+      elementNullable: true,
+    });
+    expect(columnOf(contract, 'optionalAliases')).not.toHaveProperty('noCheck');
+    expect(user?.fields['waived']).not.toHaveProperty('elementNullable');
+    expect(columnOf(contract, 'waived')).toMatchObject({
+      many: true,
+      noCheck: ['elementNotNull'],
+    });
+    expect(columnOf(contract, 'waived')).not.toHaveProperty('elementNullable');
+    expect(flatten(checksOf(contract))).toEqual([
+      wire('User_tags_elem_not_null', `array_position("tags", NULL) IS NULL`),
+      wire('User_labels_elem_not_null', `array_position("labels", NULL) IS NULL`),
+    ]);
+  });
+
   it('plain list + noCheck("elementNotNull") derives nothing', () => {
     const contract = defineContract(
       {
@@ -773,6 +862,9 @@ describe('noCheck — enforcement opt-out', () => {
 
     expect(checksOf(contract)).toEqual([]);
     expect(columnOf(contract, 'tags')?.noCheck).toEqual(['elementNotNull']);
+    expect(columnOf(contract, 'tags')).not.toHaveProperty('elementNullable');
+    const user = contract.domain.namespaces['public']?.models?.['User'];
+    expect(user?.fields['tags']).not.toHaveProperty('elementNullable');
   });
 });
 
@@ -795,6 +887,29 @@ describe('noCheck — CONTRACT.CHECK_OPTOUT_INVALID', () => {
           }) as const,
       ),
     ).toThrow(/noCheck\("membership"\) does not apply/);
+  });
+
+  it('rejects elementNotNull on a nullable-element list', () => {
+    expect(() =>
+      defineContract(
+        {
+          family: sqlFamilyPack,
+          target: postgresTargetPack,
+          createNamespace: createTestSqlNamespace,
+        },
+        ({ field: f, model: m }) =>
+          ({
+            models: {
+              User: m('User', {
+                fields: {
+                  id: f.text().id(),
+                  tags: f.text().many({ elementsNullable: true }).noCheck('elementNotNull'),
+                },
+              }),
+            },
+          }) as const,
+      ),
+    ).toThrow(/noCheck\("elementNotNull"\) does not apply/);
   });
 
   it('rejects elementNotNull on a non-many column', () => {

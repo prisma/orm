@@ -304,6 +304,40 @@ describe('parse() syntactic diagnostics', () => {
     }
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
+
+  it('reports a malformed `?` in a types-block member as a types diagnostic', () => {
+    const source = 'types {\n  Foo = Bar??\n}';
+    const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_TYPES_MEMBER');
+    expect(message).toBe(
+      'Unexpected "?"; a type may be optional (`Foo?`), a list (`Foo[]`), have nullable elements (`Foo?[]`), or both (`Foo?[]?`)',
+    );
+    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+      "
+      types {
+        Foo = Bar??
+                  ~
+      }
+      "
+    `);
+    expect(greenText(result.document.syntax.green)).toBe(source);
+  });
+
+  it('reports a malformed `?` in a model field as a model diagnostic', () => {
+    const source = 'model M {\n  x Bar??\n}';
+    const { result, message, diagnostic } = diagnosticFor(source, 'PSL_INVALID_MODEL_MEMBER');
+    expect(message).toBe(
+      'Unexpected "?"; a type may be optional (`Foo?`), a list (`Foo[]`), have nullable elements (`Foo?[]`), or both (`Foo?[]?`)',
+    );
+    expect(highlight(result.sourceFile, diagnostic.range)).toMatchInlineSnapshot(`
+      "
+      model M {
+        x Bar??
+              ~
+      }
+      "
+    `);
+    expect(greenText(result.document.syntax.green)).toBe(source);
+  });
 });
 
 describe('parse() commits reserved declaration keywords on the keyword alone', () => {

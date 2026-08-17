@@ -27,7 +27,7 @@ function elementShape(
 ): MongoFieldShape {
   const { type } = field;
   if (type.kind === 'scalar') {
-    return { kind: 'leaf', codecId: type.codecId, nullable: false };
+    return { kind: 'leaf', codecId: type.codecId, nullable: field.elementNullable === true };
   }
   if (type.kind !== 'valueObject' || enclosing.has(type.name)) return UNKNOWN;
   const valueObject = valueObjects[type.name];

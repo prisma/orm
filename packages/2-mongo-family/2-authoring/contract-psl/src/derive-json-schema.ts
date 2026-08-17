@@ -43,8 +43,10 @@ function fieldToBsonSchema(
         : null;
 
     if ('many' in field && field.many) {
-      const items: Record<string, unknown> = { bsonType };
-      if (enumValues) items['enum'] = enumValues;
+      const items: Record<string, unknown> = {
+        bsonType: field.elementNullable ? ['null', bsonType] : bsonType,
+      };
+      if (enumValues) items['enum'] = field.elementNullable ? [...enumValues, null] : enumValues;
       return { bsonType: 'array', items };
     }
 
@@ -64,7 +66,10 @@ function fieldToBsonSchema(
     if (!vo) return undefined;
     const voSchema = deriveObjectSchema(vo.fields, valueObjects, codecLookup, valueSets);
     if ('many' in field && field.many) {
-      return { bsonType: 'array', items: voSchema };
+      return {
+        bsonType: 'array',
+        items: field.elementNullable ? { oneOf: [{ bsonType: 'null' }, voSchema] } : voSchema,
+      };
     }
     if (field.nullable) {
       return { oneOf: [{ bsonType: 'null' }, voSchema] };

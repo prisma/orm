@@ -1163,7 +1163,11 @@ function resolveNonRelationField(
       type: { kind: 'valueObject', name: resolution.symbol.name },
       nullable: field.optional,
     };
-    return { field: field.list ? { ...result, many: true } : result };
+    return {
+      field: field.list
+        ? { ...result, many: true, ...(field.elementOptional ? { elementNullable: true } : {}) }
+        : result,
+    };
   }
 
   if (resolution?.kind === 'block' && resolution.symbol.keyword === 'enum') {
@@ -1180,7 +1184,11 @@ function resolveNonRelationField(
       nullable: field.optional,
       valueSet,
     };
-    return { field: field.list ? { ...result, many: true } : result };
+    return {
+      field: field.list
+        ? { ...result, many: true, ...(field.elementOptional ? { elementNullable: true } : {}) }
+        : result,
+    };
   }
 
   if (
@@ -1227,7 +1235,11 @@ function resolveNonRelationField(
     type: { kind: 'scalar', codecId },
     nullable: field.optional,
   };
-  return { field: field.list ? { ...result, many: true } : result };
+  return {
+    field: field.list
+      ? { ...result, many: true, ...(field.elementOptional ? { elementNullable: true } : {}) }
+      : result,
+  };
 }
 
 function processEnumDeclarations(input: {

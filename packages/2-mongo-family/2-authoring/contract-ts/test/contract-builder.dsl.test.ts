@@ -25,6 +25,29 @@ const mongoTargetPack = {
 } as const satisfies TargetPackRef<'mongo', 'mongo'>;
 
 describe('mongo contract builder', () => {
+  it('authors scalar-list element nullability through many options', () => {
+    const Lists = model('Lists', {
+      collection: 'lists',
+      fields: {
+        strict: field.string().many(),
+        explicitlyStrict: field.string().many({ elementsNullable: false }),
+        nullableElements: field.string().many({ elementsNullable: true }),
+        fullyNullable: field.string().optional().many({ elementsNullable: true }),
+      },
+    });
+    const contract = defineContract({
+      family: mongoFamilyPack,
+      target: mongoTargetPack,
+      models: { Lists },
+    });
+    expect(domainModelsAtDefaultNamespace(contract.domain)['Lists']?.fields).toMatchObject({
+      strict: { nullable: false, many: true },
+      explicitlyStrict: { nullable: false, many: true },
+      nullableElements: { nullable: false, many: true, elementNullable: true },
+      fullyNullable: { nullable: true, many: true, elementNullable: true },
+    });
+  });
+
   it('builds a canonical contract for referenced models', () => {
     const User = model('User', {
       collection: 'users',

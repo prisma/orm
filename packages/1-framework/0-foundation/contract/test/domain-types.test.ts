@@ -72,6 +72,16 @@ describe('contract types', () => {
     expect(field.dict).toBe(true);
   });
 
+  it('ContractField supports elementNullable modifier on a many field', () => {
+    const field: ContractField = {
+      nullable: false,
+      type: { kind: 'scalar', codecId: 'pg/text@1' },
+      many: true,
+      elementNullable: true,
+    };
+    expect(field.elementNullable).toBe(true);
+  });
+
   it('ValueObjectFieldType extends ContractFieldType', () => {
     const _check: AssertExtends<ValueObjectFieldType, ContractFieldType> = true;
     expect(_check).toBe(true);

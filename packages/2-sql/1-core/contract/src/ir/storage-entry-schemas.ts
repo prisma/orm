@@ -40,6 +40,7 @@ const StorageColumnSchema = type({
   codecId: 'string',
   nullable: 'boolean',
   'many?': 'boolean',
+  'elementNullable?': 'true',
   'typeParams?': 'Record<string, unknown>',
   'typeRef?': 'string',
   'default?': ColumnDefaultSchema,
@@ -51,6 +52,9 @@ const StorageColumnSchema = type({
 }).narrow((col, ctx) => {
   if (col.typeParams !== undefined && col.typeRef !== undefined) {
     return ctx.mustBe('a column with either typeParams or typeRef, not both');
+  }
+  if (col.elementNullable === true && col.many !== true) {
+    return ctx.mustBe('a column whose elementNullable marker is present only when many is true');
   }
   if (col.noCheck !== undefined) {
     if (col.noCheck.length === 0) {

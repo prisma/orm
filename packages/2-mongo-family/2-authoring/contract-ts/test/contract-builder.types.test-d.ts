@@ -261,11 +261,16 @@ const F11Contract = defineContract({
         scalarField: field.string(),
         nullableField: field.string().optional(),
         manyField: field.string().many(),
+        explicitlyStrictManyField: field.string().many({ elementsNullable: false }),
+        nullableElementsManyField: field.string().many({ elementsNullable: true }),
         nullableManyField: field.string().optional().many(),
+        fullyNullableManyField: field.string().optional().many({ elementsNullable: true }),
         role: field.namedType(F11Role),
         nullableRole: field.namedType(F11Role).optional(),
         manyRoles: field.namedType(F11Role).many(),
+        nullableElementRoles: field.namedType(F11Role).many({ elementsNullable: true }),
         manyNullableRoles: field.namedType(F11Role).optional().many(),
+        fullyNullableRoles: field.namedType(F11Role).optional().many({ elementsNullable: true }),
       },
     }),
   },
@@ -281,8 +286,21 @@ test('F11: nullable field resolves to Base | null', () => {
   expectTypeOf<F11Row['nullableField']>().toEqualTypeOf<string | null>();
 });
 
-test('F11: many field resolves to Base[]', () => {
+test('F11: many fields preserve both element-nullability states', () => {
   expectTypeOf<F11Row['manyField']>().toEqualTypeOf<string[]>();
+  expectTypeOf<F11Row['explicitlyStrictManyField']>().toEqualTypeOf<string[]>();
+  expectTypeOf<F11Row['nullableElementsManyField']>().toEqualTypeOf<(string | null)[]>();
+  expectTypeOf<F11Row['fullyNullableManyField']>().toEqualTypeOf<(string | null)[] | null>();
+  expectTypeOf<F11Input['nullableElementsManyField']>().toEqualTypeOf<(string | null)[]>();
+  expectTypeOf<F11Input['fullyNullableManyField']>().toEqualTypeOf<(string | null)[] | null>();
+});
+
+test('F11: many options reject incomplete and widened state', () => {
+  const widened: boolean = Math.random() > 0.5;
+  // @ts-expect-error widened booleans cannot determine element-nullability state
+  field.string().many({ elementsNullable: widened });
+  // @ts-expect-error options require elementsNullable
+  field.string().many({});
 });
 
 test('F11: nullable+many field resolves to Base[] | null, not (Base | null)[]', () => {
@@ -303,8 +321,15 @@ test('F11: many enum field resolves to value union array', () => {
   expectTypeOf<F11Row['manyRoles']>().toEqualTypeOf<('user' | 'admin')[]>();
 });
 
-test('F11: nullable+many enum field resolves to value union array | null', () => {
+test('F12M: enum lists preserve both nullability axes on output and input', () => {
+  expectTypeOf<F11Row['manyRoles']>().toEqualTypeOf<('user' | 'admin')[]>();
+  expectTypeOf<F11Row['nullableElementRoles']>().toEqualTypeOf<('user' | 'admin' | null)[]>();
   expectTypeOf<F11Row['manyNullableRoles']>().toEqualTypeOf<('user' | 'admin')[] | null>();
+  expectTypeOf<F11Row['fullyNullableRoles']>().toEqualTypeOf<('user' | 'admin' | null)[] | null>();
+  expectTypeOf<F11Input['nullableElementRoles']>().toEqualTypeOf<('user' | 'admin' | null)[]>();
+  expectTypeOf<F11Input['fullyNullableRoles']>().toEqualTypeOf<
+    ('user' | 'admin' | null)[] | null
+  >();
 });
 
 test('F14: namespace enum slot is typed with literal value preservation', () => {
@@ -377,6 +402,9 @@ const VOModel = model('VOModel', {
     nested: field.valueObject(Outer),
     nullableNested: field.valueObject(Outer).optional(),
     manyNested: field.valueObject(Outer).many(),
+    nullableElementNested: field.valueObject(Outer).many({ elementsNullable: true }),
+    nullableManyNested: field.valueObject(Outer).optional().many(),
+    fullyNullableNested: field.valueObject(Outer).optional().many({ elementsNullable: true }),
   },
 });
 
@@ -414,6 +442,20 @@ test('VO output: many value object resolves to shape[]', () => {
       name: string;
     }[]
   >();
+});
+
+test('F12M: value-object lists preserve both nullability axes on output and input', () => {
+  type Shape = {
+    inner: { x: string; y: number };
+    nullableInner: { x: string; y: number } | null;
+    name: string;
+  };
+  expectTypeOf<VORow['manyNested']>().toEqualTypeOf<Shape[]>();
+  expectTypeOf<VORow['nullableElementNested']>().toEqualTypeOf<(Shape | null)[]>();
+  expectTypeOf<VORow['nullableManyNested']>().toEqualTypeOf<Shape[] | null>();
+  expectTypeOf<VORow['fullyNullableNested']>().toEqualTypeOf<(Shape | null)[] | null>();
+  expectTypeOf<VOInput['nullableElementNested']>().toEqualTypeOf<(Shape | null)[]>();
+  expectTypeOf<VOInput['fullyNullableNested']>().toEqualTypeOf<(Shape | null)[] | null>();
 });
 
 test('VO output: nested VO recursion resolves inner shape (not unknown)', () => {

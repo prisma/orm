@@ -126,6 +126,33 @@ describe('contractModelToMongoResultShape', () => {
 });
 
 describe('contractFieldToMongoFieldShape', () => {
+  it('maps list element nullability independently from list nullability', () => {
+    expect(
+      contractFieldToMongoFieldShape({
+        nullable: false,
+        many: true,
+        type: { kind: 'scalar', codecId: 'mongo/string@1' },
+      }),
+    ).toEqual({
+      kind: 'array',
+      nullable: false,
+      element: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
+    });
+
+    expect(
+      contractFieldToMongoFieldShape({
+        nullable: true,
+        many: true,
+        elementNullable: true,
+        type: { kind: 'scalar', codecId: 'mongo/string@1' },
+      }),
+    ).toEqual({
+      kind: 'array',
+      nullable: true,
+      element: { kind: 'leaf', codecId: 'mongo/string@1', nullable: true },
+    });
+  });
+
   it('union field maps to unknown', () => {
     const f = contractFieldToMongoFieldShape({
       nullable: false,

@@ -1472,6 +1472,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
           descriptor: resolvedField.descriptor,
           nullable: resolvedField.nullable,
           ...ifDefined('many', resolvedField.many),
+          ...ifDefined('elementNullable', resolvedField.elementNullable),
           ...ifDefined('default', resolvedField.defaultValue),
           ...ifDefined('executionDefaults', resolvedField.executionDefaults),
         };
@@ -1546,6 +1547,7 @@ function buildValueObjectNodes(input: BuildValueObjectNodesInput): ValueObjectNo
         fieldName: field.name,
         nullable: field.optional,
         ...ifDefined('many', field.list ? (true as const) : undefined),
+        ...ifDefined('elementNullable', field.elementOptional ? (true as const) : undefined),
       };
       const fieldTypeReference = typeReferenceNode(field);
       const fieldTypeResolution =

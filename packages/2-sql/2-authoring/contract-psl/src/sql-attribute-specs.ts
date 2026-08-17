@@ -64,7 +64,7 @@ import type {
 } from '@internal/psl-parser/syntax';
 import { FunctionCallAst } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
-import { notOk } from '@internal/utils/result';
+import { notOk, ok } from '@internal/utils/result';
 import { removedDbgeneratedMessage } from './default-function-registry';
 import { getAttribute } from './psl-attribute-parsing';
 
@@ -248,7 +248,19 @@ const mapFieldSpec = fieldAttribute('map', {
   refine: validateMappedName,
 });
 
-type DefaultLiteralElement = string | NumLiteral | boolean | ParsedTaggedLiteral;
+type DefaultLiteralElement = string | NumLiteral | boolean | ParsedTaggedLiteral | null;
+
+function nullLiteral(): ArgType<null, AttributeCtx> {
+  const nullIdentifier = identifier('null');
+  return {
+    kind: 'null',
+    label: 'null',
+    parse: (arg, ctx) => {
+      const result = nullIdentifier.parse(arg, ctx);
+      return result.ok ? ok(null) : result;
+    },
+  };
+}
 
 type DefaultArgValue = DefaultLiteralElement | DefaultLiteralElement[] | TypedFuncCall;
 
@@ -268,7 +280,7 @@ function scalarDefaultArms(
   const tagArms = () =>
     [...tagsByDocumentation].map(([documentation, tags]) => taggedLiteral(tags, { documentation }));
   // A list element may itself be a tagged literal, so `Jsonb[] @default([json`{}`])` parses.
-  const literal = () => oneOf(str(), numLiteral(), bool(), ...tagArms());
+  const literal = () => oneOf(str(), numLiteral(), bool(), nullLiteral(), ...tagArms());
   const listArm = () => list(literal(), { label: `list of (${literal().label})` });
   const funcArms = [...registries.defaultFunctionRegistry.entries()].map(([name, entry]) =>
     funcCall(
@@ -344,11 +356,13 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
 function enumDefaultArms(
   members: readonly string[],
   enumName: string,
+  isList: boolean,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   const [first, ...rest] = members;
   if (first === undefined) return [noEnumMember()];
   const member = (name: string) =>
     identifier(name, { documentation: `The \`${name}\` member of enum \`${enumName}\`.` });
+  if (isList) return [list(oneOf(member(first), ...rest.map(member), nullLiteral()))];
   return [member(first), ...rest.map(member)];
 }
 
@@ -357,7 +371,7 @@ function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
   const valueArms =
     members === undefined
       ? scalarDefaultArms(ctx.field.list, ctx.controlMutationDefaults)
-      : enumDefaultArms(members, ctx.field.typeName);
+      : enumDefaultArms(members, ctx.field.typeName, ctx.field.list);
   return fieldAttribute('default', {
     documentation: 'Supplies a default value when this field is omitted from a mutation.',
     positional: [

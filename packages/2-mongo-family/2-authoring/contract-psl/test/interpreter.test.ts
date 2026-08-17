@@ -7,6 +7,10 @@ import {
   type StorageHashBase,
 } from '@internal/contract/types';
 import { enumType, member } from '@internal/contract-authoring';
+import {
+  mongoFamilyEntityTypes,
+  mongoFamilyPslBlockDescriptors,
+} from '@internal/family-mongo/pack';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -38,6 +42,16 @@ function buildSymbolTableInput(
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
+    pslBlockDescriptors: {
+      enum: {
+        kind: 'pslBlock',
+        keyword: 'enum',
+        discriminator: 'enum',
+        name: { required: true },
+        parameters: {},
+        variadicParameters: true,
+      },
+    },
   });
   return { documents: [document], symbolTable, sources };
 }
@@ -2134,17 +2148,133 @@ model Item {
       expect(props['bio']).toEqual({ bsonType: ['null', 'string'] });
     });
 
-    it('handles array fields', () => {
+    it('lowers and validates the scalar-list nullability matrix', () => {
       const ir = interpretOk(`
         model User {
-          id   ObjectId @id @map("_id")
-          tags String[]
+          id ObjectId @id @map("_id")
+          strict String[]
+          nullableElements String?[]
+          nullableList String[]?
+          fullyNullable String?[]?
         }
       `);
+      expect(model(ir, 'User').fields).toMatchObject({
+        strict: { nullable: false, many: true },
+        nullableElements: { nullable: false, many: true, elementNullable: true },
+        nullableList: { nullable: true, many: true },
+        fullyNullable: { nullable: true, many: true, elementNullable: true },
+      });
       const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
-      expect(props['tags']).toEqual({ bsonType: 'array', items: { bsonType: 'string' } });
+      expect(props['strict']).toEqual({ bsonType: 'array', items: { bsonType: 'string' } });
+      expect(props['nullableElements']).toEqual({
+        bsonType: 'array',
+        items: { bsonType: ['null', 'string'] },
+      });
+      expect(props['nullableList']).toEqual({ bsonType: 'array', items: { bsonType: 'string' } });
+      expect(props['fullyNullable']).toEqual({
+        bsonType: 'array',
+        items: { bsonType: ['null', 'string'] },
+      });
+    });
+
+    it('lowers nullable enum list elements into exact contract and BSON validator shapes', () => {
+      const ir = interpretOk(
+        `
+          enum Role {
+            @@type("mongo/string@1")
+            User = "user"
+            Admin = "admin"
+          }
+
+          model User {
+            id ObjectId @id @map("_id")
+            roles Role?[]
+            optionalRoles Role?[]?
+          }
+        `,
+        {
+          authoringContributions: {
+            field: {},
+            type: {},
+            entityTypes: mongoFamilyEntityTypes,
+            pslBlockDescriptors: mongoFamilyPslBlockDescriptors,
+            modelAttributes: {},
+          },
+        },
+      );
+      expect(model(ir, 'User').fields).toMatchObject({
+        roles: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: false,
+          many: true,
+          elementNullable: true,
+          valueSet: {
+            plane: 'domain',
+            entityKind: 'enum',
+            namespaceId: UNBOUND_NAMESPACE_ID,
+            entityName: 'Role',
+          },
+        },
+        optionalRoles: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: true,
+          many: true,
+          elementNullable: true,
+          valueSet: {
+            plane: 'domain',
+            entityKind: 'enum',
+            namespaceId: UNBOUND_NAMESPACE_ID,
+            entityName: 'Role',
+          },
+        },
+      });
+      const validator = getValidator(ir, 'user');
+      expect(validator!['jsonSchema']).toEqual({
+        bsonType: 'object',
+        required: ['_id', 'roles'],
+        properties: {
+          _id: { bsonType: 'objectId' },
+          roles: {
+            bsonType: 'array',
+            items: { bsonType: ['null', 'string'], enum: ['user', 'admin', null] },
+          },
+          optionalRoles: {
+            bsonType: 'array',
+            items: { bsonType: ['null', 'string'], enum: ['user', 'admin', null] },
+          },
+        },
+        additionalProperties: false,
+      });
+    });
+
+    it('lowers nullable value-object list elements and both-null lists', () => {
+      const ir = interpretOk(`
+        type Address {
+          city String
+        }
+
+        model User {
+          id ObjectId @id @map("_id")
+          nullableElements Address?[]
+          fullyNullable Address?[]?
+        }
+      `);
+      expect(model(ir, 'User').fields).toMatchObject({
+        nullableElements: {
+          type: { kind: 'valueObject', name: 'Address' },
+          nullable: false,
+          many: true,
+          elementNullable: true,
+        },
+        fullyNullable: {
+          type: { kind: 'valueObject', name: 'Address' },
+          nullable: true,
+          many: true,
+          elementNullable: true,
+        },
+      });
     });
 
     it('uses @map names in jsonSchema properties', () => {

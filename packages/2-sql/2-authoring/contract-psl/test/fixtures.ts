@@ -150,6 +150,7 @@ export function testRenderCheckExpressions(input: {
   readonly tableName: string;
   readonly columnName: string;
   readonly many: boolean;
+  readonly elementNullable: boolean;
   readonly memberValues: readonly (string | number)[] | undefined;
 }): ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
@@ -171,11 +172,11 @@ export function testRenderCheckExpressions(input: {
       kind: 'membership',
       columnName: input.columnName,
       expression: input.many
-        ? `${column}::${arrayType}[] <@ ARRAY[${members}]::${arrayType}[]`
+        ? `array_remove(${column}::${arrayType}[], NULL) <@ ARRAY[${members}]::${arrayType}[]`
         : `${column} IN (${members})`,
     });
   }
-  if (input.many) {
+  if (input.many && !input.elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,

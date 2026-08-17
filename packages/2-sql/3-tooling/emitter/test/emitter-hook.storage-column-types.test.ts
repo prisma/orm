@@ -20,6 +20,7 @@ function vectorCodecLookup(): CodecLookup {
       id === 'pg/vector@1' ? `Vector<${params['length']}>` : undefined,
     renderInputTypeFor: (id, params) =>
       id === 'pg/vector@1' ? `VectorInput<${params['length']}>` : undefined,
+    renderValueLiteralFor: (_id, value) => renderTsLiteral(value),
   };
 }
 
@@ -1049,5 +1050,161 @@ describe('StorageColumnTypes', () => {
     expect(inputMatch![0]).toContain(
       'readonly labels: ReadonlyArray<CodecTypes["pg/text@1"]["input"]> | null',
     );
+  });
+
+  it('renders nullable elements inside the array before whole-column nullability', () => {
+    const contract = createContract({
+      models: {
+        Post: {
+          storage: {
+            table: 'post',
+            fields: {
+              tags: { column: 'tags' },
+              labels: { column: 'labels' },
+              waived: { column: 'waived' },
+              priorities: { column: 'priorities' },
+              vectors: { column: 'vectors' },
+            },
+          },
+          fields: {
+            tags: {
+              nullable: false,
+              many: true,
+              elementNullable: true,
+              type: { kind: 'scalar', codecId: 'pg/text@1' },
+            },
+            labels: {
+              nullable: true,
+              many: true,
+              elementNullable: true,
+              type: { kind: 'scalar', codecId: 'pg/text@1' },
+            },
+            waived: {
+              nullable: false,
+              many: true,
+              type: { kind: 'scalar', codecId: 'pg/text@1' },
+            },
+            priorities: {
+              nullable: false,
+              many: true,
+              elementNullable: true,
+              type: { kind: 'scalar', codecId: 'pg/text@1' },
+            },
+            vectors: {
+              nullable: false,
+              many: true,
+              elementNullable: true,
+              type: { kind: 'scalar', codecId: 'pg/vector@1', typeParams: { length: 3 } },
+            },
+          },
+          relations: {},
+        },
+      },
+      storage: {
+        namespaces: {
+          [UNBOUND_NAMESPACE_ID]: {
+            entries: {
+              table: {
+                post: {
+                  columns: {
+                    tags: {
+                      nativeType: 'text',
+                      codecId: 'pg/text@1',
+                      nullable: false,
+                      many: true,
+                      elementNullable: true,
+                    },
+                    labels: {
+                      nativeType: 'text',
+                      codecId: 'pg/text@1',
+                      nullable: true,
+                      many: true,
+                      elementNullable: true,
+                    },
+                    waived: {
+                      nativeType: 'text',
+                      codecId: 'pg/text@1',
+                      nullable: false,
+                      many: true,
+                      noCheck: ['elementNotNull'],
+                    },
+                    priorities: {
+                      nativeType: 'text',
+                      codecId: 'pg/text@1',
+                      nullable: false,
+                      many: true,
+                      elementNullable: true,
+                      valueSet: {
+                        plane: 'storage',
+                        namespaceId: UNBOUND_NAMESPACE_ID,
+                        entityKind: 'valueSet',
+                        entityName: 'Priority',
+                      },
+                    },
+                    vectors: {
+                      nativeType: 'vector',
+                      codecId: 'pg/vector@1',
+                      nullable: false,
+                      many: true,
+                      elementNullable: true,
+                      typeParams: { length: 3 },
+                    },
+                  },
+                  uniques: [],
+                  indexes: [],
+                  foreignKeys: [],
+                },
+              },
+              valueSet: {
+                Priority: { kind: 'valueSet', values: ['low', 'high'] },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const dts = generateContractDts(
+      contract,
+      sqlEmission,
+      [],
+      testHashes,
+      undefined,
+      vectorCodecLookup(),
+    );
+    const outputMatch = dts.match(/export type StorageColumnTypes = ({.+?});/s);
+
+    expect(outputMatch).not.toBeNull();
+    expect(outputMatch![0]).toContain(
+      'readonly tags: ReadonlyArray<CodecTypes["pg/text@1"]["output"] | null>',
+    );
+    expect(outputMatch![0]).toContain(
+      'readonly labels: ReadonlyArray<CodecTypes["pg/text@1"]["output"] | null> | null',
+    );
+    expect(outputMatch![0]).toContain(
+      'readonly waived: ReadonlyArray<CodecTypes["pg/text@1"]["output"]>',
+    );
+    expect(outputMatch![0]).not.toContain(
+      'readonly waived: ReadonlyArray<CodecTypes["pg/text@1"]["output"] | null>',
+    );
+    expect(outputMatch![0]).toContain('readonly priorities: ReadonlyArray<"low" | "high" | null>');
+    expect(outputMatch![0]).toContain('readonly vectors: ReadonlyArray<Vector<3> | null>');
+
+    const inputMatch = dts.match(/export type StorageColumnInputTypes = ({.+?});/s);
+    expect(inputMatch).not.toBeNull();
+    expect(inputMatch![0]).toContain(
+      'readonly tags: ReadonlyArray<CodecTypes["pg/text@1"]["input"] | null>',
+    );
+    expect(inputMatch![0]).toContain(
+      'readonly labels: ReadonlyArray<CodecTypes["pg/text@1"]["input"] | null> | null',
+    );
+    expect(inputMatch![0]).toContain(
+      'readonly waived: ReadonlyArray<CodecTypes["pg/text@1"]["input"]>',
+    );
+    expect(inputMatch![0]).not.toContain(
+      'readonly waived: ReadonlyArray<CodecTypes["pg/text@1"]["input"] | null>',
+    );
+    expect(inputMatch![0]).toContain('readonly priorities: ReadonlyArray<"low" | "high" | null>');
+    expect(inputMatch![0]).toContain('readonly vectors: ReadonlyArray<VectorInput<3> | null>');
   });
 });

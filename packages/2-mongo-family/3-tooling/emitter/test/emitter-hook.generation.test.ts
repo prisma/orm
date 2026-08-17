@@ -128,6 +128,34 @@ describe('mongoEmission.generateContractTypes', () => {
       );
     });
 
+    it('emits nullable scalar-list elements on output and input channels', () => {
+      const contract = createMongoContract({
+        models: {
+          Lists: {
+            fields: {
+              values: {
+                nullable: true,
+                many: true,
+                elementNullable: true,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
+            },
+            relations: {},
+            storage: { collection: 'lists' },
+          },
+        },
+        storage: namespacedMongoStorageFromCollections({ lists: {} }),
+      });
+      const types = generateContractDts(contract, mongoEmission, [], testHashes);
+      expect(types).toContain('readonly elementNullable: true');
+      expect(types).toContain(
+        'readonly values: ReadonlyArray<CodecTypes["mongo/string@1"]["output"] | null> | null',
+      );
+      expect(types).toContain(
+        'readonly values: ReadonlyArray<CodecTypes["mongo/string@1"]["input"] | null> | null',
+      );
+    });
+
     it('generates model relations without strategy', () => {
       const contract = createMongoContract({
         models: {

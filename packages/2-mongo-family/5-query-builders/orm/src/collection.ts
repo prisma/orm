@@ -859,19 +859,24 @@ class MongoCollectionImpl<
     const field = this.#fieldAtPath(filter.field);
     if (field?.type.kind !== 'scalar') return filter;
     const encode = (value: MongoValue): MongoValue => {
+      if (value === null) return null;
       if (value instanceof MongoParamRef) {
         return value.codecId === undefined
           ? this.#wrapFieldValue(value.value, field, filter.field, 'filter')
           : value;
       }
-      if (field.many === true && Array.isArray(value)) return value.map(encode);
+      if (field.many && Array.isArray(value)) return value.map(encode);
       return this.#wrapFieldValue(value, field, filter.field, 'filter');
     };
     if (COMPARISON_OPERATORS.has(filter.op)) {
       return MongoFieldFilter.of(filter.field, filter.op, encode(filter.value));
     }
     if (MEMBERSHIP_OPERATORS.has(filter.op) && Array.isArray(filter.value)) {
-      return MongoFieldFilter.of(filter.field, filter.op, filter.value.map(encode));
+      const values = filter.value;
+      const encoded = values.map(encode);
+      return encoded.every((value, index) => value === values[index])
+        ? filter
+        : MongoFieldFilter.of(filter.field, filter.op, encoded);
     }
     return filter;
   }
@@ -912,15 +917,17 @@ class MongoCollectionImpl<
 
       if (field.many && Array.isArray(value)) {
         return value.map((item, index) =>
-          this.#wrapValueObject(
-            blindCast<
-              Record<string, unknown>,
-              'contract-typed value-object array elements are field-value records'
-            >(item),
-            voDef,
-            `${path}.${index}`,
-            purpose,
-          ),
+          item === null
+            ? null
+            : this.#wrapValueObject(
+                blindCast<
+                  Record<string, unknown>,
+                  'non-null contract-typed value-object array elements are field-value records'
+                >(item),
+                voDef,
+                `${path}.${index}`,
+                purpose,
+              ),
         );
       }
       return this.#wrapValueObject(
@@ -937,7 +944,7 @@ class MongoCollectionImpl<
     return new MongoParamRef(value);
   }
 
-  #nullParam(field: ContractField, path: string, purpose: ValuePurpose): MongoParamRef {
+  #nullParam(field: ContractField, path: string, purpose: ValuePurpose): null {
     if (purpose === 'write' && !field.nullable) {
       throw runtimeError(
         'RUNTIME.ENCODE_FAILED',
@@ -945,7 +952,7 @@ class MongoCollectionImpl<
         { label: path, collection: this.#collectionName },
       );
     }
-    return new MongoParamRef(null);
+    return null;
   }
 
   /**
@@ -958,8 +965,8 @@ class MongoCollectionImpl<
       this.#contract.domain.namespaces[valueSet.namespaceId]?.enum?.[valueSet.entityName];
     if (contractEnum === undefined) return;
     const allowed = contractEnum.members.map((member) => member.value);
-    const values = field.many === true && Array.isArray(value) ? value : [value];
-    const outside = values.find((entry) => !allowed.includes(entry));
+    const values = field.many && Array.isArray(value) ? value : [value];
+    const outside = values.find((entry) => entry !== null && !allowed.includes(entry));
     if (outside === undefined) return;
     const quoted = allowed.map((entry) => JSON.stringify(entry));
     const list =
@@ -979,8 +986,10 @@ class MongoCollectionImpl<
   #scalarParam(value: unknown, field: ContractField, path: string): MongoValue {
     if (field.type.kind !== 'scalar') return new MongoParamRef(value);
     const codecId = field.type.codecId;
-    if (field.many === true && Array.isArray(value)) {
-      return value.map((element, index) => this.#fieldParam(element, codecId, `${path}.${index}`));
+    if (field.many && Array.isArray(value)) {
+      return value.map((element, index) =>
+        element === null ? null : this.#fieldParam(element, codecId, `${path}.${index}`),
+      );
     }
     return this.#fieldParam(value, codecId, path);
   }
@@ -1121,9 +1130,10 @@ class MongoCollectionImpl<
     const field = this.#fieldAtPath(path);
     if (field === undefined) return value;
     if (operator === '$set') return this.#wrapFieldValue(value.value, field, path, 'write');
+    if (value.value === null && field.many) return null;
     if (operator === '$pull') return this.#wrapFieldValue(value.value, field, path, 'filter');
     if (field.type.kind === 'scalar') {
-      this.#assertEnumValues(field, field.many === true ? [value.value] : value.value, path);
+      this.#assertEnumValues(field, field.many ? [value.value] : value.value, path);
       return this.#fieldParam(value.value, field.type.codecId, path);
     }
     if (field.type.kind === 'valueObject' && isUnknownRecord(value.value)) {

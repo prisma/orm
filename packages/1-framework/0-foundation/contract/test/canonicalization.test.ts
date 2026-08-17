@@ -337,6 +337,52 @@ describe('default omission', () => {
     expect(idField).not.toHaveProperty('generated');
   });
 
+  it('preserves elementNullable: true on a many field', () => {
+    const result = canonicalizeContractToObject(
+      minimal({
+        models: {
+          User: {
+            fields: {
+              tags: {
+                type: { kind: 'scalar', codecId: 'text' },
+                nullable: false,
+                many: true,
+                elementNullable: true,
+              },
+            },
+            storage: { namespaceId: '__unbound__', table: 'users', fields: {} },
+            relations: {},
+          },
+        },
+      }),
+    );
+    const tagsField = drillDomainModel(result, 'User', 'fields', 'tags');
+    expect(tagsField).toEqual({
+      type: { kind: 'scalar', codecId: 'text' },
+      nullable: false,
+      many: true,
+      elementNullable: true,
+    });
+  });
+
+  it('adds no elementNullable to a field that omits it', () => {
+    const result = canonicalizeContractToObject(
+      minimal({
+        models: {
+          User: {
+            fields: {
+              tags: { type: { kind: 'scalar', codecId: 'text' }, nullable: false, many: true },
+            },
+            storage: { namespaceId: '__unbound__', table: 'users', fields: {} },
+            relations: {},
+          },
+        },
+      }),
+    );
+    const tagsField = drillDomainModel(result, 'User', 'fields', 'tags');
+    expect(tagsField).not.toHaveProperty('elementNullable');
+  });
+
   it('preserves a literal false column default value via the family hook', () => {
     const result = canonicalizeContractToObject(
       minimal({

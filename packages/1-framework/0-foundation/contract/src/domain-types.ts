@@ -24,6 +24,7 @@ export type ContractField = {
   readonly nullable: boolean;
   readonly type: ContractFieldType;
   readonly many?: true;
+  readonly elementNullable?: true;
   readonly dict?: true;
   readonly valueSet?: ValueSetRef;
 };

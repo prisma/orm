@@ -107,6 +107,8 @@ export interface FieldSymbol {
   readonly typeContractSpaceId?: string;
   readonly optional: boolean;
   readonly list: boolean;
+  /** Element-nullability axis (`Foo?[]`); meaningful only when {@link list}. */
+  readonly elementOptional: boolean;
   readonly typeConstructor?: ResolvedTypeConstructorCall;
   readonly attributes: readonly ResolvedAttribute<FieldAttributeAst>[];
   /** Prevents cascading unsupported-type diagnostics after invalid qualification. */
@@ -349,6 +351,7 @@ function buildField(
       typeName: path[path.length - 1] ?? '',
       optional: false,
       list: false,
+      elementOptional: false,
       malformedType: true,
       attributes,
     };
@@ -370,6 +373,7 @@ function buildField(
     ...(typeContractSpaceId !== undefined ? { typeContractSpaceId } : {}),
     optional: annotation?.isOptional() ?? false,
     list: annotation?.isList() ?? false,
+    elementOptional: annotation?.isElementOptional() ?? false,
     ...(typeConstructor !== undefined ? { typeConstructor } : {}),
     attributes,
   };

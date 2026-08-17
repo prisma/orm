@@ -1951,6 +1951,9 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
     devDependencies:
+      '@internal/family-mongo':
+        specifier: workspace:8.0.0-rc.4
+        version: link:../../9-family
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.14
         version: link:../../../0-config/tsconfig
