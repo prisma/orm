@@ -13,6 +13,7 @@ D1 changes what `pg` hands the codec layer. From that moment the four old Date-t
 - **D1 produces the known-red list** — the enumerated set of test files failing because of the transport change, captured in the dispatch report.
 - **Every later dispatch reports the current red set** and it must be a subset of the previous dispatch's. A dispatch that adds a new red file halts for orchestrator review.
 - **D7 closes the window.** The red set is empty; the full gate set runs clean.
+- **Amendment (D4).** The subset rule admits one class of growth: a dispatch may add a red file when the cause is an **old Date-typed codec path that this slice is retiring and D6 deletes**. That is the same structural event the window exists to hold, arriving on a path a later dispatch reaches. Each such addition is recorded below with its cause and its resolving dispatch. Growth from any other cause still halts. The rule this preserves is "no red is ever unexplained"; the rule it drops is "the count never rises", which was a proxy for it and turned out to be the wrong proxy for an atomic cutover that breaks the old surface path by path.
 - **Re-adding Date construction anywhere to quiet a red is [F1](../../../../drive/calibration/failure-modes.md#f1-dual-shape-support-relocated-under-a-new-name)** — the same failure mode under a new name. Every brief from D1 onward pre-names it.
 
 ## Applicable failure modes
@@ -163,3 +164,19 @@ Plan-side overlays from [`dod.md § Slice-DoD overlay`](../../../../drive/calibr
 | `test/e2e/framework/test/dml.test.ts` | 2 | `test:e2e` |
 
 `issues-28192-pg-historical-dates` is worth D3's attention specifically — historical dates are where the BC / expanded-year adaptation gets exercised.
+
+### Admitted growth
+
+| File | Tests | Added at | Cause | Resolved by |
+| --- | --- | --- | --- | --- |
+| `test/integration/test/sql-orm-client/include-codecs.test.ts` | 1 | D4 | The old `pg/timestamptz@1` codec's `decodeJson` gates on `ISO_8601_TIMESTAMPTZ.test(json)` (`codec-helpers.ts:296`) and the new projection hands it a space separator and `+00`, which cannot match. It throws by construction, so an `include` through it fails. D1 broke that codec's flat path; D4 breaks its nested one. | D6 (codec deleted, fixture migrated) |
+
+Blast radius verified independently at D4 review: only `pg/timestamptz@1`'s projection changed among the old codecs. `pg/date@1`, `pg/timestamp@1`, `pg/time@1` and `pg/timetz@1` keep identity projections, so their `decodeJson`s receive exactly what they received before D4 and cannot newly break.
+
+**Framing correction (D4 review).** Changing the ninth site was **not forced**. Keeping `utcIsoJsonProjection` for its single remaining consumer and adding `serverTextJsonProjection` only for the eight new descriptors was available, and would have cost neither this red nor the amendment above. What happened was a deliberate choice to retire a lossy policy one dispatch early — correct on the merits, since `pg/timestamptz@1` was already dead on the flat path from D1 and leaving its nested path alive would have left a known-lossy `.MS` path in the tree under a comment asserting an abandoned policy. The amendment stands on its own reasoning and does not rest on the change having been unavoidable.
+
+**Conditions on the amendment** (D4 review, accepted):
+
+- **Re-attribute per dispatch.** D5 and D6 restate this file's cause and resolving dispatch rather than inheriting "admitted" status.
+- **It resolves by migration, not deletion.** D6 removes the codec; the fixture must move to a representation-explicit one, after which the test exercises the new nested path — strictly more coverage than before.
+- **It must appear in D7's *red* accounting until it goes green, never in an exclusion list.** D7's exclusions stay limited to the CLI flake named in Open item 2. If this file ever appears as an exclusion, the amendment has been used to hide something and it is withdrawn.
