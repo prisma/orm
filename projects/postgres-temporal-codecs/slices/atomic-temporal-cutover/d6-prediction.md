@@ -7,63 +7,124 @@ the difference is worth understanding — it means something was reaching those 
 nobody had accounted for.
 
 Written by the dispatch that repointed authoring. Everything below was obtained with `rg` against
-the tree as it stands after that repoint, not from memory:
+the tree as it stands after that repoint, not from memory — on **two axes**, because production code
+mostly does not spell these ids out:
 
 ```
+# axis 1 — the string literals
 rg -F -e 'sql/timestamp@1' -e 'pg/date@1' -e 'pg/timestamp@1' -e 'pg/timestamptz@1' \
       -e 'pg/time@1' -l --glob '!node_modules/**' --glob '!**/dist/**' --glob '!projects/**'
+
+# axis 2 — the exported constants those literals are bound to
+rg -F -e SQL_TIMESTAMP_CODEC_ID -e PG_DATE_CODEC_ID -e PG_TIMESTAMP_CODEC_ID \
+      -e PG_TIMESTAMPTZ_CODEC_ID -e PG_TIME_CODEC_ID -l \
+      --glob '!node_modules/**' --glob '!**/dist/**' --glob '!projects/**'
 ```
 
-**253 files still name one of the five retiring ids.** They are not one job. The point of the split
-below is that only the first two groups are the deleting dispatch's work at all.
+**260 distinct files: 253 on the literal axis, 13 on the constant axis, 7 of those found only there.**
+Sixteen are production code — five definitions and eleven consumers — and the rest are tests,
+generated artefacts, and historical records.
 
-## The headline: nothing authors them any more
+The second axis is not a refinement — it is where the production consumers live. A file that imports
+`PG_TIMESTAMPTZ_CODEC_ID` and uses it is invisible to the first search, which is why the first draft
+of this document listed almost no production code outside the definitions and had to excuse
+`codecs.ts` with a parenthetical. If you re-run only the literal search you will reproduce 253 and
+believe the source group is nine files. It is sixteen.
 
-Zero files under any authoring surface appear below. Before this dispatch, nine sites across
+They are not one job. The point of the split below is that only the first two groups are the deleting
+dispatch's work at all.
+
+## The headline, split into what is checked and what is not
+
+**Checked, and true.** Before this dispatch, nine sites across
 `3-targets/postgres/src/core/authoring.ts` and `6-adapters/postgres/src/core/control-mutation-defaults.ts`
-named the retiring ids; all nine now name a representation-explicit codec. **No PSL spelling, no
-TypeScript field preset, and no scalar-type constructor can produce one of these ids.** Every
-remaining reference is a definition, a description, a test, a generated artefact, or a historical
-record.
+named the retiring ids; all nine now name a representation-explicit codec. No PSL spelling, no
+TypeScript field preset, and no scalar-type constructor can produce one of these ids.
 
-That is the property that makes the deletion safe to attempt: what is left cannot grow.
+**Not true, and this correction matters.** An earlier draft of this document concluded from the above
+that "what is left cannot grow." It can. Three routes still let new code author a retiring id today,
+all of them found only on the constant axis:
 
-## Group 1 — definitions to remove (3 files)
+- `packages/3-targets/6-adapters/postgres/src/exports/column-types.ts` — a **public** `exports/`
+  barrel. `timestamptzColumn`, `timestampColumn(precision?)` and `timeColumn(precision?)` are
+  exported column descriptors bound to the retiring ids.
+- `packages/3-targets/3-targets/postgres/src/contract-free/columns.ts` — `timestamptz(opts?)`, a
+  contract-free column function on the same id.
+- `packages/3-targets/3-targets/postgres/src/core/codecs.ts` — `pgDateColumn`,
+  `pgTimestampColumn`, `pgTimestamptzColumn` and `pgTimeColumn` (`:1123`, `:1171`, `:1219`, `:1272`)
+  are still exported and still bound to their codecs.
 
-The codecs themselves. These are the deletion.
+The narrower claim is the one to rely on: **the declarative authoring surfaces — PSL names, field
+presets, scalar type constructors — are clean.** The imperative column helpers are not, and removing
+them is part of the deletion rather than something the repoint already handled.
+
+## Group 1 — definitions to remove (5 files)
+
+The codecs themselves, and the helpers bound to them. This is the deletion.
 
 - `packages/3-targets/3-targets/postgres/src/core/codec-ids.ts` — the four `PG_*_CODEC_ID`
   constants for `date` / `timestamp` / `timestamptz` / `time`.
+- `packages/3-targets/3-targets/postgres/src/core/codecs.ts` — the four codec classes, their
+  descriptors, their registrations in `codecDescriptors`, and the four exported column helpers
+  `pgDateColumn` / `pgTimestampColumn` / `pgTimestamptzColumn` / `pgTimeColumn` (`:1123`, `:1171`,
+  `:1219`, `:1272`). Found only on the constant axis; the earlier draft excused its absence with a
+  parenthetical instead of re-running the search, which is what hid the rest of this group.
 - `packages/3-targets/3-targets/postgres/src/core/codec-helpers.ts` — the Date-typed
-  encode/decode/JSON helpers those codecs compose with. Note `timetz` and `interval` share this
-  file and must keep working.
+  encode/decode/JSON helpers those codecs compose with. `timetz` and `interval` share this file and
+  must keep working.
 - `packages/2-sql/4-lanes/relational-core/src/ast/sql-codec-helpers.ts` — `SQL_TIMESTAMP_CODEC_ID`
   and the `sql/timestamp@1` helpers.
+- `packages/2-sql/4-lanes/relational-core/src/ast/sql-codecs.ts` — the `sql/timestamp@1` descriptor
+  and codec class. Named explicitly in the slice spec's § Scope; found only on the constant axis.
 
-The codec classes, descriptors, column helpers and registrations in
-`3-targets/postgres/src/core/codecs.ts` go with them; that file does not appear in the `rg` output
-because it names the ids only through the imported constants.
+## Group 2 — production consumers to repoint (11 files)
 
-## Group 2 — one real consumer, and five prose mentions
+### Live authoring routes (2 files here, plus the helpers in Group 1)
 
-Exactly one file outside the definitions still *uses* a retiring id:
+These are the reason "nothing can author a retiring id" is too strong a claim. Each is an exported
+way to declare a column on a retiring codec, and each has a representation-explicit counterpart to
+point at.
 
+- `packages/3-targets/6-adapters/postgres/src/exports/column-types.ts` — `timestamptzColumn` (`:99`),
+  `timestampColumn(precision?)`, `timeColumn(precision?)`. A **public** barrel, so changing these is
+  a user-visible surface change, not an internal rename.
+- `packages/3-targets/3-targets/postgres/src/contract-free/columns.ts` — `timestamptz(opts?)`
+  (`:29`).
+- The four column helpers in `codecs.ts`, listed under Group 1 because they go with their codecs.
+
+### Registrations and matrices (3 files)
+
+Entries keyed by a retiring id, which have to lose those entries rather than be repointed:
+
+- `packages/3-targets/6-adapters/postgres/src/core/descriptor-meta.ts` — `controlPlaneHooks` and
+  `storage` entries for `sql/timestamp@1`, `pg/timestamp@1`, `pg/timestamptz@1`, `pg/time@1`. The
+  representation-explicit entries already sit beside them.
+- `packages/3-targets/3-targets/postgres/src/core/aggregates.ts` — `MIN_MAX_PRESERVING_CODECS` rows
+  and the `sum`/`avg`-over-`time` rows for the retiring codecs. Their replacements are already
+  present, so this is subtraction only.
 - `packages/3-extensions/supabase/src/contract/handles.ts:16` —
-  `const pgTimestamptz = { codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' }`. A hand-written
-  contract handle, not generated. It has to be repointed, and choosing which representation Supabase's
-  timestamps get is a decision rather than a rename.
+  `const pgTimestamptz = { codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' }`. Hand-written,
+  not generated. Which representation Supabase's timestamps get is a decision, not a rename.
 
-The other five name a retiring id only inside a doc comment, as an illustrative example:
+### One internal runtime consumer (1 file)
+
+- `packages/3-targets/6-adapters/postgres/src/core/marker-ledger.ts:89-92` — the `NOW` raw
+  expression declares `returns: { codecId: PG_TIMESTAMPTZ_CODEC_ID }`. This is the marker ledger's
+  own clock, so the choice of representation decides what a marker row's timestamp decodes to. It is
+  the consumer least likely to be found by a suite, because a marker write that still works tells
+  you nothing about which codec typed it.
+
+### Prose mentions (5 files, behaviour-neutral)
+
+These name a retiring id only inside a doc comment, as an illustrative example. Leaving them is
+harmless to behaviour and corrosive to documentation — each would then cite a codec that does not
+exist.
 
 - `packages/1-framework/1-core/framework-components/src/control/control-stack.ts:456`
 - `packages/1-framework/1-core/framework-components/src/shared/codec.ts:40`
 - `packages/2-sql/4-lanes/relational-core/src/expression.ts:126`
 - `packages/2-sql/5-runtime/src/sql-context.ts:420`
 - `packages/2-sql/9-family/src/core/timestamp-now-generator.ts:136`
-
-Leaving these is harmless to behaviour and corrosive to documentation — each would then cite a codec
-that does not exist. Cheap to fix, and they are the reason the `rg` count will not reach zero by
-deleting code alone.
 
 ## Group 3 — 55 test files
 
@@ -111,6 +172,12 @@ Those four account for four of the failing test files. A fifth,
 emit equal storage/profile hashes; it fails as a consequence of the three helper call sites above
 and needs no edit of its own once they move.
 
+`timestamptzColumn` is defined at
+`packages/3-targets/6-adapters/postgres/src/exports/column-types.ts:99` — Group 2's first entry. So
+these fixtures and their helper are one change, which is the reason they were left here rather than
+repointed by the authoring dispatch: the call sites and the definition have to move together or the
+build breaks between them.
+
 **Pick the replacement deliberately.** `timestamptzTemporalColumn` keeps each fixture's meaning
 unchanged, which is what a parity fixture wants. `timestamptzStringColumn` would also make the
 suites pass and would quietly change what the fixture demonstrates.
@@ -157,14 +224,19 @@ documentation judgment, not part of the deletion.
 
 ## How to read a mismatch
 
-- **A consumer not on this list** — something reached the codecs by a route the `rg` did not cover.
-  Most likely a string built at runtime, or a re-export that renames the constant.
+- **A consumer not on this list** — something reached the codecs by a route neither search covered.
+  A re-export that renames the constant is the likeliest: both axes match fixed text, so
+  `export { PG_DATE_CODEC_ID as LEGACY_DATE }` and any id assembled at runtime are invisible to both.
+  This is the failure mode that produced the first draft of this document, one axis late.
 - **A listed file that needs no change** — most likely a test already deleted alongside its subject,
   or a doc comment someone refreshed in between.
 - **The count not reaching zero** — expected. Groups 4 and 5 are not the deleting dispatch's, and
   the count only falls to zero after the fixture sweep, and then only outside the historical records.
 
-### source (9)
+### production files, both axes (16)
+
+Nine from the literal axis, seven found only by constant. Groups 1 and 2 above assign each one.
+
 - `packages/1-framework/1-core/framework-components/src/control/control-stack.ts`
 - `packages/1-framework/1-core/framework-components/src/shared/codec.ts`
 - `packages/2-sql/4-lanes/relational-core/src/ast/sql-codec-helpers.ts`
@@ -174,6 +246,14 @@ documentation judgment, not part of the deletion.
 - `packages/3-extensions/supabase/src/contract/handles.ts`
 - `packages/3-targets/3-targets/postgres/src/core/codec-helpers.ts`
 - `packages/3-targets/3-targets/postgres/src/core/codec-ids.ts`
+
+- `packages/2-sql/4-lanes/relational-core/src/ast/sql-codecs.ts` *(constant axis only)*
+- `packages/3-targets/3-targets/postgres/src/contract-free/columns.ts` *(constant axis only)*
+- `packages/3-targets/3-targets/postgres/src/core/aggregates.ts` *(constant axis only)*
+- `packages/3-targets/3-targets/postgres/src/core/codecs.ts` *(constant axis only)*
+- `packages/3-targets/6-adapters/postgres/src/core/descriptor-meta.ts` *(constant axis only)*
+- `packages/3-targets/6-adapters/postgres/src/core/marker-ledger.ts` *(constant axis only)*
+- `packages/3-targets/6-adapters/postgres/src/exports/column-types.ts` *(constant axis only)*
 
 ### tests (55)
 - `packages/1-framework/3-tooling/emitter/test/canonicalization.test.ts`
