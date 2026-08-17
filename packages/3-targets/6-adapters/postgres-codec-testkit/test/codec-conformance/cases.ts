@@ -37,6 +37,21 @@ const interval = (fields: Partial<PgInterval>): PgInterval => ({
   ...fields,
 });
 
+/**
+ * Round-trip equality for the Temporal-backed codecs. `instanceof` as well as `equals` so that a
+ * value of the wrong type fails: two objects with no own enumerable properties can compare equal
+ * structurally even when they denote different moments.
+ */
+const instantsEqual = (roundTripped: unknown, value: unknown): boolean =>
+  roundTripped instanceof Temporal.Instant &&
+  value instanceof Temporal.Instant &&
+  roundTripped.equals(value);
+
+const plainDateTimesEqual = (roundTripped: unknown, value: unknown): boolean =>
+  roundTripped instanceof Temporal.PlainDateTime &&
+  value instanceof Temporal.PlainDateTime &&
+  roundTripped.equals(value);
+
 const ENUM_TYPE = 'codec_conformance_mood';
 
 /**
@@ -209,16 +224,33 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: new Date('2026-01-02T03:04:05.678Z'),
     setupSql: HOSTILE_TEMPORAL_SESSION,
   },
+  // These two passed only because the projection used to pin the rendering to UTC and spell it out
+  // with an explicit format. That pinning is gone — it truncated microseconds and made a nested read
+  // disagree with a flat one — so this Date-typed codec's `encodeJson`, which still produces an ISO
+  // string, no longer matches what the column projects. Marked rather than rewritten because the
+  // codec's value handling is not this change's to touch, and because the disagreement resolves when
+  // the Date-typed temporal codecs are removed and their columns move to a representation-explicit
+  // one, not by anything that could be done here.
   {
     codecId: 'pg/timestamptz@1',
     label: 'instant with milliseconds',
     value: new Date('2026-01-02T03:04:05.678Z'),
+    notYetCanonical: {
+      kind: 'mismatch',
+      reason:
+        "The projection now returns the server text `2026-01-02 03:04:05.678+00` while this codec's encodeJson still produces the ISO string `2026-01-02T03:04:05.678+00:00`. Resolved by retiring the codec, not by changing either side.",
+    },
   },
   {
     codecId: 'pg/timestamptz@1',
     label: 'instant under a hostile session',
     value: new Date('2026-01-02T03:04:05.678Z'),
     setupSql: HOSTILE_TEMPORAL_SESSION,
+    notYetCanonical: {
+      kind: 'mismatch',
+      reason:
+        'This case used to demonstrate that no session setting could move a nested rendering. It now demonstrates the opposite, which is the decided behaviour: under a German DateStyle in Asia/Kolkata the projection returns `02.01.2026 08:34:05.678 IST`, the same text a flat read of the column returns. Resolved by retiring the codec.',
+    },
   },
   {
     codecId: 'pg/date@1',
@@ -248,17 +280,20 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'microsecond precision',
     value: Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456'),
     typeParams: { precision: 6 },
+    // The projection emits `2026-01-02 03:04:05.123456`; toString() spells the same wall-clock
+    // reading with a T. Both are correct, so the round trip is what there is to check.
+    valueEquality: plainDateTimesEqual,
   },
   {
     codecId: 'pg/timestamptz-temporal@1',
     label: 'microsecond precision at UTC',
     value: Temporal.Instant.from('2026-01-02T03:04:05.123456Z'),
     typeParams: { precision: 6 },
-    notYetCanonical: {
-      kind: 'mismatch',
-      reason:
-        'Byte equality is the wrong test for a codec whose application value is not a string. encodeJson produces the spelling PostgreSQL must accept on the way in — toString(), with a T separator and a trailing Z — while the projection produces the spelling PostgreSQL emits on the way out, which uses a space and a +00 offset. Those two need not be byte-identical, and casting the projection to text does not make them so: it changes which non-matching spelling appears, not the fact that they differ. What does hold, and what the nested read path actually depends on, is the round trip — decodeJson of the projected document reconstructs the same instant.',
-    },
+    // The projection emits `2026-01-02 03:04:05.123456+00`; toString() spells the same instant with
+    // a T and a trailing Z. The disagreement is permanent and correct, which is why this is a
+    // round-trip case rather than a marked one — a marker would assert forever that a working
+    // system is broken.
+    valueEquality: instantsEqual,
   },
   {
     codecId: 'pg/time-temporal@1',
@@ -267,31 +302,21 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     typeParams: { precision: 6 },
   },
   // The `*-string` codecs' application value is PostgreSQL's own rendering, so each case is written
-  // the way the server writes it — space separator, two-digit offset, microseconds. A value picked
-  // for looking tidy in JSON (a `T` separator, whole seconds) would agree with today's identity
-  // projection for the wrong reason and then disagree once the projection casts to text.
+  // the way the server writes it — space separator, two-digit offset, microseconds. That is now
+  // what the projection returns too, which is the whole point of the text cast: one spelling,
+  // whether the column is read flat or built into a JSON document.
   { codecId: 'pg/date-string@1', label: 'calendar date', value: '2026-01-02' },
   {
     codecId: 'pg/timestamp-string@1',
     label: 'microsecond precision',
     value: '2026-01-02 03:04:05.123456',
     typeParams: { precision: 6 },
-    notYetCanonical: {
-      kind: 'mismatch',
-      reason:
-        'The identity projection lets PostgreSQL render the column as JSON, which uses a T separator. The text cast that makes the projection return the same rendering a flat read returns is not in place yet.',
-    },
   },
   {
     codecId: 'pg/timestamptz-string@1',
     label: 'microsecond precision at UTC',
     value: '2026-01-02 03:04:05.123456+00',
     typeParams: { precision: 6 },
-    notYetCanonical: {
-      kind: 'mismatch',
-      reason:
-        'As for pg/timestamp-string@1, plus an offset PostgreSQL renders as +00:00 in JSON against the +00 a flat read returns.',
-    },
   },
   {
     codecId: 'pg/time-string@1',

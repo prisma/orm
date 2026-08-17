@@ -236,20 +236,32 @@ const base64JsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
   ]);
 
 /**
- * Projects a `timestamptz` as a UTC ISO-8601 string that no session setting can
- * move.
+ * Projects a temporal value as the text PostgreSQL itself renders for it.
  *
- * A `timestamptz` handed straight to a JSON constructor is rendered in the
- * session's `TimeZone`, so the same stored instant reads as `+00:00`, `-05:00`
- * or `+05:30` depending on who is connected. `timezone('UTC', …)` resolves the
- * instant to UTC wall-clock independently of the session, and the explicit
- * `to_char` format pins the rendering rather than inheriting `DateStyle`.
+ * This position used to hold the opposite policy. A `timestamptz` handed straight to a JSON
+ * constructor renders in the session's `TimeZone`, so the same stored instant read as `+00:00`,
+ * `-05:00` or `+05:30` depending on who was connected; the previous projection resolved the instant
+ * to UTC and spelled it out with an explicit `to_char` format so that no session setting could move
+ * it. That pinning is deliberately gone, for two reasons it could not reconcile:
+ *
+ * - Its format string ended in `.MS` — **milliseconds**. Every nested read silently truncated the
+ *   microseconds PostgreSQL had stored, which is a live loss of data rather than a formatting
+ *   preference.
+ * - A flat read of the same column returns the server's own text. Pinning one path and not the
+ *   other meant the two disagreed about what the value was, and having them agree is the point of
+ *   this representation.
+ *
+ * So a nested read is now session-`TimeZone`-dependent exactly as a flat read already was. Nothing
+ * downstream minds which offset the session picks: `Temporal.Instant.from()` accepts any of them
+ * and resolves to the same instant, and the `*-string` codecs are handing back whatever the server
+ * said by definition. Session-dependent output is a documented non-goal to hide, not a defect.
+ *
+ * The cast belongs inside the projection for the reason spelled out on {@link
+ * decimalTextJsonProjection}: what `jsonProjection` returns is the argument the JSON constructor
+ * receives, so casting here happens before PostgreSQL builds the JSON value rather than after.
  */
-const utcIsoJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
-  FunctionCallExpr.of('to_char', [
-    FunctionCallExpr.of('timezone', [LiteralExpr.of('UTC'), expression]),
-    LiteralExpr.of('YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"'),
-  ]);
+const serverTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
+  CastExpr.as(expression, 'text');
 
 const datePart = (field: string, expression: ProjectionExpr): ProjectionExpr =>
   FunctionCallExpr.of('date_part', [LiteralExpr.of(field), expression]);
@@ -1187,7 +1199,7 @@ export class PgTimestamptzDescriptor extends PostgresCodecDescriptor<PrecisionPa
     return PG_TIMESTAMPTZ_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return utcIsoJsonProjection(expression);
+    return serverTextJsonProjection(expression);
   }
   override readonly codecId = PG_TIMESTAMPTZ_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -1361,7 +1373,7 @@ export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
     return PG_DATE_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return serverTextJsonProjection(expression);
   }
   override readonly codecId = PG_DATE_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -1408,7 +1420,7 @@ export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<Precisi
     return PG_TIMESTAMP_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return serverTextJsonProjection(expression);
   }
   override readonly codecId = PG_TIMESTAMP_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -1466,7 +1478,7 @@ export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<Preci
     return PG_TIMESTAMPTZ_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return serverTextJsonProjection(expression);
   }
   override readonly codecId = PG_TIMESTAMPTZ_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -1523,7 +1535,7 @@ export class PgTimeStringDescriptor extends PostgresCodecDescriptor<PrecisionPar
     return PG_TIME_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return serverTextJsonProjection(expression);
   }
   override readonly codecId = PG_TIME_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -1587,7 +1599,7 @@ export class PgDateTemporalDescriptor extends PostgresCodecDescriptor<void> {
     return PG_DATE_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return serverTextJsonProjection(expression);
   }
   override readonly codecId = PG_DATE_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -1635,7 +1647,7 @@ export class PgTimestampTemporalDescriptor extends PostgresCodecDescriptor<Preci
     return PG_TIMESTAMP_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return serverTextJsonProjection(expression);
   }
   override readonly codecId = PG_TIMESTAMP_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -1691,7 +1703,7 @@ export class PgTimestamptzTemporalDescriptor extends PostgresCodecDescriptor<Pre
     return PG_TIMESTAMPTZ_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return serverTextJsonProjection(expression);
   }
   override readonly codecId = PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -1745,7 +1757,7 @@ export class PgTimeTemporalDescriptor extends PostgresCodecDescriptor<PrecisionP
     return PG_TIME_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return serverTextJsonProjection(expression);
   }
   override readonly codecId = PG_TIME_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;

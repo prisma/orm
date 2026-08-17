@@ -141,6 +141,29 @@ export interface PostgresCodecConformanceCase {
    * recorded kind can rot as projections change.
    */
   readonly notYetCanonical?: ExpectedProjectionFailure;
+  /**
+   * Judge this case by whether the value survives the round trip, comparing `decodeJson(projected)`
+   * to `value` with this predicate, instead of requiring the projected JSON to equal `encodeJson`'s
+   * output byte for byte.
+   *
+   * Byte equality is the right test only where `encodeJson` is identity — there, "the projected
+   * bytes equal `encodeJson`'s bytes" and "`decodeJson` of the projection reconstructs the value"
+   * are the same sentence. For a codec whose application value is not a string they come apart:
+   * `encodeJson` produces the spelling PostgreSQL must **accept** on write, the projection produces
+   * the spelling PostgreSQL **emits** on read, and PostgreSQL is under no obligation to emit what
+   * it accepts. Both spellings are correct and neither is canonical.
+   *
+   * What the runtime depends on is the round trip, because the nested read path calls `decodeJson`
+   * on the projected document and never calls `decode`. So that is what a case may ask to be judged
+   * on. This is not a relaxation to make a red case pass: a case declaring it is still required to
+   * project, still required to survive `decodeJson`, and still required to come back equal — only
+   * "equal" is the codec's own notion rather than the bytes'.
+   *
+   * Prefer a predicate that rejects the wrong *type* as well as the wrong value. Structural
+   * comparison of two values with no own enumerable properties — as `Temporal.*` instances have —
+   * can report equality between genuinely different values.
+   */
+  readonly valueEquality?: (roundTripped: unknown, value: unknown) => boolean;
 }
 
 export interface CodecProjectionOutcome {
@@ -404,7 +427,9 @@ export async function runPostgresCodecProjection(
 
   const base = { sql, rawJson, projected, expected } as const;
 
-  if (!isDeepStrictEqual(projected, expected)) {
+  // A case judged on round-trip equality skips this gate by design: its two spellings are both
+  // correct and differ, so comparing them would only ever report a disagreement that is not a defect.
+  if (conformanceCase.valueEquality === undefined && !isDeepStrictEqual(projected, expected)) {
     return {
       ...base,
       failure: {
@@ -427,7 +452,12 @@ export async function runPostgresCodecProjection(
     };
   }
 
-  if (!isDeepStrictEqual(roundTripped, conformanceCase.value)) {
+  const roundTripAgrees =
+    conformanceCase.valueEquality === undefined
+      ? isDeepStrictEqual(roundTripped, conformanceCase.value)
+      : conformanceCase.valueEquality(roundTripped, conformanceCase.value);
+
+  if (!roundTripAgrees) {
     return {
       ...base,
       failure: {

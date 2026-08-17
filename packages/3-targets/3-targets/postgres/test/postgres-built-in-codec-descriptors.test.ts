@@ -186,7 +186,7 @@ describe('PostgreSQL built-in codec descriptors', () => {
       nativeType: string;
       typeParams?: CodecRef['typeParams'];
       /** Codecs whose projection replaces the database's own JSON conversion rather than accepting it. */
-      jsonProjection?: 'decimal-text' | 'base64' | 'utc-iso' | 'iso-duration';
+      jsonProjection?: 'decimal-text' | 'base64' | 'server-text' | 'iso-duration';
     }> = [
       { descriptor: pgTextDescriptor, nativeType: 'text' },
       {
@@ -229,7 +229,7 @@ describe('PostgreSQL built-in codec descriptors', () => {
         descriptor: pgTimestamptzDescriptor,
         nativeType: 'timestamp with time zone',
         typeParams: { precision: 3 },
-        jsonProjection: 'utc-iso',
+        jsonProjection: 'server-text',
       },
       { descriptor: pgTimeDescriptor, nativeType: 'time', typeParams: { precision: 3 } },
       { descriptor: pgTimetzDescriptor, nativeType: 'timetz', typeParams: { precision: 3 } },
@@ -273,13 +273,10 @@ describe('PostgreSQL built-in codec descriptors', () => {
         const projected = descriptor.projectJson(expression, ref);
         expect(projected).not.toBe(expression);
         expect(projected).toMatchObject({ kind: 'case' });
-      } else if (jsonProjection === 'utc-iso') {
-        expect(descriptor.projectJson(expression, ref)).toEqual(
-          FunctionCallExpr.of('to_char', [
-            FunctionCallExpr.of('timezone', [LiteralExpr.of('UTC'), expression]),
-            LiteralExpr.of('YYYY-MM-DD"T"HH24:MI:SS.MS"+00:00"'),
-          ]),
-        );
+      } else if (jsonProjection === 'server-text') {
+        // Was a UTC-pinned `to_char` at millisecond resolution. It is now the same text cast a flat
+        // read transports, so the two paths cannot disagree about the value or lose its microseconds.
+        expect(descriptor.projectJson(expression, ref)).toEqual(CastExpr.as(expression, 'text'));
       } else {
         expect(descriptor.projectJson(expression, ref)).toBe(expression);
       }

@@ -5,6 +5,7 @@
  * comes back byte-for-byte, and whatever the application supplied is bound byte-for-byte.
  */
 
+import { CastExpr, ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import {
   PG_DATE_STRING_CODEC_ID,
@@ -100,9 +101,14 @@ describe('representation-explicit temporal string codecs', () => {
         });
       });
 
-      it('projects to JSON without altering the expression', () => {
-        const expression = { marker: 'projection-input' };
-        expect(descriptor.projectJson(expression as never, { codecId: id })).toBe(expression);
+      // Was an identity projection, which let PostgreSQL choose the JSON spelling and so disagreed
+      // with a flat read of the same column. The cast makes both paths return the server's text.
+      it('projects to JSON through a text cast, so a nested read matches a flat one', () => {
+        const expression = ColumnRef.of('moments', 'value');
+
+        expect(descriptor.projectJson(expression, { codecId: id })).toEqual(
+          CastExpr.as(expression, 'text'),
+        );
       });
     });
   }
