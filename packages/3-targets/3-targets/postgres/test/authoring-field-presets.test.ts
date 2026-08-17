@@ -1,6 +1,7 @@
 import {
   temporalAuthoringPresets,
   temporalCodecPresetWithPrecision,
+  temporalStringAuthoringPresets,
 } from '@internal/family-sql/control';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
@@ -71,27 +72,45 @@ describe('postgresAuthoringFieldPresets', () => {
 });
 
 describe('postgres temporal per-codec presets', () => {
-  it('registers timestamp against pg/timestamp@1, named for the codec base name', () => {
-    expect(postgresAuthoringFieldPresets.temporal.timestamp).toEqual(
-      temporalCodecPresetWithPrecision({ codecId: 'pg/timestamp@1', nativeType: 'timestamp' }),
-    );
+  // The mapping is the whole point of the pair, so it is asserted by id rather than by shape: which
+  // representation a spelling selects is what a schema author is choosing between.
+  it.each([
+    ['timestamp', 'pg/timestamp-temporal@1'],
+    ['timestamptz', 'pg/timestamptz-temporal@1'],
+    ['createdAt', 'pg/timestamptz-temporal@1'],
+    ['updatedAt', 'pg/timestamptz-temporal@1'],
+    ['timestampString', 'pg/timestamp-string@1'],
+    ['timestamptzString', 'pg/timestamptz-string@1'],
+    ['createdAtString', 'pg/timestamptz-string@1'],
+    ['updatedAtString', 'pg/timestamptz-string@1'],
+  ] as const)('temporal.%s resolves to %s', (helper, codecId) => {
+    expect(postgresAuthoringFieldPresets.temporal[helper].output.codecId).toBe(codecId);
   });
 
-  it('registers timestamptz against pg/timestamptz@1, named for the codec base name', () => {
-    expect(postgresAuthoringFieldPresets.temporal.timestamptz).toEqual(
-      temporalCodecPresetWithPrecision({ codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' }),
-    );
-  });
-
-  it('keeps the createdAt/updatedAt convenience presets alongside the new siblings', () => {
+  it('lowers each pair through the shared factories, so the halves differ only in their codec', () => {
     expect(postgresAuthoringFieldPresets.temporal).toEqual({
-      ...temporalAuthoringPresets({ codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' }),
+      ...temporalAuthoringPresets({
+        codecId: 'pg/timestamptz-temporal@1',
+        nativeType: 'timestamptz',
+      }),
+      ...temporalStringAuthoringPresets({
+        codecId: 'pg/timestamptz-string@1',
+        nativeType: 'timestamptz',
+      }),
       timestamp: temporalCodecPresetWithPrecision({
-        codecId: 'pg/timestamp@1',
+        codecId: 'pg/timestamp-temporal@1',
         nativeType: 'timestamp',
       }),
       timestamptz: temporalCodecPresetWithPrecision({
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
+        nativeType: 'timestamptz',
+      }),
+      timestampString: temporalCodecPresetWithPrecision({
+        codecId: 'pg/timestamp-string@1',
+        nativeType: 'timestamp',
+      }),
+      timestamptzString: temporalCodecPresetWithPrecision({
+        codecId: 'pg/timestamptz-string@1',
         nativeType: 'timestamptz',
       }),
     });
@@ -102,4 +121,31 @@ describe('postgres temporal per-codec presets', () => {
       postgresAuthoringFieldPresets.temporal.timestamptz.output.codecId,
     );
   });
+
+  it('backs updatedAtString and timestamptzString the same way', () => {
+    expect(postgresAuthoringFieldPresets.temporal.updatedAtString.output.codecId).toBe(
+      postgresAuthoringFieldPresets.temporal.timestamptzString.output.codecId,
+    );
+  });
+
+  // Both halves carry the generator, which is what makes the string representation a drop-in for
+  // the Temporal one rather than a lesser variant of it.
+  it.each(['updatedAt', 'updatedAtString'] as const)(
+    'gives %s the timestampNow generator on both phases',
+    (helper) => {
+      expect(postgresAuthoringFieldPresets.temporal[helper].output.executionDefaults).toEqual({
+        onCreate: { kind: 'generator', id: 'timestampNow' },
+        onUpdate: { kind: 'generator', id: 'timestampNow' },
+      });
+    },
+  );
+
+  it.each(['createdAt', 'createdAtString'] as const)(
+    'gives %s a now() storage default rather than an execution generator',
+    (helper) => {
+      expect(postgresAuthoringFieldPresets.temporal[helper].output).toMatchObject({
+        default: { kind: 'function', expression: 'now()' },
+      });
+    },
+  );
 });

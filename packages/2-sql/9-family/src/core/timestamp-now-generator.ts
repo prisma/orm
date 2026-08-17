@@ -74,6 +74,28 @@ export function temporalAuthoringPresets<
   } as const satisfies Record<string, AuthoringFieldPresetDescriptor>;
 }
 
+/**
+ * The representation-explicit siblings of {@link temporalAuthoringPresets}, under names that say
+ * which representation they select: `createdAtString` / `updatedAtString` beside `createdAt` /
+ * `updatedAt`.
+ *
+ * Delegates rather than restating, so the two pairs cannot drift in what they lower to. Only the
+ * key names and the caller's codec differ — the storage default, the execution generator and both
+ * phases are the shared ones, which is what keeps a target's two representations byte-identical in
+ * everything except the codec they name.
+ */
+/* @__NO_SIDE_EFFECTS__ */
+export function temporalStringAuthoringPresets<
+  const CodecId extends string,
+  const NativeType extends string,
+>(input: { readonly codecId: CodecId; readonly nativeType: NativeType }) {
+  const presets = temporalAuthoringPresets(input);
+  return {
+    createdAtString: presets.createdAt,
+    updatedAtString: presets.updatedAt,
+  } as const satisfies Record<string, AuthoringFieldPresetDescriptor>;
+}
+
 const TEMPORAL_PRECISION_ARG = {
   name: 'precision',
   kind: 'number',

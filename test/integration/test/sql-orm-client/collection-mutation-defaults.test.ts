@@ -25,7 +25,9 @@ const tagId = (s: string): TagId => s as unknown as TagId;
 // timestamp wired to the canonical `timestampNow` mutation default for
 // both onCreate and onUpdate. The postgres test stack already registers
 // the `timestampNow` runtime generator, so the contract round-trips.
-function buildTagWithUpdatedAtContract(): TestContract {
+function buildTagWithUpdatedAtContract(
+  codecId: 'pg/timestamptz-temporal@1' | 'pg/timestamptz-string@1' = 'pg/timestamptz-temporal@1',
+): TestContract {
   const contract = JSON.parse(
     JSON.stringify(withReturningCapability(getTestContract())),
   ) as TestContract;
@@ -39,7 +41,7 @@ function buildTagWithUpdatedAtContract(): TestContract {
   const tagFields = tagModel['fields'] as Record<string, unknown>;
   tagFields['updatedAt'] = {
     nullable: false,
-    type: { kind: 'scalar', codecId: 'pg/timestamptz@1' },
+    type: { kind: 'scalar', codecId },
   };
   const tagStorage = tagModel['storage'] as Record<string, unknown>;
   const tagStorageFields = tagStorage['fields'] as Record<string, unknown>;
@@ -53,7 +55,7 @@ function buildTagWithUpdatedAtContract(): TestContract {
   }
   tagsTable.columns['updated_at'] = {
     nativeType: 'timestamptz',
-    codecId: 'pg/timestamptz@1',
+    codecId,
     nullable: false,
   };
 
@@ -72,12 +74,12 @@ function buildTagWithUpdatedAtContract(): TestContract {
   return deserializeTestContract(contract);
 }
 
-function setupTagCollection(): {
+function setupTagCollection(codecId?: 'pg/timestamptz-temporal@1' | 'pg/timestamptz-string@1'): {
   collection: Collection<TestContract, 'Tag'>;
   runtime: MockRuntime;
   contract: TestContract;
 } {
-  const contract = buildTagWithUpdatedAtContract();
+  const contract = buildTagWithUpdatedAtContract(codecId);
   const context = createExecutionContext({
     contract,
     stack: createSqlExecutionStack({
@@ -168,6 +170,33 @@ describe('@updatedAt mutation defaults via Collection', () => {
       expect(first).toBeInstanceOf(Date);
       expect(dateParams[1]).toBe(first);
       expect(dateParams[2]).toBe(first);
+    });
+
+    // The guarantee belongs to the generator, not to a representation, so it has to hold for a
+    // column authored either way. `timestampNow` hands the driver a wire-level `Date` that never
+    // passes through a codec, which is what lets one clock serve both.
+    it('gives every row in an insert one value on a *String column too', async () => {
+      const { collection, runtime } = setupTagCollection('pg/timestamptz-string@1');
+      runtime.setNextResults([
+        [
+          { id: TAG_A_ID, name: 'one', updated_at: new Date() },
+          { id: TAG_B_ID, name: 'two', updated_at: new Date() },
+        ],
+      ]);
+
+      await collection
+        .createAll([
+          { id: tagId(TAG_A_ID), name: 'one' },
+          { id: tagId(TAG_B_ID), name: 'two' },
+        ])
+        .toArray();
+
+      const dateParams = planParams(runtime.executions[0]).filter(
+        (p) => p instanceof Date,
+      ) as Date[];
+
+      expect(dateParams).toHaveLength(2);
+      expect(dateParams[1]).toBe(dateParams[0]);
     });
 
     it("keeps per-row variability for stability: 'field' generators (id stays distinct)", async () => {

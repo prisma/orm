@@ -154,20 +154,24 @@ const parityCases: readonly ParityCase[] = [
     title: 'Timestamp(3)',
     bare: 'Timestamp(3)',
     alias: 'Timestamp(3)',
-    expected: { codecId: 'pg/timestamp@1', nativeType: 'timestamp', typeParams: { precision: 3 } },
+    expected: {
+      codecId: 'pg/timestamp-temporal@1',
+      nativeType: 'timestamp',
+      typeParams: { precision: 3 },
+    },
   },
   {
     title: 'Timestamp — bare',
     bare: 'Timestamp',
     alias: 'Timestamp',
-    expected: { codecId: 'pg/timestamp@1', nativeType: 'timestamp', typeParams: {} },
+    expected: { codecId: 'pg/timestamp-temporal@1', nativeType: 'timestamp', typeParams: {} },
   },
   {
     title: 'Timestamptz(6)',
     bare: 'Timestamptz(6)',
     alias: 'Timestamptz(6)',
     expected: {
-      codecId: 'pg/timestamptz@1',
+      codecId: 'pg/timestamptz-temporal@1',
       nativeType: 'timestamptz',
       typeParams: { precision: 6 },
     },
@@ -176,19 +180,71 @@ const parityCases: readonly ParityCase[] = [
     title: 'Timestamptz — bare',
     bare: 'Timestamptz',
     alias: 'Timestamptz',
-    expected: { codecId: 'pg/timestamptz@1', nativeType: 'timestamptz', typeParams: {} },
+    expected: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz', typeParams: {} },
   },
   {
     title: 'Time(3)',
     bare: 'Time(3)',
     alias: 'Time(3)',
-    expected: { codecId: 'pg/time@1', nativeType: 'time', typeParams: { precision: 3 } },
+    expected: { codecId: 'pg/time-temporal@1', nativeType: 'time', typeParams: { precision: 3 } },
   },
   {
     title: 'Time — bare',
     bare: 'Time',
     alias: 'Time',
-    expected: { codecId: 'pg/time@1', nativeType: 'time', typeParams: {} },
+    expected: { codecId: 'pg/time-temporal@1', nativeType: 'time', typeParams: {} },
+  },
+  // The representation-explicit spellings, which must carry precision exactly as their unsuffixed
+  // counterparts do — the choice between them is about what a read hands back, not about fidelity.
+  {
+    title: 'TimestampString(3)',
+    bare: 'TimestampString(3)',
+    alias: 'TimestampString(3)',
+    expected: {
+      codecId: 'pg/timestamp-string@1',
+      nativeType: 'timestamp',
+      typeParams: { precision: 3 },
+    },
+  },
+  {
+    title: 'TimestampString — bare',
+    bare: 'TimestampString',
+    alias: 'TimestampString',
+    expected: { codecId: 'pg/timestamp-string@1', nativeType: 'timestamp', typeParams: {} },
+  },
+  {
+    title: 'TimestamptzString(6)',
+    bare: 'TimestamptzString(6)',
+    alias: 'TimestamptzString(6)',
+    expected: {
+      codecId: 'pg/timestamptz-string@1',
+      nativeType: 'timestamptz',
+      typeParams: { precision: 6 },
+    },
+  },
+  {
+    title: 'TimestamptzString — bare',
+    bare: 'TimestamptzString',
+    alias: 'TimestamptzString',
+    expected: { codecId: 'pg/timestamptz-string@1', nativeType: 'timestamptz', typeParams: {} },
+  },
+  {
+    title: 'TimeString(3)',
+    bare: 'TimeString(3)',
+    alias: 'TimeString(3)',
+    expected: { codecId: 'pg/time-string@1', nativeType: 'time', typeParams: { precision: 3 } },
+  },
+  {
+    title: 'TimeString — bare',
+    bare: 'TimeString',
+    alias: 'TimeString',
+    expected: { codecId: 'pg/time-string@1', nativeType: 'time', typeParams: {} },
+  },
+  {
+    title: 'DateString',
+    bare: 'DateString',
+    alias: 'DateString',
+    expected: { codecId: 'pg/date-string@1', nativeType: 'date', typeParams: {} },
   },
   {
     title: 'Timetz(2)',
@@ -236,7 +292,7 @@ const parityCases: readonly ParityCase[] = [
     title: 'Date — bare',
     bare: 'Date',
     alias: 'Date',
-    expected: { codecId: 'pg/date@1', nativeType: 'date', typeParams: {} },
+    expected: { codecId: 'pg/date-temporal@1', nativeType: 'date', typeParams: {} },
   },
 ];
 

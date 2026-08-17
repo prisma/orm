@@ -1,6 +1,7 @@
 import {
   temporalAuthoringPresets,
   temporalCodecPresetWithPrecision,
+  temporalStringAuthoringPresets,
 } from '@internal/family-sql/control';
 import type {
   AuthoringEntityContext,
@@ -720,21 +721,43 @@ export const postgresAuthoringFieldPresets = {
   dateTime: {
     kind: 'fieldPreset',
     output: {
-      codecId: 'pg/timestamptz@1',
+      codecId: 'pg/timestamptz-temporal@1',
       nativeType: 'timestamptz',
     },
   },
+  /**
+   * Each helper names the representation it selects. The unsuffixed four read and write
+   * `Temporal.*` values; the `*String` four carry PostgreSQL's own text, which is the escape hatch
+   * for the values Temporal has no way to express — `infinity`, BC and expanded years, and any
+   * rendering a non-ISO `DateStyle` produces.
+   *
+   * Both halves lower through the same shared factories, so a pair differs only in the codec it
+   * names: same storage default on `createdAt`, same `timestampNow` generator on `updatedAt`, same
+   * optional precision.
+   */
   temporal: {
     .../* @__PURE__ */ temporalAuthoringPresets({
-      codecId: 'pg/timestamptz@1',
+      codecId: 'pg/timestamptz-temporal@1',
+      nativeType: 'timestamptz',
+    }),
+    .../* @__PURE__ */ temporalStringAuthoringPresets({
+      codecId: 'pg/timestamptz-string@1',
       nativeType: 'timestamptz',
     }),
     timestamp: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamp@1',
+      codecId: 'pg/timestamp-temporal@1',
       nativeType: 'timestamp',
     }),
     timestamptz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamptz@1',
+      codecId: 'pg/timestamptz-temporal@1',
+      nativeType: 'timestamptz',
+    }),
+    timestampString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
+      codecId: 'pg/timestamp-string@1',
+      nativeType: 'timestamp',
+    }),
+    timestamptzString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
+      codecId: 'pg/timestamptz-string@1',
       nativeType: 'timestamptz',
     }),
   },
