@@ -10,16 +10,20 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // round-trip correctly through the ORM — the date, timestamp, and timestamptz fields
 // all preserve the original Date value.
 //
-// In prisma-next: pg/date@1 accepts Date|string and returns Date (time-stripped to UTC
-// midnight). pg/timestamp@1 and pg/timestamptz@1 both accept and return Date.
+// In prisma-next the three columns carry representation-explicit codecs:
+// `pg/date-temporal@1` reads a `Temporal.PlainDate`, `pg/timestamp-temporal@1` a
+// `Temporal.PlainDateTime`, and `pg/timestamptz-temporal@1` a `Temporal.Instant`. Each parses
+// PostgreSQL's own text rather than going through a `Date`.
 //
 // The upstream computes the expected `date` value by stripping the time component:
 //   const date = new Date(new Date(timestampString).toISOString().split('T')[0])
 // This is mirrored faithfully below.
 
 // These cases have 2-digit calendar years (00–99 AD) in the date column.
-// pg/date@1 misparses 2-digit-year dates returned from PGlite: the wire format
-// omits the century, so year 31 is interpreted as 1931. Marked it.fails.
+// The it.fails markers were recorded against the retired Date-typed date codec, which misparsed
+// PGlite's century-omitting wire format (year 31 read as 1931). The replacement parses server
+// text through Temporal instead, so whether the gap survives is unverified — these need
+// re-validating once the fixtures are regenerated.
 const twoDigitYearData = [
   { label: '31 AD timestamp', timestampString: '0031-01-01T00:00:00.000Z' },
   { label: '32 AD timestamp', timestampString: '0032-01-01T00:00:00.000Z' },

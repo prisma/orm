@@ -369,7 +369,7 @@ describe('contractToSchemaIR → planner round-trip', () => {
             },
             createdAt: {
               nativeType: 'timestamptz',
-              codecId: 'pg/timestamptz@1',
+              codecId: 'pg/timestamptz-temporal@1',
               nullable: false,
               default: { kind: 'function', expression: 'now()' },
             },
@@ -807,7 +807,7 @@ function createAdapterHooksComponent(): TargetBoundComponentDescriptor<'sql', st
       codecTypes: {
         controlPlaneHooks: {
           'sql/char@1': parameterizedTypeHooks,
-          'pg/timestamptz@1': parameterizedTypeHooks,
+          'pg/timestamptz-temporal@1': parameterizedTypeHooks,
           'app/test-type@1': enumHooks,
         },
       },
@@ -826,7 +826,7 @@ const DEMO_BASE_TABLES = {
       email: col({ nativeType: 'text', codecId: 'pg/text@1' }),
       createdAt: col({
         nativeType: 'timestamptz',
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         default: { kind: 'function', expression: 'now()' },
       }),
       kind: col({
@@ -853,7 +853,7 @@ const DEMO_BASE_TABLES = {
       }),
       createdAt: col({
         nativeType: 'timestamptz',
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         default: { kind: 'function', expression: 'now()' },
       }),
       embedding: col({

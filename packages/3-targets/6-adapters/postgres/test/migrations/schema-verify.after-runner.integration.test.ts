@@ -147,7 +147,7 @@ describe('Schema verification after runner - integration', { concurrent: false }
                       },
                       createdAt: {
                         nativeType: 'timestamptz',
-                        codecId: 'pg/timestamptz@1',
+                        codecId: 'pg/timestamptz-temporal@1',
                         nullable: false,
                         default: { kind: 'function', expression: 'now()' },
                       },

@@ -54,9 +54,12 @@ function selectWithWhere(whereExpr: import('@internal/sql-relational-core/ast').
 
 describe('RawExpr postgres lowering', () => {
   it('lowers a zero-interpolation RawExpr to a verbatim SQL fragment', () => {
+    // A zero-interpolation RawExpr renders verbatim, so nothing ever resolves this codec — the id
+    // is declared metadata only. Naming a fictional one keeps that visible: were the lowering to
+    // start resolving it, this would fail loudly rather than quietly agree with a real codec.
     const rawExpr = new RawExpr({
       parts: ['now()'],
-      returns: { codecId: 'pg/timestamptz@1', nullable: false },
+      returns: { codecId: 'test/never-resolved@1', nullable: false },
     });
 
     const ast = selectWithWhere(rawExpr);

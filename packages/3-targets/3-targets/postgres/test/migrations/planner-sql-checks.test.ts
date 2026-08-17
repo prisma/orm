@@ -31,7 +31,7 @@ describe('buildExpectedFormatType', () => {
     it('maps timestamptz to timestamp with time zone', () => {
       expect(
         buildExpectedFormatType(
-          { nativeType: 'timestamptz', codecId: 'pg/timestamptz@1', nullable: false },
+          { nativeType: 'timestamptz', codecId: 'pg/timestamptz-temporal@1', nullable: false },
           noHooks,
         ),
       ).toBe('timestamp with time zone');

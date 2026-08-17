@@ -179,7 +179,7 @@ describe('rawSql composition with the typed builder', () => {
     // Top-level field proxy produces IdentifierRef for createdAt.
     const createdAtExpr = {
       buildAst: () => IdentifierRef.of('createdAt'),
-      returnType: { codecId: 'pg/timestamptz@1', nullable: false },
+      returnType: { codecId: 'pg/timestamptz-temporal@1', nullable: false },
     };
 
     const epochExpr = rawSql`extract(epoch from ${createdAtExpr})`.returns('pg/int4@1');

@@ -110,13 +110,13 @@ describe('canonicalization', () => {
         user: {
           columns: {
             created_at: {
-              codecId: 'pg/timestamptz@1',
+              codecId: 'pg/timestamptz-temporal@1',
               nativeType: 'timestamptz',
               nullable: false,
               default: { kind: 'function', expression: 'now()' },
             },
             updated_at: {
-              codecId: 'pg/timestamptz@1',
+              codecId: 'pg/timestamptz-temporal@1',
               nativeType: 'timestamptz',
               nullable: true,
             },

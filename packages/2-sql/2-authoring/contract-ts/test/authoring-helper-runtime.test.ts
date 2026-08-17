@@ -25,7 +25,7 @@ const textPreset = {
 const createdAtPreset = {
   kind: 'fieldPreset',
   output: {
-    codecId: 'sql/timestamp@1',
+    codecId: 'test/timestamp@1',
     nativeType: 'timestamp',
     default: { kind: 'function', expression: 'CURRENT_TIMESTAMP' },
   },

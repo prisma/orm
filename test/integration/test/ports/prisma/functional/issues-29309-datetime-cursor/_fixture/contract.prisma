@@ -3,7 +3,7 @@
 // (postgres matrix entry; sqlProviders minus sqlite — we port postgres).
 //
 // Upstream: DateTime @db.Date → postgres `date` column.
-// In prisma-next PSL, the native Date type pins codec pg/date@1.
+// In prisma-next PSL, the native Date type pins codec pg/date-temporal@1.
 //
 // Upstream schema (postgres branch):
 //   model Event {

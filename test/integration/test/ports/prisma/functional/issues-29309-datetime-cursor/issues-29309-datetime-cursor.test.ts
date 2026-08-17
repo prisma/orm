@@ -7,7 +7,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // packages/client/tests/functional/issues/29309-datetime-cursor
 // (postgres matrix entry; sqlProviders minus sqlite — we port postgres).
 //
-// Subject: pagination cursor against a DATE column (pg/date@1) works correctly.
+// Subject: pagination cursor against a DATE column (pg/date-temporal@1) works correctly.
 //
 // Cursor semantics gap:
 //   Prisma cursor is INCLUSIVE (starts FROM the cursor row).
