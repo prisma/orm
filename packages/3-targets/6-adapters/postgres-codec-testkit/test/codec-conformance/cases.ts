@@ -234,8 +234,10 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     setupSql: HOSTILE_TEMPORAL_SESSION,
   },
   // The Temporal-backed codecs' application value is a `Temporal.*`, so a case is written as the
-  // value itself rather than as text. `encodeJson` renders it through `toString()`; the projection
-  // currently lets PostgreSQL render the column as JSON, which spells the same instant differently.
+  // value itself rather than as text. `encodeJson` renders it through `toString()` and the
+  // projection renders whatever PostgreSQL emits for the column: the same moment in time, but not
+  // necessarily the same characters. A case agrees here only where those two spellings happen to
+  // coincide, which is a fact about spelling rather than about the value surviving the round trip.
   {
     codecId: 'pg/date-temporal@1',
     label: 'calendar date',
@@ -255,7 +257,7 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     notYetCanonical: {
       kind: 'mismatch',
       reason:
-        'The identity projection lets PostgreSQL render the column as JSON, which uses a +00:00 offset, against the trailing Z that Instant.toString() produces. The text cast that makes the projection agree with a flat read is not in place yet.',
+        'Byte equality is the wrong test for a codec whose application value is not a string. encodeJson produces the spelling PostgreSQL must accept on the way in — toString(), with a T separator and a trailing Z — while the projection produces the spelling PostgreSQL emits on the way out, which uses a space and a +00 offset. Those two need not be byte-identical, and casting the projection to text does not make them so: it changes which non-matching spelling appears, not the fact that they differ. What does hold, and what the nested read path actually depends on, is the round trip — decodeJson of the projected document reconstructs the same instant.',
     },
   },
   {
