@@ -57,6 +57,25 @@ These presets come from `temporalAuthoringPresets` / `temporalCodecPresetWithPre
 
 `timestampNow` keeps producing a `Date` internally for mutation defaults and keeps its one-value-per-ORM-operation semantics (`sql-orm-client/src/collection.ts:140`). That `Date` is wire-level only and never reaches a generated type.
 
+### What `prisma init` scaffolds
+
+**Amended at D5** (operator decision). The init template scaffolds the **string** variants:
+
+```prisma
+createdAt TimestamptzString @default(now())
+updatedAt temporal.updatedAtString()
+```
+
+with `field.temporal.createdAtString()` / `updatedAtString()` on the TypeScript side. Four touchpoints across two models in `packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates.ts`.
+
+The forcing function was that the scaffolded app threw `RUNTIME.TEMPORAL_UNAVAILABLE` on stock Node, which has no global `Temporal`. The decision is not merely a workaround for that:
+
+- **Out-of-box works with zero setup.** A user who never opts into Temporal never needs a polyfill, which is the property the string representation exists to provide.
+- **The pedagogy survives.** `@default(now())`, the `updatedAt` convention, and both models stay. Deleting the temporal fields entirely — the other candidate — would have removed the only demonstration of storage defaults from the scaffold.
+- **The scaffold demonstrates the representation choice** the project is built around, rather than hiding it. A user who wants `Temporal.Instant` changes one word, and if they lack a polyfill the capability error tells them so by name.
+
+`DateTime` is consequently free to select `pg/timestamptz-temporal@1`, consistent with the taxonomy, because the out-of-box path no longer exercises it. Note `DateTime` is a **fifth** authoring spelling, not one of the four bare names in the taxonomy table — the spec's rule about bare `Date` / `Timestamp` / `Timestamptz` / `Time` never constrained it, so this costs nothing against that rule.
+
 ### Introspection
 
 `PRESERVED_NATIVE_TYPES` and `PARAMETERIZED_NATIVE_TYPES` in `psl-infer/postgres-type-map.ts` already map `timestamp`/`timestamptz`/`date`/`time` to `Timestamp`/`Timestamptz`/`Date`/`Time`. Those mappings are correct as-is and stay — they now resolve to Temporal-backed codecs. The `*String` PSL names are added as authoring-only spellings with no entry in either introspection map.
@@ -90,6 +109,7 @@ One reviewer holds one question: *does a PostgreSQL temporal value cross every b
 - `packages/2-sql/4-lanes/relational-core/src/ast/` — remove the `sql/timestamp@1` descriptor, codec, helpers, and ID from `sql-codecs.ts` + `sql-codec-helpers.ts`.
 - `@internal/family-sql/control` — additive `*String` authoring preset factories.
 - `packages/3-targets/6-adapters/postgres-codec-testkit/` — conformance cases + aggregate matrix.
+- `packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates.ts` — the scaffold's four temporal touchpoints move to the `*String` variants (added at D5; see § What `prisma init` scaffolds).
 - `temporal-polyfill` as a **devDependency** of the test packages that exercise Temporal codecs; global install in test setup only.
 - Fixture regeneration: `test/integration/**`, `packages/3-extensions/**` (paradedb, pgvector, supabase, postgis, sql-orm-client), `packages/2-sql/4-lanes/sql-builder/test/fixtures/**`.
 - User + architecture documentation for the representation model, Temporal requirement, raw-string contract, and unsupported values.
