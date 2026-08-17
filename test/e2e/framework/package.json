@@ -18,6 +18,7 @@
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "pg": "catalog:",
+    "temporal-polyfill": "^1.0.4",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },

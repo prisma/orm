@@ -131,15 +131,25 @@ export const timestamptzStringColumn = {
   nativeType: 'timestamptz',
 } as const satisfies ColumnTypeDescriptor;
 
-export const timeTemporalColumn = {
-  codecId: PG_TIME_TEMPORAL_CODEC_ID,
-  nativeType: 'time',
-} as const satisfies ColumnTypeDescriptor;
+export function timeTemporalColumn(precision?: number): ColumnTypeDescriptor & {
+  readonly typeParams?: { readonly precision: number };
+} {
+  return {
+    codecId: PG_TIME_TEMPORAL_CODEC_ID,
+    nativeType: 'time',
+    ...(precision === undefined ? {} : { typeParams: { precision } }),
+  } as const;
+}
 
-export const timeStringColumn = {
-  codecId: PG_TIME_STRING_CODEC_ID,
-  nativeType: 'time',
-} as const satisfies ColumnTypeDescriptor;
+export function timeStringColumn(precision?: number): ColumnTypeDescriptor & {
+  readonly typeParams?: { readonly precision: number };
+} {
+  return {
+    codecId: PG_TIME_STRING_CODEC_ID,
+    nativeType: 'time',
+    ...(precision === undefined ? {} : { typeParams: { precision } }),
+  } as const;
+}
 
 export function timetzColumn(precision?: number): ColumnTypeDescriptor & {
   readonly typeParams?: { readonly precision: number };

@@ -14,6 +14,7 @@ import {
   jsonColumn,
   numericColumn,
   textColumn,
+  timestamptzStringColumn,
   timestamptzTemporalColumn,
   timeTemporalColumn,
   timetzColumn,
@@ -107,9 +108,12 @@ export const contract = defineContract(
           fields: {
             id: field.id.uuidv7String(),
             name: field.column(textColumn),
+            // A literal default is encoded at emit time, in the CLI's own process. The string
+            // representation is what makes that expressible without the CLI needing a Temporal
+            // global — the Temporal codecs cannot author a literal default on stock Node at all.
             scheduledAt: field
-              .column(timestamptzTemporalColumn)
-              .default({ kind: 'literal', value: new Date('2024-01-15T10:30:00.000Z') })
+              .column(timestamptzStringColumn)
+              .default({ kind: 'literal', value: '2024-01-15 10:30:00+00' })
               .column('scheduled_at'),
             createdAt: field
               .column(timestamptzTemporalColumn)

@@ -5,6 +5,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    setupFiles: ['./test/setup-temporal.ts'],
     include: ['test/**/*.test.ts', 'test/**/*.test-d.ts'],
     // Keep V8 PKU JIT write-protection disabled in the e2e worker forks. The
     // PGlite (WASM) WAL-teardown crash (Check failed: jit_page_->allocations_
