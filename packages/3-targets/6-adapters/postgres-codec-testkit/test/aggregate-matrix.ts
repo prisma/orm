@@ -104,7 +104,6 @@ export const FIXTURES: readonly AggregateFixture[] = [
   { codecId: 'sql/int@1', samples: ['1', '2'] },
   { codecId: 'sql/float@1', samples: ['1.5', '2.5'] },
   { codecId: 'sql/text@1', samples: ["'a'", "'b'"] },
-  { codecId: 'sql/timestamp@1', samples: ["'2024-01-01T10:00:00'", "'2024-02-01T10:00:00'"] },
   { codecId: 'pg/text@1', samples: ["'a'", "'b'"] },
   {
     codecId: 'pg/enum@1',
@@ -127,10 +126,6 @@ export const FIXTURES: readonly AggregateFixture[] = [
   { codecId: 'pg/float8@1', samples: ['1.5', '2.5'] },
   { codecId: 'pg/numeric@1', samples: ['1.5', '2.5'] },
   { codecId: 'pg/unboundedint@1', samples: ['1', '2'] },
-  { codecId: 'pg/date@1', samples: ["'2024-01-01'", "'2024-02-01'"] },
-  { codecId: 'pg/timestamp@1', samples: ["'2024-01-01T10:00:00'", "'2024-02-01T10:00:00'"] },
-  { codecId: 'pg/timestamptz@1', samples: ["'2024-01-01T10:00:00Z'", "'2024-02-01T10:00:00Z'"] },
-  { codecId: 'pg/time@1', samples: ["'10:00:00'", "'11:00:00'"] },
   // The `*-string` samples carry microseconds so an aggregate that rounded to
   // milliseconds would change the value it returns rather than pass unnoticed.
   // Temporal-backed siblings of the same columns, with microseconds for the same reason.

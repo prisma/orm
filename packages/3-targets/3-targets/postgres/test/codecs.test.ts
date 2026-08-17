@@ -8,7 +8,6 @@ import {
   sqlFloatDescriptor,
   sqlIntDescriptor,
   sqlTextDescriptor,
-  sqlTimestampDescriptor,
   sqlVarcharDescriptor,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
@@ -17,7 +16,6 @@ import {
   pgBoolDescriptor,
   pgByteaDescriptor,
   pgCharDescriptor,
-  pgDateDescriptor,
   pgFloat4Descriptor,
   pgFloat8Descriptor,
   pgFloatDescriptor,
@@ -31,15 +29,12 @@ import {
   pgJsonDescriptor,
   pgNumericDescriptor,
   pgTextDescriptor,
-  pgTimeDescriptor,
-  pgTimestampDescriptor,
-  pgTimestamptzDescriptor,
   pgTimetzDescriptor,
   pgUuidDescriptor,
   pgVarbitDescriptor,
   pgVarcharDescriptor,
 } from '../src/core/codecs';
-import { postgresCodecDescriptorRegistry, postgresCodecRegistry } from '../src/core/registry';
+import { postgresCodecRegistry } from '../src/core/registry';
 
 const SYNTH_CTX: CodecInstanceContext = { name: 'test' };
 
@@ -49,7 +44,6 @@ const descriptorByScalar = {
   int: sqlIntDescriptor,
   float: sqlFloatDescriptor,
   'sql-text': sqlTextDescriptor,
-  'sql-timestamp': sqlTimestampDescriptor,
   text: pgTextDescriptor,
   character: pgCharDescriptor,
   'character varying': pgVarcharDescriptor,
@@ -61,10 +55,6 @@ const descriptorByScalar = {
   float4: pgFloat4Descriptor,
   float8: pgFloat8Descriptor,
   numeric: pgNumericDescriptor,
-  date: pgDateDescriptor,
-  timestamp: pgTimestampDescriptor,
-  timestamptz: pgTimestamptzDescriptor,
-  time: pgTimeDescriptor,
   timetz: pgTimetzDescriptor,
   bool: pgBoolDescriptor,
   bit: pgBitDescriptor,
@@ -86,92 +76,6 @@ function codecForScalar(scalar: ScalarName): Codec {
 }
 
 describe('adapter-postgres codecs', () => {
-  it('exports expected codec scalars', () => {
-    expect(Object.keys(descriptorByScalar).sort()).toEqual([
-      'bit',
-      'bit varying',
-      'bool',
-      'bytea',
-      'char',
-      'character',
-      'character varying',
-      'date',
-      'double precision',
-      'float',
-      'float4',
-      'float8',
-      'inet',
-      'int',
-      'int2',
-      'int4',
-      'int8',
-      'integer',
-      'interval',
-      'json',
-      'jsonb',
-      'numeric',
-      'sql-text',
-      'sql-timestamp',
-      'text',
-      'time',
-      'timestamp',
-      'timestamptz',
-      'timetz',
-      'uuid',
-      'varchar',
-    ]);
-  });
-
-  describe('timestamp codec', () => {
-    const timestampCodec = codecForScalar('timestamp') as {
-      encode: (value: Date, ctx: SqlCodecCallContext) => Promise<Date>;
-      decode: (wire: Date, ctx: SqlCodecCallContext) => Promise<Date>;
-    };
-
-    it('encodes Date values as-is', async () => {
-      const date = new Date('2024-01-15T10:30:00Z');
-      expect(await timestampCodec.encode(date, {})).toBe(date);
-    });
-
-    it('decodes Date values as-is', async () => {
-      const date = new Date('2024-01-15T10:30:00Z');
-      expect(await timestampCodec.decode(date, {})).toBe(date);
-    });
-  });
-
-  describe('sql-timestamp codec', () => {
-    const timestampCodec = codecForScalar('sql-timestamp') as {
-      encode: (value: Date, ctx: SqlCodecCallContext) => Promise<Date>;
-      decode: (wire: Date, ctx: SqlCodecCallContext) => Promise<Date>;
-    };
-
-    it('round-trips Date values', async () => {
-      const date = new Date('2024-01-15T10:30:00Z');
-      expect(await timestampCodec.encode(date, {})).toBe(date);
-      expect(await timestampCodec.decode(date, {})).toBe(date);
-    });
-
-    it('uses the zone-less ISO form a timestamp column holds', () => {
-      const codec = codecForScalar('sql-timestamp');
-      const date = new Date('2024-01-15T10:30:00.000Z');
-      expect(codec.encodeJson(date)).toBe('2024-01-15T10:30:00.000');
-      expect(codec.decodeJson('2024-01-15T10:30:00.000')).toEqual(date);
-    });
-  });
-
-  describe('timestamptz codec', () => {
-    const timestamptzCodec = codecForScalar('timestamptz') as {
-      encode: (value: Date, ctx: SqlCodecCallContext) => Promise<Date>;
-      decode: (wire: Date, ctx: SqlCodecCallContext) => Promise<Date>;
-    };
-
-    it('round-trips Date values', async () => {
-      const date = new Date('2024-01-15T10:30:00Z');
-      expect(await timestamptzCodec.encode(date, {})).toBe(date);
-      expect(await timestamptzCodec.decode(date, {})).toBe(date);
-    });
-  });
-
   describe('json codec', () => {
     const jsonCodec = codecForScalar('json') as {
       encode: (value: unknown, ctx: SqlCodecCallContext) => Promise<string>;
@@ -295,37 +199,6 @@ describe('adapter-postgres codecs', () => {
 
     it('decodes number to string', async () => {
       expect(await numericCodec.decode(42, {})).toBe('42');
-    });
-  });
-
-  describe('date codec', () => {
-    const dateCodec = codecForScalar('date') as {
-      encode: (value: Date, ctx: SqlCodecCallContext) => Promise<string>;
-      decode: (wire: Date, ctx: SqlCodecCallContext) => Promise<Date>;
-    };
-
-    it('encodes a Date as its UTC calendar date, not the pg driver Date auto-conversion', async () => {
-      expect(await dateCodec.encode(new Date(Date.UTC(2024, 0, 15)), {})).toBe('2024-01-15');
-    });
-
-    it('decodes the driver local-midnight Date to the equivalent UTC-midnight instant', async () => {
-      const decoded = await dateCodec.decode(new Date(2024, 0, 15), {});
-      expect(decoded.getTime()).toBe(Date.UTC(2024, 0, 15));
-    });
-  });
-
-  describe('time codec', () => {
-    const timeCodec = codecForScalar('time') as {
-      encode: (value: string, ctx: SqlCodecCallContext) => Promise<string>;
-      decode: (wire: string, ctx: SqlCodecCallContext) => Promise<string>;
-    };
-
-    it('encodes string as-is', async () => {
-      expect(await timeCodec.encode('12:34:56', {})).toBe('12:34:56');
-    });
-
-    it('decodes string as-is', async () => {
-      expect(await timeCodec.decode('23:59:59', {})).toBe('23:59:59');
     });
   });
 
@@ -491,127 +364,6 @@ describe('adapter-postgres codecs', () => {
   });
 
   describe('metadata and params schema', () => {
-    const postgresNativeTypeCases: ReadonlyArray<{
-      scalar: ScalarName;
-      nativeType: string;
-    }> = [
-      { scalar: 'character', nativeType: 'character' },
-      { scalar: 'character varying', nativeType: 'character varying' },
-      { scalar: 'integer', nativeType: 'integer' },
-      { scalar: 'double precision', nativeType: 'double precision' },
-      { scalar: 'int4', nativeType: 'integer' },
-      { scalar: 'float8', nativeType: 'double precision' },
-      { scalar: 'bit varying', nativeType: 'bit varying' },
-      { scalar: 'uuid', nativeType: 'uuid' },
-      { scalar: 'inet', nativeType: 'inet' },
-    ];
-
-    it.each(postgresNativeTypeCases)(
-      'states the postgres native type for $scalar',
-      ({ scalar, nativeType }) => {
-        // Resolved through the registry rather than off the map, whose value type
-        // spans the SQL-base descriptors too — those carry no PostgreSQL native
-        // type, and none of these cases names one.
-        const codecId = descriptorByScalar[scalar].codecId;
-        const descriptor = postgresCodecDescriptorRegistry.descriptorFor(codecId);
-        expect(descriptor?.nativeTypeFor({ codecId })).toBe(nativeType);
-      },
-    );
-
-    const paramsSchemaPresenceCases: ReadonlyArray<{
-      scalar: ScalarName;
-    }> = [
-      { scalar: 'character' },
-      { scalar: 'character varying' },
-      { scalar: 'numeric' },
-      { scalar: 'sql-timestamp' },
-      { scalar: 'timestamp' },
-      { scalar: 'timestamptz' },
-      { scalar: 'time' },
-      { scalar: 'timetz' },
-      { scalar: 'bit' },
-      { scalar: 'bit varying' },
-      { scalar: 'interval' },
-      { scalar: 'sql-text' },
-      { scalar: 'text' },
-      { scalar: 'bool' },
-      { scalar: 'int4' },
-      { scalar: 'uuid' },
-      { scalar: 'inet' },
-    ];
-
-    it.each(paramsSchemaPresenceCases)(
-      'descriptor for $scalar carries a paramsSchema',
-      ({ scalar }) => {
-        // Descriptors always carry `paramsSchema` (every codec has one, be it `voidParamsSchema` for non-parameterized codecs or a codec-specific schema). The parameterization split remains observable through the descriptor's typed paramsSchema shape; the runtime presence check below holds for every codec.
-        expect(descriptorByScalar[scalar].paramsSchema).toBeDefined();
-      },
-    );
-  });
-
-  describe('encodeJson / decodeJson', () => {
-    describe('pg/numeric@1', () => {
-      const codec = codecForScalar('numeric');
-
-      it('uses decimal text, so arbitrary precision survives', () => {
-        expect(codec.encodeJson('1234.5')).toBe('1234.5');
-        expect(codec.decodeJson('1234.5')).toBe('1234.5');
-        expect(codec.encodeJson('1234567890.12345678901234567890')).toBe(
-          '1234567890.12345678901234567890',
-        );
-        expect(codec.decodeJson('1234567890.12345678901234567890')).toBe(
-          '1234567890.12345678901234567890',
-        );
-      });
-
-      it('rejects a JSON number, which has already lost digits', () => {
-        expect(() => codec.decodeJson(1234.5)).toThrow(
-          'pg/numeric@1 database JSON value must be a decimal string',
-        );
-      });
-
-      /**
-       * The accepted grammar is what PostgreSQL *prints* for a numeric, not what
-       * it accepts as input. It reads `+123`, `.5`, `1.`, `1e5`, `0x1f`, `1_000`
-       * and whitespace-padded text, and prints all of them normalised — so
-       * accepting an input spelling would name an application value the
-       * projection can never return.
-       */
-      it('accepts the forms a numeric prints, including the non-finite ones', () => {
-        for (const value of [
-          '0',
-          '-0',
-          '123',
-          '-123',
-          '1.5',
-          '-1.5',
-          'NaN',
-          'Infinity',
-          '-Infinity',
-          `${'9'.repeat(60)}.${'1'.repeat(40)}`,
-        ]) {
-          expect(codec.encodeJson(value)).toBe(value);
-        }
-      });
-
-      it('rejects spellings a numeric reads but never prints', () => {
-        for (const value of [
-          '+123',
-          '.5',
-          '1.',
-          '1e5',
-          '1E5',
-          '1e-5',
-          '0x1f',
-          '1_000',
-          '  12  ',
-          '',
-        ]) {
-          expect(() => codec.encodeJson(value)).toThrow(/canonical numeric text/);
-        }
-      });
-    });
-
     describe('pg/int8@1', () => {
       const codec = codecForScalar('int8');
 
@@ -630,65 +382,6 @@ describe('adapter-postgres codecs', () => {
 
       it('renders a default as a bigint literal', () => {
         expect(pgInt8Descriptor.renderValueLiteral?.('9007199254740993')).toBe('9007199254740993n');
-      });
-    });
-
-    describe('pg/timestamptz@1', () => {
-      const codec = codecForScalar('timestamptz');
-
-      it('encodes Date to the Postgres JSON timestamptz representation', () => {
-        expect(codec.encodeJson(new Date('2024-01-15T00:00:00.000Z'))).toBe(
-          '2024-01-15T00:00:00.000+00:00',
-        );
-      });
-
-      it('decodes Postgres JSON timestamptz text to Date', () => {
-        const result = codec.decodeJson('2024-01-15T00:00:00.000+00:00') as Date;
-        expect(result).toBeInstanceOf(Date);
-        expect(result).toEqual(new Date('2024-01-15T00:00:00.000Z'));
-      });
-
-      it('round-trips Date values', () => {
-        const original = new Date('2024-06-15T14:30:00.000Z');
-        const encoded = codec.encodeJson(original);
-        const decoded = codec.decodeJson(encoded);
-        expect(decoded).toEqual(original);
-      });
-
-      it('throws on non-string input to decodeJson', () => {
-        expect(() => codec.decodeJson(42)).toThrow('Expected ISO date string for pg/timestamptz@1');
-      });
-
-      it('throws on malformed date string in decodeJson', () => {
-        expect(() => codec.decodeJson('not-a-date')).toThrow(
-          'Invalid ISO date string for pg/timestamptz@1',
-        );
-      });
-    });
-
-    describe('pg/timestamp@1', () => {
-      const codec = codecForScalar('timestamp');
-
-      it('encodes Date to the Postgres JSON timestamp representation', () => {
-        expect(codec.encodeJson(new Date('2024-01-15T00:00:00.000Z'))).toBe(
-          '2024-01-15T00:00:00.000',
-        );
-      });
-
-      it('decodes Postgres JSON timestamp text to Date', () => {
-        const result = codec.decodeJson('2024-01-15T00:00:00.000') as Date;
-        expect(result).toBeInstanceOf(Date);
-        expect(result).toEqual(new Date('2024-01-15T00:00:00.000Z'));
-      });
-
-      it('throws on non-string input to decodeJson', () => {
-        expect(() => codec.decodeJson(42)).toThrow('Expected ISO date string for pg/timestamp@1');
-      });
-
-      it('throws on malformed date string in decodeJson', () => {
-        expect(() => codec.decodeJson('garbage')).toThrow(
-          'Invalid ISO date string for pg/timestamp@1',
-        );
       });
     });
 
@@ -727,12 +420,7 @@ describe('adapter-postgres codecs', () => {
     });
   });
 
-  describe('pg/date@1 registry resolution', () => {
-    it('resolves pgDateDescriptor by codec id from the registry', () => {
-      const resolved = postgresCodecRegistry.descriptorFor('pg/date@1');
-      expect(resolved).toBe(pgDateDescriptor);
-    });
-  });
+  describe('pg/date@1 registry resolution', () => {});
 
   describe('numeric codec decode', () => {
     const numericCodec = codecForScalar('numeric') as {

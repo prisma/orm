@@ -31,7 +31,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
 
 const int4Column = columnDescriptor('pg/int4@1');
 const textColumn = columnDescriptor('pg/text@1');
-const timestamptzColumn = columnDescriptor('pg/timestamptz@1');
+const timestamptzColumn = columnDescriptor('pg/timestamptz-temporal@1');
 
 function defineTestContract<
   const Definition extends Omit<ContractInput, 'target' | 'family' | 'createNamespace'>,

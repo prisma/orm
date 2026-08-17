@@ -77,10 +77,12 @@ describe('expandNativeType hooks via descriptor-meta', () => {
   });
 
   const precisionCodecIds = [
-    'sql/timestamp@1',
-    'pg/timestamp@1',
-    'pg/timestamptz@1',
-    'pg/time@1',
+    'pg/timestamp-temporal@1',
+    'pg/timestamptz-temporal@1',
+    'pg/time-temporal@1',
+    'pg/timestamp-string@1',
+    'pg/timestamptz-string@1',
+    'pg/time-string@1',
     'pg/timetz@1',
     'pg/interval@1',
   ] as const;

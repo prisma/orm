@@ -258,7 +258,7 @@ test('integrated callback authoring exposes composition-shaped type helpers', ()
   ).toEqualTypeOf<'pg/jsonb@1'>();
   expectTypeOf(
     contract.storage.namespaces['public'].entries.table.user.columns.createdAt.codecId,
-  ).toEqualTypeOf<'pg/timestamptz@1'>();
+  ).toEqualTypeOf<'pg/timestamptz-temporal@1'>();
   // `role.typeRef` and `embedding.typeRef` capture is gated on the
   // descriptor-level generic forwarding noted above; the contract
   // still carries the correct typeRef strings at runtime.

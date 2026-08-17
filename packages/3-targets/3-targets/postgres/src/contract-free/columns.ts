@@ -11,7 +11,7 @@ import {
   PG_JSONB_CODEC_ID,
   PG_TEXT_ARRAY_CODEC_ID,
   PG_TEXT_CODEC_ID,
-  PG_TIMESTAMPTZ_CODEC_ID,
+  PG_TIMESTAMPTZ_STRING_CODEC_ID,
 } from '../core/codec-ids';
 
 type ColOpts = { readonly nullable?: boolean };
@@ -26,8 +26,14 @@ export const int4 = (opts?: ColOpts): ColumnDescriptor => desc(PG_INT4_CODEC_ID,
 export const int8 = (opts?: ColOpts): ColumnDescriptor => desc(PG_INT8_CODEC_ID, opts);
 export const jsonb = (opts?: ColOpts): ColumnDescriptor => desc(PG_JSONB_CODEC_ID, opts);
 export const textArray = (opts?: ColOpts): ColumnDescriptor => desc(PG_TEXT_ARRAY_CODEC_ID, opts);
+/**
+ * Control-plane tables are read by Prisma's own tooling, which has to run wherever the user's Node
+ * runs — so this declares the string representation rather than the Temporal one. Nothing here needs
+ * a `Temporal` global, and a marker or migration row that cannot be read on a stock runtime would
+ * break `migrate` rather than a user's query.
+ */
 export const timestamptz = (opts?: ColOpts): ColumnDescriptor =>
-  desc(PG_TIMESTAMPTZ_CODEC_ID, opts);
+  desc(PG_TIMESTAMPTZ_STRING_CODEC_ID, opts);
 
 /**
  * Declare a PostgreSQL control-plane table with a typed column schema. Wraps

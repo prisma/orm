@@ -85,6 +85,7 @@
     "pathe": "^2.0.3",
     "pg": "catalog:",
     "strip-ansi": "^7.2.0",
+    "temporal-polyfill": "^1.0.4",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite7": "npm:vite@7.3.1",

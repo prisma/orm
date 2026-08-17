@@ -5374,6 +5374,9 @@ importers:
       strip-ansi:
         specifier: ^7.2.0
         version: 7.2.0
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

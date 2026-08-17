@@ -5,12 +5,7 @@ import type { SqlAggregateDescriptor } from '../src/aggregate-descriptor';
 import { buildSqlAggregateDescriptorRegistry } from '../src/aggregate-descriptor-registry';
 import type { AnyCodecDescriptor } from '../src/ast/codec-types';
 import { buildCodecDescriptorRegistry } from '../src/codec-descriptor-registry';
-import {
-  AggregateExpr,
-  LiteralColumnDefault,
-  sqlCharRenderOutputType,
-  sqlTimestampDecodeJson,
-} from '../src/exports/ast';
+import { AggregateExpr, LiteralColumnDefault, sqlCharRenderOutputType } from '../src/exports/ast';
 
 const stub = (codecId: string, targetTypes: readonly string[]): AnyCodecDescriptor =>
   ({
@@ -136,34 +131,6 @@ describe('relational-core structured error codes', () => {
     expect(error).toMatchObject({
       code: 'RUNTIME.TYPE_PARAMS_INVALID',
       meta: { codec: 'sql/char@1', param: 'length', received: '1.5' },
-    });
-  });
-
-  it('non-string timestamp database JSON raises RUNTIME.DECODE_FAILED', () => {
-    const error = capture(() => sqlTimestampDecodeJson(42));
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      message: 'Expected ISO date string for sql/timestamp@1, got number',
-      meta: { codec: 'sql/timestamp@1' },
-    });
-  });
-
-  it('unparseable timestamp database JSON raises RUNTIME.DECODE_FAILED', () => {
-    const error = capture(() => sqlTimestampDecodeJson('2024-13-01T00:00:00'));
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      message: 'Invalid ISO date string for sql/timestamp@1: 2024-13-01T00:00:00',
-    });
-  });
-
-  it('offset-bearing timestamp database JSON raises RUNTIME.DECODE_FAILED', () => {
-    const error = capture(() => sqlTimestampDecodeJson('2024-01-15T10:30:00Z'));
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      meta: { codec: 'sql/timestamp@1' },
     });
   });
 

@@ -313,7 +313,7 @@ export const postgresBaseScalarAuthoringTypes: AuthoringTypeNamespace = {
   },
   DateTime: {
     kind: 'typeConstructor',
-    output: { codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' },
+    output: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' },
   },
   Json: { kind: 'typeConstructor', output: { codecId: 'pg/json@1', nativeType: 'json' } },
   Jsonb: { kind: 'typeConstructor', output: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' } },
@@ -330,7 +330,7 @@ export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
   Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1', nativeType: 'inet' } },
   SmallInt: { kind: 'typeConstructor', output: { codecId: 'pg/int2@1', nativeType: 'int2' } },
   Real: { kind: 'typeConstructor', output: { codecId: 'pg/float4@1', nativeType: 'float4' } },
-  Date: { kind: 'typeConstructor', output: { codecId: 'pg/date@1', nativeType: 'date' } },
+  Date: { kind: 'typeConstructor', output: { codecId: 'pg/date-temporal@1', nativeType: 'date' } },
   VarChar: {
     kind: 'typeConstructor',
     args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, optional: true }],
@@ -368,7 +368,7 @@ export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
     kind: 'typeConstructor',
     args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
     output: {
-      codecId: 'pg/timestamp@1',
+      codecId: 'pg/timestamp-temporal@1',
       nativeType: 'timestamp',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
@@ -377,7 +377,7 @@ export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
     kind: 'typeConstructor',
     args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
     output: {
-      codecId: 'pg/timestamptz@1',
+      codecId: 'pg/timestamptz-temporal@1',
       nativeType: 'timestamptz',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
@@ -386,7 +386,7 @@ export const postgresScalarAuthoringTypes: AuthoringTypeNamespace = {
     kind: 'typeConstructor',
     args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
     output: {
-      codecId: 'pg/time@1',
+      codecId: 'pg/time-temporal@1',
       nativeType: 'time',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
@@ -520,16 +520,16 @@ const targetTypesByCodecId: Record<string, readonly string[]> = {
   'pg/int8@1': ['int8'],
   'pg/float8@1': ['float8'],
   'pg/numeric@1': ['numeric'],
-  'pg/timestamptz@1': ['timestamptz'],
+  'pg/timestamptz-temporal@1': ['timestamptz'],
   'pg/jsonb@1': ['jsonb'],
   'pg/bytea@1': ['bytea'],
   'sql/char@1': ['character'],
   'sql/varchar@1': ['character varying'],
   'pg/int2@1': ['int2'],
   'pg/float4@1': ['float4'],
-  'pg/timestamp@1': ['timestamp'],
-  'pg/date@1': ['date'],
-  'pg/time@1': ['time'],
+  'pg/timestamp-temporal@1': ['timestamp'],
+  'pg/date-temporal@1': ['date'],
+  'pg/time-temporal@1': ['time'],
   'pg/timetz@1': ['timetz'],
   'pg/json@1': ['json'],
   'pg/vector@1': ['vector'],
@@ -697,7 +697,11 @@ export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefau
       },
       {
         id: 'timestampNow',
-        applicableCodecIds: ['pg/timestamp@1', 'pg/timestamptz@1', 'sqlite/datetime@1'],
+        applicableCodecIds: [
+          'pg/timestamp-temporal@1',
+          'pg/timestamptz-temporal@1',
+          'sqlite/datetime@1',
+        ],
         buildPhases: () => ({
           onCreate: { kind: 'generator', id: 'timestampNow' },
           onUpdate: { kind: 'generator', id: 'timestampNow' },
@@ -790,7 +794,7 @@ export const temporalCodecPresetMirrors = {
       TEMPORAL_MIRROR_ON_UPDATE_ARG,
     ],
     output: {
-      codecId: 'pg/timestamp@1',
+      codecId: 'pg/timestamp-temporal@1',
       nativeType: 'timestamp',
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
@@ -807,7 +811,7 @@ export const temporalCodecPresetMirrors = {
       TEMPORAL_MIRROR_ON_UPDATE_ARG,
     ],
     output: {
-      codecId: 'pg/timestamptz@1',
+      codecId: 'pg/timestamptz-temporal@1',
       nativeType: 'timestamptz',
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
@@ -845,7 +849,7 @@ export const temporalConvenienceMirrors = {
     createdAt: {
       kind: 'fieldPreset',
       output: {
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         nativeType: 'timestamptz',
         default: { kind: 'function', expression: 'now()' },
       },
@@ -853,7 +857,7 @@ export const temporalConvenienceMirrors = {
     updatedAt: {
       kind: 'fieldPreset',
       output: {
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         nativeType: 'timestamptz',
         executionDefaults: {
           onCreate: TEMPORAL_MIRROR_NOW_PHASE,

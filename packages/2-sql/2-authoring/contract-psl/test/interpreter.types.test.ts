@@ -71,11 +71,11 @@ model Event {
       },
       Rating: { codecId: 'pg/int2@1', nativeType: 'int2' },
       HappenedAt: {
-        codecId: 'pg/time@1',
+        codecId: 'pg/time-temporal@1',
         nativeType: 'time',
         typeParams: { precision: 3 },
       },
-      PublishDay: { codecId: 'pg/date@1', nativeType: 'date' },
+      PublishDay: { codecId: 'pg/date-temporal@1', nativeType: 'date' },
       Payload: { codecId: 'pg/json@1', nativeType: 'json' },
       Amount: {
         codecId: 'pg/numeric@1',
@@ -104,13 +104,13 @@ model Event {
                     typeRef: 'Rating',
                   },
                   happenedAt: {
-                    codecId: 'pg/time@1',
+                    codecId: 'pg/time-temporal@1',
                     nativeType: 'time',
                     nullable: false,
                     typeRef: 'HappenedAt',
                   },
                   publishDay: {
-                    codecId: 'pg/date@1',
+                    codecId: 'pg/date-temporal@1',
                     nativeType: 'date',
                     nullable: false,
                     typeRef: 'PublishDay',
@@ -181,12 +181,12 @@ model Event {
         nativeType: 'float4',
       },
       CreatedAt: {
-        codecId: 'pg/timestamp@1',
+        codecId: 'pg/timestamp-temporal@1',
         nativeType: 'timestamp',
         typeParams: { precision: 3 },
       },
       PublishedAt: {
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         nativeType: 'timestamptz',
         typeParams: { precision: 6 },
       },
@@ -221,13 +221,13 @@ model Event {
                     typeRef: 'Score',
                   },
                   createdAt: {
-                    codecId: 'pg/timestamp@1',
+                    codecId: 'pg/timestamp-temporal@1',
                     nativeType: 'timestamp',
                     nullable: false,
                     typeRef: 'CreatedAt',
                   },
                   publishedAt: {
-                    codecId: 'pg/timestamptz@1',
+                    codecId: 'pg/timestamptz-temporal@1',
                     nativeType: 'timestamptz',
                     nullable: false,
                     typeRef: 'PublishedAt',

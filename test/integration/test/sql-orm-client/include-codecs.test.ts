@@ -1,8 +1,8 @@
 import {
   byteaColumn,
   int4Column,
-  timestampColumn,
-  timestamptzColumn,
+  timestampTemporalColumn,
+  timestamptzTemporalColumn,
 } from '@internal/adapter-postgres/column-types';
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import type { JsonValue } from '@internal/contract/types';
@@ -103,8 +103,8 @@ const Project = model('Project', {
   fields: {
     id: field.column(int4Column).id(),
     wrappedDek: field.column(byteaColumn).column('wrapped_dek').optional(),
-    deletedAt: field.column(timestampColumn).column('deleted_at').optional(),
-    deletedAtTz: field.column(timestamptzColumn).column('deleted_at_tz').optional(),
+    deletedAt: field.column(timestampTemporalColumn).column('deleted_at').optional(),
+    deletedAtTz: field.column(timestamptzTemporalColumn).column('deleted_at_tz').optional(),
     customText: field.column(includedTextColumn).column('custom_text').optional(),
   },
 }).sql({ table: 'codec_projects' });
@@ -207,8 +207,8 @@ describe('integration/include codecs', () => {
               id: 1,
               project: {
                 wrappedDek: new Uint8Array([1, 2, 3, 4]),
-                deletedAt: new Date('2026-07-09T15:23:33.037Z'),
-                deletedAtTz: new Date('2026-07-09T15:23:33.037Z'),
+                deletedAt: Temporal.PlainDateTime.from('2026-07-09T15:23:33.037'),
+                deletedAtTz: Temporal.Instant.from('2026-07-09T15:23:33.037Z'),
                 customText: 'decoded-json:extension value',
               },
             },

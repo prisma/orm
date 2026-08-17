@@ -47,11 +47,11 @@ export const float8Column: ColumnTypeDescriptor = {
 } as const;
 
 export const timestampColumn: ColumnTypeDescriptor = {
-  codecId: 'pg/timestamp@1',
+  codecId: 'pg/timestamp-temporal@1',
   nativeType: 'timestamp',
 } as const;
 
 export const timestamptzColumn: ColumnTypeDescriptor = {
-  codecId: 'pg/timestamptz@1',
+  codecId: 'pg/timestamptz-temporal@1',
   nativeType: 'timestamptz',
 } as const;

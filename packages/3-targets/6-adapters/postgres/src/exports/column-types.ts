@@ -9,6 +9,8 @@ import {
   PG_BIT_CODEC_ID,
   PG_BOOL_CODEC_ID,
   PG_BYTEA_CODEC_ID,
+  PG_DATE_STRING_CODEC_ID,
+  PG_DATE_TEMPORAL_CODEC_ID,
   PG_FLOAT4_CODEC_ID,
   PG_FLOAT8_CODEC_ID,
   PG_INT2_CODEC_ID,
@@ -19,9 +21,12 @@ import {
   PG_JSONB_CODEC_ID,
   PG_NUMERIC_CODEC_ID,
   PG_TEXT_CODEC_ID,
-  PG_TIME_CODEC_ID,
-  PG_TIMESTAMP_CODEC_ID,
-  PG_TIMESTAMPTZ_CODEC_ID,
+  PG_TIME_STRING_CODEC_ID,
+  PG_TIME_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMP_STRING_CODEC_ID,
+  PG_TIMESTAMP_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMPTZ_STRING_CODEC_ID,
+  PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
   PG_VARBIT_CODEC_ID,
   SQL_CHAR_CODEC_ID,
@@ -91,25 +96,50 @@ export function numericColumn(
   } as const;
 }
 
-export const timestampColumn = {
-  codecId: PG_TIMESTAMP_CODEC_ID,
+/**
+ * The representation-explicit temporal descriptors. Both halves declare the same column; they differ
+ * only in what a read hands back — a `Temporal.*` value, or PostgreSQL's own text for the values
+ * Temporal cannot express.
+ */
+export const dateTemporalColumn = {
+  codecId: PG_DATE_TEMPORAL_CODEC_ID,
+  nativeType: 'date',
+} as const satisfies ColumnTypeDescriptor;
+
+export const dateStringColumn = {
+  codecId: PG_DATE_STRING_CODEC_ID,
+  nativeType: 'date',
+} as const satisfies ColumnTypeDescriptor;
+
+export const timestampTemporalColumn = {
+  codecId: PG_TIMESTAMP_TEMPORAL_CODEC_ID,
   nativeType: 'timestamp',
 } as const satisfies ColumnTypeDescriptor;
 
-export const timestamptzColumn = {
-  codecId: PG_TIMESTAMPTZ_CODEC_ID,
+export const timestampStringColumn = {
+  codecId: PG_TIMESTAMP_STRING_CODEC_ID,
+  nativeType: 'timestamp',
+} as const satisfies ColumnTypeDescriptor;
+
+export const timestamptzTemporalColumn = {
+  codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
   nativeType: 'timestamptz',
 } as const satisfies ColumnTypeDescriptor;
 
-export function timeColumn(precision?: number): ColumnTypeDescriptor & {
-  readonly typeParams?: { readonly precision: number };
-} {
-  return {
-    codecId: PG_TIME_CODEC_ID,
-    nativeType: 'time',
-    ...(precision === undefined ? {} : { typeParams: { precision } }),
-  } as const;
-}
+export const timestamptzStringColumn = {
+  codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
+  nativeType: 'timestamptz',
+} as const satisfies ColumnTypeDescriptor;
+
+export const timeTemporalColumn = {
+  codecId: PG_TIME_TEMPORAL_CODEC_ID,
+  nativeType: 'time',
+} as const satisfies ColumnTypeDescriptor;
+
+export const timeStringColumn = {
+  codecId: PG_TIME_STRING_CODEC_ID,
+  nativeType: 'time',
+} as const satisfies ColumnTypeDescriptor;
 
 export function timetzColumn(precision?: number): ColumnTypeDescriptor & {
   readonly typeParams?: { readonly precision: number };

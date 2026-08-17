@@ -22,14 +22,10 @@ import {
   type SqlCharDescriptor,
   type SqlTextCodec,
   type SqlTextDescriptor,
-  type SqlTimestampCodec,
-  type SqlTimestampDescriptor,
   sqlCharColumn,
   sqlCharDescriptor,
   sqlTextColumn,
   sqlTextDescriptor,
-  sqlTimestampColumn,
-  sqlTimestampDescriptor,
 } from '../../src/ast/sql-codecs';
 
 test('sqlText: descriptor.factory() returns typed (ctx) => SqlTextCodec', () => {
@@ -60,25 +56,11 @@ test('sqlChar: column helper accepts no-args call (default params)', () => {
   expectTypeOf(col.typeParams).toEqualTypeOf<{ readonly length?: number }>();
 });
 
-test('sqlTimestamp: descriptor.factory(params) returns typed (ctx) => SqlTimestampCodec', () => {
-  const factory = sqlTimestampDescriptor.factory({ precision: 3 });
-  expectTypeOf(factory).toEqualTypeOf<(ctx: CodecInstanceContext) => SqlTimestampCodec>();
-});
-
-test('sqlTimestamp: column helper preserves typed codecFactory + precision params', () => {
-  const col = sqlTimestampColumn({ precision: 3 });
-  expectTypeOf(col.codecFactory).toEqualTypeOf<(ctx: CodecInstanceContext) => SqlTimestampCodec>();
-  expectTypeOf(col.typeParams).toEqualTypeOf<{ readonly precision?: number }>();
-});
-
 sqlTextColumn satisfies ColumnHelperFor<SqlTextDescriptor>;
 sqlTextColumn satisfies ColumnHelperForStrict<SqlTextDescriptor>;
 
 sqlCharColumn satisfies ColumnHelperFor<SqlCharDescriptor>;
 sqlCharColumn satisfies ColumnHelperForStrict<SqlCharDescriptor>;
-
-sqlTimestampColumn satisfies ColumnHelperFor<SqlTimestampDescriptor>;
-sqlTimestampColumn satisfies ColumnHelperForStrict<SqlTimestampDescriptor>;
 
 test('coarse satisfies catches wrong typeParams shape on sqlCharColumn', () => {
   const brokenHelper = (length: number) =>

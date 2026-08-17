@@ -15,7 +15,7 @@ export const contract = defineContract({ extensions: { pgvector } }, ({ field, m
       score: field.column(pg.float8Column).optional(),
       profile: field.column(pg.jsonbColumn).optional(),
       embedding: field.namedType(types.Embedding).optional(),
-      createdAt: field.column(pg.timestamptzColumn).defaultSql('now()'),
+      createdAt: field.column(pg.timestamptzTemporalColumn).defaultSql('now()'),
     },
   }).sql({ table: 'user' });
   const Post = model('Post', {

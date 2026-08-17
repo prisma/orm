@@ -17,7 +17,7 @@ type PortableSqlCodecTypes = {
   readonly 'app/test-enum@1': { output: string };
   readonly 'sql/char@1': { output: string };
   readonly 'sql/text@1': { output: string };
-  readonly 'sql/timestamp@1': { output: string };
+  readonly 'test/timestamp@1': { output: string };
 };
 
 const sqlFamilyPack = {
@@ -31,9 +31,9 @@ const sqlFamilyPack = {
         kind: 'fieldPreset',
         output: { codecId: 'sql/text@1', nativeType: 'text' },
       },
-      timestamp: {
+      portableTimestamp: {
         kind: 'fieldPreset',
-        output: { codecId: 'sql/timestamp@1', nativeType: 'timestamp' },
+        output: { codecId: 'test/timestamp@1', nativeType: 'timestamp' },
       },
       temporal: {
         // createdAt/updatedAt here are independent portable fixtures, NOT
@@ -45,7 +45,7 @@ const sqlFamilyPack = {
         createdAt: {
           kind: 'fieldPreset',
           output: {
-            codecId: 'sql/timestamp@1',
+            codecId: 'test/timestamp@1',
             nativeType: 'timestamp',
             default: { kind: 'function', expression: 'CURRENT_TIMESTAMP' },
           },
@@ -53,7 +53,7 @@ const sqlFamilyPack = {
         updatedAt: {
           kind: 'fieldPreset',
           output: {
-            codecId: 'sql/timestamp@1',
+            codecId: 'test/timestamp@1',
             nativeType: 'timestamp',
             executionDefaults: {
               onCreate: { kind: 'generator', id: 'timestampNow' },
@@ -212,7 +212,7 @@ describe('contract DSL helper vocabulary', () => {
               email: field.text().unique({ name: 'audit_entry_email_key' }),
               createdAt: field.temporal.createdAt().column('created_at'),
               updatedAt: field.temporal.updatedAt().column('updated_at'),
-              reviewedAt: field.timestamp().optional().column('reviewed_at'),
+              reviewedAt: field.portableTimestamp().optional().column('reviewed_at'),
             },
           }).sql({
             table: 'audit_entry',
@@ -249,7 +249,7 @@ describe('contract DSL helper vocabulary', () => {
       typeParams: { length: 16 },
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['created_at']).toMatchObject({
-      codecId: 'sql/timestamp@1',
+      codecId: 'test/timestamp@1',
       nativeType: 'timestamp',
       nullable: false,
       default: {
@@ -258,7 +258,7 @@ describe('contract DSL helper vocabulary', () => {
       },
     });
     expect(unboundTables(contract.storage)['audit_entry']!.columns['reviewed_at']).toMatchObject({
-      codecId: 'sql/timestamp@1',
+      codecId: 'test/timestamp@1',
       nativeType: 'timestamp',
       nullable: true,
     });
@@ -289,7 +289,7 @@ describe('contract DSL helper vocabulary', () => {
       },
       ({ field }) => {
         const textState = field.text().build();
-        const timestampState = field.timestamp().build();
+        const timestampState = field.portableTimestamp().build();
         const updatedAtState = field.temporal.updatedAt().build();
         const uuidState = field.uuidString().build();
         const nanoidState = field.nanoid({ size: 16 }).build();
@@ -299,10 +299,10 @@ describe('contract DSL helper vocabulary', () => {
 
         expectTypeOf(textState.descriptor?.codecId).toEqualTypeOf<'sql/text@1' | undefined>();
         expectTypeOf(timestampState.descriptor?.codecId).toEqualTypeOf<
-          'sql/timestamp@1' | undefined
+          'test/timestamp@1' | undefined
         >();
         expectTypeOf(updatedAtState.descriptor?.codecId).toEqualTypeOf<
-          'sql/timestamp@1' | undefined
+          'test/timestamp@1' | undefined
         >();
         expectTypeOf(uuidState.descriptor?.codecId).toEqualTypeOf<'sql/char@1' | undefined>();
         expectTypeOf(nanoidState.descriptor?.codecId).toEqualTypeOf<'sql/char@1' | undefined>();
@@ -793,17 +793,17 @@ describe('contract DSL helper vocabulary', () => {
         const zeroArgState = field.temporal.timestamp().build();
         const holeState = field.temporal.timestamp(undefined, undefined, 'now').build();
 
-        expectTypeOf(fullState.descriptor?.codecId).toEqualTypeOf<'sql/timestamp@1' | undefined>();
+        expectTypeOf(fullState.descriptor?.codecId).toEqualTypeOf<'test/timestamp@1' | undefined>();
 
         expect(fullState.descriptor).toEqual({
-          codecId: 'sql/timestamp@1',
+          codecId: 'test/timestamp@1',
           nativeType: 'timestamp',
           typeParams: { precision: 3 },
         });
         expect(fullState.executionDefaults).toEqual({ onCreate: nowPhase, onUpdate: nowPhase });
 
         expect(zeroArgState.descriptor).toEqual({
-          codecId: 'sql/timestamp@1',
+          codecId: 'test/timestamp@1',
           nativeType: 'timestamp',
         });
         expect(zeroArgState.descriptor).not.toHaveProperty('typeParams');
@@ -830,7 +830,7 @@ describe('contract DSL helper vocabulary', () => {
         const state = field.temporal.timestamp(3).build();
 
         expect(state.descriptor).toEqual({
-          codecId: 'sql/timestamp@1',
+          codecId: 'test/timestamp@1',
           nativeType: 'timestamp',
           typeParams: { precision: 3 },
         });

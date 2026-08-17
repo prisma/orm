@@ -3,7 +3,9 @@ import type { AuthoringFieldPresetDescriptor } from '@internal/framework-compone
 /**
  * Hand-written mirror of family-sql's `temporalCodecPresetWithPrecision`
  * output, over an invented portable codec so the contract-ts test pack stays
- * target-agnostic.
+ * target-agnostic. The id is deliberately not a shipped one — the factory is
+ * generic over `codecId`, so an invented anchor exercises it exactly as a real
+ * codec would, without tying this pack to a target's codec set.
  *
  * It is hand-written because this package cannot import family-sql:
  * family-sql declares `@internal/sql-contract-ts` as a production
@@ -24,7 +26,7 @@ export const sqlTimestampPresetMirror = {
     { name: 'onUpdate', kind: 'option', values: ['now'], optional: true },
   ],
   output: {
-    codecId: 'sql/timestamp@1',
+    codecId: 'test/timestamp@1',
     nativeType: 'timestamp',
     typeParams: { precision: { kind: 'arg', index: 0 } },
     executionDefaults: {

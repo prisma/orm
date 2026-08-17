@@ -29,8 +29,6 @@ import {
   type PgInt8NumberDescriptor,
   type PgNumericCodec,
   type PgNumericDescriptor,
-  type PgTimestamptzCodec,
-  type PgTimestamptzDescriptor,
   type PgUnboundedIntCodec,
   type PgUnboundedIntDescriptor,
   pgBitColumn,
@@ -41,8 +39,6 @@ import {
   pgInt8NumberDescriptor,
   pgNumericColumn,
   pgNumericDescriptor,
-  pgTimestamptzColumn,
-  pgTimestamptzDescriptor,
   pgUnboundedIntColumn,
   pgUnboundedIntDescriptor,
 } from '../src/core/codecs';
@@ -86,17 +82,6 @@ test('pgBit: column helper accepts no-args call (default params)', () => {
   expectTypeOf(col.typeParams).toEqualTypeOf<{ readonly length?: number }>();
 });
 
-test('pgTimestamptz: descriptor.factory(params) returns typed (ctx) => PgTimestamptzCodec', () => {
-  const factory = pgTimestamptzDescriptor.factory({ precision: 3 });
-  expectTypeOf(factory).toEqualTypeOf<(ctx: CodecInstanceContext) => PgTimestamptzCodec>();
-});
-
-test('pgTimestamptz: column helper preserves typed codecFactory + precision params', () => {
-  const col = pgTimestamptzColumn({ precision: 3 });
-  expectTypeOf(col.codecFactory).toEqualTypeOf<(ctx: CodecInstanceContext) => PgTimestamptzCodec>();
-  expectTypeOf(col.typeParams).toEqualTypeOf<{ readonly precision?: number }>();
-});
-
 test('pgNumeric: descriptor.factory(params) returns typed (ctx) => PgNumericCodec', () => {
   const factory = pgNumericDescriptor.factory({ precision: 10, scale: 2 });
   expectTypeOf(factory).toEqualTypeOf<(ctx: CodecInstanceContext) => PgNumericCodec>();
@@ -134,9 +119,6 @@ pgUnboundedIntDescriptor.factory() satisfies (ctx: CodecInstanceContext) => PgUn
 
 pgBitColumn satisfies ColumnHelperFor<PgBitDescriptor>;
 pgBitColumn satisfies ColumnHelperForStrict<PgBitDescriptor>;
-
-pgTimestamptzColumn satisfies ColumnHelperFor<PgTimestamptzDescriptor>;
-pgTimestamptzColumn satisfies ColumnHelperForStrict<PgTimestamptzDescriptor>;
 
 pgNumericColumn satisfies ColumnHelperFor<PgNumericDescriptor>;
 pgNumericColumn satisfies ColumnHelperForStrict<PgNumericDescriptor>;

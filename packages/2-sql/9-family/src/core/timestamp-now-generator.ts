@@ -133,7 +133,7 @@ function temporalPhaseTemplate<const Index extends number>(index: Index) {
 
 /**
  * Builds a `temporal.<codec>` field preset for a codec that takes a precision
- * parameter (`pg/timestamp@1`, `pg/timestamptz@1`). Arguments change field
+ * parameter (`pg/timestamp-temporal@1`, `pg/timestamptz-temporal@1`). Arguments change field
  * properties only — never the codec, which the caller fixes here.
  *
  * All three arguments are optional: omitting `precision` omits `typeParams`

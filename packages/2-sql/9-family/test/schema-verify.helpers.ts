@@ -73,6 +73,29 @@ export function createTestSchemaIR(tables: Record<string, SqlTableIR>): SqlSchem
 /**
  * Creates a minimal contract table for testing.
  */
+/**
+ * Most PostgreSQL codec ids are `pg/<nativeType>@1`, so a test column can name only its native type
+ * and have the id inferred. The temporal types are deliberately not among them: each has two codecs
+ * — one carrying a `Temporal.*` value, one carrying the server's text — and no default. Inferring one
+ * would put back the implicit choice the representation-explicit codecs exist to remove, so a
+ * temporal column has to say which it means.
+ */
+const NO_INFERRED_CODEC = new Set(['date', 'timestamp', 'timestamptz', 'time']);
+
+function codecIdFor(
+  name: string,
+  col: { readonly codecId?: string; readonly nativeType: string },
+): string {
+  if (col.codecId !== undefined) return col.codecId;
+  if (NO_INFERRED_CODEC.has(col.nativeType)) {
+    throw new Error(
+      `Test column "${name}" is a ${col.nativeType} and must name its codecId explicitly: ` +
+        `pg/${col.nativeType}-temporal@1 for a Temporal value, pg/${col.nativeType}-string@1 for the server's text.`,
+    );
+  }
+  return `pg/${col.nativeType}@1`;
+}
+
 export function createContractTable(
   columns: Record<
     string,
@@ -104,7 +127,7 @@ export function createContractTable(
         name,
         {
           nativeType: col.nativeType,
-          codecId: col.codecId ?? `pg/${col.nativeType}@1`,
+          codecId: codecIdFor(name, col),
           nullable: col.nullable,
           ...ifDefined('default', col.default),
           ...ifDefined('typeParams', col.typeParams),

@@ -99,7 +99,7 @@ describe('builder integration', () => {
     // Runtime check that they match expected values
     expect(userTableType.columns.id.codecId).toBe('pg/int4@1');
     expect(userTableType.columns.email.codecId).toBe('pg/text@1');
-    expect(userTableType.columns.createdAt.codecId).toBe('pg/timestamptz@1');
+    expect(userTableType.columns.createdAt.codecId).toBe('pg/timestamptz-temporal@1');
 
     // Verify nullable is literal false, not boolean
     expectTypeOf(userTableType.columns.id.nullable).toEqualTypeOf<false>();

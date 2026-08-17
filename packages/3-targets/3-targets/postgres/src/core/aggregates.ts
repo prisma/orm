@@ -19,7 +19,6 @@ import type {
 import type { AggregateFn } from '@internal/sql-relational-core/ast';
 import { AggregateExpr, CastExpr } from '@internal/sql-relational-core/ast';
 import {
-  PG_DATE_CODEC_ID,
   PG_DATE_STRING_CODEC_ID,
   PG_DATE_TEMPORAL_CODEC_ID,
   PG_FLOAT_CODEC_ID,
@@ -35,13 +34,10 @@ import {
   PG_NUMERIC_CODEC_ID,
   PG_TEXT_ARRAY_CODEC_ID,
   PG_TEXT_CODEC_ID,
-  PG_TIME_CODEC_ID,
   PG_TIME_STRING_CODEC_ID,
   PG_TIME_TEMPORAL_CODEC_ID,
-  PG_TIMESTAMP_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
-  PG_TIMESTAMPTZ_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
@@ -49,7 +45,6 @@ import {
   PG_VARCHAR_CODEC_ID,
   SQL_FLOAT_CODEC_ID,
   SQL_INT_CODEC_ID,
-  SQL_TIMESTAMP_CODEC_ID,
   SQL_VARCHAR_CODEC_ID,
 } from './codec-ids';
 
@@ -129,11 +124,6 @@ const DOUBLE_PRECISION_CODECS = [
  * Codecs whose `min`/`max` returns the input type and whose traits do not already say so: the temporal types, `inet`, and `text[]` advertise `order` or `equality`, which `uuid`, `bit`, `bit varying`, `bool`, `bytea`, `json`, and `jsonb` also advertise while having no `min`/`max` at all. An exact overload per supported codec is therefore the only honest shape — a trait fallback over `order` would claim the unsupported ones too.
  */
 const MIN_MAX_PRESERVING_CODECS = [
-  PG_DATE_CODEC_ID,
-  PG_TIMESTAMP_CODEC_ID,
-  SQL_TIMESTAMP_CODEC_ID,
-  PG_TIMESTAMPTZ_CODEC_ID,
-  PG_TIME_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
   PG_INTERVAL_CODEC_ID,
   PG_INET_CODEC_ID,
@@ -212,7 +202,6 @@ export const postgresAggregateDescriptors: ReadonlyArray<SqlAggregateDescriptor>
   // `sum` over the unbounded integer keeps its codec: the expression's SQL type is `numeric`, and a sum of integral values is integral, so the codec's integrality-checked `bigint` decode is the right reader for the total.
   produces('sum', overCodec(PG_UNBOUNDED_INT_CODEC_ID), PG_UNBOUNDED_INT_CODEC_ID),
   produces('sum', overCodec(PG_INTERVAL_CODEC_ID), PG_INTERVAL_CODEC_ID),
-  produces('sum', overCodec(PG_TIME_CODEC_ID), PG_INTERVAL_CODEC_ID),
   produces('sum', overCodec(PG_TIME_STRING_CODEC_ID), PG_INTERVAL_CODEC_ID),
   produces('sum', overCodec(PG_TIME_TEMPORAL_CODEC_ID), PG_INTERVAL_CODEC_ID),
 
@@ -228,7 +217,6 @@ export const postgresAggregateDescriptors: ReadonlyArray<SqlAggregateDescriptor>
   ),
   produces('avg', overCodec(PG_NUMERIC_CODEC_ID), PG_NUMERIC_CODEC_ID),
   produces('avg', overCodec(PG_INTERVAL_CODEC_ID), PG_INTERVAL_CODEC_ID),
-  produces('avg', overCodec(PG_TIME_CODEC_ID), PG_INTERVAL_CODEC_ID),
   produces('avg', overCodec(PG_TIME_STRING_CODEC_ID), PG_INTERVAL_CODEC_ID),
   produces('avg', overCodec(PG_TIME_TEMPORAL_CODEC_ID), PG_INTERVAL_CODEC_ID),
 

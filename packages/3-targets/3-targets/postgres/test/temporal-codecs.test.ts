@@ -24,6 +24,7 @@ import {
   pgTimestamptzTemporalDescriptor,
   pgTimeTemporalDescriptor,
 } from '../src/core/codecs';
+import { postgresCodecRegistry } from '../src/core/registry';
 
 const instanceCtx = { name: '<test>' };
 const callCtx = {};
@@ -239,5 +240,30 @@ describe('Temporal-backed temporal codecs', () => {
         pgTimeTemporalDescriptor.renderOutputType,
       ]).toEqual([undefined, undefined, undefined, undefined]);
     });
+  });
+});
+
+/**
+ * The temporal target types had no single-claimant assertion, which is exactly why a second claimant
+ * could be registered beside each of them without anything failing: `byTargetType` was ambiguous for
+ * the whole window in which both the Date-typed and the Temporal codec existed. With the old ones
+ * gone, this locks the resolution — the sibling assertions on `int8` and `numeric` are the pattern.
+ */
+describe('one claimant per temporal target type', () => {
+  it.each([
+    ['date', pgDateTemporalDescriptor],
+    ['timestamp', pgTimestampTemporalDescriptor],
+    ['timestamptz', pgTimestamptzTemporalDescriptor],
+    ['time', pgTimeTemporalDescriptor],
+  ])('%s resolves to exactly one descriptor', (targetType, descriptor) => {
+    expect(postgresCodecRegistry.byTargetType(targetType)).toEqual([descriptor]);
+  });
+
+  it('leaves the representation-explicit string codecs out of target-type resolution entirely', () => {
+    const claimed = ['date', 'timestamp', 'timestamptz', 'time'].flatMap((t) =>
+      postgresCodecRegistry.byTargetType(t).map((d) => d.codecId),
+    );
+
+    expect(claimed.filter((id) => id.endsWith('-string@1'))).toEqual([]);
   });
 });

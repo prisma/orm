@@ -82,13 +82,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   { codecId: 'sql/int@1', label: 'integer', value: 42 },
   { codecId: 'sql/float@1', label: 'finite float', value: 1.5 },
   { codecId: 'sql/text@1', label: 'text', value: 'hello' },
-  { codecId: 'sql/timestamp@1', label: 'instant', value: new Date('2026-01-02T03:04:05.678Z') },
-  {
-    codecId: 'sql/timestamp@1',
-    label: 'instant under a hostile session',
-    value: new Date('2026-01-02T03:04:05.678Z'),
-    setupSql: HOSTILE_TEMPORAL_SESSION,
-  },
   { codecId: 'pg/text@1', label: 'text', value: 'hello' },
   {
     codecId: 'pg/enum@1',
@@ -212,18 +205,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'byte string spanning several base64 line breaks',
     value: Uint8Array.from({ length: 200 }, (_, index) => (index * 7) % 256),
   },
-  { codecId: 'pg/date@1', label: 'calendar date', value: new Date(Date.UTC(2026, 0, 2)) },
-  {
-    codecId: 'pg/timestamp@1',
-    label: 'instant with milliseconds',
-    value: new Date('2026-01-02T03:04:05.678Z'),
-  },
-  {
-    codecId: 'pg/timestamp@1',
-    label: 'instant under a hostile session',
-    value: new Date('2026-01-02T03:04:05.678Z'),
-    setupSql: HOSTILE_TEMPORAL_SESSION,
-  },
   // These two passed only because the projection used to pin the rendering to UTC and spell it out
   // with an explicit format. That pinning is gone — it truncated microseconds and made a nested read
   // disagree with a flat one — so this Date-typed codec's `encodeJson`, which still produces an ISO
@@ -231,40 +212,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   // codec's value handling is not this change's to touch, and because the disagreement resolves when
   // the Date-typed temporal codecs are removed and their columns move to a representation-explicit
   // one, not by anything that could be done here.
-  {
-    codecId: 'pg/timestamptz@1',
-    label: 'instant with milliseconds',
-    value: new Date('2026-01-02T03:04:05.678Z'),
-    notYetCanonical: {
-      kind: 'mismatch',
-      reason:
-        "The projection now returns the server text `2026-01-02 03:04:05.678+00` while this codec's encodeJson still produces the ISO string `2026-01-02T03:04:05.678+00:00`. Resolved by retiring the codec, not by changing either side.",
-    },
-  },
-  {
-    codecId: 'pg/timestamptz@1',
-    label: 'instant under a hostile session',
-    value: new Date('2026-01-02T03:04:05.678Z'),
-    setupSql: HOSTILE_TEMPORAL_SESSION,
-    notYetCanonical: {
-      kind: 'mismatch',
-      reason:
-        'This case used to demonstrate that no session setting could move a nested rendering. It now demonstrates the opposite, which is the decided behaviour: under a German DateStyle in Asia/Kolkata the projection returns `02.01.2026 08:34:05.678 IST`, the same text a flat read of the column returns. Resolved by retiring the codec.',
-    },
-  },
-  {
-    codecId: 'pg/date@1',
-    label: 'calendar date under a hostile session',
-    value: new Date(Date.UTC(2026, 0, 2)),
-    setupSql: HOSTILE_TEMPORAL_SESSION,
-  },
-  { codecId: 'pg/time@1', label: 'time of day', value: '03:04:05' },
-  {
-    codecId: 'pg/time@1',
-    label: 'time of day under a hostile session',
-    value: '03:04:05',
-    setupSql: HOSTILE_TEMPORAL_SESSION,
-  },
   // The Temporal-backed codecs' application value is a `Temporal.*`, so a case is written as the
   // value itself rather than as text. `encodeJson` renders it through `toString()` and the
   // projection renders whatever PostgreSQL emits for the column: the same moment in time, but not
@@ -447,12 +394,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     nullValue: true,
   },
   {
-    codecId: 'pg/date@1',
-    label: 'null',
-    value: undefined,
-    nullValue: true,
-  },
-  {
     codecId: 'pg/enum@1',
     label: 'null',
     value: undefined,
@@ -550,12 +491,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     nullValue: true,
   },
   {
-    codecId: 'pg/time@1',
-    label: 'null',
-    value: undefined,
-    nullValue: true,
-  },
-  {
     codecId: 'pg/date-temporal@1',
     label: 'null',
     value: undefined,
@@ -610,18 +545,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     nullValue: true,
   },
   {
-    codecId: 'pg/timestamp@1',
-    label: 'null',
-    value: undefined,
-    nullValue: true,
-  },
-  {
-    codecId: 'pg/timestamptz@1',
-    label: 'null',
-    value: undefined,
-    nullValue: true,
-  },
-  {
     codecId: 'pg/timetz@1',
     label: 'null',
     value: undefined,
@@ -671,12 +594,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   {
     codecId: 'sql/text@1',
-    label: 'null',
-    value: undefined,
-    nullValue: true,
-  },
-  {
-    codecId: 'sql/timestamp@1',
     label: 'null',
     value: undefined,
     nullValue: true,

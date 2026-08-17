@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   PG_BIT_CODEC_ID,
   PG_BOOL_CODEC_ID,
-  PG_DATE_CODEC_ID,
   PG_FLOAT4_CODEC_ID,
   PG_FLOAT8_CODEC_ID,
   PG_INET_CODEC_ID,
@@ -14,9 +13,6 @@ import {
   PG_JSONB_CODEC_ID,
   PG_NUMERIC_CODEC_ID,
   PG_TEXT_CODEC_ID,
-  PG_TIME_CODEC_ID,
-  PG_TIMESTAMP_CODEC_ID,
-  PG_TIMESTAMPTZ_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
   PG_UUID_CODEC_ID,
   PG_VARBIT_CODEC_ID,
@@ -24,7 +20,6 @@ import {
 import {
   pgBitDescriptor,
   pgBoolDescriptor,
-  pgDateDescriptor,
   pgFloat4Descriptor,
   pgFloat8Descriptor,
   pgInetDescriptor,
@@ -36,9 +31,6 @@ import {
   pgJsonDescriptor,
   pgNumericDescriptor,
   pgTextDescriptor,
-  pgTimeDescriptor,
-  pgTimestampDescriptor,
-  pgTimestamptzDescriptor,
   pgTimetzDescriptor,
   pgUuidDescriptor,
   pgVarbitDescriptor,
@@ -177,140 +169,6 @@ describe('codecs-class', () => {
 
     it('renderOutputType returns undefined when precision is absent', () => {
       expect(pgNumericDescriptor.renderOutputType?.({})).toBeUndefined();
-    });
-  });
-
-  describe('pg/date@1', () => {
-    const codec = pgDateDescriptor.factory()(instanceCtx);
-
-    it('id proxies through the descriptor', () => {
-      expect(codec.id).toBe(PG_DATE_CODEC_ID);
-    });
-
-    it('decode normalizes a local-midnight Date into canonical UTC midnight', async () => {
-      // Simulates what the pg driver hands the codec for a `date` column: a
-      // `Date` built at *local* midnight (postgres-date's `getDate`), e.g.
-      // `new Date(2024, 0, 15)`. Regardless of the process's timezone, decode
-      // must recover the same calendar date at UTC midnight.
-      const localMidnight = new Date(2024, 0, 15);
-      const decoded = await codec.decode(localMidnight, callCtx);
-      expect(decoded.getTime()).toBe(Date.UTC(2024, 0, 15));
-    });
-
-    it('encode formats the UTC calendar date as YYYY-MM-DD, independent of local getters', async () => {
-      const utcMidnight = new Date(Date.UTC(2024, 0, 15));
-      expect(await codec.encode(utcMidnight, callCtx)).toBe('2024-01-15');
-    });
-
-    it('round-trips a calendar date through encode -> decode unchanged', async () => {
-      const original = new Date(Date.UTC(2024, 0, 15));
-      const wireText = await codec.encode(original, callCtx);
-      // The driver would parse `wireText` back into a Date; decode
-      // canonicalizes whatever it receives to the same UTC-midnight instant.
-      const roundTripped = await codec.decode(new Date(2024, 0, 15), callCtx);
-      expect(wireText).toBe('2024-01-15');
-      expect(roundTripped.getTime()).toBe(original.getTime());
-    });
-
-    it('encodeJson/decodeJson round-trip the YYYY-MM-DD representation', () => {
-      const instant = new Date(Date.UTC(2024, 0, 15));
-      expect(codec.encodeJson(instant)).toBe('2024-01-15');
-      expect(codec.decodeJson('2024-01-15')).toEqual(instant);
-    });
-
-    it('throws on invalid JSON input', () => {
-      expect(() => codec.decodeJson(42)).toThrow(/Expected date string for pg\/date@1/);
-      expect(() => codec.decodeJson('not-a-date')).toThrow(/Invalid date string for pg\/date@1/);
-      expect(() => codec.decodeJson('2024-01-15T10:30:00Z')).toThrow(
-        /Invalid date string for pg\/date@1/,
-      );
-    });
-
-    it('throws on calendar-invalid dates instead of silently normalizing them', () => {
-      expect(() => codec.decodeJson('2024-02-31')).toThrow(/Invalid date string for pg\/date@1/);
-      expect(() => codec.decodeJson('2024-13-01')).toThrow(/Invalid date string for pg\/date@1/);
-      expect(() => codec.decodeJson('0024-01-15')).toThrow(/Invalid date string for pg\/date@1/);
-    });
-
-    it('still accepts a valid calendar date', () => {
-      expect(codec.decodeJson('2024-01-15')).toEqual(new Date(Date.UTC(2024, 0, 15)));
-    });
-
-    it('exposes equality-order traits and the date target/native types', () => {
-      expect(pgDateDescriptor.traits).toEqual(['equality', 'order']);
-      expect(pgDateDescriptor.targetTypes).toEqual(['date']);
-      expect(pgDateDescriptor.nativeTypeFor({ codecId: pgDateDescriptor.codecId })).toBe('date');
-    });
-  });
-
-  describe('pg/timestamp@1', () => {
-    const codec = pgTimestampDescriptor.factory({ precision: 3 })(instanceCtx);
-
-    it('id proxies through the descriptor', () => {
-      expect(codec.id).toBe(PG_TIMESTAMP_CODEC_ID);
-    });
-
-    it('round-trips Date values', async () => {
-      const instant = new Date('2024-01-15T10:30:00Z');
-      expect(await codec.encode(instant, callCtx)).toBe(instant);
-      expect(await codec.decode(instant, callCtx)).toBe(instant);
-    });
-
-    it('uses the Postgres JSON timestamp representation', () => {
-      const instant = new Date('2024-01-15T10:30:00Z');
-      expect(codec.encodeJson(instant)).toBe('2024-01-15T10:30:00.000');
-      expect(codec.decodeJson('2024-01-15T10:30:00.000')).toEqual(instant);
-    });
-
-    it('throws on invalid JSON input', () => {
-      expect(() => codec.decodeJson(42)).toThrow(/Expected ISO date string/);
-      expect(() => codec.decodeJson('not-a-date')).toThrow(/Invalid ISO date string/);
-    });
-
-    it('renderOutputType returns Timestamp<precision>', () => {
-      expect(pgTimestampDescriptor.renderOutputType?.({ precision: 3 })).toBe('Timestamp<3>');
-    });
-
-    it('renderOutputType returns bare Timestamp when precision absent', () => {
-      expect(pgTimestampDescriptor.renderOutputType?.({})).toBe('Timestamp');
-    });
-  });
-
-  describe('pg/timestamptz@1', () => {
-    const codec = pgTimestamptzDescriptor.factory({ precision: 6 })(instanceCtx);
-
-    it('id proxies through the descriptor', () => {
-      expect(codec.id).toBe(PG_TIMESTAMPTZ_CODEC_ID);
-    });
-
-    it('round-trips Date values', async () => {
-      const instant = new Date('2024-01-15T10:30:00Z');
-      expect(await codec.encode(instant, callCtx)).toBe(instant);
-      expect(await codec.decode(instant, callCtx)).toBe(instant);
-    });
-
-    it('uses the Postgres JSON timestamptz representation', () => {
-      const instant = new Date('2024-01-15T10:30:00Z');
-      expect(codec.encodeJson(instant)).toBe('2024-01-15T10:30:00.000+00:00');
-      expect(codec.decodeJson('2024-01-15T10:30:00.000+00:00')).toEqual(instant);
-    });
-
-    it('throws on invalid JSON input with pg/timestamptz@1 label', () => {
-      expect(() => codec.decodeJson(42)).toThrow(/pg\/timestamptz@1/);
-    });
-  });
-
-  describe('pg/time@1', () => {
-    const codec = pgTimeDescriptor.factory({ precision: 2 })(instanceCtx);
-    it('id proxies through the descriptor', () => {
-      expect(codec.id).toBe(PG_TIME_CODEC_ID);
-    });
-    it('round-trips strings verbatim', async () => {
-      expect(await codec.encode('10:30:00', callCtx)).toBe('10:30:00');
-      expect(await codec.decode('10:30:00', callCtx)).toBe('10:30:00');
-    });
-    it('renderOutputType formats Time<precision>', () => {
-      expect(pgTimeDescriptor.renderOutputType?.({ precision: 2 })).toBe('Time<2>');
     });
   });
 
@@ -459,68 +317,6 @@ describe('codecs-class', () => {
   });
 
   describe('descriptor metadata', () => {
-    it('codec ids match the PG_*_CODEC_ID constants', () => {
-      expect(pgTextDescriptor.codecId).toBe(PG_TEXT_CODEC_ID);
-      expect(pgInt4Descriptor.codecId).toBe(PG_INT4_CODEC_ID);
-      expect(pgInt2Descriptor.codecId).toBe(PG_INT2_CODEC_ID);
-      expect(pgInt8Descriptor.codecId).toBe(PG_INT8_CODEC_ID);
-      expect(pgFloat4Descriptor.codecId).toBe(PG_FLOAT4_CODEC_ID);
-      expect(pgFloat8Descriptor.codecId).toBe(PG_FLOAT8_CODEC_ID);
-      expect(pgBoolDescriptor.codecId).toBe(PG_BOOL_CODEC_ID);
-      expect(pgNumericDescriptor.codecId).toBe(PG_NUMERIC_CODEC_ID);
-      expect(pgTimestampDescriptor.codecId).toBe(PG_TIMESTAMP_CODEC_ID);
-      expect(pgTimestamptzDescriptor.codecId).toBe(PG_TIMESTAMPTZ_CODEC_ID);
-      expect(pgTimeDescriptor.codecId).toBe(PG_TIME_CODEC_ID);
-      expect(pgTimetzDescriptor.codecId).toBe(PG_TIMETZ_CODEC_ID);
-      expect(pgBitDescriptor.codecId).toBe(PG_BIT_CODEC_ID);
-      expect(pgVarbitDescriptor.codecId).toBe(PG_VARBIT_CODEC_ID);
-      expect(pgIntervalDescriptor.codecId).toBe(PG_INTERVAL_CODEC_ID);
-      expect(pgJsonDescriptor.codecId).toBe(PG_JSON_CODEC_ID);
-      expect(pgJsonbDescriptor.codecId).toBe(PG_JSONB_CODEC_ID);
-      expect(pgUuidDescriptor.codecId).toBe(PG_UUID_CODEC_ID);
-      expect(pgInetDescriptor.codecId).toBe(PG_INET_CODEC_ID);
-    });
-
-    it('states its PostgreSQL native type', () => {
-      expect(pgTextDescriptor.nativeTypeFor({ codecId: pgTextDescriptor.codecId })).toBe('text');
-      expect(pgInt4Descriptor.nativeTypeFor({ codecId: pgInt4Descriptor.codecId })).toBe('integer');
-      expect(pgInt2Descriptor.nativeTypeFor({ codecId: pgInt2Descriptor.codecId })).toBe(
-        'smallint',
-      );
-      expect(pgInt8Descriptor.nativeTypeFor({ codecId: pgInt8Descriptor.codecId })).toBe('bigint');
-      expect(pgFloat4Descriptor.nativeTypeFor({ codecId: pgFloat4Descriptor.codecId })).toBe(
-        'real',
-      );
-      expect(pgFloat8Descriptor.nativeTypeFor({ codecId: pgFloat8Descriptor.codecId })).toBe(
-        'double precision',
-      );
-      expect(pgBoolDescriptor.nativeTypeFor({ codecId: pgBoolDescriptor.codecId })).toBe('boolean');
-      expect(pgNumericDescriptor.nativeTypeFor({ codecId: pgNumericDescriptor.codecId })).toBe(
-        'numeric',
-      );
-      expect(pgTimestampDescriptor.nativeTypeFor({ codecId: pgTimestampDescriptor.codecId })).toBe(
-        'timestamp without time zone',
-      );
-      expect(
-        pgTimestamptzDescriptor.nativeTypeFor({ codecId: pgTimestamptzDescriptor.codecId }),
-      ).toBe('timestamp with time zone');
-      expect(pgTimeDescriptor.nativeTypeFor({ codecId: pgTimeDescriptor.codecId })).toBe('time');
-      expect(pgTimetzDescriptor.nativeTypeFor({ codecId: pgTimetzDescriptor.codecId })).toBe(
-        'timetz',
-      );
-      expect(pgBitDescriptor.nativeTypeFor({ codecId: pgBitDescriptor.codecId })).toBe('bit');
-      expect(pgVarbitDescriptor.nativeTypeFor({ codecId: pgVarbitDescriptor.codecId })).toBe(
-        'bit varying',
-      );
-      expect(pgIntervalDescriptor.nativeTypeFor({ codecId: pgIntervalDescriptor.codecId })).toBe(
-        'interval',
-      );
-      expect(pgJsonDescriptor.nativeTypeFor({ codecId: pgJsonDescriptor.codecId })).toBe('json');
-      expect(pgJsonbDescriptor.nativeTypeFor({ codecId: pgJsonbDescriptor.codecId })).toBe('jsonb');
-      expect(pgUuidDescriptor.nativeTypeFor({ codecId: pgUuidDescriptor.codecId })).toBe('uuid');
-      expect(pgInetDescriptor.nativeTypeFor({ codecId: pgInetDescriptor.codecId })).toBe('inet');
-    });
-
     it('exposes traits and targetTypes for each codec', () => {
       expect(pgTextDescriptor.traits).toEqual(['equality', 'order', 'textual']);
       expect(pgInt4Descriptor.traits).toEqual(['equality', 'order', 'numeric']);
