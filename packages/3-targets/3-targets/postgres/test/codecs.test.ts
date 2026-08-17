@@ -419,6 +419,4 @@ describe('adapter-postgres codecs', () => {
       expect(resolved).toBe(pgInetDescriptor);
     });
   });
-
-  describe('pg/date@1 registry resolution', () => {});
 });

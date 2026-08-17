@@ -110,6 +110,4 @@ describe('codec renderValueLiteral', () => {
       expect(renderer?.("it's", 'output')).toBe('"it\'s"');
     });
   });
-
-  describe('non-narrowable codecs', () => {});
 });
