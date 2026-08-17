@@ -52,13 +52,17 @@ const CODECS = [
   { id: PG_TIME_STRING_CODEC_ID, descriptor: pgTimeStringDescriptor, nativeType: 'time' },
 ] as const;
 
-function withoutTemporalGlobal<T>(body: () => T): T {
+/**
+ * Runs `body` with no global `Temporal`, restoring whatever was there afterwards. `await body()`
+ * rather than `return body()` is the whole point: the window has to span the codec calls, not just
+ * the synchronous act of starting them, or the global comes back before any `decode` runs.
+ */
+async function withoutTemporalGlobal<T>(body: () => Promise<T>): Promise<T> {
   const had = Object.hasOwn(globalThis, 'Temporal');
   const original = Reflect.get(globalThis, 'Temporal');
   Reflect.deleteProperty(globalThis, 'Temporal');
   try {
-    expect('Temporal' in globalThis).toBe(false);
-    return body();
+    return await body();
   } finally {
     if (had) {
       Reflect.set(globalThis, 'Temporal', original);
@@ -126,16 +130,31 @@ describe('representation-explicit temporal string codecs', () => {
   });
 
   it('encodes and decodes with no global Temporal available', async () => {
-    const results = await withoutTemporalGlobal(async () =>
-      Promise.all(
-        CODECS.map(async ({ descriptor }) => {
+    // This Node has no `Temporal`, so deleting nothing would prove nothing. Installing a stand-in
+    // first gives the helper something to remove, which is what makes the assertions below
+    // discriminating: sampled after an await, `seenDuring` reports the window the codecs actually
+    // ran in. A helper that restored the global before awaiting would hand back the stand-in.
+    const standIn = { note: 'stands in for a host Temporal implementation' };
+    Reflect.set(globalThis, 'Temporal', standIn);
+    const seenDuring: unknown[] = [];
+
+    try {
+      const results = await withoutTemporalGlobal(async () => {
+        const decoded: string[] = [];
+        for (const { descriptor } of CODECS) {
           const codec = descriptor.factory({})(instanceCtx);
           const encoded = await codec.encode('infinity', callCtx);
-          return codec.decode(encoded, callCtx);
-        }),
-      ),
-    );
+          seenDuring.push(Reflect.get(globalThis, 'Temporal'));
+          decoded.push(await codec.decode(encoded, callCtx));
+        }
+        return decoded;
+      });
 
-    expect(results).toEqual(['infinity', 'infinity', 'infinity', 'infinity']);
+      expect(seenDuring).toEqual([undefined, undefined, undefined, undefined]);
+      expect(results).toEqual(['infinity', 'infinity', 'infinity', 'infinity']);
+      expect(Reflect.get(globalThis, 'Temporal')).toBe(standIn);
+    } finally {
+      Reflect.deleteProperty(globalThis, 'Temporal');
+    }
   });
 });

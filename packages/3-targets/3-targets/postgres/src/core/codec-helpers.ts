@@ -9,11 +9,18 @@
 import type { JsonValue } from '@internal/contract/types';
 import { postgresError } from './errors';
 
+/**
+ * The emit path hands these renderers whatever the contract carried: `renderOutputTypeFor` reads
+ * `typeParams` out of the contract and calls straight through without validating it. So the
+ * property is declared `unknown` rather than `number` — that is what it is at runtime, it keeps the
+ * guards below live rather than dead, and it lets a descriptor pass its own precisely-typed params
+ * without a cast.
+ */
 export function renderLength(
   typeName: string,
-  typeParams: Record<string, unknown>,
+  typeParams: { readonly length?: unknown },
 ): string | undefined {
-  const length = typeParams['length'];
+  const length = typeParams.length;
   if (length === undefined) {
     return undefined;
   }
@@ -27,8 +34,11 @@ export function renderLength(
   return `${typeName}<${length}>`;
 }
 
-export function renderPrecision(typeName: string, typeParams: Record<string, unknown>): string {
-  const precision = typeParams['precision'];
+export function renderPrecision(
+  typeName: string,
+  typeParams: { readonly precision?: unknown },
+): string {
+  const precision = typeParams.precision;
   if (precision === undefined) {
     return typeName;
   }

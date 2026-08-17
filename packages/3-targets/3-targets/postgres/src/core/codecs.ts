@@ -1135,7 +1135,7 @@ export class PgTimestampDescriptor extends PostgresCodecDescriptor<PrecisionPara
   override readonly paramsSchema =
     precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('Timestamp', params as Record<string, unknown>);
+    return renderPrecision('Timestamp', params);
   }
   override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimestampCodec {
     return () => new PgTimestampCodec(this);
@@ -1183,7 +1183,7 @@ export class PgTimestamptzDescriptor extends PostgresCodecDescriptor<PrecisionPa
   override readonly paramsSchema =
     precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('Timestamptz', params as Record<string, unknown>);
+    return renderPrecision('Timestamptz', params);
   }
   override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimestamptzCodec {
     return () => new PgTimestamptzCodec(this);
@@ -1236,7 +1236,7 @@ export class PgTimeDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
   override readonly paramsSchema =
     precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('Time', params as Record<string, unknown>);
+    return renderPrecision('Time', params);
   }
   override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimeCodec {
     return () => new PgTimeCodec(this);
@@ -1284,7 +1284,7 @@ export class PgTimetzDescriptor extends PostgresCodecDescriptor<PrecisionParams>
   override readonly paramsSchema =
     precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('Timetz', params as Record<string, unknown>);
+    return renderPrecision('Timetz', params);
   }
   override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimetzCodec {
     return () => new PgTimetzCodec(this);
@@ -1335,6 +1335,15 @@ export class PgDateStringCodec extends CodecImpl<
   }
 }
 
+/**
+ * Alone among the four, this descriptor carries no `renderOutputType`, so a `date` column reads as
+ * plain `string` rather than a branded `DateString`. Two reasons, both structural: the emitter only
+ * consults `renderOutputType` for a column with non-empty type params, and a `date` has no
+ * precision to carry — so a renderer here would never be called. Branding the codec's own type
+ * instead would reach the declaration, but it would also make the *write* side branded, and a
+ * plain string literal is no longer assignable to it. The asymmetry is the honest shape; please
+ * don't tidy it away.
+ */
 export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
   protected override nativeType(): string {
     return PG_DATE_NATIVE_TYPE;
@@ -1395,7 +1404,7 @@ export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<Precisi
   override readonly paramsSchema =
     precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('TimestampString', params as Record<string, unknown>);
+    return renderPrecision('TimestampString', params);
   }
   override factory(
     _params: PrecisionParams,
@@ -1453,7 +1462,7 @@ export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<Preci
   override readonly paramsSchema =
     precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('TimestamptzString', params as Record<string, unknown>);
+    return renderPrecision('TimestamptzString', params);
   }
   override factory(
     _params: PrecisionParams,
@@ -1510,7 +1519,7 @@ export class PgTimeStringDescriptor extends PostgresCodecDescriptor<PrecisionPar
   override readonly paramsSchema =
     precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('TimeString', params as Record<string, unknown>);
+    return renderPrecision('TimeString', params);
   }
   override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimeStringCodec {
     return () => new PgTimeStringCodec(this);
@@ -1557,7 +1566,7 @@ export class PgBitDescriptor extends PostgresCodecDescriptor<LengthParams> {
   override readonly targetTypes = ['bit'] as const;
   override readonly paramsSchema = lengthParamsSchema satisfies StandardSchemaV1<LengthParams>;
   override renderOutputType(params: LengthParams): string | undefined {
-    return renderLength('Bit', params as Record<string, unknown>);
+    return renderLength('Bit', params);
   }
   override factory(_params: LengthParams): (ctx: CodecInstanceContext) => PgBitCodec {
     return () => new PgBitCodec(this);
@@ -1604,7 +1613,7 @@ export class PgVarbitDescriptor extends PostgresCodecDescriptor<LengthParams> {
   override readonly targetTypes = ['bit varying'] as const;
   override readonly paramsSchema = lengthParamsSchema satisfies StandardSchemaV1<LengthParams>;
   override renderOutputType(params: LengthParams): string | undefined {
-    return renderLength('VarBit', params as Record<string, unknown>);
+    return renderLength('VarBit', params);
   }
   override factory(_params: LengthParams): (ctx: CodecInstanceContext) => PgVarbitCodec {
     return () => new PgVarbitCodec(this);
@@ -1813,7 +1822,7 @@ export class PgIntervalDescriptor extends PostgresCodecDescriptor<PrecisionParam
   override readonly paramsSchema =
     precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
   override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('Interval', params as Record<string, unknown>);
+    return renderPrecision('Interval', params);
   }
   override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgIntervalCodec {
     return () => new PgIntervalCodec(this);
