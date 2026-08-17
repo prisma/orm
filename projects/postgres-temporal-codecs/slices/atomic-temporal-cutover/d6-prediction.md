@@ -83,6 +83,53 @@ Two of those testkit entries are the transient `notYetCanonical` markers on `pg/
 which record that they resolve when the codec is retired. **Deleting the codec is what resolves
 them**; they should disappear with the cases rather than be edited.
 
+## Group 3a — the hand-written TS authoring fixtures, and why they are here
+
+Called out separately from the rest of the tests because these are the only files that are **red
+right now** as a direct consequence of the authoring repoint, and because they cannot be fixed by
+the fixture sweep: they are hand-written `contract.ts` files, and regeneration never touches them.
+
+They are here rather than fixed in the repointing dispatch on a deliberate decision: each one calls
+a column helper that belongs to a codec the deleting dispatch removes, so the call site and the
+helper have to move in the same commit or the build breaks between them.
+
+### Currently failing — TS and PSL disagree about the same field
+
+The PSL side of each pair says `DateTime`, which now resolves to `pg/timestamptz-temporal@1`. The TS
+side calls the old codec's column helper, which still resolves to `pg/timestamptz@1`. The parity
+assertions compare the two emissions and correctly report the difference.
+
+| File | Calls | Replacement |
+| --- | --- | --- |
+| `test/integration/test/authoring/parity/callback-mode-scalars/contract.ts:18` | `pg.timestamptzColumn` | `pg.timestamptzTemporalColumn` |
+| `test/integration/test/authoring/parity/core-surface/contract.ts:38` | `timestamptzColumn` | `timestamptzTemporalColumn` |
+| `test/integration/test/authoring/side-by-side/postgres/contract.ts:18` | `timestamptzColumn` | `timestamptzTemporalColumn` |
+| `test/integration/test/contract-builder.types.test-d.ts:261` | pins `'pg/timestamptz@1'` off `field.temporal.createdAt()` | `'pg/timestamptz-temporal@1'` |
+
+Those four account for four of the failing test files. A fifth,
+`test/integration/test/cli.emit-command.additional.test.ts`, asserts that the PSL and TS providers
+emit equal storage/profile hashes; it fails as a consequence of the three helper call sites above
+and needs no edit of its own once they move.
+
+**Pick the replacement deliberately.** `timestamptzTemporalColumn` keeps each fixture's meaning
+unchanged, which is what a parity fixture wants. `timestamptzStringColumn` would also make the
+suites pass and would quietly change what the fixture demonstrates.
+
+### Not yet failing — will break the moment the codec is deleted
+
+These name a retiring id directly in a hand-built contract or descriptor. They pass today because
+the codec still exists, and they are the reason a green suite before the deletion says nothing about
+after it.
+
+| File | Names | Replacement |
+| --- | --- | --- |
+| `test/integration/test/contract-builder.test.ts:102` | `pg/timestamptz@1` | `pg/timestamptz-temporal@1` |
+| `test/utils/src/column-descriptors.ts:50,55` | `pg/timestamp@1`, `pg/timestamptz@1` | the `-temporal@1` pair |
+| `packages/2-sql/2-authoring/contract-ts/test/contract-builder.dsl.test.ts:34` | `pg/timestamptz@1` | `pg/timestamptz-temporal@1` |
+
+`test/utils/src/column-descriptors.ts` is shared test infrastructure rather than a fixture, so it is
+worth doing first — a wrong choice there propagates into every suite that builds a column through it.
+
 ## Group 4 — 178 generated artefacts, which are not this dispatch's work
 
 `contract.json`, `contract.d.ts`, `expected.contract.json` and migration snapshots — 130 of them

@@ -177,8 +177,8 @@ model User {
   username  String?
   name      String?
   posts     Post[]
-  createdAt DateTime @default(now())
-  updatedAt temporal.updatedAt()
+  createdAt TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
 }
 
 model Post {
@@ -187,8 +187,8 @@ model Post {
   content   String?
   author    User     @relation(fields: [authorId], references: [id])
   authorId  Int
-  createdAt DateTime @default(now())
-  updatedAt temporal.updatedAt()
+  createdAt TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
 }
 `;
 }
@@ -226,8 +226,8 @@ export const contract = defineContract({}, ({ field, model, rel }) => {
       email: field.text().unique(),
       username: field.text().optional(),
       name: field.text().optional(),
-      createdAt: field.temporal.createdAt(),
-      updatedAt: field.temporal.updatedAt(),
+      createdAt: field.temporal.createdAtString(),
+      updatedAt: field.temporal.updatedAtString(),
     },
   });
 
@@ -237,8 +237,8 @@ export const contract = defineContract({}, ({ field, model, rel }) => {
       title: field.text(),
       content: field.text().optional(),
       authorId: field.uuidString(),
-      createdAt: field.temporal.createdAt(),
-      updatedAt: field.temporal.updatedAt(),
+      createdAt: field.temporal.createdAtString(),
+      updatedAt: field.temporal.updatedAtString(),
     },
   });
 
