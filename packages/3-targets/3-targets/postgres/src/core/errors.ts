@@ -20,6 +20,7 @@ export type PostgresTargetErrorCode =
   | 'MIGRATION.TARGET_MISMATCH'
   | 'RUNTIME.DECODE_FAILED'
   | 'RUNTIME.ENCODE_FAILED'
+  | 'RUNTIME.TEMPORAL_UNAVAILABLE'
   | 'RUNTIME.TYPE_PARAMS_INVALID';
 
 export function postgresError(
@@ -60,6 +61,77 @@ export function errorPostgresMigrationStackMissing(operation: string): CliStruct
       why: `PostgresMigration.${operation} was invoked on an instance constructed without a ControlStack, so the stored controlAdapter is undefined and the operation cannot lower its plan.`,
       fix: 'Construct the migration via the migration CLI entrypoint (which assembles a ControlStack from the loaded prisma.config.ts), or pass a ControlStack containing a Postgres adapter to the migration constructor in test fixtures.',
       meta: { operation },
+    },
+  );
+}
+
+/**
+ * A Temporal-backed codec was invoked in a runtime with no `Temporal` implementation.
+ *
+ * Raised lazily, at the moment a value is encoded or decoded, never while assembling descriptors or
+ * validating a contract — a client whose contract uses only the `*-string` codecs has to construct
+ * and run in a runtime that has never heard of Temporal.
+ *
+ * `structuredError` rather than a plain `Error` so the generic decode path forwards it with this
+ * code intact instead of re-wrapping it as `RUNTIME.DECODE_FAILED`, which would bury the one thing
+ * the caller needs to act on.
+ */
+export function errorTemporalUnavailable(codecId: string, operation: string): StructuredError {
+  return postgresError(
+    'RUNTIME.TEMPORAL_UNAVAILABLE',
+    `Codec '${codecId}' cannot ${operation} a value because this runtime has no global Temporal implementation.`,
+    {
+      why: 'Temporal-backed codecs read and write their values through the global Temporal API, which this runtime does not provide.',
+      fix: "Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with its *String type to read and write PostgreSQL's own text instead.",
+      meta: { codecId, operation },
+    },
+  );
+}
+
+/**
+ * A value crossed the boundary of what a `Temporal.*` type can represent.
+ *
+ * Both directions raise it: PostgreSQL text that Temporal cannot parse (`infinity`, a `DateStyle`
+ * the server renders non-ISO, a year beyond Temporal's range) and application values PostgreSQL
+ * would not accept back. The message names the `*String` type that reads the same column as the
+ * server's own text, because that type existing is the entire reason this is a recoverable
+ * situation rather than a dead end.
+ */
+export function errorTemporalUnrepresentable(options: {
+  readonly codecId: string;
+  readonly operation: 'decode' | 'encode';
+  readonly stringType: string;
+  readonly value: string;
+  readonly detail: string;
+  readonly cause?: unknown;
+}): StructuredError {
+  const { codecId, operation, stringType, value, detail } = options;
+  const direction = operation === 'decode' ? 'PostgreSQL returned' : 'the application supplied';
+  return postgresError(
+    operation === 'decode' ? 'RUNTIME.DECODE_FAILED' : 'RUNTIME.ENCODE_FAILED',
+    `Codec '${codecId}' cannot represent the value ${direction}: ${JSON.stringify(value)} — ${detail}. Use ${stringType} to carry this column as PostgreSQL's own text.`,
+    {
+      why: `${detail}. Temporal is the authoritative parser and range check for this codec, so a value it cannot express has no representation on this column.`,
+      fix: `Author the column as ${stringType} to read and write PostgreSQL's own text for it, which preserves every value the database accepts.`,
+      meta: { codecId, operation, value, stringType },
+      ...(options.cause === undefined ? {} : { cause: options.cause }),
+    },
+  );
+}
+
+/**
+ * A write carried a non-ISO calendar. Rejected rather than silently discarded: PostgreSQL stores no
+ * calendar, so accepting the value would quietly drop the one thing the author went out of their
+ * way to specify.
+ */
+export function errorTemporalNonIsoCalendar(codecId: string, calendarId: string): StructuredError {
+  return postgresError(
+    'RUNTIME.ENCODE_FAILED',
+    `Codec '${codecId}' accepts only the iso8601 calendar, but the value carries '${calendarId}'.`,
+    {
+      why: 'PostgreSQL stores no calendar alongside a date, so a non-ISO calendar would be discarded on write and the value would read back as a different date than the one authored.',
+      fix: 'Convert the value with .withCalendar("iso8601") before writing if the ISO projection is what you mean to store.',
+      meta: { codecId, calendarId },
     },
   );
 }

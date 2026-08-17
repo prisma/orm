@@ -7,7 +7,18 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { postgresError } from './errors';
+import {
+  PG_DATE_TEMPORAL_CODEC_ID,
+  PG_TIME_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMP_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
+} from './codec-ids';
+import {
+  errorTemporalNonIsoCalendar,
+  errorTemporalUnavailable,
+  errorTemporalUnrepresentable,
+  postgresError,
+} from './errors';
 
 /**
  * The emit path hands these renderers whatever the contract carried: `renderOutputTypeFor` reads
@@ -548,3 +559,154 @@ export const pgJsonDecode = (wire: string | JsonValue): JsonValue =>
 export const pgJsonbEncode = (value: string | JsonValue): string => JSON.stringify(value);
 export const pgJsonbDecode = (wire: string | JsonValue): JsonValue =>
   typeof wire === 'string' ? JSON.parse(wire) : wire;
+
+/**
+ * Temporal-backed codecs: read and write PostgreSQL's temporal text through the global `Temporal`
+ * API, which is the authoritative parser *and* the authoritative range check. Nothing below
+ * hand-rolls an ISO grammar or a range test — a value Temporal declines is a value this
+ * representation cannot carry, and that is reported rather than worked around.
+ */
+
+const POSTGRES_TEMPORAL_SENTINELS: ReadonlySet<string> = new Set(['infinity', '-infinity']);
+
+const EXPANDED_YEAR_DIGITS = 6;
+const ORDINARY_YEAR_DIGITS = 4;
+const BC_SUFFIX = ' BC';
+
+/**
+ * Bridges the two spellings PostgreSQL and Temporal use for years outside `0001`–`9999`, and
+ * nothing else. PostgreSQL writes an era suffix (`0044-03-15 BC`) and leaves expanded years bare
+ * (`12026-01-02`); Temporal wants a signed six-digit proleptic year (`-000043-03-15`,
+ * `+012026-01-02`) and note the off-by-one — 44 BC is proleptic year −43, because there is no year
+ * zero in the era numbering and there is one in the proleptic.
+ *
+ * Anything that is not one of those two spellings is returned untouched, including every ordinary
+ * date and every non-ISO `DateStyle` rendering. Those go to `Temporal.*.from()` exactly as the
+ * server wrote them and are rejected there — this is deliberately not a normaliser that tries to
+ * make unparseable text parse.
+ */
+function adaptPostgresEra(text: string): string {
+  const isBc = text.endsWith(BC_SUFFIX);
+  const body = isBc ? text.slice(0, -BC_SUFFIX.length) : text;
+  const yearEnd = body.indexOf('-');
+  if (yearEnd <= 0) {
+    return text;
+  }
+  const yearText = body.slice(0, yearEnd);
+  if (!isBc && yearText.length <= ORDINARY_YEAR_DIGITS) {
+    return text;
+  }
+  const year = Number(yearText);
+  if (!Number.isInteger(year)) {
+    return text;
+  }
+  const proleptic = isBc ? 1 - year : year;
+  const sign = proleptic < 0 ? '-' : '+';
+  const digits = String(Math.abs(proleptic)).padStart(EXPANDED_YEAR_DIGITS, '0');
+  return `${sign}${digits}${body.slice(yearEnd)}`;
+}
+
+/**
+ * The lazy capability check. Called at the top of every encode and decode, never during descriptor
+ * assembly or contract validation, so a client whose columns are all `*-string` constructs and runs
+ * with no Temporal anywhere. `typeof` rather than a property read because an absent global is a
+ * ReferenceError on any other form of access.
+ */
+export function requireTemporal(codecId: string, operation: 'decode' | 'encode'): void {
+  if (typeof Temporal === 'undefined') {
+    throw errorTemporalUnavailable(codecId, operation);
+  }
+}
+
+interface TemporalCodecIdentity {
+  readonly codecId: string;
+  readonly stringType: string;
+}
+
+function decodeTemporalText<T>(
+  identity: TemporalCodecIdentity,
+  wire: string,
+  parse: (text: string) => T,
+  adapt: (text: string) => string,
+): T {
+  requireTemporal(identity.codecId, 'decode');
+  if (POSTGRES_TEMPORAL_SENTINELS.has(wire)) {
+    throw errorTemporalUnrepresentable({
+      ...identity,
+      operation: 'decode',
+      value: wire,
+      detail: `PostgreSQL's ${wire} is a sentinel with no position on the timeline, so no Temporal value denotes it`,
+    });
+  }
+  try {
+    return parse(adapt(wire));
+  } catch (cause) {
+    throw errorTemporalUnrepresentable({
+      ...identity,
+      operation: 'decode',
+      value: wire,
+      detail: cause instanceof Error ? cause.message : String(cause),
+      cause,
+    });
+  }
+}
+
+function encodeTemporalValue(
+  identity: TemporalCodecIdentity,
+  value: { readonly calendarId?: string; toString: () => string },
+): string {
+  requireTemporal(identity.codecId, 'encode');
+  if (value.calendarId !== undefined && value.calendarId !== 'iso8601') {
+    throw errorTemporalNonIsoCalendar(identity.codecId, value.calendarId);
+  }
+  return value.toString();
+}
+
+const DATE_TEMPORAL: TemporalCodecIdentity = {
+  codecId: PG_DATE_TEMPORAL_CODEC_ID,
+  stringType: 'DateString',
+};
+const TIMESTAMP_TEMPORAL: TemporalCodecIdentity = {
+  codecId: PG_TIMESTAMP_TEMPORAL_CODEC_ID,
+  stringType: 'TimestampString(p)',
+};
+const TIMESTAMPTZ_TEMPORAL: TemporalCodecIdentity = {
+  codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
+  stringType: 'TimestamptzString(p)',
+};
+const TIME_TEMPORAL: TemporalCodecIdentity = {
+  codecId: PG_TIME_TEMPORAL_CODEC_ID,
+  stringType: 'TimeString(p)',
+};
+
+// A time-of-day carries no year, so the era adaptation has nothing to do for it.
+const unadapted = (text: string): string => text;
+
+export const pgDateTemporalDecode = (wire: string): Temporal.PlainDate =>
+  decodeTemporalText(DATE_TEMPORAL, wire, (t) => Temporal.PlainDate.from(t), adaptPostgresEra);
+
+export const pgDateTemporalEncode = (value: Temporal.PlainDate): string =>
+  encodeTemporalValue(DATE_TEMPORAL, value);
+
+export const pgTimestampTemporalDecode = (wire: string): Temporal.PlainDateTime =>
+  decodeTemporalText(
+    TIMESTAMP_TEMPORAL,
+    wire,
+    (t) => Temporal.PlainDateTime.from(t),
+    adaptPostgresEra,
+  );
+
+export const pgTimestampTemporalEncode = (value: Temporal.PlainDateTime): string =>
+  encodeTemporalValue(TIMESTAMP_TEMPORAL, value);
+
+export const pgTimestamptzTemporalDecode = (wire: string): Temporal.Instant =>
+  decodeTemporalText(TIMESTAMPTZ_TEMPORAL, wire, (t) => Temporal.Instant.from(t), adaptPostgresEra);
+
+export const pgTimestamptzTemporalEncode = (value: Temporal.Instant): string =>
+  encodeTemporalValue(TIMESTAMPTZ_TEMPORAL, value);
+
+export const pgTimeTemporalDecode = (wire: string): Temporal.PlainTime =>
+  decodeTemporalText(TIME_TEMPORAL, wire, (t) => Temporal.PlainTime.from(t), unadapted);
+
+export const pgTimeTemporalEncode = (value: Temporal.PlainTime): string =>
+  encodeTemporalValue(TIME_TEMPORAL, value);

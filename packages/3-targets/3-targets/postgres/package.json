@@ -36,11 +36,12 @@
   },
   "devDependencies": {
     "@internal/psl-printer": "workspace:8.0.0-rc.5",
+    "@internal/publish-surface": "workspace:8.0.0-rc.5",
     "@internal/sql-contract-psl": "workspace:8.0.0-rc.5",
     "@repo/test-utils": "workspace:8.0.0-rc.5",
-    "@internal/publish-surface": "workspace:8.0.0-rc.5",
     "@repo/tsconfig": "workspace:8.0.0-rc.5",
     "@repo/tsdown": "workspace:8.0.0-rc.5",
+    "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

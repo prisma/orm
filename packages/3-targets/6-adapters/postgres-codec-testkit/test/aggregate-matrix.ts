@@ -133,6 +133,23 @@ export const FIXTURES: readonly AggregateFixture[] = [
   { codecId: 'pg/time@1', samples: ["'10:00:00'", "'11:00:00'"] },
   // The `*-string` samples carry microseconds so an aggregate that rounded to
   // milliseconds would change the value it returns rather than pass unnoticed.
+  // Temporal-backed siblings of the same columns, with microseconds for the same reason.
+  { codecId: 'pg/date-temporal@1', samples: ["'2024-01-01'", "'2024-02-01'"] },
+  {
+    codecId: 'pg/timestamp-temporal@1',
+    typeParams: { precision: 6 },
+    samples: ["'2024-01-01T10:00:00.123456'", "'2024-02-01T10:00:00.654321'"],
+  },
+  {
+    codecId: 'pg/timestamptz-temporal@1',
+    typeParams: { precision: 6 },
+    samples: ["'2024-01-01T10:00:00.123456Z'", "'2024-02-01T10:00:00.654321Z'"],
+  },
+  {
+    codecId: 'pg/time-temporal@1',
+    typeParams: { precision: 6 },
+    samples: ["'10:00:00.123456'", "'11:00:00.654321'"],
+  },
   { codecId: 'pg/date-string@1', samples: ["'2024-01-01'", "'2024-02-01'"] },
   {
     codecId: 'pg/timestamp-string@1',

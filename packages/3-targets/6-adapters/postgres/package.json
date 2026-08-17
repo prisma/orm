@@ -43,6 +43,7 @@
     "@types/pg": "catalog:",
     "pathe": "^2.0.3",
     "pg": "catalog:",
+    "temporal-polyfill": "^1.0.4",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
