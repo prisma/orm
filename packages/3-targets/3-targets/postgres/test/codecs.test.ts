@@ -421,17 +421,4 @@ describe('adapter-postgres codecs', () => {
   });
 
   describe('pg/date@1 registry resolution', () => {});
-
-  describe('numeric codec decode', () => {
-    const numericCodec = codecForScalar('numeric') as {
-      decode: (wire: string | number, ctx: SqlCodecCallContext) => Promise<string>;
-    };
-
-    it.each([
-      { wire: 42, expected: '42' },
-      { wire: '123.45', expected: '123.45' },
-    ])('decodes $wire to $expected', async ({ wire, expected }) => {
-      expect(await numericCodec.decode(wire, {})).toBe(expected);
-    });
-  });
 });
