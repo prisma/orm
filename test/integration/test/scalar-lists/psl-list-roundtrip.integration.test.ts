@@ -186,7 +186,7 @@ model Reading {
       if (!contract) throw new Error('authoring produced no contract');
 
       expect(findStorageColumn(contract, 'dates')).toMatchObject({
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         many: true,
       });
       expect(findStorageColumn(contract, 'payloads')).toMatchObject({
@@ -211,7 +211,10 @@ model Reading {
       const payloadsRef = listCodecRefFor(contract, 'payloads');
       const amountsRef = listCodecRefFor(contract, 'amounts');
 
-      const dates = [new Date('2026-01-02T03:04:05.000Z'), new Date('2025-06-15T12:00:00.000Z')];
+      const dates = [
+        Temporal.Instant.from('2026-01-02T03:04:05Z'),
+        Temporal.Instant.from('2025-06-15T12:00:00Z'),
+      ];
       const payloads = [new Uint8Array([1, 2, 3]), new Uint8Array([255, 0, 127])];
       const amounts = ['1.5', '999999999999.99', '-0.001'];
 
@@ -251,8 +254,8 @@ model Reading {
           amounts: string[];
         };
 
-        expect(row.dates.map((value) => value.toISOString())).toEqual(
-          dates.map((value) => value.toISOString()),
+        expect(row.dates.map((value) => value.toString())).toEqual(
+          dates.map((value) => value.toString()),
         );
         expect(row.payloads.map((value) => [...value])).toEqual(
           payloads.map((value) => [...value]),

@@ -1,4 +1,8 @@
-import { int4Column, textColumn, timestamptzColumn } from '@internal/adapter-postgres/column-types';
+import {
+  int4Column,
+  textColumn,
+  timestamptzTemporalColumn,
+} from '@internal/adapter-postgres/column-types';
 import { defineContract, field, model } from '@internal/postgres/contract-builder';
 
 export const contract = defineContract({
@@ -7,7 +11,7 @@ export const contract = defineContract({
       fields: {
         id: field.column(int4Column).id(),
         email: field.column(textColumn),
-        createdAt: field.column(timestamptzColumn),
+        createdAt: field.column(timestamptzTemporalColumn),
       },
     }).sql({ table: 'user' }),
   },

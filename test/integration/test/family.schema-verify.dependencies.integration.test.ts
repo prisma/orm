@@ -186,8 +186,8 @@ describe('family instance schemaVerify', () => {
       const textMetadata = registry.get('pg/text@1');
       expect(textMetadata?.nativeType).toBe('text');
 
-      expect(registry.has('pg/timestamptz@1')).toBe(true);
-      const timestamptzMetadata = registry.get('pg/timestamptz@1');
+      expect(registry.has('pg/timestamptz-temporal@1')).toBe(true);
+      const timestamptzMetadata = registry.get('pg/timestamptz-temporal@1');
       expect(timestamptzMetadata?.nativeType).toBe('timestamptz');
 
       expect(registry.has('pg/bool@1')).toBe(true);

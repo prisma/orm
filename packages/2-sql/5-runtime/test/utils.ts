@@ -384,7 +384,7 @@ export type StubAdapter = Adapter<SelectAst, Contract<SqlStorage>, LoweredStatem
 /**
  * Creates a stub adapter for testing. This helper DRYs up the common pattern of adapter creation in tests.
  *
- * The stub adapter includes simple codecs for common test types (pg/int4@1, pg/text@1, pg/timestamptz@1) to enable type inference in tests without requiring the postgres adapter package.
+ * The stub adapter includes simple codecs for common test types (pg/int4@1, pg/text@1, pg/timestamptz-temporal@1) to enable type inference in tests without requiring the postgres adapter package.
  */
 export function createStubAdapter(): StubAdapter {
   // Stub codecs for codec IDs that test contracts may reference. The set must
@@ -424,9 +424,9 @@ export function createStubAdapter(): StubAdapter {
       encode: (value: string) => value,
       decode: (wire: string) => wire,
     }),
-    passthroughCodec('pg/time@1', 'time'),
+    passthroughCodec('pg/time-temporal@1', 'time'),
     defineTestCodec({
-      typeId: 'pg/timestamp@1',
+      typeId: 'pg/timestamp-temporal@1',
       targetTypes: ['timestamp'],
       encode: (value: Date) => value,
       decode: (wire: Date) => wire,
@@ -437,7 +437,7 @@ export function createStubAdapter(): StubAdapter {
       },
     }),
     defineTestCodec({
-      typeId: 'pg/timestamptz@1',
+      typeId: 'pg/timestamptz-temporal@1',
       targetTypes: ['timestamptz'],
       encode: (value: Date) => value,
       decode: (wire: Date) => wire,

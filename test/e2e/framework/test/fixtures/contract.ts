@@ -14,8 +14,8 @@ import {
   jsonColumn,
   numericColumn,
   textColumn,
-  timeColumn,
-  timestamptzColumn,
+  timestamptzTemporalColumn,
+  timeTemporalColumn,
   timetzColumn,
   varbitColumn,
   varcharColumn,
@@ -39,8 +39,8 @@ export const contract = defineContract(
       fields: {
         id: field.column(int4Column).defaultSql('autoincrement()').id(),
         email: field.column(varcharColumn(255)).unique({ name: 'user_email_key' }),
-        createdAt: field.column(timestamptzColumn).defaultSql('now()').column('created_at'),
-        updatedAt: field.column(timestamptzColumn).optional().column('update_at'),
+        createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()').column('created_at'),
+        updatedAt: field.column(timestamptzTemporalColumn).optional().column('update_at'),
         profile: field.column(jsonbColumn).optional(),
       },
     });
@@ -50,8 +50,8 @@ export const contract = defineContract(
         id: field.column(int4Column).defaultSql('autoincrement()').id(),
         userId: field.column(int4Column),
         title: field.column(textColumn),
-        createdAt: field.column(timestamptzColumn).defaultSql('now()').column('created_at'),
-        updatedAt: field.column(timestamptzColumn).optional().column('update_at'),
+        createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()').column('created_at'),
+        updatedAt: field.column(timestamptzTemporalColumn).optional().column('update_at'),
         published: field.column(boolColumn),
         meta: field.column(jsonColumn).optional(),
       },
@@ -62,8 +62,8 @@ export const contract = defineContract(
         id: field.column(int4Column).defaultSql('autoincrement()').id(),
         postId: field.column(int4Column),
         content: field.column(textColumn),
-        createdAt: field.column(timestamptzColumn).defaultSql('now()').column('created_at'),
-        updatedAt: field.column(timestamptzColumn).optional().column('update_at'),
+        createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()').column('created_at'),
+        updatedAt: field.column(timestamptzTemporalColumn).optional().column('update_at'),
       },
       relations: {
         post: rel.belongsTo(PostBase, { from: 'postId', to: 'id' }),
@@ -94,10 +94,10 @@ export const contract = defineContract(
             flags: field.column(bitColumn(8)).optional(),
             bits: field.column(varbitColumn(12)).optional(),
             createdAt: field
-              .column({ ...timestamptzColumn, typeParams: { precision: 3 } })
+              .column({ ...timestamptzTemporalColumn, typeParams: { precision: 3 } })
               .optional()
               .column('created_at'),
-            startsAt: field.column(timeColumn(2)).optional().column('starts_at'),
+            startsAt: field.column(timeTemporalColumn(2)).optional().column('starts_at'),
             startsAtTz: field.column(timetzColumn(2)).optional().column('starts_at_tz'),
             duration: field.column(intervalColumn(6)).optional().column('duration'),
           },
@@ -108,10 +108,13 @@ export const contract = defineContract(
             id: field.id.uuidv7String(),
             name: field.column(textColumn),
             scheduledAt: field
-              .column(timestamptzColumn)
+              .column(timestamptzTemporalColumn)
               .default({ kind: 'literal', value: new Date('2024-01-15T10:30:00.000Z') })
               .column('scheduled_at'),
-            createdAt: field.column(timestamptzColumn).defaultSql('now()').column('created_at'),
+            createdAt: field
+              .column(timestamptzTemporalColumn)
+              .defaultSql('now()')
+              .column('created_at'),
           },
         }).sql({ table: 'event' }),
 

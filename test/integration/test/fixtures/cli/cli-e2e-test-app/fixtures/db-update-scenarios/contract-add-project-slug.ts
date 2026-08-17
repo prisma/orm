@@ -1,7 +1,7 @@
 import {
   jsonbColumn,
   textColumn,
-  timestamptzColumn,
+  timestamptzTemporalColumn,
   varcharColumn,
 } from '@internal/adapter-postgres/column-types';
 import {
@@ -42,7 +42,7 @@ const Account = model('Account', {
     email: field.column(varcharColumn(320)).unique(),
     status: field.namedType(enums.AccountStatus),
     profile: field.column(jsonbColumn).optional(),
-    createdAt: field.column(timestamptzColumn).defaultSql('now()'),
+    createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()'),
   },
 }).sql({ table: 'account' });
 
@@ -59,7 +59,7 @@ const Project = model('Project', {
     slug: field.column(varcharColumn(128)).optional(),
     visibility: field.namedType(enums.ProjectVisibility),
     metadata: field.column(jsonbColumn).optional(),
-    createdAt: field.column(timestamptzColumn).defaultSql('now()'),
+    createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()'),
   },
 }).sql(({ cols, constraints }) => ({
   table: 'project',
