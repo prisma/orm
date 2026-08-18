@@ -411,7 +411,7 @@ test('codec type inference via type option', () => {
   const _testRow: Row = {
     id: 1,
     email: 'test@example.com',
-    createdAt: new Date('2024-01-01T00:00:00Z'),
+    createdAt: Temporal.Instant.from('2024-01-01T00:00:00Z'),
   } as Row;
 
   expectTypeOf(_testRow).toEqualTypeOf<Row>();
@@ -593,7 +593,7 @@ test('read: non-enum fields keep their codec output, unchanged from main', () =>
   type Row = ResultType<typeof plan>;
   expectTypeOf<Row['id']>().toEqualTypeOf<number>();
   expectTypeOf<Row['email']>().toEqualTypeOf<string>();
-  expectTypeOf<Row['createdAt']>().toEqualTypeOf<Date>();
+  expectTypeOf<Row['createdAt']>().toEqualTypeOf<Temporal.Instant>();
 });
 
 test('write: enum insert accepts the value union and rejects out-of-union literals', () => {

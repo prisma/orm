@@ -224,7 +224,7 @@ describe('builder integration', () => {
     const row: Row = {
       id: 1,
       email: 'test@example.com',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
+      createdAt: Temporal.Instant.from('2024-01-01T00:00:00Z'),
     };
     expect(row).toBeDefined();
 

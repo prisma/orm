@@ -16,10 +16,7 @@ describe('ports/prisma/functional/issues-12572', () => {
       withPostgresPort<Contract>({ contractJson }, async ({ db }) => {
         const created = await db.public.User.create({});
 
-        const createdAt = new Date(created.createdAt);
-        const updatedAt = new Date(created.updatedAt);
-
-        expect(createdAt.getDate()).toEqual(updatedAt.getDate());
+        expect(Temporal.Instant.compare(created.createdAt, created.updatedAt)).toBe(0);
       }),
     timeouts.spinUpPpgDev,
   );

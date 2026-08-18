@@ -27,10 +27,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Dispositions:
 //   'createMany stress test for cache bloat' → PORTED (passing)
 
-function daysBefore(days: number): Date {
-  const date = new Date();
-  date.setDate(date.getDate() - days);
-  return date;
+function daysBefore(days: number): Temporal.Instant {
+  return Temporal.Now.instant().subtract({ hours: days * 24 });
 }
 
 type AnalyticsRow = Parameters<typeof withPostgresPort<Contract>>[1] extends (

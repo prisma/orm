@@ -80,13 +80,13 @@ export function starterSchema(
 }
 
 /**
- * Renders a short authoring-appropriate schema sample (FR5.1) for embedding
- * in `prisma-next.md`. Returns a complete fenced markdown code block.
+ * Renders a short authoring-appropriate schema sample for embedding in
+ * `prisma-next.md`. Returns a complete fenced markdown code block.
  *
  * The sample intentionally shows just one model: it's illustrative, not
  * a substitute for the full scaffolded contract file. The TS samples use
- * the same outer shape as `starterSchemaTs*` (FR5.3) so a user reading
- * the doc and the file side-by-side sees the same structure.
+ * the same outer shape as `starterSchemaTs*` so a user reading the doc and
+ * the file side-by-side sees the same structure.
  */
 export function schemaSample(
   target: TargetId,

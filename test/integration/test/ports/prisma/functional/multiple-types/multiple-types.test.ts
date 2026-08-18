@@ -14,7 +14,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - BigInt  → bigint   (pg/int8@1 carries the full signed 64-bit range, which a
 //                         JS number cannot hold past 2^53)
 //   - Decimal → string   (pg/numeric@1 codec output is `string`, not Prisma.Decimal)
-//   - DateTime → Date    (same as Prisma)
+//   - DateTime → Temporal.Instant (Prisma returns a Date; pg/timestamptz-temporal@1 parses
+//                         PostgreSQL's own text into an instant instead)
 //   - Bytes   → Uint8Array (same as Prisma, but always a plain Uint8Array not Buffer)
 //   - Bool    → boolean  (same as Prisma)
 //   - Int     → number   (same as Prisma)
@@ -26,6 +27,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //     subject is the queryRaw-vs-findMany comparison itself; recorded in the ledger.
 // All other tests (including '2 records, 1st with null, 2nd with values should
 // succeed') are ported via findMany, which is their observable subject here.
+
+const instant = Temporal.Instant.from('1900-10-10T01:10:10.001Z');
 
 function withMultipleTypes(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
   return withPostgresPort<Contract>({ contractJson }, fn);
@@ -102,7 +105,7 @@ describe('ports/prisma/functional/multiple-types', () => {
           float: 0.125,
           bytes: Uint8Array.from([1, 2, 3]),
           bool: true,
-          dt: new Date('1900-10-10T01:10:10.001Z'),
+          dt: instant,
           dec: '0.0625',
         });
 
@@ -134,9 +137,11 @@ describe('ports/prisma/functional/multiple-types', () => {
           float: 0.125,
           bytes: Uint8Array.from([1, 2, 3]),
           bool: true,
-          dt: new Date('1900-10-10T01:10:10.001Z'),
           dec: '0.0625',
         });
+        // `dt` is asserted through its text: a Temporal value has no own enumerable
+        // properties, so a structural matcher would compare two empty objects.
+        expect(valuesRow?.dt?.toString()).toBe(instant.toString());
       }),
     timeouts.spinUpPpgDev,
   );
