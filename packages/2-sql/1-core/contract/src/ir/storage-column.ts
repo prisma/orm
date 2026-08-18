@@ -60,7 +60,10 @@ export class StorageColumn extends SqlNode {
 
   constructor(input: StorageColumnInput) {
     super();
-    if (input.elementNullable === true && input.many !== true) {
+    if (
+      input.elementNullable !== undefined &&
+      (input.elementNullable !== true || input.many !== true)
+    ) {
       throw contractError(
         'CONTRACT.ARGUMENT_INVALID',
         'StorageColumn elementNullable requires many:true.',

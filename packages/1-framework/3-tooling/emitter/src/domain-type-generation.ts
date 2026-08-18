@@ -558,11 +558,7 @@ export function resolveValueObjectType(
 }
 
 export function generateContractFieldDescriptor(fieldName: string, field: ContractField): string {
-  const mods: string[] = [];
-  if (field.many === true) mods.push('; readonly many: true');
-  if (field.dict === true) mods.push('; readonly dict: true');
-  const modStr = mods.join('');
-
+  const modStr = contractFieldModifierSuffix(field);
   const { type } = field;
   if (type.kind === 'scalar') {
     const typeParamsSpec =

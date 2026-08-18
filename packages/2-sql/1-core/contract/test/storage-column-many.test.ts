@@ -172,6 +172,23 @@ describe('StorageColumn many', () => {
       );
     });
 
+    it('rejects elementNullable:false when the input type is bypassed', () => {
+      const invalidInput = {
+        nativeType: 'text',
+        codecId: 'pg/text@1',
+        nullable: false,
+        many: true,
+        elementNullable: false,
+      } as unknown as ConstructorParameters<typeof StorageColumn>[0];
+
+      expect(() => new StorageColumn(invalidInput)).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ARGUMENT_INVALID',
+          message: 'StorageColumn elementNullable requires many:true.',
+        }),
+      );
+    });
+
     it('leaves optional markers undefined for scalar columns', () => {
       const column = new StorageColumn({
         nativeType: 'text',

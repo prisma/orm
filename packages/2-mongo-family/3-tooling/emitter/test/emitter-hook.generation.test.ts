@@ -128,15 +128,20 @@ describe('mongoEmission.generateContractTypes', () => {
       );
     });
 
-    it('emits nullable scalar-list elements on output and input channels', () => {
+    it('emits mixed scalar-list outer and element nullability exactly', () => {
       const contract = createMongoContract({
         models: {
           Lists: {
             fields: {
-              values: {
-                nullable: true,
+              nullableElements: {
+                nullable: false,
                 many: true,
                 elementNullable: true,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
+              nullableList: {
+                nullable: true,
+                many: true,
                 type: { kind: 'scalar', codecId: 'mongo/string@1' },
               },
             },
@@ -147,12 +152,23 @@ describe('mongoEmission.generateContractTypes', () => {
         storage: namespacedMongoStorageFromCollections({ lists: {} }),
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
-      expect(types).toContain('readonly elementNullable: true');
       expect(types).toContain(
-        'readonly values: ReadonlyArray<CodecTypes["mongo/string@1"]["output"] | null> | null',
+        'readonly nullableElements: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: true; readonly elementNullable: true }',
       );
       expect(types).toContain(
-        'readonly values: ReadonlyArray<CodecTypes["mongo/string@1"]["input"] | null> | null',
+        'readonly nullableList: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: true }',
+      );
+      expect(types).toContain(
+        'readonly nullableElements: ReadonlyArray<CodecTypes["mongo/string@1"]["output"] | null>',
+      );
+      expect(types).toContain(
+        'readonly nullableList: ReadonlyArray<CodecTypes["mongo/string@1"]["output"]> | null',
+      );
+      expect(types).toContain(
+        'readonly nullableElements: ReadonlyArray<CodecTypes["mongo/string@1"]["input"] | null>',
+      );
+      expect(types).toContain(
+        'readonly nullableList: ReadonlyArray<CodecTypes["mongo/string@1"]["input"]> | null',
       );
     });
 

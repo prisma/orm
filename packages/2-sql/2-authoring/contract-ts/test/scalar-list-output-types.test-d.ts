@@ -57,6 +57,11 @@ const definition = {
         explicitNonNullableElements: field.column(textColumn).many({ elementsNullable: false }),
         optTags: field.column(textColumn).many().optional(),
         nullableElementValues: field.column(textColumn).many({ elementsNullable: true }),
+        chainedOmittedElements: field.column(textColumn).many({ elementsNullable: true }).many(),
+        chainedFalseElements: field
+          .column(textColumn)
+          .many({ elementsNullable: true })
+          .many({ elementsNullable: false }),
         nullableElementValuesAndList: field
           .column(textColumn)
           .many({ elementsNullable: true })
@@ -87,6 +92,21 @@ test('omitted and false element nullability resolve identically', () => {
   expectTypeOf<FieldInputTypes['explicitNonNullableElements']>().toEqualTypeOf<
     FieldInputTypes['tags']
   >();
+});
+
+test('chained many calls restore strict element types', () => {
+  expectTypeOf<FieldTypes['chainedOmittedElements']>().toEqualTypeOf<ReadonlyArray<string>>();
+  expectTypeOf<FieldInputTypes['chainedOmittedElements']>().toEqualTypeOf<ReadonlyArray<string>>();
+  expectTypeOf<FieldTypes['chainedFalseElements']>().toEqualTypeOf<ReadonlyArray<string>>();
+  expectTypeOf<FieldInputTypes['chainedFalseElements']>().toEqualTypeOf<ReadonlyArray<string>>();
+  expectTypeOf<StorageOutputTypes['chainedOmittedElements']>().toEqualTypeOf<
+    ReadonlyArray<string>
+  >();
+  expectTypeOf<StorageInputTypes['chainedOmittedElements']>().toEqualTypeOf<
+    ReadonlyArray<string>
+  >();
+  expectTypeOf<StorageOutputTypes['chainedFalseElements']>().toEqualTypeOf<ReadonlyArray<string>>();
+  expectTypeOf<StorageInputTypes['chainedFalseElements']>().toEqualTypeOf<ReadonlyArray<string>>();
 });
 
 test('nullable-container list field resolves to ReadonlyArray<string> | null', () => {

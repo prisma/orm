@@ -379,13 +379,14 @@ export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFie
   many(options: { readonly elementsNullable: true }): ScalarFieldBuilder<ApplyMany<State, true>>;
   many(options: { readonly elementsNullable: false }): ScalarFieldBuilder<ApplyMany<State, false>>;
   many(options?: ManyOptions): ScalarFieldBuilder<AnyScalarFieldState> {
+    const { elementNullable: _elementNullable, ...state } = this.state;
     const elementNullable = options?.elementsNullable === true ? { elementNullable: true } : {};
     return new ScalarFieldBuilder(
       blindCast<
         AnyScalarFieldState,
         'object spread does not narrow the generic State conditional; runtime shape is correct'
       >({
-        ...this.state,
+        ...state,
         many: true,
         ...elementNullable,
       }),

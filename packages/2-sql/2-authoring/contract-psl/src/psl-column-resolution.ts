@@ -682,7 +682,17 @@ export function lowerDefaultForField(input: {
     rejectStrictListNullDefault({ ...input, node })
   )
     return {};
-  if (value === null) return {};
+  if (value === null) {
+    if (!input.field.optional) {
+      input.diagnostics.push({
+        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+        message: `Field "${input.modelName}.${input.fieldName}" is non-nullable and cannot use null as its literal default. Make the field nullable or use a non-null default.`,
+        ...source.at(),
+      });
+      return {};
+    }
+    return { defaultValue: { kind: 'literal', value: null, canonical: true } };
+  }
   // A list of value objects is stored in one column whose value is the whole list: a list literal
   // fills it element by element, as it fills a list column, and any other literal is read as the
   // whole value.

@@ -843,6 +843,42 @@ describe('noCheck — enforcement opt-out', () => {
     ]);
   });
 
+  it('chained many calls clear stale nullable-element metadata and restore enforcement', () => {
+    const contract = defineContract(
+      {
+        family: sqlFamilyPack,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+      },
+      ({ field: f, model: m }) => {
+        const nullableElements = f.text().many({ elementsNullable: true });
+        return {
+          models: {
+            User: m('User', {
+              fields: {
+                id: f.text().id(),
+                nullableElements,
+                omittedResets: nullableElements.many(),
+                falseResets: nullableElements.many({ elementsNullable: false }),
+              },
+            }),
+          },
+        } as const;
+      },
+    ) as Contract<SqlStorage>;
+
+    expect(columnOf(contract, 'nullableElements')).toMatchObject({
+      many: true,
+      elementNullable: true,
+    });
+    expect(columnOf(contract, 'omittedResets')).not.toHaveProperty('elementNullable');
+    expect(columnOf(contract, 'falseResets')).not.toHaveProperty('elementNullable');
+    expect(flatten(checksOf(contract))).toEqual([
+      wire('User_omittedResets_elem_not_null', `array_position("omittedResets", NULL) IS NULL`),
+      wire('User_falseResets_elem_not_null', `array_position("falseResets", NULL) IS NULL`),
+    ]);
+  });
+
   it('plain list + noCheck("elementNotNull") derives nothing', () => {
     const contract = defineContract(
       {

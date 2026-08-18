@@ -904,6 +904,18 @@ describe('generateContractFieldDescriptor', () => {
     expect(result).toContain('; readonly many: true');
   });
 
+  it('includes elementNullable modifier', () => {
+    const field: ContractField = {
+      nullable: false,
+      type: { kind: 'valueObject', name: 'Address' },
+      many: true,
+      elementNullable: true,
+    };
+    expect(generateContractFieldDescriptor('addresses', field)).toBe(
+      'readonly addresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: true; readonly elementNullable: true }',
+    );
+  });
+
   it('includes dict modifier', () => {
     const field: ContractField = {
       nullable: false,

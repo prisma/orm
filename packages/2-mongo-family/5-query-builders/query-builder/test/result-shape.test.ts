@@ -126,30 +126,32 @@ describe('contractModelToMongoResultShape', () => {
 });
 
 describe('contractFieldToMongoFieldShape', () => {
-  it('maps list element nullability independently from list nullability', () => {
+  it('maps a required list with nullable elements exactly', () => {
     expect(
       contractFieldToMongoFieldShape({
         nullable: false,
-        many: true,
-        type: { kind: 'scalar', codecId: 'mongo/string@1' },
-      }),
-    ).toEqual({
-      kind: 'array',
-      nullable: false,
-      element: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
-    });
-
-    expect(
-      contractFieldToMongoFieldShape({
-        nullable: true,
         many: true,
         elementNullable: true,
         type: { kind: 'scalar', codecId: 'mongo/string@1' },
       }),
     ).toEqual({
       kind: 'array',
-      nullable: true,
+      nullable: false,
       element: { kind: 'leaf', codecId: 'mongo/string@1', nullable: true },
+    });
+  });
+
+  it('maps a nullable list with required elements exactly', () => {
+    expect(
+      contractFieldToMongoFieldShape({
+        nullable: true,
+        many: true,
+        type: { kind: 'scalar', codecId: 'mongo/string@1' },
+      }),
+    ).toEqual({
+      kind: 'array',
+      nullable: true,
+      element: { kind: 'leaf', codecId: 'mongo/string@1', nullable: false },
     });
   });
 

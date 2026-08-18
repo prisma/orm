@@ -291,11 +291,9 @@ function scalarDefaultArms(
       >(entry.signature),
     ),
   );
-  // A scalar column takes a list literal too: a codec such as `pg/vector@1` declares a list of
-  // element types, and its value is written as a PSL list on a column that is not a list.
   return isList
     ? [listArm(), ...funcArms, ...tagArms()]
-    : [str(), numLiteral(), bool(), ...funcArms, ...tagArms(), listArm()];
+    : [str(), numLiteral(), bool(), nullLiteral(), ...funcArms, ...tagArms(), listArm()];
 }
 
 /**

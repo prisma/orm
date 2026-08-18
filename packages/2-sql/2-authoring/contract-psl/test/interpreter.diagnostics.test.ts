@@ -1525,6 +1525,45 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     });
   });
 
+  it('lowers null as the literal default for a nullable scalar', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model Post {
+  id Int @id
+  title String? @default(null)
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
+    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['title']).toMatchObject({
+      nullable: true,
+      default: { kind: 'literal', value: null },
+    });
+  });
+
+  it('rejects null as the literal default for a non-nullable scalar', () => {
+    expectDiagnosticForSchema(
+      `model Post {
+  id Int @id
+  title String @default(null)
+}
+`,
+      {
+        code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
+      },
+    );
+  });
+
   it('lowers a null-containing literal default for nullable list elements', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `model Post {
