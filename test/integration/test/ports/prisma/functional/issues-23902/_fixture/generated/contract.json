@@ -36,7 +36,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -64,7 +64,7 @@
               "updatedAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -203,7 +203,7 @@
                   "nullable": true
                 },
                 "createdAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -231,7 +231,7 @@
                   "nullable": false
                 },
                 "updatedAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
@@ -319,7 +319,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "d77c23d8f827a7239691c462394a22a81c36ec903a196cfb2effb2ede5f7ebe3"
+    "storageHash": "c1c14a07f2bca116eb6deb8c38ae490ef471864731dfed50f951d00e73b9582c"
   },
   "execution": {
     "executionHash": "27a88f1138300d9ca801a02b0455dd8d3172476231ba8433307683757567343e",
@@ -375,6 +375,7 @@
       "returning": true
     },
     "sql": {
+      "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
       "lateral": true,

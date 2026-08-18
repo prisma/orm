@@ -92,7 +92,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -244,7 +244,7 @@
                   "nullable": false
                 },
                 "createdAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -308,7 +308,7 @@
         "id": "public"
       }
     },
-    "storageHash": "d2b2185d3f182c9abacb3ceff6f43ef881047429f38040a0b1a8baf4c04c78f6",
+    "storageHash": "d2079ba7652fcf633a2d675504cbc6b1a0bfdbfa23fbe9e560b66d29f3839dde",
     "types": {
       "Embedding": {
         "codecId": "pg/vector@1",

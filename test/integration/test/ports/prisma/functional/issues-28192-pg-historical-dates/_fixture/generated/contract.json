@@ -18,7 +18,7 @@
               "date": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/date@1",
+                  "codecId": "pg/date-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -32,14 +32,14 @@
               "timestamp": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamp@1",
+                  "codecId": "pg/timestamp-temporal@1",
                   "kind": "scalar"
                 }
               },
               "timestamptz": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               }
@@ -76,7 +76,7 @@
             "testData": {
               "columns": {
                 "date": {
-                  "codecId": "pg/date@1",
+                  "codecId": "pg/date-temporal@1",
                   "nativeType": "date",
                   "nullable": false
                 },
@@ -86,12 +86,12 @@
                   "nullable": false
                 },
                 "timestamp": {
-                  "codecId": "pg/timestamp@1",
+                  "codecId": "pg/timestamp-temporal@1",
                   "nativeType": "timestamp",
                   "nullable": false
                 },
                 "timestamptz": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "nativeType": "timestamptz",
                   "nullable": false
                 }
@@ -111,7 +111,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "e83b54b64a6c692ac53f630624ec222fd4bb1822fe8505cd4fedbc2eae9a4012"
+    "storageHash": "87aa20f2dcef84b910b4b7424d488f4a1d5e2b96a3d9ad4a54934857ec6c1246"
   },
   "execution": {
     "executionHash": "9f01a9177f36a92600298f29da3e5d5a10f017f5525d820aa013eb7accdd9fe1",
@@ -141,6 +141,7 @@
       "returning": true
     },
     "sql": {
+      "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
       "lateral": true,

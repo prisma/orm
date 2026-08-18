@@ -100,7 +100,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -251,7 +251,7 @@
               ],
               "columns": {
                 "createdAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -322,7 +322,7 @@
         "id": "public"
       }
     },
-    "storageHash": "18cf551b7c6cb114f16d5eed967fba34f4c30e571d5efdb002ca23da0f055748",
+    "storageHash": "4ef6deee6b5cadcf7e136883eca7decfd88d59634cf958a3ee9576c1c00245c0",
     "types": {
       "Email": {
         "codecId": "pg/text@1",

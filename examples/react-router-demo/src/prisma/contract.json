@@ -22,7 +22,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -92,7 +92,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -159,7 +159,7 @@
             "post": {
               "columns": {
                 "createdAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -224,7 +224,7 @@
             "user": {
               "columns": {
                 "createdAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -261,7 +261,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "9a618563701307bbbcb79ebc0cfd568d2593677968d5f24498bdb18d43083ca6"
+    "storageHash": "deddce086f6a11aca3daa89a698902a934e4518c0ae9846a4c5fe2291ca9c8bd"
   },
   "execution": {
     "executionHash": "1ff963fbab83b7266b283d62c8b49c9850cb57c65ea29fe44077380cee559199",
