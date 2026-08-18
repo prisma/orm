@@ -9,9 +9,9 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Upstream seeds two Resource rows (date @unique) at 2011-01-01 and 2022-02-02 and
 // reads them back concurrently, asserting each round-trips to the matching `Date`.
 // prisma-next DateTime is `pg/timestamptz-temporal@1`, whose application value is a
-// `Temporal.Instant` rather than a `Date`. Upstream passes ISO strings; the equivalent here is
-// `Temporal.Instant.from(...)` denoting the same instant, which is what create and the
-// where/first filters use below.
+// `Temporal.Instant` rather than a `Date`. The values below are still `Date`s, and the checked-in
+// `_fixture/generated` contract still names the retired codec — both move together when the
+// fixtures are regenerated.
 //
 // Dispositions (per upstream test):
 //   - 'findUnique date with Promise.all'      → PORTED: two concurrent `.first({date})`.

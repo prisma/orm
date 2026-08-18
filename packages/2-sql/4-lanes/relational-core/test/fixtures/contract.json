@@ -23,7 +23,7 @@
           },
           "createdAt": {
             "nativeType": "timestamptz",
-            "codecId": "pg/timestamptz-temporal@1",
+            "codecId": "pg/timestamptz-string@1",
             "nullable": false
           }
         },
@@ -83,7 +83,7 @@
                 "nullable": false,
                 "type": {
                   "kind": "scalar",
-                  "codecId": "pg/timestamptz-temporal@1"
+                  "codecId": "pg/timestamptz-string@1"
                 }
               }
             },
