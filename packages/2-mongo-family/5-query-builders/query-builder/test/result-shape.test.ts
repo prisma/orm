@@ -130,8 +130,7 @@ describe('contractFieldToMongoFieldShape', () => {
     expect(
       contractFieldToMongoFieldShape({
         nullable: false,
-        many: true,
-        elementNullable: true,
+        many: { elementNullable: true },
         type: { kind: 'scalar', codecId: 'mongo/string@1' },
       }),
     ).toEqual({
@@ -145,7 +144,7 @@ describe('contractFieldToMongoFieldShape', () => {
     expect(
       contractFieldToMongoFieldShape({
         nullable: true,
-        many: true,
+        many: { elementNullable: false },
         type: { kind: 'scalar', codecId: 'mongo/string@1' },
       }),
     ).toEqual({
@@ -158,6 +157,7 @@ describe('contractFieldToMongoFieldShape', () => {
   it('union field maps to unknown', () => {
     const f = contractFieldToMongoFieldShape({
       nullable: false,
+      many: false,
       type: {
         kind: 'union',
         members: [{ kind: 'scalar', codecId: 'mongo/string@1' }],

@@ -332,8 +332,7 @@ const ModelFieldSchema = type({
   '+': 'reject',
   nullable: 'boolean',
   type: ContractFieldTypeSchema,
-  'many?': 'true',
-  'elementNullable?': 'true',
+  many: type('false').or({ elementNullable: 'boolean' }),
   'dict?': 'true',
   'valueSet?': DomainEnumRefSchema,
 });

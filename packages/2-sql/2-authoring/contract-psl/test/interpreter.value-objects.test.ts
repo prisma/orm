@@ -74,9 +74,9 @@ model User {
     expect(valueObjectsOf(result.value)).toEqual({
       Address: {
         fields: {
-          street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-          city: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-          zip: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+          street: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+          city: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+          zip: { nullable: true, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
         },
       },
     });
@@ -112,24 +112,22 @@ model User {
           requiredElements: {
             nullable: false,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
-            many: true,
+            many: { elementNullable: false },
           },
           nullableElementValues: {
             nullable: false,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
-            many: true,
-            elementNullable: true,
+            many: { elementNullable: true },
           },
           nullableList: {
             nullable: true,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
-            many: true,
+            many: { elementNullable: false },
           },
           nullableElementValuesAndList: {
             nullable: true,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
-            many: true,
-            elementNullable: true,
+            many: { elementNullable: true },
           },
         },
       },
@@ -235,51 +233,47 @@ model User {
         requiredElements: {
           nullable: false,
           type: { kind: 'scalar', codecId: 'pg/text@1' },
-          many: true,
+          many: { elementNullable: false },
         },
         nullableElementValues: {
           nullable: false,
           type: { kind: 'scalar', codecId: 'pg/text@1' },
-          many: true,
-          elementNullable: true,
+          many: { elementNullable: true },
         },
         nullableList: {
           nullable: true,
           type: { kind: 'scalar', codecId: 'pg/text@1' },
-          many: true,
+          many: { elementNullable: false },
         },
         nullableElementValuesAndList: {
           nullable: true,
           type: { kind: 'scalar', codecId: 'pg/text@1' },
-          many: true,
-          elementNullable: true,
+          many: { elementNullable: true },
         },
       },
       storage: {
         requiredElements: {
           nativeType: 'text',
           codecId: 'pg/text@1',
-          many: true,
+          many: { elementNullable: false },
           nullable: false,
         },
         nullableElementValues: {
           nativeType: 'text',
           codecId: 'pg/text@1',
-          many: true,
-          elementNullable: true,
+          many: { elementNullable: true },
           nullable: false,
         },
         nullableList: {
           nativeType: 'text',
           codecId: 'pg/text@1',
-          many: true,
+          many: { elementNullable: false },
           nullable: true,
         },
         nullableElementValuesAndList: {
           nativeType: 'text',
           codecId: 'pg/text@1',
-          many: true,
-          elementNullable: true,
+          many: { elementNullable: true },
           nullable: true,
         },
       },
@@ -319,20 +313,20 @@ model User {
     expect(model?.fields['addresses']).toEqual({
       nullable: false,
       type: { kind: 'valueObject', name: 'Address' },
-      many: true,
-      elementNullable: true,
+      many: { elementNullable: true },
     });
     expect(addressesColumn).toEqual({
       nativeType: 'jsonb',
       codecId: 'pg/jsonb@1',
       nullable: false,
+      many: false,
     });
-    expect(Object.hasOwn(addressesColumn ?? {}, 'many')).toBe(false);
+    expect(addressesColumn?.many).toBe(false);
     expect(Object.hasOwn(addressesColumn ?? {}, 'elementNullable')).toBe(false);
     expect(Object.hasOwn(addressesColumn ?? {}, 'noCheck')).toBe(false);
   });
 
-  it('emits value object list fields with many: true and valueObject domain type', () => {
+  it('emits value object list fields with many: { elementNullable: false } and valueObject domain type', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `type Address {
   street String
@@ -360,7 +354,7 @@ model User {
           addresses: {
             nullable: false,
             type: { kind: 'valueObject', name: 'Address' },
-            many: true,
+            many: { elementNullable: false },
           },
         },
       },
@@ -417,14 +411,22 @@ model Order {
     expect(valueObjectsOf(result.value)).toEqual({
       Address: {
         fields: {
-          street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-          city: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+          street: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+          city: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
         },
       },
       ShippingInfo: {
         fields: {
-          address: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
-          notes: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+          address: {
+            nullable: false,
+            many: false,
+            type: { kind: 'valueObject', name: 'Address' },
+          },
+          notes: {
+            nullable: false,
+            many: false,
+            type: { kind: 'scalar', codecId: 'pg/text@1' },
+          },
         },
       },
     });

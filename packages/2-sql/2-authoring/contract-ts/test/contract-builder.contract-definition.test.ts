@@ -48,6 +48,7 @@ describe('shared contract definition lowering', () => {
                 typeParams: { length: 36 },
               },
               nullable: false,
+              many: false,
               executionDefaults: { onCreate: { kind: 'generator', id: 'uuidv4' } },
             },
             {
@@ -59,6 +60,7 @@ describe('shared contract definition lowering', () => {
                 typeRef: 'Role',
               },
               nullable: false,
+              many: false,
             },
           ],
           id: {
@@ -92,6 +94,7 @@ describe('shared contract definition lowering', () => {
                 nativeType: 'int4',
               },
               nullable: false,
+              many: false,
             },
             {
               fieldName: 'authorId',
@@ -102,6 +105,7 @@ describe('shared contract definition lowering', () => {
                 typeParams: { length: 36 },
               },
               nullable: false,
+              many: false,
             },
           ],
           id: {
@@ -228,6 +232,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'timestamptz',
                 },
                 nullable: false,
+                many: false,
                 default: {
                   kind: 'literal',
                   value: new Date('2025-01-01T00:00:00.000Z'),
@@ -350,8 +355,7 @@ describe('shared contract definition lowering', () => {
                 columnName: 'tags',
                 descriptor: { codecId: 'app/value@1', nativeType: 'text' },
                 nullable: false,
-                many: true,
-                elementNullable: true,
+                many: { elementNullable: true },
                 default: { kind: 'literal', value: ['value', null] },
               },
             ],
@@ -384,7 +388,7 @@ describe('shared contract definition lowering', () => {
                 columnName: 'tags',
                 descriptor: { codecId: 'app/value@1', nativeType: 'text' },
                 nullable: false,
-                many: true,
+                many: { elementNullable: false },
                 default: { kind: 'literal', value: ['value', null] },
               },
             ],
@@ -412,6 +416,7 @@ describe('shared contract definition lowering', () => {
                 nativeType: 'timestamptz',
               },
               nullable: false,
+              many: false,
               executionDefaults: {
                 onCreate: { kind: 'generator', id: 'timestampNow' },
                 onUpdate: { kind: 'generator', id: 'timestampNow' },
@@ -450,6 +455,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'text',
                 },
                 nullable: false,
+                many: false,
                 default: {
                   kind: 'function',
                   expression: 'gen_random_uuid()',
@@ -487,6 +493,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'text',
                 },
                 nullable: false,
+                many: false,
                 default: {
                   kind: 'function',
                   expression: 'gen_random_uuid()',
@@ -524,6 +531,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'int4',
                 },
                 nullable: false,
+                many: false,
               },
             ],
             id: { columns: ['id'] },
@@ -540,6 +548,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'int4',
                 },
                 nullable: false,
+                many: false,
               },
               {
                 fieldName: 'authorId',
@@ -549,6 +558,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'int4',
                 },
                 nullable: false,
+                many: false,
               },
             ],
             id: { columns: ['id'] },
@@ -591,6 +601,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'text',
                 },
                 nullable: true,
+                many: false,
                 executionDefaults: {
                   onCreate: {
                     kind: 'generator',
@@ -626,6 +637,7 @@ describe('shared contract definition lowering', () => {
                   nativeType: 'int4',
                 },
                 nullable: true,
+                many: false,
               },
             ],
             id: {
@@ -656,6 +668,7 @@ describe('shared contract definition lowering', () => {
                 columnName: 'severity',
                 descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
                 nullable: true,
+                many: false,
               },
             ],
             checks: [
@@ -686,12 +699,14 @@ describe('M:N through descriptor lowering', () => {
         columnName: 'id',
         descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
         nullable: false,
+        many: false as const,
       },
       {
         fieldName: 'slug',
         columnName: 'slug',
         descriptor: { codecId: 'pg/text@1', nativeType: 'text' },
         nullable: false,
+        many: false as const,
       },
     ],
     ...target,
@@ -712,6 +727,7 @@ describe('M:N through descriptor lowering', () => {
               columnName: 'id',
               descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
               nullable: false,
+              many: false,
             },
           ],
           id: { columns: ['id'] },
@@ -745,12 +761,14 @@ describe('M:N through descriptor lowering', () => {
               columnName: 'post_id',
               descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
               nullable: false,
+              many: false,
             },
             {
               fieldName: 'tagId',
               columnName: 'tag_id',
               descriptor: { codecId: 'pg/int4@1', nativeType: 'int4' },
               nullable: false,
+              many: false,
             },
           ],
           id: { columns: ['post_id', 'tag_id'] },

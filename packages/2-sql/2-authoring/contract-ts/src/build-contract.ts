@@ -946,8 +946,7 @@ function buildStorageColumn(
     nativeType: descriptor.nativeType,
     codecId,
     nullable: field.nullable,
-    ...ifDefined('many', isListColumn ? (true as const) : undefined),
-    ...ifDefined('elementNullable', isListColumn ? field.elementNullable : undefined),
+    many: isListColumn ? { elementNullable: field.elementNullable === true } : false,
     ...ifDefined('noCheck', noCheck && [...noCheck].sort()),
     ...ifDefined('typeParams', descriptor.typeParams),
     ...ifDefined('default', encodedDefault),
@@ -985,8 +984,7 @@ function buildDomainField(
     return {
       type: { kind: 'valueObject', name: field.valueObjectName },
       nullable: field.nullable,
-      ...ifDefined('many', field.many ? (true as const) : undefined),
-      ...ifDefined('elementNullable', field.elementNullable),
+      many: field.many ? { elementNullable: field.elementNullable === true } : false,
     };
   }
 
@@ -997,8 +995,7 @@ function buildDomainField(
       ...ifDefined('typeParams', resolvedTypeParams(field.descriptor, storageTypes)),
     },
     nullable: field.nullable,
-    ...ifDefined('many', field.many ? (true as const) : undefined),
-    ...ifDefined('elementNullable', field.elementNullable),
+    many: field.many ? { elementNullable: field.elementNullable === true } : false,
     ...ifDefined('valueSet', enumValueSetRefs(field.enumTypeHandle, defaultNamespaceId)?.domain),
   };
 }
@@ -1332,6 +1329,7 @@ export function buildSqlContractFromDefinition(
         definition.storageTypes ?? {},
         codecLookup,
       );
+      const columnMany = column.many ?? false;
       columns[field.columnName] = column;
       fieldToColumn[field.fieldName] = field.columnName;
 
@@ -1350,8 +1348,8 @@ export function buildSqlContractFromDefinition(
             renderCheckExpressions({
               tableName,
               columnName: field.columnName,
-              many: column.many === true,
-              elementNullable: column.elementNullable === true,
+              many: columnMany !== false,
+              elementNullable: columnMany !== false && columnMany.elementNullable,
               memberValues:
                 enumHandle !== undefined ? checkMemberValues(enumHandle, codecLookup) : undefined,
             }).filter((candidate) => !(waivedKinds?.includes(candidate.kind) ?? false)),

@@ -7,10 +7,7 @@ import {
   type StorageHashBase,
 } from '@internal/contract/types';
 import { enumType, member } from '@internal/contract-authoring';
-import {
-  mongoFamilyEntityTypes,
-  mongoFamilyPslBlockDescriptors,
-} from '@internal/family-mongo/pack';
+import { enumType } from '@internal/mongo-contract-ts/contract-builder';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
@@ -284,11 +281,27 @@ model Item {
 
       expect(modelsOf(ir)['Item']).toMatchObject({
         fields: {
-          _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-          name: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-          count: { type: { kind: 'scalar', codecId: 'mongo/int32@1' }, nullable: false },
-          active: { type: { kind: 'scalar', codecId: 'mongo/bool@1' }, nullable: false },
-          at: { type: { kind: 'scalar', codecId: 'mongo/date@1' }, nullable: false },
+          _id: {
+            type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+            nullable: false,
+            many: false,
+          },
+          name: {
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            nullable: false,
+            many: false,
+          },
+          count: {
+            type: { kind: 'scalar', codecId: 'mongo/int32@1' },
+            nullable: false,
+            many: false,
+          },
+          active: {
+            type: { kind: 'scalar', codecId: 'mongo/bool@1' },
+            nullable: false,
+            many: false,
+          },
+          at: { type: { kind: 'scalar', codecId: 'mongo/date@1' }, nullable: false, many: false },
         },
       });
     });
@@ -338,13 +351,17 @@ model Item {
 
       expect(modelsOf(ir)['Item']).toMatchObject({
         fields: {
-          _id: { type: { kind: 'scalar', codecId: 'custom/oid@2' }, nullable: false },
-          name: { type: { kind: 'scalar', codecId: 'custom/text@2' }, nullable: false },
+          _id: { type: { kind: 'scalar', codecId: 'custom/oid@2' }, nullable: false, many: false },
+          name: {
+            type: { kind: 'scalar', codecId: 'custom/text@2' },
+            nullable: false,
+            many: false,
+          },
         },
       });
     });
 
-    it('emits many: true for scalar list fields', () => {
+    it('emits many: { elementNullable: false } for scalar list fields', () => {
       const ir = interpretOk(`
         model Item {
           id   ObjectId @id @map("_id")
@@ -357,7 +374,7 @@ model Item {
           tags: {
             type: { kind: 'scalar', codecId: 'mongo/string@1' },
             nullable: false,
-            many: true,
+            many: { elementNullable: false },
           },
         },
       });
@@ -1061,9 +1078,21 @@ model Item {
       expect(valueObjectsOf(ir)).toEqual({
         Address: {
           fields: {
-            street: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-            city: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-            zip: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+            street: {
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              nullable: false,
+              many: false,
+            },
+            city: {
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              nullable: false,
+              many: false,
+            },
+            zip: {
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              nullable: false,
+              many: false,
+            },
           },
         },
       });
@@ -1084,12 +1113,16 @@ model Item {
 
       expect(modelsOf(ir)['User']).toMatchObject({
         fields: {
-          homeAddress: { type: { kind: 'valueObject', name: 'Address' }, nullable: true },
+          homeAddress: {
+            type: { kind: 'valueObject', name: 'Address' },
+            nullable: true,
+            many: false,
+          },
         },
       });
     });
 
-    it('emits many: true for value object array fields', () => {
+    it('emits many: { elementNullable: false } for value object array fields', () => {
       const ir = interpretOk(`
         type Address {
           street String
@@ -1107,7 +1140,7 @@ model Item {
           addresses: {
             type: { kind: 'valueObject', name: 'Address' },
             nullable: false,
-            many: true,
+            many: { elementNullable: false },
           },
         },
       });
@@ -1140,15 +1173,35 @@ model Item {
       expect(valueObjectsOf(ir)).toEqual({
         GeoPoint: {
           fields: {
-            lat: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false },
-            lng: { type: { kind: 'scalar', codecId: 'mongo/double@1' }, nullable: false },
+            lat: {
+              type: { kind: 'scalar', codecId: 'mongo/double@1' },
+              nullable: false,
+              many: false,
+            },
+            lng: {
+              type: { kind: 'scalar', codecId: 'mongo/double@1' },
+              nullable: false,
+              many: false,
+            },
           },
         },
         Address: {
           fields: {
-            street: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-            city: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-            location: { type: { kind: 'valueObject', name: 'GeoPoint' }, nullable: false },
+            street: {
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              nullable: false,
+              many: false,
+            },
+            city: {
+              type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              nullable: false,
+              many: false,
+            },
+            location: {
+              type: { kind: 'valueObject', name: 'GeoPoint' },
+              nullable: false,
+              many: false,
+            },
           },
         },
       });
@@ -1202,10 +1255,26 @@ model Item {
               models: {
                 User: {
                   fields: {
-                    _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-                    name: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-                    email: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-                    bio: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: true },
+                    _id: {
+                      type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                      nullable: false,
+                      many: false,
+                    },
+                    name: {
+                      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                      nullable: false,
+                      many: false,
+                    },
+                    email: {
+                      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                      nullable: false,
+                      many: false,
+                    },
+                    bio: {
+                      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                      nullable: true,
+                      many: false,
+                    },
                   },
                   relations: {
                     posts: {
@@ -1218,19 +1287,30 @@ model Item {
                 },
                 Post: {
                   fields: {
-                    _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-                    title: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+                    _id: {
+                      type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                      nullable: false,
+                      many: false,
+                    },
+                    title: {
+                      type: { kind: 'scalar', codecId: 'mongo/string@1' },
+                      nullable: false,
+                      many: false,
+                    },
                     content: {
                       type: { kind: 'scalar', codecId: 'mongo/string@1' },
                       nullable: false,
+                      many: false,
                     },
                     authorId: {
                       type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
                       nullable: false,
+                      many: false,
                     },
                     createdAt: {
                       type: { kind: 'scalar', codecId: 'mongo/date@1' },
                       nullable: false,
+                      many: false,
                     },
                   },
                   relations: {
@@ -2159,10 +2239,10 @@ model Item {
         }
       `);
       expect(model(ir, 'User').fields).toMatchObject({
-        strict: { nullable: false, many: true },
-        nullableElements: { nullable: false, many: true, elementNullable: true },
-        nullableList: { nullable: true, many: true },
-        fullyNullable: { nullable: true, many: true, elementNullable: true },
+        strict: { nullable: false, many: { elementNullable: false } },
+        nullableElements: { nullable: false, many: { elementNullable: true } },
+        nullableList: { nullable: true, many: { elementNullable: false } },
+        fullyNullable: { nullable: true, many: { elementNullable: true } },
       });
       const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
@@ -2183,7 +2263,6 @@ model Item {
       const ir = interpretOk(
         `
           enum Role {
-            @@type("mongo/string@1")
             User = "user"
             Admin = "admin"
           }
@@ -2198,8 +2277,19 @@ model Item {
           authoringContributions: {
             field: {},
             type: {},
-            entityTypes: mongoFamilyEntityTypes,
-            pslBlockDescriptors: mongoFamilyPslBlockDescriptors,
+            entityTypes: {
+              enum: {
+                kind: 'entity',
+                discriminator: 'enum',
+                output: { factory: () => enumType('Role', { codecId: 'mongo/string@1', nativeType: 'string' }, { name: 'User', value: 'user' }, { name: 'Admin', value: 'admin' }) },
+              },
+            },
+            pslBlockDescriptors: {
+              enum: {
+                kind: 'pslBlock', keyword: 'enum', discriminator: 'enum', name: { required: true },
+                spec: () => mapBlock({ value: { type: jsonValue(), documentation: 'The member value.' }, allowBare: true }),
+              },
+            },
             modelAttributes: {},
           },
         },
@@ -2208,8 +2298,7 @@ model Item {
         roles: {
           type: { kind: 'scalar', codecId: 'mongo/string@1' },
           nullable: false,
-          many: true,
-          elementNullable: true,
+          many: { elementNullable: true },
           valueSet: {
             plane: 'domain',
             entityKind: 'enum',
@@ -2220,8 +2309,7 @@ model Item {
         optionalRoles: {
           type: { kind: 'scalar', codecId: 'mongo/string@1' },
           nullable: true,
-          many: true,
-          elementNullable: true,
+          many: { elementNullable: true },
           valueSet: {
             plane: 'domain',
             entityKind: 'enum',
@@ -2265,14 +2353,12 @@ model Item {
         nullableElements: {
           type: { kind: 'valueObject', name: 'Address' },
           nullable: false,
-          many: true,
-          elementNullable: true,
+          many: { elementNullable: true },
         },
         fullyNullable: {
           type: { kind: 'valueObject', name: 'Address' },
           nullable: true,
-          many: true,
-          elementNullable: true,
+          many: { elementNullable: true },
         },
       });
     });

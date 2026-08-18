@@ -4,7 +4,7 @@
  *
  * The emit path (`contract.d.ts` FieldOutputTypes) is driven by
  * `domain-type-generation.applyModifiers` in the framework emitter package,
- * which already handles `many: true` via the domain ContractField. That
+ * which handles nested `many` metadata via the domain ContractField. That
  * behaviour is covered by the emitter's own tests.
  *
  * Container nullability: `T[]` → `ReadonlyArray<string>`;

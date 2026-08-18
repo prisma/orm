@@ -64,6 +64,7 @@ function col(overrides: Partial<StorageColumn> & { nativeType: string }): Storag
   return {
     codecId: 'pg/text@1',
     nullable: false,
+    many: false,
     ...overrides,
   };
 }
@@ -1281,7 +1282,9 @@ describe('contractToSchemaIR — resolved leaf values', () => {
 
   it('appends [] to resolvedNativeType for array columns', () => {
     const storage = unboundStorage('test' as StorageHashBase<string>, {
-      T: table({ columns: { tags: col({ nativeType: 'text', many: true }) } }),
+      T: table({
+        columns: { tags: col({ nativeType: 'text', many: { elementNullable: false } }) },
+      }),
     });
 
     const result = contractToSchemaIR(wrap(storage), { renderDefault: testRenderer });
@@ -1321,7 +1324,7 @@ describe('contractToSchemaIR — resolved leaf values', () => {
         columns: {
           tags: col({
             nativeType: 'text',
-            many: true,
+            many: { elementNullable: false },
             default: { kind: 'function', expression: "'{}'::text[]" },
           }),
         },

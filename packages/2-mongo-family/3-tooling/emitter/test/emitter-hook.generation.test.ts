@@ -106,9 +106,21 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-              name: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-              bio: { nullable: true, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
+              name: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
+              bio: {
+                nullable: true,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
             storage: { collection: 'users' },
@@ -118,13 +130,13 @@ describe('mongoEmission.generateContractTypes', () => {
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
       expect(types).toContain(
-        'readonly _id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/objectId@1" } }',
+        'readonly _id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/objectId@1" }; readonly many: false }',
       );
       expect(types).toContain(
-        'readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" } }',
+        'readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: false }',
       );
       expect(types).toContain(
-        'readonly bio: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" } }',
+        'readonly bio: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: false }',
       );
     });
 
@@ -135,13 +147,12 @@ describe('mongoEmission.generateContractTypes', () => {
             fields: {
               nullableElements: {
                 nullable: false,
-                many: true,
-                elementNullable: true,
+                many: { elementNullable: true },
                 type: { kind: 'scalar', codecId: 'mongo/string@1' },
               },
               nullableList: {
                 nullable: true,
-                many: true,
+                many: { elementNullable: false },
                 type: { kind: 'scalar', codecId: 'mongo/string@1' },
               },
             },
@@ -153,10 +164,10 @@ describe('mongoEmission.generateContractTypes', () => {
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
       expect(types).toContain(
-        'readonly nullableElements: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: true; readonly elementNullable: true }',
+        'readonly nullableElements: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: { readonly elementNullable: true } }',
       );
       expect(types).toContain(
-        'readonly nullableList: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: true }',
+        'readonly nullableList: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: { readonly elementNullable: false } }',
       );
       expect(types).toContain(
         'readonly nullableElements: ReadonlyArray<CodecTypes["mongo/string@1"]["output"] | null>',
@@ -177,7 +188,11 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {
               posts: {
@@ -190,8 +205,16 @@ describe('mongoEmission.generateContractTypes', () => {
           },
           Post: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-              authorId: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
+              authorId: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {
               author: {
@@ -221,7 +244,11 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {},
             storage: { collection: 'users' },
@@ -238,7 +265,11 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {
               addresses: { to: crossRef('Address'), cardinality: '1:N' },
@@ -250,7 +281,11 @@ describe('mongoEmission.generateContractTypes', () => {
           },
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
             storage: {},
@@ -269,7 +304,11 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           Post: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {
               comments: { to: crossRef('Comment'), cardinality: '1:N' },
@@ -278,7 +317,11 @@ describe('mongoEmission.generateContractTypes', () => {
           },
           Comment: {
             fields: {
-              text: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              text: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
             storage: {},
@@ -296,8 +339,16 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           Task: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-              type: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
+              type: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
             storage: { collection: 'tasks' },
@@ -306,7 +357,11 @@ describe('mongoEmission.generateContractTypes', () => {
           },
           Bug: {
             fields: {
-              severity: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              severity: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
             storage: { collection: 'tasks' },
@@ -314,7 +369,11 @@ describe('mongoEmission.generateContractTypes', () => {
           },
           Feature: {
             fields: {
-              priority: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              priority: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
             storage: { collection: 'tasks' },
@@ -337,7 +396,11 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {
               addresses: { to: crossRef('Address'), cardinality: '1:N' },
@@ -349,7 +412,11 @@ describe('mongoEmission.generateContractTypes', () => {
           },
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
             storage: {},
@@ -412,7 +479,11 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
             },
             relations: {},
             storage: { collection: 'users' },
@@ -421,8 +492,16 @@ describe('mongoEmission.generateContractTypes', () => {
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
-              city: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
+              city: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
           },
         },
@@ -439,7 +518,11 @@ describe('mongoEmission.generateContractTypes', () => {
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
           },
         },
@@ -454,9 +537,14 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
               homeAddress: {
                 nullable: true,
+                many: false,
                 type: { kind: 'valueObject', name: 'Address' },
               },
             },
@@ -467,7 +555,11 @@ describe('mongoEmission.generateContractTypes', () => {
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
           },
         },
@@ -475,20 +567,24 @@ describe('mongoEmission.generateContractTypes', () => {
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
       expect(types).toContain(
-        'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" } }',
+        'readonly homeAddress: { readonly nullable: true; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: false }',
       );
     });
 
-    it('handles many: true on value object model fields', () => {
+    it('handles list value object model fields', () => {
       const contract = createMongoContract({
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
               previousAddresses: {
                 nullable: false,
                 type: { kind: 'valueObject', name: 'Address' },
-                many: true,
+                many: { elementNullable: false },
               },
             },
             relations: {},
@@ -498,7 +594,11 @@ describe('mongoEmission.generateContractTypes', () => {
         valueObjects: {
           Address: {
             fields: {
-              street: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              street: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
           },
         },
@@ -506,7 +606,7 @@ describe('mongoEmission.generateContractTypes', () => {
       });
       const types = generateContractDts(contract, mongoEmission, [], testHashes);
       expect(types).toContain(
-        'readonly previousAddresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: true }',
+        'readonly previousAddresses: { readonly nullable: false; readonly type: { readonly kind: "valueObject"; readonly name: "Address" }; readonly many: { readonly elementNullable: false } }',
       );
     });
 
@@ -515,11 +615,15 @@ describe('mongoEmission.generateContractTypes', () => {
         valueObjects: {
           NavItem: {
             fields: {
-              label: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              label: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
               children: {
                 nullable: false,
                 type: { kind: 'valueObject', name: 'NavItem' },
-                many: true,
+                many: { elementNullable: false },
               },
             },
           },
@@ -543,7 +647,11 @@ describe('mongoEmission.generateContractTypes', () => {
         valueObjects: {
           Address: {
             fields: {
-              zip: { nullable: true, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              zip: {
+                nullable: true,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
           },
         },
@@ -557,8 +665,16 @@ describe('mongoEmission.generateContractTypes', () => {
         models: {
           User: {
             fields: {
-              _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
-              name: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/string@1' } },
+              _id: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              },
+              name: {
+                nullable: false,
+                many: false,
+                type: { kind: 'scalar', codecId: 'mongo/string@1' },
+              },
             },
             relations: {},
             storage: { collection: 'users' },

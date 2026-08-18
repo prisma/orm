@@ -31,7 +31,11 @@ function deserializedContract() {
       models: {
         Item: {
           fields: {
-            _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+            _id: {
+              type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+              nullable: false,
+              many: false,
+            },
           },
           relations: {},
           storage: { collection: 'items' },

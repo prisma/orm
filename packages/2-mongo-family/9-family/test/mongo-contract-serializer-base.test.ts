@@ -61,7 +61,11 @@ describe('MongoContractSerializerBase', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'missing_collection' },
             relations: {},
@@ -78,8 +82,16 @@ describe('MongoContractSerializerBase', () => {
         models: {
           Item: {
             fields: {
-              _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-              data: { type: { kind: 'valueObject', name: 'Missing' }, nullable: false },
+              _id: {
+                type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+                nullable: false,
+                many: false,
+              },
+              data: {
+                type: { kind: 'valueObject', name: 'Missing' },
+                nullable: false,
+                many: false,
+              },
             },
             storage: { collection: 'items' },
             relations: {},

@@ -40,8 +40,13 @@ describe('data contract JSON schema', () => {
         tables: {
           User: {
             columns: {
-              id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
-              tags: { codecId: 'pg/text@1', nativeType: 'text', nullable: false, many: true },
+              id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false, many: false },
+              tags: {
+                codecId: 'pg/text@1',
+                nativeType: 'text',
+                nullable: false,
+                many: { elementNullable: false },
+              },
               status: {
                 codecId: 'pg/text@1',
                 nativeType: 'text',

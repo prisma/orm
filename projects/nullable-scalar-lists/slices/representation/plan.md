@@ -12,12 +12,12 @@ Three dispatches, stacked (each hands to the next). One persistent implementer.
    - **Completed when:** parser tests cover all six spellings + `Foo??` diagnostic; `pnpm --filter @prisma-next/psl-parser test` + typecheck green.
    - **Hands to:** the AST/symbol element-axis accessors.
 
-2. **`contract-ir-marker`** — framework `ContractField.elementNullable`.
-   - **Outcome:** `ContractField` carries `elementNullable?: true`; domain validator accepts it; canonicalization omits it when false (matching `many`'s omission path).
+2. **`contract-ir-marker`** — framework `ContractField.many` descriptor.
+   - **Outcome:** `ContractField.many` is `false | { elementNullable: boolean }`; domain validation and canonicalization preserve the nested representation and reject legacy parallel shapes.
    - **Files in play:** `packages/1-framework/0-foundation/contract/src/domain-types.ts`, `src/validate-domain.ts`, `src/canonicalization.ts` (+ tests).
    - **Completed when:** unit tests for validator accept/reject + canonicalization omission; `pnpm --filter @prisma-next/contract test` + typecheck green; `pnpm fixtures:check` clean (existing fixtures byte-stable).
    - **Builds on:** dispatch 1 (conceptually; no code dependency — parser and IR type are independent, but sequence keeps one review coherent).
-   - **Hands to:** the `elementNullable` IR marker the family slices populate.
+   - **Hands to:** the nested `many.elementNullable` IR descriptor the family slices populate.
 
 3. **`printer-round-trip`** — PSL printer.
    - **Outcome:** the printer emits the exact spelling for all six forms; parse → print → identical source.

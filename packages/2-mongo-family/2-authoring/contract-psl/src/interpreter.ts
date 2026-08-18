@@ -1159,14 +1159,12 @@ function resolveNonRelationField(
 ): ResolvedNonRelationField | undefined {
   const ownerName = owner.name;
   if (resolution?.kind === 'compositeType') {
-    const result: ContractField = {
-      type: { kind: 'valueObject', name: resolution.symbol.name },
-      nullable: field.optional,
-    };
     return {
-      field: field.list
-        ? { ...result, many: true, ...(field.elementOptional ? { elementNullable: true } : {}) }
-        : result,
+      field: {
+        type: { kind: 'valueObject', name: resolution.symbol.name },
+        nullable: field.optional,
+        many: field.list ? { elementNullable: field.elementOptional } : false,
+      },
     };
   }
 
@@ -1179,15 +1177,13 @@ function resolveNonRelationField(
       namespaceId: UNBOUND_NAMESPACE_ID,
       entityName: resolution.symbol.name,
     };
-    const result: ContractField = {
-      type: { kind: 'scalar', codecId: enumCodecId },
-      nullable: field.optional,
-      valueSet,
-    };
     return {
-      field: field.list
-        ? { ...result, many: true, ...(field.elementOptional ? { elementNullable: true } : {}) }
-        : result,
+      field: {
+        type: { kind: 'scalar', codecId: enumCodecId },
+        nullable: field.optional,
+        many: field.list ? { elementNullable: field.elementOptional } : false,
+        valueSet,
+      },
     };
   }
 
@@ -1231,14 +1227,12 @@ function resolveNonRelationField(
   const codecId = resolution.symbol.descriptor.output.codecId;
 
   scalarNames.warnDeprecated(field);
-  const result: ContractField = {
-    type: { kind: 'scalar', codecId },
-    nullable: field.optional,
-  };
   return {
-    field: field.list
-      ? { ...result, many: true, ...(field.elementOptional ? { elementNullable: true } : {}) }
-      : result,
+    field: {
+      type: { kind: 'scalar', codecId },
+      nullable: field.optional,
+      many: field.list ? { elementNullable: field.elementOptional } : false,
+    },
   };
 }
 

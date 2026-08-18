@@ -7,11 +7,11 @@ Two focused dispatches remain after the rebase; main already supplies the comple
 ## Dispatches
 
 1. **`sql-psl-lowering`**
-   - **Outcome:** SQL PSL resolution preserves `ResolvedField.elementNullable` for domain/build metadata and maps native nullable-element lists to storage `elementNullable: true` without an automatic `noCheck`. Explicit `Foo[] @noCheck(elementNotNull)` gets no marker; the same waiver on `Foo?[]` is rejected as inapplicable. Value-object lists keep domain metadata but JSONB storage receives neither marker nor waiver.
+   - **Outcome:** SQL PSL resolution preserves `ResolvedField.elementNullable` for domain/build metadata and maps native nullable-element lists to storage `many: { elementNullable: true }` without an automatic `noCheck`. Explicit `Foo[] @noCheck(elementNotNull)` gets no marker; the same waiver on `Foo?[]` is rejected as inapplicable. Value-object lists keep domain metadata but JSONB storage receives neither marker nor waiver.
    - **Gate:** `@internal/sql-contract-psl` tests/typecheck/lint plus affected contract and TS-authoring builds.
 
 2. **`rebase-validation`**
-   - **Outcome:** `StorageColumn.elementNullable` is restored across validation, hydration/serialization, factory, emitter, and TS type maps while `SqlColumnIR.elementNullable` remains absent; Postgres generated-check tests confirm the marker suppresses `elementNotNull` generation before explicit `noCheck` filtering; project gates and fixtures remain clean.
+   - **Outcome:** `StorageColumn.many` is migrated to `false | { elementNullable: boolean }` across validation, hydration/serialization, factory, emitter, and TS type maps while `SqlColumnIR` remains without an element-nullability marker; Postgres generated-check tests confirm the marker suppresses `elementNotNull` generation before explicit `noCheck` filtering; project gates and fixtures remain clean.
    - **Builds on:** dispatch 1 and main's rewritten derivation/diff/introspection/infer lifecycle.
    - **Gate:** targeted parser/contract/SQL/Postgres tests, builds/typechecks/lints, `pnpm fixtures:check`, and `pnpm lint:deps`.
 

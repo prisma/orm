@@ -2,14 +2,14 @@
 
 ## Outcome
 
-Mongo supports scalar-list element nullability end to end. PSL `Foo?[]` and `Foo?[]?` lower `FieldSymbol.elementOptional` to `ContractField.elementNullable: true`; TypeScript authoring exposes the same `.many({ elementsNullable: true })` shape as SQL; generated and inferred input/output types include `null` per element; and BSON validators permit `null` in `items` only when the marker is present.
+Mongo supports scalar-list element nullability end to end. PSL `Foo?[]` and `Foo?[]?` lower `FieldSymbol.elementOptional` to `ContractField.many.elementNullable: true`; TypeScript authoring exposes the same `.many({ elementsNullable: true })` shape as SQL; generated and inferred input/output types include `null` per element; and BSON validators permit `null` in `items` only when the marker is present.
 
 ## Design
 
 - `.many()` and `.many({ elementsNullable: false })` preserve the existing non-null-element contract shape and types.
-- `.many({ elementsNullable: true })` carries a distinct builder type-state axis and emits `elementNullable: true`; only literal `true` and `false` are accepted, while widened booleans and empty option objects are rejected.
-- Whole-list `nullable` and element `elementNullable` compose independently.
-- Scalar and value-object arrays derive nullable `items` only from `elementNullable`; relation semantics are unchanged.
+- `.many({ elementsNullable: true })` carries a distinct builder type-state axis and emits `many: { elementNullable: true }`; only literal `true` and `false` are accepted, while widened booleans and empty option objects are rejected.
+- Whole-list `nullable` and nested `many.elementNullable` compose independently.
+- Scalar and value-object arrays derive nullable `items` only from `many.elementNullable`; relation semantics are unchanged.
 - Scalar-list writes wrap each non-null element with its scalar codec reference and pass `null` through unchanged. Array decoding already short-circuits `null` before invoking the element codec and is regression-tested.
 
 ## Done conditions

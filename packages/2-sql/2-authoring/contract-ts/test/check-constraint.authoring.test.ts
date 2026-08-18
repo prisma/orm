@@ -810,33 +810,29 @@ describe('noCheck — enforcement opt-out', () => {
 
     const user = contract.domain.namespaces['public']?.models?.['User'];
     expect(user?.fields['tags']).toEqual(user?.fields['labels']);
-    expect(user?.fields['tags']).not.toHaveProperty('elementNullable');
-    expect(user?.fields['labels']).not.toHaveProperty('elementNullable');
+    expect(user?.fields['tags']).toMatchObject({ many: { elementNullable: false } });
+    expect(user?.fields['labels']).toMatchObject({ many: { elementNullable: false } });
     expect(columnOf(contract, 'tags')).toEqual(columnOf(contract, 'labels'));
-    expect(columnOf(contract, 'labels')).not.toHaveProperty('elementNullable');
-    expect(user?.fields['aliases']).toMatchObject({ many: true, elementNullable: true });
+    expect(columnOf(contract, 'labels')).toMatchObject({ many: { elementNullable: false } });
+    expect(user?.fields['aliases']).toMatchObject({ many: { elementNullable: true } });
     expect(user?.fields['optionalAliases']).toMatchObject({
       nullable: true,
-      many: true,
-      elementNullable: true,
+      many: { elementNullable: true },
     });
     expect(columnOf(contract, 'aliases')).toMatchObject({
-      many: true,
-      elementNullable: true,
+      many: { elementNullable: true },
     });
     expect(columnOf(contract, 'aliases')).not.toHaveProperty('noCheck');
     expect(columnOf(contract, 'optionalAliases')).toMatchObject({
       nullable: true,
-      many: true,
-      elementNullable: true,
+      many: { elementNullable: true },
     });
     expect(columnOf(contract, 'optionalAliases')).not.toHaveProperty('noCheck');
-    expect(user?.fields['waived']).not.toHaveProperty('elementNullable');
+    expect(user?.fields['waived']).toMatchObject({ many: { elementNullable: false } });
     expect(columnOf(contract, 'waived')).toMatchObject({
-      many: true,
+      many: { elementNullable: false },
       noCheck: ['elementNotNull'],
     });
-    expect(columnOf(contract, 'waived')).not.toHaveProperty('elementNullable');
     expect(flatten(checksOf(contract))).toEqual([
       wire('User_tags_elem_not_null', `array_position("tags", NULL) IS NULL`),
       wire('User_labels_elem_not_null', `array_position("labels", NULL) IS NULL`),
@@ -868,11 +864,14 @@ describe('noCheck — enforcement opt-out', () => {
     ) as Contract<SqlStorage>;
 
     expect(columnOf(contract, 'nullableElements')).toMatchObject({
-      many: true,
-      elementNullable: true,
+      many: { elementNullable: true },
     });
-    expect(columnOf(contract, 'omittedResets')).not.toHaveProperty('elementNullable');
-    expect(columnOf(contract, 'falseResets')).not.toHaveProperty('elementNullable');
+    expect(columnOf(contract, 'omittedResets')).toMatchObject({
+      many: { elementNullable: false },
+    });
+    expect(columnOf(contract, 'falseResets')).toMatchObject({
+      many: { elementNullable: false },
+    });
     expect(flatten(checksOf(contract))).toEqual([
       wire('User_omittedResets_elem_not_null', `array_position("omittedResets", NULL) IS NULL`),
       wire('User_falseResets_elem_not_null', `array_position("falseResets", NULL) IS NULL`),
@@ -898,9 +897,9 @@ describe('noCheck — enforcement opt-out', () => {
 
     expect(checksOf(contract)).toEqual([]);
     expect(columnOf(contract, 'tags')?.noCheck).toEqual(['elementNotNull']);
-    expect(columnOf(contract, 'tags')).not.toHaveProperty('elementNullable');
+    expect(columnOf(contract, 'tags')).toMatchObject({ many: { elementNullable: false } });
     const user = contract.domain.namespaces['public']?.models?.['User'];
-    expect(user?.fields['tags']).not.toHaveProperty('elementNullable');
+    expect(user?.fields['tags']).toMatchObject({ many: { elementNullable: false } });
   });
 });
 
@@ -1111,7 +1110,7 @@ describe('noCheck — wire schema', () => {
                     nativeType: 'text',
                     codecId: 'pg/text@1',
                     nullable: false,
-                    many: true,
+                    many: { elementNullable: false },
                     ...(noCheck !== undefined ? { noCheck } : {}),
                   },
                 },
@@ -1296,7 +1295,12 @@ describe('check emission — a specifier-applied policy strips derived checks', 
               table: {
                 User: new StorageTableClass({
                   columns: {
-                    tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+                    tags: {
+                      nativeType: 'text',
+                      codecId: 'pg/text@1',
+                      nullable: false,
+                      many: { elementNullable: false },
+                    },
                   },
                   uniques: [],
                   indexes: [],
@@ -1350,7 +1354,12 @@ describe('check emission — a specifier-applied policy strips derived checks', 
                   columns: {
                     id: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
                     role: { nativeType: 'text', codecId: 'pg/text@1', nullable: false },
-                    tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+                    tags: {
+                      nativeType: 'text',
+                      codecId: 'pg/text@1',
+                      nullable: false,
+                      many: { elementNullable: false },
+                    },
                   },
                   uniques: [],
                   indexes: [],

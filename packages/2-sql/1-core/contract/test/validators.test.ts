@@ -242,7 +242,7 @@ describe('SQL contract validators', () => {
           fields: { id: { column: 'id' } },
         },
         fields: {
-          id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+          id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' }, many: false },
         },
       };
       expect(() => validateModel(modelWithoutRelations)).not.toThrow();
@@ -254,7 +254,9 @@ describe('SQL contract validators', () => {
         namespaceId: UNBOUND_NAMESPACE_ID,
         fields: { id: { column: 'id' } },
       },
-      fields: { id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } } },
+      fields: {
+        id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' }, many: false },
+      },
       relations: { rel: relation },
     });
 
@@ -1868,6 +1870,7 @@ describe('SQL contract validators', () => {
         fields: {
           role: {
             nullable: false,
+            many: false,
             type: { kind: 'scalar', codecId: 'pg/text@1' },
             valueSet: {
               plane: 'domain',

@@ -42,7 +42,7 @@ describe('StorageColumn many', () => {
         nativeType: 'text',
         codecId: 'pg/text@1',
         nullable: false,
-        many: true,
+        many: { elementNullable: false },
       });
     });
 
@@ -67,8 +67,7 @@ describe('StorageColumn many', () => {
         nativeType: 'text',
         codecId: 'pg/text@1',
         nullable: false,
-        many: true,
-        elementNullable: true,
+        many: { elementNullable: true },
       });
     });
 
@@ -90,12 +89,13 @@ describe('StorageColumn many', () => {
       ]?.columns['title'] as StorageColumn | undefined;
 
       expect(titleColumn).toBeDefined();
-      expect(titleColumn).not.toHaveProperty('many');
+      expect(titleColumn?.many).toBe(false);
       expect(titleColumn).not.toHaveProperty('elementNullable');
       expect(titleColumn).toEqual({
         nativeType: 'text',
         codecId: 'pg/text@1',
         nullable: false,
+        many: false,
       });
     });
   });
@@ -107,13 +107,13 @@ describe('StorageColumn many', () => {
         nativeType: 'text',
         codecId: 'pg/text@1',
         nullable: false,
-        many: true,
+        many: { elementNullable: false },
       });
     });
 
     it('creates an element-nullable many column', () => {
       const column = col('text', 'pg/text@1', false, { many: true, elementNullable: true });
-      expect(column).toMatchObject({ many: true, elementNullable: true });
+      expect(column).toMatchObject({ many: { elementNullable: true } });
     });
 
     it('rejects elementNullable without many:true when the options type is bypassed', () => {
@@ -122,14 +122,14 @@ describe('StorageColumn many', () => {
       expect(() => col('text', 'pg/text@1', false, invalidOptions)).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.ARGUMENT_INVALID',
-          message: 'StorageColumn elementNullable requires many:true.',
+          message: 'StorageColumn elementNullable must be nested under many.',
         }),
       );
     });
 
     it('omits optional markers from scalar column', () => {
       const column = col('text', 'pg/text@1');
-      expect(column).not.toHaveProperty('many');
+      expect(column.many).toBe(false);
       expect(column).not.toHaveProperty('elementNullable');
     });
   });
@@ -140,9 +140,9 @@ describe('StorageColumn many', () => {
         nativeType: 'text',
         codecId: 'pg/text@1',
         nullable: false,
-        many: true,
+        many: { elementNullable: false },
       });
-      expect(column.many).toBe(true);
+      expect(column.many).toEqual({ elementNullable: false });
     });
 
     it('accepts elementNullable:true with many:true', () => {
@@ -150,10 +150,9 @@ describe('StorageColumn many', () => {
         nativeType: 'text',
         codecId: 'pg/text@1',
         nullable: false,
-        many: true,
-        elementNullable: true,
+        many: { elementNullable: true },
       });
-      expect(column).toMatchObject({ many: true, elementNullable: true });
+      expect(column).toMatchObject({ many: { elementNullable: true } });
     });
 
     it('rejects elementNullable without many:true when the input type is bypassed', () => {
@@ -167,7 +166,7 @@ describe('StorageColumn many', () => {
       expect(() => new StorageColumn(invalidInput)).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.ARGUMENT_INVALID',
-          message: 'StorageColumn elementNullable requires many:true.',
+          message: 'StorageColumn elementNullable must be nested under many.',
         }),
       );
     });
@@ -177,14 +176,14 @@ describe('StorageColumn many', () => {
         nativeType: 'text',
         codecId: 'pg/text@1',
         nullable: false,
-        many: true,
+        many: { elementNullable: false },
         elementNullable: false,
       } as unknown as ConstructorParameters<typeof StorageColumn>[0];
 
       expect(() => new StorageColumn(invalidInput)).toThrow(
         expect.objectContaining({
           code: 'CONTRACT.ARGUMENT_INVALID',
-          message: 'StorageColumn elementNullable requires many:true.',
+          message: 'StorageColumn elementNullable must be nested under many.',
         }),
       );
     });
@@ -194,10 +193,10 @@ describe('StorageColumn many', () => {
         nativeType: 'text',
         codecId: 'pg/text@1',
         nullable: false,
+        many: false,
       });
-      expect(column.many).toBeUndefined();
-      expect(column.elementNullable).toBeUndefined();
-      expect(Object.keys(column)).not.toContain('elementNullable');
+      expect(column.many).toBe(false);
+      expect(column).not.toHaveProperty('elementNullable');
     });
   });
 
@@ -213,7 +212,12 @@ describe('StorageColumn many', () => {
               table: {
                 post: {
                   columns: {
-                    tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
+                    tags: {
+                      nativeType: 'text',
+                      codecId: 'pg/text@1',
+                      nullable: false,
+                      many: { elementNullable: false },
+                    },
                   },
                   uniques: [],
                   indexes: [],
@@ -272,7 +276,7 @@ describe('StorageColumn many', () => {
                       nativeType: 'text',
                       codecId: 'pg/text@1',
                       nullable: false,
-                      many: true,
+                      many: { elementNullable: false },
                       elementNullable: false,
                     },
                   },

@@ -10,10 +10,10 @@ A list has two places where `null` may occur: the list value itself and an eleme
 
 | PSL | Contract shape | TypeScript |
 | --- | --- | --- |
-| `Foo[]` | `{ nullable: false, many: true }` | `ReadonlyArray<Foo>` |
-| `Foo?[]` | `{ nullable: false, many: true, elementNullable: true }` | `ReadonlyArray<Foo \| null>` |
-| `Foo[]?` | `{ nullable: true, many: true }` | `ReadonlyArray<Foo> \| null` |
-| `Foo?[]?` | `{ nullable: true, many: true, elementNullable: true }` | `ReadonlyArray<Foo \| null> \| null` |
+| `Foo[]` | `{ nullable: false, many: { elementNullable: false } }` | `ReadonlyArray<Foo>` |
+| `Foo?[]` | `{ nullable: false, many: { elementNullable: true } }` | `ReadonlyArray<Foo \| null>` |
+| `Foo[]?` | `{ nullable: true, many: { elementNullable: false } }` | `ReadonlyArray<Foo> \| null` |
+| `Foo?[]?` | `{ nullable: true, many: { elementNullable: true } }` | `ReadonlyArray<Foo \| null> \| null` |
 
 The TypeScript authoring surface couples the element option to list construction:
 
@@ -38,27 +38,27 @@ This distinction also crosses architectural layers. The domain contract needs el
 
 ### Element nullability is an independent field-shape axis
 
-`ContractField` carries `elementNullable?: true`, meaningful only when `many === true`. The marker is present only for nullable elements; strict elements omit it. Validation rejects the marker on a non-list field.
+`ContractField.many` is `false | { elementNullable: boolean }`. A non-list field carries `many: false`; a list field carries a descriptor that records whether its elements are nullable. Nesting the element property makes the invalid state “non-list field with nullable elements” unrepresentable. Validation rejects the legacy `many: true` and sibling `elementNullable` shapes.
 
 The marker is independent of `nullable`:
 
 - `nullable` applies to the whole field value.
-- `many` makes that value a list.
-- `elementNullable` applies to each member of that list.
+- A `many` descriptor makes that value a list.
+- `many.elementNullable` applies to each member of that list.
 
 Keeping the dimensions independent makes the contract shape a direct description of the generated type rather than an inference from target-specific storage behavior.
 
 ### Native SQL array storage carries the same semantic fact
 
-`StorageColumn` carries `elementNullable?: true` for native scalar-list columns. SQL builder typing reads storage columns directly, so the domain marker alone is insufficient for the SQL authoring and query surfaces. The storage marker is valid only with `many === true` and is omitted for strict elements.
+`StorageColumn.many` uses the same `false | { elementNullable: boolean }` representation for native scalar-list columns. SQL builder typing reads storage columns directly, so the domain descriptor alone is insufficient for the SQL authoring and query surfaces.
 
 The marker does not enter `SqlColumnIR`. Schema IR describes physical columns and constraints; it does not need a second copy of a semantic fact whose physical consequence is already represented by the derived check set. Migration comparison therefore observes the generated `elementNotNull` check rather than comparing `elementNullable` directly.
 
-Value-object lists stored as JSON do not receive `StorageColumn.elementNullable`; their element semantics remain in `ContractField` and in the JSON/BSON structure derived from the value-object type.
+Value-object lists stored as JSON do not receive a scalar-list `StorageColumn.many` descriptor; their element semantics remain in `ContractField.many` and in the JSON/BSON structure derived from the value-object type.
 
 ### Semantic nullability and enforcement waivers remain distinct
 
-PostgreSQL derives an `elementNotNull` check only when a native array column has `many === true` and `elementNullable !== true`. The ordinary explicit-waiver filter runs after candidate derivation.
+PostgreSQL derives an `elementNotNull` check only when a native array column has `many !== false` and `many.elementNullable === false`. The ordinary explicit-waiver filter runs after candidate derivation.
 
 These two declarations therefore mean different things:
 
@@ -67,7 +67,7 @@ field.text().many({ elementsNullable: true })
 field.text().many().noCheck('elementNotNull')
 ```
 
-The first declares `ReadonlyArray<string | null>` and produces no element-non-null check because that check does not apply. The second still declares `ReadonlyArray<string>` but explicitly declines database enforcement of the declared invariant. It carries `noCheck: ['elementNotNull']` without `elementNullable`.
+The first declares `ReadonlyArray<string | null>` and produces no element-non-null check because that check does not apply. The second still declares `ReadonlyArray<string>` but explicitly declines database enforcement of the declared invariant. It carries `noCheck: ['elementNotNull']` while retaining `many: { elementNullable: false }`.
 
 No automatic `noCheck` is added for nullable elements, and type generation never infers nullable elements from `noCheck`. An explicit `elementNotNull` waiver on an element-nullable list is rejected because there is no applicable generated check to waive.
 
@@ -75,7 +75,7 @@ No automatic `noCheck` is added for nullable elements, and type generation never
 
 PostgreSQL omits the element-non-null check for nullable-element native arrays. Other generated checks remain independent. In particular, membership checks for enum arrays ignore `NULL` elements while continuing to reject non-null values outside the declared set.
 
-MongoDB derives array-item schemas from `ContractField.elementNullable`. Scalar items include `null` in `bsonType`; enum items also include `null` in their allowed values; value-object items admit either the object schema or `null`. Strict-element arrays retain their existing item schemas.
+MongoDB derives array-item schemas from `ContractField.many.elementNullable`. Scalar items include `null` in `bsonType`; enum items also include `null` in their allowed values; value-object items admit either the object schema or `null`. Strict-element arrays retain their existing item schemas.
 
 SQLite has no scalar-list capability, so it has no storage or enforcement behavior for this axis.
 
@@ -96,7 +96,7 @@ The parser AST distinguishes the `?` before `[]` from the trailing `?`, and the 
 - The contract and generated TypeScript describe all four list-nullability combinations exactly.
 - PSL and TypeScript authoring have equivalent expressive power.
 - SQL storage typing has the semantic marker it needs without misusing an enforcement waiver.
-- Existing strict-list contracts remain byte-stable because false markers are omitted.
+- List cardinality and element nullability form one nested descriptor, so invalid parallel states are not representable.
 - PostgreSQL and MongoDB derive their different enforcement representations from the same domain meaning.
 
 ### Costs

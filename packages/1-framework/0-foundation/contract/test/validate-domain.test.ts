@@ -23,6 +23,22 @@ function makeMinimalModel(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function withExplicitFieldCardinality(contract: DomainContractShape): DomainContractShape {
+  for (const namespace of Object.values(contract.domain.namespaces)) {
+    for (const model of Object.values(namespace.models)) {
+      for (const field of Object.values(model.fields) as Record<string, unknown>[]) {
+        if (field['many'] === undefined) field['many'] = false;
+      }
+    }
+    for (const valueObject of Object.values(namespace.valueObjects ?? {})) {
+      for (const field of Object.values(valueObject.fields) as Record<string, unknown>[]) {
+        if (field['many'] === undefined) field['many'] = false;
+      }
+    }
+  }
+  return contract;
+}
+
 function makeValidContract(overrides: Record<string, unknown> = {}): DomainContractShape {
   const defaultModels = {
     Item: makeMinimalModel({
@@ -42,7 +58,7 @@ function makeValidContract(overrides: Record<string, unknown> = {}): DomainContr
       ? (modelsOverride as Record<string, ReturnType<typeof makeMinimalModel>>)
       : {}),
   };
-  return {
+  return withExplicitFieldCardinality({
     roots: (rootsOverride as DomainContractShape['roots']) ?? { items: crossRef('Item') },
     domain:
       domainOverride !== undefined
@@ -60,7 +76,7 @@ function makeValidContract(overrides: Record<string, unknown> = {}): DomainContr
             ),
           }),
     ...rest,
-  } as DomainContractShape;
+  } as DomainContractShape);
 }
 
 describe('validateContractDomain()', () => {
@@ -763,7 +779,7 @@ describe('validateContractDomain()', () => {
   });
 
   describe('field modifier validation', () => {
-    it('rejects many + dict on the same field', () => {
+    it('rejects list many + dict on the same field', () => {
       const contract = makeValidContract({
         roots: {},
         models: {
@@ -772,7 +788,7 @@ describe('validateContractDomain()', () => {
               tags: {
                 nullable: false,
                 type: { kind: 'scalar', codecId: 'pg/text@1' },
-                many: true,
+                many: { elementNullable: false },
                 dict: true,
               },
             },
@@ -782,7 +798,7 @@ describe('validateContractDomain()', () => {
       expect(() => validateContractDomain(contract)).toThrow(/many.*dict|dict.*many/i);
     });
 
-    it('accepts elementNullable on a many field', () => {
+    it('accepts nullable elements inside the list descriptor', () => {
       const contract = makeValidContract({
         roots: {},
         models: {
@@ -791,8 +807,7 @@ describe('validateContractDomain()', () => {
               tags: {
                 nullable: false,
                 type: { kind: 'scalar', codecId: 'pg/text@1' },
-                many: true,
-                elementNullable: true,
+                many: { elementNullable: true },
               },
             },
           }),
@@ -801,7 +816,7 @@ describe('validateContractDomain()', () => {
       expect(() => validateContractDomain(contract)).not.toThrow();
     });
 
-    it('rejects elementNullable without many on the same field', () => {
+    it('rejects the old sibling elementNullable shape when type checking is bypassed', () => {
       const contract = makeValidContract({
         roots: {},
         models: {
@@ -810,18 +825,17 @@ describe('validateContractDomain()', () => {
               tags: {
                 nullable: false,
                 type: { kind: 'scalar', codecId: 'pg/text@1' },
+                many: false,
                 elementNullable: true,
               },
             },
           }),
         },
       });
-      expect(() => validateContractDomain(contract)).toThrow(
-        /cannot have "elementNullable" modifier without "many"/,
-      );
+      expect(() => validateContractDomain(contract)).toThrow(/sibling "elementNullable"/);
     });
 
-    it('rejects elementNullable without many on a value object field', () => {
+    it('rejects old many: true when type checking is bypassed', () => {
       const contract = makeValidContract({
         roots: {},
         models: {},
@@ -831,15 +845,13 @@ describe('validateContractDomain()', () => {
               tags: {
                 nullable: false,
                 type: { kind: 'scalar', codecId: 'pg/text@1' },
-                elementNullable: true,
+                many: true,
               },
             },
           },
         },
       });
-      expect(() => validateContractDomain(contract)).toThrow(
-        /Value object.*cannot have "elementNullable" modifier without "many"/,
-      );
+      expect(() => validateContractDomain(contract)).toThrow(/Value object.*invalid "many"/);
     });
   });
 });

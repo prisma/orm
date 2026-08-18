@@ -51,7 +51,7 @@ const RawFieldSchema = type({
   '+': 'reject',
   type: FieldTypeSchema,
   'nullable?': 'boolean',
-  'many?': 'boolean',
+  many: type('false').or({ elementNullable: 'boolean' }),
   'dict?': 'boolean',
   'valueSet?': DomainEnumRefSchema,
 });

@@ -6,6 +6,7 @@ import { createMongoContract } from './fixtures/create-mongo-contract';
 
 const roleField = {
   nullable: false,
+  many: false,
   type: { kind: 'scalar', codecId: 'mongo/string@1' },
   valueSet: {
     plane: 'domain',
@@ -17,7 +18,7 @@ const roleField = {
 
 const userModel: ContractModelBase = {
   fields: {
-    _id: { nullable: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
+    _id: { nullable: false, many: false, type: { kind: 'scalar', codecId: 'mongo/objectId@1' } },
     role: roleField,
   },
   relations: {},

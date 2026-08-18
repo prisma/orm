@@ -43,13 +43,13 @@ describe('Mongo emitter hook end-to-end (blog fixture)', () => {
     expect(types).toContain('readonly Comment:');
 
     expect(types).toContain(
-      'readonly _id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/objectId@1" } }',
+      'readonly _id: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/objectId@1" }; readonly many: false }',
     );
     expect(types).toContain(
-      'readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" } }',
+      'readonly name: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: false }',
     );
     expect(types).toContain(
-      'readonly bio: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" } }',
+      'readonly bio: { readonly nullable: true; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: false }',
     );
 
     expect(types).toContain(
@@ -84,10 +84,10 @@ describe('Mongo emitter hook end-to-end (blog fixture)', () => {
     const types = generateContractDts(blogContract, mongoEmission, [], testHashes);
 
     expect(types).toContain(
-      'readonly text: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" } }',
+      'readonly text: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/string@1" }; readonly many: false }',
     );
     expect(types).toContain(
-      'readonly createdAt: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/date@1" } }',
+      'readonly createdAt: { readonly nullable: false; readonly type: { readonly kind: "scalar"; readonly codecId: "mongo/date@1" }; readonly many: false }',
     );
     expect(types).toContain('readonly owner: "Post"');
   });

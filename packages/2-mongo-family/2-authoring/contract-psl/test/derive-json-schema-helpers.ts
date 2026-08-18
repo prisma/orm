@@ -35,13 +35,14 @@ export const mongoCodecLookup: CodecLookup = {
 };
 
 export function scalarField(codecId: string, nullable = false): ContractField {
-  return { type: { kind: 'scalar', codecId }, nullable };
+  return { type: { kind: 'scalar', codecId }, nullable, many: false };
 }
 
 export function enumField(codecId: string, enumName: string, nullable = false): ContractField {
   return {
     type: { kind: 'scalar', codecId },
     nullable,
+    many: false,
     valueSet: {
       plane: 'domain',
       entityKind: 'enum',
@@ -51,30 +52,15 @@ export function enumField(codecId: string, enumName: string, nullable = false): 
   };
 }
 
-export function arrayField(
-  codecId: string,
-  nullable = false,
-  elementNullable = false,
-): ContractField {
-  return {
-    type: { kind: 'scalar', codecId },
-    nullable,
-    many: true,
-    ...(elementNullable ? { elementNullable: true } : {}),
-  };
+export function arrayField(codecId: string, nullable = false, elementNullable = false): ContractField {
+  return { type: { kind: 'scalar', codecId }, nullable, many: { elementNullable } };
 }
 
-export function arrayEnumField(
-  codecId: string,
-  enumName: string,
-  nullable = false,
-  elementNullable = false,
-): ContractField {
+export function arrayEnumField(codecId: string, enumName: string, nullable = false, elementNullable = false): ContractField {
   return {
     type: { kind: 'scalar', codecId },
     nullable,
-    many: true,
-    ...(elementNullable ? { elementNullable: true } : {}),
+    many: { elementNullable },
     valueSet: {
       plane: 'domain',
       entityKind: 'enum',
@@ -85,18 +71,9 @@ export function arrayEnumField(
 }
 
 export function voField(name: string, nullable = false): ContractField {
-  return { type: { kind: 'valueObject', name }, nullable };
+  return { type: { kind: 'valueObject', name }, nullable, many: false };
 }
 
-export function voArrayField(
-  name: string,
-  nullable = false,
-  elementNullable = false,
-): ContractField {
-  return {
-    type: { kind: 'valueObject', name },
-    nullable,
-    many: true,
-    ...(elementNullable ? { elementNullable: true } : {}),
-  };
+export function voArrayField(name: string, nullable = false, elementNullable = false): ContractField {
+  return { type: { kind: 'valueObject', name }, nullable, many: { elementNullable } };
 }

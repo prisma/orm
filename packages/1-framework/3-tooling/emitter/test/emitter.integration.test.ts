@@ -38,8 +38,12 @@ describe('emitter integration', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
-              email: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
+              email: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -125,7 +129,7 @@ describe('emitter integration', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
             },
             relations: {},
           },
@@ -182,8 +186,12 @@ describe('emitter integration', () => {
               },
             },
             fields: {
-              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false },
-              email: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+              id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false, many: false },
+              email: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },
@@ -276,8 +284,13 @@ describe('emitter integration', () => {
                   namespaceId: '__unbound__',
                   entityName: 'Priority',
                 },
+                many: false,
               },
-              title: { type: { kind: 'scalar', codecId: 'pg/text@1' }, nullable: false },
+              title: {
+                type: { kind: 'scalar', codecId: 'pg/text@1' },
+                nullable: false,
+                many: false,
+              },
             },
             relations: {},
           },

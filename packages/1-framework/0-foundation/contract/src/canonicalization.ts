@@ -1,4 +1,5 @@
 import { isArrayEqual } from '@internal/utils/array-equal';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
 import { matchesPathPattern, type PathPattern } from './canonicalization-path-match';
@@ -55,6 +56,26 @@ const DOMAIN_MODEL_STORAGE_PATTERN = [
   'models',
   '*',
   'storage',
+] as const satisfies PathPattern;
+const DOMAIN_MODEL_FIELD_MANY_PATTERN = [
+  'domain',
+  'namespaces',
+  '*',
+  'models',
+  '*',
+  'fields',
+  '*',
+  'many',
+] as const satisfies PathPattern;
+const DOMAIN_VALUE_OBJECT_FIELD_MANY_PATTERN = [
+  'domain',
+  'namespaces',
+  '*',
+  'valueObjects',
+  '*',
+  'fields',
+  '*',
+  'many',
 ] as const satisfies PathPattern;
 const STORAGE_NAMESPACE_ENTRIES_PATTERN = [
   'storage',
@@ -146,6 +167,10 @@ function omitDefaults(
       const isModelStorage = matchesPathPattern(currentPath, DOMAIN_MODEL_STORAGE_PATTERN);
 
       const isNullableField = key === 'nullable';
+      const isManyElementNullable = key === 'elementNullable' && path.at(-1) === 'many';
+      const isContractFieldMany =
+        matchesPathPattern(currentPath, DOMAIN_MODEL_FIELD_MANY_PATTERN) ||
+        matchesPathPattern(currentPath, DOMAIN_VALUE_OBJECT_FIELD_MANY_PATTERN);
 
       const isFamilyPreserved = shouldPreserveEmpty?.(currentPath) ?? false;
 
@@ -164,6 +189,8 @@ function omitDefaults(
         !isModelRelations &&
         !isModelStorage &&
         !isNullableField &&
+        !isManyElementNullable &&
+        !isContractFieldMany &&
         !isFamilyPreserved
       ) {
         continue;
@@ -188,7 +215,9 @@ function sortObjectKeys(obj: unknown): unknown {
   const sorted: Record<string, unknown> = {};
   const keys = Object.keys(obj).sort();
   for (const key of keys) {
-    sorted[key] = sortObjectKeys((obj as Record<string, unknown>)[key]);
+    sorted[key] = sortObjectKeys(
+      blindCast<Record<string, unknown>, 'non-array object narrowed above'>(obj)[key],
+    );
   }
 
   return sorted;
@@ -266,14 +295,17 @@ export function canonicalizeContractToObject(
     ...ifDefined('defaultControlPolicy', serialized['defaultControlPolicy']),
     meta: serialized['meta'],
   };
-  const withDefaultsOmitted = omitDefaults(normalized, [], options.shouldPreserveEmpty) as Record<
-    string,
-    unknown
-  >;
+  const withDefaultsOmitted = blindCast<
+    Record<string, unknown>,
+    'canonicalization starts from a record and preserves its outer object shape'
+  >(omitDefaults(normalized, [], options.shouldPreserveEmpty));
   const withSortedStorage = options.sortStorage
     ? { ...withDefaultsOmitted, storage: options.sortStorage(withDefaultsOmitted['storage']) }
     : withDefaultsOmitted;
-  const withSortedKeys = sortObjectKeys(withSortedStorage) as Record<string, unknown>;
+  const withSortedKeys = blindCast<
+    Record<string, unknown>,
+    'sorting a record preserves its outer object shape'
+  >(sortObjectKeys(withSortedStorage));
   return orderTopLevel(withSortedKeys);
 }
 

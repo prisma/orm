@@ -101,14 +101,17 @@ type FieldToLeaf<F> = F extends {
   readonly nullable: infer N extends boolean;
 }
   ? { readonly codecId: C; readonly nullable: N }
-  : F extends { readonly many: true; readonly nullable: infer N extends boolean }
+  : F extends {
+        readonly many: { readonly elementNullable: boolean };
+        readonly nullable: infer N extends boolean;
+      }
     ? { readonly codecId: 'mongo/array@1'; readonly nullable: N }
     : DocField;
 
 /**
  * Translate a single contract field to its nested-shape form. Scalars
  * become `DocField` leaves; value-object fields become
- * `ObjectField<Sub>`; `many: true` stops at a leaf; anything else falls
+ * `ObjectField<Sub>`; list fields stop at a leaf; anything else falls
  * through to the opaque `DocField` base.
  *
  * Kept as a per-field helper (rather than a `Fields → NestedShape` helper
@@ -120,7 +123,7 @@ type FieldToLeaf<F> = F extends {
  * concrete instead of collapsing to `{ [x: string]: … }`.
  */
 type TranslateField<TContract extends MongoContract, F> = F extends {
-  readonly many: true;
+  readonly many: { readonly elementNullable: boolean };
 }
   ? FieldToLeaf<F>
   : F extends {

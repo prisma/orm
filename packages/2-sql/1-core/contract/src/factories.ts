@@ -1,6 +1,7 @@
 import { asNamespaceId, type ScalarFieldType } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { parseNaming } from '@internal/sql-schema-ir/naming';
+import { contractError } from './contract-errors';
 import {
   ForeignKey,
   type ForeignKeyOptions,
@@ -15,8 +16,8 @@ import {
 } from './types';
 
 type ColumnMultiplicityOptions =
-  | { readonly many: true; readonly elementNullable: true }
-  | { readonly many?: boolean; readonly elementNullable?: never };
+  | { readonly many: true; readonly elementNullable?: boolean }
+  | { readonly many?: false; readonly elementNullable?: never };
 
 export function col(
   nativeType: string,
@@ -24,21 +25,19 @@ export function col(
   nullable = false,
   opts?: ColumnMultiplicityOptions,
 ): StorageColumn {
-  if (opts?.elementNullable === true) {
-    return new StorageColumn({
-      nativeType,
-      codecId,
-      nullable,
-      many: opts.many,
-      elementNullable: true,
-    });
+  if (opts?.elementNullable !== undefined && opts.many !== true) {
+    throw contractError(
+      'CONTRACT.ARGUMENT_INVALID',
+      'StorageColumn elementNullable must be nested under many.',
+      { meta: { reason: 'elementNullable-without-many' } },
+    );
   }
 
   return new StorageColumn({
     nativeType,
     codecId,
     nullable,
-    ...(opts?.many !== undefined && { many: opts.many }),
+    many: opts?.many === true ? { elementNullable: opts.elementNullable ?? false } : false,
   });
 }
 
@@ -112,19 +111,22 @@ export function model(
   namespaceId: string = UNBOUND_NAMESPACE_ID,
 ): {
   storage: SqlModelStorage;
-  fields: Record<string, { readonly nullable: boolean; readonly type: ScalarFieldType }>;
+  fields: Record<
+    string,
+    { readonly nullable: boolean; readonly type: ScalarFieldType; readonly many: false }
+  >;
   relations: Record<string, unknown>;
 } {
   const storage: SqlModelStorage = { table: tableName, namespaceId, fields };
-  const domainFields = Object.fromEntries(
-    Object.entries(fields).map(([name, field]) => [
-      name,
-      {
-        nullable: field.nullable ?? false,
-        type: { kind: 'scalar' as const, codecId: field.codecId ?? 'core/unknown@1' },
-      },
-    ]),
-  ) as Record<string, { nullable: boolean; type: ScalarFieldType }>;
+  const domainFields: Record<string, { nullable: boolean; type: ScalarFieldType; many: false }> =
+    {};
+  for (const [name, field] of Object.entries(fields)) {
+    domainFields[name] = {
+      nullable: field.nullable ?? false,
+      type: { kind: 'scalar', codecId: field.codecId ?? 'core/unknown@1' },
+      many: false,
+    };
+  }
   return {
     storage,
     fields: domainFields,

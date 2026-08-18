@@ -41,8 +41,7 @@ function declaredArrayElementChecks(): CheckConstraint[] {
     postgresRenderCheckExpressions({
       tableName: 'ArrayTest',
       columnName,
-      many: true,
-      elementNullable: false,
+      many: { elementNullable: false },
       memberValues: undefined,
     }).map(
       (candidate) =>
@@ -73,14 +72,29 @@ function buildArrayContract(): Contract<SqlStorage> {
               ArrayTest: {
                 columns: {
                   id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-                  tags: { nativeType: 'text', codecId: 'pg/text@1', nullable: false, many: true },
-                  labels: { nativeType: 'text', codecId: 'pg/text@1', nullable: true, many: true },
-                  scores: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false, many: true },
+                  tags: {
+                    nativeType: 'text',
+                    codecId: 'pg/text@1',
+                    nullable: false,
+                    many: { elementNullable: false },
+                  },
+                  labels: {
+                    nativeType: 'text',
+                    codecId: 'pg/text@1',
+                    nullable: true,
+                    many: { elementNullable: false },
+                  },
+                  scores: {
+                    nativeType: 'int4',
+                    codecId: 'pg/int4@1',
+                    nullable: false,
+                    many: { elementNullable: false },
+                  },
                   tagsWithDefault: {
                     nativeType: 'text',
                     codecId: 'pg/text@1',
                     nullable: false,
-                    many: true,
+                    many: { elementNullable: false },
                     default: { kind: 'literal' as const, value: [] },
                   },
                 },

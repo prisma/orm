@@ -14,9 +14,7 @@ import { SqlNode } from './sql-node';
  * other, not both); the constructor preserves whichever caller-side
  * choice the input encodes.
  */
-type StorageColumnMultiplicity =
-  | { readonly many: true; readonly elementNullable: true }
-  | { readonly many?: boolean; readonly elementNullable?: never };
+export type StorageColumnMultiplicity = false | { readonly elementNullable: boolean };
 
 export type StorageColumnInput = {
   readonly nativeType: string;
@@ -29,7 +27,8 @@ export type StorageColumnInput = {
   readonly valueSet?: ValueSetRef;
   /** Generated-check kinds the author declined for this column. Presence means opted out; never an empty array. */
   readonly noCheck?: readonly CheckKind[];
-} & StorageColumnMultiplicity;
+  readonly many?: StorageColumnMultiplicity;
+};
 
 /**
  * SQL Contract IR node for a single column entry in `StorageTable.columns`.
@@ -48,8 +47,7 @@ export class StorageColumn extends SqlNode {
   readonly nativeType: string;
   readonly codecId: string;
   readonly nullable: boolean;
-  declare readonly many?: boolean;
-  declare readonly elementNullable?: true;
+  readonly many: StorageColumnMultiplicity;
   declare readonly typeParams?: Record<string, unknown>;
   declare readonly typeRef?: string;
   declare readonly default?: ColumnDefault;
@@ -60,21 +58,17 @@ export class StorageColumn extends SqlNode {
 
   constructor(input: StorageColumnInput) {
     super();
-    if (
-      input.elementNullable !== undefined &&
-      (input.elementNullable !== true || input.many !== true)
-    ) {
+    if (Object.hasOwn(input, 'elementNullable')) {
       throw contractError(
         'CONTRACT.ARGUMENT_INVALID',
-        'StorageColumn elementNullable requires many:true.',
-        { meta: { reason: 'elementNullable-without-many' } },
+        'StorageColumn elementNullable must be nested under many.',
+        { meta: { reason: 'sibling-elementNullable' } },
       );
     }
     this.nativeType = input.nativeType;
     this.codecId = input.codecId;
     this.nullable = input.nullable;
-    if (input.many !== undefined) this.many = input.many;
-    if (input.elementNullable !== undefined) this.elementNullable = input.elementNullable;
+    this.many = input.many ?? false;
     if (input.noCheck !== undefined) this.noCheck = input.noCheck;
     if (input.typeParams !== undefined) this.typeParams = input.typeParams;
     if (input.typeRef !== undefined) this.typeRef = input.typeRef;

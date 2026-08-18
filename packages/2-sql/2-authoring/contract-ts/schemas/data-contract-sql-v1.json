@@ -70,17 +70,27 @@
                       "additionalProperties": {
                         "type": "object",
                         "properties": {
+                          "many": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "elementNullable": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": ["elementNullable"]
+                              },
+                              {
+                                "const": false
+                              }
+                            ]
+                          },
                           "nullable": {
                             "type": "boolean"
                           },
                           "type": {},
                           "dict": {
-                            "const": true
-                          },
-                          "many": {
-                            "const": true
-                          },
-                          "elementNullable": {
                             "const": true
                           },
                           "valueSet": {
@@ -105,7 +115,7 @@
                             "required": ["entityKind", "entityName", "namespaceId", "plane"]
                           }
                         },
-                        "required": ["nullable", "type"],
+                        "required": ["many", "nullable", "type"],
                         "additionalProperties": false
                       }
                     },
@@ -471,11 +481,21 @@
                                   }
                                 ]
                               },
-                              "elementNullable": {
-                                "const": true
-                              },
                               "many": {
-                                "type": "boolean"
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "elementNullable": {
+                                        "type": "boolean"
+                                      }
+                                    },
+                                    "required": ["elementNullable"]
+                                  },
+                                  {
+                                    "const": false
+                                  }
+                                ]
                               },
                               "noCheck": {
                                 "type": "array",

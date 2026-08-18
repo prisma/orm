@@ -12,22 +12,27 @@ type DecodeFixtureModels = {
       readonly _id: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly name: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly email: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly createdAt: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/date@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly embeddings: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/vector@1' };
         readonly nullable: false;
+        readonly many: false;
       };
     };
     readonly relations: Record<string, never>;
@@ -38,14 +43,17 @@ type DecodeFixtureModels = {
       readonly _id: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly title: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         readonly nullable: false;
+        readonly many: false;
       };
       readonly userId: {
         readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
         readonly nullable: false;
+        readonly many: false;
       };
     };
     readonly relations: {
@@ -153,22 +161,27 @@ export const decodeFixtureContractJson = {
               _id: {
                 type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' },
                 nullable: false,
+                many: false,
               },
               name: {
                 type: { kind: 'scalar' as const, codecId: 'mongo/string@1' },
                 nullable: false,
+                many: false,
               },
               email: {
                 type: { kind: 'scalar' as const, codecId: 'mongo/string@1' },
                 nullable: false,
+                many: false,
               },
               createdAt: {
                 type: { kind: 'scalar' as const, codecId: 'mongo/date@1' },
                 nullable: false,
+                many: false,
               },
               embeddings: {
                 type: { kind: 'scalar' as const, codecId: 'mongo/vector@1' },
                 nullable: false,
+                many: false,
               },
             },
           },
@@ -186,14 +199,17 @@ export const decodeFixtureContractJson = {
               _id: {
                 type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' },
                 nullable: false,
+                many: false,
               },
               title: {
                 type: { kind: 'scalar' as const, codecId: 'mongo/string@1' },
                 nullable: false,
+                many: false,
               },
               userId: {
                 type: { kind: 'scalar' as const, codecId: 'mongo/objectId@1' },
                 nullable: false,
+                many: false,
               },
             },
           },

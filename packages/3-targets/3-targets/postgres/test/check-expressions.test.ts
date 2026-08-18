@@ -5,7 +5,6 @@ const base = {
   tableName: 'User',
   columnName: 'role',
   many: false,
-  elementNullable: false,
   memberValues: undefined,
 };
 
@@ -55,7 +54,7 @@ describe('postgresRenderCheckExpressions', () => {
       postgresRenderCheckExpressions({
         ...base,
         columnName: 'roles',
-        many: true,
+        many: { elementNullable: false },
         memberValues: ['user', 'admin'],
       }),
     ).toEqual([
@@ -73,7 +72,13 @@ describe('postgresRenderCheckExpressions', () => {
   });
 
   it('renders element-non-null only for a list column with no member set', () => {
-    expect(postgresRenderCheckExpressions({ ...base, columnName: 'tags', many: true })).toEqual([
+    expect(
+      postgresRenderCheckExpressions({
+        ...base,
+        columnName: 'tags',
+        many: { elementNullable: false },
+      }),
+    ).toEqual([
       {
         kind: 'elementNotNull',
         columnName: 'tags',
@@ -87,8 +92,7 @@ describe('postgresRenderCheckExpressions', () => {
       postgresRenderCheckExpressions({
         ...base,
         columnName: 'roles',
-        many: true,
-        elementNullable: true,
+        many: { elementNullable: true },
         memberValues: ['user', 'admin'],
       }),
     ).toEqual([
@@ -115,7 +119,7 @@ describe('postgresRenderCheckExpressions', () => {
       postgresRenderCheckExpressions({
         ...base,
         columnName: 'roles',
-        many: true,
+        many: { elementNullable: false },
         memberValues: [],
       }),
     ).toThrow(/empty member set/);
@@ -127,7 +131,6 @@ describe('postgresRenderCheckExpressions', () => {
         tableName: 'Order',
         columnName: 'sta"tus',
         many: false,
-        elementNullable: false,
         memberValues: ["o'brien"],
       }),
     ).toEqual([

@@ -9,8 +9,47 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
  */
 type EmitterTestStorage = Contract['storage'] & { readonly types?: Record<string, unknown> };
 
+function normalizeTables(tables: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(tables).map(([tableName, table]) => {
+      if (table === null || typeof table !== 'object' || Array.isArray(table)) {
+        return [tableName, table];
+      }
+      const tableRecord = table as Record<string, unknown>;
+      const columns = tableRecord['columns'];
+      if (columns === null || typeof columns !== 'object' || Array.isArray(columns)) {
+        return [tableName, table];
+      }
+      return [
+        tableName,
+        {
+          ...tableRecord,
+          columns: Object.fromEntries(
+            Object.entries(columns as Record<string, unknown>).map(([columnName, column]) => {
+              if (column === null || typeof column !== 'object' || Array.isArray(column)) {
+                return [columnName, column];
+              }
+              const columnRecord = column as Record<string, unknown>;
+              return [columnName, { ...columnRecord, many: columnRecord['many'] ?? false }];
+            }),
+          ),
+        },
+      ];
+    }),
+  );
+}
+
 function makeRawNamespace(id: string, entries: Record<string, unknown>): StorageNamespace {
-  return { id, kind: 'test-sql-namespace', entries } as unknown as StorageNamespace;
+  const table = entries['table'];
+  const normalizedEntries =
+    table !== null && typeof table === 'object' && !Array.isArray(table)
+      ? { ...entries, table: normalizeTables(table as Record<string, unknown>) }
+      : entries;
+  return {
+    id,
+    kind: 'test-sql-namespace',
+    entries: normalizedEntries,
+  } as unknown as StorageNamespace;
 }
 
 export function namespacedSqlStorage(parts: {
@@ -52,6 +91,10 @@ export function normalizeRootSqlStorage(
           if ('entries' in ns) {
             const nsId = typeof ns['id'] === 'string' ? ns['id'] : id;
             const kind = typeof ns['kind'] === 'string' ? ns['kind'] : 'test-sql-namespace';
+            const entries = ns['entries'];
+            if (entries !== null && typeof entries === 'object' && !Array.isArray(entries)) {
+              return [id, { ...makeRawNamespace(nsId, entries as Record<string, unknown>), kind }];
+            }
             return [id, { ...ns, id: nsId, kind }];
           }
           if ('tables' in ns) {

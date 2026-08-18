@@ -24,6 +24,7 @@ describe('contract types', () => {
     const field: ContractField = {
       nullable: true,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
+      many: false,
     };
     expect(field.nullable).toBe(true);
     expect(field.type.kind).toBe('scalar');
@@ -54,32 +55,32 @@ describe('contract types', () => {
     expect(scalar.typeParams).toBeDefined();
   });
 
-  it('ContractField supports many modifier', () => {
+  it('ContractField explicitly represents a non-list', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
-      many: true,
+      many: false,
     };
-    expect(field.many).toBe(true);
+    expect(field.many).toBe(false);
   });
 
   it('ContractField supports dict modifier', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'valueObject', name: 'Address' },
+      many: false,
       dict: true,
     };
     expect(field.dict).toBe(true);
   });
 
-  it('ContractField supports elementNullable modifier on a many field', () => {
+  it('ContractField carries element nullability inside the list descriptor', () => {
     const field: ContractField = {
       nullable: false,
       type: { kind: 'scalar', codecId: 'pg/text@1' },
-      many: true,
-      elementNullable: true,
+      many: { elementNullable: true },
     };
-    expect(field.elementNullable).toBe(true);
+    expect(field.many).toEqual({ elementNullable: true });
   });
 
   it('ValueObjectFieldType extends ContractFieldType', () => {
@@ -135,7 +136,7 @@ describe('contract types', () => {
   it('ContractModel supports polymorphism fields', () => {
     const model: ContractModel = {
       fields: {
-        type: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+        type: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' }, many: false },
       },
       relations: {},
       storage: {},
@@ -159,7 +160,11 @@ describe('contract types', () => {
   it('ContractModel supports owner for component membership', () => {
     const model: ContractModel = {
       fields: {
-        street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+        street: {
+          nullable: false,
+          type: { kind: 'scalar', codecId: 'pg/text@1' },
+          many: false,
+        },
       },
       relations: {},
       storage: {},
@@ -171,9 +176,21 @@ describe('contract types', () => {
   it('ContractValueObject holds fields without identity', () => {
     const vo: ContractValueObject = {
       fields: {
-        street: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-        city: { nullable: false, type: { kind: 'scalar', codecId: 'pg/text@1' } },
-        zip: { nullable: true, type: { kind: 'scalar', codecId: 'pg/text@1' } },
+        street: {
+          nullable: false,
+          type: { kind: 'scalar', codecId: 'pg/text@1' },
+          many: false,
+        },
+        city: {
+          nullable: false,
+          type: { kind: 'scalar', codecId: 'pg/text@1' },
+          many: false,
+        },
+        zip: {
+          nullable: true,
+          type: { kind: 'scalar', codecId: 'pg/text@1' },
+          many: false,
+        },
       },
     };
     expect(Object.keys(vo.fields)).toEqual(['street', 'city', 'zip']);
@@ -182,8 +199,16 @@ describe('contract types', () => {
   it('ContractValueObject field can reference another value object', () => {
     const vo: ContractValueObject = {
       fields: {
-        home: { nullable: false, type: { kind: 'valueObject', name: 'Address' } },
-        work: { nullable: true, type: { kind: 'valueObject', name: 'Address' } },
+        home: {
+          nullable: false,
+          type: { kind: 'valueObject', name: 'Address' },
+          many: false,
+        },
+        work: {
+          nullable: true,
+          type: { kind: 'valueObject', name: 'Address' },
+          many: false,
+        },
       },
     };
     expect(vo.fields['home']!.type.kind).toBe('valueObject');

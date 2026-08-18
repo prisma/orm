@@ -4,7 +4,7 @@
 
 ## Delivered
 
-- PSL element-optional lowering to `ContractField.elementNullable: true` for Mongo scalar and value-object lists.
+- PSL element-optional lowering to `ContractField.many: { elementNullable: true }` for Mongo scalar and value-object lists.
 - Literal-only `.many({ elementsNullable: true | false })` Mongo authoring with an independent builder type-state axis.
 - Inferred and emitted input/output nullable-element array types.
 - BSON validator `items` nullability for all four list/element cells.
@@ -13,7 +13,7 @@
 - Separate wrapping paths for mutation field values and object-filter equality operands. Callback `$set` list replacement wraps each non-null element; scalar `$push` wraps one element; `$unset` remains untouched.
 - Nullable value-object list writes preserve null elements and recurse only into non-null objects, wrapping nested scalar leaves.
 - Object-filter list equality retains exact array semantics with per-element codec refs, while raw operator expressions retain their operator-owned operand shapes and avoid mutation-style rewrapping.
-- Full PSL enum integration uses the production Mongo family entity and block contributions, covering `Role?[]` and `Role?[]?` through parser/symbol table, Mongo interpreter, ContractField lowering, and BSON validator derivation. Both fields carry `many: true` and `elementNullable: true`; only `Role?[]?` carries `nullable: true`; validator items are exactly `{ bsonType: ['null', 'string'], enum: ['user', 'admin', null] }`.
+- Full PSL enum integration uses the production Mongo family entity and block contributions, covering `Role?[]` and `Role?[]?` through parser/symbol table, Mongo interpreter, ContractField lowering, and BSON validator derivation. Both fields carry `many: { elementNullable: true }`; only `Role?[]?` carries `nullable: true`; validator items are exactly `{ bsonType: ['null', 'string'], enum: ['user', 'admin', null] }`.
 - Contract-derived Mongo result shapes map whole-list nullability and element nullability independently. Query-builder regression coverage proves strict and nullable element leaf shapes, and the ORM consumes the same shared adapter.
 - Nullable value-object write command ASTs cover insert, object update, callback `$set`, and top-level nullable value-object callback `set(null)`. `[VO, null, VO]` preserves the middle null while each non-null object's scalar leaves carry `mongo/string@1` refs.
 - Raw `$in` ownership is explicit: the ORM preserves the original pre-wrapped operand array and ref identities, and runtime resolution transforms `admin`/`editor` once each, preserves the array and middle null, and records exactly two codec calls.

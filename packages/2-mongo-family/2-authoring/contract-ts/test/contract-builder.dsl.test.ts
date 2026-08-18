@@ -41,10 +41,10 @@ describe('mongo contract builder', () => {
       models: { Lists },
     });
     expect(domainModelsAtDefaultNamespace(contract.domain)['Lists']?.fields).toMatchObject({
-      strict: { nullable: false, many: true },
-      explicitlyStrict: { nullable: false, many: true },
-      nullableElements: { nullable: false, many: true, elementNullable: true },
-      fullyNullable: { nullable: true, many: true, elementNullable: true },
+      strict: { nullable: false, many: { elementNullable: false } },
+      explicitlyStrict: { nullable: false, many: { elementNullable: false } },
+      nullableElements: { nullable: false, many: { elementNullable: true } },
+      fullyNullable: { nullable: true, many: { elementNullable: true } },
     });
   });
 
@@ -95,9 +95,21 @@ describe('mongo contract builder', () => {
         collection: 'posts',
       },
       fields: {
-        _id: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-        authorId: { type: { kind: 'scalar', codecId: 'mongo/objectId@1' }, nullable: false },
-        title: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
+        _id: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+        authorId: {
+          type: { kind: 'scalar', codecId: 'mongo/objectId@1' },
+          nullable: false,
+          many: false,
+        },
+        title: {
+          type: { kind: 'scalar', codecId: 'mongo/string@1' },
+          nullable: false,
+          many: false,
+        },
       },
       relations: {
         author: {
@@ -297,8 +309,12 @@ describe('mongo contract builder', () => {
     expect(domainValueObjectsAtDefaultNamespace(contract.domain)).toEqual({
       Address: {
         fields: {
-          street: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: false },
-          zip: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: true },
+          street: {
+            type: { kind: 'scalar', codecId: 'mongo/string@1' },
+            nullable: false,
+            many: false,
+          },
+          zip: { type: { kind: 'scalar', codecId: 'mongo/string@1' }, nullable: true, many: false },
         },
       },
     });
@@ -373,6 +389,7 @@ describe('mongo contract builder', () => {
     expect(domainModelsAtDefaultNamespace(contract.domain)['Metric']?.fields['value']).toEqual({
       type: { kind: 'scalar', codecId: 'mongo/double@1' },
       nullable: false,
+      many: false,
     });
   });
 

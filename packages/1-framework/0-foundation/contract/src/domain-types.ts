@@ -23,8 +23,7 @@ export type ContractFieldType = ScalarFieldType | ValueObjectFieldType | UnionFi
 export type ContractField = {
   readonly nullable: boolean;
   readonly type: ContractFieldType;
-  readonly many?: true;
-  readonly elementNullable?: true;
+  readonly many: false | { readonly elementNullable: boolean };
   readonly dict?: true;
   readonly valueSet?: ValueSetRef;
 };

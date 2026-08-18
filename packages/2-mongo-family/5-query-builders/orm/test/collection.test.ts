@@ -41,8 +41,7 @@ function contractWithNullableValueObjectList(): Contract {
   };
   const homeAddress = json.domain.namespaces['__unbound__']!.models['User']!.fields['homeAddress']!;
   homeAddress['nullable'] = false;
-  homeAddress['many'] = true;
-  homeAddress['elementNullable'] = true;
+  homeAddress['many'] = { elementNullable: true };
   return json as unknown as Contract;
 }
 

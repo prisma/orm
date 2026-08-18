@@ -184,8 +184,7 @@ model Post {
     const ns = (pslResult.value.storage as unknown as SqlStorage).namespaces['public'];
     const postTable = ns !== undefined ? ns.entries.table?.['post'] : undefined;
     expect(postTable?.columns['roles']).toMatchObject({
-      many: true,
-      elementNullable: true,
+      many: { elementNullable: true },
       noCheck: ['membership'],
     });
     expect(postTable?.checks ?? []).toEqual([]);

@@ -48,6 +48,26 @@ function expectDiagnosticForSchema(
 }
 
 describe('interpretPslDocumentToSqlContract list-column defaults', () => {
+  it.each([
+    ['String?[]', '[null, "alpha", null, "beta", null]', [null, 'alpha', null, 'beta', null]],
+    ['String?[]', '[null, null]', [null, null]],
+    ['String?[]?', '["alpha", null]', ['alpha', null]],
+    ['Int?[]', '[1, null, 2]', [1, null, 2]],
+  ])('lowers %s defaults %s through the typed literal pipeline', (type, literal, value) => {
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...symbolTableInputFromParseArgs({ schema: `model Post {\n id Int @id\n tags ${type} @default(${literal})\n}`, sourceId: 'schema.prisma' }),
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.storage).toMatchObject({ namespaces: { public: { entries: { table: { Post: { columns: { tags: { many: { elementNullable: true }, default: { kind: 'literal', value } } } } } } } } });
+  });
+
+  it('rejects null elements on strict lists despite a nullable container', () => {
+    expectDiagnosticForSchema('model Post {\n id Int @id\n tags String[]? @default(["alpha", null])\n}', { code: 'PSL_INVALID_DEFAULT_APPLICABILITY' });
+  });
+
   it('refuses autoincrement() on a list field, and only that storage function', () => {
     expectDiagnosticForSchema(
       'model Post {\n  id Int @id\n  tags Int[] @default(autoincrement())\n}\n',

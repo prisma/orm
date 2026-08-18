@@ -19,8 +19,7 @@ export type PostgresCheckKind = CheckKind;
 export interface PostgresCheckExpressionInput {
   readonly tableName: string;
   readonly columnName: string;
-  readonly many: boolean;
-  readonly elementNullable?: boolean;
+  readonly many: boolean | { readonly elementNullable: boolean };
   readonly memberValues: readonly (string | number)[] | undefined;
 }
 
@@ -56,6 +55,10 @@ export function postgresRenderCheckExpressions(
 ): readonly PostgresCheckExpressionCandidate[] {
   const candidates: PostgresCheckExpressionCandidate[] = [];
   const column = quoteIdentifier(input.columnName);
+  const isMany = input.many !== false;
+  const elementNullable =
+    (typeof input.many === 'object' && input.many.elementNullable) ||
+    ('elementNullable' in input && input.elementNullable === true);
 
   if (input.memberValues !== undefined) {
     invariant(
@@ -78,13 +81,13 @@ export function postgresRenderCheckExpressions(
     candidates.push({
       kind: 'membership',
       columnName: input.columnName,
-      expression: input.many
+      expression: isMany
         ? `array_remove(${column}::${arrayType}, NULL) <@ ARRAY[${members}]::${arrayType}`
         : `${column} IN (${members})`,
     });
   }
 
-  if (input.many && input.elementNullable !== true) {
+  if (isMany && !elementNullable) {
     candidates.push({
       kind: 'elementNotNull',
       columnName: input.columnName,
