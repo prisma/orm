@@ -18,7 +18,7 @@ describe('ports/prisma/functional/create-default-date', () => {
     () =>
       withPostgresPort<Contract>({ contractJson }, async ({ db }) => {
         const visit = await db.public.Visit.create({});
-        expect(visit.visitTime).toBeInstanceOf(Date);
+        expect(visit.visitTime).toBeInstanceOf(Temporal.Instant);
       }),
     timeouts.spinUpPpgDev,
   );
