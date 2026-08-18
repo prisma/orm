@@ -26,6 +26,7 @@ This directory contains the primary documentation for the repository.
 - [Reference docs](./reference/) — conventions and patterns used across the codebase
 - [Codec authoring guide](./reference/codec-authoring-guide.md) — class-based codecs (`CodecImpl`, `CodecDescriptorImpl`) and column helpers
 - [Integer representation types](./reference/integer-representation-types.md) — choosing `BigInt`, `BigIntNumber`, or `UnboundedInt` by target, storage, application value, and aggregate behavior
+- [PostgreSQL temporal types](./reference/postgres-temporal-types.md) — choosing a `Temporal` or a raw-string representation for `date`, `timestamp`, `timestamptz`, and `time`, and what the Temporal global is required for
 - [Aggregate descriptor guide](./reference/aggregate-descriptor-guide.md) — how a target or extension declares aggregate operations and their result codecs (`SqlAggregateDescriptor` on `types.aggregateDescriptors`)
 - [Mongo Pipeline Builder](./reference/Mongo%20Pipeline%20Builder.md) — typed builder for MongoDB aggregation pipelines, reads, writes, and find-and-modify
 - [`migration graph --tree` rendering](./reference/migration-graph-rendering.md) — condensed annotated-tree rendering for offline migration topology
