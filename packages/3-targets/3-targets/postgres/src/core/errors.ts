@@ -89,6 +89,26 @@ export function errorTemporalUnavailable(codecId: string, operation: string): St
 }
 
 /**
+ * A mutation default generator that produces a `Temporal.*` value was invoked in a runtime with no
+ * `Temporal` implementation.
+ *
+ * The same code as {@link errorTemporalUnavailable} and the same lazy timing, but a generator is
+ * not a codec: it is reached because a column carries `temporal.createdAt()` or
+ * `temporal.updatedAt()`, so the fix names the `*String` presets rather than a `*String` type.
+ */
+export function errorTemporalUnavailableForDefault(generatorId: string): StructuredError {
+  return postgresError(
+    'RUNTIME.TEMPORAL_UNAVAILABLE',
+    `Mutation default generator '${generatorId}' cannot produce a value because this runtime has no global Temporal implementation.`,
+    {
+      why: 'The generator answers a Temporal-backed column, so the value it produces is a Temporal.Instant, which this runtime cannot construct.',
+      fix: "Run on a runtime with Temporal available, install a Temporal polyfill before creating the client, or author the column with `temporal.createdAtString()` / `temporal.updatedAtString()` to store PostgreSQL's own text instead.",
+      meta: { generatorId },
+    },
+  );
+}
+
+/**
  * A value crossed the boundary of what a `Temporal.*` type can represent.
  *
  * Both directions raise it: PostgreSQL text that Temporal cannot parse (`infinity`, a `DateStyle`

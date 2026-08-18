@@ -11,6 +11,7 @@ import type {
 import { builtinGeneratorRegistryMetadata } from '@internal/ids';
 import type { FuncCallSig } from '@internal/psl-parser';
 import { int, num, oneOf, optional, str } from '@internal/psl-parser';
+import { instantNowControlDescriptor } from '@internal/target-postgres/control';
 
 function invalidArgumentDiagnostic(input: {
   readonly context: DefaultFunctionLoweringContext;
@@ -338,5 +339,6 @@ export function createPostgresMutationDefaultGeneratorDescriptors(): readonly Mu
       }),
     ),
     timestampNowControlDescriptor(),
+    instantNowControlDescriptor(),
   ];
 }

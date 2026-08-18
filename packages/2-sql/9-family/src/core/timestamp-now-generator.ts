@@ -38,19 +38,33 @@ export function timestampNowControlDescriptor(): MutationDefaultGeneratorDescrip
 /**
  * Builds the canonical `temporal.{createdAt,updatedAt}` field-preset pair
  * for a SQL target. `createdAt` lowers to a `now()` storage default;
- * `updatedAt` lowers to the `timestampNow` execution generator on both
- * `onCreate` and `onUpdate` (RD: "last modified time", non-null). Targets
- * supply the codec/native-type pair that matches their timestamp column;
- * everything else is shared so PSL `temporal.updatedAt()` and TS
+ * `updatedAt` lowers to an execution generator on both `onCreate` and
+ * `onUpdate` (RD: "last modified time", non-null). Targets supply the
+ * codec/native-type pair that matches their timestamp column; everything
+ * else is shared so PSL `temporal.updatedAt()` and TS
  * `field.temporal.updatedAt()` lower to byte-identical contracts across
  * targets by construction.
+ *
+ * `generatorId` selects which clock answers the phases, defaulting to
+ * {@link TIMESTAMP_NOW_GENERATOR_ID}. A generated default is bound through the
+ * column's codec like any other parameter, so the value a generator produces
+ * has to be one that codec accepts: a target whose column carries a rich
+ * application value names its own generator here rather than binding this
+ * one's. The id is the only thing that varies — a caller cannot reach in and
+ * change a phase, the storage default, or the shape either preset lowers to.
  */
 /* @__NO_SIDE_EFFECTS__ */
 export function temporalAuthoringPresets<
   const CodecId extends string,
   const NativeType extends string,
->(input: { readonly codecId: CodecId; readonly nativeType: NativeType }) {
+  const GeneratorId extends string = typeof TIMESTAMP_NOW_GENERATOR_ID,
+>(input: {
+  readonly codecId: CodecId;
+  readonly nativeType: NativeType;
+  readonly generatorId?: GeneratorId;
+}) {
   const { codecId, nativeType } = input;
+  const generatorId = input.generatorId ?? TIMESTAMP_NOW_GENERATOR_ID;
   return {
     createdAt: {
       kind: 'fieldPreset',
@@ -66,8 +80,8 @@ export function temporalAuthoringPresets<
         codecId,
         nativeType,
         executionDefaults: {
-          onCreate: { kind: 'generator', id: TIMESTAMP_NOW_GENERATOR_ID },
-          onUpdate: { kind: 'generator', id: TIMESTAMP_NOW_GENERATOR_ID },
+          onCreate: { kind: 'generator', id: generatorId },
+          onUpdate: { kind: 'generator', id: generatorId },
         },
       },
     },
@@ -79,10 +93,13 @@ export function temporalAuthoringPresets<
  * which representation they select: `createdAtString` / `updatedAtString` beside `createdAt` /
  * `updatedAt`.
  *
- * Delegates rather than restating, so the two pairs cannot drift in what they lower to. Only the
- * key names and the caller's codec differ — the storage default, the execution generator and both
- * phases are the shared ones, which is what keeps a target's two representations byte-identical in
- * everything except the codec they name.
+ * Delegates rather than restating, so the two pairs cannot drift in the shape they lower to: the
+ * storage default, both phases and the precision handling are literally the same objects.
+ *
+ * The clock is the one thing that legitimately differs. A `*String` column takes text, so it uses
+ * the shared {@link TIMESTAMP_NOW_GENERATOR_ID} — this factory takes no `generatorId` because a
+ * string codec has no reason to want another one. A Temporal-backed sibling passes its own id to
+ * {@link temporalAuthoringPresets} directly.
  */
 /* @__NO_SIDE_EFFECTS__ */
 export function temporalStringAuthoringPresets<
@@ -119,15 +136,17 @@ const TEMPORAL_ON_UPDATE_ARG = {
 } as const;
 
 /**
- * Selects the `timestampNow` generator descriptor for the preset's `now`
- * token. The token is preset vocabulary; the generator id never appears in a
- * user's spelling (ADR 169 — `timestampNow` is preset-only).
+ * Selects a generator descriptor for the preset's `now` token. The token is preset vocabulary; the
+ * generator id never appears in a user's spelling (ADR 169 — these generators are preset-only).
  */
-function temporalPhaseTemplate<const Index extends number>(index: Index) {
+function temporalPhaseTemplate<const Index extends number, const GeneratorId extends string>(
+  index: Index,
+  generatorId: GeneratorId,
+) {
   return {
     kind: 'select',
     index,
-    cases: { now: { kind: 'generator', id: TIMESTAMP_NOW_GENERATOR_ID } },
+    cases: { now: { kind: 'generator', id: generatorId } },
   } as const;
 }
 
@@ -139,12 +158,21 @@ function temporalPhaseTemplate<const Index extends number>(index: Index) {
  * All three arguments are optional: omitting `precision` omits `typeParams`
  * entirely, and omitting a phase omits that phase (both omitted omits
  * `executionDefaults`).
+ *
+ * `generatorId` answers the `now` token, defaulting to {@link TIMESTAMP_NOW_GENERATOR_ID}; see
+ * {@link temporalAuthoringPresets} for why a target with a rich application value names its own.
  */
 /* @__NO_SIDE_EFFECTS__ */
 export function temporalCodecPresetWithPrecision<
   const CodecId extends string,
   const NativeType extends string,
->(input: { readonly codecId: CodecId; readonly nativeType: NativeType }) {
+  const GeneratorId extends string = typeof TIMESTAMP_NOW_GENERATOR_ID,
+>(input: {
+  readonly codecId: CodecId;
+  readonly nativeType: NativeType;
+  readonly generatorId?: GeneratorId;
+}) {
+  const generatorId = input.generatorId ?? TIMESTAMP_NOW_GENERATOR_ID;
   return {
     kind: 'fieldPreset',
     args: [TEMPORAL_PRECISION_ARG, TEMPORAL_ON_CREATE_ARG, TEMPORAL_ON_UPDATE_ARG],
@@ -153,8 +181,8 @@ export function temporalCodecPresetWithPrecision<
       nativeType: input.nativeType,
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
-        onCreate: temporalPhaseTemplate(1),
-        onUpdate: temporalPhaseTemplate(2),
+        onCreate: temporalPhaseTemplate(1, generatorId),
+        onUpdate: temporalPhaseTemplate(2, generatorId),
       },
     },
   } as const satisfies AuthoringFieldPresetDescriptor;
@@ -177,8 +205,8 @@ export function temporalCodecPreset<
       codecId: input.codecId,
       nativeType: input.nativeType,
       executionDefaults: {
-        onCreate: temporalPhaseTemplate(0),
-        onUpdate: temporalPhaseTemplate(1),
+        onCreate: temporalPhaseTemplate(0, TIMESTAMP_NOW_GENERATOR_ID),
+        onUpdate: temporalPhaseTemplate(1, TIMESTAMP_NOW_GENERATOR_ID),
       },
     },
   } as const satisfies AuthoringFieldPresetDescriptor;

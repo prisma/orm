@@ -502,6 +502,11 @@ export function requireTemporal(codecId: string, operation: 'decode' | 'encode')
 interface TemporalCodecIdentity {
   readonly codecId: string;
   readonly stringType: string;
+  /**
+   * The `Symbol.toStringTag` the codec's application value carries — `'Temporal.Instant'` and its
+   * siblings. Used as the nominal identity of the value on encode; see {@link encodeTemporalValue}.
+   */
+  readonly temporalTag: string;
 }
 
 function decodeTemporalText<T>(
@@ -532,32 +537,75 @@ function decodeTemporalText<T>(
   }
 }
 
+/**
+ * Encodes a `Temporal.*` application value to the text PostgreSQL is sent.
+ *
+ * The type check is **nominal**, on `Symbol.toStringTag`, not structural. A structural parameter
+ * type — anything with a `toString()` and an optional `calendarId` — is satisfied by a `Date`, at
+ * compile time and at runtime alike, so a `Date` reaching this function used to be encoded as
+ * `Date.prototype.toString()`: `'Tue Aug 18 2026 15:09:05 GMT+0000 (Coordinated Universal Time)'`,
+ * which PostgreSQL rejects with a syntax error naming neither the codec nor the cause. The tag is
+ * the cheapest identity that holds across a native Temporal and a polyfilled one, where an
+ * `instanceof` against either realm's classes would not.
+ *
+ * A rejection here is a plain `Error`, deliberately: the generic encode path wraps it as
+ * `RUNTIME.ENCODE_FAILED` carrying the codec id and the parameter label, which is the envelope a
+ * wrong-typed parameter belongs in. The structured Temporal errors are for values that are the
+ * right type and still cannot cross the boundary.
+ */
 function encodeTemporalValue(
   identity: TemporalCodecIdentity,
   value: { readonly calendarId?: string; toString: () => string },
 ): string {
   requireTemporal(identity.codecId, 'encode');
+  const tag: unknown =
+    typeof value === 'object' && value !== null
+      ? Reflect.get(value, Symbol.toStringTag)
+      : undefined;
+  if (tag !== identity.temporalTag) {
+    throw new Error(
+      `Codec '${identity.codecId}' encodes a ${identity.temporalTag}, but received ${describeEncodeInput(value, tag)}. Author the column with its ${identity.stringType} type to write PostgreSQL text instead.`,
+    );
+  }
   if (value.calendarId !== undefined && value.calendarId !== 'iso8601') {
     throw errorTemporalNonIsoCalendar(identity.codecId, value.calendarId);
   }
   return value.toString();
 }
 
+/** Names what actually arrived, so the encode failure is actionable without a debugger. */
+function describeEncodeInput(value: unknown, tag: unknown): string {
+  if (typeof tag === 'string') {
+    return `a ${tag}`;
+  }
+  if (value instanceof Date) {
+    return 'a Date';
+  }
+  if (value === null) {
+    return 'null';
+  }
+  return `a ${typeof value}`;
+}
+
 const DATE_TEMPORAL: TemporalCodecIdentity = {
   codecId: PG_DATE_TEMPORAL_CODEC_ID,
   stringType: 'DateString',
+  temporalTag: 'Temporal.PlainDate',
 };
 const TIMESTAMP_TEMPORAL: TemporalCodecIdentity = {
   codecId: PG_TIMESTAMP_TEMPORAL_CODEC_ID,
   stringType: 'TimestampString(p)',
+  temporalTag: 'Temporal.PlainDateTime',
 };
 const TIMESTAMPTZ_TEMPORAL: TemporalCodecIdentity = {
   codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
   stringType: 'TimestamptzString(p)',
+  temporalTag: 'Temporal.Instant',
 };
 const TIME_TEMPORAL: TemporalCodecIdentity = {
   codecId: PG_TIME_TEMPORAL_CODEC_ID,
   stringType: 'TimeString(p)',
+  temporalTag: 'Temporal.PlainTime',
 };
 
 // A time-of-day carries no year, so the era adaptation has nothing to do for it.

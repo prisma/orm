@@ -31,6 +31,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { PG_ENUM_CODEC_ID } from './codec-ids';
 import { postgresError } from './errors';
+import { INSTANT_NOW_GENERATOR_ID } from './instant-now-generator';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
 import { PostgresRlsPolicy, type RlsPolicyOperation } from './postgres-rls-policy';
@@ -739,6 +740,7 @@ export const postgresAuthoringFieldPresets = {
     .../* @__PURE__ */ temporalAuthoringPresets({
       codecId: 'pg/timestamptz-temporal@1',
       nativeType: 'timestamptz',
+      generatorId: INSTANT_NOW_GENERATOR_ID,
     }),
     .../* @__PURE__ */ temporalStringAuthoringPresets({
       codecId: 'pg/timestamptz-string@1',
@@ -747,10 +749,12 @@ export const postgresAuthoringFieldPresets = {
     timestamp: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: 'pg/timestamp-temporal@1',
       nativeType: 'timestamp',
+      generatorId: INSTANT_NOW_GENERATOR_ID,
     }),
     timestamptz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: 'pg/timestamptz-temporal@1',
       nativeType: 'timestamptz',
+      generatorId: INSTANT_NOW_GENERATOR_ID,
     }),
     timestampString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: 'pg/timestamp-string@1',

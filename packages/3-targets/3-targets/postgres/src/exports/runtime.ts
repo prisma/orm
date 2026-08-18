@@ -5,6 +5,7 @@ import type {
 } from '@internal/framework-components/execution';
 import { postgresTargetDescriptorMetaRuntime } from '../core/descriptor-meta-runtime';
 
+export { INSTANT_NOW_GENERATOR_ID, instantNow } from '../core/instant-now-generator';
 export { PostgresContractSerializer } from '../core/postgres-contract-serializer';
 export { PostgresContractView } from '../core/postgres-contract-view';
 

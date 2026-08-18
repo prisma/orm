@@ -6,6 +6,7 @@ import { generateId } from '@internal/ids/runtime';
 import type { Adapter, AnyQueryAst } from '@internal/sql-relational-core/ast';
 import type { SqlRuntimeAdapterDescriptor } from '@internal/sql-runtime';
 import { postgresCodecRegistry } from '@internal/target-postgres/codecs';
+import { INSTANT_NOW_GENERATOR_ID, instantNow } from '@internal/target-postgres/runtime';
 import { createPostgresAdapterWithCodecRegistry, postgresRawCodecInferer } from '../core/adapter';
 import { assemblePostgresCodecRegistry } from '../core/codec-lookup';
 import { postgresAdapterDescriptorMeta, postgresQueryOperations } from '../core/descriptor-meta';
@@ -26,6 +27,13 @@ function createPostgresMutationDefaultGenerators() {
       stability: 'field' as const,
     })),
     timestampNowRuntimeGenerator(),
+    // The Temporal-backed sibling. `stability: 'query'` for the same reason `timestampNow` has it:
+    // one instant across every row and every temporal-defaulted column of one ORM operation.
+    {
+      id: INSTANT_NOW_GENERATOR_ID,
+      generate: () => instantNow(),
+      stability: 'query' as const,
+    },
   ];
 }
 
