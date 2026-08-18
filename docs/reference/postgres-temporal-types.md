@@ -28,8 +28,10 @@ The codec ids behind them are `pg/date-temporal@1`, `pg/timestamp-temporal@1`, `
 Prisma does not bundle, import, or select a Temporal implementation. Where the runtime has one natively, that is what gets used; otherwise install a global polyfill in your application's entry point, before any query runs:
 
 ```typescript
-import 'temporal-polyfill/global';
+import 'temporal-polyfill/full/global';
 ```
+
+`temporal-polyfill` ships two global builds. Take `full/global`: the default `global` build omits non-ISO calendars, and its published types resolve to `export {}`, so TypeScript will not see the `Temporal` namespace even once the runtime has it. Every setup file in this repository uses `full/global` for both reasons.
 
 **Every read of a Temporal-backed column needs it.** The check is the first thing a Temporal codec does on decode, so it is not limited to explicitly constructed values — selecting the column is enough. Without a global implementation the read fails with `RUNTIME.TEMPORAL_UNAVAILABLE`, naming the codec and the operation, and pointing at the corresponding `*String` type.
 

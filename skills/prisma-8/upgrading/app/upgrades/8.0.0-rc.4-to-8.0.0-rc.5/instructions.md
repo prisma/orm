@@ -58,7 +58,9 @@ changes:
          runtime.
       5. **Provide a Temporal implementation if you kept any Temporal-backed column.** Prisma
          bundles no polyfill. Where the runtime has no native `Temporal`, install a global one
-         in your entry point before any query runs — `import 'temporal-polyfill/global';`.
+         in your entry point before any query runs — `import 'temporal-polyfill/full/global';`.
+         Take `full/global`, not `global`: the default build omits non-ISO calendars and its
+         published types resolve to `export {}`, so TypeScript will not see the namespace.
          **Every read** of a Temporal-backed column needs it, and so does any insert into a
          table carrying `temporal.updatedAt()`, whose generated value is a `Temporal.Instant`.
          Without it the operation fails with `RUNTIME.TEMPORAL_UNAVAILABLE`, which names the
