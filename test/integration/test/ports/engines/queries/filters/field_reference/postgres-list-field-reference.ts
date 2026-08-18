@@ -91,8 +91,8 @@ export function commonMixedRows() {
       bytes2: [Uint8Array.from([1, 2, 3])],
       bool: false,
       bool2: [false],
-      dt: new Date('1900-10-10T01:10:10.001Z'),
-      dt2: [new Date('1900-10-10T01:10:10.001Z')],
+      dt: Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
+      dt2: [Temporal.Instant.from('1900-10-10T01:10:10.001Z')],
     },
     {
       id: 2,
@@ -108,8 +108,8 @@ export function commonMixedRows() {
       bytes2: [Uint8Array.from([1, 2, 3, 4])],
       bool: false,
       bool2: [true],
-      dt: new Date('1900-10-10T01:10:10.001Z'),
-      dt2: [new Date('1901-10-10T01:10:10.001Z')],
+      dt: Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
+      dt2: [Temporal.Instant.from('1901-10-10T01:10:10.001Z')],
     },
     {
       id: 3,
@@ -146,9 +146,15 @@ export function commonListRows() {
       bool: true,
       bool_list: [false, true],
       bool_list2: [false, true],
-      dt: new Date('1900-10-10T01:10:10.001Z'),
-      dt_list: [new Date('1900-10-10T01:10:10.001Z'), new Date('1901-10-10T01:10:10.001Z')],
-      dt_list2: [new Date('1900-10-10T01:10:10.001Z'), new Date('1901-10-10T01:10:10.001Z')],
+      dt: Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
+      dt_list: [
+        Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
+        Temporal.Instant.from('1901-10-10T01:10:10.001Z'),
+      ],
+      dt_list2: [
+        Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
+        Temporal.Instant.from('1901-10-10T01:10:10.001Z'),
+      ],
     },
     {
       id: 2,
@@ -170,9 +176,15 @@ export function commonListRows() {
       bool: false,
       bool_list: [false, true],
       bool_list2: [true, true],
-      dt: new Date('1990-10-10T01:10:10.001Z'),
-      dt_list: [new Date('1900-10-10T01:10:10.001Z'), new Date('1901-10-10T01:10:10.001Z')],
-      dt_list2: [new Date('1901-10-10T01:10:10.001Z'), new Date('1901-11-10T01:10:10.001Z')],
+      dt: Temporal.Instant.from('1990-10-10T01:10:10.001Z'),
+      dt_list: [
+        Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
+        Temporal.Instant.from('1901-10-10T01:10:10.001Z'),
+      ],
+      dt_list2: [
+        Temporal.Instant.from('1901-10-10T01:10:10.001Z'),
+        Temporal.Instant.from('1901-11-10T01:10:10.001Z'),
+      ],
     },
     {
       id: 3,

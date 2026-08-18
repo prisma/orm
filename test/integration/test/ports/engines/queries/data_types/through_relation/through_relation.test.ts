@@ -19,6 +19,32 @@ const longBytes = Uint8Array.from(
 );
 const shortBytes = Uint8Array.from(Buffer.from('FDSF', 'base64'));
 
+/**
+ * Replaces every `Temporal.Instant` in a result with its text, recursively.
+ *
+ * A Temporal value carries no own enumerable properties — every accessor lives on the prototype —
+ * so a structural matcher compares two empty objects and passes for any pair of instants. Running
+ * both the actual and the expected side through this keeps the whole-shape comparison while making
+ * the `dt` columns discriminate: two different instants become two different strings.
+ *
+ * Typed arrays are returned untouched; enumerating one would turn a `Uint8Array` into a record of
+ * index keys and break the byte comparisons this suite also makes.
+ */
+function instantsAsText(value: unknown): unknown {
+  if (value instanceof Temporal.Instant) {
+    return value.toString();
+  }
+  if (Array.isArray(value)) {
+    return value.map(instantsAsText);
+  }
+  if (value !== null && typeof value === 'object' && !ArrayBuffer.isView(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, inner]) => [key, instantsAsText(inner)]),
+    );
+  }
+  return value;
+}
+
 describe('ports/engines/queries/data_types/through_relation', () => {
   it(
     'common_types',
@@ -34,7 +60,7 @@ describe('ports/engines/queries/data_types/through_relation', () => {
           float: 1.5,
           bytes: longBytes,
           bool: false,
-          dt: new Date('1900-10-10T01:10:10.001Z'),
+          dt: Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
         });
         await db.public.Child.create({
           childId: 2,
@@ -45,7 +71,7 @@ describe('ports/engines/queries/data_types/through_relation', () => {
           float: -2.54367,
           bytes: shortBytes,
           bool: true,
-          dt: new Date('1999-12-12T21:12:12.121Z'),
+          dt: Temporal.Instant.from('1999-12-12T21:12:12.121Z'),
         });
         const query = db.public.Parent.include('children', (children) =>
           children.select('childId', 'string', 'int', 'bInt', 'float', 'bytes', 'bool', 'dt'),
@@ -61,7 +87,7 @@ describe('ports/engines/queries/data_types/through_relation', () => {
               float: 1.5,
               bytes: longBytes,
               bool: false,
-              dt: new Date('1900-10-10T01:10:10.001Z'),
+              dt: Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
             },
             {
               childId: 2,
@@ -71,12 +97,12 @@ describe('ports/engines/queries/data_types/through_relation', () => {
               float: -2.54367,
               bytes: shortBytes,
               bool: true,
-              dt: new Date('1999-12-12T21:12:12.121Z'),
+              dt: Temporal.Instant.from('1999-12-12T21:12:12.121Z'),
             },
           ],
         };
-        expect(await query.all()).toEqual([expected]);
-        expect(await query.first({ id: 1 })).toEqual(expected);
+        expect(instantsAsText(await query.all())).toEqual(instantsAsText([expected]));
+        expect(instantsAsText(await query.first({ id: 1 }))).toEqual(instantsAsText(expected));
         expect(await query.first({ id: 2 })).toBeNull();
       }),
     timeouts.spinUpPpgDev,
@@ -169,7 +195,10 @@ describe('ports/engines/queries/data_types/through_relation', () => {
           float: [1.5, -1.5, 1.234567],
           bytes: [Uint8Array.from([1, 2, 3]), Uint8Array.from(Buffer.from('BONJOUR'))],
           bool: [false, true],
-          dt: [new Date('1900-10-10T01:10:10.001Z'), new Date('1999-12-12T21:12:12.121Z')],
+          dt: [
+            Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
+            Temporal.Instant.from('1999-12-12T21:12:12.121Z'),
+          ],
           empty: [],
           unset: [],
         };
@@ -200,14 +229,17 @@ describe('ports/engines/queries/data_types/through_relation', () => {
               float: [1.5, -1.5, 1.234567],
               bytes: [Uint8Array.from([1, 2, 3]), Uint8Array.from(Buffer.from('BONJOUR'))],
               bool: [false, true],
-              dt: [new Date('1900-10-10T01:10:10.001Z'), new Date('1999-12-12T21:12:12.121Z')],
+              dt: [
+                Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
+                Temporal.Instant.from('1999-12-12T21:12:12.121Z'),
+              ],
               empty: [],
               unset: [],
             },
           ],
         };
-        expect(await query.all()).toEqual([expected]);
-        expect(await query.first({ id: 1 })).toEqual(expected);
+        expect(instantsAsText(await query.all())).toEqual(instantsAsText([expected]));
+        expect(instantsAsText(await query.first({ id: 1 }))).toEqual(instantsAsText(expected));
       }),
     timeouts.spinUpPpgDev,
   );
