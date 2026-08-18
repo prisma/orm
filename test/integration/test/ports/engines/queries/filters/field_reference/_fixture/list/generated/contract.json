@@ -87,7 +87,7 @@
               "dt": {
                 "nullable": true,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -95,7 +95,7 @@
                 "many": true,
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -103,7 +103,7 @@
                 "many": true,
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -268,6 +268,78 @@
         "entries": {
           "table": {
             "testModel": {
+              "checks": [
+                {
+                  "expression": "array_position(\"bInt_list2\", NULL) IS NULL",
+                  "name": "testModel_bInt_list2_elem_not_null_7860ce00",
+                  "prefix": "testModel_bInt_list2_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"bInt_list\", NULL) IS NULL",
+                  "name": "testModel_bInt_list_elem_not_null_1b8f9a44",
+                  "prefix": "testModel_bInt_list_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"bool_list2\", NULL) IS NULL",
+                  "name": "testModel_bool_list2_elem_not_null_ce7abff7",
+                  "prefix": "testModel_bool_list2_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"bool_list\", NULL) IS NULL",
+                  "name": "testModel_bool_list_elem_not_null_19689fb9",
+                  "prefix": "testModel_bool_list_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"bytes_list2\", NULL) IS NULL",
+                  "name": "testModel_bytes_list2_elem_not_null_84f723d3",
+                  "prefix": "testModel_bytes_list2_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"bytes_list\", NULL) IS NULL",
+                  "name": "testModel_bytes_list_elem_not_null_dbe3d8b9",
+                  "prefix": "testModel_bytes_list_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"dt_list2\", NULL) IS NULL",
+                  "name": "testModel_dt_list2_elem_not_null_0aa8563f",
+                  "prefix": "testModel_dt_list2_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"dt_list\", NULL) IS NULL",
+                  "name": "testModel_dt_list_elem_not_null_ea7ced2d",
+                  "prefix": "testModel_dt_list_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"float_list2\", NULL) IS NULL",
+                  "name": "testModel_float_list2_elem_not_null_0ff5faf1",
+                  "prefix": "testModel_float_list2_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"float_list\", NULL) IS NULL",
+                  "name": "testModel_float_list_elem_not_null_eda5004e",
+                  "prefix": "testModel_float_list_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"int_list2\", NULL) IS NULL",
+                  "name": "testModel_int_list2_elem_not_null_f7dbb56e",
+                  "prefix": "testModel_int_list2_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"int_list\", NULL) IS NULL",
+                  "name": "testModel_int_list_elem_not_null_fe63c691",
+                  "prefix": "testModel_int_list_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"string_list2\", NULL) IS NULL",
+                  "name": "testModel_string_list2_elem_not_null_e169f87b",
+                  "prefix": "testModel_string_list2_elem_not_null"
+                },
+                {
+                  "expression": "array_position(\"string_list\", NULL) IS NULL",
+                  "name": "testModel_string_list_elem_not_null_dde88be8",
+                  "prefix": "testModel_string_list_elem_not_null"
+                }
+              ],
               "columns": {
                 "bInt": {
                   "codecId": "pg/int8@1",
@@ -321,18 +393,18 @@
                   "nullable": false
                 },
                 "dt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "nativeType": "timestamptz",
                   "nullable": true
                 },
                 "dt_list": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "many": true,
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "dt_list2": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "many": true,
                   "nativeType": "timestamptz",
                   "nullable": false
@@ -409,7 +481,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "00875dec910300275ff3ad6f697d7805fbef39cd5e5aa6a402f0380b1bc492a7"
+    "storageHash": "dd7e98992d0dcff2bb6543085f7a7deccda88c497a467d34b26c67f7636de3e6"
   },
   "capabilities": {
     "postgres": {
@@ -421,6 +493,7 @@
       "returning": true
     },
     "sql": {
+      "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
       "lateral": true,
@@ -432,7 +505,7 @@
   "meta": {},
   "_generated": {
     "warning": "⚠️  GENERATED FILE - DO NOT EDIT",
-    "message": "This file is automatically generated by \"prisma-next contract emit\".",
-    "regenerate": "To regenerate, run: prisma-next contract emit"
+    "message": "This file is automatically generated by \"prisma contract emit\".",
+    "regenerate": "To regenerate, run: prisma contract emit"
   }
 }
