@@ -115,7 +115,60 @@ rg 'per spec|the spec\b|sub-spec|milestone' -- ':!projects/' ':!*.generated.*'
 - **Builds on:** D6's single-surface source tree.
 - **Hands to:** A green workspace on the new representation model.
 - **Focus:** Fixtures under `test/integration/**`, `packages/3-extensions/**` (paradedb, pgvector, postgis, supabase, sql-orm-client), and `packages/2-sql/4-lanes/sql-builder/test/fixtures/**`. Fixture drift outside the temporal surface is investigated, not committed. Integration coverage must include buffered, cursor, array, flat, and nested reads for both representations.
+
+**Scope corrected at D6 R2** — a repo-wide sweep found generated contract artefacts in two directories this Focus never named:
+
+- **`apps/`** — 6 files. `telemetry-backend/src/prisma/contract.{json,d.ts}` plus two `migrations/snapshots/<hash>/` pairs. This is also the true cause of the `cli-telemetry` failures, which were previously misclassified (including by the orchestrator) as "the package cannot resolve `target-postgres`, not ours". The real stack is `Column 'telemetry_event.ingestedAt' references codec 'pg/timestamptz@1'` at `apps/telemetry-backend/src/db.ts:8`; the harness reports "backend exited early" only because the backend is a child process. **`cli-telemetry` resolves at D7.**
+- **`examples/`** — 27 files across `prisma-8-demo`, `prisma-8-cloudflare-worker`, `react-router-demo`, `paradedb-demo`, `prisma-8-postgis-demo`, `supabase`, `multi-extension-monorepo`, `bundle-size`.
+
+`packages/` is down to 11 generated files; `test/` holds 130. Outside the three hand-written files named below, nothing hand-written still names a retired id — F36's 24 are gone.
+
+### D7 open question — hash-addressed migration snapshots
+
+**20 of the 33 `apps/` + `examples/` files sit under `migrations/snapshots/<64-hex>/`.** The directory name is a content hash, so regenerating a contract inside one is not a like-for-like fixture refresh: it either invalidates the hash or requires the snapshot chain to be re-derived. `apps/telemetry-backend` has 2 such pairs; `examples/prisma-8-demo` has 7.
+
+**Settled at D6 R2 review, by investigation: regenerating a snapshot in place is structurally impossible.**
+
+The directory name **is** the `storageHash` of the contract inside it, and the CLI actively verifies that identity — `migration-check.ts:137-143` reads `storage.storageHash` out of the snapshot and errors when it differs from the migration's `to=` metadata (*"declares to=X but its contract snapshot has storageHash=Y"*), and `contract-snapshot-resolution.ts` checks the same field when resolving hash → snapshot dir → `contract.json`. So regenerating a snapshot's contract changes its codec ids → changes the emitted contract → changes `storageHash` → breaks both the directory name and every migration's back-reference. Making it consistent would mean re-deriving `to=` / `from=` across the chain and renaming every snapshot directory in eight example projects.
+
+Two corrections to the framing that produced this question. The **"falsifies history" argument does not apply** — unlike a CHANGELOG or an ADR, these have machine consumers, so they are not the prose-historical group. And **inertness never needed deciding**: the hash-identity property settles it first, because the files are immutable by construction regardless of whether anything reads them.
+
+**Resolution:** snapshots naming retired ids stay as they are, and the retired-ID grep gate gains an explicit `**/migrations/snapshots/**` exclusion **with the reason recorded** — the same treatment the CLI flake gets, excluded by name with a rationale rather than silently.
+
+### The one test that could overturn this, and D7 runs it first
+
+Does any path **load a snapshot and resolve its codecs**? `migration check` only compares hashes and structure, so a stale id is inert there. But `db update --to <hash>` goes through `contract-snapshot-resolution.ts`, and if that builds an execution context, a deleted codec id is a hard runtime error.
+
+Cheap to settle: run it against one `examples/prisma-8-demo` snapshot that names `pg/timestamptz@1` — four do.
+
+**If it errors, this slice has broken backward migration for existing projects.** That is a finding for the project spec and a user-facing decision, not something a fixture sweep resolves. The `cli-telemetry` correction is the evidence that makes it worth running rather than assuming: a generated contract naming a deleted codec **does** fail at runtime, with the harness reporting a misleading child-process message on top of it.
+
+### `types.test-d.ts:596` is on D7's explicit worklist, not the self-resolving bucket
+
+The D6 R2 review accepted the deferral for `contract-builder.types.test-d.ts:117` — it compares a builder-derived row type against a *fixture*-derived one, so both sides converge when D7 regenerates and editing it now would be churn.
+
+It **rejected** the deferral for `:596`. That line is `expectTypeOf<Row['createdAt']>().toEqualTypeOf<Date>()`, and `Row` derives from `enumDb = sql({…})` at `:566` — a **builder**-constructed contract, not a fixture. Regeneration provably cannot touch it. It is a hand-written assertion that a temporal field is `Date`, which is precisely what this project exists to remove, and the deferral's stated rationale ("reads through a fixture D7 regenerates") does not apply to it.
+
+`:227` and `:411` are hand-written `new Date(...)` literals whose fate depends on whether their `Row` is fixture- or builder-derived — D7 checks rather than assumes.
+
+### D7 must also hand-fix three files a regeneration cannot reach
+
+`test/integration/test/contract-builder.test.ts`, `contract-builder.types.test-d.ts`, and `infer-roundtrip-runtime.integration.test.ts` assert the `Date` representation in **hand-written** code. Same species as F36. Two of them change shape once fixtures regenerate — `types.test-d.ts:117` should resolve on its own, `:596` flips from wrong-in-one-direction to wrong-in-the-other — so they need a hand pass **after** regeneration, not before. `pnpm --filter integration-tests typecheck` is the only gate that sees `:117` at all.
 - **Tier:** composer-2.5-fast (fixture regen), escalating to Sonnet if a fixture diff needs judgment.
+
+### D7 and D8 merged (operator decision, taken after D6)
+
+The operator called the run too slow and was right. **D8 folds into D7 as one dispatch with one review**, and the gate cadence drops: `pnpm fixtures:check` plus targeted suites during iteration, **one** full serial workspace pass at the end rather than a pass per round.
+
+**Low-severity findings no longer block.** Anything cosmetic — comment placement, prose wording, a fixture's reason string — is batched into the PR-open commit instead of costing an implement-plus-review cycle. `must-fix` still blocks.
+
+The three choices that made the run slow, recorded so the retro has them rather than reconstructing them:
+
+1. **F30 (JSDoc placement) and F34 (a fixture's reason string) each blocked a dispatch.** The findings discipline says every severity blocks `SATISFIED` and it was followed literally. Two full round-trips for cosmetics.
+2. **All three workspace suites ran at nearly every dispatch.** The red set moved meaningfully only at D1, D4 and D6; `packages` alone was sufficient signal most rounds. One serial pass is 20-25 minutes and it ran eight-plus times.
+3. **Eight dispatches was about two too many.** D2 and D3 were the same surface with the same shape, and D4's projection change could have folded into D3. Split for reviewability, paid for in round-trips.
+
+The verification itself earned its keep — F31 caught a CI-red every reported gate showed green, F36 caught 24 tests passing because their assertions had become unreachable, the D6 comparison caught an entire missing search axis. That is an argument for the checks, not for their cadence.
 
 ### D8: Documentation
 
