@@ -314,16 +314,16 @@
     "storageHash": "d5cd9f2901b1d4b526a6926a9eea6ba22a525203e5a311533a7f77d3f1aa47ea"
   },
   "execution": {
-    "executionHash": "94534d3939ec8721db349da41bf407ecc61da80217258fb4e543aa0cd554b6ca",
+    "executionHash": "ccdfb5fdd6574f55d5646c52773c4da4e3b3a54e34831a0f60018709812703cf",
     "mutations": {
       "defaults": [
         {
           "onCreate": {
-            "id": "timestampNow",
+            "id": "instantNow",
             "kind": "generator"
           },
           "onUpdate": {
-            "id": "timestampNow",
+            "id": "instantNow",
             "kind": "generator"
           },
           "ref": {

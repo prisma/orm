@@ -31,7 +31,9 @@ Prisma does not bundle, import, or select a Temporal implementation. Where the r
 import 'temporal-polyfill/global';
 ```
 
-**Every read of a Temporal-backed column needs it.** The check is the first thing a Temporal codec does on decode, so it is not limited to writes or to explicitly constructed values — selecting the column is enough. Without a global implementation the read fails with `RUNTIME.TEMPORAL_UNAVAILABLE`, naming the codec and the operation, and pointing at the corresponding `*String` type.
+**Every read of a Temporal-backed column needs it.** The check is the first thing a Temporal codec does on decode, so it is not limited to explicitly constructed values — selecting the column is enough. Without a global implementation the read fails with `RUNTIME.TEMPORAL_UNAVAILABLE`, naming the codec and the operation, and pointing at the corresponding `*String` type.
+
+**So does every write, including the ones you did not write.** Encoding a value you constructed obviously needs Temporal. Less obviously, so does `temporal.updatedAt()`: the column's clock produces a `Temporal.Instant`, so inserting a row into a table carrying that preset requires an implementation even if your code never mentions a temporal value. The same error code covers it, naming the generator and recommending `temporal.updatedAtString()`. `temporal.createdAt()` is unaffected — its value comes from a PostgreSQL storage default, not from a client-side clock.
 
 The check is lazy in every other respect. Registering the target, validating a contract, building a runtime, resolving a codec descriptor and even constructing a codec instance all succeed with no `Temporal` in scope; only invoking one fails. A contract whose temporal columns all use `*String` codecs constructs and executes with no Temporal implementation anywhere.
 
@@ -125,7 +127,7 @@ Four presets cover the common timestamp columns, in matched pairs:
 | `field.temporal.createdAtString()` | the same storage default, string-backed |
 | `field.temporal.updatedAtString()` | the same write-on-create-and-update behaviour, string-backed |
 
-The `*String` pair delegates to the same factory as the bare pair, so the two differ only in the codec they name. Both `updatedAt` forms produce one timestamp per ORM operation — a `createAll([...])` of a hundred rows writes one value across every row and every timestamp-defaulted column, not a hundred.
+The `*String` pair delegates to the same factory as the bare pair, so the two lower to the same shape and differ in the codec they name and the clock that answers them: a Temporal-backed column's `updatedAt` produces a `Temporal.Instant`, a string-backed one produces text. Both forms produce one timestamp per ORM operation — a `createAll([...])` of a hundred rows writes one value across every row and every timestamp-defaulted column, not a hundred — and both advance on update.
 
 ## What `prisma init` scaffolds
 

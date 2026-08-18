@@ -26,11 +26,11 @@ describe('ports/prisma/functional/issues-23902', () => {
         expect(post).toMatchObject({
           authorId: null,
           content: null,
-          createdAt: expect.any(Date),
+          createdAt: expect.any(Temporal.Instant),
           id: expect.any(String),
           published: false,
           title: 'Hello World',
-          updatedAt: expect.any(Date),
+          updatedAt: expect.any(Temporal.Instant),
           viewCount: 0,
         });
 

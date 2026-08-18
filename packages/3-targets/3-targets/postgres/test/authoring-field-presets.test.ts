@@ -87,11 +87,12 @@ describe('postgres temporal per-codec presets', () => {
     expect(postgresAuthoringFieldPresets.temporal[helper].output.codecId).toBe(codecId);
   });
 
-  it('lowers each pair through the shared factories, so the halves differ only in their codec', () => {
+  it('lowers each pair through the shared factories, so the halves differ only in their codec and their clock', () => {
     expect(postgresAuthoringFieldPresets.temporal).toEqual({
       ...temporalAuthoringPresets({
         codecId: 'pg/timestamptz-temporal@1',
         nativeType: 'timestamptz',
+        generatorId: 'instantNow',
       }),
       ...temporalStringAuthoringPresets({
         codecId: 'pg/timestamptz-string@1',
@@ -100,10 +101,12 @@ describe('postgres temporal per-codec presets', () => {
       timestamp: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamp-temporal@1',
         nativeType: 'timestamp',
+        generatorId: 'instantNow',
       }),
       timestamptz: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamptz-temporal@1',
         nativeType: 'timestamptz',
+        generatorId: 'instantNow',
       }),
       timestampString: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamp-string@1',
@@ -128,17 +131,21 @@ describe('postgres temporal per-codec presets', () => {
     );
   });
 
-  // Both halves carry the generator, which is what makes the string representation a drop-in for
-  // the Temporal one rather than a lesser variant of it.
-  it.each(['updatedAt', 'updatedAtString'] as const)(
-    'gives %s the timestampNow generator on both phases',
-    (helper) => {
-      expect(postgresAuthoringFieldPresets.temporal[helper].output.executionDefaults).toEqual({
-        onCreate: { kind: 'generator', id: 'timestampNow' },
-        onUpdate: { kind: 'generator', id: 'timestampNow' },
-      });
-    },
-  );
+  // Both halves carry a generator on both phases, which is what makes the string representation a
+  // drop-in for the Temporal one rather than a lesser variant of it. The generator differs because
+  // the value does: a Temporal-backed column takes a `Temporal.Instant`, a `*String` column takes
+  // text, and a generator has no column context with which to decide between them. That the two
+  // behave alike is proven behaviourally in
+  // `test/integration/test/temporal-defaults/temporal-defaults.integration.test.ts`.
+  it.each([
+    ['updatedAt', 'instantNow'],
+    ['updatedAtString', 'timestampNow'],
+  ] as const)('gives %s the %s generator on both phases', (helper, generatorId) => {
+    expect(postgresAuthoringFieldPresets.temporal[helper].output.executionDefaults).toEqual({
+      onCreate: { kind: 'generator', id: generatorId },
+      onUpdate: { kind: 'generator', id: generatorId },
+    });
+  });
 
   it.each(['createdAt', 'createdAtString'] as const)(
     'gives %s a now() storage default rather than an execution generator',

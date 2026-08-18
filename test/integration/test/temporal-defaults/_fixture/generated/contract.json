@@ -4,8 +4,8 @@
   "target": "postgres",
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "roots": {
-    "user": {
-      "model": "User",
+    "reading": {
+      "model": "Reading",
       "namespace": "public"
     }
   },
@@ -13,7 +13,7 @@
     "namespaces": {
       "public": {
         "models": {
-          "User": {
+          "Reading": {
             "fields": {
               "createdAt": {
                 "nullable": false,
@@ -22,7 +22,21 @@
                   "kind": "scalar"
                 }
               },
+              "createdAtText": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
+              },
               "id": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/int4@1",
+                  "kind": "scalar"
+                }
+              },
+              "label": {
                 "nullable": false,
                 "type": {
                   "codecId": "pg/text@1",
@@ -35,6 +49,13 @@
                   "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
+              },
+              "updatedAtText": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "kind": "scalar"
+                }
               }
             },
             "relations": {},
@@ -43,15 +64,24 @@
                 "createdAt": {
                   "column": "createdAt"
                 },
+                "createdAtText": {
+                  "column": "createdAtText"
+                },
                 "id": {
                   "column": "id"
                 },
+                "label": {
+                  "column": "label"
+                },
                 "updatedAt": {
                   "column": "updatedAt"
+                },
+                "updatedAtText": {
+                  "column": "updatedAtText"
                 }
               },
               "namespaceId": "public",
-              "table": "user"
+              "table": "reading"
             }
           }
         }
@@ -63,7 +93,7 @@
       "public": {
         "entries": {
           "table": {
-            "user": {
+            "reading": {
               "columns": {
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -74,13 +104,32 @@
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
+                "createdAtText": {
+                  "codecId": "pg/timestamptz-string@1",
+                  "default": {
+                    "expression": "now()",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
                 "id": {
+                  "codecId": "pg/int4@1",
+                  "nativeType": "int4",
+                  "nullable": false
+                },
+                "label": {
                   "codecId": "pg/text@1",
                   "nativeType": "text",
                   "nullable": false
                 },
                 "updatedAt": {
                   "codecId": "pg/timestamptz-temporal@1",
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
+                "updatedAtText": {
+                  "codecId": "pg/timestamptz-string@1",
                   "nativeType": "timestamptz",
                   "nullable": false
                 }
@@ -100,23 +149,12 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "cb43b91d46731f66bee24c3212057eeb6e76dddf6a4cb5b9434252fcdafbbf4a"
+    "storageHash": "3448bd5734489469aeba4316018605f866734dfa3d6fb31e60bc27b4d6d52781"
   },
   "execution": {
-    "executionHash": "a55f20e3dac97092388a4ca7b9cfd751308ef19d90e866cc7983e47fa0d39565",
+    "executionHash": "d1e832917869d55b7ba731e320b560c6a3e558f260978aa11e018daf79a7439e",
     "mutations": {
       "defaults": [
-        {
-          "onCreate": {
-            "id": "cuid2",
-            "kind": "generator"
-          },
-          "ref": {
-            "column": "id",
-            "namespace": "public",
-            "table": "user"
-          }
-        },
         {
           "onCreate": {
             "id": "instantNow",
@@ -129,7 +167,22 @@
           "ref": {
             "column": "updatedAt",
             "namespace": "public",
-            "table": "user"
+            "table": "reading"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "onUpdate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "updatedAtText",
+            "namespace": "public",
+            "table": "reading"
           }
         }
       ]

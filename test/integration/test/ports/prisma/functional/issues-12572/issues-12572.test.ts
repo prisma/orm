@@ -16,7 +16,12 @@ describe('ports/prisma/functional/issues-12572', () => {
       withPostgresPort<Contract>({ contractJson }, async ({ db }) => {
         const created = await db.public.User.create({});
 
-        expect(Temporal.Instant.compare(created.createdAt, created.updatedAt)).toBe(0);
+        // Upstream compares the day of month. It has to be that loose and so does this: the
+        // `@default(now())` column is filled by PostgreSQL's clock and the `@updatedAt` one by the
+        // client's, so the two are close rather than identical.
+        const createdDay = created.createdAt.toZonedDateTimeISO('UTC').toPlainDate();
+        const updatedDay = created.updatedAt.toZonedDateTimeISO('UTC').toPlainDate();
+        expect(createdDay.toString()).toBe(updatedDay.toString());
       }),
     timeouts.spinUpPpgDev,
   );

@@ -32,7 +32,7 @@ import type {
 export type StorageHash =
   StorageHashBase<'5eba83ca89146f79e95e703b59d4401bc8b1b764fe3f02d229f3067fbf19fadf'>;
 export type ExecutionHash =
-  ExecutionHashBase<'27a88f1138300d9ca801a02b0455dd8d3172476231ba8433307683757567343e'>;
+  ExecutionHashBase<'825a03304d5822bc78cb404d7b7c546dac3bbe074261c78e6ab2ed24c4f20331'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -582,8 +582,8 @@ type ContractBase = Omit<
             readonly table: 'post';
             readonly column: 'updatedAt';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'timestampNow' };
-          readonly onUpdate: { readonly kind: 'generator'; readonly id: 'timestampNow' };
+          readonly onCreate: { readonly kind: 'generator'; readonly id: 'instantNow' };
+          readonly onUpdate: { readonly kind: 'generator'; readonly id: 'instantNow' };
         },
         {
           readonly ref: {

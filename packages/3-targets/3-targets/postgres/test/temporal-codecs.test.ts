@@ -267,3 +267,42 @@ describe('one claimant per temporal target type', () => {
     expect(claimed.filter((id) => id.endsWith('-string@1'))).toEqual([]);
   });
 });
+
+/**
+ * The encode-side type check is nominal, on `Symbol.toStringTag`, and this is why.
+ *
+ * The parameter used to be typed structurally — anything with a `toString()` and an optional
+ * `calendarId`. A `Date` satisfies that at compile time *and* at runtime, so a `Date` reaching an
+ * encode was serialized with `Date.prototype.toString()` and sent to PostgreSQL as
+ * `'Tue Aug 18 2026 15:09:05 GMT+0000 (Coordinated Universal Time)'`. The server rejected it with a
+ * syntax error that named neither the codec nor the cause, and the mistake was invisible until then.
+ *
+ * That is not hypothetical: it is how `temporal.updatedAt()` shipped broken on every Temporal-backed
+ * column, because the shared `timestampNow` generator hands out a `Date`.
+ */
+describe('encode refuses a value that is not the codec’s own Temporal type', () => {
+  it.each([
+    ['pg/date-temporal@1', dateCodec, 'Temporal.PlainDate'],
+    ['pg/timestamp-temporal@1', timestampCodec, 'Temporal.PlainDateTime'],
+    ['pg/timestamptz-temporal@1', timestamptzCodec, 'Temporal.Instant'],
+    ['pg/time-temporal@1', timeCodec, 'Temporal.PlainTime'],
+  ])('%s rejects a Date rather than serializing it', async (codecId, codec, expectedType) => {
+    // The cast is the whole point: production code cannot reach this, and a test has to.
+    await expect(codec.encode(new Date() as never, callCtx)).rejects.toThrow(
+      new RegExp(`Codec '${codecId}' encodes a ${expectedType}, but received a Date`),
+    );
+  });
+
+  it('rejects the wrong Temporal type as readily as a non-Temporal one', async () => {
+    await expect(timestamptzCodec.encode(Temporal.PlainDate.from('2026-01-02') as never, {})) //
+      .rejects.toThrow(
+        "Codec 'pg/timestamptz-temporal@1' encodes a Temporal.Instant, but received a Temporal.PlainDate",
+      );
+  });
+
+  it('names the *String escape hatch in the message', async () => {
+    await expect(timestampCodec.encode(new Date() as never, callCtx)).rejects.toThrow(
+      'TimestampString(p)',
+    );
+  });
+});
