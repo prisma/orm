@@ -40,6 +40,7 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "pathe": "^2.0.3",
+    "temporal-polyfill": "^1.0.4",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-tsconfig-paths": "^6.1.1",

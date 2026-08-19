@@ -23,7 +23,8 @@
   "dependencies": {
     "@prisma/orm-postgres": "workspace:8.0.0-rc.5",
     "arktype": "catalog:",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "temporal-polyfill": "^1.0.4"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.20.3",

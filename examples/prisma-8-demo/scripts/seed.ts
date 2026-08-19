@@ -20,6 +20,10 @@ import 'dotenv/config';
 
 import { loadAppConfig } from '../src/app-config';
 import { createOrmClient } from '../src/orm-client/client';
+// Node ships no global `Temporal`, and this script writes Temporal-backed columns.
+// `full/global` rather than `global`: the default build omits non-ISO calendars and its
+// published types resolve to `export {}`.
+import 'temporal-polyfill/full/global';
 import { db } from '../src/prisma/db';
 
 async function main() {
@@ -34,7 +38,7 @@ async function main() {
           {
             email: 'alice@example.com',
             displayName: 'Alice',
-            createdAt: new Date(),
+            createdAt: Temporal.Now.instant(),
             kind: 'admin',
             address: { street: '123 Main St', city: 'San Francisco', zip: '94102', country: 'US' },
           },
@@ -48,7 +52,7 @@ async function main() {
           {
             email: 'bob@example.com',
             displayName: 'Bob',
-            createdAt: new Date(),
+            createdAt: Temporal.Now.instant(),
             kind: 'user',
             address: { street: '456 Oak Ave', city: 'Portland', zip: null, country: 'US' },
           },
@@ -113,7 +117,7 @@ async function main() {
             userId: alice.id,
             priority: db.enums.public.Priority.members.Low,
             embedding: generateEmbedding(1),
-            createdAt: new Date(),
+            createdAt: Temporal.Now.instant(),
             viewCount: 12_500,
             impressionCount: 4_503_599_627_370_496n,
             reachScore: 18_446_744_073_709_551_616n,
@@ -131,7 +135,7 @@ async function main() {
             userId: alice.id,
             priority: db.enums.public.Priority.members.High,
             embedding: generateEmbedding(2),
-            createdAt: new Date(),
+            createdAt: Temporal.Now.instant(),
             viewCount: 9_800,
             impressionCount: 4_503_599_627_370_496n,
             reachScore: 9_223_372_036_854_775_809n,
@@ -149,7 +153,7 @@ async function main() {
             userId: bob.id,
             priority: db.enums.public.Priority.members.Urgent,
             embedding: generateEmbedding(3),
-            createdAt: new Date(),
+            createdAt: Temporal.Now.instant(),
             viewCount: 3_112,
             impressionCount: 1_000n,
             reachScore: 42n,
@@ -227,20 +231,20 @@ async function main() {
       userId: alice.id,
       severity: 'critical',
       stepsToRepro: 'Open Safari → click "Sign in" → blank white screen',
-      createdAt: new Date('2024-03-01T09:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-01T09:00:00.000Z'),
     });
     await orm.Task.features().create({
       title: 'Dark mode',
       userId: alice.id,
       priority: 'P1',
       targetRelease: 'v2.0',
-      createdAt: new Date('2024-03-02T09:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-02T09:00:00.000Z'),
     });
     await orm.Task.features().create({
       title: 'CSV export',
       userId: alice.id,
       priority: 'P2',
-      createdAt: new Date('2024-03-03T09:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-03T09:00:00.000Z'),
     });
 
     await orm.Task.bugs().create({
@@ -248,20 +252,20 @@ async function main() {
       userId: bob.id,
       severity: 'critical',
       stepsToRepro: 'Import 1M rows → RSS climbs without bound',
-      createdAt: new Date('2024-03-04T09:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-04T09:00:00.000Z'),
     });
     await orm.Task.bugs().create({
       title: 'Typo on pricing page',
       userId: bob.id,
       severity: 'low',
-      createdAt: new Date('2024-03-05T09:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-05T09:00:00.000Z'),
     });
     await orm.Task.features().create({
       title: 'Slack integration',
       userId: bob.id,
       priority: 'P0',
       targetRelease: 'v2.0',
-      createdAt: new Date('2024-03-06T09:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-06T09:00:00.000Z'),
     });
 
     console.log('Created 6 polymorphic tasks (3 bugs, 3 features) across Alice and Bob');

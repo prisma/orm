@@ -144,6 +144,34 @@ export function errorTemporalUnrepresentable(options: {
  * calendar, so accepting the value would quietly drop the one thing the author went out of their
  * way to specify.
  */
+/**
+ * A Temporal codec was handed a value that is not the Temporal type it encodes.
+ *
+ * The guard is nominal — it reads `Symbol.toStringTag` rather than probing for
+ * methods — because the structural shape a Temporal value presents is one a
+ * `Date` also satisfies: both carry `toString()`, and `calendarId` is optional.
+ * A structural check therefore admits a `Date`, whose `toString()` renders
+ * `Tue Aug 18 2026 15:09:05 GMT+0000 (Coordinated Universal Time)` — which
+ * PostgreSQL rejects with a bare syntax error naming neither the codec nor the
+ * cause. Failing here instead keeps the diagnosis at the codec boundary.
+ */
+export function errorTemporalWrongType(
+  codecId: string,
+  temporalTag: string,
+  stringType: string,
+  received: string,
+): StructuredError {
+  return postgresError(
+    'RUNTIME.ENCODE_FAILED',
+    `Codec '${codecId}' encodes a ${temporalTag}, but received ${received}.`,
+    {
+      why: "The codec serializes through the Temporal value's own toString(). A different type reaches PostgreSQL in a spelling it does not accept, and the resulting error names the column rather than the codec.",
+      fix: `Pass a ${temporalTag}, or author the column with its ${stringType} type to write PostgreSQL text directly.`,
+      meta: { codecId, temporalTag, stringType, received },
+    },
+  );
+}
+
 export function errorTemporalNonIsoCalendar(codecId: string, calendarId: string): StructuredError {
   return postgresError(
     'RUNTIME.ENCODE_FAILED',

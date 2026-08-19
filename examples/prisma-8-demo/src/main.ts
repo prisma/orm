@@ -464,7 +464,7 @@ async function main() {
           email,
           displayName: displayNameFromEmail(email),
           kind,
-          createdAt: new Date(),
+          createdAt: Temporal.Now.instant(),
           address: { street: '789 Elm Blvd', city: 'Austin', zip: '73301', country: 'US' },
         },
         runtime,

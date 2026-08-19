@@ -44,6 +44,7 @@
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react-swc": "^4.3.2",
     "jsdom": "^29.0.2",
+    "temporal-polyfill": "^1.0.4",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

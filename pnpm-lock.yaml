@@ -494,6 +494,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: 0.20.3
@@ -589,6 +592,9 @@ importers:
       jsdom:
         specifier: ^29.0.2
         version: 29.1.1(@noble/hashes@2.2.0)
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       tsx:
         specifier: 'catalog:'
         version: 4.23.12
@@ -757,6 +763,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      temporal-polyfill:
+        specifier: ^1.0.4
+        version: 1.0.4
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

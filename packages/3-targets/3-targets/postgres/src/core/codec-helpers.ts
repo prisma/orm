@@ -17,6 +17,7 @@ import {
   errorTemporalNonIsoCalendar,
   errorTemporalUnavailable,
   errorTemporalUnrepresentable,
+  errorTemporalWrongType,
   postgresError,
 } from './errors';
 
@@ -563,8 +564,11 @@ function encodeTemporalValue(
       ? Reflect.get(value, Symbol.toStringTag)
       : undefined;
   if (tag !== identity.temporalTag) {
-    throw new Error(
-      `Codec '${identity.codecId}' encodes a ${identity.temporalTag}, but received ${describeEncodeInput(value, tag)}. Author the column with its ${identity.stringType} type to write PostgreSQL text instead.`,
+    throw errorTemporalWrongType(
+      identity.codecId,
+      identity.temporalTag,
+      identity.stringType,
+      describeEncodeInput(value, tag),
     );
   }
   if (value.calendarId !== undefined && value.calendarId !== 'iso8601') {
