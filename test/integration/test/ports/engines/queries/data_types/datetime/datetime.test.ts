@@ -13,10 +13,10 @@ const secondDate = Temporal.Instant.from('1969-01-01T10:33:59.000Z');
 /**
  * Reads a `dt` column as text.
  *
- * `dt` is a `Temporal.Instant`, which carries no own enumerable properties — every accessor lives
- * on the prototype. A structural matcher therefore compares two empty objects and passes for *any*
- * pair of instants, which in this suite would mean the repo's only datetime round-trip port
- * asserting nothing at all. Comparing the text is what makes it discriminate.
+ * This suite is the repo's only datetime round-trip port, so its assertions are worth making
+ * legible as well as correct: a failure names the two spellings rather than printing two opaque
+ * objects. `toEqual` on a `Temporal.Instant` does discriminate — only `toMatchObject` is defeated
+ * by their having no own enumerable properties — so this is about the diff, not about correctness.
  */
 function dtText(row: { readonly dt: Temporal.Instant | null } | null): string | null | undefined {
   return row === null ? null : (row.dt?.toString() ?? null);

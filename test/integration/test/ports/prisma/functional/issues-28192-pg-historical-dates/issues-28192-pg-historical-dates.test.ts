@@ -18,9 +18,10 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // The upstream computes the expected `date` value by stripping the time component; the
 // Temporal equivalent is `PlainDateTime.toPlainDate()`, mirrored faithfully below.
 //
-// Values are compared through `toString()` rather than as objects: a Temporal value carries
-// no own enumerable properties, so a structural matcher would compare two empty objects and
-// pass for any pair of same-typed values.
+// Values are compared through `toString()`. The original assertion was a `toMatchObject`, which
+// a Temporal value defeats: it has no own enumerable properties, so a subset matcher finds nothing
+// to compare and passes for any pair of same-typed values. (`toEqual` does not have this problem —
+// Vitest compares these correctly — but the text also puts the actual value in the failure diff.)
 
 // These cases have 2-digit calendar years (00–99 AD) in the date column.
 // The it.fails markers were recorded against the retired Date-typed date codec, which misparsed

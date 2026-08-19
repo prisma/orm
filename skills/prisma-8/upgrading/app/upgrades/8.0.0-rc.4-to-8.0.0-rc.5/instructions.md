@@ -87,9 +87,12 @@ changes:
          operands must already be `Instant`s** — it throws on a `Date`. Values read back from
          the ORM already are; convert anything you brought from elsewhere first.
 
-         In tests, compare temporal values through `toString()` or the type's own `equals` /
-         `compare`: a Temporal value has no own enumerable properties, so `toEqual` /
-         `toMatchObject` against one passes for *any* value of the same type.
+         In tests, be careful with **`toMatchObject`**. A Temporal value has no own enumerable
+         properties — every accessor lives on the prototype — so a subset matcher finds nothing
+         to compare and passes for *any* value of the same type. `toEqual` is not affected
+         (Vitest compares these correctly), but `toMatchObject` will silently stop checking the
+         timestamp. Where you need a subset match, compare `toString()` or use the type's own
+         `equals` / `compare`.
     detection:
       glob: "**/*.{ts,mts,cts,prisma,json}"
       regex:
