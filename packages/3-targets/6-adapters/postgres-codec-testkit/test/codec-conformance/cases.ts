@@ -205,13 +205,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'byte string spanning several base64 line breaks',
     value: Uint8Array.from({ length: 200 }, (_, index) => (index * 7) % 256),
   },
-  // These two passed only because the projection used to pin the rendering to UTC and spell it out
-  // with an explicit format. That pinning is gone — it truncated microseconds and made a nested read
-  // disagree with a flat one — so this Date-typed codec's `encodeJson`, which still produces an ISO
-  // string, no longer matches what the column projects. Marked rather than rewritten because the
-  // codec's value handling is not this change's to touch, and because the disagreement resolves when
-  // the Date-typed temporal codecs are removed and their columns move to a representation-explicit
-  // one, not by anything that could be done here.
   // The Temporal-backed codecs' application value is a `Temporal.*`, so a case is written as the
   // value itself rather than as text. `encodeJson` renders it through `toString()` and the
   // projection renders whatever PostgreSQL emits for the column: the same moment in time, but not

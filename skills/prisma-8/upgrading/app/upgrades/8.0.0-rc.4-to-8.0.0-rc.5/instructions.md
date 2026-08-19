@@ -66,12 +66,30 @@ changes:
          Without it the operation fails with `RUNTIME.TEMPORAL_UNAVAILABLE`, which names the
          codec and recommends the matching `*String` type. A contract whose temporal columns
          are all `*String` needs no Temporal anywhere.
-      6. **Update application code that consumed a `Date`.** `a.getTime() - b.getTime()`
-         becomes `Temporal.Instant.compare(a, b)`; `new Date(x)` at a write site becomes
-         `Temporal.Instant.from(x)` (or `PlainDate` / `PlainDateTime` / `PlainTime` to match
-         the column). In tests, compare temporal values through `toString()` or the type's own
-         `equals` / `compare`: a Temporal value has no own enumerable properties, so
-         `toEqual` / `toMatchObject` against one passes for *any* value of the same type.
+      6. **Update application code that consumed a `Date`.** `Temporal.Instant.from()` parses
+         **only an ISO string carrying an offset** — it throws on a `Date`, on an
+         epoch-millisecond number, and on a date-time string with no offset. Convert by source:
+
+         | You have | Use |
+         | --- | --- |
+         | a `Date` | `instant = date.toTemporalInstant()`, or `Temporal.Instant.fromEpochMilliseconds(date.getTime())` |
+         | epoch milliseconds | `Temporal.Instant.fromEpochMilliseconds(ms)` |
+         | an ISO string **with** an offset (`…Z`, `…+02:00`) | `Temporal.Instant.from(text)` |
+         | an ISO string **without** an offset | pick the zone it meant: `Temporal.PlainDateTime.from(text).toZonedDateTime('UTC').toInstant()` |
+         | "now" | `Temporal.Now.instant()` |
+
+         Match the column, not just the type name: a `date` column takes a
+         `Temporal.PlainDate` (`Temporal.PlainDate.from('2024-01-01')`), a `timestamp` column a
+         `Temporal.PlainDateTime`, a `time` column a `Temporal.PlainTime`. Only `timestamptz`
+         takes an `Instant`.
+
+         `Temporal.Instant.compare(a, b)` replaces `a.getTime() - b.getTime()`, but **both
+         operands must already be `Instant`s** — it throws on a `Date`. Values read back from
+         the ORM already are; convert anything you brought from elsewhere first.
+
+         In tests, compare temporal values through `toString()` or the type's own `equals` /
+         `compare`: a Temporal value has no own enumerable properties, so `toEqual` /
+         `toMatchObject` against one passes for *any* value of the same type.
     detection:
       glob: "**/*.{ts,mts,cts,prisma,json}"
       regex:

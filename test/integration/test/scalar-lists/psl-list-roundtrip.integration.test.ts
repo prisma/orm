@@ -248,8 +248,13 @@ model Reading {
 
         const rows = await runtime.query(planFromAst(select, contract)).toArray();
         expect(rows).toHaveLength(1);
-        const row = rows[0] as unknown as {
-          dates: Date[];
+        // `rows[0]!` rather than a hop through `unknown`: the plan is built from a dynamically
+        // assembled AST, so it carries no literal row type and indexing yields `undefined` under
+        // `noUncheckedIndexedAccess`. The length assertion above is what rules that out. Going
+        // through `unknown` hid both that and the element types — `dates` read as `Date[]` here
+        // long after the column started handing back `Temporal.Instant`.
+        const row = rows[0]! as {
+          dates: Temporal.Instant[];
           payloads: Uint8Array[];
           amounts: string[];
         };
@@ -332,7 +337,7 @@ model Reading {
 
         const rows = await runtime.query(planFromAst(select, contract)).toArray();
         expect(rows).toHaveLength(1);
-        const row = rows[0] as unknown as {
+        const row = rows[0]! as {
           tags: string[];
           scores: number[];
         };

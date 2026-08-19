@@ -141,6 +141,11 @@ describe('representation-explicit temporal string codecs', () => {
     // discriminating: sampled after an await, `seenDuring` reports the window the codecs actually
     // ran in. A helper that restored the global before awaiting would hand back the stand-in.
     const standIn = { note: 'stands in for a host Temporal implementation' };
+    // Save what was there before overwriting it. This suite installs a real polyfill in its setup
+    // file, and deleting the stand-in on the way out — rather than restoring — would leave every
+    // later test in the same worker without a global that its own setup had provided.
+    const hadHostTemporal = Object.hasOwn(globalThis, 'Temporal');
+    const hostTemporal = Reflect.get(globalThis, 'Temporal');
     Reflect.set(globalThis, 'Temporal', standIn);
     const seenDuring: unknown[] = [];
 
@@ -160,7 +165,16 @@ describe('representation-explicit temporal string codecs', () => {
       expect(results).toEqual(['infinity', 'infinity', 'infinity', 'infinity']);
       expect(Reflect.get(globalThis, 'Temporal')).toBe(standIn);
     } finally {
-      Reflect.deleteProperty(globalThis, 'Temporal');
+      if (hadHostTemporal) {
+        Reflect.set(globalThis, 'Temporal', hostTemporal);
+      } else {
+        Reflect.deleteProperty(globalThis, 'Temporal');
+      }
     }
+  });
+
+  it('leaves the host Temporal global exactly as it found it', () => {
+    expect(Object.hasOwn(globalThis, 'Temporal')).toBe(true);
+    expect(Reflect.get(globalThis, 'Temporal')).toBe(Temporal);
   });
 });
