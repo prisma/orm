@@ -549,10 +549,9 @@ function decodeTemporalText<T>(
  * the cheapest identity that holds across a native Temporal and a polyfilled one, where an
  * `instanceof` against either realm's classes would not.
  *
- * A rejection here is a plain `Error`, deliberately: the generic encode path wraps it as
- * `RUNTIME.ENCODE_FAILED` carrying the codec id and the parameter label, which is the envelope a
- * wrong-typed parameter belongs in. The structured Temporal errors are for values that are the
- * right type and still cannot cross the boundary.
+ * The rejection is a structured `RUNTIME.ENCODE_FAILED`, so it reaches the caller with its code
+ * and its `fix` intact rather than being re-wrapped by the generic encode path. `fix` is where the
+ * `*String` escape hatch is named, which is the one thing a caller who hit this can act on.
  */
 function encodeTemporalValue(
   identity: TemporalCodecIdentity,

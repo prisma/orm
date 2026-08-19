@@ -300,9 +300,11 @@ describe('encode refuses a value that is not the codec’s own Temporal type', (
       );
   });
 
-  it('names the *String escape hatch in the message', async () => {
-    await expect(timestampCodec.encode(new Date() as never, callCtx)).rejects.toThrow(
-      'TimestampString(p)',
-    );
+  it('carries the code, the codec and the *String escape hatch as structured fields', async () => {
+    await expect(timestampCodec.encode(new Date() as never, callCtx)).rejects.toMatchObject({
+      code: 'RUNTIME.ENCODE_FAILED',
+      fix: expect.stringContaining('TimestampString(p)'),
+      meta: { codecId: 'pg/timestamp-temporal@1', received: 'a Date' },
+    });
   });
 });
