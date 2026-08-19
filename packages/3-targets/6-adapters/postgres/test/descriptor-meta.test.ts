@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { postgresNativeAuthoringTypes } from '../src/core/control-mutation-defaults';
 import { postgresAdapterDescriptorMeta } from '../src/core/descriptor-meta';
 
 const storage = postgresAdapterDescriptorMeta.types.storage;
@@ -112,9 +113,12 @@ describe('expandNativeType hooks via descriptor-meta', () => {
           );
         });
 
-        it('throws for zero precision', () => {
-          expect(() => expand({ nativeType: 'timestamp', typeParams: { precision: 0 } })).toThrow(
-            'Invalid "precision" type parameter',
+        // `timestamp(0)` is a whole-second column, not a missing precision. The authoring surface
+        // accepts it (`minimum: 0` on every precision-bearing type constructor), so expansion has
+        // to as well — otherwise a schema the emitter accepts fails later, at planning.
+        it('renders zero precision rather than rejecting it', () => {
+          expect(expand({ nativeType: 'timestamp', typeParams: { precision: 0 } })).toBe(
+            'timestamp(0)',
           );
         });
 
@@ -222,4 +226,42 @@ describe('storage entries', () => {
       ]),
     );
   });
+});
+
+/**
+ * The two halves of a type parameter have to agree on what they accept.
+ *
+ * The authoring surface decides which literals a schema may write; the codec's control hook decides
+ * which of them survive into a native type at planning time. A value the first accepts and the
+ * second refuses is not a validation error the user can act on — it is a schema that emits cleanly
+ * and then fails on `db update`, several commands later, with a message about type parameters the
+ * user never typed.
+ *
+ * `Timestamp(0)` was exactly that: `minimum: 0` in the type constructor, a positive-integer check
+ * in `expandPrecision`.
+ */
+describe('precision bounds agree between authoring and expansion', () => {
+  const precisionBearing = [
+    ['Timestamp', 'pg/timestamp-temporal@1', 'timestamp'],
+    ['Timestamptz', 'pg/timestamptz-temporal@1', 'timestamptz'],
+    ['Time', 'pg/time-temporal@1', 'time'],
+    ['Timetz', 'pg/timetz@1', 'timetz'],
+    ['TimestampString', 'pg/timestamp-string@1', 'timestamp'],
+    ['TimestamptzString', 'pg/timestamptz-string@1', 'timestamptz'],
+    ['TimeString', 'pg/time-string@1', 'time'],
+  ] as const;
+
+  it.each(precisionBearing)(
+    '%s declares a minimum its hook honours',
+    (typeName, codecId, nativeType) => {
+      const typeConstructor = postgresNativeAuthoringTypes[typeName];
+      const precisionArg = typeConstructor.args?.find((arg) => arg.name === 'precision');
+      const minimum = precisionArg?.kind === 'number' ? precisionArg.minimum : undefined;
+
+      expect(minimum, `${typeName} should declare a precision minimum`).toBeTypeOf('number');
+      expect(
+        hooks[codecId]!.expandNativeType({ nativeType, typeParams: { precision: minimum } }),
+      ).toBe(`${nativeType}(${minimum})`);
+    },
+  );
 });

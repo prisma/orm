@@ -84,15 +84,24 @@ function expandLength({ nativeType, typeParams }: ExpandNativeTypeInput): string
   return `${nativeType}(${length})`;
 }
 
+/**
+ * Zero is a precision, not a missing one: `timestamp(0)`, `timestamptz(0)`, `time(0)`, `timetz(0)`
+ * and `interval(0)` all name whole-second columns in PostgreSQL. The authoring surface says so too
+ * — every precision-bearing type constructor declares `minimum: 0` — so rejecting it here made a
+ * schema the emitter accepts fail later, during native-type expansion, with a planning error.
+ *
+ * Length is the opposite case and keeps {@link isPositiveInteger}: `character(0)` and `bit(0)` are
+ * not types PostgreSQL has. So is `numeric`, whose precision must be at least 1.
+ */
 function expandPrecision({ nativeType, typeParams }: ExpandNativeTypeInput): string {
   if (!typeParams || !('precision' in typeParams)) {
     return nativeType;
   }
   const precision = typeParams['precision'];
-  if (!isPositiveInteger(precision)) {
+  if (!isNonNegativeInteger(precision)) {
     throw adapterError(
       'RUNTIME.TYPE_PARAMS_INVALID',
-      `Invalid "precision" type parameter for "${nativeType}": expected a positive integer, got ${JSON.stringify(precision)}`,
+      `Invalid "precision" type parameter for "${nativeType}": expected a non-negative integer, got ${JSON.stringify(precision)}`,
       { meta: { nativeType, param: 'precision', received: precision } },
     );
   }
