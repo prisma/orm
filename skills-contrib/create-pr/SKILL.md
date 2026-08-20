@@ -75,7 +75,7 @@ Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's req
 
 1. **`## Linked issue`** — the template header, used instead of a bare close-line. The template asks for a GitHub issue here; a maintainer PR puts the Linear ticket in the same place: a single `Refs [$TICKET_ID](https://linear.app/...)` link, plus `Fixes #N` as well when a GitHub issue exists, plus links to any prerequisite or follow-up PRs and the Linear tickets they close. Keep it short — three lines max.
 
-   **`## Skill update`** — name the agent skill the change teaches, or write `n/a — internal only`. The template checklist asks you to confirm this section, so a body without it cannot tick that box truthfully.
+   **`## Skill update`** — name the agent skill the change teaches. Reserve `n/a — internal only` for changes that are purely internal or a refactor with no user-visible delta; a user-facing change that teaches no existing skill still needs a sentence saying why no update is required. The template checklist asks you to confirm this section, so a body without it cannot tick that box truthfully.
 
 2. **`## At a glance`** — a copy-pasteable code sample from real code in the branch (not invented, not pseudocode) that demonstrates the change in user-observable terms. Below the code, one short sentence that grounds the "before" state if relevant.
 
@@ -127,7 +127,7 @@ Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's req
 
 #### Drafting workflow
 
-1. Run the `drive-pr-walkthrough` skill for the current branch vs base (default: `origin/main...HEAD`) and write `walkthrough.md` to disk. That skill installs from [prisma/ignite](https://github.com/prisma/ignite) and is not part of this repo; if it is not installed, derive the walkthrough from the diff yourself. The walkthrough provides raw material — narrative steps, behavior changes, evidence links — but its default section order is **not** the PR shape. You will restructure it.
+1. Run the `drive-pr-walkthrough` skill for the current branch vs base (default: `origin/main...HEAD`) and write `walkthrough.md` to disk. That skill lives in [prisma/ignite](https://github.com/prisma/ignite), not in this repo. If it is not installed, either install it with `npx skills add prisma/ignite/skills/.pilot --skill '*'` (the command the root `CLAUDE.md` documents) or derive the walkthrough from the diff yourself. The walkthrough provides raw material — narrative steps, behavior changes, evidence links — but its default section order is **not** the PR shape. You will restructure it.
 2. Write the PR body to disk as a working file (e.g. `wip/pr-<num>-body.md`) following the **Required structure** above. Reuse the walkthrough's narrative, behavior bullets, and evidence links where they fit; restructure to lead with the code sample and the decision, and to end with alternatives.
 3. **Adjust links for GitHub**:
    - Keep helpful link text (file paths, optionally line ranges).

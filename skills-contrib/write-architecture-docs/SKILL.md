@@ -44,7 +44,7 @@ Architecture docs in this repo serve two audiences: team members working on the 
 Good: "Prisma Next supports multiple database families. SQL was the first; MongoDB is the second."
 Bad: "MongoDB is a database family in Prisma Next. The contract, ORM, execution pipeline, and plugin framework all generalize across fundamentally different data models — the same `ContractBase` domain structure, the same `Collection` chaining API, and the same plugin lifecycle work for both SQL and MongoDB."
 
-**Inline summaries with ADR links.** When referencing an ADR, summarize the key idea in the text and link the ADR for depth. The doc should be understandable without following any links.
+**Inline summaries with ADR links.** When referencing an ADR, summarize the key idea in the text and link the ADR for depth. The doc should be understandable without following any links. The example below shows the link as it must appear in the subsystem doc you are writing, so its path is relative to that doc's location under `docs/architecture docs/subsystems/`.
 
 Good: "An owned model declares `owner: \"User\"` — a domain fact about aggregate membership. Its data lives within the owner's storage. See [ADR 177](../adrs/ADR%20177%20-%20Ownership%20replaces%20relation%20strategy.md)."
 Bad: "See [ADR 177](...) for how embedding works."

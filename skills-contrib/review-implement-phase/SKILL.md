@@ -63,11 +63,13 @@ If missing, instruct user to run:
      - issue comments via `addComment` (or wrapper script)
    - Before starting implementation:
      - **Detect pending reviews authored by the acting user** on this PR:
-       `gh api graphql -f query='query($owner:String!,$repo:String!,$pr:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$pr){reviews(last:20,states:PENDING){nodes{id author{login}}}}}}' -F owner=<owner> -F repo=<repo> -F pr=<number>`
-     - If any exist, **halt** and clean them up (submit or dismiss) before continuing.
+       `gh api graphql -f query='query($owner:String!,$repo:String!,$pr:Int!){viewer{login} repository(owner:$owner,name:$repo){pullRequest(number:$pr){reviews(last:100,states:PENDING){pageInfo{hasPreviousPage startCursor} nodes{id author{login}}}}}}' -F owner=<owner> -F repo=<repo> -F pr=<number> --jq '.data as $d | $d.repository.pullRequest.reviews.nodes[] | select(.author.login == $d.viewer.login)'`
+     - The `author.login` filter matters: another user's pending review is not yours to submit or dismiss, and must not block this workflow. `--jq` is `gh`'s built-in filter and needs no `jq` binary.
+     - GitHub allows one pending review per user per PR, so the filtered result is either empty or a single node. `last:100` covers the page; if `hasPreviousPage` is true and nothing matched, page back with `before: <startCursor>` before concluding there is none.
+     - If one exists, **halt** and clean it up (submit or dismiss) before continuing.
    - After posting any "On it" / "Done" comment:
-     - **Re-check for pending reviews authored by the acting user**.
-     - If any exist, the workflow is **blocked** until they are cleaned up.
+     - **Re-check for a pending review authored by the acting user**, with the same filtered query.
+     - If one exists, the workflow is **blocked** until it is cleaned up.
    - Implementation requirement:
      - For `review_thread` targets, always reply using **thread replies** (never inline PR review comments).
        - If you only have the thread node id, first fetch the thread’s primary comment node id, then call `addPullRequestReviewThreadReply`.

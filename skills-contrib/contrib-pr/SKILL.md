@@ -14,8 +14,8 @@ If the user is a maintainer with access to internal Linear tickets, use `create-
 Trigger this skill when the user says any of:
 
 - "Open a PR for this contribution"
-- "Submit this as a PR to prisma-next"
-- "I'm contributing to prisma-next, finalize my change"
+- "Submit this as a PR to prisma/prisma"
+- "I'm contributing to Prisma Next, finalize my change"
 - "Help me get this PR ready for review"
 
 If the user has clearly already followed the contribution flow and just needs the `gh pr create` invocation, you may skip directly to step 5.
@@ -51,7 +51,7 @@ Before opening the PR, check:
 - **One logical change.** If the diff includes unrelated cleanup or "while I was here" fixes, ask the user whether to split them into separate PRs. Mixed-scope PRs almost always trigger a "please split this" review comment.
 - **Substantive change?** If the change is more than a typo / doc fix / obvious bug fix, ask the user whether they opened a tracking issue first per `CONTRIBUTING.md`. If not, recommend they do — maintainers will respond within 5 business days, and a half-day issue conversation can prevent a one-week PR rewrite when the design direction differs from what they expect.
 - **Tests updated.** If the change has any behavioural delta and there are no test changes in the diff, push back on the user before opening the PR. "Why aren't there tests?" is the most common reason a PR gets bounced.
-- **No backward-compat shims.** prisma-next is pre-1.0; if the change renames or removes an API, the call sites should be updated, not aliased.
+- **No backward-compat shims.** Prisma Next is pre-1.0; if the change renames or removes an API, the call sites should be updated, not aliased.
 
 ### Step 3 — Run the right test suites
 
@@ -123,7 +123,7 @@ Fill in the [pull request template](../../.github/PULL_REQUEST_TEMPLATE.md) sect
 - **Linked issue**: `Fixes #N` / `Refs #N`. If no issue exists because the change is small, write `n/a — small change`.
 - **Summary**: one or two sentences focused on *why*, not file-by-file *what*. "Adds X because Y was broken" rather than "Adds X function in foo.ts and modifies bar.ts".
 - **Testing performed**: list the actual `pnpm test:*` commands you ran. If you ran a manual repro (e.g. against the demo), say so.
-- **Skill update**: say which agent skill the change teaches, or write `n/a — internal only` when the change touches nothing an agent skill describes. The checklist below asks you to confirm this section.
+- **Skill update**: say which agent skill the change teaches. Write `n/a — internal only` only when the change is purely internal or a refactor with no user-visible delta. A user-facing change that teaches no existing skill still needs a sentence saying why no skill update is required. The checklist below asks you to confirm this section.
 - **Checklist**: confirm DCO signoff, scope, tests, conventional title.
 - **Notes for the reviewer** (optional): alternative approaches you considered, follow-ups intentionally deferred, anything you want the reviewer to focus on.
 
