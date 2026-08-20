@@ -46,7 +46,7 @@ Note:
    - `<output-dir>/review-state.json`
    - `<output-dir>/review-actions.json`
    - `<output-dir>/review-actions.md`
-2. Enforce artifact safety before generation (must be ignored by git):
+2. Enforce artifact safety before generation (the artifacts must stay untracked). In a git checkout the guard asks git directly; in a Jujutsu workspace with no git directory it accepts a directory under the workspace root's ignored `wip/` tree:
 
 ```bash
 node ../review-fetch-phase/scripts/guard-review-artifacts-ignored.mjs --dir <output-dir>

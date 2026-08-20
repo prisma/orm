@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { realpathSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { existsSync, realpathSync } from 'node:fs';
+import { isAbsolute, join, relative, resolve, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const EXIT_SUCCESS = 0;
@@ -62,10 +62,54 @@ function isTracked(path) {
   return result.status === 0;
 }
 
+/**
+ * The workspace root of a Jujutsu workspace, found by walking up to the `.jj`
+ * directory. Returns null outside one.
+ */
+function findJjWorkspaceRoot(startPath) {
+  let current = resolve(startPath);
+  for (;;) {
+    if (existsSync(join(current, '.jj'))) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return null;
+    }
+    current = parent;
+  }
+}
+
+/**
+ * In a Jujutsu workspace with no git directory, git cannot answer whether a
+ * path is ignored. The repo ignores its whole `wip/` tree, so an artifact dir
+ * under `<workspace-root>/wip/` is covered by construction — that is what this
+ * checks, and it is the only case it accepts.
+ */
+function ensureUnderIgnoredWipTree(path) {
+  const absolutePath = resolve(path);
+  const workspaceRoot = findJjWorkspaceRoot(absolutePath);
+  if (workspaceRoot === null) {
+    throw new Error('error: not in a git repository or a jj workspace');
+  }
+  const relativePath = relative(join(workspaceRoot, 'wip'), absolutePath);
+  if (
+    relativePath === '' ||
+    relativePath === '..' ||
+    relativePath.startsWith(`..${sep}`) ||
+    isAbsolute(relativePath)
+  ) {
+    throw new Error(
+      `error: without git, review artifacts must live under the ignored wip/ tree: ${join(workspaceRoot, 'wip')}`,
+    );
+  }
+  return true;
+}
+
 function ensureInsideRepo(path) {
   const root = spawnSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' });
   if (root.status !== 0) {
-    throw new Error('error: not in a git repository');
+    return ensureUnderIgnoredWipTree(path);
   }
   const repoRoot = root.stdout.trim();
   const absolutePath = resolve(path);
@@ -78,6 +122,7 @@ function ensureInsideRepo(path) {
   ) {
     throw new Error(`error: output dir must be inside repo: ${repoRoot}`);
   }
+  return false;
 }
 
 async function main() {
@@ -87,7 +132,13 @@ async function main() {
     process.exit(EXIT_SUCCESS);
   }
 
-  ensureInsideRepo(args.outputDir);
+  const ignoredByWorkspaceLayout = ensureInsideRepo(args.outputDir);
+  if (ignoredByWorkspaceLayout) {
+    process.stdout.write(
+      `ok: review artifacts are under the ignored wip/ tree: ${args.outputDir}\n`,
+    );
+    process.exit(EXIT_SUCCESS);
+  }
 
   const tracked = [];
   const notIgnored = [];
