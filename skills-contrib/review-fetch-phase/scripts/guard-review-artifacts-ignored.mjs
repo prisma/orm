@@ -2,7 +2,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, realpathSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve, sep, dirname } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve, sep, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const EXIT_SUCCESS = 0;
@@ -81,10 +81,44 @@ function findJjWorkspaceRoot(startPath) {
 }
 
 /**
+ * The canonical form of `path`: symlinks resolved in the part of it that
+ * exists, with the components that do not exist yet appended unchanged.
+ */
+function canonicalize(path) {
+  const missing = [];
+  let current = resolve(path);
+  for (;;) {
+    if (existsSync(current)) {
+      return join(realpathSync(current), ...missing.reverse());
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      return resolve(path);
+    }
+    missing.push(basename(current));
+    current = parent;
+  }
+}
+
+function isInside(parentPath, childPath) {
+  const relativePath = relative(parentPath, childPath);
+  return (
+    relativePath !== '' &&
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${sep}`) &&
+    !isAbsolute(relativePath)
+  );
+}
+
+/**
  * In a Jujutsu workspace with no git directory, git cannot answer whether a
  * path is ignored. The repo ignores its whole `wip/` tree, so an artifact dir
  * under `<workspace-root>/wip/` is covered by construction — that is what this
  * checks, and it is the only case it accepts.
+ *
+ * Both sides are canonicalized first: a symlink under `wip/` points at a
+ * directory the ignore rule does not cover, so the comparison has to be made
+ * between real paths.
  */
 function ensureUnderIgnoredWipTree(path) {
   const absolutePath = resolve(path);
@@ -92,15 +126,17 @@ function ensureUnderIgnoredWipTree(path) {
   if (workspaceRoot === null) {
     throw new Error('error: not in a git repository or a jj workspace');
   }
-  const relativePath = relative(join(workspaceRoot, 'wip'), absolutePath);
-  if (
-    relativePath === '' ||
-    relativePath === '..' ||
-    relativePath.startsWith(`..${sep}`) ||
-    isAbsolute(relativePath)
-  ) {
+  const wipRoot = join(workspaceRoot, 'wip');
+  const canonicalWorkspaceRoot = canonicalize(workspaceRoot);
+  const canonicalPath = canonicalize(absolutePath);
+  if (!isInside(canonicalWorkspaceRoot, canonicalPath)) {
     throw new Error(
-      `error: without git, review artifacts must live under the ignored wip/ tree: ${join(workspaceRoot, 'wip')}`,
+      `error: review artifacts must stay inside the workspace: ${absolutePath} resolves to ${canonicalPath}, outside ${canonicalWorkspaceRoot}`,
+    );
+  }
+  if (!isInside(canonicalize(wipRoot), canonicalPath)) {
+    throw new Error(
+      `error: without git, review artifacts must live under the ignored wip/ tree: ${wipRoot}`,
     );
   }
   return true;
