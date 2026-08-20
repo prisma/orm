@@ -1,11 +1,11 @@
 ---
 name: contrib-pr
-description: Open a high-quality external contributor PR against prisma-next. Use when the user is an outside contributor (not a Prisma maintainer) and wants to submit a change as a pull request from a fork. Encodes the contribution flow from CONTRIBUTING.md so the resulting PR passes review on the first round.
+description: Open a high-quality external contributor PR against prisma/prisma. Use when the user is an outside contributor (not a Prisma maintainer) and wants to submit a change as a pull request from a fork. Encodes the contribution flow from CONTRIBUTING.md so the resulting PR passes review on the first round.
 ---
 
 # Contributor PR skill (external)
 
-This skill is for **external contributors** to `prisma/prisma` who are using an LLM-based agent to author or finalize a PR. It is intentionally separate from the maintainer-facing `create-pr` skill: it does not depend on Linear access, internal plan/spec documents, or any private context. It encodes the expectations laid out in [`CONTRIBUTING.md`](../../../CONTRIBUTING.md) as a runnable workflow, so the PR you produce matches the shape maintainers expect on the first review round.
+This skill is for **external contributors** to `prisma/prisma` who are using an LLM-based agent to author or finalize a PR. It is intentionally separate from the maintainer-facing `create-pr` skill: it does not depend on Linear access, internal plan/spec documents, or any private context. It encodes the expectations laid out in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) as a runnable workflow, so the PR you produce matches the shape maintainers expect on the first review round.
 
 If the user is a maintainer with access to internal Linear tickets, use `create-pr` instead.
 
@@ -38,9 +38,9 @@ This skill is a pit of success — there is no CI gate that checks you used it. 
 
 Before doing anything else, read the project's contribution docs:
 
-1. Read [`CONTRIBUTING.md`](../../../CONTRIBUTING.md). This is the source of truth for setup, the test command set, DCO signoff, and PR expectations.
-2. Read [`CODE_OF_CONDUCT.md`](../../../CODE_OF_CONDUCT.md) so you understand what's expected in your interactions on the PR thread.
-3. Skim [`SECURITY.md`](../../../SECURITY.md). If your change is fixing a security issue, **stop and use the Private Vulnerability Reporting flow instead** — do not open a public PR.
+1. Read [`CONTRIBUTING.md`](../../CONTRIBUTING.md). This is the source of truth for setup, the test command set, DCO signoff, and PR expectations.
+2. Read [`CODE_OF_CONDUCT.md`](../../CODE_OF_CONDUCT.md) so you understand what's expected in your interactions on the PR thread.
+3. Skim [`SECURITY.md`](../../SECURITY.md). If your change is fixing a security issue, **stop and use the Private Vulnerability Reporting flow instead** — do not open a public PR.
 
 If anything in `CONTRIBUTING.md` contradicts what this skill says, `CONTRIBUTING.md` wins.
 
@@ -114,15 +114,16 @@ Examples:
 - `fix(postgres-adapter): handle null in jsonb columns`
 - `docs(contributing): clarify pnpm install steps`
 
-The PR title flows directly into the auto-generated GitHub Release notes when the version that contains it is published — pick a title a downstream user would understand.
+PR titles are the raw material the release-notes author triages when a version ships, so pick a title a downstream user would understand.
 
 #### Body
 
-Fill in the [pull request template](../../../.github/PULL_REQUEST_TEMPLATE.md) sections in order:
+Fill in the [pull request template](../../.github/PULL_REQUEST_TEMPLATE.md) sections in order:
 
 - **Linked issue**: `Fixes #N` / `Refs #N`. If no issue exists because the change is small, write `n/a — small change`.
 - **Summary**: one or two sentences focused on *why*, not file-by-file *what*. "Adds X because Y was broken" rather than "Adds X function in foo.ts and modifies bar.ts".
 - **Testing performed**: list the actual `pnpm test:*` commands you ran. If you ran a manual repro (e.g. against the demo), say so.
+- **Skill update**: say which agent skill the change teaches, or write `n/a — internal only` when the change touches nothing an agent skill describes. The checklist below asks you to confirm this section.
 - **Checklist**: confirm DCO signoff, scope, tests, conventional title.
 - **Notes for the reviewer** (optional): alternative approaches you considered, follow-ups intentionally deferred, anything you want the reviewer to focus on.
 

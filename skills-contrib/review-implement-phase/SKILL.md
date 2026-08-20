@@ -33,7 +33,7 @@ System dependencies required on PATH:
 
 - `gh` (GitHub CLI)
 
-If `gh` is missing, halt immediately and ask the user to install it. The implement-phase scripts no longer depend on `jq`.
+If `gh` is missing, halt immediately and ask the user to install it. The implement-phase scripts require only `gh`.
 
 GitHub admin capability must be available before starting implementation:
 
@@ -62,7 +62,8 @@ If missing, instruct user to run:
      - thread replies via `addPullRequestReviewThreadReply` (or wrapper script)
      - issue comments via `addComment` (or wrapper script)
    - Before starting implementation:
-     - **Detect pending reviews authored by the acting user** on this PR.
+     - **Detect pending reviews authored by the acting user** on this PR:
+       `gh api graphql -f query='query($owner:String!,$repo:String!,$pr:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$pr){reviews(last:20,states:PENDING){nodes{id author{login}}}}}}' -F owner=<owner> -F repo=<repo> -F pr=<number>`
      - If any exist, **halt** and clean them up (submit or dismiss) before continuing.
    - After posting any "On it" / "Done" comment:
      - **Re-check for pending reviews authored by the acting user**.

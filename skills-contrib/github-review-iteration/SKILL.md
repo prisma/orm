@@ -25,6 +25,8 @@ This skill depends on three sibling skills that live **in the same parent direct
 
 All script paths in this document are **relative to this skill's directory**. Use `../` to reach sibling skills. Do **not** search the workspace/repo for these files — they are part of the skills installation, not the project being reviewed.
 
+**Run the scripts from the repository root**, addressing them by their full path under the skills installation. The reviews root defaults to `wip/reviews` resolved against the working directory, so a run started elsewhere writes artifacts outside the repo-root `wip/` tree that `.gitignore` covers. Pass `--reviews-root <repo-root>/wip/reviews` if you must run from another directory.
+
 ## Usage
 
 This skill supports subcommands:
@@ -36,7 +38,7 @@ This skill supports subcommands:
 /github-review-iteration iterate <PR_URL> [output-dir]
 ```
 
-When `output-dir` is omitted, use the standard layout: `wip/reviews/<owner>_<repo>_pr-<number>/` (derived from PR URL).
+When `output-dir` is omitted, use the standard layout: `wip/reviews/<owner>_<repo>_pr-<number>/` (derived from the PR URL, with owner and repo lowercased — derive a directory name by hand the same way, or the artifacts split across two directories).
 
 Example:
 

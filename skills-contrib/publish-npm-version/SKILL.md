@@ -26,10 +26,10 @@ Read [`docs/oss/versioning.md`](../../docs/oss/versioning.md) before running thi
 - The lockstep guarantee (every workspace package matches the root).
 - The v8 RC line (`8.0.0-rc.N`, `latest` frozen until `8.0.0` final).
 - The dist-tag convention (`latest` / `dev` / `beta`).
-- The full release procedure (this skill is step 2 of 3; merging the PR is the publish trigger — there is no separate dispatch step).
+- The full release procedure (this skill covers steps 1-2 of 3; merging the PR is the publish trigger — there is no separate dispatch step).
 - The emergency-patch path (this skill does **not** handle patches).
 
-This SKILL.md covers only the mechanics of step 2 — opening the bump PR.
+This SKILL.md covers steps 1-2 — opening the bump PR and driving the release notes. Merging (step 3) stays the human gate.
 
 ## Pre-flight
 
@@ -99,7 +99,7 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
 9. **Open the PR** with `gh pr create`. Use the title:
 
    ```text
-   Bump to version <version>
+   chore(release): bump to <version>
    ```
 
    The body should:

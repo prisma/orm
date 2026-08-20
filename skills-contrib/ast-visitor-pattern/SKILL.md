@@ -14,7 +14,7 @@ When a discriminated union has **3+ variants** and **2+ dispatch sites** (render
 
 ## Structure
 
-Four pieces, always in the same file:
+Four pieces, usually in one file — the Mongo DDL set below spreads them over three:
 
 ```typescript
 // 1. Abstract base (not exported — consumers use the union type)
@@ -93,5 +93,6 @@ export function bar(value: string): Foo { return Object.freeze({ kind: 'bar', va
 
 ## Codebase examples
 
-- `MongoAstNode` / `MongoDdlCommandVisitor` — `packages/2-mongo-family/4-query/query-ast/src/ddl-commands.ts`
-- `OpFactoryCall` / `OpFactoryCallVisitor` — `packages/3-mongo-target/1-mongo-target/src/core/op-factory-call.ts`
+- `MongoAstNode` base — `packages/2-mongo-family/4-query/query-ast/src/ast-node.ts`
+- `MongoDdlCommandVisitor` interface — `packages/2-mongo-family/4-query/query-ast/src/ddl-visitors.ts`
+- Concrete DDL commands and their union — `packages/2-mongo-family/4-query/query-ast/src/ddl-commands.ts`

@@ -46,7 +46,7 @@ Bad: "MongoDB is a database family in Prisma Next. The contract, ORM, execution 
 
 **Inline summaries with ADR links.** When referencing an ADR, summarize the key idea in the text and link the ADR for depth. The doc should be understandable without following any links.
 
-Good: "An owned model declares `owner: \"User\"` — a domain fact about aggregate membership. Its data lives within the owner's storage. See [ADR 177](docs/architecture%20docs/adrs/ADR%20177%20-%20Ownership%20replaces%20relation%20strategy.md)."
+Good: "An owned model declares `owner: \"User\"` — a domain fact about aggregate membership. Its data lives within the owner's storage. See [ADR 177](../adrs/ADR%20177%20-%20Ownership%20replaces%20relation%20strategy.md)."
 Bad: "See [ADR 177](...) for how embedding works."
 
 **References section.** Organize by durability:

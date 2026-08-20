@@ -69,11 +69,13 @@ The PR description must follow a **decision-led, narrative** structure. A teamma
 
 #### Consult the PR template
 
-Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's required headers (in prisma-next today: `## Linked issue`, `## Testing performed`, `## Checklist`) must appear in the final body even when the skill's recommended structure below doesn't list them. Where the template and the skill overlap, use the template's richer header (e.g. `## Linked issue` — with a `Refs:` link and any prerequisite-PR / follow-up-PR context — replaces the bare close-line at the top).
+Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's required headers (today: `## Linked issue`, `## Summary`, `## Testing performed`, `## Skill update`, `## Checklist`, `## Notes for the reviewer`) must appear in the final body even when the skill's recommended structure below doesn't list them. Where the template and the skill overlap, use the template's richer header (e.g. `## Linked issue` — with a `Refs:` link and any prerequisite-PR / follow-up-PR context — replaces the bare close-line at the top).
 
 #### Required structure (in this order)
 
-1. **`## Linked issue`** — the template header, used instead of a bare close-line. Single `Refs [$TICKET_ID](https://linear.app/...)` link plus, if relevant, links to any prerequisite or follow-up PRs and the Linear tickets they close. Keep it short — three lines max.
+1. **`## Linked issue`** — the template header, used instead of a bare close-line. The template asks for a GitHub issue here; a maintainer PR puts the Linear ticket in the same place: a single `Refs [$TICKET_ID](https://linear.app/...)` link, plus `Fixes #N` as well when a GitHub issue exists, plus links to any prerequisite or follow-up PRs and the Linear tickets they close. Keep it short — three lines max.
+
+   **`## Skill update`** — name the agent skill the change teaches, or write `n/a — internal only`. The template checklist asks you to confirm this section, so a body without it cannot tick that box truthfully.
 
 2. **`## At a glance`** — a copy-pasteable code sample from real code in the branch (not invented, not pseudocode) that demonstrates the change in user-observable terms. Below the code, one short sentence that grounds the "before" state if relevant.
 
@@ -125,7 +127,7 @@ Read `.github/PULL_REQUEST_TEMPLATE.md` once before drafting. The template's req
 
 #### Drafting workflow
 
-1. Run the `.agents/skills/drive-pr-walkthrough/SKILL.md` workflow for the current branch vs base (default: `origin/main...HEAD`) and write `walkthrough.md` to disk. The walkthrough provides raw material — narrative steps, behavior changes, evidence links — but its default section order is **not** the PR shape. You will restructure it.
+1. Run the `drive-pr-walkthrough` skill for the current branch vs base (default: `origin/main...HEAD`) and write `walkthrough.md` to disk. That skill installs from [prisma/ignite](https://github.com/prisma/ignite) and is not part of this repo; if it is not installed, derive the walkthrough from the diff yourself. The walkthrough provides raw material — narrative steps, behavior changes, evidence links — but its default section order is **not** the PR shape. You will restructure it.
 2. Write the PR body to disk as a working file (e.g. `wip/pr-<num>-body.md`) following the **Required structure** above. Reuse the walkthrough's narrative, behavior bullets, and evidence links where they fit; restructure to lead with the code sample and the decision, and to end with alternatives.
 3. **Adjust links for GitHub**:
    - Keep helpful link text (file paths, optionally line ranges).

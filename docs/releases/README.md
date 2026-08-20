@@ -16,9 +16,9 @@ These files are drafted automatically by the [`draft-release-notes`](../../skill
 - **Write for users, not maintainers.** The audience is someone upgrading their app, not the team that shipped the change. Do not carry internal `TML-NNNN:` issue prefixes — link the PR instead.
 - **Categorize** entries under the fixed section order below, and **omit any section that has no entries**.
 - **Lead with breaking changes** — they are what a reader scanning the notes most needs to see.
-- **Show the impact of breaking changes with a short before/after example.** For the code-visible breaking changes (contract-shape changes, authoring-surface changes, runtime-option changes), nest a compact `before` / `after` snippet under the prose bullet so a reader can see the change at a glance. Source the snippet from the matching `<prev.minor>-to-<head.minor>` upgrade recipe so it stays accurate. Lead with PSL (```` ```prisma ````) when the change is on the authoring surface; use TS/JSON only when the change is genuinely a TS/emitted-shape change. Operational-only breaks (version floors, peer-dep changes, package removals) need no example.
-- **Link PRs and contributors as absolute markdown links** — `[#1234](https://github.com/prisma/prisma-next/pull/1234)` and `[@handle](https://github.com/handle)`, never bare `#1234` / `@handle`. Bare references only autolink inside the GitHub Release body, **not** when this file is read as a repo file or in PR review; explicit links work in every context. Attribute contributors, especially first-time ones.
-- **Link migration recipes as absolute, tag-pinned URLs** — `https://github.com/prisma/prisma/blob/v<version>/skills/upgrade/prisma-next-upgrade/upgrades/<prev.minor>-to-<head.minor>/` — not repo-relative paths. This file is published verbatim as the GitHub Release body, where repo-relative links do not resolve; pinning to the release tag keeps the link working and rot-proof.
+- **Show the impact of breaking changes with a short before/after example.** For the code-visible breaking changes (contract-shape changes, authoring-surface changes, runtime-option changes), nest a compact `before` / `after` snippet under the prose bullet so a reader can see the change at a glance. Source the snippet from the matching `<transition-label>` upgrade recipe so it stays accurate. Lead with PSL (```` ```prisma ````) when the change is on the authoring surface; use TS/JSON only when the change is genuinely a TS/emitted-shape change. Operational-only breaks (version floors, peer-dep changes, package removals) need no example.
+- **Link PRs and contributors as absolute markdown links** — `[#1234](https://github.com/prisma/prisma/pull/1234)` and `[@handle](https://github.com/handle)`, never bare `#1234` / `@handle`. Bare references only autolink inside the GitHub Release body, **not** when this file is read as a repo file or in PR review; explicit links work in every context. Attribute contributors, especially first-time ones.
+- **Link migration recipes as absolute, tag-pinned URLs** — `https://github.com/prisma/prisma/blob/v<version>/skills/prisma-next-upgrade/upgrades/<transition-label>/` — not repo-relative paths. This file is published verbatim as the GitHub Release body, where repo-relative links do not resolve; pinning to the release tag keeps the link working and rot-proof.
 
 The section order is: **Breaking changes → Features → Fixes → New contributors**.
 
@@ -38,7 +38,7 @@ Copy this into `docs/releases/v<version>.md` and fill it in, dropping any sectio
 
 ## Breaking changes
 
-- **<short title>** — <what changed and what the reader must do>. See the [migration recipe](https://github.com/prisma/prisma/blob/v<version>/skills/upgrade/prisma-next-upgrade/upgrades/<prev.minor>-to-<head.minor>/). ([#<pr>](https://github.com/prisma/prisma-next/pull/<pr>))
+- **<short title>** — <what changed and what the reader must do>. See the [migration recipe](https://github.com/prisma/prisma/blob/v<version>/skills/prisma-next-upgrade/upgrades/<transition-label>/). ([#<pr>](https://github.com/prisma/prisma/pull/<pr>))
 
   Before:
 
@@ -54,15 +54,15 @@ Copy this into `docs/releases/v<version>.md` and fill it in, dropping any sectio
 
 ## Features
 
-- <new capability>. ([#<pr>](https://github.com/prisma/prisma-next/pull/<pr>))
+- <new capability>. ([#<pr>](https://github.com/prisma/prisma/pull/<pr>))
 
 ## Fixes
 
-- <bug fix>. ([#<pr>](https://github.com/prisma/prisma-next/pull/<pr>))
+- <bug fix>. ([#<pr>](https://github.com/prisma/prisma/pull/<pr>))
 
 ## New contributors
 
-- [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/prisma-next/pull/<pr>)
+- [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/prisma/pull/<pr>)
 ````
 
 ## See also
