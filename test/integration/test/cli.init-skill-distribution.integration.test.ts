@@ -9,13 +9,14 @@ const WORKSPACE_ROOT = resolve(import.meta.dirname, '../../..');
 const CLI_BIN = resolve(WORKSPACE_ROOT, 'packages/1-framework/3-tooling/cli/dist/bin.mjs');
 
 /**
- * What a consumer's project looks like after `init` where skills are
- * concerned: the skill tree ships inside the packages, and init's whole job
- * is to run the sync once so a fresh project starts current. Keeping the
- * copies current afterwards is the CLI's staleness check, not anything init
- * writes into the project. This exercises the real CLI bin as a subprocess
- * against a fake package manager, so the assertions are about the commands
- * init actually spawns and the files it actually writes.
+ * What a consumer's project looks like after `orm init` where skills are
+ * concerned: nothing. The skill tree ships inside the packages, and skills
+ * setup belongs to the family-level `prisma init` command — `orm init`
+ * neither fetches skills from GitHub nor runs `skills sync`. The one skill
+ * job it keeps is deleting retired skill directories. This exercises the
+ * real CLI bin as a subprocess against a fake package manager, so the
+ * assertions are about the commands init actually spawns and the files it
+ * actually writes.
  */
 function runEngineInit(
   testDir: string,
@@ -58,8 +59,6 @@ function gitignoreOf(testDir: string): string {
   return readFileSync(join(testDir, '.gitignore'), 'utf8');
 }
 
-const SYNC_COMMAND = 'dlx prisma@next skills sync';
-
 describe('init skill distribution (offline integration, real CLI)', () => {
   const testDirs = new Set<string>();
 
@@ -70,13 +69,12 @@ describe('init skill distribution (offline integration, real CLI)', () => {
     testDirs.clear();
   });
 
-  it('syncs the skills out of the installed packages, once', { timeout: 60_000 }, async () => {
+  it('runs no skills command at all', { timeout: 60_000 }, async () => {
     const { testDir, exitCode, stderr, commands } = initProject();
     testDirs.add(testDir);
 
     expect(exitCode, stderr).toBe(0);
-    const syncCommands = commands.filter((command) => command.includes('skills sync'));
-    expect(syncCommands).toEqual([SYNC_COMMAND]);
+    expect(commands.filter((command) => command.includes('skills'))).toEqual([]);
   });
 
   it('fetches no skills from GitHub any more', { timeout: 60_000 }, async () => {
@@ -96,7 +94,6 @@ describe('init skill distribution (offline integration, real CLI)', () => {
     // `prisma-cli`) would leave the script calling a binary the project does
     // not have.
     expect(commands).toContain('add -D prisma@next @types/node');
-    expect(commands).toContain(SYNC_COMMAND);
     expect(manifestOf(testDir).scripts).toMatchObject({
       'contract:emit': 'prisma contract emit',
     });
@@ -127,22 +124,14 @@ describe('init skill distribution (offline integration, real CLI)', () => {
     expect(exitCode, stderr).toBe(0);
     expect(existsSync(retired)).toBe(false);
   });
-
-  it('under --skip-skills, syncs nothing', { timeout: 60_000 }, async () => {
-    const { testDir, exitCode, stderr, commands } = initProject('--skip-skills');
-    testDirs.add(testDir);
-
-    expect(exitCode, stderr).toBe(0);
-    expect(commands.filter((command) => command.includes('skills'))).toEqual([]);
-  });
 });
 
 /**
- * Stand-in for the project's package manager. A real `pnpm dlx
- * prisma@next skills sync` would fetch from the npm registry, which an
- * offline test cannot do, so `pnpm` on `PATH` is replaced by a Node script
- * that logs every invocation, reports success, and leaves behind the part of
- * the "installed" project init reads next.
+ * Stand-in for the project's package manager. A real `pnpm add` would fetch
+ * from the npm registry, which an offline test cannot do, so `pnpm` on
+ * `PATH` is replaced by a Node script that logs every invocation, reports
+ * success, and leaves behind the part of the "installed" project init reads
+ * next.
  */
 function createFakeManagerHarness(testDir: string): {
   readonly fakeBinDir: string;
@@ -169,8 +158,8 @@ if (args[0] === 'add' || args[0] === 'install') {
  * The shim reports a successful install without fetching anything, so the
  * project it leaves behind has to contain what \`init\` reads next: init emits
  * by spawning the project-local \`prisma\` binary it resolves through
- * \`prisma/package.json\`. Without this stub the emit step fails, init
- * settles at exit 5, and the skill sync this file is about never runs.
+ * \`prisma/package.json\`. Without this stub the emit step fails and init
+ * settles at exit 5 instead of completing.
  *
  * The binary only has to exit 0 — no assertion here reads the emitted
  * contract, and the emit path itself is covered by the CLI's own unit tests

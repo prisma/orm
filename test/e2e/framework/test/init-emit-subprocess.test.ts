@@ -98,7 +98,6 @@ async function runInit(): Promise<InitRun> {
     '--schema-path',
     'prisma/contract.prisma',
     '--yes',
-    '--skip-skills',
     '--json',
   ];
   try {

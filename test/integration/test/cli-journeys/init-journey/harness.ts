@@ -146,10 +146,6 @@ export async function createJourneyProject(
     writeMinimalPackageJson(dir);
 
     const target = cell.target === 'mongo' ? 'mongodb' : 'postgres';
-    // `--skip-skills` matters here: this journey verifies
-    // scaffold/install/emit/migrate only; the skill sync is intentionally
-    // not exercised (it is covered by
-    // cli.init-skill-distribution.integration.test.ts).
     const initResult = await runNode(
       [
         CLI_BIN,
@@ -161,7 +157,6 @@ export async function createJourneyProject(
         cell.authoring,
         '--yes',
         '--skip-install',
-        '--skip-skills',
       ],
       dir,
     );
