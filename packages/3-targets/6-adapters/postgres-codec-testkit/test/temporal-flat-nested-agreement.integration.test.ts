@@ -74,7 +74,7 @@ function projectionCaseOf(entry: AgreementCase): PostgresCodecConformanceCase {
   };
 }
 
-describe.sequential('temporal flat and nested reads agree', () => {
+describe('temporal flat and nested reads agree', () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>> | undefined;
   let driver: Awaited<ReturnType<typeof postgresControlDriverDescriptor.create>> | undefined;
 

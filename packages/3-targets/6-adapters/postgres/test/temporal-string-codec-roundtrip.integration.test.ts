@@ -151,7 +151,7 @@ function buildSelectByIdAst(id: number): SelectAst {
     );
 }
 
-describe.sequential('temporal string codecs round-trip PostgreSQL text', () => {
+describe('temporal string codecs round-trip PostgreSQL text', () => {
   let database: Awaited<ReturnType<typeof createDevDatabase>> | undefined;
   let runtime: Runtime | undefined;
   let session: ReturnType<typeof postgresRuntimeDriverDescriptor.create> | undefined;
