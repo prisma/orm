@@ -1,13 +1,13 @@
 /**
  * Pins the init emit invariant end to end: the shipped bin's `init` command
- * emits the scaffolded contract by spawning the *project-local* `@prisma/cli`
+ * emits the scaffolded contract by spawning the *project-local* `prisma`
  * bin as a child process in the scaffold directory — never by loading the
  * project's config in-process with the running CLI's own loader. A revert to
  * in-process emit makes the fake project-local bin unnecessary, so its
  * sentinel file never appears and this suite fails.
  *
- * The project's `node_modules/@prisma/cli` is a fake package whose
- * `prisma-cli` bin records its argv and cwd; the package-manager install step
+ * The project's `node_modules/prisma` is a fake package whose
+ * `prisma` bin records its argv and cwd; the package-manager install step
  * is satisfied by a PATH shim `npm` that exits 0, so `init` reaches the emit
  * step without the network.
  */
@@ -61,18 +61,18 @@ afterEach(() => {
 });
 
 function installFakePrismaCli(binSource: string): void {
-  const packageDir = join(projectDir, 'node_modules', '@prisma', 'cli');
+  const packageDir = join(projectDir, 'node_modules', 'prisma');
   mkdirSync(join(packageDir, 'bin'), { recursive: true });
   writeFileSync(
     join(packageDir, 'package.json'),
     JSON.stringify({
-      name: '@prisma/cli',
+      name: 'prisma',
       version: '0.0.0-test',
       type: 'module',
-      bin: { 'prisma-cli': './bin/prisma-cli.mjs' },
+      bin: { prisma: './bin/prisma.mjs' },
     }),
   );
-  writeFileSync(join(packageDir, 'bin/prisma-cli.mjs'), binSource);
+  writeFileSync(join(packageDir, 'bin/prisma.mjs'), binSource);
 }
 
 interface InitRun {
@@ -121,9 +121,9 @@ function settledFrame(stdout: string): unknown {
   return JSON.parse(last ?? '');
 }
 
-describe('init emit through the project-local prisma-cli bin (process e2e)', () => {
+describe('init emit through the project-local prisma bin (process e2e)', () => {
   it(
-    'runs node_modules/@prisma/cli with `contract emit` as a child process in the scaffold directory',
+    'runs node_modules/prisma with `contract emit` as a child process in the scaffold directory',
     async () => {
       installFakePrismaCli(
         [
@@ -142,7 +142,7 @@ describe('init emit through the project-local prisma-cli bin (process e2e)', () 
       expect(invocation.argv).toEqual(['contract', 'emit']);
       expect(realpathSync(invocation.cwd)).toBe(realpathSync(projectDir));
       expect(realpathSync(invocation.script)).toBe(
-        realpathSync(join(projectDir, 'node_modules', '@prisma', 'cli', 'bin', 'prisma-cli.mjs')),
+        realpathSync(join(projectDir, 'node_modules', 'prisma', 'bin', 'prisma.mjs')),
       );
       expect(JSON.stringify(settledFrame(run.stdout))).toContain('"contractEmitted":true');
     },
