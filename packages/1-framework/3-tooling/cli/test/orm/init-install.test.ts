@@ -143,7 +143,7 @@ describe('init installs', () => {
   it(
     'announces each package-manager run as a step',
     async () => {
-      const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
       expect(run.events).toContainEqual(
         expect.objectContaining({
@@ -215,58 +215,14 @@ describe('init installs', () => {
   );
 
   it(
-    'completes at exit 0 when the skill sync fails, telling the user how to retry',
+    'runs no skills command — the family-level `prisma init` owns skills setup',
     async () => {
-      script = [
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 1, stderr: 'prisma: registry unreachable' },
-      ];
-
       const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
       expect(run.exitCode).toBe(0);
-      expect(envelopeOf(run)).toMatchObject({ ok: true, exitCode: 0, diagnostics: [] });
-      expect(skillCalls()).toHaveLength(1);
-      expect(run.presented?.data).toMatchObject({
-        warnings: expect.arrayContaining([
-          expect.stringContaining('Could not sync the Prisma Next agent skills'),
-        ]),
-      });
-    },
-    timeouts.coldTransformImport,
-  );
-
-  it(
-    'sends a failed sync to the sync command, never back through init',
-    async () => {
-      script = [
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 1, stderr: 'prisma: registry unreachable' },
-      ];
-
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
-      const warnings = JSON.stringify(run.presented?.data);
-
-      expect(warnings).toContain('prisma skills sync');
-      expect(warnings).not.toContain('prisma-next init');
-    },
-    timeouts.coldTransformImport,
-  );
-
-  it(
-    'runs the skill sync once, through the unified CLI',
-    async () => {
-      await harness().run(scaffoldArgv(), { cwd: projectDir });
-
-      const first = skillCalls()[0];
-
-      expect(skillCalls()).toHaveLength(1);
-      expect(first).toMatchObject({ cwd: projectDir });
-      expect(first?.args).toEqual(expect.arrayContaining(['prisma@next', 'skills', 'sync']));
+      expect(skillCalls()).toEqual([]);
+      expect(calls).toHaveLength(3);
+      expect(JSON.stringify(run.presented?.data)).not.toContain('skills sync');
     },
     timeouts.coldTransformImport,
   );
@@ -277,7 +233,7 @@ describe('init installs', () => {
       async () => {
         script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
 
-        const run = await harness('pnpm').run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
 
         expect(run.exitCode).toBe(0);
         expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
@@ -307,7 +263,7 @@ describe('init installs', () => {
           },
         ];
 
-        const run = await harness('pnpm').run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
         const warnings = run.presented?.data;
 
         expect(JSON.stringify(warnings)).not.toContain('hunter2');
@@ -315,18 +271,6 @@ describe('init installs', () => {
         expect(warnings).toMatchObject({
           warnings: expect.arrayContaining([expect.stringContaining('ERR_PNPM_WORKSPACE')]),
         });
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'drives the agent-skill sync with the manager that worked',
-      async () => {
-        script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
-
-        await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
-
-        expect(skillCalls()[0]?.file).toBe('npx');
       },
       timeouts.coldTransformImport,
     );
@@ -381,11 +325,11 @@ describe('init installs', () => {
     );
   });
 
-  describe('the skip flags', () => {
+  describe('--skip-install', () => {
     it(
-      'installs nothing and emits nothing under --skip-install',
+      'installs nothing and emits nothing',
       async () => {
-        const run = await harness().run(scaffoldArgv('--skip-install', '--skip-skills'), {
+        const run = await harness().run(scaffoldArgv('--skip-install'), {
           cwd: projectDir,
         });
 
@@ -399,35 +343,6 @@ describe('init installs', () => {
         expect(run.presented?.presentation.next).toContainEqual(
           expect.objectContaining({ kind: 'run-command', command: 'prisma contract emit' }),
         );
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'still installs the agent skills when only the dependencies are skipped',
-      async () => {
-        const run = await harness().run(scaffoldArgv('--skip-install'), { cwd: projectDir });
-
-        expect(run.exitCode).toBe(0);
-        expect(skillCalls()).toHaveLength(1);
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'warns about the skipped skills under --skip-skills, naming the sync command',
-      async () => {
-        const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
-        const warnings = run.presented?.presentation.json;
-
-        expect(skillCalls()).toEqual([]);
-        expect(warnings).toMatchObject({
-          warnings: expect.arrayContaining([
-            expect.stringContaining('--skip-skills'),
-            expect.stringContaining('skills sync'),
-          ]),
-        });
-        expect(JSON.stringify(warnings)).not.toContain('prisma-next init --skip-install');
       },
       timeouts.coldTransformImport,
     );

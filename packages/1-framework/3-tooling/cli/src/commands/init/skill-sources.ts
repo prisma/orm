@@ -1,43 +1,8 @@
-import type { PackageManager } from './detect-package-manager';
-
-/**
- * The agent skills ship inside the packages they describe — the `prisma-8`
- * skill travels in the `@prisma/orm-*` tarball a project installs — so init
- * no longer fetches them from anywhere. `prisma skills sync` copies them out
- * of the installed packages into the agent harnesses' skill directories;
- * init runs it once at scaffold time, and the CLI's staleness check points
- * the user back at it when the copies fall behind the installed packages.
- *
- * The package driven here is `prisma`, the same specifier init adds as a
- * development dependency: it is the package that carries the `prisma` binary
- * every piece of advice below names.
- */
-export const SKILLS_SYNC_PACKAGE = 'prisma@next';
-
-export const SKILLS_SYNC_ARGS: readonly string[] = ['skills', 'sync'];
-
-/**
- * The sync invocation as the user would type it, for the advice init prints
- * when it skips the sync or the sync fails. This runs the `prisma` binary the
- * project already has as a development dependency rather than fetching a
- * fresh copy: the installed one is the version the project pinned, and it
- * needs no network. Deno has no local-bin runner, so it names the package.
- */
-export function formatSkillSyncCommand(pm: PackageManager): string {
-  const command = ['prisma', ...SKILLS_SYNC_ARGS].join(' ');
-  switch (pm) {
-    case 'pnpm':
-      return `pnpm exec ${command}`;
-    case 'yarn':
-      return `yarn exec ${command}`;
-    case 'bun':
-      return `bun run ${command}`;
-    case 'deno':
-      return `deno run -A npm:${command}`;
-    case 'npm':
-      return `npm exec ${command}`;
-  }
-}
+// The agent skills ship inside the packages they describe — the `prisma-8`
+// skill travels in the `@prisma/orm-*` tarball a project installs — so init
+// no longer fetches or installs them from anywhere. Skills setup belongs to
+// the family-level `prisma init` command; the only skill work left in
+// `orm init` is deleting the retired directories below.
 
 // -------------------------------------------------------------------
 // Legacy file cleanup
@@ -73,9 +38,8 @@ export const RETIRED_SKILL_NAMES = [
 ] as const;
 
 /**
- * The project-level skill directories the agent harnesses read, and the ones
- * `prisma skills sync` writes into: Claude Code, Cursor, Codex (`.agents`),
- * and Windsurf.
+ * The project-level skill directories the agent harnesses read: Claude Code,
+ * Cursor, Codex (`.agents`), and Windsurf.
  */
 export const AGENT_SKILL_ROOTS = [
   '.claude/skills',
@@ -86,7 +50,7 @@ export const AGENT_SKILL_ROOTS = [
 
 /**
  * Every directory a retired skill may occupy in a consumer project. Init
- * deletes each (recursively) before running the sync.
+ * deletes each (recursively) on every run.
  */
 export function legacySkillDirs(): readonly string[] {
   return AGENT_SKILL_ROOTS.flatMap((root) => RETIRED_SKILL_NAMES.map((name) => `${root}/${name}`));

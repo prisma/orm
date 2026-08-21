@@ -80,14 +80,6 @@ export function buildNextSteps(options: {
   readonly contractEmitted: boolean;
   readonly emitCommand: string;
   readonly schemaPath: string;
-  /**
-   * Whether the project-level Prisma Next skill sync actually ran
-   * and succeeded during this `init`. When false (the user passed
-   * `--skip-skills`, so the sync was skipped), the
-   * "registered with your agent runtime" step is omitted — the skip is
-   * already surfaced in the warnings array with a manual-install hint.
-   */
-  readonly skillRegistered: boolean;
 }): string[] {
   const steps: string[] = [];
   let stepNumber = 1;
@@ -111,10 +103,8 @@ export function buildNextSteps(options: {
     push(`Edit your schema at ${options.schemaPath}, then re-run \`${options.emitCommand}\`.`);
   }
   push('Open prisma-next.md for a quick reference on how to write your first typed query.');
-  if (options.skillRegistered) {
-    push(
-      'Prisma Next skills are registered with your agent runtime — open the project in your IDE and ask the agent to add a model, run a query, or plan a migration.',
-    );
-  }
+  push(
+    'Working with a coding agent? Run `prisma init` in this project to set up the Prisma agent skills.',
+  );
   return steps;
 }

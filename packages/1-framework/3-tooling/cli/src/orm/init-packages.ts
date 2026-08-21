@@ -5,7 +5,6 @@ import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 import { isRecognisedPnpmResolutionError } from '../commands/init/pnpm-fallback';
 import { redactSecrets } from '../commands/init/redact-secrets';
-import { SKILLS_SYNC_ARGS, SKILLS_SYNC_PACKAGE } from '../commands/init/skill-sources';
 
 /** What one install pair produced, and which manager finished it. */
 export interface InstallOutcome {
@@ -13,7 +12,7 @@ export interface InstallOutcome {
   readonly failure: CliStructuredError | undefined;
   /**
    * The manager override that succeeded, when the pnpm fallback fired. The
-   * agent-skill install reuses it: driving `pnpm dlx` right after `pnpm add`
+   * follow-up engine install reuses it: driving pnpm right after `pnpm add`
    * failed to resolve a workspace specifier would fail the same way.
    */
   readonly manager: PackageManagerId | undefined;
@@ -146,25 +145,4 @@ export async function installProjectDependencies(ctx: {
   // npm bypassed pnpm's resolver, so the workspace catalog is not what ended
   // up installed — saying otherwise alongside the fallback would contradict it.
   return { failure: undefined, manager: 'npm', warnings: [fallbackWarning(failure)] };
-}
-
-/**
- * Copies the agent skills out of the packages that just installed into the
- * project's agent-harness directories, by running the unified CLI's own
- * `skills sync`. Sync exits 0 when there is nothing to do, so a failure here
- * is the run itself failing — a missing runner, an unreachable registry —
- * rather than a project with no skills to sync.
- */
-export async function syncAgentSkills(ctx: {
-  readonly packages: PackageOperations;
-  readonly cwd: string;
-  readonly manager: PackageManagerId | undefined;
-}): Promise<CliStructuredError | undefined> {
-  const result = await ctx.packages.run({
-    package: SKILLS_SYNC_PACKAGE,
-    args: SKILLS_SYNC_ARGS,
-    cwd: ctx.cwd,
-    ...ifDefined('manager', ctx.manager),
-  });
-  return result.ok ? undefined : result.failure;
 }

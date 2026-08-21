@@ -1,6 +1,5 @@
 import { ifDefined } from '@internal/utils/defined';
 import { docsUrlFor } from '@internal/utils/structured-error';
-import type { PackageManagerId } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
@@ -14,7 +13,6 @@ import {
   type InstallStatus,
 } from '../commands/init/output';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import { formatSkillSyncCommand } from '../commands/init/skill-sources';
 import { targetPackageName } from '../commands/init/templates/code-templates';
 import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
 import { chooseAction } from '../utils/next-actions';
@@ -23,11 +21,7 @@ import { buildInitNextActions, initPresentations } from './init-blocks';
 import { EMIT_COMMAND, emitFailedFinding, installFailedFinding } from './init-diagnostics';
 import { emitScaffoldedContract } from './init-emit';
 import { resolveInitInputs } from './init-inputs';
-import {
-  engineDevDependencySpec,
-  installProjectDependencies,
-  syncAgentSkills,
-} from './init-packages';
+import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
 import { normalizeError } from './normalize-error';
 
@@ -85,7 +79,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
         'orm init --target mongodb --authoring typescript --json',
         'orm init --skip-install',
-        'orm init --skip-skills',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
         'orm init --target postgres --keep-previous-facade',
       ],
@@ -113,7 +106,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }),
         strictProbe: flag.boolean({ brief: 'Treat a failed --probe-db as fatal' }),
         skipInstall: flag.boolean({ brief: 'Skip dependency installation and contract emission' }),
-        skipSkills: flag.boolean({ brief: 'Skip the Prisma Next agent-skill sync' }),
         keepPreviousFacade: flag.boolean({
           brief: 'Keep the previous target package in package.json when switching targets',
         }),
@@ -160,10 +152,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
 
       const findings: Diagnostic[] = [];
       const extraActions: NextAction[] = [];
-      let installedManager: PackageManagerId | undefined;
       let packagesInstalled: InstallStatus = 'skipped';
       let contractEmitted = false;
-      let skillRegistered = false;
 
       const settle = (exitCode: 0 | 4 | 5) => {
         const installed = packagesInstalled === 'installed';
@@ -186,7 +176,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             contractEmitted,
             emitCommand: EMIT_COMMAND,
             schemaPath: inputs.schemaPath,
-            skillRegistered,
           }),
           warnings,
         };
@@ -217,7 +206,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
                 ...buildInitNextActions({
                   contractEmitted,
                   schemaPath: inputs.schemaPath,
-                  skillRegistered,
                 }),
               ],
             }),
@@ -256,7 +244,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }
         devDeps.push(engineSpec);
         packagesInstalled = 'installed';
-        installedManager = outcome.manager;
 
         const emitStep = 'Emit the contract';
         ctx.report({ kind: 'step-started', step: emitStep });
@@ -300,34 +287,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             ),
           );
         }
-      }
-
-      // The sync runs through the same manager the dependencies did, and needs
-      // no scaffold, so the command stands alone: whether it is skipped or
-      // fails, what the user is told to run is the sync itself — never `init`
-      // again, which would re-scaffold over the schema they have since written.
-      const syncCommand = formatSkillSyncCommand(installedManager ?? packageManager);
-
-      if (inputs.installProjectSkill) {
-        const failure = await syncAgentSkills({
-          packages: ctx.packages,
-          cwd: ctx.cwd,
-          manager: installedManager,
-        });
-        if (failure === undefined) {
-          skillRegistered = true;
-        } else {
-          // A failed first sync is not a failed init: every `prisma` command
-          // reports skills that do not match the installed packages, so the
-          // user is pointed back at the sync the next time they run anything.
-          warn(
-            `Could not sync the Prisma Next agent skills: ${failure.why ?? failure.message}\nRun it again: \`${syncCommand}\``,
-          );
-        }
-      } else {
-        warn(
-          `Skipped the Prisma Next agent-skill sync (--skip-skills). To install them later, run: \`${syncCommand}\``,
-        );
       }
 
       return settle(0);

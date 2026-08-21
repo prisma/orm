@@ -11,7 +11,7 @@ import { createTestProjectDir } from '../utils/test-project-dir';
  * case here passes both skip flags, so no run needs a package-manager runner
  * and none is seeded.
  */
-const NO_PACKAGE_WORK = ['--skip-install', '--skip-skills'] as const;
+const NO_PACKAGE_WORK = ['--skip-install'] as const;
 
 let projectDir: string;
 

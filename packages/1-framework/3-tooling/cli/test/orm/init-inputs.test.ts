@@ -24,7 +24,6 @@ function flags(overrides: Partial<InitFlagValues> = {}): InitFlagValues {
     probeDb: false,
     strictProbe: false,
     skipInstall: true,
-    skipSkills: true,
     keepPreviousFacade: false,
     ...overrides,
   };

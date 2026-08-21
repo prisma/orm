@@ -26,12 +26,9 @@ export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = ['node_modules/', '
  * every required entry). The caller can use this to decide whether to
  * include `.gitignore` in `filesWritten`.
  */
-export function mergeGitignore(
-  existing: string | undefined,
-  required: readonly string[] = REQUIRED_GITIGNORE_ENTRIES,
-): string | null {
+export function mergeGitignore(existing: string | undefined): string | null {
   if (existing === undefined) {
-    return `${required.join('\n')}\n`;
+    return `${REQUIRED_GITIGNORE_ENTRIES.join('\n')}\n`;
   }
 
   const present = new Set(
@@ -41,7 +38,7 @@ export function mergeGitignore(
       .filter((line) => line.length > 0 && !line.startsWith('#')),
   );
 
-  const missing = required.filter((entry) => !present.has(entry));
+  const missing = REQUIRED_GITIGNORE_ENTRIES.filter((entry) => !present.has(entry));
   if (missing.length === 0) {
     return null;
   }
