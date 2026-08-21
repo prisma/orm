@@ -82,6 +82,14 @@ describe('harvestCheckLiterals', () => {
       expect(harvestCheckLiterals(`("role" = 'user'::text)`)).toEqual(['user']);
     });
 
+    it('an unterminated literal is dropped', () => {
+      expect(harvestCheckLiterals(`(x = 'abc`)).toEqual([]);
+    });
+
+    it('a trailing lone quote after a doubled quote is dropped', () => {
+      expect(harvestCheckLiterals(`(x = 'a''`)).toEqual([]);
+    });
+
     it('literals separated by non-literal text keep their order', () => {
       expect(harvestCheckLiterals(`(a = 'first' OR b = 'second' OR c = 'third')`)).toEqual([
         'first',
