@@ -26,13 +26,14 @@ const RECOVERABLE_NATIVE_TYPE_CODECS: Readonly<Record<string, string>> = {
 /**
  * The codec id a recovered enum's `@@type` carries for a column of this
  * native type, or undefined when no text-backed codec maps — an unmapped
- * type is simply not recovered, never an error. Parameterized spellings
- * (`varchar(20)`, `character varying(20)`) map by their base type.
+ * type is simply not recovered, never an error. Only the exact codec target
+ * spellings map: a parameterized spelling like `varchar(20)` must keep its
+ * `@@check`, because `@@type` re-emits the codec's bare target type and the
+ * planner would widen the column to it.
  */
 function recoveredEnumCodecId(nativeType: string): string | undefined {
-  const baseType = nativeType.match(/^(.+?)\(.+\)$/)?.[1] ?? nativeType;
-  return Object.hasOwn(RECOVERABLE_NATIVE_TYPE_CODECS, baseType)
-    ? RECOVERABLE_NATIVE_TYPE_CODECS[baseType]
+  return Object.hasOwn(RECOVERABLE_NATIVE_TYPE_CODECS, nativeType)
+    ? RECOVERABLE_NATIVE_TYPE_CODECS[nativeType]
     : undefined;
 }
 

@@ -244,7 +244,67 @@ describe('Path A recovery — text scalar', () => {
 });
 
 describe('Path A recovery — varchar scalar', () => {
-  it('recovers a varchar(20) column with the pg/varchar@1 codec', () => {
+  it('recovers a bare varchar column with the pg/varchar@1 codec', () => {
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode('public', {
+          orders: table(
+            'orders',
+            {
+              id: idColumn,
+              status: { name: 'status', nativeType: 'varchar', nullable: false },
+            },
+            [
+              membershipCheck(
+                'orders',
+                'status',
+                false,
+                ['open', 'closed'],
+                `((status)::text = ANY ((ARRAY['open'::character varying, 'closed'::character varying])::text[]))`,
+              ),
+            ],
+          ),
+        }),
+      }),
+    );
+
+    expect(output).toContain('enum OrdersStatus {');
+    expect(output).toContain('@@type("pg/varchar@1")');
+    expect(output).toMatch(/status\s+OrdersStatus\n/);
+    expect(output).not.toContain('@@check');
+  });
+
+  it('recovers the bare `character varying` spelling too', () => {
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode('public', {
+          orders: table(
+            'orders',
+            {
+              id: idColumn,
+              status: { name: 'status', nativeType: 'character varying', nullable: false },
+            },
+            [
+              membershipCheck(
+                'orders',
+                'status',
+                false,
+                ['open'],
+                `((status)::text = 'open'::text)`,
+              ),
+            ],
+          ),
+        }),
+      }),
+    );
+
+    expect(output).toContain('enum OrdersStatus {');
+    expect(output).toContain('@@type("pg/varchar@1")');
+  });
+
+  it('a varchar(20) column recovers nothing — recovery would drop the length', () => {
+    // `@@type("pg/varchar@1")` re-emits as bare `character varying`; the
+    // planner would then see a native-type mismatch and widen the column.
     const output = inferAndPrint(
       tree({
         public: namespaceNode('public', {
@@ -268,14 +328,12 @@ describe('Path A recovery — varchar scalar', () => {
       }),
     );
 
-    expect(output).toContain('enum OrdersStatus {');
-    expect(output).toContain('@@type("pg/varchar@1")');
-    expect(output).toMatch(/status\s+OrdersStatus\n/);
-    expect(output).not.toContain('VarChar(20)');
-    expect(output).not.toContain('@@check');
+    expect(output).not.toContain('enum ');
+    expect(output).toContain('VarChar(20)');
+    expect(output).toContain('@@check');
   });
 
-  it('recovers the `character varying(20)` spelling too', () => {
+  it('a character varying(20) column recovers nothing either', () => {
     const output = inferAndPrint(
       tree({
         public: namespaceNode('public', {
@@ -299,8 +357,9 @@ describe('Path A recovery — varchar scalar', () => {
       }),
     );
 
-    expect(output).toContain('enum OrdersStatus {');
-    expect(output).toContain('@@type("pg/varchar@1")');
+    expect(output).not.toContain('enum ');
+    expect(output).toContain('VarChar(20)');
+    expect(output).toContain('@@check');
   });
 });
 
@@ -449,6 +508,29 @@ describe('recovered enum naming collisions', () => {
 
     expect(output).toContain('enum VarChar2 {');
     expect(output).toMatch(/char\s+VarChar2\n/);
+  });
+
+  it('a name equal to a pack-contributed type constructor gets a numeric suffix', () => {
+    // toEnumName('big_int_number') is exactly `BigIntNumber` — a name that
+    // only `collectScalarTypeConstructors(postgresAuthoringTypes)` reserves;
+    // it appears in no type-map table.
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode('public', {
+          big_int: table(
+            'big_int',
+            {
+              id: idColumn,
+              number: { name: 'number', nativeType: 'text', nullable: false },
+            },
+            [membershipCheck('big_int', 'number', false, ['x'], `(number = 'x'::text)`)],
+          ),
+        }),
+      }),
+    );
+
+    expect(output).toContain('enum BigIntNumber2 {');
+    expect(output).toMatch(/number\s+BigIntNumber2\n/);
   });
 });
 
