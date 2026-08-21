@@ -63,21 +63,18 @@ function isTracked(path) {
 }
 
 /**
- * The workspace root of a Jujutsu workspace, found by walking up to the `.jj`
- * directory. Returns null outside one.
+ * The workspace root jj reports for the process working directory, or null
+ * when jj is unavailable or the working directory is not in a jj workspace.
  */
-function findJjWorkspaceRoot(startPath) {
-  let current = resolve(startPath);
-  for (;;) {
-    if (existsSync(join(current, '.jj'))) {
-      return current;
-    }
-    const parent = dirname(current);
-    if (parent === current) {
-      return null;
-    }
-    current = parent;
+function findJjWorkspaceRoot() {
+  const result = spawnSync('jj', ['workspace', 'root', '--ignore-working-copy'], {
+    encoding: 'utf8',
+  });
+  if (result.status !== 0) {
+    return null;
   }
+  const root = result.stdout.trim();
+  return root === '' ? null : root;
 }
 
 /**
@@ -122,7 +119,7 @@ function isInside(parentPath, childPath) {
  */
 function ensureUnderIgnoredWipTree(path) {
   const absolutePath = resolve(path);
-  const workspaceRoot = findJjWorkspaceRoot(absolutePath);
+  const workspaceRoot = findJjWorkspaceRoot();
   if (workspaceRoot === null) {
     throw new Error('error: not in a git repository or a jj workspace');
   }
