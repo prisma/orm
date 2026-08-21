@@ -143,9 +143,9 @@ The code was raised by the commander `init` (deleted in the S5 cutover), whose c
 
 ### CLI.INIT_SKILL_INSTALL_FAILED
 
-Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skills add`, and raised this at exit `6` when that fetch failed. The skills now ship inside the `@prisma/orm-*` packages a project installs, and init copies them into the agent directories by running `prisma skills sync` once, then writes a `postinstall` script that repeats the sync on every later install.
+Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skills add`, and raised this at exit `6` when that fetch failed. The skills now ship inside the `@prisma/orm-*` packages a project installs, and init copies them into the agent directories by running `prisma skills sync` once at scaffold time.
 
-A sync that fails no longer fails anything: init warns and names the command to re-run, the postinstall retries on the next install, and every `prisma` command reports skills that no longer match the installed packages. Init exits `4` or `5` now — there is no exit `6`, and nothing raises this code.
+A sync that fails no longer fails anything: init warns and names the command to re-run, and every `prisma` command reports skills that no longer match the installed packages — that staleness notice is what keeps the copies current, naming the sync command to run. Init exits `4` or `5` now — there is no exit `6`, and nothing raises this code.
 
 ### CLI.INIT_STRICT_PROBE_WITHOUT_PROBE
 
