@@ -11,6 +11,7 @@
  * it usefully, which is why each one pins the error's code and the `*String` type it recommends.
  */
 
+import type { JsonValue } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import {
   PG_DATE_TEMPORAL_CODEC_ID,
@@ -118,42 +119,54 @@ describe('Temporal-backed temporal codecs', () => {
    * column.
    */
   describe('the JSON path carries the same values as the wire path', () => {
+    // Each row closes over its own codec so the four different `encodeJson` signatures never meet
+    // in a union — `text` renders the value, `read` reads a projection back as its own spelling.
     const cases = [
-      ['pg/date-temporal@1', dateCodec, Temporal.PlainDate.from('2026-01-02'), '2026-01-02'],
-      [
-        'pg/timestamp-temporal@1',
-        timestampCodec,
-        Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456'),
-        '2026-01-02 03:04:05.123456',
-      ],
-      [
-        'pg/timestamptz-temporal@1',
-        timestamptzCodec,
-        Temporal.Instant.from('2026-01-02T03:04:05.123456Z'),
-        '2026-01-02 03:04:05.123456+00',
-      ],
-      [
-        'pg/time-temporal@1',
-        timeCodec,
-        Temporal.PlainTime.from('03:04:05.123456'),
-        '03:04:05.123456',
-      ],
+      {
+        id: 'pg/date-temporal@1',
+        text: '2026-01-02',
+        projected: '2026-01-02',
+        render: () => dateCodec.encodeJson(Temporal.PlainDate.from('2026-01-02')),
+        read: (json: JsonValue) => dateCodec.decodeJson(json).toString(),
+      },
+      {
+        id: 'pg/timestamp-temporal@1',
+        text: '2026-01-02T03:04:05.123456',
+        projected: '2026-01-02 03:04:05.123456',
+        render: () =>
+          timestampCodec.encodeJson(Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456')),
+        read: (json: JsonValue) => timestampCodec.decodeJson(json).toString(),
+      },
+      {
+        id: 'pg/timestamptz-temporal@1',
+        text: '2026-01-02T03:04:05.123456Z',
+        projected: '2026-01-02 03:04:05.123456+00',
+        render: () =>
+          timestamptzCodec.encodeJson(Temporal.Instant.from('2026-01-02T03:04:05.123456Z')),
+        read: (json: JsonValue) => timestamptzCodec.decodeJson(json).toString(),
+      },
+      {
+        id: 'pg/time-temporal@1',
+        text: '03:04:05.123456',
+        projected: '03:04:05.123456',
+        render: () => timeCodec.encodeJson(Temporal.PlainTime.from('03:04:05.123456')),
+        read: (json: JsonValue) => timeCodec.decodeJson(json).toString(),
+      },
     ] as const;
 
-    // The text is what the `::text` cast makes PostgreSQL emit for the column — a space separator
-    // and a two-digit offset, not the `T`/`Z` spelling Temporal writes. Reading it back is the
-    // whole point: the projection and `toString()` are different directions and need not agree.
-    it.each(cases)('%s decodes the projected server text', (_id, codec, value, projected) => {
-      expect(codec.decodeJson(projected).toString()).toBe(value.toString());
+    // The projected text is what the `::text` cast makes PostgreSQL emit — a space separator and a
+    // two-digit offset, not the `T`/`Z` spelling Temporal writes. Reading it back is the whole
+    // point: the projection and `toString()` are different directions and need not agree.
+    it.each(cases)('$id decodes the projected server text', ({ read, projected, text }) => {
+      expect(read(projected)).toBe(text);
     });
 
-    it.each(cases)('%s renders a value PostgreSQL accepts back', (_id, codec, value) => {
-      expect(codec.encodeJson(value)).toBe(value.toString());
+    it.each(cases)('$id renders a value PostgreSQL accepts back', ({ render, text }) => {
+      expect(render()).toBe(text);
     });
 
-    it.each(cases)('%s round-trips its own JSON rendering', (_id, codec, value) => {
-      const rendered = codec.encodeJson(value);
-      expect(codec.decodeJson(rendered).toString()).toBe(value.toString());
+    it.each(cases)('$id round-trips its own JSON rendering', ({ render, read, text }) => {
+      expect(read(render())).toBe(text);
     });
   });
 
