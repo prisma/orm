@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempDisposableSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -20,6 +20,7 @@ fi
 printf '%s\\n' "$FAKE_JJ_WORKSPACE_ROOT"
 `;
 
+let tempRoot;
 let workspaceRoot;
 let outsideRoot;
 let fakeWorkspaceRoot;
@@ -40,7 +41,8 @@ function runGuard(dir, { jjRoot = workspaceRoot, cwd = workspaceRoot } = {}) {
 
 describe('guard-review-artifacts-ignored in a jj workspace without git', () => {
   before(() => {
-    const base = realpathSync(mkdtempSync(join(tmpdir(), 'guard-review-')));
+    tempRoot = mkdtempDisposableSync(join(tmpdir(), 'guard-review-'));
+    const base = realpathSync(tempRoot.path);
     workspaceRoot = join(base, 'workspace');
     outsideRoot = join(base, 'outside');
     fakeWorkspaceRoot = join(base, 'fake-workspace');
@@ -60,7 +62,7 @@ describe('guard-review-artifacts-ignored in a jj workspace without git', () => {
   });
 
   after(() => {
-    rmSync(dirname(workspaceRoot), { recursive: true, force: true });
+    tempRoot.remove();
   });
 
   it('accepts a directory under the ignored wip/ tree', () => {
