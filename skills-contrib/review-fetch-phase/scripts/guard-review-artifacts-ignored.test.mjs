@@ -23,6 +23,7 @@ printf '%s\\n' "$FAKE_JJ_WORKSPACE_ROOT"
 let workspaceRoot;
 let outsideRoot;
 let fakeWorkspaceRoot;
+let wipLinkWorkspaceRoot;
 let fakeJjBinDir;
 
 function runGuard(dir, { jjRoot = workspaceRoot, cwd = workspaceRoot } = {}) {
@@ -44,14 +45,18 @@ describe('guard-review-artifacts-ignored in a jj workspace without git', () => {
     outsideRoot = join(base, 'outside');
     fakeWorkspaceRoot = join(base, 'fake-workspace');
     fakeJjBinDir = join(base, 'bin');
+    wipLinkWorkspaceRoot = join(base, 'wip-link-workspace');
     mkdirSync(join(workspaceRoot, 'wip', 'reviews', 'x'), { recursive: true });
     mkdirSync(join(workspaceRoot, 'docs'), { recursive: true });
-    mkdirSync(outsideRoot, { recursive: true });
+    mkdirSync(join(outsideRoot, 'reviews'), { recursive: true });
     mkdirSync(join(fakeWorkspaceRoot, '.jj'), { recursive: true });
     mkdirSync(join(fakeWorkspaceRoot, 'wip', 'reviews'), { recursive: true });
+    mkdirSync(join(wipLinkWorkspaceRoot, 'docs', 'reviews'), { recursive: true });
     mkdirSync(fakeJjBinDir, { recursive: true });
     writeFileSync(join(fakeJjBinDir, 'jj'), FAKE_JJ_SCRIPT, { mode: 0o755 });
     symlinkSync(outsideRoot, join(workspaceRoot, 'wip', 'escape'), 'dir');
+    symlinkSync(join(base, 'nonexistent'), join(workspaceRoot, 'wip', 'dangling'), 'dir');
+    symlinkSync(join(wipLinkWorkspaceRoot, 'docs'), join(wipLinkWorkspaceRoot, 'wip'), 'dir');
   });
 
   after(() => {
@@ -74,6 +79,27 @@ describe('guard-review-artifacts-ignored in a jj workspace without git', () => {
     const result = runGuard(join(workspaceRoot, 'wip', 'escape', 'reviews'));
     assert.equal(result.status, 1);
     assert.match(result.stderr, /outside/);
+  });
+
+  it('rejects a path through a dangling symlink under wip/', () => {
+    const result = runGuard(join(workspaceRoot, 'wip', 'dangling', 'reviews'));
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /ENOENT/);
+  });
+
+  it('rejects an artifact dir when wip itself is a symlink to a non-ignored directory', () => {
+    const result = runGuard(join(wipLinkWorkspaceRoot, 'wip', 'reviews'), {
+      jjRoot: wipLinkWorkspaceRoot,
+      cwd: wipLinkWorkspaceRoot,
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /must live under the ignored wip\/ tree/);
+  });
+
+  it('fails with ENOENT for a missing output path', () => {
+    const result = runGuard(join(workspaceRoot, 'wip', 'reviews', 'missing'));
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /ENOENT/);
   });
 
   it('rejects a directory under another workspace marked only by a .jj directory', () => {
