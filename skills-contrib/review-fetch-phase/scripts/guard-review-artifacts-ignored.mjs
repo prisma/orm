@@ -128,13 +128,7 @@ function ensureInsideRepo(path) {
   }
   const repoRoot = root.stdout.trim();
   const absolutePath = resolve(path);
-  const relativePath = relative(repoRoot, absolutePath);
-  if (
-    relativePath === '' ||
-    relativePath === '..' ||
-    relativePath.startsWith(`..${sep}`) ||
-    isAbsolute(relativePath)
-  ) {
+  if (!isInside(repoRoot, absolutePath)) {
     throw new Error(`error: output dir must be inside repo: ${repoRoot}`);
   }
   return false;
