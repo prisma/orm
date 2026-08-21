@@ -154,6 +154,39 @@ describe('init scaffold', () => {
     );
   });
 
+  describe('the skill-sync wiring it writes', () => {
+    it(
+      'adds the postinstall script and gitignores the managed skill copies',
+      async () => {
+        const run = await harness().run(scaffoldArgv('--skip-install'), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+        const gitignore = readFileSync(join(projectDir, '.gitignore'), 'utf-8');
+
+        expect(run.exitCode).toBe(0);
+        expect(manifest.scripts).toMatchObject({ postinstall: 'prisma skills sync || exit 0' });
+        expect(gitignore).toContain('.claude/skills/prisma-8/');
+        expect(gitignore).toContain('.cursor/skills/prisma-8/');
+        expect(gitignore).toContain('.agents/skills/prisma-8/');
+        expect(gitignore).toContain('.windsurf/skills/prisma-8/');
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'writes neither under --skip-skills',
+      async () => {
+        const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+        const gitignore = readFileSync(join(projectDir, '.gitignore'), 'utf-8');
+
+        expect(run.exitCode).toBe(0);
+        expect(manifest.scripts?.postinstall).toBeUndefined();
+        expect(gitignore).not.toContain('skills/prisma-8/');
+      },
+      timeouts.coldTransformImport,
+    );
+  });
+
   describe('the files it removes', () => {
     it(
       'deletes a retired agent-skill directory even on a first run, leaving installed skills alone under --skip-skills',

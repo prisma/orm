@@ -5,12 +5,7 @@ import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 import { isRecognisedPnpmResolutionError } from '../commands/init/pnpm-fallback';
 import { redactSecrets } from '../commands/init/redact-secrets';
-import {
-  DEFAULT_SKILL_AGENTS,
-  DEFAULT_SKILL_SOURCES,
-  formatSkillSourceUrl,
-  type SkillInstallEnv,
-} from '../commands/init/skill-sources';
+import { SKILLS_SYNC_ARGS, SKILLS_SYNC_PACKAGE } from '../commands/init/skill-sources';
 
 /** What one install pair produced, and which manager finished it. */
 export interface InstallOutcome {
@@ -153,31 +148,23 @@ export async function installProjectDependencies(ctx: {
   return { failure: undefined, manager: 'npm', warnings: [fallbackWarning(failure)] };
 }
 
-function skillArgs(url: string, skill: string): readonly string[] {
-  return ['add', url, '--agent', ...DEFAULT_SKILL_AGENTS, '--skill', skill, '-y'];
-}
-
 /**
- * Registers every Prisma Next skill with the agent runtimes, in order. The
- * first failure stops the loop: the user opted into Prisma Next by running
- * `init`, and a half-installed skill set leaves the project ambiguous.
+ * Copies the agent skills out of the packages that just installed into the
+ * project's agent-harness directories, by running the unified CLI's own
+ * `skills sync`. Sync exits 0 when there is nothing to do, so a failure here
+ * is the run itself failing — a missing runner, an unreachable registry —
+ * rather than a project with no skills to sync.
  */
-export async function installAgentSkills(ctx: {
+export async function syncAgentSkills(ctx: {
   readonly packages: PackageOperations;
   readonly cwd: string;
-  readonly env: SkillInstallEnv;
   readonly manager: PackageManagerId | undefined;
 }): Promise<CliStructuredError | undefined> {
-  for (const source of DEFAULT_SKILL_SOURCES) {
-    const result = await ctx.packages.run({
-      package: 'skills@latest',
-      args: skillArgs(formatSkillSourceUrl(source, ctx.env), source.skill),
-      cwd: ctx.cwd,
-      ...ifDefined('manager', ctx.manager),
-    });
-    if (!result.ok) {
-      return result.failure;
-    }
-  }
-  return undefined;
+  const result = await ctx.packages.run({
+    package: SKILLS_SYNC_PACKAGE,
+    args: SKILLS_SYNC_ARGS,
+    cwd: ctx.cwd,
+    ...ifDefined('manager', ctx.manager),
+  });
+  return result.ok ? undefined : result.failure;
 }

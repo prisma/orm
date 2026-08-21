@@ -61,26 +61,3 @@ export function emitFailedFinding(cause: string, filesWritten: readonly string[]
     meta: { filesWritten, cause },
   });
 }
-
-/**
- * An agent-skill install failed; the project itself is complete without it.
- * The remedy is the skill-install commands themselves, which run against any
- * directory — advising a re-run of `init` would put the user's schema at risk
- * to fix something `init` no longer needs to be involved in.
- */
-export function skillInstallFailedFinding(
-  failure: CliStructuredError,
-  filesWritten: readonly string[],
-  skillCommands: readonly string[],
-): Diagnostic {
-  return initFinding('CLI.INIT_SKILL_INSTALL_FAILED', 'Failed to install Prisma Next skills', {
-    why: failure.why ?? failure.message,
-    nextActions: [
-      ...failure.nextActions,
-      ...skillCommands.map((command) =>
-        runCommandAction('Install the Prisma Next skills', command),
-      ),
-    ],
-    meta: { filesWritten, skillInstall: failure.meta ?? {} },
-  });
-}

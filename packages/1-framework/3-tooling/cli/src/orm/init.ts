@@ -14,24 +14,19 @@ import {
   type InstallStatus,
 } from '../commands/init/output';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import { resolveProjectSkillInstallCommands } from '../commands/init/skill-sources';
+import { formatSkillSyncCommand } from '../commands/init/skill-sources';
 import { targetPackageName } from '../commands/init/templates/code-templates';
 import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
 import { chooseAction } from '../utils/next-actions';
 import { defineOrmCommand } from './define-command';
 import { buildInitNextActions, initPresentations } from './init-blocks';
-import {
-  EMIT_COMMAND,
-  emitFailedFinding,
-  installFailedFinding,
-  skillInstallFailedFinding,
-} from './init-diagnostics';
+import { EMIT_COMMAND, emitFailedFinding, installFailedFinding } from './init-diagnostics';
 import { emitScaffoldedContract } from './init-emit';
 import { resolveInitInputs } from './init-inputs';
 import {
   engineDevDependencySpec,
-  installAgentSkills,
   installProjectDependencies,
+  syncAgentSkills,
 } from './init-packages';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
 import { normalizeError } from './normalize-error';
@@ -40,7 +35,6 @@ import { normalizeError } from './normalize-error';
 const INIT_EXIT_CODES = {
   4: 'scaffold written; dependency install failed',
   5: 'scaffold written and installed; contract emit failed',
-  6: 'scaffold complete; agent-skill install failed',
 } as const;
 
 function probeWarning(
@@ -119,7 +113,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }),
         strictProbe: flag.boolean({ brief: 'Treat a failed --probe-db as fatal' }),
         skipInstall: flag.boolean({ brief: 'Skip dependency installation and contract emission' }),
-        skipSkills: flag.boolean({ brief: 'Skip the Prisma Next agent-skill install' }),
+        skipSkills: flag.boolean({ brief: 'Skip the Prisma Next agent-skill sync' }),
         keepPreviousFacade: flag.boolean({
           brief: 'Keep the previous target package in package.json when switching targets',
         }),
@@ -169,7 +163,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       let contractEmitted = false;
       let skillRegistered = false;
 
-      const settle = (exitCode: 0 | 4 | 5 | 6) => {
+      const settle = (exitCode: 0 | 4 | 5) => {
         const installed = packagesInstalled === 'installed';
         const document: InitOutput = {
           ok: true,
@@ -306,30 +300,32 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }
       }
 
-      // The skills install through the same manager the dependencies did, and
-      // needs no scaffold, so the commands stand alone: whether it is skipped or
-      // fails, what the user is told to run is the install itself — never `init`
+      // The sync runs through the same manager the dependencies did, and needs
+      // no scaffold, so the command stands alone: whether it is skipped or
+      // fails, what the user is told to run is the sync itself — never `init`
       // again, which would re-scaffold over the schema they have since written.
-      const skillCommands = resolveProjectSkillInstallCommands(
-        installedManager ?? packageManager,
-        ctx.env,
-      );
+      const syncCommand = formatSkillSyncCommand(installedManager ?? packageManager);
 
       if (inputs.installProjectSkill) {
-        const failure = await installAgentSkills({
+        const failure = await syncAgentSkills({
           packages: ctx.packages,
           cwd: ctx.cwd,
-          env: ctx.env,
           manager: installedManager,
         });
-        if (failure !== undefined) {
-          findings.push(skillInstallFailedFinding(failure, scaffold.filesWritten, skillCommands));
-          return settle(6);
+        if (failure === undefined) {
+          skillRegistered = true;
+        } else {
+          // A failed first sync is not a failed init: the postinstall script
+          // this run wrote re-runs the sync on the next install, and every
+          // `prisma` command reports skills that do not match the installed
+          // packages. The project converges without anyone doing anything.
+          warn(
+            `Could not sync the Prisma Next agent skills: ${failure.why ?? failure.message}\nThe postinstall script will retry on the next install, or run it now: \`${syncCommand}\``,
+          );
         }
-        skillRegistered = true;
       } else {
         warn(
-          `Skipped the Prisma Next agent-skill install (--skip-skills). To install them later, run: ${skillCommands.map((command) => `\`${command}\``).join(' && ')}`,
+          `Skipped the Prisma Next agent-skill sync (--skip-skills). To install them later, run: \`${syncCommand}\``,
         );
       }
 

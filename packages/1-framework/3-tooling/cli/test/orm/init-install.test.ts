@@ -72,7 +72,7 @@ function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }
 }
 
 function skillCalls(): readonly RunnerCall[] {
-  return calls.filter((call) => call.args.includes('skills@latest'));
+  return calls.filter((call) => call.args.includes('skills'));
 }
 
 describe('init installs', () => {
@@ -215,56 +215,50 @@ describe('init installs', () => {
   );
 
   it(
-    'completes at exit 6 when the agent-skill install fails',
+    'completes at exit 0 when the skill sync fails, telling the user how to retry',
     async () => {
       script = [
         { exitCode: 0, stderr: '' },
         { exitCode: 0, stderr: '' },
         { exitCode: 0, stderr: '' },
-        { exitCode: 1, stderr: 'skills: registry unreachable' },
+        { exitCode: 1, stderr: 'prisma: registry unreachable' },
       ];
 
       const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
-      expect(run.exitCode).toBe(6);
-      expect(envelopeOf(run)).toMatchObject({
-        ok: true,
-        exitCode: 6,
-        diagnostics: [{ code: 'CLI.INIT_SKILL_INSTALL_FAILED', severity: 'error' }],
-      });
+      expect(run.exitCode).toBe(0);
+      expect(envelopeOf(run)).toMatchObject({ ok: true, exitCode: 0, diagnostics: [] });
       expect(skillCalls()).toHaveLength(1);
+      expect(run.presented?.data).toMatchObject({
+        warnings: expect.arrayContaining([
+          expect.stringContaining('Could not sync the Prisma Next agent skills'),
+        ]),
+      });
     },
     timeouts.coldTransformImport,
   );
 
   it(
-    'sends a failed skill install to the skill commands, never back through init',
+    'sends a failed sync to the sync command, never back through init',
     async () => {
       script = [
         { exitCode: 0, stderr: '' },
         { exitCode: 0, stderr: '' },
         { exitCode: 0, stderr: '' },
-        { exitCode: 1, stderr: 'skills: registry unreachable' },
+        { exitCode: 1, stderr: 'prisma: registry unreachable' },
       ];
 
       const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
-      const finding = envelopeOf(run)?.diagnostics?.[0];
+      const warnings = JSON.stringify(run.presented?.data);
 
-      expect(finding?.nextActions).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kind: 'run-command',
-            command: expect.stringContaining('skills@latest add'),
-          }),
-        ]),
-      );
-      expect(JSON.stringify(finding?.nextActions)).not.toContain('prisma-next init');
+      expect(warnings).toContain('skills sync');
+      expect(warnings).not.toContain('prisma-next init');
     },
     timeouts.coldTransformImport,
   );
 
   it(
-    'runs one skill install, naming the skill and the agents',
+    'runs the skill sync once, through the unified CLI',
     async () => {
       await harness().run(scaffoldArgv(), { cwd: projectDir });
 
@@ -272,10 +266,7 @@ describe('init installs', () => {
 
       expect(skillCalls()).toHaveLength(1);
       expect(first).toMatchObject({ cwd: projectDir });
-      expect(first?.args).toEqual(
-        expect.arrayContaining(['skills@latest', 'add', '--skill', 'prisma-8']),
-      );
-      expect(first?.args.at(-1)).toBe('-y');
+      expect(first?.args).toEqual(expect.arrayContaining(['@prisma/cli@next', 'skills', 'sync']));
     },
     timeouts.coldTransformImport,
   );
@@ -424,7 +415,7 @@ describe('init installs', () => {
     );
 
     it(
-      'warns about the skipped skills under --skip-skills, naming the install commands',
+      'warns about the skipped skills under --skip-skills, naming the sync command',
       async () => {
         const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
         const warnings = run.presented?.presentation.json;
@@ -433,7 +424,7 @@ describe('init installs', () => {
         expect(warnings).toMatchObject({
           warnings: expect.arrayContaining([
             expect.stringContaining('--skip-skills'),
-            expect.stringContaining('skills@latest add'),
+            expect.stringContaining('skills sync'),
           ]),
         });
         expect(JSON.stringify(warnings)).not.toContain('prisma-next init --skip-install');
