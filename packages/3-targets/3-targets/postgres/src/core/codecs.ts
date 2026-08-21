@@ -49,12 +49,11 @@ import { definePostgresCodecs, PostgresCodecDescriptor, postgresCodec } from './
 import {
   decimalTextBigintLiteral,
   type PgInterval,
+  type PrecisionParams,
   pgBigintEncode,
   pgBigintEncodeJson,
   pgByteaDecodeJson,
   pgByteaEncodeJson,
-  pgDateTemporalDecode,
-  pgDateTemporalEncode,
   pgInt8Decode,
   pgInt8NumberDecode,
   pgInt8NumberDecodeJson,
@@ -70,13 +69,8 @@ import {
   pgJsonEncode,
   pgNumericDecode,
   pgNumericRenderOutputType,
-  pgTimestampTemporalDecode,
-  pgTimestampTemporalEncode,
-  pgTimestamptzTemporalDecode,
-  pgTimestamptzTemporalEncode,
-  pgTimeTemporalDecode,
-  pgTimeTemporalEncode,
   pgUnboundedIntDecode,
+  precisionParamsSchema,
   renderLength,
   renderPrecision,
 } from './codec-helpers';
@@ -85,8 +79,6 @@ import {
   PG_BOOL_CODEC_ID,
   PG_BYTEA_CODEC_ID,
   PG_CHAR_CODEC_ID,
-  PG_DATE_STRING_CODEC_ID,
-  PG_DATE_TEMPORAL_CODEC_ID,
   PG_ENUM_CODEC_ID,
   PG_FLOAT_CODEC_ID,
   PG_FLOAT4_CODEC_ID,
@@ -103,12 +95,6 @@ import {
   PG_NUMERIC_CODEC_ID,
   PG_TEXT_ARRAY_CODEC_ID,
   PG_TEXT_CODEC_ID,
-  PG_TIME_STRING_CODEC_ID,
-  PG_TIME_TEMPORAL_CODEC_ID,
-  PG_TIMESTAMP_STRING_CODEC_ID,
-  PG_TIMESTAMP_TEMPORAL_CODEC_ID,
-  PG_TIMESTAMPTZ_STRING_CODEC_ID,
-  PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
   PG_UNBOUNDED_INT_CODEC_ID,
   PG_UUID_CODEC_ID,
@@ -118,9 +104,20 @@ import {
 import { postgresError } from './errors';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
 import { PostgresNativeEnum } from './postgres-native-enum';
+import {
+  pgDateTemporalDescriptor,
+  pgTimestampTemporalDescriptor,
+  pgTimestamptzTemporalDescriptor,
+  pgTimeTemporalDescriptor,
+} from './temporal-codecs';
+import {
+  pgDateStringDescriptor,
+  pgTimeStringDescriptor,
+  pgTimestampStringDescriptor,
+  pgTimestamptzStringDescriptor,
+} from './temporal-string-codecs';
 
 type LengthParams = { readonly length?: number };
-type PrecisionParams = { readonly precision?: number };
 type NumericParams = { readonly precision?: number; readonly scale?: number };
 
 const lengthParamsSchema = arktype({
@@ -132,10 +129,6 @@ const numericParamsSchema = arktype({
   'scale?': 'number.integer >= 0',
 }) satisfies StandardSchemaV1<NumericParams>;
 
-const precisionParamsSchema = arktype({
-  'precision?': 'number.integer >= 0 & number.integer <= 6',
-}) satisfies StandardSchemaV1<PrecisionParams>;
-
 const PG_TEXT_NATIVE_TYPE = 'text';
 const PG_TEXT_ARRAY_NATIVE_TYPE = 'text[]';
 const PG_INT4_NATIVE_TYPE = 'integer';
@@ -144,10 +137,6 @@ const PG_INT8_NATIVE_TYPE = 'bigint';
 const PG_FLOAT4_NATIVE_TYPE = 'real';
 const PG_FLOAT8_NATIVE_TYPE = 'double precision';
 const PG_NUMERIC_NATIVE_TYPE = 'numeric';
-const PG_DATE_NATIVE_TYPE = 'date';
-const PG_TIMESTAMP_NATIVE_TYPE = 'timestamp without time zone';
-const PG_TIMESTAMPTZ_NATIVE_TYPE = 'timestamp with time zone';
-const PG_TIME_NATIVE_TYPE = 'time';
 const PG_TIMETZ_NATIVE_TYPE = 'timetz';
 const PG_BOOL_NATIVE_TYPE = 'boolean';
 const PG_BIT_NATIVE_TYPE = 'bit';
@@ -221,34 +210,6 @@ const base64JsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
     FunctionCallExpr.of('chr', [LiteralExpr.of(10)]),
     LiteralExpr.of(''),
   ]);
-
-/**
- * Projects a temporal value as the text PostgreSQL itself renders for it.
- *
- * This position used to hold the opposite policy. A `timestamptz` handed straight to a JSON
- * constructor renders in the session's `TimeZone`, so the same stored instant read as `+00:00`,
- * `-05:00` or `+05:30` depending on who was connected; the previous projection resolved the instant
- * to UTC and spelled it out with an explicit `to_char` format so that no session setting could move
- * it. That pinning is deliberately gone, for two reasons it could not reconcile:
- *
- * - Its format string ended in `.MS` — **milliseconds**. Every nested read silently truncated the
- *   microseconds PostgreSQL had stored, which is a live loss of data rather than a formatting
- *   preference.
- * - A flat read of the same column returns the server's own text. Pinning one path and not the
- *   other meant the two disagreed about what the value was, and having them agree is the point of
- *   this representation.
- *
- * So a nested read is now session-`TimeZone`-dependent exactly as a flat read already was. Nothing
- * downstream minds which offset the session picks: `Temporal.Instant.from()` accepts any of them
- * and resolves to the same instant, and the `*-string` codecs are handing back whatever the server
- * said by definition. Session-dependent output is a documented non-goal to hide, not a defect.
- *
- * The cast belongs inside the projection for the reason spelled out on {@link
- * decimalTextJsonProjection}: what `jsonProjection` returns is the argument the JSON constructor
- * receives, so casting here happens before PostgreSQL builds the JSON value rather than after.
- */
-const serverTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
-  CastExpr.as(expression, 'text');
 
 const datePart = (field: string, expression: ProjectionExpr): ProjectionExpr =>
   FunctionCallExpr.of('date_part', [LiteralExpr.of(field), expression]);
@@ -1105,465 +1066,6 @@ export const pgTimetzColumn = (params: PrecisionParams = {}) =>
 
 pgTimetzColumn satisfies ColumnHelperFor<PgTimetzDescriptor>;
 pgTimetzColumn satisfies ColumnHelperForStrict<PgTimetzDescriptor>;
-
-/**
- * Representation-explicit temporal codecs whose application value is PostgreSQL's own text.
- *
- * Every direction is identity: a value is bound exactly as the application supplied it, and the
- * server's rendering is returned exactly as it arrived. PostgreSQL alone decides which inputs are
- * valid and how an accepted value is normalised, so these codecs neither validate, normalise, nor
- * canonicalise. That is what makes them the lossless escape hatch for values with no counterpart in
- * a richer temporal representation — `infinity`, BC and expanded-year dates, microsecond precision —
- * and what makes session settings such as `DateStyle` and `TimeZone` observable rather than hidden.
- *
- * `targetTypes` is empty on all four: introspection ownership of `date` / `timestamp` /
- * `timestamptz` / `time` belongs to the codecs that carry the richer representation, and these are
- * selected explicitly by the schema author instead.
- */
-export class PgDateStringCodec extends CodecImpl<
-  typeof PG_DATE_STRING_CODEC_ID,
-  readonly ['equality', 'order'],
-  string,
-  string
-> {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
-    return value;
-  }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
-  }
-  encodeJson(value: string): JsonValue {
-    return value;
-  }
-  decodeJson(json: JsonValue): string {
-    return blindCast<string, 'date-string columns serialize to JSON as their wire string form'>(
-      json,
-    );
-  }
-}
-
-/**
- * Alone among the four, this descriptor carries no `renderOutputType`, so a `date` column reads as
- * plain `string` rather than a branded `DateString`. Two reasons, both structural: the emitter only
- * consults `renderOutputType` for a column with non-empty type params, and a `date` has no
- * precision to carry — so a renderer here would never be called. Branding the codec's own type
- * instead would reach the declaration, but it would also make the *write* side branded, and a
- * plain string literal is no longer assignable to it. The asymmetry is the honest shape; please
- * don't tidy it away.
- */
-export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
-  protected override nativeType(): string {
-    return PG_DATE_NATIVE_TYPE;
-  }
-  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
-  }
-  override readonly codecId = PG_DATE_STRING_CODEC_ID;
-  override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = [] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
-  override factory(): (ctx: CodecInstanceContext) => PgDateStringCodec {
-    return () => new PgDateStringCodec(this);
-  }
-}
-
-export const pgDateStringDescriptor = new PgDateStringDescriptor();
-
-export const pgDateStringColumn = () =>
-  column(pgDateStringDescriptor.factory(), pgDateStringDescriptor.codecId, undefined, 'date');
-
-pgDateStringColumn satisfies ColumnHelperFor<PgDateStringDescriptor>;
-pgDateStringColumn satisfies ColumnHelperForStrict<PgDateStringDescriptor>;
-
-export class PgTimestampStringCodec extends CodecImpl<
-  typeof PG_TIMESTAMP_STRING_CODEC_ID,
-  readonly ['equality', 'order'],
-  string,
-  string
-> {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
-    return value;
-  }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
-  }
-  encodeJson(value: string): JsonValue {
-    return value;
-  }
-  decodeJson(json: JsonValue): string {
-    return blindCast<
-      string,
-      'timestamp-string columns serialize to JSON as their wire string form'
-    >(json);
-  }
-}
-
-export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIMESTAMP_NATIVE_TYPE;
-  }
-  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
-  }
-  override readonly codecId = PG_TIMESTAMP_STRING_CODEC_ID;
-  override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = [] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
-  override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('TimestampString', params);
-  }
-  override factory(
-    _params: PrecisionParams,
-  ): (ctx: CodecInstanceContext) => PgTimestampStringCodec {
-    return () => new PgTimestampStringCodec(this);
-  }
-}
-
-export const pgTimestampStringDescriptor = new PgTimestampStringDescriptor();
-
-export const pgTimestampStringColumn = (params: PrecisionParams = {}) =>
-  column(
-    pgTimestampStringDescriptor.factory(params),
-    pgTimestampStringDescriptor.codecId,
-    params,
-    'timestamp',
-  );
-
-pgTimestampStringColumn satisfies ColumnHelperFor<PgTimestampStringDescriptor>;
-pgTimestampStringColumn satisfies ColumnHelperForStrict<PgTimestampStringDescriptor>;
-
-export class PgTimestamptzStringCodec extends CodecImpl<
-  typeof PG_TIMESTAMPTZ_STRING_CODEC_ID,
-  readonly ['equality', 'order'],
-  string,
-  string
-> {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
-    return value;
-  }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
-  }
-  encodeJson(value: string): JsonValue {
-    return value;
-  }
-  decodeJson(json: JsonValue): string {
-    return blindCast<
-      string,
-      'timestamptz-string columns serialize to JSON as their wire string form'
-    >(json);
-  }
-}
-
-export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIMESTAMPTZ_NATIVE_TYPE;
-  }
-  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
-  }
-  override readonly codecId = PG_TIMESTAMPTZ_STRING_CODEC_ID;
-  override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = [] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
-  override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('TimestamptzString', params);
-  }
-  override factory(
-    _params: PrecisionParams,
-  ): (ctx: CodecInstanceContext) => PgTimestamptzStringCodec {
-    return () => new PgTimestamptzStringCodec(this);
-  }
-}
-
-export const pgTimestamptzStringDescriptor = new PgTimestamptzStringDescriptor();
-
-export const pgTimestamptzStringColumn = (params: PrecisionParams = {}) =>
-  column(
-    pgTimestamptzStringDescriptor.factory(params),
-    pgTimestamptzStringDescriptor.codecId,
-    params,
-    'timestamptz',
-  );
-
-pgTimestamptzStringColumn satisfies ColumnHelperFor<PgTimestamptzStringDescriptor>;
-pgTimestamptzStringColumn satisfies ColumnHelperForStrict<PgTimestamptzStringDescriptor>;
-
-export class PgTimeStringCodec extends CodecImpl<
-  typeof PG_TIME_STRING_CODEC_ID,
-  readonly ['equality', 'order'],
-  string,
-  string
-> {
-  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
-    return value;
-  }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
-    return wire;
-  }
-  encodeJson(value: string): JsonValue {
-    return value;
-  }
-  decodeJson(json: JsonValue): string {
-    return blindCast<string, 'time-string columns serialize to JSON as their wire string form'>(
-      json,
-    );
-  }
-}
-
-export class PgTimeStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIME_NATIVE_TYPE;
-  }
-  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
-  }
-  override readonly codecId = PG_TIME_STRING_CODEC_ID;
-  override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = [] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
-  override renderOutputType(params: PrecisionParams): string | undefined {
-    return renderPrecision('TimeString', params);
-  }
-  override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimeStringCodec {
-    return () => new PgTimeStringCodec(this);
-  }
-}
-
-export const pgTimeStringDescriptor = new PgTimeStringDescriptor();
-
-export const pgTimeStringColumn = (params: PrecisionParams = {}) =>
-  column(pgTimeStringDescriptor.factory(params), pgTimeStringDescriptor.codecId, params, 'time');
-
-pgTimeStringColumn satisfies ColumnHelperFor<PgTimeStringDescriptor>;
-pgTimeStringColumn satisfies ColumnHelperForStrict<PgTimeStringDescriptor>;
-
-/**
- * Temporal-backed temporal codecs: the application value is the `Temporal.*` type that matches the
- * column's native type, and the wire value is PostgreSQL's own text in both directions.
- *
- * `Temporal.*.from()` is the authoritative parser and the authoritative range check — these codecs
- * add only PostgreSQL's `infinity` sentinels and the named era adaptation for BC and expanded
- * years. Anything Temporal declines is reported as unrepresentable, naming the `*String` type that
- * reads the same column losslessly.
- *
- * The application type reaches the generated declaration through `TInput` rather than
- * `renderOutputType`: the emitter only consults a renderer for a column carrying non-empty type
- * params, so a bare `Timestamp` would fall through it. `Temporal` is referenced as an ambient
- * global and no polyfill type is imported, which is why these carry no `typeImports` entry.
- */
-export class PgDateTemporalCodec extends CodecImpl<
-  typeof PG_DATE_TEMPORAL_CODEC_ID,
-  readonly ['equality', 'order'],
-  string,
-  Temporal.PlainDate
-> {
-  async encode(value: Temporal.PlainDate, _ctx: CodecCallContext): Promise<string> {
-    return pgDateTemporalEncode(value);
-  }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainDate> {
-    return pgDateTemporalDecode(wire);
-  }
-  encodeJson(value: Temporal.PlainDate): JsonValue {
-    return pgDateTemporalEncode(value);
-  }
-  decodeJson(json: JsonValue): Temporal.PlainDate {
-    return pgDateTemporalDecode(
-      blindCast<string, 'date-temporal columns serialize to JSON as their wire string form'>(json),
-    );
-  }
-}
-
-export class PgDateTemporalDescriptor extends PostgresCodecDescriptor<void> {
-  protected override nativeType(): string {
-    return PG_DATE_NATIVE_TYPE;
-  }
-  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
-  }
-  override readonly codecId = PG_DATE_TEMPORAL_CODEC_ID;
-  override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = ['date'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
-  override factory(): (ctx: CodecInstanceContext) => PgDateTemporalCodec {
-    return () => new PgDateTemporalCodec(this);
-  }
-}
-
-export const pgDateTemporalDescriptor = new PgDateTemporalDescriptor();
-
-export const pgDateTemporalColumn = () =>
-  column(pgDateTemporalDescriptor.factory(), pgDateTemporalDescriptor.codecId, undefined, 'date');
-
-pgDateTemporalColumn satisfies ColumnHelperFor<PgDateTemporalDescriptor>;
-pgDateTemporalColumn satisfies ColumnHelperForStrict<PgDateTemporalDescriptor>;
-
-export class PgTimestampTemporalCodec extends CodecImpl<
-  typeof PG_TIMESTAMP_TEMPORAL_CODEC_ID,
-  readonly ['equality', 'order'],
-  string,
-  Temporal.PlainDateTime
-> {
-  async encode(value: Temporal.PlainDateTime, _ctx: CodecCallContext): Promise<string> {
-    return pgTimestampTemporalEncode(value);
-  }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainDateTime> {
-    return pgTimestampTemporalDecode(wire);
-  }
-  encodeJson(value: Temporal.PlainDateTime): JsonValue {
-    return pgTimestampTemporalEncode(value);
-  }
-  decodeJson(json: JsonValue): Temporal.PlainDateTime {
-    return pgTimestampTemporalDecode(
-      blindCast<string, 'timestamp-temporal columns serialize to JSON as their wire string form'>(
-        json,
-      ),
-    );
-  }
-}
-
-export class PgTimestampTemporalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIMESTAMP_NATIVE_TYPE;
-  }
-  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
-  }
-  override readonly codecId = PG_TIMESTAMP_TEMPORAL_CODEC_ID;
-  override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = ['timestamp'] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
-  override factory(
-    _params: PrecisionParams,
-  ): (ctx: CodecInstanceContext) => PgTimestampTemporalCodec {
-    return () => new PgTimestampTemporalCodec(this);
-  }
-}
-
-export const pgTimestampTemporalDescriptor = new PgTimestampTemporalDescriptor();
-
-export const pgTimestampTemporalColumn = (params: PrecisionParams = {}) =>
-  column(
-    pgTimestampTemporalDescriptor.factory(params),
-    pgTimestampTemporalDescriptor.codecId,
-    params,
-    'timestamp',
-  );
-
-pgTimestampTemporalColumn satisfies ColumnHelperFor<PgTimestampTemporalDescriptor>;
-pgTimestampTemporalColumn satisfies ColumnHelperForStrict<PgTimestampTemporalDescriptor>;
-
-export class PgTimestamptzTemporalCodec extends CodecImpl<
-  typeof PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
-  readonly ['equality', 'order'],
-  string,
-  Temporal.Instant
-> {
-  async encode(value: Temporal.Instant, _ctx: CodecCallContext): Promise<string> {
-    return pgTimestamptzTemporalEncode(value);
-  }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.Instant> {
-    return pgTimestamptzTemporalDecode(wire);
-  }
-  encodeJson(value: Temporal.Instant): JsonValue {
-    return pgTimestamptzTemporalEncode(value);
-  }
-  decodeJson(json: JsonValue): Temporal.Instant {
-    return pgTimestamptzTemporalDecode(
-      blindCast<string, 'timestamptz-temporal columns serialize to JSON as their wire string form'>(
-        json,
-      ),
-    );
-  }
-}
-
-export class PgTimestamptzTemporalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIMESTAMPTZ_NATIVE_TYPE;
-  }
-  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
-  }
-  override readonly codecId = PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID;
-  override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = ['timestamptz'] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
-  override factory(
-    _params: PrecisionParams,
-  ): (ctx: CodecInstanceContext) => PgTimestamptzTemporalCodec {
-    return () => new PgTimestamptzTemporalCodec(this);
-  }
-}
-
-export const pgTimestamptzTemporalDescriptor = new PgTimestamptzTemporalDescriptor();
-
-export const pgTimestamptzTemporalColumn = (params: PrecisionParams = {}) =>
-  column(
-    pgTimestamptzTemporalDescriptor.factory(params),
-    pgTimestamptzTemporalDescriptor.codecId,
-    params,
-    'timestamptz',
-  );
-
-pgTimestamptzTemporalColumn satisfies ColumnHelperFor<PgTimestamptzTemporalDescriptor>;
-pgTimestamptzTemporalColumn satisfies ColumnHelperForStrict<PgTimestamptzTemporalDescriptor>;
-
-export class PgTimeTemporalCodec extends CodecImpl<
-  typeof PG_TIME_TEMPORAL_CODEC_ID,
-  readonly ['equality', 'order'],
-  string,
-  Temporal.PlainTime
-> {
-  async encode(value: Temporal.PlainTime, _ctx: CodecCallContext): Promise<string> {
-    return pgTimeTemporalEncode(value);
-  }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainTime> {
-    return pgTimeTemporalDecode(wire);
-  }
-  encodeJson(value: Temporal.PlainTime): JsonValue {
-    return pgTimeTemporalEncode(value);
-  }
-  decodeJson(json: JsonValue): Temporal.PlainTime {
-    return pgTimeTemporalDecode(
-      blindCast<string, 'time-temporal columns serialize to JSON as their wire string form'>(json),
-    );
-  }
-}
-
-export class PgTimeTemporalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  protected override nativeType(): string {
-    return PG_TIME_NATIVE_TYPE;
-  }
-  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
-  }
-  override readonly codecId = PG_TIME_TEMPORAL_CODEC_ID;
-  override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = ['time'] as const;
-  override readonly paramsSchema =
-    precisionParamsSchema satisfies StandardSchemaV1<PrecisionParams>;
-  override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => PgTimeTemporalCodec {
-    return () => new PgTimeTemporalCodec(this);
-  }
-}
-
-export const pgTimeTemporalDescriptor = new PgTimeTemporalDescriptor();
-
-export const pgTimeTemporalColumn = (params: PrecisionParams = {}) =>
-  column(
-    pgTimeTemporalDescriptor.factory(params),
-    pgTimeTemporalDescriptor.codecId,
-    params,
-    'time',
-  );
-
-pgTimeTemporalColumn satisfies ColumnHelperFor<PgTimeTemporalDescriptor>;
-pgTimeTemporalColumn satisfies ColumnHelperForStrict<PgTimeTemporalDescriptor>;
 
 export class PgBitCodec extends CodecImpl<
   typeof PG_BIT_CODEC_ID,

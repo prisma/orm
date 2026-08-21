@@ -13,8 +13,6 @@ import {
   pgBoolDescriptor,
   pgByteaDescriptor,
   pgCharDescriptor,
-  pgDateStringDescriptor,
-  pgDateTemporalDescriptor,
   pgEnumDescriptor,
   pgFloat4Descriptor,
   pgFloat8Descriptor,
@@ -30,12 +28,6 @@ import {
   pgJsonDescriptor,
   pgNumericDescriptor,
   pgTextDescriptor,
-  pgTimeStringDescriptor,
-  pgTimestampStringDescriptor,
-  pgTimestampTemporalDescriptor,
-  pgTimestamptzStringDescriptor,
-  pgTimestamptzTemporalDescriptor,
-  pgTimeTemporalDescriptor,
   pgTimetzDescriptor,
   pgUnboundedIntDescriptor,
   pgUuidDescriptor,
@@ -47,6 +39,18 @@ import {
   postgresSqlTextDescriptor,
   postgresSqlVarcharDescriptor,
 } from './codecs';
+import {
+  pgDateTemporalDescriptor,
+  pgTimestampTemporalDescriptor,
+  pgTimestamptzTemporalDescriptor,
+  pgTimeTemporalDescriptor,
+} from './temporal-codecs';
+import {
+  pgDateStringDescriptor,
+  pgTimeStringDescriptor,
+  pgTimestampStringDescriptor,
+  pgTimestamptzStringDescriptor,
+} from './temporal-string-codecs';
 
 export const codecDescriptorMap = {
   char: postgresSqlCharDescriptor,

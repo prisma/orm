@@ -14,17 +14,17 @@ import {
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from '../src/core/codec-ids';
+import { codecDescriptors } from '../src/core/codecs';
+import { instantNow } from '../src/core/instant-now-generator';
+import { postgresCodecDescriptorRegistry } from '../src/core/registry';
 import {
-  codecDescriptors,
-  pgDateStringDescriptor,
   pgDateTemporalColumn,
   pgDateTemporalDescriptor,
   pgTimestampTemporalDescriptor,
   pgTimestamptzTemporalDescriptor,
   pgTimeTemporalDescriptor,
-} from '../src/core/codecs';
-import { instantNow } from '../src/core/instant-now-generator';
-import { postgresCodecDescriptorRegistry } from '../src/core/registry';
+} from '../src/core/temporal-codecs';
+import { pgDateStringDescriptor } from '../src/core/temporal-string-codecs';
 
 const instanceCtx = { name: '<test>' };
 const callCtx = {};

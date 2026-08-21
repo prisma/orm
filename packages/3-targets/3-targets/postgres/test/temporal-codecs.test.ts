@@ -19,13 +19,13 @@ import {
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from '../src/core/codec-ids';
+import { postgresCodecRegistry } from '../src/core/registry';
 import {
   pgDateTemporalDescriptor,
   pgTimestampTemporalDescriptor,
   pgTimestamptzTemporalDescriptor,
   pgTimeTemporalDescriptor,
-} from '../src/core/codecs';
-import { postgresCodecRegistry } from '../src/core/registry';
+} from '../src/core/temporal-codecs';
 
 const instanceCtx = { name: '<test>' };
 const callCtx = {};

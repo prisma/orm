@@ -18,7 +18,7 @@ import {
   pgTimeStringDescriptor,
   pgTimestampStringDescriptor,
   pgTimestamptzStringDescriptor,
-} from '../src/core/codecs';
+} from '../src/core/temporal-string-codecs';
 
 const instanceCtx = { name: '<test>' };
 const callCtx = {};

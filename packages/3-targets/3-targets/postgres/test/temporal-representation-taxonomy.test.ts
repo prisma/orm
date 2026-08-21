@@ -16,23 +16,25 @@
 import { ColumnRef, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import {
-  pgDateStringColumn,
-  pgDateStringDescriptor,
   pgDateTemporalColumn,
   pgDateTemporalDescriptor,
-  pgTimeStringColumn,
-  pgTimeStringDescriptor,
-  pgTimestampStringColumn,
-  pgTimestampStringDescriptor,
   pgTimestampTemporalColumn,
   pgTimestampTemporalDescriptor,
-  pgTimestamptzStringColumn,
-  pgTimestamptzStringDescriptor,
   pgTimestamptzTemporalColumn,
   pgTimestamptzTemporalDescriptor,
   pgTimeTemporalColumn,
   pgTimeTemporalDescriptor,
-} from '../src/core/codecs';
+} from '../src/core/temporal-codecs';
+import {
+  pgDateStringColumn,
+  pgDateStringDescriptor,
+  pgTimeStringColumn,
+  pgTimeStringDescriptor,
+  pgTimestampStringColumn,
+  pgTimestampStringDescriptor,
+  pgTimestamptzStringColumn,
+  pgTimestamptzStringDescriptor,
+} from '../src/core/temporal-string-codecs';
 
 interface ColumnSpecShape {
   readonly codecId: string;
