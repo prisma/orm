@@ -1,6 +1,6 @@
 import type { SqlDescribedContractSpace } from '@internal/family-sql/control';
 import type { EnumInfo, PslPrinterOptions } from '@internal/family-sql/psl-infer';
-import { inferRelations, toModelName } from '@internal/family-sql/psl-infer';
+import { inferRelations, toEnumName, toModelName } from '@internal/family-sql/psl-infer';
 import { coordinateKey } from '@internal/framework-components/ir';
 import type {
   PslDocumentAst,
@@ -18,18 +18,29 @@ import { parsePostgresDefault } from '../default-normalizer';
 import { postgresError } from '../errors';
 import type { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
-import { buildNativeEnumBlocks, PSL_SCALAR_TYPE_NAMES } from './infer-enum-blocks';
+import {
+  buildNativeEnumBlocks,
+  buildRecoveredEnumBlock,
+  PSL_SCALAR_TYPE_NAMES,
+} from './infer-enum-blocks';
 import {
   describedContractOwners,
   type ForeignKeyResolution,
   resolveForeignKeys,
 } from './infer-foreign-keys';
+import type { RecoveredEnumField } from './infer-model-blocks';
 import { buildModel } from './infer-model-blocks';
-import { buildFieldNamesByTable, buildTopLevelNameMap, topologicalSort } from './infer-names';
+import {
+  buildFieldNamesByTable,
+  buildTopLevelNameMap,
+  createUniqueFieldName,
+  topologicalSort,
+} from './infer-names';
 import { buildPolicyBlocks } from './infer-policy-blocks';
 import { createPostgresDefaultMapping } from './postgres-default-mapping';
 import { createPostgresTypeMap } from './postgres-type-map';
 import { SYNTHETIC_SPAN } from './psl-literals';
+import { recoverDomainEnumColumns } from './recover-domain-enums';
 
 /**
  * Infers a PSL AST (for `printPsl`) from an introspected Postgres schema tree.
@@ -310,16 +321,6 @@ export function buildPslDocumentAst(
   ]);
   const { relationsByTable } = inferRelations(schemaIR.tables, modelNameMap);
 
-  const policyEmission = buildPolicyBlocks(
-    rlsExtras?.policiesByTable ?? new Map(),
-    modelNameMap,
-    new Set([
-      ...modelNameMap.values(),
-      ...bareEnumNameMap.values(),
-      ...topLevelExtensionBlocks.map((block) => block.name),
-    ]),
-  );
-
   // A caller's block shares one top-level name scope with the models, the
   // native enums, PSL's scalar type names, and the caller's other blocks. A
   // clash costs differently depending on the partner: against a scalar name
@@ -327,8 +328,8 @@ export function buildPslDocumentAst(
   // (`psl-column-resolution` consults enums before scalars), while against a
   // model it is two declarations claiming one top-level name, which does not
   // parse back. Either way the block cannot be renamed here, so it is refused.
-  // Policies are absent from this set on purpose — they were handed these
-  // names above and have already renamed themselves out of the way.
+  // Policies are absent from this set on purpose — they are handed these
+  // names below and rename themselves out of the way.
   const claimedTopLevelNames = new Set([
     ...PSL_SCALAR_TYPE_NAMES,
     ...modelNameMap.values(),
@@ -347,6 +348,42 @@ export function buildPslDocumentAst(
     claimedTopLevelNames.add(block.name);
   }
 
+  // Path A domain-enum recovery. Names are allocated against the fully
+  // claimed top-level scope with the numeric-suffix disambiguator, so a
+  // recovered block can never trip the collision throw above (which stays
+  // for external callers of `topLevelExtensionBlocks`).
+  const recoveredColumnsByTable = recoverDomainEnumColumns(schemaIR.tables);
+  const recoveredEnumBlocks: PslExtensionBlock[] = [];
+  const recoveredEnumsByTable = new Map<string, ReadonlyMap<string, RecoveredEnumField>>();
+  for (const table of Object.values(schemaIR.tables)) {
+    const recoveredColumns = recoveredColumnsByTable.get(table.name);
+    if (recoveredColumns === undefined) continue;
+    const byColumn = new Map<string, RecoveredEnumField>();
+    for (const column of Object.values(table.columns)) {
+      const entry = recoveredColumns.get(column.name);
+      if (entry === undefined) continue;
+      const pslName = createUniqueFieldName(
+        toEnumName(`${table.name}_${column.name}`).name,
+        claimedTopLevelNames,
+      );
+      claimedTopLevelNames.add(pslName);
+      recoveredEnumBlocks.push(buildRecoveredEnumBlock(pslName, entry.memberValues, entry.codecId));
+      byColumn.set(column.name, { pslName, memberValues: entry.memberValues });
+    }
+    recoveredEnumsByTable.set(table.name, byColumn);
+  }
+  const allTopLevelBlocks = [...topLevelExtensionBlocks, ...recoveredEnumBlocks];
+
+  const policyEmission = buildPolicyBlocks(
+    rlsExtras?.policiesByTable ?? new Map(),
+    modelNameMap,
+    new Set([
+      ...modelNameMap.values(),
+      ...bareEnumNameMap.values(),
+      ...allTopLevelBlocks.map((block) => block.name),
+    ]),
+  );
+
   const models: PslModel[] = [];
   for (const table of Object.values(schemaIR.tables)) {
     models.push(
@@ -364,6 +401,7 @@ export function buildPslDocumentAst(
         danglingForeignKeysByTable.get(table.name) ?? [],
         rlsExtras?.rlsEnabledTables.has(table.name) ?? false,
         policyEmission.skipNotesByTable.get(table.name) ?? [],
+        recoveredEnumsByTable.get(table.name),
       ),
     );
   }
@@ -396,7 +434,7 @@ export function buildPslDocumentAst(
   const separateTopLevelBucket =
     namespaceName !== undefined &&
     namespaceName !== UNSPECIFIED_PSL_NAMESPACE_ID &&
-    topLevelExtensionBlocks.length > 0;
+    allTopLevelBlocks.length > 0;
 
   const namespaces: PslNamespace[] = [];
   if (separateTopLevelBucket) {
@@ -404,7 +442,7 @@ export function buildPslDocumentAst(
       makePslNamespace({
         kind: 'namespace',
         name: UNSPECIFIED_PSL_NAMESPACE_ID,
-        entries: makePslNamespaceEntries([], [], topLevelExtensionBlocks),
+        entries: makePslNamespaceEntries([], [], allTopLevelBlocks),
         span: SYNTHETIC_SPAN,
       }),
     );
@@ -417,7 +455,7 @@ export function buildPslDocumentAst(
         sortedModels,
         [],
         [
-          ...(separateTopLevelBucket ? [] : topLevelExtensionBlocks),
+          ...(separateTopLevelBucket ? [] : allTopLevelBlocks),
           ...enumBlocks,
           ...policyEmission.blocks,
         ],
