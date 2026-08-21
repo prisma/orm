@@ -46,18 +46,18 @@ const SKIP_ALL = ['--skip-install', '--skip-skills'] as const;
  * do not pass `--skip-install`.
  */
 function installFakeProjectLocalCli(dir: string): void {
-  const packageDir = join(dir, 'node_modules/@prisma/cli');
+  const packageDir = join(dir, 'node_modules/prisma');
   mkdirSync(join(packageDir, 'bin'), { recursive: true });
   writeFileSync(
     join(packageDir, 'package.json'),
     JSON.stringify({
-      name: '@prisma/cli',
+      name: 'prisma',
       version: '0.0.0-test',
       type: 'module',
-      bin: { 'prisma-cli': './bin/prisma-cli.mjs' },
+      bin: { prisma: './bin/prisma.mjs' },
     }),
   );
-  writeFileSync(join(packageDir, 'bin/prisma-cli.mjs'), '');
+  writeFileSync(join(packageDir, 'bin/prisma.mjs'), '');
 }
 
 function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }) {
@@ -278,7 +278,7 @@ describe('init scaffold', () => {
 
         expect(envelopeOf(run)).toMatchObject({ ok: true });
         expect(run.exitCode).toBe(0);
-        expect(calls[1]?.args).toEqual(['add', '-D', '@prisma/cli@next']);
+        expect(calls[1]?.args).toEqual(['add', '-D', 'prisma@next']);
         expect(calls[2]?.args).toEqual(['add', '-D', '@prisma/cli-engine@next']);
       },
       timeouts.coldTransformImport,

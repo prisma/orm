@@ -9,17 +9,17 @@ import {
 } from '../../../src/commands/init/skill-sources';
 
 describe('the skills sync invocation', () => {
-  it('drives the unified CLI, which carries the sync command', () => {
-    expect(SKILLS_SYNC_PACKAGE).toBe('@prisma/cli@next');
+  it('drives the package that carries the prisma bin', () => {
+    expect(SKILLS_SYNC_PACKAGE).toBe('prisma@next');
     expect(SKILLS_SYNC_ARGS).toEqual(['skills', 'sync']);
   });
 
-  it('spells the runner the way each package manager does', () => {
-    expect(formatSkillSyncCommand('pnpm')).toBe('pnpm dlx @prisma/cli@next skills sync');
-    expect(formatSkillSyncCommand('npm')).toBe('npx @prisma/cli@next skills sync');
-    expect(formatSkillSyncCommand('yarn')).toBe('yarn dlx @prisma/cli@next skills sync');
-    expect(formatSkillSyncCommand('bun')).toBe('bunx @prisma/cli@next skills sync');
-    expect(formatSkillSyncCommand('deno')).toBe('deno run -A npm:@prisma/cli@next skills sync');
+  it('advises the copy the project already installed, never a fresh one', () => {
+    expect(formatSkillSyncCommand('pnpm')).toBe('pnpm exec prisma skills sync');
+    expect(formatSkillSyncCommand('npm')).toBe('npm exec prisma skills sync');
+    expect(formatSkillSyncCommand('yarn')).toBe('yarn exec prisma skills sync');
+    expect(formatSkillSyncCommand('bun')).toBe('bun run prisma skills sync');
+    expect(formatSkillSyncCommand('deno')).toBe('deno run -A npm:prisma skills sync');
   });
 });
 

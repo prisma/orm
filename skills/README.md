@@ -24,7 +24,7 @@ The skill arrives with the packages, and `prisma skills sync` copies it from the
 
 ```bash
 mkdir my-app && cd my-app
-pnpm dlx @prisma/cli@next orm init
+pnpm dlx prisma@next orm init
 ```
 
 In an existing project, or after adding an agent runtime, run it directly:

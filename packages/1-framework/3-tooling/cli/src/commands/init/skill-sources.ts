@@ -7,33 +7,34 @@ import type { PackageManager } from './detect-package-manager';
  * of the installed packages into the agent harnesses' skill directories, and
  * the `postinstall` script init writes re-runs it on every later install.
  *
- * The package driven here is the unified CLI at the same specifier init adds
- * as a development dependency, so the sync runs at the version the project
- * just pinned.
+ * The package driven here is `prisma`, the same specifier init adds as a
+ * development dependency: it is the package that carries the `prisma` binary
+ * the postinstall script and every piece of advice below name.
  */
-export const SKILLS_SYNC_PACKAGE = '@prisma/cli@next';
+export const SKILLS_SYNC_PACKAGE = 'prisma@next';
 
 export const SKILLS_SYNC_ARGS: readonly string[] = ['skills', 'sync'];
 
 /**
  * The sync invocation as the user would type it, for the advice init prints
- * when it skips the sync or the sync fails. `npx`/`pnpm dlx`/`bunx` are
- * interchangeable to the user; we pick the variant that matches the rest of
- * the install step so a project consistently uses one runner.
+ * when it skips the sync or the sync fails. This runs the `prisma` binary the
+ * project already has as a development dependency rather than fetching a
+ * fresh copy: the installed one is the version the project pinned, and it
+ * needs no network. Deno has no local-bin runner, so it names the package.
  */
 export function formatSkillSyncCommand(pm: PackageManager): string {
-  const args = [SKILLS_SYNC_PACKAGE, ...SKILLS_SYNC_ARGS];
+  const command = ['prisma', ...SKILLS_SYNC_ARGS].join(' ');
   switch (pm) {
     case 'pnpm':
-      return `pnpm dlx ${args.join(' ')}`;
+      return `pnpm exec ${command}`;
     case 'yarn':
-      return `yarn dlx ${args.join(' ')}`;
+      return `yarn exec ${command}`;
     case 'bun':
-      return `bunx ${args.join(' ')}`;
+      return `bun run ${command}`;
     case 'deno':
-      return `deno run -A npm:${args.join(' ')}`;
+      return `deno run -A npm:${command}`;
     case 'npm':
-      return `npx ${args.join(' ')}`;
+      return `npm exec ${command}`;
   }
 }
 

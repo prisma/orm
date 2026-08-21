@@ -79,12 +79,12 @@ describe('init installs', () => {
   it(
     'pins the engine to the exact version the installed @prisma/cli declares',
     async () => {
-      const cliManifestDir = join(projectDir, 'node_modules', '@prisma', 'cli');
+      const cliManifestDir = join(projectDir, 'node_modules', 'prisma');
       mkdirSync(cliManifestDir, { recursive: true });
       writeFileSync(
         join(cliManifestDir, 'package.json'),
         JSON.stringify({
-          name: '@prisma/cli',
+          name: 'prisma',
           version: '8.0.0-rc.4',
           dependencies: { '@prisma/cli-engine': '0.1.1' },
         }),
@@ -117,7 +117,7 @@ describe('init installs', () => {
         },
         {
           file: expect.any(String),
-          args: ['add', '-D', '@prisma/cli@next', '@types/node'],
+          args: ['add', '-D', 'prisma@next', '@types/node'],
           cwd: projectDir,
         },
         {
@@ -131,7 +131,7 @@ describe('init installs', () => {
         packagesInstalled: {
           status: 'installed',
           deps: ['@prisma/orm-postgres', 'dotenv'],
-          devDeps: ['@prisma/cli@next', '@types/node', '@prisma/cli-engine@next'],
+          devDeps: ['prisma@next', '@types/node', '@prisma/cli-engine@next'],
         },
         contractEmitted: true,
       });
@@ -251,7 +251,7 @@ describe('init installs', () => {
       const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
       const warnings = JSON.stringify(run.presented?.data);
 
-      expect(warnings).toContain('skills sync');
+      expect(warnings).toContain('prisma skills sync');
       expect(warnings).not.toContain('prisma-next init');
     },
     timeouts.coldTransformImport,
@@ -266,7 +266,7 @@ describe('init installs', () => {
 
       expect(skillCalls()).toHaveLength(1);
       expect(first).toMatchObject({ cwd: projectDir });
-      expect(first?.args).toEqual(expect.arrayContaining(['@prisma/cli@next', 'skills', 'sync']));
+      expect(first?.args).toEqual(expect.arrayContaining(['prisma@next', 'skills', 'sync']));
     },
     timeouts.coldTransformImport,
   );
@@ -283,7 +283,7 @@ describe('init installs', () => {
         expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
           'pnpm add @prisma/orm-postgres dotenv',
           'npm add @prisma/orm-postgres dotenv',
-          'npm add -D @prisma/cli@next @types/node',
+          'npm add -D prisma@next @types/node',
           'npm add -D @prisma/cli-engine@next',
         ]);
         expect(run.events).toContainEqual(
@@ -397,7 +397,7 @@ describe('init installs', () => {
           contractEmitted: false,
         });
         expect(run.presented?.presentation.next).toContainEqual(
-          expect.objectContaining({ kind: 'run-command', command: 'prisma-cli contract emit' }),
+          expect.objectContaining({ kind: 'run-command', command: 'prisma contract emit' }),
         );
       },
       timeouts.coldTransformImport,

@@ -205,7 +205,7 @@ describe('mergePackageScripts (FR3.5)', () => {
     expect(content).not.toBeNull();
     expect(warnings).toEqual([]);
     const parsed = JSON.parse(content ?? '');
-    expect(parsed.scripts).toEqual({ 'contract:emit': 'prisma-cli contract emit' });
+    expect(parsed.scripts).toEqual({ 'contract:emit': 'prisma contract emit' });
   });
 
   it('preserves existing user scripts and appends contract:emit', () => {
@@ -217,13 +217,13 @@ describe('mergePackageScripts (FR3.5)', () => {
     expect(parsed.scripts).toEqual({
       build: 'tsc',
       test: 'vitest',
-      'contract:emit': 'prisma-cli contract emit',
+      'contract:emit': 'prisma contract emit',
     });
   });
 
   it('returns null content when contract:emit is already correct (idempotent / FR9.3)', () => {
     const pkg = JSON.stringify(
-      { name: 'app', scripts: { 'contract:emit': 'prisma-cli contract emit' } },
+      { name: 'app', scripts: { 'contract:emit': 'prisma contract emit' } },
       null,
       2,
     );
@@ -243,7 +243,7 @@ describe('mergePackageScripts (FR3.5)', () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('"contract:emit"');
     expect(warnings[0]).toContain('./scripts/custom-emit.sh');
-    expect(warnings[0]).toContain('prisma-cli contract emit');
+    expect(warnings[0]).toContain('prisma contract emit');
   });
 
   it("preserves the user's key order (no reshuffle)", () => {
@@ -350,7 +350,7 @@ describe('the skills-sync postinstall script', () => {
     ]);
     expect(warnings).toEqual([]);
     expect(JSON.parse(content ?? '').scripts).toEqual({
-      'contract:emit': 'prisma-cli contract emit',
+      'contract:emit': 'prisma contract emit',
       postinstall: 'prisma skills sync || exit 0',
     });
   });

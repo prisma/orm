@@ -75,7 +75,7 @@ function retriedWarning(failure: CliStructuredError): string {
 /**
  * The engine dependency spec a fresh scaffold installs. The scaffolded
  * `prisma.config.ts` imports `defineConfig` from `@prisma/cli-engine`, and the
- * installed `@prisma/cli` names the exact engine version it runs against — so
+ * installed `prisma` names the exact engine version it runs against — so
  * the spec is read from the manifest the install just placed, never guessed
  * from a dist-tag (whose `latest` has lagged that version before and broken
  * the very next command). A CLI without a readable engine entry falls back to
@@ -84,7 +84,7 @@ function retriedWarning(failure: CliStructuredError): string {
 export function engineDevDependencySpec(cwd: string): string {
   try {
     const manifest: unknown = JSON.parse(
-      readFileSync(join(cwd, 'node_modules', '@prisma', 'cli', 'package.json'), 'utf-8'),
+      readFileSync(join(cwd, 'node_modules', 'prisma', 'package.json'), 'utf-8'),
     );
     if (typeof manifest === 'object' && manifest !== null) {
       for (const field of ['dependencies', 'peerDependencies'] as const) {

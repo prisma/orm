@@ -144,16 +144,18 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       }
 
       const deps = [targetPackageName(inputs.target, scaffold.resolveImportSpecifier), 'dotenv'];
-      // The CLI the scaffolded scripts run is the unified `@prisma/cli`, whose
-      // v8 line publishes under the `next` dist-tag (the `prisma-next` shim is
-      // no longer published). `@prisma/cli-engine` — the config file's
+      // The CLI the scaffolded scripts run is `prisma`, the unified CLI's
+      // published name, whose v8 line publishes under the `next` dist-tag (the
+      // `prisma-next` shim is no longer published). It is the package that
+      // carries the `prisma` binary, which is what the scaffolded scripts and
+      // the postinstall skills sync invoke. `@prisma/cli-engine` — the config file's
       // defineConfig import — is deliberately absent here: the CLI declares it
       // as an exact peer, so it installs in a second step at the version the
       // just-installed CLI names. Under moduleResolution 'bundler' the
       // scaffolded files reference process.env, which only typechecks with
       // Node's ambient types present; a project that already pins @types/node
       // keeps its own major.
-      const cliDevDeps = ['@prisma/cli@next'];
+      const cliDevDeps = ['prisma@next'];
       const devDeps: string[] = scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node'];
 
       const findings: Diagnostic[] = [];
@@ -270,7 +272,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       } else {
         extraActions.push(
           chooseAction(
-            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version @prisma/cli declares as its peer, as development dependencies)`,
+            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version prisma declares as its dependency, as development dependencies)`,
           ),
         );
       }

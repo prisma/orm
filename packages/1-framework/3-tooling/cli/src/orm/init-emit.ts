@@ -9,7 +9,7 @@ const STDERR_TAIL_LINES = 20;
 /**
  * Test-only seam for the manifest resolution, mirroring probe-db's
  * `requireFromBaseDir`: vitest wraps `createRequire` so resolution never
- * fails under test even when the project has no `@prisma/cli` installed.
+ * fails under test even when the project has no `prisma` installed.
  * Production callers omit it.
  */
 export interface EmitOverrides {
@@ -18,7 +18,7 @@ export interface EmitOverrides {
 
 /**
  * Emits the contract for the project `init` has just scaffolded, by spawning
- * the project-local `prisma-cli` binary the install step put into
+ * the project-local `prisma` binary the install step put into
  * `node_modules`. That binary and the installed `defineConfig` come from the
  * same registry release, so the config loader that evaluates
  * `prisma.config.ts` always matches the config format it was written
@@ -38,7 +38,7 @@ export async function emitScaffoldedContract(
       result.exitCode === null
         ? `was killed by signal ${result.signal ?? 'unknown'}`
         : `exited with code ${result.exitCode}`;
-    throw new Error(`\`prisma-cli contract emit\` ${cause}: ${redactSecrets(tail(output))}`);
+    throw new Error(`\`prisma contract emit\` ${cause}: ${redactSecrets(tail(output))}`);
   }
 }
 
@@ -49,10 +49,10 @@ function resolveProjectBin(cwd: string, overrides: EmitOverrides): string {
       createRequire(join(baseDir, 'package.json')).resolve(specifier));
   let manifestPath: string;
   try {
-    manifestPath = resolveFromBaseDir(cwd, '@prisma/cli/package.json');
+    manifestPath = resolveFromBaseDir(cwd, 'prisma/package.json');
   } catch (error) {
     throw new Error(
-      `\`@prisma/cli\` is not installed in this project (resolved from ${cwd}; cause: ${causeMessage(error)})`,
+      `\`prisma\` is not installed in this project (resolved from ${cwd}; cause: ${causeMessage(error)})`,
     );
   }
   let manifest: unknown;
@@ -60,7 +60,7 @@ function resolveProjectBin(cwd: string, overrides: EmitOverrides): string {
     manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
   } catch (error) {
     throw new Error(
-      `the installed @prisma/cli manifest at ${manifestPath} is not valid JSON: ${causeMessage(error)}`,
+      `the installed prisma manifest at ${manifestPath} is not valid JSON: ${causeMessage(error)}`,
     );
   }
   const bin =
@@ -69,11 +69,11 @@ function resolveProjectBin(cwd: string, overrides: EmitOverrides): string {
     typeof bin === 'string'
       ? bin
       : bin !== null && typeof bin === 'object'
-        ? Reflect.get(bin, 'prisma-cli')
+        ? Reflect.get(bin, 'prisma')
         : undefined;
   if (typeof binEntry !== 'string') {
     throw new Error(
-      `the installed @prisma/cli package at ${dirname(manifestPath)} declares no \`prisma-cli\` bin`,
+      `the installed prisma package at ${dirname(manifestPath)} declares no \`prisma\` bin`,
     );
   }
   return join(dirname(manifestPath), binEntry);
@@ -100,7 +100,7 @@ function runCaptured(
       stderr += chunk.toString('utf-8');
     });
     child.on('error', (error) => {
-      reject(new Error(`could not run the project-local prisma-cli binary: ${error.message}`));
+      reject(new Error(`could not run the project-local prisma binary: ${error.message}`));
     });
     child.on('close', (code, signal) => {
       resolve({ exitCode: code, signal, stdout, stderr });

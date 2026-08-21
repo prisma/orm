@@ -183,7 +183,7 @@ function planScaffold(ctx: {
   const configContractPath = isAbsolute(inputs.schemaPath)
     ? inputs.schemaPath
     : `./${inputs.schemaPath}`;
-  const runPrefix = formatRunCommand(packageManager, 'prisma-cli', '').trimEnd();
+  const runPrefix = formatRunCommand(packageManager, 'prisma', '').trimEnd();
 
   const files: FileEntry[] = [
     {

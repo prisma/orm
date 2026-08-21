@@ -57,6 +57,8 @@ function gitignoreOf(testDir: string): string {
   return readFileSync(join(testDir, '.gitignore'), 'utf8');
 }
 
+const SYNC_COMMAND = 'dlx prisma@next skills sync';
+
 const MANAGED_SKILL_PATHS = [
   '.claude/skills/prisma-8/',
   '.cursor/skills/prisma-8/',
@@ -80,7 +82,7 @@ describe('init skill distribution (offline integration, real CLI)', () => {
 
     expect(exitCode, stderr).toBe(0);
     const syncCommands = commands.filter((command) => command.includes('skills sync'));
-    expect(syncCommands).toEqual(['dlx @prisma/cli@next skills sync']);
+    expect(syncCommands).toEqual([SYNC_COMMAND]);
   });
 
   it('fetches no skills from GitHub any more', { timeout: 60_000 }, async () => {
@@ -89,6 +91,22 @@ describe('init skill distribution (offline integration, real CLI)', () => {
 
     expect(commands.filter((command) => command.includes('skills add'))).toEqual([]);
     expect(commands.filter((command) => command.includes('prisma/prisma'))).toEqual([]);
+  });
+
+  it('names one binary everywhere: the one it installed', { timeout: 60_000 }, async () => {
+    const { testDir, commands } = initProject();
+    testDirs.add(testDir);
+
+    // The postinstall and the emit script both name `prisma`, so the package
+    // that carries that bin is the one that has to be installed. Naming
+    // @prisma/cli here (bin `prisma-cli`) would leave both scripts calling a
+    // binary the project does not have, and `|| exit 0` would hide it.
+    expect(commands).toContain('add -D prisma@next @types/node');
+    expect(commands).toContain(SYNC_COMMAND);
+    expect(manifestOf(testDir).scripts).toMatchObject({
+      postinstall: 'prisma skills sync || exit 0',
+      'contract:emit': 'prisma contract emit',
+    });
   });
 
   it('leaves the wiring that keeps the skills current', { timeout: 60_000 }, async () => {
@@ -163,8 +181,8 @@ if (args[0] === 'add' || args[0] === 'install') {
 /**
  * The shim reports a successful install without fetching anything, so the
  * project it leaves behind has to contain what \`init\` reads next: init emits
- * by spawning the project-local \`prisma-cli\` binary it resolves through
- * \`@prisma/cli/package.json\`. Without this stub the emit step fails, init
+ * by spawning the project-local \`prisma\` binary it resolves through
+ * \`prisma/package.json\`. Without this stub the emit step fails, init
  * settles at exit 5, and the skill sync this file is about never runs.
  *
  * The binary only has to exit 0 — no assertion here reads the emitted
@@ -172,11 +190,11 @@ if (args[0] === 'add' || args[0] === 'install') {
  * and by test/e2e/framework/test/init-emit-subprocess.test.ts.
  */
 function materializePrismaCliStub(projectDir) {
-  const packageDir = path.join(projectDir, 'node_modules', '@prisma', 'cli');
+  const packageDir = path.join(projectDir, 'node_modules', 'prisma');
   fs.mkdirSync(packageDir, { recursive: true });
   fs.writeFileSync(
     path.join(packageDir, 'package.json'),
-    JSON.stringify({ name: '@prisma/cli', version: '0.0.0-test', bin: { 'prisma-cli': 'bin.mjs' } }),
+    JSON.stringify({ name: 'prisma', version: '0.0.0-test', bin: { prisma: 'bin.mjs' } }),
     'utf8',
   );
   fs.writeFileSync(path.join(packageDir, 'bin.mjs'), 'process.exit(0);\\n', 'utf8');

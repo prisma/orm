@@ -3,7 +3,7 @@ import type { CliStructuredError, Diagnostic, NextAction } from '@prisma/cli-eng
 import { chooseAction, runCommandAction } from '../utils/next-actions';
 
 /** The invocation that finishes what a failed `init` phase started. */
-export const EMIT_COMMAND = 'prisma-cli contract emit';
+export const EMIT_COMMAND = 'prisma contract emit';
 
 /**
  * The command's own record of a phase that failed after the scaffold was
