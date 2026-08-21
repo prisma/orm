@@ -1,55 +1,68 @@
-import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter as pathDelimiter } from 'node:path';
 import { join, resolve } from 'pathe';
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_SKILL_AGENTS } from '../../../packages/1-framework/3-tooling/cli/src/commands/init/skill-sources';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createIntegrationTestDir } from './utils/cli-test-helpers';
 
 const WORKSPACE_ROOT = resolve(import.meta.dirname, '../../..');
-const SKILLS_BIN = resolve(WORKSPACE_ROOT, 'node_modules/.bin/skills');
 const CLI_BIN = resolve(WORKSPACE_ROOT, 'packages/1-framework/3-tooling/cli/dist/bin.mjs');
 
 /**
- * Runs the workspace-built engine bin's `init` as a real subprocess with the
- * fake package-manager harness on PATH, so every `pnpm add`/`pnpm dlx` the
- * engine's package capability spawns hits the shim.
+ * What a consumer's project looks like after `init` where skills are
+ * concerned: the skill tree ships inside the packages, so init's whole job is
+ * to run the sync once and leave behind the wiring that keeps re-running it.
+ * This exercises the real CLI bin as a subprocess against a fake package
+ * manager, so the assertions are about the commands init actually spawns and
+ * the files it actually writes.
  */
 function runEngineInit(
   testDir: string,
   env: Readonly<Record<string, string | undefined>>,
+  ...extraArgs: string[]
 ): { readonly exitCode: number; readonly stderr: string } {
   const result = spawnSync(
     process.execPath,
-    [CLI_BIN, 'orm', 'init', '--target', 'postgres', '--authoring', 'psl', '--yes'],
+    [CLI_BIN, 'orm', 'init', '--target', 'postgres', '--authoring', 'psl', '--yes', ...extraArgs],
     { cwd: testDir, encoding: 'utf8', env: { ...process.env, ...env } },
   );
   return { exitCode: result.status ?? 1, stderr: result.stderr ?? '' };
 }
 
-interface ParsedSkillMetadata {
-  readonly name: string;
+function initProject(...extraArgs: string[]): {
+  readonly testDir: string;
+  readonly exitCode: number;
+  readonly stderr: string;
+  readonly commands: readonly string[];
+} {
+  const testDir = createIntegrationTestDir();
+  writeFileSync(join(testDir, 'pnpm-lock.yaml'), '', 'utf8');
+  const { fakeBinDir, logPath } = createFakeManagerHarness(testDir);
+  const { exitCode, stderr } = runEngineInit(
+    testDir,
+    {
+      PATH: `${fakeBinDir}${pathDelimiter}${process.env['PATH'] ?? ''}`,
+      TEST_FAKE_DLX_LOG: logPath,
+    },
+    ...extraArgs,
+  );
+  return { testDir, exitCode, stderr, commands: readLoggedCommands(logPath) };
 }
 
-/**
- * Hermetic fixture: a sparse local clone of the tracked skill surfaces at
- * HEAD, built once per test file. The clone reflects what an external consumer
- * sees: tracked files only, no gitignored install targets like
- * `.agents/skills/`. Discovery against this fixture exercises the same
- * priority-dir traversal the upstream CLI does at consumer machines,
- * without any network round-trip.
- */
-let workspaceClone: string;
+function manifestOf(testDir: string): { readonly scripts?: Record<string, string> } {
+  return JSON.parse(readFileSync(join(testDir, 'package.json'), 'utf8'));
+}
 
-beforeAll(() => {
-  workspaceClone = makeWorkspaceClone();
-}, 30_000);
+function gitignoreOf(testDir: string): string {
+  return readFileSync(join(testDir, '.gitignore'), 'utf8');
+}
 
-afterAll(() => {
-  if (workspaceClone) {
-    rmSync(workspaceClone, { recursive: true, force: true });
-  }
-});
+const MANAGED_SKILL_PATHS = [
+  '.claude/skills/prisma-8/',
+  '.cursor/skills/prisma-8/',
+  '.agents/skills/prisma-8/',
+  '.windsurf/skills/prisma-8/',
+];
 
 describe('init skill distribution (offline integration, real CLI)', () => {
   const testDirs = new Set<string>();
@@ -61,107 +74,72 @@ describe('init skill distribution (offline integration, real CLI)', () => {
     testDirs.clear();
   });
 
-  it('invokes the shared skills source once per named skill and installs their union', {
-    timeout: 60_000,
-  }, async () => {
+  it('syncs the skills out of the installed packages, once', { timeout: 60_000 }, async () => {
+    const { testDir, exitCode, stderr, commands } = initProject();
+    testDirs.add(testDir);
+
+    expect(exitCode, stderr).toBe(0);
+    const syncCommands = commands.filter((command) => command.includes('skills sync'));
+    expect(syncCommands).toEqual(['dlx @prisma/cli@next skills sync']);
+  });
+
+  it('fetches no skills from GitHub any more', { timeout: 60_000 }, async () => {
+    const { testDir, commands } = initProject();
+    testDirs.add(testDir);
+
+    expect(commands.filter((command) => command.includes('skills add'))).toEqual([]);
+    expect(commands.filter((command) => command.includes('prisma/prisma'))).toEqual([]);
+  });
+
+  it('leaves the wiring that keeps the skills current', { timeout: 60_000 }, async () => {
+    const { testDir } = initProject();
+    testDirs.add(testDir);
+
+    expect(manifestOf(testDir).scripts).toMatchObject({
+      postinstall: 'prisma skills sync || exit 0',
+    });
+    for (const path of MANAGED_SKILL_PATHS) {
+      expect(gitignoreOf(testDir)).toContain(path);
+    }
+  });
+
+  it('removes skill directories the router replaced', { timeout: 60_000 }, async () => {
     const testDir = createIntegrationTestDir();
     testDirs.add(testDir);
     writeFileSync(join(testDir, 'pnpm-lock.yaml'), '', 'utf8');
+    const retired = join(testDir, '.agents', 'skills', 'prisma-next-upgrade');
+    mkdirSync(retired, { recursive: true });
+    writeFileSync(join(retired, 'SKILL.md'), '---\nname: prisma-next-upgrade\n---\n', 'utf8');
 
-    const { fakeBinDir, logPath } = createFakeDlxHarness(testDir);
-
+    const { fakeBinDir, logPath } = createFakeManagerHarness(testDir);
     const { exitCode, stderr } = runEngineInit(testDir, {
       PATH: `${fakeBinDir}${pathDelimiter}${process.env['PATH'] ?? ''}`,
-      PRISMA_NEXT_SKILLS_BASE: workspaceClone,
       TEST_FAKE_DLX_LOG: logPath,
-      INSTALL_INTERNAL_SKILLS: undefined,
-      SKILLS_AGENT_AUTO: 'cursor-cli',
     });
 
     expect(exitCode, stderr).toBe(0);
-
-    const loggedCommands = readLoggedCommands(logPath);
-    const agentFlags = (skill: string) =>
-      `--agent ${DEFAULT_SKILL_AGENTS.join(' ')} --skill ${skill} -y`;
-    expect(loggedCommands).toContain(
-      `dlx skills@latest add ${workspaceClone}/skills ${agentFlags('prisma-8')}`,
-    );
-
-    const installed = readInstalledSkillDirs(testDir);
-    const expected = readSkillNamesFrom(join(workspaceClone, 'skills'));
-    const expectedSorted = Array.from(new Set(expected)).sort();
-    expect(installed).toEqual(expectedSorted);
-    expect(installed.length).toBeGreaterThan(0);
-
-    const contributorNames = new Set(readContributorSkillNames());
-    const leaks = installed.filter((name) => contributorNames.has(name));
-    expect(leaks).toEqual([]);
+    expect(existsSync(retired)).toBe(false);
   });
 
-  it('subpath URL form is invoked verbatim (no implicit fallback to bare repo URL)', {
-    timeout: 60_000,
-  }, async () => {
-    const testDir = createIntegrationTestDir();
+  it('under --skip-skills, syncs nothing and writes no wiring', { timeout: 60_000 }, async () => {
+    const { testDir, exitCode, stderr, commands } = initProject('--skip-skills');
     testDirs.add(testDir);
-    writeFileSync(join(testDir, 'pnpm-lock.yaml'), '', 'utf8');
 
-    const { fakeBinDir, logPath } = createFakeDlxHarness(testDir);
-
-    runEngineInit(testDir, {
-      PATH: `${fakeBinDir}${pathDelimiter}${process.env['PATH'] ?? ''}`,
-      PRISMA_NEXT_SKILLS_BASE: workspaceClone,
-      TEST_FAKE_DLX_LOG: logPath,
-      SKILLS_AGENT_AUTO: 'cursor-cli',
-    });
-
-    const loggedCommands = readLoggedCommands(logPath);
-    const skillsAddCommands = loggedCommands.filter((c) => c.startsWith('dlx skills@latest add'));
-    // One shared source, one consolidated multi-agent install per named skill.
-    expect(skillsAddCommands).toHaveLength(1);
-    for (const command of skillsAddCommands) {
-      // Each call's source ends at the `skills` subpath before any
-      // flags. A bare repo URL (no `/skills`) would leak contributor
-      // skills via priority discovery of `.agents/skills/`; assert
-      // the subpath form here.
-      expect(command).toMatch(/\/skills(?:\s|$)/);
-      expect(command).toMatch(/--skill prisma-8 /);
-    }
+    expect(exitCode, stderr).toBe(0);
+    expect(commands.filter((command) => command.includes('skills'))).toEqual([]);
+    expect(manifestOf(testDir).scripts?.['postinstall']).toBeUndefined();
+    expect(gitignoreOf(testDir)).not.toContain('skills/prisma-8/');
   });
 });
 
 /**
- * Build a sparse local clone of the tracked skill surfaces at HEAD. Local
- * object sharing avoids copying repository history, and sparse checkout avoids
- * materialising thousands of unrelated tracked files.
+ * Stand-in for the project's package manager. A real `pnpm dlx
+ * @prisma/cli@next skills sync` would fetch from the npm registry, which an
+ * offline test cannot do, so `pnpm` on `PATH` is replaced by a Node script
+ * that logs every invocation, reports success, and leaves behind the part of
+ * the "installed" project init reads next.
  */
-function makeWorkspaceClone(): string {
-  const cloneRoot = join(
-    integrationTempRoot(),
-    `skills-clone-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
-  mkdirSync(cloneRoot, { recursive: true });
-  execFileSync('git', ['clone', '--local', '--sparse', '-q', WORKSPACE_ROOT, cloneRoot]);
-  execFileSync('git', ['-C', cloneRoot, 'sparse-checkout', 'set', 'skills', 'skills-contrib']);
-  return cloneRoot;
-}
-
-function integrationTempRoot(): string {
-  return resolve(import.meta.dirname, '../.tmp');
-}
-
-/**
- * Stand-in for `pnpm dlx`. We can't run real `pnpm dlx skills@latest` from
- * an offline test (it would fetch from the npm registry on first run
- * in a fresh pnpm store), and we want to invoke the *real* `skills`
- * binary, not a re-implementation. So the harness replaces `pnpm` on
- * `PATH` with a Node script that:
- *   - logs every invocation (for assertions on the install URL form)
- *   - leaves behind the part of the "installed" project that init reads next
- *     (a stub `@prisma/cli` with a `prisma-cli` bin — see the shim body)
- *   - forwards `pnpm dlx skills@latest add <args>` to the workspace's
- *     `node_modules/.bin/skills` invoked from the consumer's cwd.
- */
-function createFakeDlxHarness(testDir: string): {
+function createFakeManagerHarness(testDir: string): {
   readonly fakeBinDir: string;
   readonly logPath: string;
 } {
@@ -173,20 +151,13 @@ function createFakeDlxHarness(testDir: string): {
     `#!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 
 const args = process.argv.slice(2);
 const cwd = process.cwd();
 const logPath = process.env.TEST_FAKE_DLX_LOG;
 
-if (args[0] === 'add' || args[0] === 'install' || args[0] === 'prisma-next') {
-  if (args[0] !== 'prisma-next') {
-    materializePrismaCliStub(cwd);
-  }
-  if (logPath) {
-    fs.appendFileSync(logPath, JSON.stringify({ cwd, args, status: 0 }) + '\\n', 'utf8');
-  }
-  process.exit(0);
+if (args[0] === 'add' || args[0] === 'install') {
+  materializePrismaCliStub(cwd);
 }
 
 /**
@@ -194,7 +165,7 @@ if (args[0] === 'add' || args[0] === 'install' || args[0] === 'prisma-next') {
  * project it leaves behind has to contain what \`init\` reads next: init emits
  * by spawning the project-local \`prisma-cli\` binary it resolves through
  * \`@prisma/cli/package.json\`. Without this stub the emit step fails, init
- * settles at exit 5, and the skill install this file is about never runs.
+ * settles at exit 5, and the skill sync this file is about never runs.
  *
  * The binary only has to exit 0 — no assertion here reads the emitted
  * contract, and the emit path itself is covered by the CLI's own unit tests
@@ -211,34 +182,6 @@ function materializePrismaCliStub(projectDir) {
   fs.writeFileSync(path.join(packageDir, 'bin.mjs'), 'process.exit(0);\\n', 'utf8');
 }
 
-if (args[0] === 'dlx' && (args[1] === 'skills' || args[1] === 'skills@latest') && args[2] === 'add') {
-  // Forward to the real CLI, scoped to the consumer cwd.
-  const skillsArgs = args.slice(2);
-  const result = spawnSync(${JSON.stringify(SKILLS_BIN)}, skillsArgs, {
-    cwd,
-    stdio: 'pipe',
-    env: { ...process.env, SKILLS_AGENT_AUTO: process.env.SKILLS_AGENT_AUTO || 'cursor-cli' },
-  });
-  if (logPath) {
-    fs.appendFileSync(
-      logPath,
-      JSON.stringify({
-        cwd,
-        args,
-        status: result.status,
-        stdout: result.stdout?.toString('utf8') ?? '',
-        stderr: result.stderr?.toString('utf8') ?? '',
-      }) + '\\n',
-      'utf8',
-    );
-  }
-  if (result.status !== 0) {
-    process.stderr.write(result.stderr ?? Buffer.from(''));
-    process.stdout.write(result.stdout ?? Buffer.from(''));
-  }
-  process.exit(result.status ?? 1);
-}
-
 if (logPath) {
   fs.appendFileSync(logPath, JSON.stringify({ cwd, args, status: 0 }) + '\\n', 'utf8');
 }
@@ -248,7 +191,6 @@ process.exit(0);
   );
   // Make the shim executable (POSIX) and provide a Windows shim for parity.
   // chmod is a no-op on Windows.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { chmodSync } = require('node:fs');
   chmodSync(join(fakeBinDir, 'pnpm'), 0o755);
   writeFileSync(
@@ -266,64 +208,4 @@ function readLoggedCommands(logPath: string): readonly string[] {
     .filter((line) => line.length > 0)
     .map((line) => JSON.parse(line) as { readonly args: readonly string[] })
     .map((entry) => entry.args.join(' '));
-}
-
-function readInstalledSkillDirs(testDir: string): readonly string[] {
-  const root = join(testDir, '.agents', 'skills');
-  return readSkillDirNames(root);
-}
-
-function readSkillDirNames(root: string): readonly string[] {
-  if (!existsSync(root)) return [];
-  return readdirSync(root, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
-    .map((entry) => entry.name)
-    .sort();
-}
-
-function readContributorSkillNames(): readonly string[] {
-  return readSkillNamesFrom(join(workspaceClone, 'skills-contrib'));
-}
-
-function readSkillNamesFrom(root: string): readonly string[] {
-  if (!existsSync(root)) return [];
-  const names: string[] = [];
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-    const skillFile = join(root, entry.name, 'SKILL.md');
-    if (!existsSync(skillFile)) continue;
-    const metadata = parseSkillMetadata(skillFile);
-    if (metadata === null) continue;
-    names.push(sanitizeSkillDirName(metadata.name || entry.name));
-  }
-  return Array.from(new Set(names)).sort();
-}
-
-function parseSkillMetadata(skillFile: string): ParsedSkillMetadata | null {
-  const source = readFileSync(skillFile, 'utf8');
-  const normalized = source.replace(/\r\n/g, '\n');
-  if (!normalized.startsWith('---\n')) return null;
-  const end = normalized.indexOf('\n---\n', 4);
-  if (end === -1) return null;
-
-  const lines = normalized.slice(4, end).split('\n');
-  let name = '';
-  for (const line of lines) {
-    if (line.startsWith('name:')) {
-      name = line
-        .slice('name:'.length)
-        .trim()
-        .replace(/^['"]|['"]$/g, '');
-      break;
-    }
-  }
-  return { name };
-}
-
-function sanitizeSkillDirName(name: string): string {
-  const sanitized = name
-    .toLowerCase()
-    .replace(/[^a-z0-9._]+/g, '-')
-    .replace(/^[.-]+|[.-]+$/g, '');
-  return sanitized.substring(0, 255) || 'unnamed-skill';
 }

@@ -320,7 +320,7 @@ describe('init installs', () => {
     );
 
     it(
-      'drives the agent-skill install with the manager that worked',
+      'drives the agent-skill sync with the manager that worked',
       async () => {
         script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
 

@@ -8,7 +8,7 @@ Exit codes (CLI): an expected structured failure exits `2`, a user abort exits `
 
 Some codes are not failures to run at all. `db verify`, `db sign` and `migration check` answer a question about the project, and a bad answer is still an answer: they finish, report their findings as diagnostics on a successful envelope, and exit `4`. Exit `2` is reserved for the cases where those commands could not do the job — an unknown `--space`, a migration reference that resolves to nothing, an unreachable database, a contract that has not been emitted. Every entry whose code can arrive on one of those runs says so and names the command. Each of those commands declares the numbers it can exit with, and its `--help` text spells out what each one means.
 
-A command may also **complete with findings**: it ran to its end and has a result to report, and the problems it found ride that result as diagnostics carrying the codes on this page. Those runs exit with a documented per-command code in the `4`–`99` band rather than `2`, and the entry below says so. `prisma orm init` is the case today: its scaffold is on disk whatever happens next, so a failed dependency install, contract emit, or agent-skill install is a finding on a completed run at exit `4`, `5` or `6`.
+A command may also **complete with findings**: it ran to its end and has a result to report, and the problems it found ride that result as diagnostics carrying the codes on this page. Those runs exit with a documented per-command code in the `4`–`99` band rather than `2`, and the entry below says so. `prisma orm init` is the case today: its scaffold is on disk whatever happens next, so a failed dependency install or contract emit is a finding on a completed run at exit `4` or `5`.
 
 Codes that predate the dotted scheme were renamed at 0.16; the full old→new crosswalk (`PN-DOMAIN-NNNN` → `NAMESPACE.SUBCODE`) is in [ADR 239](../architecture%20docs/adrs/ADR%20239%20-%20Errors%20are%20structural%20envelopes%20with%20dotted%20namespace%20codes.md).
 
@@ -143,9 +143,9 @@ The code was raised by the commander `init` (deleted in the S5 cutover), whose c
 
 ### CLI.INIT_SKILL_INSTALL_FAILED
 
-During `prisma orm init`, the project-level skills install failed after a successful dependency install and emit. Init runs `skills add` through the project's package manager — `pnpm dlx skills@latest add prisma/prisma/skills#v<version> --agent cursor claude-code codex windsurf --skill prisma-8 -y` — for the one `prisma-8` skill (upgrading folded into it, so there are no longer separate always-latest upgrade installs). The project itself is complete without the skills; the user can fix the underlying issue (network, registry, PATH) and install manually, or re-run with `--skip-skills`. `init` completes with this as a finding and exits 6. Meta: `filesWritten`, plus `skillInstall` (the attempted command, the manager, its exit code and the tail of its stderr).
+Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skills add`, and raised this at exit `6` when that fetch failed. The skills now ship inside the `@prisma/orm-*` packages a project installs, and init copies them into the agent directories by running `prisma skills sync` once, then writes a `postinstall` script that repeats the sync on every later install.
 
-This GitHub-fetching install is being replaced: the skill now ships inside the `@prisma/orm-*` tarballs and `prisma skills sync` copies it out of the installed package, so init will stop shelling out to `skills add` and this failure path retires with it.
+A sync that fails no longer fails anything: init warns and names the command to re-run, the postinstall retries on the next install, and every `prisma` command reports skills that no longer match the installed packages. Init exits `4` or `5` now — there is no exit `6`, and nothing raises this code.
 
 ### CLI.INIT_STRICT_PROBE_WITHOUT_PROBE
 
