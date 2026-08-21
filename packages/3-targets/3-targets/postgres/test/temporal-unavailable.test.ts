@@ -23,6 +23,7 @@ import {
   pgTimestamptzTemporalDescriptor,
   pgTimeTemporalDescriptor,
 } from '../src/core/codecs';
+import { instantNow } from '../src/core/instant-now-generator';
 import { postgresCodecDescriptorRegistry } from '../src/core/registry';
 
 const instanceCtx = { name: '<test>' };
@@ -116,6 +117,40 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
     });
 
     expect(decoded).toBe('infinity');
+  });
+
+  // The generator is the other half of the laziness contract. A `*String` column's clock hands out
+  // text and needs nothing, but `temporal.updatedAt()` on a Temporal-backed column produces a
+  // `Temporal.Instant` — so an insert into such a table fails without an implementation even though
+  // the caller never mentioned a temporal value. The error names the generator rather than a codec,
+  // because that is what the author has to change.
+  it('fails the instantNow generator with the capability error, naming its *String alternative', async () => {
+    const outcome = await withoutTemporal(async () => {
+      await Promise.resolve();
+      try {
+        instantNow();
+        return { threw: false };
+      } catch (error) {
+        const structured = error as { code?: string; fix?: string; meta?: Record<string, unknown> };
+        return {
+          threw: true,
+          code: structured.code,
+          namesTheStringPreset: (structured.fix ?? '').includes('updatedAtString'),
+          meta: structured.meta,
+        };
+      }
+    });
+
+    expect(outcome).toEqual({
+      threw: true,
+      code: 'RUNTIME.TEMPORAL_UNAVAILABLE',
+      namesTheStringPreset: true,
+      meta: { generatorId: 'instantNow' },
+    });
+  });
+
+  it('reads the clock through Temporal once one is available', () => {
+    expect(instantNow()).toBeInstanceOf(Temporal.Instant);
   });
 
   it('restores whatever Temporal the host had once the window closes', () => {

@@ -110,6 +110,53 @@ describe('Temporal-backed temporal codecs', () => {
     });
   });
 
+  /**
+   * The nested-read path. A relation read never calls `decode` — PostgreSQL builds the JSON and the
+   * codec's `decodeJson` reads it back — so this pair is what makes an `include(...)` return the
+   * same value the flat read does. Both directions are exercised here because they are separately
+   * reachable: `encodeJson` renders a value into a contract literal, `decodeJson` reads a projected
+   * column.
+   */
+  describe('the JSON path carries the same values as the wire path', () => {
+    const cases = [
+      ['pg/date-temporal@1', dateCodec, Temporal.PlainDate.from('2026-01-02'), '2026-01-02'],
+      [
+        'pg/timestamp-temporal@1',
+        timestampCodec,
+        Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456'),
+        '2026-01-02 03:04:05.123456',
+      ],
+      [
+        'pg/timestamptz-temporal@1',
+        timestamptzCodec,
+        Temporal.Instant.from('2026-01-02T03:04:05.123456Z'),
+        '2026-01-02 03:04:05.123456+00',
+      ],
+      [
+        'pg/time-temporal@1',
+        timeCodec,
+        Temporal.PlainTime.from('03:04:05.123456'),
+        '03:04:05.123456',
+      ],
+    ] as const;
+
+    // The text is what the `::text` cast makes PostgreSQL emit for the column — a space separator
+    // and a two-digit offset, not the `T`/`Z` spelling Temporal writes. Reading it back is the
+    // whole point: the projection and `toString()` are different directions and need not agree.
+    it.each(cases)('%s decodes the projected server text', (_id, codec, value, projected) => {
+      expect(codec.decodeJson(projected).toString()).toBe(value.toString());
+    });
+
+    it.each(cases)('%s renders a value PostgreSQL accepts back', (_id, codec, value) => {
+      expect(codec.encodeJson(value)).toBe(value.toString());
+    });
+
+    it.each(cases)('%s round-trips its own JSON rendering', (_id, codec, value) => {
+      const rendered = codec.encodeJson(value);
+      expect(codec.decodeJson(rendered).toString()).toBe(value.toString());
+    });
+  });
+
   describe('values Temporal cannot represent are reported, not silently coerced', () => {
     const unrepresentable: ReadonlyArray<
       readonly [string, { decode: (w: string, c: object) => Promise<unknown> }, string, string]
