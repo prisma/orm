@@ -741,6 +741,14 @@ A whole-query raw statement returned a result that omits a column its row spec d
 
 A raw-SQL tagged template interpolated a JS value whose type cannot be auto-inferred to a codec (anything other than number, bigint, string, boolean, or Uint8Array). Wrap the value in `param(...)` with an explicit codec.
 
+### RUNTIME.TEMPORAL_UNAVAILABLE
+
+A Temporal-backed PostgreSQL codec (`pg/date-temporal@1`, `pg/timestamp-temporal@1`, `pg/timestamptz-temporal@1`, `pg/time-temporal@1`) was invoked in a runtime with no global `Temporal`. Meta: `codecId`, `operation`.
+
+The check is lazy — registering the target, validating a contract, building a runtime, resolving a descriptor and constructing a codec instance all succeed without `Temporal`; only encoding or decoding a value fails. It is raised on **reads** as well as writes: the check is the first thing a Temporal codec does on decode, so selecting the column is enough. Inserting into a table carrying `temporal.updatedAt()` also raises it, because that column's clock produces a `Temporal.Instant` even when your code never mentions a temporal value.
+
+Install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type — `DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)` — to read and write PostgreSQL's own text, which needs no Temporal at all. See [PostgreSQL temporal types](./postgres-temporal-types.md).
+
 ### RUNTIME.TRANSACTION_CLOSED
 
 A query result created inside a transaction was read after the transaction ended. Await the result or call `.toArray()` inside the transaction callback.
