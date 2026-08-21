@@ -6,13 +6,11 @@ import {
 import {
   mergeGitignore,
   REQUIRED_GITIGNORE_ENTRIES,
-  SYNCED_SKILL_GITIGNORE_ENTRIES,
 } from '../../../src/commands/init/hygiene-gitignore';
 import {
   ensureEsmModuleType,
   mergePackageScripts,
   REQUIRED_SCRIPTS,
-  SKILLS_SYNC_SCRIPT,
 } from '../../../src/commands/init/hygiene-package-scripts';
 
 // ---------------------------------------------------------------------------
@@ -167,33 +165,6 @@ describe('mergeGitattributes (FR3.4)', () => {
   });
 });
 
-describe('the synced-skill gitignore entries', () => {
-  it('names one managed skill directory per harness, never the harness directory', () => {
-    expect(SYNCED_SKILL_GITIGNORE_ENTRIES).toEqual([
-      '.claude/skills/prisma-8/',
-      '.cursor/skills/prisma-8/',
-      '.agents/skills/prisma-8/',
-      '.windsurf/skills/prisma-8/',
-    ]);
-  });
-
-  it('appends them alongside the base entries when asked for', () => {
-    const result = mergeGitignore(undefined, [
-      ...REQUIRED_GITIGNORE_ENTRIES,
-      ...SYNCED_SKILL_GITIGNORE_ENTRIES,
-    ]);
-    expect(result).toContain('.claude/skills/prisma-8/');
-    expect(result).toContain('node_modules/');
-  });
-
-  it('leaves a project that already ignores them untouched', () => {
-    const existing = `${[...REQUIRED_GITIGNORE_ENTRIES, ...SYNCED_SKILL_GITIGNORE_ENTRIES].join('\n')}\n`;
-    expect(
-      mergeGitignore(existing, [...REQUIRED_GITIGNORE_ENTRIES, ...SYNCED_SKILL_GITIGNORE_ENTRIES]),
-    ).toBeNull();
-  });
-});
-
 // ---------------------------------------------------------------------------
 // FR3.5 — package.json#scripts merge with collision detection
 // ---------------------------------------------------------------------------
@@ -331,34 +302,5 @@ describe('ensureEsmModuleType (TML-2494)', () => {
     expect(content).not.toBeNull();
     const keys = Object.keys(JSON.parse(content ?? ''));
     expect(keys).toEqual(['name', 'type', 'version', 'dependencies']);
-  });
-});
-
-describe('the skills-sync postinstall script', () => {
-  it('runs sync on every install and never fails the install', () => {
-    expect(SKILLS_SYNC_SCRIPT).toEqual({
-      name: 'postinstall',
-      command: 'prisma skills sync || exit 0',
-    });
-  });
-
-  it('is merged like every other required script', () => {
-    const pkg = JSON.stringify({ name: 'app' }, null, 2);
-    const { content, warnings } = mergePackageScripts(pkg, [
-      ...REQUIRED_SCRIPTS,
-      SKILLS_SYNC_SCRIPT,
-    ]);
-    expect(warnings).toEqual([]);
-    expect(JSON.parse(content ?? '').scripts).toEqual({
-      'contract:emit': 'prisma contract emit',
-      postinstall: 'prisma skills sync || exit 0',
-    });
-  });
-
-  it("keeps a project's own postinstall and warns instead of overwriting it", () => {
-    const pkg = JSON.stringify({ name: 'app', scripts: { postinstall: 'patch-package' } }, null, 2);
-    const { content, warnings } = mergePackageScripts(pkg, [SKILLS_SYNC_SCRIPT]);
-    expect(content).toBeNull();
-    expect(warnings).toEqual([expect.stringContaining('postinstall')]);
   });
 });

@@ -20,7 +20,7 @@ Upgrading is a branch of the same skill rather than a separate one. [`references
 
 ## Install
 
-The skill arrives with the packages, and `prisma skills sync` copies it from the installed package into the agent directories at your project root (`.claude/skills/`, `.cursor/skills/`, `.agents/skills/`, `.windsurf/skills/`). `prisma orm init` runs that for you and adds a `postinstall` script so every later install and upgrade re-syncs:
+The skill arrives with the packages, and `prisma skills sync` copies it from the installed package into the agent directories at your project root (`.claude/skills/`, `.cursor/skills/`, `.agents/skills/`, `.windsurf/skills/`). `prisma orm init` runs that for you once at scaffold time:
 
 ```bash
 mkdir my-app && cd my-app

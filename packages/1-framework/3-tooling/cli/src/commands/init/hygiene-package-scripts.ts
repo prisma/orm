@@ -19,22 +19,6 @@ export const REQUIRED_SCRIPTS: readonly RequiredScript[] = [
   { name: 'contract:emit', command: 'prisma contract emit' },
 ];
 
-/**
- * Keeps the agent skills matching the installed packages: every install and
- * every upgrade re-copies them out of the packages they ship in. The script
- * lives in the user's own manifest rather than in a Prisma package because
- * dependency lifecycle scripts are blocked by default under pnpm 10+, bun and
- * Deno, and by any `ignore-scripts` policy.
- *
- * `|| exit 0` covers the environments where the `prisma` binary is not there
- * at all — a production install with no development dependencies, most of all.
- * Skills are a development aid, so their absence must never fail an install.
- */
-export const SKILLS_SYNC_SCRIPT: RequiredScript = {
-  name: 'postinstall',
-  command: 'prisma skills sync || exit 0',
-};
-
 export interface PackageScriptsMergeResult {
   /**
    * The new package.json content. `null` when no changes are required

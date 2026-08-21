@@ -81,9 +81,9 @@ export function buildNextSteps(options: {
   readonly emitCommand: string;
   readonly schemaPath: string;
   /**
-   * Whether the project-level Prisma Next skills install actually ran
+   * Whether the project-level Prisma Next skill sync actually ran
    * and succeeded during this `init`. When false (the user passed
-   * `--skip-skills`, so the install was skipped), the
+   * `--skip-skills`, so the sync was skipped), the
    * "registered with your agent runtime" step is omitted — the skip is
    * already surfaced in the warnings array with a manual-install hint.
    */

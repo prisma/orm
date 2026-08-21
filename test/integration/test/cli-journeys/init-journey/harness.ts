@@ -147,11 +147,9 @@ export async function createJourneyProject(
 
     const target = cell.target === 'mongo' ? 'mongodb' : 'postgres';
     // `--skip-skills` matters here: this journey verifies
-    // scaffold/install/emit/migrate only; skill registration is
-    // intentionally not exercised. Without the flag, project-level skill
-    // install pulls the `prisma/prisma/skills#v<cliVersion>` tag from
-    // GitHub, which does not exist for an in-development minor (the tag is
-    // only cut after publish), so every release-bump PR's CI goes red.
+    // scaffold/install/emit/migrate only; the skill sync is intentionally
+    // not exercised (it is covered by
+    // cli.init-skill-distribution.integration.test.ts).
     const initResult = await runNode(
       [
         CLI_BIN,

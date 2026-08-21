@@ -10,11 +10,12 @@ const CLI_BIN = resolve(WORKSPACE_ROOT, 'packages/1-framework/3-tooling/cli/dist
 
 /**
  * What a consumer's project looks like after `init` where skills are
- * concerned: the skill tree ships inside the packages, so init's whole job is
- * to run the sync once and leave behind the wiring that keeps re-running it.
- * This exercises the real CLI bin as a subprocess against a fake package
- * manager, so the assertions are about the commands init actually spawns and
- * the files it actually writes.
+ * concerned: the skill tree ships inside the packages, and init's whole job
+ * is to run the sync once so a fresh project starts current. Keeping the
+ * copies current afterwards is the CLI's staleness check, not anything init
+ * writes into the project. This exercises the real CLI bin as a subprocess
+ * against a fake package manager, so the assertions are about the commands
+ * init actually spawns and the files it actually writes.
  */
 function runEngineInit(
   testDir: string,
@@ -59,13 +60,6 @@ function gitignoreOf(testDir: string): string {
 
 const SYNC_COMMAND = 'dlx prisma@next skills sync';
 
-const MANAGED_SKILL_PATHS = [
-  '.claude/skills/prisma-8/',
-  '.cursor/skills/prisma-8/',
-  '.agents/skills/prisma-8/',
-  '.windsurf/skills/prisma-8/',
-];
-
 describe('init skill distribution (offline integration, real CLI)', () => {
   const testDirs = new Set<string>();
 
@@ -97,28 +91,23 @@ describe('init skill distribution (offline integration, real CLI)', () => {
     const { testDir, commands } = initProject();
     testDirs.add(testDir);
 
-    // The postinstall and the emit script both name `prisma`, so the package
-    // that carries that bin is the one that has to be installed. Naming
-    // @prisma/cli here (bin `prisma-cli`) would leave both scripts calling a
-    // binary the project does not have, and `|| exit 0` would hide it.
+    // The emit script names `prisma`, so the package that carries that bin is
+    // the one that has to be installed. Naming @prisma/cli here (bin
+    // `prisma-cli`) would leave the script calling a binary the project does
+    // not have.
     expect(commands).toContain('add -D prisma@next @types/node');
     expect(commands).toContain(SYNC_COMMAND);
     expect(manifestOf(testDir).scripts).toMatchObject({
-      postinstall: 'prisma skills sync || exit 0',
       'contract:emit': 'prisma contract emit',
     });
   });
 
-  it('leaves the wiring that keeps the skills current', { timeout: 60_000 }, async () => {
+  it('writes no skills wiring into the project', { timeout: 60_000 }, async () => {
     const { testDir } = initProject();
     testDirs.add(testDir);
 
-    expect(manifestOf(testDir).scripts).toMatchObject({
-      postinstall: 'prisma skills sync || exit 0',
-    });
-    for (const path of MANAGED_SKILL_PATHS) {
-      expect(gitignoreOf(testDir)).toContain(path);
-    }
+    expect(manifestOf(testDir).scripts?.['postinstall']).toBeUndefined();
+    expect(gitignoreOf(testDir)).not.toContain('skills/prisma-8/');
   });
 
   it('removes skill directories the router replaced', { timeout: 60_000 }, async () => {
@@ -139,20 +128,18 @@ describe('init skill distribution (offline integration, real CLI)', () => {
     expect(existsSync(retired)).toBe(false);
   });
 
-  it('under --skip-skills, syncs nothing and writes no wiring', { timeout: 60_000 }, async () => {
+  it('under --skip-skills, syncs nothing', { timeout: 60_000 }, async () => {
     const { testDir, exitCode, stderr, commands } = initProject('--skip-skills');
     testDirs.add(testDir);
 
     expect(exitCode, stderr).toBe(0);
     expect(commands.filter((command) => command.includes('skills'))).toEqual([]);
-    expect(manifestOf(testDir).scripts?.['postinstall']).toBeUndefined();
-    expect(gitignoreOf(testDir)).not.toContain('skills/prisma-8/');
   });
 });
 
 /**
  * Stand-in for the project's package manager. A real `pnpm dlx
- * @prisma/cli@next skills sync` would fetch from the npm registry, which an
+ * prisma@next skills sync` would fetch from the npm registry, which an
  * offline test cannot do, so `pnpm` on `PATH` is replaced by a Node script
  * that logs every invocation, reports success, and leaves behind the part of
  * the "installed" project init reads next.

@@ -13,17 +13,8 @@ import {
   mergeGitattributes,
   requiredGitattributesLines,
 } from '../commands/init/hygiene-gitattributes';
-import {
-  mergeGitignore,
-  REQUIRED_GITIGNORE_ENTRIES,
-  SYNCED_SKILL_GITIGNORE_ENTRIES,
-} from '../commands/init/hygiene-gitignore';
-import {
-  ensureEsmModuleType,
-  mergePackageScripts,
-  REQUIRED_SCRIPTS,
-  SKILLS_SYNC_SCRIPT,
-} from '../commands/init/hygiene-package-scripts';
+import { mergeGitignore } from '../commands/init/hygiene-gitignore';
+import { ensureEsmModuleType, mergePackageScripts } from '../commands/init/hygiene-package-scripts';
 import { findStaleArtifacts, removeDependency } from '../commands/init/reinit-cleanup';
 import { legacySkillDirs } from '../commands/init/skill-sources';
 import {
@@ -248,16 +239,9 @@ function planScaffold(ctx: {
     files.push({ path: 'tsconfig.json', content: defaultTsConfig() });
   }
 
-  // The synced skill copies are only this project's business when init is the
-  // one putting them there; `--skip-skills` leaves both the sync and the lines
-  // that would describe its output out of the project.
-  const gitignoreEntries = inputs.installProjectSkill
-    ? [...REQUIRED_GITIGNORE_ENTRIES, ...SYNCED_SKILL_GITIGNORE_ENTRIES]
-    : REQUIRED_GITIGNORE_ENTRIES;
   const gitignorePath = join(cwd, '.gitignore');
   const nextGitignore = mergeGitignore(
     existsSync(gitignorePath) ? readFileSync(gitignorePath, 'utf-8') : undefined,
-    gitignoreEntries,
   );
   if (nextGitignore !== null) {
     files.push({ path: '.gitignore', content: nextGitignore });
@@ -298,10 +282,7 @@ function planScaffold(ctx: {
         changed = true;
       }
     }
-    const { content: withScripts, warnings: scriptWarnings } = mergePackageScripts(
-      working,
-      inputs.installProjectSkill ? [...REQUIRED_SCRIPTS, SKILLS_SYNC_SCRIPT] : REQUIRED_SCRIPTS,
-    );
+    const { content: withScripts, warnings: scriptWarnings } = mergePackageScripts(working);
     if (withScripts !== null) {
       working = withScripts;
       changed = true;

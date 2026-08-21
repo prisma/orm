@@ -4,12 +4,13 @@ import type { PackageManager } from './detect-package-manager';
  * The agent skills ship inside the packages they describe — the `prisma-8`
  * skill travels in the `@prisma/orm-*` tarball a project installs — so init
  * no longer fetches them from anywhere. `prisma skills sync` copies them out
- * of the installed packages into the agent harnesses' skill directories, and
- * the `postinstall` script init writes re-runs it on every later install.
+ * of the installed packages into the agent harnesses' skill directories;
+ * init runs it once at scaffold time, and the CLI's staleness check points
+ * the user back at it when the copies fall behind the installed packages.
  *
  * The package driven here is `prisma`, the same specifier init adds as a
  * development dependency: it is the package that carries the `prisma` binary
- * the postinstall script and every piece of advice below name.
+ * every piece of advice below names.
  */
 export const SKILLS_SYNC_PACKAGE = 'prisma@next';
 

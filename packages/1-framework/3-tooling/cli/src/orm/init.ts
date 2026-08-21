@@ -147,8 +147,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // The CLI the scaffolded scripts run is `prisma`, the unified CLI's
       // published name, whose v8 line publishes under the `next` dist-tag (the
       // `prisma-next` shim is no longer published). It is the package that
-      // carries the `prisma` binary, which is what the scaffolded scripts and
-      // the postinstall skills sync invoke. `@prisma/cli-engine` — the config file's
+      // carries the `prisma` binary, which is what the scaffolded scripts
+      // invoke. `@prisma/cli-engine` — the config file's
       // defineConfig import — is deliberately absent here: the CLI declares it
       // as an exact peer, so it installs in a second step at the version the
       // just-installed CLI names. Under moduleResolution 'bundler' the
@@ -317,12 +317,11 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         if (failure === undefined) {
           skillRegistered = true;
         } else {
-          // A failed first sync is not a failed init: the postinstall script
-          // this run wrote re-runs the sync on the next install, and every
-          // `prisma` command reports skills that do not match the installed
-          // packages. The project converges without anyone doing anything.
+          // A failed first sync is not a failed init: every `prisma` command
+          // reports skills that do not match the installed packages, so the
+          // user is pointed back at the sync the next time they run anything.
           warn(
-            `Could not sync the Prisma Next agent skills: ${failure.why ?? failure.message}\nThe postinstall script will retry on the next install, or run it now: \`${syncCommand}\``,
+            `Could not sync the Prisma Next agent skills: ${failure.why ?? failure.message}\nRun it again: \`${syncCommand}\``,
           );
         }
       } else {
