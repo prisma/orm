@@ -10,6 +10,23 @@
 export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = ['node_modules/', 'dist/', '.env'];
 
 /**
+ * The skill copies `prisma skills sync` maintains in each agent harness's
+ * skill directory. They are derived from the lockfile the way `node_modules`
+ * is — a teammate's first install recreates them — so committing them would
+ * only invite drift between what the tree says and what is installed.
+ *
+ * Each entry names the one directory sync manages, not the harness directory
+ * around it: a project's own hand-written skills live as siblings there and
+ * must stay tracked.
+ */
+export const SYNCED_SKILL_GITIGNORE_ENTRIES: readonly string[] = [
+  '.claude/skills/prisma-8/',
+  '.cursor/skills/prisma-8/',
+  '.agents/skills/prisma-8/',
+  '.windsurf/skills/prisma-8/',
+];
+
+/**
  * Idempotent `.gitignore` merge (FR3.3 / FR9.3). Returns the new file
  * content given the existing content (or `undefined` if the file does
  * not yet exist). Adds only entries that are not already present and
@@ -26,9 +43,12 @@ export const REQUIRED_GITIGNORE_ENTRIES: readonly string[] = ['node_modules/', '
  * every required entry). The caller can use this to decide whether to
  * include `.gitignore` in `filesWritten`.
  */
-export function mergeGitignore(existing: string | undefined): string | null {
+export function mergeGitignore(
+  existing: string | undefined,
+  required: readonly string[] = REQUIRED_GITIGNORE_ENTRIES,
+): string | null {
   if (existing === undefined) {
-    return `${REQUIRED_GITIGNORE_ENTRIES.join('\n')}\n`;
+    return `${required.join('\n')}\n`;
   }
 
   const present = new Set(
@@ -38,7 +58,7 @@ export function mergeGitignore(existing: string | undefined): string | null {
       .filter((line) => line.length > 0 && !line.startsWith('#')),
   );
 
-  const missing = REQUIRED_GITIGNORE_ENTRIES.filter((entry) => !present.has(entry));
+  const missing = required.filter((entry) => !present.has(entry));
   if (missing.length === 0) {
     return null;
   }
