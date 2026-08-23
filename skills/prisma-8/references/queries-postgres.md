@@ -95,7 +95,7 @@ await db.orm.User
   .all();
 ```
 
-**Sorting and pagination.** `.orderBy(...)` accepts a single lambda or an array of lambdas (each calling `.asc()` / `.desc()` on a field). `.limit(n)` limits; `.offset(n)` offsets.
+**Sorting and pagination.** `.orderBy(...)` accepts a single lambda or an array of lambdas (each calling `.asc()` / `.desc()` on a field). `.asc()` / `.desc()` take an optional NULL placement — `.asc('first')` / `.desc('last')` render `NULLS FIRST` / `NULLS LAST`; omitted, the database default applies. `.limit(n)` limits; `.offset(n)` offsets. Cursor pagination (`.cursor(...)`) rejects orderBy entries that carry a nulls placement (`ORM.CURSOR_ORDER_NULLS_UNSUPPORTED`) because keyset predicates cannot express NULL boundaries.
 
 ```typescript
 await db.orm.Post

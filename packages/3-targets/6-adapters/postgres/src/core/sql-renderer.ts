@@ -32,6 +32,7 @@ import {
   type ProjectionItem,
   type RawExpr,
   type RawQueryAst,
+  renderOrderBySuffix,
   type SelectAst,
   type SubqueryExpr,
   type TableSource,
@@ -219,12 +220,9 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
     : '';
   const havingClause = ast.having ? `HAVING ${renderWhere(ast.having, contract, pim)}` : '';
   const orderClause = ast.orderBy?.length
-    ? `ORDER BY ${ast.orderBy
-        .map((order) => {
-          const expr = renderOrderByExpr(order.expr, sourcesByRef, contract, pim);
-          return `${expr} ${order.dir.toUpperCase()}`;
-        })
-        .join(', ')}`
+    ? `ORDER BY ${renderOrderByItems(ast.orderBy, contract, pim, (expr) =>
+        renderOrderByExpr(expr, sourcesByRef, contract, pim),
+      )}`
     : '';
   const limitClause = renderLimitOffset('LIMIT', ast.limit, contract, pim);
   const offsetClause = renderLimitOffset('OFFSET', ast.offset, contract, pim);
@@ -754,10 +752,9 @@ function renderOrderByItems(
   items: ReadonlyArray<OrderByItem>,
   contract: PostgresContract,
   pim: ParamIndexMap,
+  renderItemExpr: (expr: AnyExpression) => string = (expr) => renderExpr(expr, contract, pim),
 ): string {
-  return items
-    .map((item) => `${renderExpr(item.expr, contract, pim)} ${item.dir.toUpperCase()}`)
-    .join(', ');
+  return items.map((item) => `${renderItemExpr(item.expr)}${renderOrderBySuffix(item)}`).join(', ');
 }
 
 function renderJsonArrayAggExpr(

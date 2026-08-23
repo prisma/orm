@@ -239,18 +239,11 @@ function buildIncludeOrderArtifacts(
   const hiddenOrderProjection = childOrderBy.map((orderItem, index) =>
     ProjectionItem.of(`${relationName}__order_${index}`, orderItem.expr),
   );
-  const aggregateOrderBy = hiddenOrderProjection.map((projection, index) => {
-    const orderItem = childOrderBy[index];
-    if (!orderItem) {
-      throw new InternalError(`Missing include order metadata at index ${index}`);
-    }
-    return new OrderByItem(ColumnRef.of(rowAlias, projection.alias), orderItem.dir);
-  });
 
   return {
     childOrderBy,
     hiddenOrderProjection,
-    aggregateOrderBy,
+    aggregateOrderBy: remapOrderToHiddenAliases(childOrderBy, rowAlias, relationName),
   };
 }
 
@@ -262,6 +255,26 @@ interface IncludeParentSource {
 
 function localColumnsForRowInclude(include: IncludeExpr): readonly string[] {
   return include.through?.parentLocalColumns ?? [include.localColumn];
+}
+
+/**
+ * Remap user order items onto the hidden `<relation>__order_<i>` columns a
+ * wrapping SELECT forwards under `sourceAlias`, preserving each item's
+ * direction and nulls placement.
+ */
+function remapOrderToHiddenAliases(
+  items: readonly OrderByItem[],
+  sourceAlias: string,
+  relationName: string,
+): OrderByItem[] {
+  return items.map(
+    (item, index) =>
+      new OrderByItem(
+        ColumnRef.of(sourceAlias, `${relationName}__order_${index}`),
+        item.dir,
+        item.nulls,
+      ),
+  );
 }
 
 function resolveParentLocalRefs(
@@ -704,13 +717,7 @@ function buildIncludeChildRowsSelect(
     });
     if (childOrderBy) {
       childRows = childRows.withOrderBy(
-        childOrderBy.map(
-          (item, index) =>
-            new OrderByItem(
-              ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
-              item.dir,
-            ),
-        ),
+        remapOrderToHiddenAliases(childOrderBy, rankedAlias, include.relationName),
       );
     }
   } else if (childOrderBy) {
@@ -864,13 +871,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
     // deterministic. Reference the hidden-order alias columns the
     // wrapper forwarded under their original names from `rankedAlias`.
     innerSelect = innerSelect.withOrderBy(
-      childOrderBy.map(
-        (item, index) =>
-          new OrderByItem(
-            ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
-            item.dir,
-          ),
-      ),
+      remapOrderToHiddenAliases(childOrderBy, rankedAlias, include.relationName),
     );
   }
   if (childState.limit !== undefined) {
@@ -1142,13 +1143,7 @@ function buildIncludeChildScalarSelect(
     });
     if (remappedOrderBy !== undefined && remappedOrderBy.length > 0) {
       inner = inner.withOrderBy(
-        remappedOrderBy.map(
-          (item, index) =>
-            new OrderByItem(
-              ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
-              item.dir,
-            ),
-        ),
+        remapOrderToHiddenAliases(remappedOrderBy, rankedAlias, include.relationName),
       );
     }
   } else if (remappedOrderBy !== undefined && remappedOrderBy.length > 0) {

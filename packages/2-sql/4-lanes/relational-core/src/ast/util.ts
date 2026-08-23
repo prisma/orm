@@ -1,4 +1,15 @@
-import type { AnyParamRef, AnyQueryAst } from './types';
+import type { AnyParamRef, AnyQueryAst, OrderByItem } from './types';
+
+/**
+ * The dialect-independent ` ASC`/` DESC` tail of a rendered order item,
+ * including ` NULLS FIRST`/` NULLS LAST` when the item carries an explicit
+ * placement. Shared by adapter renderers so the order-suffix grammar cannot
+ * drift between targets.
+ */
+export function renderOrderBySuffix(item: OrderByItem): string {
+  const nulls = item.nulls === undefined ? '' : ` NULLS ${item.nulls.toUpperCase()}`;
+  return ` ${item.dir.toUpperCase()}${nulls}`;
+}
 
 export function compact<T extends Record<string, unknown>>(o: T): T {
   const out: Record<string, unknown> = {};

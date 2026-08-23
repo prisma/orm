@@ -144,6 +144,31 @@ describe('compileSelectWithIncludes', () => {
     );
   });
 
+  it('carries nulls placement from asc()/desc() through binding to the plan orderBy', () => {
+    const { collection } = createCollection();
+    const state = collection
+      .orderBy((user) => user.name.asc('first'))
+      .orderBy((user) => user.id.desc('last'))
+      .select('id').state;
+
+    const plan = compileSelect(baseContract, 'public', 'users', state);
+    expectSelectAst(plan.ast);
+    expect(plan.ast.orderBy).toEqual([
+      new OrderByItem(ColumnRef.of('users', 'name'), 'asc', 'first'),
+      new OrderByItem(ColumnRef.of('users', 'id'), 'desc', 'last'),
+    ]);
+  });
+
+  it('rejects cursor pagination when orderBy carries nulls placement', () => {
+    const { collection } = createCollection();
+    const state = collection
+      .orderBy((user) => user.name.asc('first'))
+      .cursor({ name: 'Alice' })
+      .select('id').state;
+
+    expect(() => compileSelect(baseContract, 'public', 'users', state)).toThrow('nulls placement');
+  });
+
   it('builds lexicographic cursor filters with distinctOn, limit, and offset', () => {
     const { collection } = createCollection();
     const state = collection
@@ -388,6 +413,33 @@ describe('compileSelectWithIncludes', () => {
     expect(embeddingProjection?.codec).toEqual(codec);
   });
 
+  it('preserves nulls placement in the reapplied orderBy of a distinct include', () => {
+    const { collection } = createCollection();
+    const state = collection.include('posts', (posts) =>
+      posts
+        .distinct('title')
+        .orderBy((post) => post.views.desc('first'))
+        .limit(2),
+    ).state;
+
+    const plan = compileSelectWithIncludes(
+      baseContract,
+      getTestAggregates(),
+      'public',
+      'users',
+      state,
+    );
+    expectSelectAst(plan.ast);
+    const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
+    expectSubqueryExpr(postsProjection?.expr);
+    const childRowsSource = postsProjection.expr.query.from;
+    expectDerivedTableSource(childRowsSource);
+
+    expect(childRowsSource.query.orderBy).toEqual([
+      new OrderByItem(ColumnRef.of('posts__distinct', 'posts__order_0'), 'desc', 'first'),
+    ]);
+  });
+
   // Each scalar reducer lowers to a correlated subquery whose
   // projection is the `json_build_object('value', AGG(...))` envelope.
   // The JSON wrapper lets the value travel through the existing
@@ -580,6 +632,32 @@ describe('compileSelectWithIncludes', () => {
       expect(innerSelect.from.alias).toBe('posts__scalar_distinct');
       expect(innerSelect.orderBy).toEqual([
         new OrderByItem(ColumnRef.of('posts__scalar_distinct', 'posts__order_0'), 'desc'),
+      ]);
+    });
+
+    it('preserves nulls placement in the reapplied orderBy after the dedup wrap', () => {
+      const { collection } = createCollection();
+      const state = collection.include('posts', (posts) =>
+        posts
+          .distinct('title')
+          .orderBy((post) => post.views.desc('last'))
+          .limit(2)
+          .sum('views'),
+      ).state;
+
+      const plan = compileSelectWithIncludes(
+        baseContract,
+        getTestAggregates(),
+        'public',
+        'users',
+        state,
+      );
+      const subquery = extractScalarCorrelatedSubquery(plan, 'posts');
+      expectDerivedTableSource(subquery.from);
+      const innerSelect = subquery.from.query;
+
+      expect(innerSelect.orderBy).toEqual([
+        new OrderByItem(ColumnRef.of('posts__scalar_distinct', 'posts__order_0'), 'desc', 'last'),
       ]);
     });
 
@@ -1203,6 +1281,35 @@ describe('M:N include correlated subquery', () => {
         ])
         .withSelectAllIntent({ table: 'projects' }),
     );
+  });
+
+  it('preserves nulls placement in the reapplied orderBy of a distinct non-leaf include', () => {
+    const { collection } = createCollectionFor('Project');
+    const state = collection.include('related', (related) =>
+      related
+        .distinct('name')
+        .orderBy((r) => r.name.desc('last'))
+        .include('related'),
+    ).state;
+    const plan = compileSelectWithIncludes(
+      baseContract,
+      getTestAggregates(),
+      'public',
+      'projects',
+      state,
+    );
+
+    expectSelectAst(plan.ast);
+    const relatedProjection = plan.ast.projection.find((item) => item.alias === 'related');
+    expectSubqueryExpr(relatedProjection?.expr);
+    const rowsSource = relatedProjection.expr.query.from;
+    expectDerivedTableSource(rowsSource);
+    const distinctSource = rowsSource.query.from;
+    expectDerivedTableSource(distinctSource);
+
+    expect(distinctSource.query.orderBy).toEqual([
+      new OrderByItem(ColumnRef.of('related__ranked', 'related__order_0'), 'desc', 'last'),
+    ]);
   });
 });
 

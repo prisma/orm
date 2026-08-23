@@ -95,6 +95,13 @@ function buildCursorWhere(
   for (const order of orderBy) {
     if (order.expr.kind !== 'column-ref') continue;
     const column = order.expr.column;
+    if (order.nulls !== undefined) {
+      throw ormError(
+        'ORM.CURSOR_ORDER_NULLS_UNSUPPORTED',
+        `Cursor pagination cannot express nulls placement: orderBy column "${column}" uses nulls: '${order.nulls}'. Remove the nulls option or paginate with skip/take.`,
+        { meta: { column, nulls: order.nulls } },
+      );
+    }
     const value = cursor[column];
     if (value === undefined) {
       throw ormError(

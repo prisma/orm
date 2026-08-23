@@ -18,6 +18,7 @@ import {
   ListExpression,
   NullCheckExpr,
   OrderByItem,
+  type OrderByNulls,
   ParamRef,
   type AggregateFn as SqlAggregateFn,
 } from '@internal/sql-relational-core/ast';
@@ -197,8 +198,8 @@ export type ComparisonMethodFns<T> = {
   notIn(values: readonly T[]): AnyExpression;
   isNull(): AnyExpression;
   isNotNull(): AnyExpression;
-  asc(): OrderByItem;
-  desc(): OrderByItem;
+  asc(nulls?: OrderByNulls): OrderByItem;
+  desc(nulls?: OrderByNulls): OrderByItem;
 };
 
 /**
@@ -395,11 +396,11 @@ export const COMPARISON_METHODS_META = {
   },
   asc: {
     traits: ['order'],
-    create: (left) => () => OrderByItem.asc(left),
+    create: (left) => (nulls?: OrderByNulls) => OrderByItem.asc(left, nulls),
   },
   desc: {
     traits: ['order'],
-    create: (left) => () => OrderByItem.desc(left),
+    create: (left) => (nulls?: OrderByNulls) => OrderByItem.desc(left, nulls),
   },
   isNull: {
     traits: [],

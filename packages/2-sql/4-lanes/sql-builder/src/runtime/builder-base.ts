@@ -377,7 +377,9 @@ export function resolveOrderBy(
         },
       );
     const expr = IdentifierRef.of(arg);
-    return dir === 'asc' ? OrderByItem.asc(expr) : OrderByItem.desc(expr);
+    return dir === 'asc'
+      ? OrderByItem.asc(expr, options?.nulls)
+      : OrderByItem.desc(expr, options?.nulls);
   }
 
   if (typeof arg === 'function') {
@@ -386,7 +388,9 @@ export function resolveOrderBy(
       ? createAggregateFunctions(ctx.queryOperationTypes, ctx.rawCodecInferer, ctx.aggregates)
       : createFunctions(ctx.queryOperationTypes, ctx.rawCodecInferer);
     const result = (arg as ExprCallback)(createFieldProxy(combined), fns);
-    return dir === 'asc' ? OrderByItem.asc(result.buildAst()) : OrderByItem.desc(result.buildAst());
+    return dir === 'asc'
+      ? OrderByItem.asc(result.buildAst(), options?.nulls)
+      : OrderByItem.desc(result.buildAst(), options?.nulls);
   }
 
   throw structuredError('ORM.ARGUMENT_INVALID', 'Invalid orderBy argument');

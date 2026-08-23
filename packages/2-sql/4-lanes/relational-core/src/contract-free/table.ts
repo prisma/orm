@@ -18,6 +18,7 @@ import {
   NullCheckExpr,
   OperationExpr,
   OrderByItem,
+  type OrderByNulls,
   OrExpr,
   ParamRef,
   ProjectionItem,
@@ -418,8 +419,8 @@ export class CfSelectQuery {
     return new CfSelectQuery(this.src, this.projectionItems, expr, this.orderByItems);
   }
 
-  orderBy(column: ColumnProxy, dir: 'asc' | 'desc' = 'asc'): CfSelectQuery {
-    const item = dir === 'asc' ? OrderByItem.asc(column.toRef()) : OrderByItem.desc(column.toRef());
+  orderBy(column: ColumnProxy, dir: 'asc' | 'desc' = 'asc', nulls?: OrderByNulls): CfSelectQuery {
+    const item = new OrderByItem(column.toRef(), dir, nulls);
     return new CfSelectQuery(this.src, this.projectionItems, this.whereExpr, [
       ...this.orderByItems,
       item,
