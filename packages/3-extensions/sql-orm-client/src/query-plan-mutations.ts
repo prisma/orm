@@ -328,6 +328,99 @@ export function compileUpsertReturning(
   return buildOrmQueryPlan(contract, ast, params);
 }
 
+/**
+ * How a batched upsert resolves a conflict. `updateColumns` are assigned from
+ * the proposed row (`excluded.<column>`) so each conflicting row is updated
+ * with its own values — the whole point of a batched upsert, which a literal
+ * SET clause shared by every row cannot express. `updateDefaults` are the
+ * onUpdate mutation defaults (e.g. `@updatedAt`) for columns the update set
+ * does not already carry; they bind as literal params and win over an
+ * `excluded` assignment for the same column.
+ */
+export interface UpsertConflictResolution {
+  readonly columns: readonly string[];
+  readonly updateColumns: readonly string[];
+  readonly updateDefaults: Record<string, unknown>;
+}
+
+function buildBatchedOnConflict(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+  conflict: UpsertConflictResolution,
+): InsertOnConflict {
+  const target = InsertOnConflict.on(
+    conflict.columns.map((column) => ColumnRef.of(tableName, column)),
+  );
+
+  const set: Record<string, AnyExpression> = {};
+  for (const column of conflict.updateColumns) {
+    set[column] = ColumnRef.of('excluded', column);
+  }
+  if (Object.keys(conflict.updateDefaults).length > 0) {
+    const { assignments } = toParamAssignments(
+      contract,
+      namespaceId,
+      tableName,
+      conflict.updateDefaults,
+    );
+    Object.assign(set, assignments);
+  }
+
+  return Object.keys(set).length === 0 ? target.doNothing() : target.doUpdateSet(set);
+}
+
+/**
+ * Compiles a batched `INSERT ... VALUES (…), (…) ON CONFLICT … DO UPDATE SET`
+ * with a RETURNING clause — one statement for N rows (ADR 003).
+ *
+ * With `DO NOTHING` (no update columns and no update defaults) the statement
+ * returns only the rows it actually inserted; conflicting rows are absent.
+ * Reloading them would mean a second statement, which this lane does not do.
+ */
+export function compileUpsertReturningMany(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+  rows: readonly Record<string, unknown>[],
+  conflict: UpsertConflictResolution,
+  returningColumns: readonly string[] | undefined,
+): SqlQueryPlan<Record<string, unknown>> {
+  const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
+  const ast = InsertAst.into(tableSourceForContract(contract, namespaceId, tableName))
+    .withRows(normalizedRows)
+    .withOnConflict(buildBatchedOnConflict(contract, namespaceId, tableName, conflict))
+    .withReturning(buildReturningColumns(contract, namespaceId, tableName, returningColumns));
+
+  const { params } = deriveParamsFromAst(ast);
+  return buildOrmQueryPlan(contract, ast, params);
+}
+
+/**
+ * Sibling of {@link compileInsertReturningSplit} for targets that cannot spell
+ * `DEFAULT` inside `INSERT ... VALUES`: rows are grouped by their column
+ * signature and each group becomes its own statement. The conflict resolution
+ * is shared verbatim across the groups, so a column a group omits is still
+ * assigned from `excluded` — the proposed row carries that column's default.
+ */
+export function compileUpsertReturningManySplit(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  tableName: string,
+  rows: readonly Record<string, unknown>[],
+  conflict: UpsertConflictResolution,
+  returningColumns: readonly string[] | undefined,
+): ReadonlyArray<SqlQueryPlan<Record<string, unknown>>> {
+  if (rows.length === 0) {
+    throw ormError('ORM.MUTATION_DATA_MISSING', 'upsertAll() requires at least one row', {
+      meta: { method: 'upsertAll', namespaceId, tableName },
+    });
+  }
+  return groupRowsByColumnSignature(rows).map((group) =>
+    compileUpsertReturningMany(contract, namespaceId, tableName, group, conflict, returningColumns),
+  );
+}
+
 export function compileUpdateReturning(
   contract: Contract<SqlStorage>,
   namespaceId: string,

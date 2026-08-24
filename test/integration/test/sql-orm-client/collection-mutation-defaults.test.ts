@@ -1,6 +1,7 @@
 import postgresAdapter from '@internal/adapter-postgres/runtime';
 import pgvectorRuntime from '@internal/extension-pgvector/runtime';
 import { Collection } from '@internal/sql-orm-client';
+import { ColumnRef, type ParamRef } from '@internal/sql-relational-core/ast';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget from '@internal/target-postgres/runtime';
 import { describe, expect, it } from 'vitest';
@@ -72,6 +73,42 @@ function buildTagWithUpdatedAtContract(): TestContract {
   return deserializeTestContract(contract);
 }
 
+// Same shape as `buildTagWithUpdatedAtContract`, but the generated column is a
+// `createdAt` carrying an onCreate default and no onUpdate one — the case where
+// sourcing the column from `excluded` on conflict would silently restamp an
+// existing row's creation time.
+function buildTagWithCreatedAtContract(): TestContract {
+  const contract = JSON.parse(
+    JSON.stringify(withReturningCapability(getTestContract())),
+  ) as TestContract;
+
+  const tagModel = contract.domain.namespaces['public']!.models['Tag'] as Record<string, unknown>;
+  const tagFields = tagModel['fields'] as Record<string, unknown>;
+  tagFields['createdAt'] = {
+    nullable: false,
+    type: { kind: 'scalar', codecId: 'pg/timestamptz@1' },
+  };
+  const tagStorage = tagModel['storage'] as Record<string, unknown>;
+  (tagStorage['fields'] as Record<string, unknown>)['createdAt'] = { column: 'created_at' };
+
+  const tagsTable = unboundTables(contract.storage)['tags'] as { columns: Record<string, unknown> };
+  tagsTable.columns['created_at'] = {
+    nativeType: 'timestamptz',
+    codecId: 'pg/timestamptz@1',
+    nullable: false,
+  };
+
+  const execution = contract.execution as unknown as {
+    mutations: { defaults: Array<Record<string, unknown>> };
+  };
+  execution.mutations.defaults.push({
+    ref: { namespace: 'public', table: 'tags', column: 'created_at' },
+    onCreate: { kind: 'generator', id: 'timestampNow' },
+  });
+
+  return deserializeTestContract(contract);
+}
+
 function setupTagCollection(): {
   collection: Collection<TestContract, 'Tag'>;
   runtime: MockRuntime;
@@ -91,9 +128,34 @@ function setupTagCollection(): {
   return { collection, runtime, contract };
 }
 
+function setupCreatedAtTagCollection(): {
+  collection: Collection<TestContract, 'Tag'>;
+  runtime: MockRuntime;
+} {
+  const contract = buildTagWithCreatedAtContract();
+  const context = createExecutionContext({
+    contract,
+    stack: createSqlExecutionStack({
+      target: postgresTarget,
+      adapter: postgresAdapter,
+      extensions: [pgvectorRuntime],
+    }),
+  });
+  const runtime = createMockRuntime();
+  const collection = new Collection({ runtime, context }, 'Tag', { namespaceId: 'public' });
+  return { collection, runtime };
+}
+
 function planParams(execution: { plan: unknown } | undefined): readonly unknown[] {
   const plan = execution?.plan as { params?: readonly unknown[] } | undefined;
   return plan?.params ?? [];
+}
+
+function conflictSet(execution: { plan: unknown } | undefined): Record<string, unknown> {
+  const plan = execution?.plan as
+    | { ast?: { onConflict?: { action?: { set?: Record<string, unknown> } } } }
+    | undefined;
+  return plan?.ast?.onConflict?.action?.set ?? {};
 }
 
 const TAG_A_ID = `${TAG_ID_1.slice(0, -1)}A` as string;
@@ -304,6 +366,88 @@ describe('@updatedAt mutation defaults via Collection', () => {
       const dateParams = params.filter((p) => p instanceof Date) as Date[];
       // Only the create branch's timestamp; the empty update branch must not
       // generate or apply one.
+      expect(dateParams).toHaveLength(1);
+    });
+  });
+
+  describe('upsertAll (bulk)', () => {
+    it('advances updatedAt through an onUpdate literal, not through excluded', async () => {
+      const { collection, runtime } = setupTagCollection();
+      runtime.setNextResults([
+        [
+          { id: TAG_A_ID, name: 'one', updated_at: new Date() },
+          { id: TAG_B_ID, name: 'two', updated_at: new Date() },
+        ],
+      ]);
+
+      await collection
+        .upsertAll([
+          { id: tagId(TAG_A_ID), name: 'one' },
+          { id: tagId(TAG_B_ID), name: 'two' },
+        ])
+        .toArray();
+
+      // `updated_at` is not a caller-supplied column, so it stays out of the
+      // implicit update set and is bound as the onUpdate default instead.
+      const set = conflictSet(runtime.executions[0]);
+      expect(Object.keys(set)).toEqual(['name', 'updated_at']);
+      expect(set['name']).toEqual(ColumnRef.of('excluded', 'name'));
+      expect((set['updated_at'] as ParamRef).value).toBeInstanceOf(Date);
+
+      const dateParams = planParams(runtime.executions[0]).filter(
+        (p) => p instanceof Date,
+      ) as Date[];
+      // Two create-branch Dates sharing one generated value, then the onUpdate literal.
+      expect(dateParams).toHaveLength(3);
+      expect(dateParams[1]).toBe(dateParams[0]);
+    });
+
+    it('applies an onUpdate default the explicit update list omits', async () => {
+      const { collection, runtime } = setupTagCollection();
+      runtime.setNextResults([[{ id: TAG_A_ID, name: 'one', updated_at: new Date() }]]);
+
+      await collection
+        .upsertAll([{ id: tagId(TAG_A_ID), name: 'one' }], { update: ['name'] })
+        .toArray();
+
+      const set = conflictSet(runtime.executions[0]);
+      expect(Object.keys(set)).toEqual(['name', 'updated_at']);
+      expect(set['name']).toEqual(ColumnRef.of('excluded', 'name'));
+
+      const dateParams = planParams(runtime.executions[0]).filter(
+        (p) => p instanceof Date,
+      ) as Date[];
+      // One Date in the INSERT row, a second as the `updated_at` assignment.
+      expect(dateParams).toHaveLength(2);
+      expect((set['updated_at'] as ParamRef).value).toBe(dateParams[1]);
+    });
+
+    it('keeps an onCreate-only column out of the conflict update', async () => {
+      const { collection, runtime } = setupCreatedAtTagCollection();
+      runtime.setNextResults([[{ id: TAG_A_ID, name: 'one' }]]);
+
+      const rows = await collection
+        .select('id', 'name')
+        .upsertAll([{ id: tagId(TAG_A_ID), name: 'one' }])
+        .toArray();
+
+      expect(rows).toEqual([{ id: TAG_A_ID, name: 'one' }]);
+
+      // `created_at` is generated for the insert branch only. Assigning it from
+      // `excluded` would restamp the creation time of a row that already exists.
+      const set = conflictSet(runtime.executions[0]);
+      expect(Object.keys(set)).toEqual(['name']);
+      expect(set['name']).toEqual(ColumnRef.of('excluded', 'name'));
+    });
+
+    it('does not advance updatedAt when the update list is empty', async () => {
+      const { collection, runtime } = setupTagCollection();
+      runtime.setNextResults([[{ id: TAG_A_ID, name: 'one', updated_at: new Date() }]]);
+
+      await collection.upsertAll([{ id: tagId(TAG_A_ID), name: 'one' }], { update: [] }).toArray();
+
+      const params = planParams(runtime.executions[0]);
+      const dateParams = params.filter((p) => p instanceof Date) as Date[];
       expect(dateParams).toHaveLength(1);
     });
   });

@@ -208,4 +208,176 @@ describe('integration/upsert', () => {
     },
     timeouts.spinUpPpgDev,
   );
+
+  it(
+    'upsertAll() inserts and updates in one statement, overwriting every non-conflict column',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
+
+        runtime.resetExecutions();
+        const upserted = await users.select('id', 'name', 'email', 'invitedById').upsertAll([
+          { id: 1, name: 'Alice Updated', email: 'alice+new@example.com', invitedById: null },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: null },
+        ]);
+
+        expect(upserted).toEqual([
+          { id: 1, name: 'Alice Updated', email: 'alice+new@example.com', invitedById: null },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: null },
+        ]);
+        expect(runtime.executions).toHaveLength(1);
+
+        const ast = runtime.executions[0]?.ast;
+        expect(isInsertAst(ast)).toBe(true);
+        if (!isInsertAst(ast)) {
+          throw new Error('Expected upsertAll to emit an insert AST');
+        }
+        expect(ast.onConflict?.action?.kind).toBe('do-update-set');
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'upsertAll() restricts the conflict update to the requested fields',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
+
+        const upserted = await users
+          .select('id', 'name', 'email')
+          .upsertAll(
+            [{ id: 1, name: 'Alice Renamed', email: 'ignored@example.com', invitedById: null }],
+            { update: ['name'] },
+          );
+
+        expect(upserted).toEqual([{ id: 1, name: 'Alice Renamed', email: 'alice@example.com' }]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'upsertAll() with an empty update list leaves conflicting rows untouched and omits them',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
+
+        runtime.resetExecutions();
+        const upserted = await users.select('id', 'name', 'email').upsertAll(
+          [
+            { id: 1, name: 'Ignored', email: 'ignored@example.com', invitedById: null },
+            { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: null },
+          ],
+          { update: [] },
+        );
+
+        expect(upserted).toEqual([{ id: 2, name: 'Bob', email: 'bob@example.com' }]);
+
+        const ast = runtime.executions[0]?.ast;
+        expect(isInsertAst(ast)).toBe(true);
+        if (!isInsertAst(ast)) {
+          throw new Error('Expected upsertAll to emit an insert AST');
+        }
+        expect(ast.onConflict?.action?.kind).toBe('do-nothing');
+
+        expect(await users.select('id', 'name', 'email').first({ id: 1 })).toEqual({
+          id: 1,
+          name: 'Alice',
+          email: 'alice@example.com',
+        });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'upsertAll() resolves an explicit non-primary-key conflict target',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await runtime.query('create unique index users_email_key on users (email)');
+        await seedUsers(runtime, [{ id: 2, name: 'Bob', email: 'bob@example.com' }]);
+
+        const upserted = await users.select('id', 'name', 'email').upsertAll(
+          [
+            { id: 3, name: 'Bob Updated', email: 'bob@example.com', invitedById: null },
+            { id: 4, name: 'Cara', email: 'cara@example.com', invitedById: null },
+          ],
+          { conflictOn: ['email'], update: ['name'] },
+        );
+
+        expect(upserted).toEqual([
+          { id: 2, name: 'Bob Updated', email: 'bob@example.com' },
+          { id: 4, name: 'Cara', email: 'cara@example.com' },
+        ]);
+        expect(await users.first({ id: 3 })).toBeNull();
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'upsertAll() holds the primary key back from the default update set',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        await runtime.query('create unique index users_email_key on users (email)');
+        await seedUsers(runtime, [{ id: 2, name: 'Bob', email: 'bob@example.com' }]);
+
+        const upserted = await users
+          .select('id', 'name', 'email')
+          .upsertAll(
+            [{ id: 99, name: 'Bob Updated', email: 'bob@example.com', invitedById: null }],
+            {
+              conflictOn: ['email'],
+            },
+          );
+
+        // `name` is refreshed, but the row keeps its identity — an `id`
+        // carried only to satisfy the insert branch must not reassign it.
+        expect(upserted).toEqual([{ id: 2, name: 'Bob Updated', email: 'bob@example.com' }]);
+        expect(await users.first({ id: 99 })).toBeNull();
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'upsertAll() returns an empty result without touching the database for empty input',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createReturningUsersCollection(runtime);
+
+        runtime.resetExecutions();
+        expect(await users.upsertAll([])).toEqual([]);
+        expect(runtime.executions).toHaveLength(0);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'upsertAll() rejects when returning capability is disabled',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createUsersCollectionWithoutReturning(runtime);
+
+        expect(() =>
+          users.upsertAll([
+            { id: 5, name: 'NoReturn', email: 'noreturn@example.com', invitedById: null },
+          ]),
+        ).toThrow(/requires contract capability "returning"/);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 });

@@ -94,7 +94,10 @@ import {
   compileUpdateCount,
   compileUpdateReturning,
   compileUpsertReturning,
+  compileUpsertReturningMany,
+  compileUpsertReturningManySplit,
   mergeAnnotations,
+  type UpsertConflictResolution,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
 import {
@@ -125,6 +128,7 @@ import {
   type RuntimeQueryable,
   type ShorthandWhereFilter,
   type UniqueConstraintCriterion,
+  type UpsertAllOptions,
   type VariantAwareIncludeRelationNames,
   type VariantAwareModelAccessor,
   type VariantModelRow,
@@ -172,6 +176,34 @@ function applyUpdateDefaults(
   for (const def of applied) {
     values[def.column] = def.value;
   }
+}
+
+/**
+ * The onUpdate defaults a batched upsert must bind as literals: those for
+ * columns the conflict update does not already assign. Columns already in
+ * `assignedColumns` are left alone — they are written from the proposed row,
+ * which carries its own create-branch default for the same column.
+ *
+ * An empty `assignedColumns` means nothing is being updated, and an empty
+ * update payload skips onUpdate defaults by design (ADR 158) — so the probe
+ * stays empty and no default is generated.
+ */
+function collectUpdateDefaults(
+  ctx: CollectionContext<Contract<SqlStorage>>,
+  namespaceId: string,
+  tableName: string,
+  assignedColumns: readonly string[],
+): Record<string, unknown> {
+  const probe: Record<string, unknown> = Object.fromEntries(
+    assignedColumns.map((column) => [column, null]),
+  );
+  const applied = ctx.context.applyMutationDefaults({
+    op: 'update',
+    table: tableName,
+    namespace: namespaceId,
+    values: probe,
+  });
+  return Object.fromEntries(applied.map((def) => [def.column, def.value]));
 }
 
 type WhereDirectInput = WhereArg;
@@ -1797,6 +1829,176 @@ class CollectionImpl<
       `upsert() for model "${this.modelName}" did not return a row`,
       { meta: { operation: 'upsert', model: this.modelName } },
     );
+  }
+
+  /**
+   * Write terminal: insert many rows, updating the ones that conflict, and
+   * stream the resulting rows. One statement for the whole batch, so the
+   * cost is one round-trip rather than one per row.
+   *
+   * Each conflicting row is updated with its own proposed values — the
+   * update is not a single literal payload shared by the batch. `update`
+   * selects which fields that overwrite covers; it defaults to every field
+   * the caller supplied except the conflict target and the primary key.
+   * Fields that only an `onCreate` default fills (a generated id, a
+   * `createdAt`) stay out of it, so a conflicting row keeps its own.
+   *
+   * ```typescript
+   * // Insert-or-refresh a batch keyed on the primary key:
+   * const rows = await db.orm.User.upsertAll([
+   *   { id: 1, name: 'Alice', email: 'alice@example.com' },
+   *   { id: 2, name: 'Bob', email: 'bob@example.com' },
+   * ]);
+   *
+   * // Key on a unique constraint, and overwrite only `name`:
+   * await db.orm.User.upsertAll(users, {
+   *   conflictOn: ['email'],
+   *   update: ['name'],
+   * });
+   *
+   * // Insert-if-absent — `update: []` leaves conflicting rows untouched.
+   * // Those rows are skipped by the statement, so they are absent from
+   * // the result; reloading them would cost a second statement.
+   * await db.orm.User.upsertAll(users, { update: [] });
+   * ```
+   *
+   * Accepts an optional `configure` callback that receives a
+   * `MetaBuilder<'write'>` for attaching typed annotations.
+   *
+   * Not supported on MTI variants.
+   */
+  upsertAll(
+    data: readonly ResolvedCreateInput<TContract, ModelName, State['variantName'], State['nsId']>[],
+    options?: UpsertAllOptions<TContract, ModelName>,
+    configure?: (meta: MetaBuilder<'write'>) => void,
+  ): AsyncIterableResult<Row> {
+    if (data.length === 0) {
+      const generator = async function* (): AsyncGenerator<Row, void, unknown> {};
+      return new AsyncIterableResult(generator());
+    }
+
+    assertReturningCapability(this.contract, 'upsertAll()');
+    this.#assertNotMtiVariant('upsertAll()');
+    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'upsertAll');
+
+    const mappedRows = this.#mapCreateRows(
+      blindCast<
+        readonly Record<string, unknown>[],
+        'resolved upsert inputs are model-field records for storage mapping'
+      >(data),
+    );
+    // Read before `applyCreateDefaults` mutates the rows: only what the caller
+    // actually supplied may drive the implicit update set. An onCreate default
+    // (`created_at`, a generated id) belongs to the insert branch alone — taking
+    // it from `excluded` would stamp an existing row with the new row's value.
+    const providedColumns = [...new Set(mappedRows.flatMap((row) => Object.keys(row)))];
+    applyCreateDefaults(this.ctx, this.namespaceId, this.tableName, mappedRows);
+
+    const conflict = this.#resolveBatchedConflict(providedColumns, options);
+    const { selectedForQuery: selectedForUpsert, hiddenColumns } = this.#augmentMutationSelection();
+
+    const dispatch = {
+      context: this.ctx.context,
+      runtime: this.ctx.runtime,
+      tableName: this.tableName,
+      modelName: this.modelName,
+      namespaceId: this.namespaceId,
+      variantName: this.state.variantName,
+      includes: this.state.includes,
+      selectedFields: this.state.selectedFields,
+      hiddenColumns,
+      mapRow: (mapped: Record<string, unknown>) =>
+        blindCast<Row, 'mapped mutation storage row matches the collection generic row'>(mapped),
+    };
+
+    if (this.contract.capabilities?.['sql']?.['defaultInInsert'] !== true) {
+      const plans = compileUpsertReturningManySplit(
+        this.contract,
+        this.namespaceId,
+        this.tableName,
+        mappedRows,
+        conflict,
+        selectedForUpsert,
+      ).map((plan) => mergeAnnotations(plan, annotationsMap));
+      return dispatchSplitMutationRows<Row>({ ...dispatch, plans });
+    }
+
+    return dispatchMutationRows<Row>({
+      ...dispatch,
+      compiled: mergeAnnotations(
+        compileUpsertReturningMany(
+          this.contract,
+          this.namespaceId,
+          this.tableName,
+          mappedRows,
+          conflict,
+          selectedForUpsert,
+        ),
+        annotationsMap,
+      ),
+    });
+  }
+
+  #resolveBatchedConflict(
+    providedColumns: readonly string[],
+    options: UpsertAllOptions<TContract, ModelName> | undefined,
+  ): UpsertConflictResolution {
+    const primaryKeyColumns = resolveUpsertConflictColumns(
+      this.contract,
+      this.namespaceId,
+      this.modelName,
+      undefined,
+    );
+    const columns = options?.conflictOn?.length
+      ? mapFieldsToColumns(this.contract, this.namespaceId, this.modelName, options.conflictOn)
+      : primaryKeyColumns;
+    if (columns.length === 0) {
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `upsertAll() for model "${this.modelName}" requires conflict columns`,
+        { meta: { method: 'upsertAll', model: this.modelName } },
+      );
+    }
+
+    // An explicit list is honoured verbatim — naming the conflict column is
+    // legal and meaningful (under a case-insensitive collation the stored
+    // value and the proposed one can genuinely differ), so it is the caller's
+    // call, not something to silently drop.
+    if (options?.update) {
+      const updateColumns = mapFieldsToColumns(
+        this.contract,
+        this.namespaceId,
+        this.modelName,
+        options.update,
+      );
+      return {
+        columns,
+        updateColumns,
+        updateDefaults: collectUpdateDefaults(
+          this.ctx,
+          this.namespaceId,
+          this.tableName,
+          updateColumns,
+        ),
+      };
+    }
+
+    // The primary key is held back along with the conflict target — when the
+    // two differ, overwriting it would reassign the identity of a row the
+    // caller only meant to refresh.
+    const withheld = new Set([...columns, ...primaryKeyColumns]);
+    const updateColumns = providedColumns.filter((column) => !withheld.has(column));
+
+    return {
+      columns,
+      updateColumns,
+      updateDefaults: collectUpdateDefaults(
+        this.ctx,
+        this.namespaceId,
+        this.tableName,
+        updateColumns,
+      ),
+    };
   }
 
   /**

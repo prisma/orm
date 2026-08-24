@@ -29,5 +29,7 @@ export type {
   RuntimeQueryable,
   ShorthandWhereFilter,
   UniqueConstraintCriterion,
+  UniqueConstraintFieldName,
+  UpsertAllOptions,
 } from '../types';
 export { emptyState } from '../types';

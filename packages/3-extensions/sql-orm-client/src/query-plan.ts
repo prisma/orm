@@ -13,5 +13,8 @@ export {
   compileUpdateCount,
   compileUpdateReturning,
   compileUpsertReturning,
+  compileUpsertReturningMany,
+  compileUpsertReturningManySplit,
+  type UpsertConflictResolution,
 } from './query-plan-mutations';
 export { compileSelect, compileSelectWithIncludes } from './query-plan-select';

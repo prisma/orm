@@ -65,7 +65,8 @@ export type IncludeRefinementTerminals =
   | 'delete'
   | 'deleteAll'
   | 'deleteAndCount'
-  | 'upsert';
+  | 'upsert'
+  | 'upsertAll';
 
 /**
  * The members a to-one refinement collection strips: the scalar reducers the

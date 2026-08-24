@@ -1430,6 +1430,46 @@ export type UniqueConstraintCriterion<
       : never
     : never;
 
+type ConstraintFieldNames<TContract extends Contract<SqlStorage>, ModelName extends string> =
+  ConstraintColumnsUnion<TContract, ModelName> extends infer Columns
+    ? Columns extends readonly string[]
+      ? FieldNameForColumn<TContract, ModelName, Columns[number]>
+      : never
+    : never;
+
+/**
+ * The field names a conflict target may name: every field participating in the
+ * primary key or a unique constraint. A batched upsert names the constraint by
+ * its fields rather than by a field-value record — no single row's values can
+ * stand for the whole batch — so this is the flat name union rather than the
+ * per-constraint record {@link UniqueConstraintCriterion} builds. A contract
+ * whose constraint metadata is not statically known widens to every model
+ * field, mirroring how that criterion widens to an open record.
+ */
+export type UniqueConstraintFieldName<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+> = [ConstraintFieldNames<TContract, ModelName>] extends [never]
+  ? keyof DefaultModelRow<TContract, ModelName> & string
+  : ConstraintFieldNames<TContract, ModelName>;
+
+export interface UpsertAllOptions<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+> {
+  /**
+   * Fields of the unique constraint that drives conflict resolution. Defaults
+   * to the model's primary key.
+   */
+  readonly conflictOn?: readonly UniqueConstraintFieldName<TContract, ModelName>[];
+  /**
+   * Fields overwritten from the proposed row when a row conflicts. Defaults to
+   * every non-conflict field the input rows carry. An empty list skips
+   * conflicting rows, which are then absent from the result.
+   */
+  readonly update?: readonly (keyof DefaultModelRow<TContract, ModelName> & string)[];
+}
+
 type RelationConnectCriterion<TContract extends Contract<SqlStorage>, ModelName extends string> = [
   UniqueConstraintCriterion<TContract, ModelName>,
 ] extends [never]

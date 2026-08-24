@@ -204,6 +204,12 @@ await db.orm.User
     create: { id, email, displayName, kind, createdAt: new Date() },
     update: { email, displayName, kind },
   });
+
+// Upsert a batch — one statement, each conflicting row updated with its
+// own proposed values. `update` defaults to every field the rows carry
+// except the conflict target and the primary key; `update: []` leaves
+// conflicting rows untouched (and out of the result).
+await db.orm.User.upsertAll(rows, { conflictOn: ['email'], update: ['displayName'] });
 ```
 
 The ORM returns inserted / updated rows by default. The `.returning(...)` selector lives on the SQL builder (next section), where you build a plan and execute it explicitly.

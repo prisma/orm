@@ -366,6 +366,37 @@ describe('Collection', () => {
       expect(runtime.executions).toHaveLength(2);
     });
 
+    it('upsertAll() uses split insert when defaultInInsert is absent', async () => {
+      const { collection, runtime } = createReturningCollectionWithoutDefaultInInsert('User');
+      runtime.setNextResults([
+        [{ id: 1, name: 'Alice', email: 'alice@example.com', invited_by_id: null, address: null }],
+        [{ id: 2, name: 'Bob', email: 'bob@example.com', invited_by_id: 1, address: null }],
+      ]);
+
+      const rows = await collection
+        .upsertAll([
+          { id: 1, name: 'Alice', email: 'alice@example.com' },
+          { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+        ])
+        .toArray();
+
+      expect(rows).toHaveLength(2);
+      expect(runtime.executions).toHaveLength(2);
+      // Every group carries the same conflict resolution — a split batch must
+      // not degrade into per-group update semantics.
+      for (const execution of runtime.executions) {
+        const ast = execution.plan.ast as {
+          onConflict?: { action?: { kind: string; set?: Record<string, unknown> } };
+        };
+        expect(ast.onConflict?.action?.kind).toBe('do-update-set');
+        expect(Object.keys(ast.onConflict?.action?.set ?? {})).toEqual([
+          'name',
+          'email',
+          'invited_by_id',
+        ]);
+      }
+    });
+
     it('createAndCount() uses split insert when defaultInInsert is absent', async () => {
       const { collection, runtime } = createReturningCollectionWithoutDefaultInInsert('User');
       runtime.setNextResults([[], []]);

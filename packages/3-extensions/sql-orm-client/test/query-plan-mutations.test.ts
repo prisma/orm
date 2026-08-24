@@ -19,6 +19,8 @@ import {
   compileUpdateCount,
   compileUpdateReturning,
   compileUpsertReturning,
+  compileUpsertReturningMany,
+  compileUpsertReturningManySplit,
 } from '../src/query-plan';
 import { withReturningCapability } from './collection-fixtures';
 import { getTestContract } from './helpers';
@@ -152,6 +154,141 @@ describe('query plan mutations', () => {
       name: usersColParam(contract, 'name', 'Updated Alice'),
     });
     expect(plan.params).toEqual([10, 'Alice', 'alice@example.com', 'Updated Alice']);
+  });
+
+  describe('compileUpsertReturningMany()', () => {
+    it('assigns every update column from the excluded row across a batched insert', () => {
+      const contract = withReturningCapability(getTestContract());
+      const plan = compileUpsertReturningMany(
+        contract,
+        'public',
+        'users',
+        [
+          { id: 10, name: 'Alice', email: 'alice@example.com' },
+          { id: 11, name: 'Bob', email: 'bob@example.com' },
+        ],
+        { columns: ['id'], updateColumns: ['name', 'email'], updateDefaults: {} },
+        undefined,
+      );
+
+      assertInsertAst(plan.ast);
+      expect(plan.ast.rows).toHaveLength(2);
+      expect(plan.ast.onConflict?.columns).toEqual([ColumnRef.of('users', 'id')]);
+      const action = plan.ast.onConflict?.action as DoUpdateSetConflictAction;
+      expect(action.set).toEqual({
+        name: ColumnRef.of('excluded', 'name'),
+        email: ColumnRef.of('excluded', 'email'),
+      });
+      // The excluded assignments bind nothing — only the VALUES rows carry params.
+      expect(plan.params).toEqual([10, 'Alice', 'alice@example.com', 11, 'Bob', 'bob@example.com']);
+    });
+
+    it('binds update defaults as literal params beside the excluded assignments', () => {
+      const contract = withReturningCapability(getTestContract());
+      const plan = compileUpsertReturningMany(
+        contract,
+        'public',
+        'users',
+        [{ id: 10, name: 'Alice', email: 'alice@example.com' }],
+        {
+          columns: ['id'],
+          updateColumns: ['name'],
+          updateDefaults: { address: 'generated address' },
+        },
+        undefined,
+      );
+
+      assertInsertAst(plan.ast);
+      const action = plan.ast.onConflict?.action as DoUpdateSetConflictAction;
+      expect(action.set).toEqual({
+        name: ColumnRef.of('excluded', 'name'),
+        address: usersColParam(contract, 'address', 'generated address'),
+      });
+      expect(plan.params).toEqual([10, 'Alice', 'alice@example.com', 'generated address']);
+    });
+
+    it('lets an update default win over the excluded assignment for the same column', () => {
+      const contract = withReturningCapability(getTestContract());
+      const plan = compileUpsertReturningMany(
+        contract,
+        'public',
+        'users',
+        [{ id: 10, name: 'Alice', email: 'alice@example.com', address: 'Old St' }],
+        {
+          columns: ['id'],
+          updateColumns: ['name', 'address'],
+          updateDefaults: { address: 'generated address' },
+        },
+        undefined,
+      );
+
+      assertInsertAst(plan.ast);
+      const action = plan.ast.onConflict?.action as DoUpdateSetConflictAction;
+      expect(action.set).toEqual({
+        name: ColumnRef.of('excluded', 'name'),
+        address: usersColParam(contract, 'address', 'generated address'),
+      });
+    });
+
+    it('uses DO NOTHING when no update columns and no update defaults remain', () => {
+      const contract = withReturningCapability(getTestContract());
+      const plan = compileUpsertReturningMany(
+        contract,
+        'public',
+        'users',
+        [{ id: 10, name: 'Alice', email: 'alice@example.com' }],
+        { columns: ['id'], updateColumns: [], updateDefaults: {} },
+        undefined,
+      );
+
+      assertInsertAst(plan.ast);
+      expect(plan.ast.onConflict?.action?.kind).toBe('do-nothing');
+      expect(plan.ast.returning?.map((item) => item.alias)).toEqual(
+        Object.keys(unboundTables(contract.storage)['users']!.columns),
+      );
+    });
+
+    it('rejects an empty rows array', () => {
+      const contract = withReturningCapability(getTestContract());
+      expect(() =>
+        compileUpsertReturningMany(
+          contract,
+          'public',
+          'users',
+          [],
+          { columns: ['id'], updateColumns: ['name'], updateDefaults: {} },
+          undefined,
+        ),
+      ).toThrow('at least one row');
+    });
+  });
+
+  describe('compileUpsertReturningManySplit()', () => {
+    it('keeps one update set across the per-column-signature groups', () => {
+      const contract = withReturningCapability(getTestContract());
+      const plans = compileUpsertReturningManySplit(
+        contract,
+        'public',
+        'users',
+        [
+          { id: 1, name: 'Alice', email: 'a@a.com' },
+          { id: 2, name: 'Bob', email: 'b@b.com', address: 'Baker St' },
+        ],
+        { columns: ['id'], updateColumns: ['name', 'email', 'address'], updateDefaults: {} },
+        undefined,
+      );
+
+      expect(plans).toHaveLength(2);
+      for (const plan of plans) {
+        assertInsertAst(plan.ast);
+        const action = plan.ast.onConflict?.action as DoUpdateSetConflictAction;
+        expect(action.set).toEqual({
+          name: ColumnRef.of('excluded', 'name'),
+          email: ColumnRef.of('excluded', 'email'),
+          address: ColumnRef.of('excluded', 'address'),
+        });
+      }
+    });
   });
 
   describe('compileInsertReturningSplit()', () => {
