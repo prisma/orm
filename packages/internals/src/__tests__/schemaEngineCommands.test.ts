@@ -9,6 +9,7 @@ import {
   dropDatabase,
   execaCommand,
   formatSchemaEngineError,
+  parseJsonFromStderr,
   type SchemaEngineLogLine,
 } from '../schemaEngineCommands'
 
@@ -58,6 +59,18 @@ describe('formatSchemaEngineError', () => {
 
   test('falls back to the raw stderr when log lines have empty messages', () => {
     expect(formatSchemaEngineError([log('')], 'raw stderr')).toBe('raw stderr')
+  })
+})
+
+describe('parseJsonFromStderr', () => {
+  test('does not throw on a single-line stderr with a trailing newline', () => {
+    // stderr.split(/\r?\n/).slice(1) on "real error\n" leaves [''], which used to
+    // reach JSON.parse('') and throw before formatSchemaEngineError's fallback ever ran.
+    expect(parseJsonFromStderr('real error\n')).toEqual([])
+  })
+
+  test('does not throw on a single-line stderr with no trailing newline', () => {
+    expect(parseJsonFromStderr('real error')).toEqual([])
   })
 })
 

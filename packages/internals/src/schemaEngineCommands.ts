@@ -46,9 +46,12 @@ export interface ConnectionError {
   code: DatabaseErrorCodes
 }
 
-function parseJsonFromStderr(stderr: string): SchemaEngineLogLine[] {
+export function parseJsonFromStderr(stderr: string): SchemaEngineLogLine[] {
   // split by new line
-  const lines = stderr.split(/\r?\n/).slice(1) // Remove first element
+  const lines = stderr
+    .split(/\r?\n/)
+    .slice(1) // Remove first element
+    .filter((line) => line.trim() !== '') // A trailing newline leaves a blank line that isn't valid JSON
   const logs: any = []
 
   for (const line of lines) {
@@ -64,11 +67,13 @@ function parseJsonFromStderr(stderr: string): SchemaEngineLogLine[] {
   return logs
 }
 
-// `parseJsonFromStderr` drops the engine's first stderr line as a discardable
-// preamble. When the engine only emits that one line for a given failure, the
-// only line with real information is dropped, `logs` ends up empty, and this
-// used to produce a bare "Schema engine error:" with nothing after it. Fall
-// back to the raw stderr so the error always carries some diagnostic content.
+/**
+ * `parseJsonFromStderr` drops the engine's first stderr line as a discardable
+ * preamble. When the engine only emits that one line for a given failure, the
+ * only line with real information is dropped, `logs` ends up empty, and this
+ * used to produce a bare "Schema engine error:" with nothing after it. Fall
+ * back to the raw stderr so the error always carries some diagnostic content.
+ */
 export function formatSchemaEngineError(logs: SchemaEngineLogLine[], stderr: string): string {
   const messages = logs.map((log) => log.fields.message).filter(Boolean)
   return messages.length > 0 ? messages.join('\n') : stderr
