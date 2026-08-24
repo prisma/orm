@@ -29,20 +29,29 @@ const TEMPORAL_ARRAY_OIDS: ReadonlySet<number> = new Set([
 
 type TextParser = (value: string) => unknown;
 
+/** `pg-types`' own view of `getTypeParser`, which its published types understate — see below. */
+type GetTypeParser = (oid: number, format?: 'text' | 'binary' | undefined) => TextParser;
+
 /**
- * `pg-types`' own view of `getTypeParser`, which its published types understate.
+ * Resolves `pg`'s parser for an OID.
  *
  * The declared parameter is `TypeId`, an enum of **scalar** OIDs only, but the function is a plain
- * lookup in an OID-keyed map — its own source comment says the oid is whatever
+ * lookup in an OID-keyed map — `pg-types`' own source comment says the oid is whatever
  * `SELECT oid FROM pg_type WHERE typname = …` returns. So the narrowing is a defect in the type
- * rather than a constraint of the function, and correcting it here is more honest than asserting at
- * each call site that some array OID is secretly an enum member. It also types the passthrough
- * below, which forwards an arbitrary OID for every type this module does not claim.
+ * rather than a constraint of the function, and correcting it is more honest than asserting at each
+ * call site that some array OID is secretly an enum member.
+ *
+ * The `pgTypes.getTypeParser` property is read **inside** this function, never at module scope.
+ * Four suites in other packages mock `pg` with a double that carries no `types` export, and a
+ * module-scope read makes importing this driver throw in all of them — at import, for a reason
+ * unrelated to what the test is doing. The laziness is the contract, not an accident of style.
  */
-const getTypeParser = blindCast<
-  (oid: number, format?: 'text' | 'binary' | undefined) => TextParser,
-  "pg-types' TypeId enum lists only scalar OIDs; getTypeParser resolves any OID from its map"
->(pgTypes.getTypeParser);
+function getTypeParser(oid: number, format?: 'text' | 'binary'): TextParser {
+  return blindCast<
+    GetTypeParser,
+    "pg-types' TypeId enum lists only scalar OIDs; getTypeParser resolves any OID from its map"
+  >(pgTypes.getTypeParser)(oid, format);
+}
 
 function serverText(value: string): string {
   return value;
