@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@prisma/orm-framework": "workspace:8.0.0-rc.5",
-    "@vercel/detect-agent": "^1.2.4",
+    "@vercel/detect-agent": "^1.2.5",
     "arktype": "catalog:",
     "c12": "^3.3.4",
     "ci-info": "^4.3.1",
@@ -31,7 +31,7 @@
     "strip-ansi": "^7.2.0",
     "vscode-languageserver": "catalog:",
     "vscode-languageserver-textdocument": "catalog:",
-    "wrap-ansi": "^10.0.0"
+    "wrap-ansi": "^10.0.1"
   },
   "devDependencies": {
     "@internal/cli": "workspace:8.0.0-rc.5",
