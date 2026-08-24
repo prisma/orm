@@ -46,7 +46,7 @@ const readsContract: ReadonlyArray<[string, readonly string[]]> = [
   ['migration list', ['migration', 'list']],
   ['migration graph', ['migration', 'graph']],
   ['migration check', ['migration', 'check']],
-  ['migrate', ['migrate', '--to', 'HEAD']],
+  ['db migrate', ['db', 'migrate', '--to', 'HEAD']],
   ['db init', ['db', 'init']],
   ['db update', ['db', 'update']],
   ['db sign', ['db', 'sign']],

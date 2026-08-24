@@ -180,4 +180,92 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
       expect(stats).toEqual({ total: 120 });
     });
   });
+
+  describe('groupBy', () => {
+    it('take() before groupBy() scopes which rows get grouped', async () => {
+      await withPostsRuntime(async (_runtime, posts) => {
+        const grouped = await posts
+          .orderBy((post) => post.views.desc())
+          .take(3)
+          .groupBy('userId')
+          .aggregate((aggregate) => ({
+            count: dynamicAggregate(aggregate)['count']!(),
+            total: dynamicAggregate(aggregate)['sum']!('views'),
+          }));
+
+        const sorted = [...grouped].sort((a, b) => Number(a.userId) - Number(b.userId));
+        // Scoped to the top 3 by views (50/40/30), user 1's two rows (10/20)
+        // are both excluded — user 1 disappears from the grouped result
+        // entirely. Unscoped, all three users would appear, user 1 as
+        // { count: 2, total: 30 }.
+        expect(sorted).toEqual([
+          { userId: 2, count: 2, total: 70 },
+          { userId: 3, count: 1, total: 50 },
+        ]);
+      });
+    });
+
+    it('orderBy()/take() after groupBy() pages the groups themselves', async () => {
+      await withPostsRuntime(async (_runtime, posts) => {
+        const grouped = await posts
+          .groupBy('userId')
+          .orderBy((group) => group.userId.desc())
+          .take(2)
+          .aggregate((aggregate) => ({ count: dynamicAggregate(aggregate)['count']!() }));
+
+        // Three distinct groups exist (userId 1, 2, 3); post-group take(2)
+        // returns only the top 2 by userId desc — if take() were dropped,
+        // all 3 groups would come back instead.
+        expect(grouped).toEqual([
+          { userId: 3, count: 1 },
+          { userId: 2, count: 2 },
+        ]);
+      });
+    });
+
+    it('post-group skip() without take() emits OFFSET with no LIMIT', async () => {
+      await withPostsRuntime(async (_runtime, posts) => {
+        const grouped = await posts
+          .groupBy('userId')
+          .orderBy((group) => group.userId.asc())
+          .skip(1)
+          .aggregate((aggregate) => ({ count: dynamicAggregate(aggregate)['count']!() }));
+
+        // Three distinct groups exist (userId 1, 2, 3); skip(1) with no take()
+        // drops the first group by userId and returns all-but-the-first —
+        // the same "SQLite has no standalone OFFSET" renderer path root-level
+        // skip() already exercises above, now pinned for the grouped select.
+        expect(grouped).toEqual([
+          { userId: 2, count: 2 },
+          { userId: 3, count: 1 },
+        ]);
+      });
+    });
+
+    it('pre-group and post-group pagination both apply, in the same chain', async () => {
+      await withPostsRuntime(async (_runtime, posts) => {
+        const grouped = await posts
+          .orderBy((post) => post.views.desc())
+          .take(4)
+          .groupBy('userId')
+          .orderBy((group) => group.userId.asc())
+          .take(2)
+          .aggregate((aggregate) => ({
+            count: dynamicAggregate(aggregate)['count']!(),
+            total: dynamicAggregate(aggregate)['sum']!('views'),
+          }));
+
+        // Pre-group take(4) drops user 1's lowest row (views 10), leaving
+        // user 1 with one row (views 20) instead of two — if that scoping
+        // didn't apply, user 1 would read { count: 2, total: 30 }.
+        // Post-group take(2) then keeps only the lowest 2 of the 3 userIds
+        // that remain — if that didn't apply, user 3 ({ count: 1, total: 50
+        // }) would appear as a third row.
+        expect(grouped).toEqual([
+          { userId: 1, count: 1, total: 20 },
+          { userId: 2, count: 2, total: 70 },
+        ]);
+      });
+    });
+  });
 });

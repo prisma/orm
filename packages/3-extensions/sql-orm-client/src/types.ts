@@ -118,6 +118,22 @@ export function emptyState(): CollectionState {
   };
 }
 
+/**
+ * `GroupedCollection`'s own post-group chain — orders/pages the grouped rows
+ * themselves. Kept separate from {@link CollectionState}: pre-group and
+ * post-group clauses are different clauses at different levels, and merging
+ * them into one state is the defect this shape exists to prevent.
+ */
+export interface GroupPagingState {
+  readonly orderBy: readonly OrderByItem[];
+  readonly limit: number | undefined;
+  readonly offset: number | undefined;
+}
+
+export function emptyGroupPagingState(): GroupPagingState {
+  return { orderBy: [], limit: undefined, offset: undefined };
+}
+
 export interface CollectionTypeState {
   readonly hasOrderBy: boolean;
   readonly hasWhere: boolean;

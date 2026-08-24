@@ -10,7 +10,7 @@ export function mapMigrateFailure(failure: MigrateFailure): CliStructuredError {
   }
   return errorRunnerFailed(failure.summary, {
     why: failure.why ?? 'Migration runner failed',
-    fix: 'Fix the issue and re-run `prisma-cli migrate --to <contract>` — previously applied migrations are preserved.',
+    fix: 'Fix the issue and re-run `{bin} db migrate --to <contract>` — previously applied migrations are preserved.',
     meta: failure.meta ?? {},
     ...ifDefined('cause', failure.cause),
   });

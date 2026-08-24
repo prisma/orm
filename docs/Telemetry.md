@@ -112,8 +112,8 @@ prisma telemetry status    # reports whether telemetry is on, why, the config pa
 Two env vars suppress telemetry without modifying any file on disk:
 
 ```bash
-PRISMA_NEXT_DISABLE_TELEMETRY=1 prisma migrate
-DO_NOT_TRACK=1 prisma migrate
+PRISMA_NEXT_DISABLE_TELEMETRY=1 prisma db migrate
+DO_NOT_TRACK=1 prisma db migrate
 ```
 
 - **`PRISMA_NEXT_DISABLE_TELEMETRY`** — disables telemetry when set to any truthy value. The values `""`, `"0"`, and `"false"` (case-insensitive) are treated as "not set" so an exported-but-blanked variable doesn't accidentally disable telemetry.

@@ -33,27 +33,27 @@ const DOCS_BASE_URL = `${DOCS_BASE}/`;
 
 const commands: Readonly<Record<string, AnyCommand>> = {
   'contract emit': contractEmitCommand,
+  'contract format': formatCommand,
   'contract infer': contractInferCommand,
   'db init': dbInitCommand,
+  'db migrate': migrateCommand,
   'db schema': dbSchemaCommand,
   'db sign': dbSignCommand,
   'db update': dbUpdateCommand,
   'db verify': dbVerifyCommand,
-  format: formatCommand,
-  init: initCommand,
   lsp: lspCommand,
-  migrate: migrateCommand,
   'migration check': migrationCheckCommand,
   'migration graph': migrationGraphCommand,
   'migration list': migrationListCommand,
   'migration log': migrationLogCommand,
   'migration new': migrationNewCommand,
   'migration plan': migrationPlanCommand,
+  'migration ref delete': refDeleteCommand,
+  'migration ref list': refListCommand,
+  'migration ref set': refSetCommand,
   'migration show': migrationShowCommand,
   'migration status': migrationStatusCommand,
-  'ref delete': refDeleteCommand,
-  'ref list': refListCommand,
-  'ref set': refSetCommand,
+  'orm init': initCommand,
 };
 
 /**
@@ -67,13 +67,8 @@ const commands: Readonly<Record<string, AnyCommand>> = {
 const redirects: readonly RedirectSpec[] = [
   {
     from: 'migration apply',
-    replacement: '{bin} migrate --to <contract>',
+    replacement: '{bin} db migrate --to <contract>',
     reason: 'Applying a migration is a move to a target contract, not a verb of its own.',
-  },
-  {
-    from: 'migration ref',
-    replacement: '{bin} ref set|list|delete',
-    reason: 'Refs are managed by their own command, for every space rather than migrations alone.',
   },
   {
     from: 'migration status',

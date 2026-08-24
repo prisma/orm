@@ -1,7 +1,7 @@
 {
   "name": "@internal/emitter",
   "private": true,
-  "version": "8.0.0-rc.4",
+  "version": "8.0.0-rc.5",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -15,20 +15,20 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.4",
-    "@internal/framework-components": "workspace:8.0.0-rc.4",
-    "@internal/operations": "workspace:8.0.0-rc.4",
-    "@internal/ts-render": "workspace:8.0.0-rc.4",
-    "@internal/utils": "workspace:8.0.0-rc.4",
+    "@internal/contract": "workspace:8.0.0-rc.5",
+    "@internal/framework-components": "workspace:8.0.0-rc.5",
+    "@internal/operations": "workspace:8.0.0-rc.5",
+    "@internal/ts-render": "workspace:8.0.0-rc.5",
+    "@internal/utils": "workspace:8.0.0-rc.5",
     "arktype": "^2.2.2",
     "prettier": "^3.9.6"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.4",
-    "@internal/publish-surface": "workspace:8.0.0-rc.4",
-    "@repo/tsconfig": "workspace:8.0.0-rc.4",
+    "@repo/test-utils": "workspace:8.0.0-rc.5",
+    "@internal/publish-surface": "workspace:8.0.0-rc.5",
+    "@repo/tsconfig": "workspace:8.0.0-rc.5",
     "@types/node": "catalog:",
-    "@repo/tsdown": "workspace:8.0.0-rc.4",
+    "@repo/tsdown": "workspace:8.0.0-rc.5",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

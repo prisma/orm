@@ -226,7 +226,7 @@ export function createDbSignCommand(
                     nextActions: [
                       runCommandAction(
                         'Bring the database up to the contract, then sign again',
-                        'prisma-cli db update',
+                        '{bin} db update',
                       ),
                     ],
                   }),

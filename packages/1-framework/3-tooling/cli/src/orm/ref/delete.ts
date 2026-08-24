@@ -31,7 +31,7 @@ export function createRefDeleteCommand(
       description:
         'Removes migrations/app/refs/<name>.json. The contract the ref pointed at\n' +
         'is untouched: a ref is a pointer, and its target survives the deletion.',
-      examples: ['ref delete staging', 'ref delete staging --json'],
+      examples: ['migration ref delete staging', 'migration ref delete staging --json'],
     },
     args: {
       positionals: {

@@ -58,22 +58,16 @@ function groupsFor(commands: MountedTree): Record<string, { readonly brief: stri
 }
 
 /**
- * The ORM family mounted the way the real host mounts it: the commands at the
- * top level and `init` under `orm` (the host reserves top-level `init` for
- * the compute config). Shared by every helper that builds a test CLI over the
- * family.
+ * The ORM family mounted the way the real host mounts it: every command at
+ * its family key, which spells the unified CLI's mount path. Shared by every
+ * helper that builds a test CLI over the family.
  */
 export function ormEngineMount(): {
   readonly commands: MountedTree;
   readonly groups: Record<string, { readonly brief: string }>;
 } {
   if (cachedMount === undefined) {
-    const commands = Object.fromEntries(
-      Object.entries(ormCommandFamily.commands).map(([path, command]) => [
-        path === 'init' ? 'orm init' : path,
-        command,
-      ]),
-    );
+    const commands = { ...ormCommandFamily.commands };
     cachedMount = { commands, groups: groupsFor(commands) };
   }
   return cachedMount;

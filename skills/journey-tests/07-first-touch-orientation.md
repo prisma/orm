@@ -5,7 +5,7 @@
 **Example app:** A Prisma Next project the user is encountering for the first time. Three flavours of this initial state should all pass:
 
 - Freshly scaffolded by `npx createprisma`.
-- Freshly scaffolded by `pnpm dlx prisma-next init` (run by the user themselves, but not yet connected to a DB).
+- Freshly scaffolded by `pnpm dlx @prisma/cli orm init` (run by the user themselves, but not yet connected to a DB).
 - An existing project (e.g. `examples/prisma-8-demo`) with no migration applied yet — simulate "just got handed a teammate's repo, haven't run anything against the DB yet".
 
 **Acceptance criterion:** This journey complements AC4 from `specs/usage-skill.spec.md` by covering the first-touch orientation entry point — the moment a user arrives at a PN project and asks what they can do with it. The `createprisma` tool produces one specific phrasing of this prompt; the journey tests the broader "first-time user, any arrival path" surface.
@@ -52,7 +52,7 @@ The journey should pass on each of:
 - Agent answers with a capability inventory ("Prisma Next lets you: define a schema, run migrations, write queries, …") instead of orienting the user on *their* project's contract and getting them running.
 - Agent opens with a CLI command table or feature list, before any move has been taken.
 - Agent skips naming the contract path and its role — the user finishes the interaction not knowing where their schema lives.
-- Agent skips reading project state and proposes greenfield-path commands (`prisma-next init`) against a directory that is already scaffolded.
+- Agent skips reading project state and proposes greenfield-path commands (`prisma orm init`) against a directory that is already scaffolded.
 - Agent dives into schema editing as the first move ("let me show you how to add a model") instead of using the scaffold's starter model.
 - Agent proposes a migration before the user has run one query against the existing scaffold.
 - Agent hand-edits `contract.json` or `contract.d.ts` to "speed things up".

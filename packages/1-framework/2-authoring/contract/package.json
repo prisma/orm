@@ -1,7 +1,7 @@
 {
   "name": "@internal/contract-authoring",
   "private": true,
-  "version": "8.0.0-rc.4",
+  "version": "8.0.0-rc.5",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,12 +16,12 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/framework-components": "workspace:8.0.0-rc.4",
-    "@internal/utils": "workspace:8.0.0-rc.4"
+    "@internal/framework-components": "workspace:8.0.0-rc.5",
+    "@internal/utils": "workspace:8.0.0-rc.5"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.4",
-    "@repo/tsdown": "workspace:8.0.0-rc.4",
+    "@repo/tsconfig": "workspace:8.0.0-rc.5",
+    "@repo/tsdown": "workspace:8.0.0-rc.5",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

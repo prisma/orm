@@ -1,7 +1,7 @@
 {
   "name": "@internal/vite-plugin-contract-emit",
   "private": true,
-  "version": "8.0.0-rc.4",
+  "version": "8.0.0-rc.5",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -19,15 +19,15 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/cli": "workspace:8.0.0-rc.4",
-    "@internal/config-loader": "workspace:8.0.0-rc.4",
-    "@internal/emitter": "workspace:8.0.0-rc.4",
+    "@internal/cli": "workspace:8.0.0-rc.5",
+    "@internal/config-loader": "workspace:8.0.0-rc.5",
+    "@internal/emitter": "workspace:8.0.0-rc.5",
     "pathe": "^2.0.3"
   },
   "devDependencies": {
-    "@internal/utils": "workspace:8.0.0-rc.4",
-    "@repo/tsconfig": "workspace:8.0.0-rc.4",
-    "@repo/tsdown": "workspace:8.0.0-rc.4",
+    "@internal/utils": "workspace:8.0.0-rc.5",
+    "@repo/tsconfig": "workspace:8.0.0-rc.5",
+    "@repo/tsdown": "workspace:8.0.0-rc.5",
     "@types/node": "catalog:",
     "tsdown": "catalog:",
     "typescript": "catalog:",

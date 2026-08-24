@@ -86,7 +86,7 @@ export function mergePackageScripts(
     }
     if (existingValue !== command) {
       warnings.push(
-        `package.json already has a "${name}" script with a different command — keeping yours.\n  existing: ${existingValue}\n  expected: ${command}\nIf you want the default, remove your "${name}" script and re-run \`init\`.`,
+        `package.json already has a "${name}" script with a different command — keeping yours.\n  existing: ${existingValue}\n  expected: ${command}\nIf you want the default, remove your "${name}" script and re-run \`orm init\`.`,
       );
     }
   }

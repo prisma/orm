@@ -8,19 +8,19 @@
   "scripts": {
     "emit": "prisma contract emit",
     "migration:plan": "prisma migration plan",
-    "migration:apply": "prisma migrate",
+    "migration:apply": "prisma db migrate",
     "db:seed": "tsx scripts/seed.ts",
     "test": "vitest run",
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-mongo": "workspace:8.0.0-rc.4",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.5",
     "mongodb": "catalog:"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.2.0",
-    "@repo/tsconfig": "workspace:8.0.0-rc.4",
+    "@repo/tsconfig": "workspace:8.0.0-rc.5",
     "@types/node": "catalog:",
     "mongodb-memory-server": "catalog:",
     "tsx": "catalog:",
@@ -28,5 +28,5 @@
     "vite": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.4"
+  "version": "8.0.0-rc.5"
 }

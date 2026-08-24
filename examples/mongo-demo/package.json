@@ -8,7 +8,7 @@
   "scripts": {
     "emit": "prisma contract emit",
     "migration:plan": "prisma migration plan",
-    "migration:apply": "prisma migrate",
+    "migration:apply": "prisma db migrate",
     "db:seed": "tsx scripts/seed.ts",
     "dev:api": "tsx src/server.ts",
     "dev": "vite",
@@ -17,16 +17,16 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-extension-middleware-cache": "workspace:8.0.0-rc.4",
-    "@prisma/orm-mongo": "workspace:8.0.0-rc.4",
+    "@prisma/orm-extension-middleware-cache": "workspace:8.0.0-rc.5",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.5",
     "mongodb": "catalog:",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
   },
   "devDependencies": {
     "@prisma/cli-engine": "0.2.0",
-    "@repo/test-utils": "workspace:8.0.0-rc.4",
-    "@repo/tsconfig": "workspace:8.0.0-rc.4",
+    "@repo/test-utils": "workspace:8.0.0-rc.5",
+    "@repo/tsconfig": "workspace:8.0.0-rc.5",
     "@types/node": "catalog:",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
@@ -38,5 +38,5 @@
     "vite": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.4"
+  "version": "8.0.0-rc.5"
 }

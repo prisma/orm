@@ -78,7 +78,7 @@ interface MigrateDocument {
 
 const STATUS_ACTION = runCommandAction(
   'Check every space against the database',
-  'prisma-cli migration status',
+  '{bin} migration status',
 );
 
 /**
@@ -207,11 +207,11 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         'target a specific contract (hash, ref name, or migration directory) and\n' +
         '--show for a read-only preview of the route it would take.',
       examples: [
-        'migrate',
-        'migrate --db $DATABASE_URL',
-        'migrate --to production',
-        'migrate --show',
-        'migrate --show --from @contract --to production',
+        'db migrate',
+        'db migrate --db $DATABASE_URL',
+        'db migrate --to production',
+        'db migrate --show',
+        'db migrate --show --from @contract --to production',
       ],
     },
     args: {
@@ -289,7 +289,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         config: ctx.config,
         cwd: ctx.cwd,
         db: args.flags.db,
-        commandName: 'migrate',
+        commandName: 'db migrate',
         createClient,
       });
       if (!prepared.ok) {

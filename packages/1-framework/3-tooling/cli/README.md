@@ -1014,12 +1014,12 @@ prisma migration status [--db <url>] [--ref <name>] [--config <path>] [--json] [
 
 **Branched graphs:** When the migration graph has multiple branches (divergence), status reports an `AMBIGUOUS_TARGET` error with the divergence point and branch details. Use `--ref` to target a specific branch.
 
-### `prisma migrate`
+### `prisma db migrate`
 
 Apply planned migrations to the database. Executes previously planned migrations (created by `migration plan`). Compares the database marker against the migration graph to determine which migrations are pending, then executes them sequentially. Each migration runs in its own transaction. Does not plan new migrations — run `migration plan` first.
 
 ```bash
-prisma migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
+prisma db migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v] [-q] [--color/--no-color]
 ```
 
 **Options:**
@@ -1041,11 +1041,11 @@ prisma migrate [--db <url>] [--to <contract>] [--config <path>] [--json] [-v] [-
 7. Each migration runs in its own transaction with prechecks, postchecks, and idempotency checks enabled
 8. After each migration, the runner runs the migration's post-checks and verifies the resulting state matches the target contract's storage hash, then updates the marker/ledger
 
-**Rollback workflow:** When no on-disk edge reaches the target (for example `migrate --to <migration-dir>^`), the command refuses with `MIGRATION.PATH_UNREACHABLE` and suggests planning the missing edge with `migration plan --from <current> --to <target> --name <slug>`, then re-running `migrate --to <target>`. No contract-source edit is required.
+**Rollback workflow:** When no on-disk edge reaches the target (for example `db migrate --to <migration-dir>^`), the command refuses with `MIGRATION.PATH_UNREACHABLE` and suggests planning the missing edge with `migration plan --from <current> --to <target> --name <slug>`, then re-running `db migrate --to <target>`. No contract-source edit is required.
 
 **Config requirements:** Requires `driver` and `db.connection` (or `--db`). `migrations.dir` is optional and defaults to `migrations/`.
 
-**Resume semantics:** If a migration fails, previously applied migrations are preserved. Re-running `migrate` resumes from the last successful migration.
+**Resume semantics:** If a migration fails, previously applied migrations are preserved. Re-running `db migrate` resumes from the last successful migration.
 
 **Ref-based routing:** With `--ref`, apply targets the ref's hash instead of the contract hash. This enables multi-environment workflows where staging and production track different points in the migration graph.
 
@@ -1069,9 +1069,9 @@ The scaffolded `migration.ts` calls `MigrationCLI.run(import.meta.url, ...)` fro
 Manage named refs in `migrations/refs.json`. Refs map logical environment names (e.g., `staging`, `production`) to contract hashes, enabling multi-environment migration workflows where different environments track different points in the migration graph.
 
 ```bash
-prisma ref set <name> <contract>          # Set a ref to a contract (hash, ref, dir, ...)
-prisma ref list                           # List all refs (use `ref list` and filter for one ref)
-prisma ref delete <name>                  # Delete a ref
+prisma migration ref set <name> <contract>          # Set a ref to a contract (hash, ref, dir, ...)
+prisma migration ref list                           # List all refs (use `migration ref list` and filter for one ref)
+prisma migration ref delete <name>                  # Delete a ref
 ```
 
 **Options (all subcommands):**

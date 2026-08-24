@@ -4,8 +4,10 @@ import {
   type BinaryExpr,
   CaseExpr,
   CastExpr,
+  ColumnRef,
   FunctionCallExpr,
   LiteralExpr,
+  OrderByItem,
 } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { createCollectionFor } from './collection-fixtures';
@@ -197,9 +199,96 @@ describe('GroupedCollection', () => {
 
     expect(typeof grouped['having']).toBe('function');
     expect(typeof grouped['aggregate']).toBe('function');
+    expect(typeof grouped['take']).toBe('function');
+    expect(typeof grouped['skip']).toBe('function');
+    expect(typeof grouped['orderBy']).toBe('function');
     expect(grouped['all']).toBeUndefined();
     expect(grouped['first']).toBeUndefined();
     expect(grouped['include']).toBeUndefined();
     expect(grouped['select']).toBeUndefined();
+  });
+
+  describe('post-group take() / skip() / orderBy()', () => {
+    it('take() applies LIMIT to the grouped select', async () => {
+      const { collection, runtime } = createCollectionFor('Post');
+      runtime.setNextResults([[{ user_id: 1, count: 2 }]]);
+
+      await collection
+        .groupBy('userId')
+        .orderBy((group) => group.userId.asc())
+        .take(5)
+        .aggregate((aggregate) => ({ count: aggregate.count() }));
+
+      const ast = runtime.executions[0]?.plan.ast;
+      if (!isSelectAst(ast)) {
+        throw new Error('Expected the grouped execution plan to be a select SQL query plan');
+      }
+      expect(ast.limit).toBe(5);
+    });
+
+    it('skip() applies OFFSET to the grouped select', async () => {
+      const { collection, runtime } = createCollectionFor('Post');
+      runtime.setNextResults([[{ user_id: 1, count: 2 }]]);
+
+      await collection
+        .groupBy('userId')
+        .orderBy((group) => group.userId.asc())
+        .skip(3)
+        .aggregate((aggregate) => ({ count: aggregate.count() }));
+
+      const ast = runtime.executions[0]?.plan.ast;
+      if (!isSelectAst(ast)) {
+        throw new Error('Expected the grouped execution plan to be a select SQL query plan');
+      }
+      expect(ast.offset).toBe(3);
+    });
+
+    it('orderBy() orders the grouped select by the group key', async () => {
+      const { collection, runtime } = createCollectionFor('Post');
+      runtime.setNextResults([[{ user_id: 1, count: 2 }]]);
+
+      await collection
+        .groupBy('userId')
+        .orderBy((group) => group.userId.desc())
+        .aggregate((aggregate) => ({ count: aggregate.count() }));
+
+      const ast = runtime.executions[0]?.plan.ast;
+      if (!isSelectAst(ast)) {
+        throw new Error('Expected the grouped execution plan to be a select SQL query plan');
+      }
+      expect(ast.orderBy).toEqual([OrderByItem.desc(ColumnRef.of('posts', 'user_id'))]);
+    });
+
+    it('repeated orderBy() calls append, left-to-right', async () => {
+      const { collection, runtime } = createCollectionFor('Post');
+      runtime.setNextResults([[{ user_id: 1, count: 2 }]]);
+
+      await collection
+        .groupBy('userId')
+        .orderBy((group) => group.userId.asc())
+        .orderBy((group) => group.userId.desc())
+        .aggregate((aggregate) => ({ count: aggregate.count() }));
+
+      const ast = runtime.executions[0]?.plan.ast;
+      if (!isSelectAst(ast)) {
+        throw new Error('Expected the grouped execution plan to be a select SQL query plan');
+      }
+      expect(ast.orderBy).toEqual([
+        OrderByItem.asc(ColumnRef.of('posts', 'user_id')),
+        OrderByItem.desc(ColumnRef.of('posts', 'user_id')),
+      ]);
+    });
+
+    // The type gate refuses an empty selector list at compile time
+    // (grouped-pagination-gate.test-d.ts); this covers a plain-JS caller
+    // with no types to catch it. An empty orderBy() must not silently
+    // satisfy the "has an order" gate — it orders by nothing.
+    it('rejects an empty selector list at runtime', () => {
+      const { collection } = createCollectionFor('Post');
+
+      expect(() => collection.groupBy('userId').orderBy([] as never)).toThrow(
+        'orderBy() for model "Post" requires at least one selector',
+      );
+    });
   });
 });

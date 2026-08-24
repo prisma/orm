@@ -45,7 +45,7 @@ describe('Migration Errors', () => {
       why: 'No migration.ts file was found at "/tmp/migrations/20260101_x"',
       meta: { dir: '/tmp/migrations/20260101_x' },
     });
-    expect(error.fix).toContain('prisma migration new');
+    expect(error.fix).toContain('{bin} migration new');
     expect(error.toEnvelope().code).toBe('MIGRATION.FILE_MISSING');
   });
 

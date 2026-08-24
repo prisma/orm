@@ -75,7 +75,7 @@ describe('the orm command family', () => {
     expect(ormCommandFamily.docsBaseUrl?.endsWith('/')).toBe(true);
   });
 
-  it('retires the two removed verbs and the four removed status flags, naming the binary as {bin}', () => {
+  it('retires the removed verb and the four removed status flags, naming the binary as {bin}', () => {
     expect(
       ormCommandFamily.redirects.map(({ from, flag, replacement }) => ({
         from,
@@ -86,9 +86,8 @@ describe('the orm command family', () => {
       {
         from: 'migration apply',
         flag: undefined,
-        replacement: '{bin} migrate --to <contract>',
+        replacement: '{bin} db migrate --to <contract>',
       },
-      { from: 'migration ref', flag: undefined, replacement: '{bin} ref set|list|delete' },
       { from: 'migration status', flag: 'graph', replacement: '{bin} migration graph' },
       {
         from: 'migration status',
@@ -161,7 +160,7 @@ describe('a retired invocation', () => {
             {
               kind: 'run-command',
               label: 'Use the replacement',
-              command: 'prisma-test migrate --to <contract>',
+              command: 'prisma-test db migrate --to <contract>',
             },
           ],
         },

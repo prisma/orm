@@ -300,7 +300,7 @@ describe('migration status', () => {
     expect(run.presented?.presentation.human.at(-1)).toEqual({
       kind: 'summary',
       status: 'warn',
-      text: `1 pending — run \`prisma-cli migrate --to ${HASH_HEAD.slice(0, 12)}\``,
+      text: `1 pending — run \`{bin} db migrate --to ${HASH_HEAD.slice(0, 12)}\``,
     });
   });
 

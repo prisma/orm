@@ -269,7 +269,7 @@ The callback returns whatever you return from it — the transaction wrapper pas
 
 ## Workflow — Switch between Postgres, SQLite, and Mongo
 
-The concept: the façade selection is baked into `db.ts` (`@internal/postgres`, `@internal/sqlite`, or `@internal/mongo`) and `prisma.config.ts` (which `defineConfig` you import from). To switch a project's target, re-run `prisma-next init` in the same directory and pick the other target — the init flow detects the existing scaffold and prompts to reinit (`--force` skips the prompt). PN re-scaffolds `prisma.config.ts` and `db.ts` for the new façade. The contract source needs to be re-authored for the new target's idioms (Mongo expresses nested documents; Postgres/SQLite express relations).
+The concept: the façade selection is baked into `db.ts` (`@internal/postgres` or `@internal/mongo`) and `prisma.config.ts` (which `defineConfig` you import from). To switch a project's target, re-run `prisma orm init` in the same directory and pick the other target — the init flow detects the existing scaffold and prompts to reinit (non-interactive runs grant the consent with `--confirm <directory name>`). PN re-scaffolds `prisma.config.ts` and `db.ts` for the new façade. The contract source needs to be re-authored for the new target's idioms (Mongo expresses nested documents; Postgres expresses relations).
 
 After the switch (Mongo):
 
@@ -299,10 +299,10 @@ The `db.sql` / `db.orm` surfaces stay the same in name; the operators each surfa
 
 ## Workflow — Build-system / dev-server integration
 
-If you want contract artefacts to re-emit automatically while the dev server is running (instead of running `prisma-next contract emit` by hand each time the contract source changes), reach for the build-tool plugin from `references/build.md`:
+If you want contract artefacts to re-emit automatically while the dev server is running (instead of running `prisma contract emit` by hand each time the contract source changes), reach for the build-tool plugin from `references/build.md`:
 
 - **Vite**: install `@internal/vite-plugin-contract-emit` and register `prismaVitePlugin('prisma.config.ts')` in `vite.config.ts`.
-- **Next.js, Webpack, esbuild, Rollup, Turbopack**: no first-party plugin yet — the workaround is a `prebuild` script that runs `prisma-next contract emit`. See `references/build.md` for the walkthrough.
+- **Next.js, Webpack, esbuild, Rollup, Turbopack**: no first-party plugin yet — the workaround is a `prebuild` script that runs `prisma contract emit`. See `references/build.md` for the walkthrough.
 
 The runtime side (this skill) is the same regardless: `db.ts` reads `contract.json` + `contract.d.ts` from disk. The build-system plugin's job is to keep those files current during development.
 
@@ -326,7 +326,7 @@ The runtime side (this skill) is the same regardless: `db.ts` reads `contract.js
 
 ## Reference Files
 
-This skill is intentionally body-only; `prisma-next init --help`, the `defineConfig` factory in `packages/3-extensions/postgres/src/config/define-config.ts`, the `postgres()` factory in `packages/3-extensions/postgres/src/runtime/postgres.ts`, and the middleware sources in `packages/2-sql/5-runtime/src/middleware/{lints,budgets}.ts` are the authoritative surfaces for option-level detail. When in doubt, read the source.
+This skill is intentionally body-only; `prisma orm init --help`, the `defineConfig` factory in `packages/3-extensions/postgres/src/config/define-config.ts`, the `postgres()` factory in `packages/3-extensions/postgres/src/runtime/postgres.ts`, and the middleware sources in `packages/2-sql/5-runtime/src/middleware/{lints,budgets}.ts` are the authoritative surfaces for option-level detail. When in doubt, read the source.
 
 ## Checklist
 

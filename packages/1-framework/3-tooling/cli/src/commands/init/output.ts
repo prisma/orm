@@ -83,7 +83,7 @@ export function buildNextSteps(options: {
   /**
    * Whether the project-level Prisma Next skills install actually ran
    * and succeeded during this `init`. When false (the user passed
-   * `--no-skill`, so the install was skipped), the
+   * `--skip-skills`, so the install was skipped), the
    * "registered with your agent runtime" step is omitted — the skip is
    * already surfaced in the warnings array with a manual-install hint.
    */

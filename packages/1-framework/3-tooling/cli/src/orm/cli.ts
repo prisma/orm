@@ -35,12 +35,12 @@ import { resolveTelemetryHooks } from './telemetry/reporting';
 
 /**
  * This repo's stand-in for the unified Prisma CLI: it mounts the ORM command
- * family exactly the way the real host does — the commands at the top level
- * and `init` under `orm` (the host reserves top-level `init` for compute) —
- * same command paths, same `prisma.config.ts`, so examples and e2e tests
- * exercise the commands as users run them. The real host lives in the
- * prisma-cli repo and consumes {@link ormCommandFamily} from this package's
- * exports.
+ * family exactly the way the real host does — every command at its family
+ * key, which spells the unified CLI's mount path (`contract format`,
+ * `db migrate`, `migration ref …`, `orm init`) — same command paths, same
+ * `prisma.config.ts`, so examples and e2e tests exercise the commands as
+ * users run them. The real host lives in the prisma-cli repo and consumes
+ * {@link ormCommandFamily} from this package's exports.
  */
 export const BIN_NAME = 'prisma';
 
@@ -57,9 +57,8 @@ export const BIN_GROUPS = {
   orm: {
     brief: 'Initialize a Prisma ORM project',
     description:
-      'Project initialization for the ORM. The other ORM commands mount at the\n' +
-      'top level; only init lives here, because the host reserves the top-level\n' +
-      'init for the compute config.',
+      'Project initialization for the ORM. The other ORM commands mount under\n' +
+      'their workflow groups (contract, db, migration); only init lives here.',
   },
   contract: {
     brief: 'Contract management commands',
@@ -80,7 +79,7 @@ export const BIN_GROUPS = {
       'Plan, apply, and scaffold on-disk migration packages. Migrations are\n' +
       'contract-to-contract edges stored as versioned directories under migrations/.',
   },
-  ref: {
+  'migration ref': {
     brief: 'Named pointers at contracts',
     description:
       'Manage the named refs under migrations/app/refs/. A ref maps a logical\n' +
@@ -97,27 +96,27 @@ export const BIN_GROUPS = {
 export function createBinCommands(createClient: CreateControlClient): MountedTree {
   return {
     'contract emit': contractEmitCommand,
+    'contract format': formatCommand,
     'contract infer': contractInferCommand,
     'db init': createDbInitCommand(createClient),
+    'db migrate': createMigrateCommand(createClient),
     'db schema': createDbSchemaCommand(createClient),
     'db sign': createDbSignCommand(createClient),
     'db update': createDbUpdateCommand(createClient),
     'db verify': createDbVerifyCommand(createClient),
-    format: formatCommand,
-    'orm init': initCommand,
     lsp: lspCommand,
-    migrate: createMigrateCommand(createClient),
     'migration check': migrationCheckCommand,
     'migration graph': migrationGraphCommand,
     'migration list': migrationListCommand,
     'migration log': migrationLogCommand,
     'migration new': migrationNewCommand,
     'migration plan': migrationPlanCommand,
+    'migration ref delete': refDeleteCommand,
+    'migration ref list': refListCommand,
+    'migration ref set': refSetCommand,
     'migration show': migrationShowCommand,
     'migration status': migrationStatusCommand,
-    'ref delete': refDeleteCommand,
-    'ref list': refListCommand,
-    'ref set': refSetCommand,
+    'orm init': initCommand,
     ...telemetry.commands,
   };
 }

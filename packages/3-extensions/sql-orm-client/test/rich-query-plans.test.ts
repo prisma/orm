@@ -20,6 +20,7 @@ import {
   compileUpdateReturning,
   compileUpsertReturning,
 } from '../src/query-plan';
+import { emptyState } from '../src/types';
 import { baseContract, createCollectionFor } from './collection-fixtures';
 import { getTestAggregates } from './helpers';
 
@@ -117,7 +118,7 @@ describe('SQL ORM rich AST query plans', () => {
       getTestAggregates(),
       'public',
       'posts',
-      [],
+      emptyState(),
       ['user_id'],
       {
         postCount: { kind: 'aggregate', fn: 'count' },

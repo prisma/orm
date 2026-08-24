@@ -24,8 +24,12 @@ import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst } from './query-plan-meta';
 import { buildAggregateInput, buildMtiJoins, buildStateWhere } from './query-plan-source';
 import { tableSourceForContract } from './storage-resolution';
-import type { AggregateSelector, CollectionState } from './types';
-import { combineWhereExprs } from './where-utils';
+import {
+  type AggregateSelector,
+  type CollectionState,
+  emptyGroupPagingState,
+  type GroupPagingState,
+} from './types';
 
 function toAggregateProjection(
   contract: Contract<SqlStorage>,
@@ -186,8 +190,9 @@ function aggregateInputColumns(
   tableName: string,
   entries: ReadonlyArray<[string, AggregateSelector<unknown>]>,
   orderBy: ReadonlyArray<OrderByItem> | undefined,
+  groupByColumns: ReadonlyArray<string> = [],
 ): ProjectionItem[] {
-  const columns = new Set<string>();
+  const columns = new Set<string>(groupByColumns);
   for (const [, selector] of entries) {
     if (selector.column !== undefined) {
       columns.add(selector.column);
@@ -300,10 +305,12 @@ export function compileGroupedAggregate(
   aggregates: SqlAggregateDescriptorRegistry,
   namespaceId: string,
   tableName: string,
-  filters: readonly AnyExpression[],
+  preGroupState: CollectionState,
   groupByColumns: readonly string[],
   aggregateSpec: Record<string, AggregateSelector<unknown>>,
   havingExpr: AnyExpression | undefined,
+  modelName?: string,
+  postGroup: GroupPagingState = emptyGroupPagingState(),
 ): SqlQueryPlan<Record<string, unknown>> {
   if (groupByColumns.length === 0) {
     throw ormError('ORM.GROUP_BY_FIELD_MISSING', 'groupBy() requires at least one field', {
@@ -318,6 +325,10 @@ export function compileGroupedAggregate(
       'groupBy().aggregate() requires at least one aggregation selector',
       { meta: { method: 'groupBy.aggregate', namespaceId, tableName } },
     );
+  }
+
+  if (preGroupState.distinctOn !== undefined && preGroupState.distinctOn.length > 0) {
+    assertDistinctOnCapability(contract, 'distinctOn');
   }
 
   const projection: ProjectionItem[] = [
@@ -340,16 +351,58 @@ export function compileGroupedAggregate(
     }),
   ];
 
-  let ast = SelectAst.from(tableSourceForContract(contract, namespaceId, tableName))
-    .withProjection(projection)
-    .withGroupBy(groupByColumns.map((column) => ColumnRef.of(tableName, column)));
-  const where = combineWhereExprs(filters);
-  if (where) {
-    ast = ast.withWhere(where);
+  const hasPagination = preGroupState.limit !== undefined || preGroupState.offset !== undefined;
+  const hasDistinct =
+    (preGroupState.distinct !== undefined && preGroupState.distinct.length > 0) ||
+    (preGroupState.distinctOn !== undefined && preGroupState.distinctOn.length > 0);
+  const needsInputSelect = hasPagination || hasDistinct;
+
+  let ast: SelectAst;
+  if (needsInputSelect) {
+    const { source } = buildAggregateInput(
+      contract,
+      namespaceId,
+      tableName,
+      preGroupState,
+      modelName,
+      aggregateInputColumns(tableName, entries, preGroupState.orderBy, groupByColumns),
+    );
+    ast = SelectAst.from(source)
+      .withProjection(projection)
+      .withGroupBy(groupByColumns.map((column) => ColumnRef.of(tableName, column)));
+  } else {
+    const polyInfo = modelName
+      ? resolvePolymorphismInfo(contract, namespaceId, modelName)
+      : undefined;
+    const variantJoins =
+      polyInfo && polyInfo.mtiVariants.length > 0
+        ? buildMtiJoins(contract, namespaceId, polyInfo, preGroupState.variantName, undefined).joins
+        : [];
+
+    ast = SelectAst.from(tableSourceForContract(contract, namespaceId, tableName))
+      .withProjection(projection)
+      .withGroupBy(groupByColumns.map((column) => ColumnRef.of(tableName, column)));
+    if (variantJoins.length > 0) {
+      ast = ast.withJoins(variantJoins);
+    }
+    const where = buildStateWhere(contract, tableName, preGroupState, { namespaceId });
+    if (where) {
+      ast = ast.withWhere(where);
+    }
   }
 
   if (havingExpr) {
     ast = ast.withHaving(validateGroupedHavingExpr(havingExpr));
+  }
+
+  if (postGroup.orderBy.length > 0) {
+    ast = ast.withOrderBy(postGroup.orderBy);
+  }
+  if (postGroup.limit !== undefined) {
+    ast = ast.withLimit(postGroup.limit);
+  }
+  if (postGroup.offset !== undefined) {
+    ast = ast.withOffset(postGroup.offset);
   }
 
   const { params } = deriveParamsFromAst(ast);

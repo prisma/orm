@@ -44,7 +44,7 @@ export function mapDbInitFailure(failure: DbInitFailure): CliStructuredError {
       `Existing database signature does not match plan destination.${markerMismatchDetail(failure)}`,
       {
         why: 'Database has an existing signature (marker) that does not match the target contract',
-        fix: 'If bootstrapping, drop/reset the database then re-run `prisma-cli db init`; otherwise reconcile schema/marker using your migration workflow',
+        fix: 'If bootstrapping, drop/reset the database then re-run `{bin} db init`; otherwise reconcile schema/marker using your migration workflow',
         meta: {
           ...ifDefined('markerStorageHash', failure.marker?.storageHash),
           ...ifDefined('destinationStorageHash', failure.destination?.storageHash),
@@ -63,8 +63,8 @@ export function mapDbInitFailure(failure: DbInitFailure): CliStructuredError {
     const fix =
       runnerCode === 'MIGRATION.LEGACY_MARKER_SHAPE'
         ? // biome-ignore lint/plugin/no-family-vocabulary: names the object to drop per target on purpose — user-facing remediation text, not a framework type
-          'Legacy marker-table shape detected. Drop `prisma_contract.marker` (Postgres) or `_prisma_marker` (SQLite) and re-run `prisma-cli db init` to recreate it with the current per-space schema.'
-        : 'Fix the schema mismatch (db init is additive-only), or drop/reset the database and re-run `prisma-cli db init`';
+          'Legacy marker-table shape detected. Drop `prisma_contract.marker` (Postgres) or `_prisma_marker` (SQLite) and re-run `{bin} db init` to recreate it with the current per-space schema.'
+        : 'Fix the schema mismatch (db init is additive-only), or drop/reset the database and re-run `{bin} db init`';
     return errorRunnerFailed(failure.summary, {
       why: failure.why ?? 'Migration runner failed',
       fix,

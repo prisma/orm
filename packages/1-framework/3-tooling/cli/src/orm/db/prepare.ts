@@ -47,7 +47,7 @@ export async function readContractDocument(
         missing
           ? errorFileNotFound(contractPath, {
               why: `Contract file not found at ${contractPath}`,
-              fix: 'Run `prisma-cli contract emit` to generate contract.json, or update `contract.output` in prisma.config.ts',
+              fix: 'Run `{bin} contract emit` to generate contract.json, or update `contract.output` in prisma.config.ts',
             })
           : errorUnexpected(error instanceof Error ? error.message : String(error), {
               why: `Failed to read contract file: ${error instanceof Error ? error.message : String(error)}`,

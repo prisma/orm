@@ -160,7 +160,7 @@ export async function readContractEnvelope(config: {
   if (typeof storageHash !== 'string') {
     throw new CliStructuredError(
       'CONTRACT.VALIDATION_FAILED',
-      `Contract at ${relative(process.cwd(), contractPath)} is missing a valid storage.storageHash. Run \`prisma-cli contract emit\` to regenerate.`,
+      `Contract at ${relative(process.cwd(), contractPath)} is missing a valid storage.storageHash. Run \`{bin} contract emit\` to regenerate.`,
       { where: { path: contractPath } },
     );
   }

@@ -14,7 +14,7 @@ A topic branch with 2 pending migrations relative to a configured `staging` ref.
 
 ## Expected agent behavior
 
-- [ ] Confirms a `staging` ref exists (`ref list`).
+- [ ] Confirms a `staging` ref exists (`migration ref list`).
 - [ ] Runs `migration status --to staging --db <url>`.
 - [ ] Surfaces the 2 pending migrations with their slugs, `from` / `to` hashes.
 - [ ] Flags any data-transform steps or destructive ops.

@@ -2,8 +2,10 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import type { PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
+import { expectDefined } from '@repo/test-utils/typed-expectations';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { DEFAULT_SKILL_SOURCES } from '../../src/commands/init/skill-sources';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
@@ -154,11 +156,16 @@ describe('init scaffold', () => {
 
   describe('the files it removes', () => {
     it(
-      'deletes a retired agent-skill directory even on a first run',
+      'deletes a retired agent-skill directory even on a first run, leaving installed skills alone under --skip-skills',
       async () => {
         const retired = join(projectDir, '.claude/skills/prisma-next-queries');
         mkdirSync(retired, { recursive: true });
         writeFileSync(join(retired, 'SKILL.md'), '# stale\n', 'utf-8');
+        const [firstSource] = DEFAULT_SKILL_SOURCES;
+        expectDefined(firstSource);
+        const installed = join(projectDir, `.agents/skills/${firstSource.skill}`);
+        mkdirSync(installed, { recursive: true });
+        writeFileSync(join(installed, 'SKILL.md'), '# installed\n', 'utf-8');
 
         const run = await harness().run(scaffoldArgv(...SKIP_ALL), { cwd: projectDir });
 
@@ -167,6 +174,7 @@ describe('init scaffold', () => {
           filesDeleted: ['.claude/skills/prisma-next-queries'],
         });
         expect(existsSync(retired)).toBe(false);
+        expect(existsSync(join(installed, 'SKILL.md'))).toBe(true);
       },
       timeouts.coldTransformImport,
     );

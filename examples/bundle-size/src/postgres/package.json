@@ -2,9 +2,9 @@
   "name": "bundle-size-postgres",
   "private": true,
   "type": "module",
-  "version": "8.0.0-rc.4",
+  "version": "8.0.0-rc.5",
   "description": "The Postgres half of the bundle-size example. Its own manifest because emission reads the nearest one to decide which package names generated files import, and this example measures two databases that must not name each other's facade.",
   "dependencies": {
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.4"
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.5"
   }
 }

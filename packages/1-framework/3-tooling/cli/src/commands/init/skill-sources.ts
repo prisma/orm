@@ -52,7 +52,7 @@ export const DEFAULT_SKILL_SOURCES: readonly SkillSource[] = [
  * `#ref` fragment is dropped — local-path mode in upstream's CLI does
  * not accept refs, and the local clone has whatever content the test
  * checked into it anyway. When set to anything else (e.g. a fork name
- * `myuser/prisma-next`), the ref policy is preserved.
+ * `myuser/prisma`), the ref policy is preserved.
  */
 function resolveAgentSkillBase(env: SkillInstallEnv): string {
   const override = env['PRISMA_NEXT_SKILLS_BASE']?.trim();
@@ -211,8 +211,16 @@ export const AGENT_SKILL_ROOTS = ['.agents/skills', '.claude/skills', '.windsurf
 /**
  * Every directory a retired per-workflow skill may occupy in a
  * consumer project. Init deletes each (recursively) before running the
- * skill install.
+ * skill install. Names that are also in `DEFAULT_SKILL_SOURCES` are
+ * excluded so a list mistake can never delete a skill init installs
+ * (or one `--skip-skills` preserves) — see TML-2637.
  */
-export function legacySkillDirs(): readonly string[] {
-  return AGENT_SKILL_ROOTS.flatMap((root) => RETIRED_SKILL_NAMES.map((name) => `${root}/${name}`));
+export function legacySkillDirs(
+  retired: readonly string[] = RETIRED_SKILL_NAMES,
+  sources: readonly SkillSource[] = DEFAULT_SKILL_SOURCES,
+): readonly string[] {
+  const installed = new Set<string>(sources.map((source) => source.skill));
+  return AGENT_SKILL_ROOTS.flatMap((root) =>
+    retired.filter((name) => !installed.has(name)).map((name) => `${root}/${name}`),
+  );
 }

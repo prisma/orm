@@ -123,7 +123,7 @@ export async function probeServerVersion(
         minVersion,
         meetsMinimum: null,
         cause: err.message,
-        message: `Skipped --probe-db: ${err.message}. (Run with install enabled, or install the driver yourself, then re-run \`prisma-cli init --probe-db\`.)`,
+        message: `Skipped --probe-db: ${err.message}. (Run with install enabled, or install the driver yourself, then re-run \`prisma orm init --probe-db\`.)`,
       };
     }
     const cause = redactDatabaseUrlSecrets(causeMessage(err));

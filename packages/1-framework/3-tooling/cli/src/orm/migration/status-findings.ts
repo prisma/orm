@@ -18,7 +18,7 @@ export interface StatusFinding {
   readonly diagnostic: Diagnostic;
 }
 
-const EMIT_CONTRACT = runCommandAction('Regenerate the contract', 'prisma-cli contract emit');
+const EMIT_CONTRACT = runCommandAction('Regenerate the contract', '{bin} contract emit');
 
 export function contractUnreadableFinding(reason: string): StatusFinding {
   const message = `Could not read contract: ${reason}`;
@@ -27,7 +27,7 @@ export function contractUnreadableFinding(reason: string): StatusFinding {
       code: 'CONTRACT.UNREADABLE',
       severity: 'warn',
       message,
-      hints: ["Run 'prisma-cli contract emit' to generate a valid contract"],
+      hints: ["Run '{bin} contract emit' to generate a valid contract"],
     },
     diagnostic: {
       code: 'CONTRACT.UNREADABLE',
@@ -42,8 +42,8 @@ export function contractUnreadableFinding(reason: string): StatusFinding {
 export function markerNotInHistoryFinding(space: string): StatusFinding {
   const message = `Database was updated outside the migration system (marker for space "${space}" does not match any migration)`;
   const hints = [
-    "Run 'prisma-cli db sign' to overwrite the marker if the database already matches the contract",
-    "Run 'prisma-cli db update' to push the current contract to the database",
+    "Run '{bin} db sign' to overwrite the marker if the database already matches the contract",
+    "Run '{bin} db update' to push the current contract to the database",
   ];
   return {
     document: { code: 'MIGRATION.MARKER_NOT_IN_HISTORY', severity: 'warn', message, hints },
@@ -56,9 +56,9 @@ export function markerNotInHistoryFinding(space: string): StatusFinding {
       nextActions: [
         runCommandAction(
           'Overwrite the marker if the database already matches the contract',
-          'prisma-cli db sign',
+          '{bin} db sign',
         ),
-        runCommandAction('Or push the current contract to the database', 'prisma-cli db update'),
+        runCommandAction('Or push the current contract to the database', '{bin} db update'),
       ],
     },
   };
@@ -85,9 +85,7 @@ export function missingInvariantsFinding(inputs: {
         inputs.refName === undefined
           ? 'The database marker does not carry every invariant the target requires.'
           : `The database marker does not carry every invariant \`${inputs.refName}\` requires.`,
-      nextActions: [
-        runCommandAction('Apply the migrations that provide them', 'prisma-cli migrate'),
-      ],
+      nextActions: [runCommandAction('Apply the migrations that provide them', '{bin} db migrate')],
       meta: { invariants: [...inputs.missing], ...ifDefined('ref', inputs.refName) },
     },
   };

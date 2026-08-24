@@ -13,7 +13,7 @@
 - [ ] Runs `contract emit`.
 - [ ] Runs `migration plan --name rename-user-email`.
 - [ ] Runs `migration show <slug>` and confirms the plan is a `DROP COLUMN` + `ADD COLUMN` — the destructive shape the user was warned about.
-- [ ] Walks the user through hand-editing `migration.ts` to rewrite the destructive op as a `RENAME COLUMN`, then `node migrations/app/<dir>/migration.ts` to self-emit and `migrate`.
+- [ ] Walks the user through hand-editing `migration.ts` to rewrite the destructive op as a `RENAME COLUMN`, then `node migrations/app/<dir>/migration.ts` to self-emit and `db migrate`.
 - [ ] Offers to route a feature request for a first-class rename hint via `prisma-next-feedback`.
 
 ## Success criteria

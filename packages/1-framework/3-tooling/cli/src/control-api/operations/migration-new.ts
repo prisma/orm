@@ -81,7 +81,7 @@ export async function executeMigrationNewCommand(
       return notOk(
         errorRuntime('CLI.FILE_NOT_FOUND', `Contract file not found at ${contractPathAbsolute}`, {
           why: `Contract file not found at ${contractPathAbsolute}`,
-          fix: 'Run `prisma-cli contract emit` first to generate the contract',
+          fix: 'Run `{bin} contract emit` first to generate the contract',
         }),
       );
     }
@@ -96,7 +96,7 @@ export async function executeMigrationNewCommand(
     return notOk(
       errorRuntime('MIGRATION.CONTRACT_DESERIALIZATION_FAILED', 'Contract JSON is invalid', {
         why: `Failed to deserialize ${contractPathAbsolute}: ${error instanceof Error ? error.message : String(error)}`,
-        fix: 'Run `prisma-cli contract emit` to regenerate the contract',
+        fix: 'Run `{bin} contract emit` to regenerate the contract',
         cause: error,
       }),
     );
@@ -107,7 +107,7 @@ export async function executeMigrationNewCommand(
     return notOk(
       errorRuntime('CONTRACT.VALIDATION_FAILED', 'Contract is missing storageHash', {
         why: `Contract at ${contractPathAbsolute} has no storageHash`,
-        fix: 'Run `prisma-cli contract emit` to regenerate the contract',
+        fix: 'Run `{bin} contract emit` to regenerate the contract',
       }),
     );
   }
@@ -151,7 +151,7 @@ export async function executeMigrationNewCommand(
     return notOk(
       errorRuntime('MIGRATION.NO_CHANGES', 'No changes detected', {
         why: 'The from and to contract hashes are identical — there is nothing to migrate.',
-        fix: 'Change the contract and run `prisma-cli contract emit` before creating a new migration. To author a data-only migration on the current contract hash, pass `--from <hash>` explicitly.',
+        fix: 'Change the contract and run `{bin} contract emit` before creating a new migration. To author a data-only migration on the current contract hash, pass `--from <hash>` explicitly.',
       }),
     );
   }

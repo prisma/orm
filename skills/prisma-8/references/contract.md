@@ -9,7 +9,7 @@ The data contract is the single source of truth for your data layer. You edit a 
 2. **The system plans the migrations for you.** (`references/migrations.md`)
 3. **If you need data migrations, you edit `migration.ts` and execute it.** (`references/migrations.md`)
 
-Behind step 1 the agent runs `prisma-next contract emit` after every contract edit (or installs the Vite plugin so the bundler runs it on save — see `references/build.md`). Emit reads the contract source through the provider the façade picks based on the file extension of `contract:` in `prisma.config.ts`, then writes two artefacts colocated with the source:
+Behind step 1 the agent runs `prisma contract emit` after every contract edit (or installs the Vite plugin so the bundler runs it on save — see `references/build.md`). Emit reads the contract source through the provider the façade picks based on the file extension of `contract:` in `prisma.config.ts`, then writes two artefacts colocated with the source:
 
 - `contract.json` — the canonical, content-hashed Contract IR. Read by the planner, the runtime, and `db verify`.
 - `contract.d.ts` — the precise TypeScript types the runtime + lanes propagate when you import `Contract` from it.
@@ -45,19 +45,19 @@ Both files are **emitted artefacts**. Edit the source; never the JSON or `.d.ts`
   - **`contract.prisma` (PSL)** — schema-flavoured DSL. Canonical for typical apps and brownfield Prisma users. Wired by `contract: './<path>/contract.prisma'` — the `defineConfig` façade detects the `.prisma` extension and routes through the PSL provider.
   - **`contract.ts` (TypeScript builder)** — programmatic authoring with `defineContract({...}, ({ field, model, rel, type }) => ({...}))` from `@internal/postgres/contract-builder` (or `@internal/mongo/contract-builder`). Wired by `contract: './<path>/contract.ts'` — the façade detects the `.ts` extension and routes through the TS provider. Use when you need programmatic composition (per-tenant variants, generated fields) or constructs PSL doesn't yet express (e.g. registering a parameterised extension type — see pgvector's contract).
 - **`prisma.config.ts`.** Wires the contract source, the database connection, the migrations directory, and any installed extensions. Use `defineConfig({...})` from `@internal/postgres/config` (or `@internal/mongo/config`). The four fields the façade accepts: `contract` (path string — `.prisma` or `.ts`), `db` (`{ connection?: string }`), `extensions` (array of control descriptors), `migrations` (`{ dir?: string }`). The output path for `contract.json` is auto-derived from `contract` (e.g. `./src/prisma/contract.prisma` → `./src/prisma/contract.json`).
-- **Emit pipeline.** `prisma-next contract emit --config <path>?` reads `prisma.config.ts`, calls the provider the façade picked, validates the resulting Contract, then atomically writes `contract.json` + `contract.d.ts` colocated with the source.
+- **Emit pipeline.** `prisma contract emit --config <path>?` reads `prisma.config.ts`, calls the provider the façade picked, validates the resulting Contract, then atomically writes `contract.json` + `contract.d.ts` colocated with the source.
 - **Extension namespaces.** Extensions contribute namespaced constructors (`pgvector.Vector(length: 1536)`, `cipherstash.EncryptedString({equality: true})`) and helper presets. Install them by adding the descriptor to **two** places — both fields are named `extensions`, but the two surfaces consume two different descriptor types and shapes:
   - **In the config (façade and core):** `extensions: [pgvector]` — array of *control* descriptors imported from `@internal/extension-<name>/control`.
   - **In the TS builder's `defineContract` (only when authoring `contract.ts`):** `extensions: { pgvector }` — record of *pack* descriptors imported from `@internal/extension-<name>/pack`.
 - **Contract space.** Every package that emits a contract owns its own *contract space* — a `prisma.config.ts` at package root, a contract source, the colocated emitted artefacts, and a `migrations/` directory. **There are two intentional on-disk layouts**, picked by whether the contract space is the consuming application or a contract-space package (an extension, an internal aggregate-root package, etc.):
-  - **Application layout** (what you use when building an *app*). `prisma.config.ts` at repo root; `src/prisma/contract.{prisma,ts}`; `src/prisma/contract.{json,d.ts}` colocated; `src/prisma/db.ts` colocated; migrations under `migrations/app/<timestamp>_<slug>/`. The `app/` segment is the consuming application's space-id; extension space-ids land in sibling `migrations/<extension-space-id>/` directories that the extension packages manage. This is what `examples/prisma-8-demo` uses. `prisma-next init` currently scaffolds something different (`prisma/...` at repo root) — that's a defect (TML-2532); the canonical layout is what every command actually expects to see.
+  - **Application layout** (what you use when building an *app*). `prisma.config.ts` at repo root; `src/prisma/contract.{prisma,ts}`; `src/prisma/contract.{json,d.ts}` colocated; `src/prisma/db.ts` colocated; migrations under `migrations/app/<timestamp>_<slug>/`. The `app/` segment is the consuming application's space-id; extension space-ids land in sibling `migrations/<extension-space-id>/` directories that the extension packages manage. This is what `examples/prisma-8-demo` uses. `prisma orm init` currently scaffolds something different (`prisma/...` at repo root) — that's a defect (TML-2532); the canonical layout is what every command actually expects to see.
   - **Contract-space-package layout** (what you use when *publishing* a contract-space package — extensions, internal monorepo packages). `prisma.config.ts` at package root; `src/contract.{prisma,ts}` directly (no `prisma/` subdir); `src/contract.{json,d.ts}` colocated; `migrations/<timestamp>_<slug>/` directly under `migrations/` (no `<space-id>` segment — the package *is* a single space). Documented in `.cursor/rules/contract-space-package-layout.mdc` and ADR 212.
 
   Both layouts let `defineConfig`'s `contract:` path point at the source; the framework derives everything else (emit output, migration root) from there. Pick the layout that matches what you're building and stick with it — don't mix.
 
 ## Diagnostic codes you route on
 
-`prisma-next contract emit` surfaces structured errors with stable codes; branch on `code` rather than message text.
+`prisma contract emit` surfaces structured errors with stable codes; branch on `code` rather than message text.
 
 | Code | Meaning | Next move |
 |---|---|---|
@@ -96,7 +96,7 @@ model Post {
 }
 ```
 
-Then run `pnpm prisma-next contract emit` (or rely on the Vite plugin — see `references/build.md`). Specify cascade behaviour explicitly with `onDelete` / `onUpdate`; the default is `Restrict`.
+Then run `pnpm prisma contract emit` (or rely on the Vite plugin — see `references/build.md`). Specify cascade behaviour explicitly with `onDelete` / `onUpdate`; the default is `Restrict`.
 
 `@@index` also accepts `expression:` (instead of a fields list), `where:` (partial-index predicate), `unique:`, `type:`/`options:` (target-registered access method), and `name:` xor `map:`:
 
@@ -150,7 +150,7 @@ export const contract = defineContract(
 );
 ```
 
-Then `pnpm prisma-next contract emit`. The `field.<scalar>()` helpers are only available inside the callback overload; outside the callback only `field.column(...)`, `field.generated(...)`, `field.namedType(...)` exist.
+Then `pnpm prisma contract emit`. The `field.<scalar>()` helpers are only available inside the callback overload; outside the callback only `field.column(...)`, `field.generated(...)`, `field.namedType(...)` exist.
 
 For Mongo, swap every `@internal/postgres/*` import for `@internal/mongo/*`. The Mongo builder also exposes `index` and `valueObject`.
 
@@ -368,11 +368,11 @@ Export subpaths: `@internal/extension-supabase/pack`, `@internal/extension-supab
 
 ## Workflow — Brownfield introspection
 
-The concept: pull a contract source out of an existing database and continue from there. `prisma-next contract infer --db <url>` reads the live schema and writes a `contract.prisma` file. It stops there — follow it with `contract emit` and (when the schema matches a pinned hash) `db sign` as separate steps.
+The concept: pull a contract source out of an existing database and continue from there. `prisma contract infer --db <url>` reads the live schema and writes a `contract.prisma` file. It stops there — follow it with `contract emit` and (when the schema matches a pinned hash) `db sign` as separate steps.
 
 ```bash
-pnpm prisma-next contract infer --db $DATABASE_URL --output ./src/prisma/contract.prisma
-pnpm prisma-next contract emit
+pnpm prisma contract infer --db $DATABASE_URL --output ./src/prisma/contract.prisma
+pnpm prisma contract emit
 ```
 
 Infer captures indexes at full fidelity — expression, partial (`where:`), unique non-constraint, `type:`/`options:` — adopting each under `map:` with the live name, except that a name shaped like a wire name whose hash recomputes from the content re-detects as wire-named and emits `name:` with the prefix. RLS surfaces too: `@@rls` on RLS-enabled models, and every policy as a `policy_<operation>` block with `@@map("<live name>")`, verbatim predicate reprints, and `permissive = false` for RESTRICTIVE rows (a policy whose role name can't be spelled as a PSL identifier is skipped with a comment note). Replacing an adopted `map:` with the plain wire spelling later converges via a single rename migration.
@@ -397,7 +397,7 @@ Infer captures indexes at full fidelity — expression, partial (`where:`), uniq
 
 ## Reference
 
-- Run `pnpm prisma-next contract --help` for the live command surface.
+- Run `pnpm prisma contract --help` for the live command surface.
 - PSL feature surface and what the interpreter accepts: `packages/2-sql/2-authoring/contract-psl/README.md`.
 - TS builder surface and the callback-helper vocabulary: `packages/2-sql/2-authoring/contract-ts/README.md`.
 - Layouts (where `contract.prisma`, `contract.json`, `contract.d.ts`, and `migrations/` live):
@@ -411,7 +411,7 @@ Infer captures indexes at full fidelity — expression, partial (`where:`), uniq
 - [ ] Edited the contract source (`contract.prisma` or `contract.ts`), not an emitted artefact.
 - [ ] For new extension namespaces: added the package, imported its control descriptor (`@internal/extension-<name>/control`), added it to `extensions: [...]` in `defineConfig({...})` (and the matching pack descriptor to `defineContract({extensions: {...}})` if using the TS builder).
 - [ ] For renames: hand-edited `migration.ts` after `migration plan` (or used the keep-then-drop two-migration pattern) — Prisma Next has no rename hint today.
-- [ ] Ran `pnpm prisma-next contract emit` after the edit (or let the Vite plugin re-emit on save).
+- [ ] Ran `pnpm prisma contract emit` after the edit (or let the Vite plugin re-emit on save).
 - [ ] Confirmed `contract.json` and `contract.d.ts` updated next to the source.
 - [ ] Did **not** hand-edit `contract.json` / `contract.d.ts`.
 - [ ] Did **not** confabulate a missing feature (validations, callbacks, soft delete, scopes, in-contract rename hint) — referred the user to *What Prisma Next doesn't do yet* + `references/feedback.md`.

@@ -61,7 +61,7 @@ export function createRefListCommand(
         'Reads migrations/app/refs/ and reports each ref with the contract hash it\n' +
         'points at and the invariants recorded against it. Offline — does not\n' +
         'consult the database.',
-      examples: ['ref list', 'ref list --json'],
+      examples: ['migration ref list', 'migration ref list --json'],
     },
     needs: { config: ormConfigSection },
     handler: async (_args, ctx) => {

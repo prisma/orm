@@ -85,15 +85,15 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         'Run it interactively for a guided setup, or supply --target and --authoring\n' +
         'for a fully scriptable run (CI, AI coding agents, automation).',
       examples: [
-        'init',
+        'orm init',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'init --target postgres --authoring psl',
+        'orm init --target postgres --authoring psl',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'init --target mongodb --authoring typescript --json',
-        'init --skip-install',
-        'init --skip-skills',
+        'orm init --target mongodb --authoring typescript --json',
+        'orm init --skip-install',
+        'orm init --skip-skills',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'init --target postgres --keep-previous-facade',
+        'orm init --target postgres --keep-previous-facade',
       ],
     },
     args: {

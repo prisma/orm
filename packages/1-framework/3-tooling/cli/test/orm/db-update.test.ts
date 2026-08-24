@@ -278,7 +278,7 @@ describe('db update', () => {
       {
         kind: 'run-command',
         label: 'Confirm the space is up to date',
-        command: 'prisma-cli migration status',
+        command: '{bin} migration status',
       },
     ]);
   });
@@ -319,7 +319,7 @@ describe('db update', () => {
         {
           kind: 'run-command',
           label: 'Apply the planned operations',
-          command: 'prisma-cli db update',
+          command: '{bin} db update',
         },
       ]);
     });

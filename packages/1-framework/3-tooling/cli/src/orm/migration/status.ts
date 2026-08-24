@@ -125,13 +125,13 @@ export function buildNoPathSummary(args: {
       : 'the database state';
   const targetShort = shortDisplayHash(args.targetHash);
   if (!args.explicitTarget) {
-    return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`prisma-cli migration plan --name <name>\` to author one.`;
+    return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`{bin} migration plan --name <name>\` to author one.`;
   }
   const targetLabel =
     args.refName !== undefined
       ? `the target (${targetShort} via \`${args.refName}\`)`
       : `the target (${targetShort})`;
-  return `No migration path from ${markerPart} to ${targetLabel}. Run \`prisma-cli migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
+  return `No migration path from ${markerPart} to ${targetLabel}. Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
 }
 
 export function buildStatusHeadline(args: {
@@ -146,7 +146,7 @@ export function buildStatusHeadline(args: {
   if (args.pendingCount === 0) {
     return 'Up to date';
   }
-  return `${args.pendingCount} pending — run \`prisma-cli migrate --to ${shortDisplayHash(args.targetHash)}\``;
+  return `${args.pendingCount} pending — run \`{bin} db migrate --to ${shortDisplayHash(args.targetHash)}\``;
 }
 
 interface SpaceSection {
@@ -254,7 +254,7 @@ export const migrationStatusCommand = defineOrmCommand({
         dbConnection,
         hasDriver,
         why: 'migration status needs a database connection to read the marker and ledger (or pass --from for an offline path preview)',
-        retryCommand: 'prisma-cli migration status --from <contract>',
+        retryCommand: '{bin} migration status --from <contract>',
       });
       if (missingDb !== null) {
         return notOk(normalizeError(missingDb));

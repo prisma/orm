@@ -32,9 +32,8 @@ const numericField = 'views' as never;
 // terminal now does the same: `take`/`skip` wrap the source in a derived
 // table aliased back to `tableName` (the same trick the plain-select path
 // uses for `distinct(cols)`) so the outer aggregate reduces over exactly
-// the rows the chain describes. `groupBy()` still forwards only
-// `baseFilters`, silently dropping pagination — that terminal is the next
-// slice's, so its case below is still `it.fails`.
+// the rows the chain describes. Clauses before `groupBy()` go through the
+// same wrap, scoping the rows that get grouped.
 describe('aggregate pagination', () => {
   it('aggregate() wraps take()/skip() in an input derived table', async () => {
     const { collection, runtime } = createCollectionFor('Post');
@@ -115,9 +114,9 @@ describe('aggregate pagination', () => {
     expect(selectAstOf(paginated.runtime)).not.toEqual(selectAstOf(unpaginated.runtime));
   });
 
-  it.fails('groupBy().aggregate() applies take()/skip() to the compiled plan', async () => {
+  it('groupBy().aggregate() wraps pre-group take()/skip() in an input derived table', async () => {
     const { collection, runtime } = createCollectionFor('Post');
-    runtime.setNextResults([[{ user_id: 1, totalViews: 500 }]]);
+    runtime.setNextResults([[{ userId: 1, totalViews: 500 }]]);
 
     await collection
       .skip(5)
@@ -126,8 +125,44 @@ describe('aggregate pagination', () => {
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const ast = selectAstOf(runtime);
-    expect(ast.limit).toBe(10);
-    expect(ast.offset).toBe(5);
+    expect(ast.limit).toBeUndefined();
+    expect(ast.offset).toBeUndefined();
+    expectDerivedTableSource(ast.from);
+    expect(ast.from.alias).toBe('posts');
+    expect(ast.groupBy).toEqual([ColumnRef.of('posts', 'user_id')]);
+
+    const innerSelect = ast.from.query;
+    expect(innerSelect.limit).toBe(10);
+    expect(innerSelect.offset).toBe(5);
+    // The group key travels through the wrap alongside the aggregated
+    // column — GROUP BY posts.user_id needs it in the wrap's projection.
+    expect(innerSelect.projection).toEqual([
+      ProjectionItem.of('user_id', ColumnRef.of('posts', 'user_id')),
+      ProjectionItem.of('views', ColumnRef.of('posts', 'views')),
+    ]);
+  });
+
+  // Discriminating case: pre-group and post-group pagination are separate
+  // clauses at separate levels. If they merged, one of these two `take()`
+  // values would win and the other would vanish.
+  it('pre-group and post-group pagination land in separate places, not merged', async () => {
+    const { collection, runtime } = createCollectionFor('Post');
+    runtime.setNextResults([[{ userId: 1, totalViews: 500 }]]);
+
+    await collection
+      .orderBy((post) => post.views.desc())
+      .take(10)
+      .groupBy('userId')
+      .orderBy((group) => group.userId.asc())
+      .take(2)
+      .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
+
+    const ast = selectAstOf(runtime);
+    expect(ast.limit).toBe(2);
+    expect(ast.orderBy).toEqual([OrderByItem.asc(ColumnRef.of('posts', 'user_id'))]);
+    expectDerivedTableSource(ast.from);
+    expect(ast.from.query.limit).toBe(10);
+    expect(ast.from.query.orderBy).toEqual([OrderByItem.desc(ColumnRef.of('posts', 'views'))]);
   });
 
   it('skip() without take() emits OFFSET with no LIMIT', async () => {

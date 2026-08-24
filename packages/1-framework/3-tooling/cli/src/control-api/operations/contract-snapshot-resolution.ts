@@ -113,7 +113,7 @@ export async function resolveContractRefToSnapshot(
         return notOk(
           errorFileNotFound(options.contractPathAbsolute, {
             why: `Contract file not found at ${options.contractPathAbsolute}`,
-            fix: 'Run `prisma-cli contract emit` first to generate the contract',
+            fix: 'Run `{bin} contract emit` first to generate the contract',
             cause: error,
           }),
         );

@@ -69,6 +69,6 @@ function requirementsBlock(target: TargetId): string {
     '## Requirements',
     '',
     `- **${label} ${minVersion} or newer.** Older servers are not supported. Run ${verifyCommand} against your server to verify.`,
-    '- The CLI never connects to your database without explicit consent. Pass `--probe-db` to `prisma-cli init` if you want `init` to verify the server version itself.',
+    '- The CLI never connects to your database without explicit consent. Pass `--probe-db` to `prisma orm init` if you want `init` to verify the server version itself.',
   ].join('\n');
 }

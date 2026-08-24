@@ -22,9 +22,9 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-extension-middleware-cache": "workspace:8.0.0-rc.4",
-    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.4",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.4",
+    "@prisma/orm-extension-middleware-cache": "workspace:8.0.0-rc.5",
+    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.5",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.5",
     "arktype": "^2.2.2",
     "dotenv": "^17.4.2",
     "pg": "catalog:",
@@ -34,8 +34,8 @@
   "devDependencies": {
     "@prisma/cli-engine": "0.2.0",
     "@prisma/dev": "catalog:",
-    "@repo/test-utils": "workspace:8.0.0-rc.4",
-    "@repo/tsconfig": "workspace:8.0.0-rc.4",
+    "@repo/test-utils": "workspace:8.0.0-rc.5",
+    "@repo/tsconfig": "workspace:8.0.0-rc.5",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "catalog:",
@@ -49,5 +49,5 @@
     "vite": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.4"
+  "version": "8.0.0-rc.5"
 }

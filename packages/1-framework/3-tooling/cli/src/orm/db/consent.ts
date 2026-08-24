@@ -15,7 +15,7 @@ export function errorConsentTokenUnresolved(targetId: string): CliStructuredErro
         {
           kind: 'user-choice',
           label:
-            'Name the database in `db.connection` (or pass `--db <url>`) and run `prisma-cli db update` again.',
+            'Name the database in `db.connection` (or pass `--db <url>`) and run `{bin} db update` again.',
         },
       ],
     },
@@ -33,7 +33,7 @@ export function errorConsentOperationsMissing(): CliStructuredError {
         {
           kind: 'run-command',
           label: 'Preview the plan',
-          command: 'prisma-cli db update --dry-run',
+          command: '{bin} db update --dry-run',
         },
       ],
     },

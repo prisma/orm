@@ -44,7 +44,7 @@ function initPresentations(inputs: {
       ...migrationResultBlocks(document),
     ],
     json: () => document,
-    next: () => migrationResultNextActions(document, 'prisma-cli db init'),
+    next: () => migrationResultNextActions(document, '{bin} db init'),
   };
 }
 

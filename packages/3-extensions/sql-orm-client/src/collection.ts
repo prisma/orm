@@ -108,6 +108,7 @@ import {
   type CollectionTypeState,
   type DefaultCollectionTypeState,
   type DefaultModelRow,
+  emptyGroupPagingState,
   emptyState,
   type IncludeCombine,
   type IncludeCombineBranch,
@@ -764,10 +765,11 @@ class CollectionImpl<
     return new GroupedCollection(this.ctx, this.modelName, {
       tableName: this.tableName,
       namespaceId: this.namespaceId,
-      baseFilters: this.state.filters,
+      preGroupState: this.state,
       groupByFields: [...fields],
       groupByColumns,
       havingFilters: [],
+      postGroup: emptyGroupPagingState(),
     });
   }
 

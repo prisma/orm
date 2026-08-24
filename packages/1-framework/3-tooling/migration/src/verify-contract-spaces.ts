@@ -196,7 +196,7 @@ export function verifyContractSpaces(
       violations.push({
         kind: 'declaredButUnmigrated',
         spaceId,
-        remediation: `Extension '${spaceId}' is declared in extensions but has not been emitted; run \`prisma migrate\`.`,
+        remediation: `Extension '${spaceId}' is declared in extensions but has not been emitted; run \`{bin} db migrate\`.`,
       });
       continue;
     }
@@ -213,7 +213,7 @@ export function verifyContractSpaces(
         spaceId,
         priorHeadHash: head.hash,
         markerHash: marker.hash,
-        remediation: `Marker row for space '${spaceId}' is keyed at ${marker.hash}, but the on-disk ${join('migrations', spaceId, 'contract.json')} resolves to ${head.hash}. Run \`prisma db update\` to advance the database, or \`prisma migrate\` if the descriptor was bumped without re-emitting.`,
+        remediation: `Marker row for space '${spaceId}' is keyed at ${marker.hash}, but the on-disk ${join('migrations', spaceId, 'contract.json')} resolves to ${head.hash}. Run \`{bin} db update\` to advance the database, or \`{bin} db migrate\` if the descriptor was bumped without re-emitting.`,
       });
       continue;
     }
@@ -227,7 +227,7 @@ export function verifyContractSpaces(
         spaceId,
         onDiskInvariants,
         markerInvariants: [...marker.invariants].sort(),
-        remediation: `Marker row for space '${spaceId}' is missing invariants [${missing.map((s) => JSON.stringify(s)).join(', ')}]. Run \`prisma db update\` to apply the corresponding data-transform migrations.`,
+        remediation: `Marker row for space '${spaceId}' is missing invariants [${missing.map((s) => JSON.stringify(s)).join(', ')}]. Run \`{bin} db update\` to apply the corresponding data-transform migrations.`,
       });
     }
   }

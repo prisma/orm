@@ -100,9 +100,12 @@ describe('migrate --to invariant pre-check', () => {
       edgeInvariants: ['real-id'],
     });
 
-    const run = await harness(driverConfig(project)).run(['migrate', '--to', 'prod', '--json'], {
-      cwd: project.dir,
-    });
+    const run = await harness(driverConfig(project)).run(
+      ['db', 'migrate', '--to', 'prod', '--json'],
+      {
+        cwd: project.dir,
+      },
+    );
 
     expect(run.exitCode).not.toBe(0);
     expect(run.json.at(-1)).toMatchObject({
@@ -122,7 +125,7 @@ describe('migrate --to invariant pre-check', () => {
 
     const run = await harness(
       driverConfig(project, { hash: TO_HASH, invariants: ['retired-id'] }),
-    ).run(['migrate', '--to', 'prod', '--json'], { cwd: project.dir });
+    ).run(['db', 'migrate', '--to', 'prod', '--json'], { cwd: project.dir });
 
     expect(errorCodeOf(run)).not.toBe('MIGRATION.UNKNOWN_INVARIANT');
     expect(JSON.stringify(run.json)).not.toContain('MIGRATION.UNKNOWN_INVARIANT');
@@ -131,9 +134,12 @@ describe('migrate --to invariant pre-check', () => {
   it('skips the pre-check when the ref requires no invariants', async () => {
     const project = await projectWithRef({ refInvariants: [], edgeInvariants: ['real-id'] });
 
-    const run = await harness(driverConfig(project)).run(['migrate', '--to', 'prod', '--json'], {
-      cwd: project.dir,
-    });
+    const run = await harness(driverConfig(project)).run(
+      ['db', 'migrate', '--to', 'prod', '--json'],
+      {
+        cwd: project.dir,
+      },
+    );
 
     expect(errorCodeOf(run)).not.toBe('MIGRATION.UNKNOWN_INVARIANT');
     expect(JSON.stringify(run.json)).not.toContain('MIGRATION.UNKNOWN_INVARIANT');

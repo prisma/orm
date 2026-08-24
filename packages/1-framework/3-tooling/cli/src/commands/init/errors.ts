@@ -2,19 +2,6 @@ import { docsUrlFor } from '@internal/utils/structured-error';
 import { CliStructuredError } from '../../utils/cli-errors';
 
 /**
- * Re-init in non-interactive mode without `--force`. Distinct from the
- * decline-the-prompt path (which is `errorInitUserAborted`) because here
- * the user was never given the choice — `--force` is the contract.
- */
-export function errorInitReinitNeedsForce(): CliStructuredError {
-  return new CliStructuredError('CLI.INIT_REINIT_NEEDS_FORCE', 'Project is already initialized', {
-    why: 'A `prisma.config.ts` already exists in this directory. Re-running `init` would overwrite the scaffolded files; in non-interactive mode `init` will not do that without `--force`.',
-    fix: 'Pass `--force` to overwrite the existing scaffold, or run `init` interactively to confirm.',
-    docsUrl: docsUrlFor('CLI.INIT_REINIT_NEEDS_FORCE'),
-  });
-}
-
-/**
  * Non-interactive mode is missing one or more required inputs. Lists every
  * missing flag in the error so an agent / CI script can react without
  * needing to parse English.
@@ -44,7 +31,7 @@ export function errorInitMissingFlags(options: {
     .join(' ');
   return new CliStructuredError('CLI.INIT_MISSING_FLAGS', 'Missing required flags', {
     why: `${options.why} Missing required flag(s): ${flagList}.`,
-    fix: `Re-run with the missing flag(s) supplied, e.g. \`prisma-cli init --yes ${fixList}\`. Use \`prisma-cli init --help\` to see every flag.`,
+    fix: `Re-run with the missing flag(s) supplied, e.g. \`prisma orm init --yes ${fixList}\`. Use \`prisma orm init --help\` to see every flag.`,
     docsUrl: docsUrlFor('CLI.INIT_MISSING_FLAGS'),
     meta: { missingFlags: options.missing },
   });
@@ -107,15 +94,13 @@ export function errorInitAuthoringSchemaPathMismatch(options: {
 
 /**
  * The user cancelled an interactive prompt (Ctrl-C, escape, declined a
- * selection). Distinct from `errorInitReinitNeedsForce` because that path
- * applies to non-interactive mode where the user was never given the
- * choice; this one is the generic "user said no" path. Maps to exit code
+ * selection) — the generic "user said no" path. Maps to exit code
  * 3 (USER_ABORTED).
  */
 export function errorInitUserAborted(): CliStructuredError {
   return new CliStructuredError('CLI.INIT_USER_ABORTED', 'Init cancelled', {
     why: 'The interactive prompt was cancelled before all required inputs were supplied. No files were modified.',
-    fix: 'Re-run `prisma-cli init` and complete the prompts, or pass the required inputs as flags (see `--help`) for a non-interactive run.',
+    fix: 'Re-run `prisma orm init` and complete the prompts, or pass the required inputs as flags (see `--help`) for a non-interactive run.',
     severity: 'info',
   });
 }
@@ -187,7 +172,7 @@ export function errorInitInvalidManifest(options: {
 }): CliStructuredError {
   return new CliStructuredError('CLI.INIT_INVALID_MANIFEST', `Failed to parse ${options.path}`, {
     why: `\`${options.path}\` is not valid JSON: ${options.cause}`,
-    fix: `Fix the JSON syntax in \`${options.path}\` (a missing comma or unbalanced brace is the most common cause), then re-run \`prisma-cli init\`.`,
+    fix: `Fix the JSON syntax in \`${options.path}\` (a missing comma or unbalanced brace is the most common cause), then re-run \`prisma orm init\`.`,
     docsUrl: docsUrlFor('CLI.INIT_INVALID_MANIFEST'),
     meta: { path: options.path, cause: options.cause },
   });
@@ -213,7 +198,7 @@ export function errorInitInvalidTsconfig(options: {
 }): CliStructuredError {
   return new CliStructuredError('CLI.INIT_INVALID_TSCONFIG', `Failed to parse ${options.path}`, {
     why: `\`${options.path}\` is not valid JSON or JSONC: ${options.cause}`,
-    fix: `Fix the syntax in \`${options.path}\` and re-run \`prisma-cli init\`. \`init\` accepts JSONC (comments and trailing commas) but cannot recover from unbalanced braces or missing commas.`,
+    fix: `Fix the syntax in \`${options.path}\` and re-run \`prisma orm init\`. \`init\` accepts JSONC (comments and trailing commas) but cannot recover from unbalanced braces or missing commas.`,
     docsUrl: docsUrlFor('CLI.INIT_INVALID_TSCONFIG'),
     meta: { path: options.path, cause: options.cause },
   });
@@ -285,43 +270,8 @@ export function errorInitWriteFailed(options: {
 }): CliStructuredError {
   return new CliStructuredError('CLI.INIT_WRITE_FAILED', `Failed to write ${options.path}`, {
     why: `\`${options.path}\` could not be written: ${options.cause}`,
-    fix: 'Fix what stopped the write — a directory sitting where the file goes, permissions, a full disk — then run `prisma-cli init` again. It will ask you to confirm replacing the files this run already wrote (listed in `meta.filesWritten`).',
+    fix: 'Fix what stopped the write — a directory sitting where the file goes, permissions, a full disk — then run `prisma orm init` again. Interactive runs ask before replacing the files this run already wrote (listed in `meta.filesWritten`); non-interactive runs grant that consent with `--confirm <directory name>`.',
     docsUrl: docsUrlFor('CLI.INIT_WRITE_FAILED'),
     meta: { path: options.path, cause: options.cause, filesWritten: options.filesWritten },
   });
-}
-
-/**
- * The project-level skills install (`npx skills add
- * prisma/prisma#v<version>`) failed after a successful dependency
- * install + emit. The project's scaffold remains on disk; the user
- * can either fix the underlying issue (network, registry, PATH) and
- * run the install command manually, or re-run `init --no-skill` to
- * proceed without the skill.
- *
- * Non-rolling-back, matching the existing install/emit failure
- * semantics. Maps to exit code `6 = SKILL_INSTALL_FAILED`.
- */
-export function errorInitSkillInstallFailed(options: {
-  readonly skillInstallCommand: string;
-  readonly filesWritten: readonly string[];
-  readonly cause: string;
-}): CliStructuredError {
-  return new CliStructuredError(
-    'CLI.INIT_SKILL_INSTALL_FAILED',
-    'Failed to install Prisma Next skills',
-    {
-      why: `\`${options.skillInstallCommand}\` exited with an error: ${options.cause}`,
-      fix:
-        'Either:\n' +
-        `  - Re-run \`prisma-cli init --no-skill${options.filesWritten.length > 0 ? ' --force' : ''}\` to skip the skill install for this run, or\n` +
-        `  - Fix the underlying issue (network, npm registry, \`npx skills\` on PATH) and install manually:\n      ${options.skillInstallCommand}`,
-      docsUrl: docsUrlFor('CLI.INIT_SKILL_INSTALL_FAILED'),
-      meta: {
-        filesWritten: options.filesWritten,
-        skillInstallCommand: options.skillInstallCommand,
-        cause: options.cause,
-      },
-    },
-  );
 }

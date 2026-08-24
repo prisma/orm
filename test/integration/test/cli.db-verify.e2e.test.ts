@@ -480,7 +480,7 @@ withTempDir(({ createTempDir }) => {
           nextActions: expect.arrayContaining([
             expect.objectContaining({
               label: expect.stringContaining(
-                'Run `prisma-cli db verify --schema-only --strict --db <url>`',
+                'Run `{bin} db verify --schema-only --strict --db <url>`',
               ),
             }),
           ]),

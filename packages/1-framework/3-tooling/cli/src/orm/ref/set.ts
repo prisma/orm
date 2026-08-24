@@ -38,9 +38,9 @@ export function createRefSetCommand(execute: typeof executeRefSetCommand = execu
         "migration's source contract. Offline — the contract must already be a\n" +
         'node of the on-disk migration graph, with its snapshot present.',
       examples: [
-        'ref set staging 4cb4256',
-        'ref set production 20260101T1000_add_user',
-        'ref set staging production --json',
+        'migration ref set staging 4cb4256',
+        'migration ref set production 20260101T1000_add_user',
+        'migration ref set staging production --json',
       ],
     },
     args: {

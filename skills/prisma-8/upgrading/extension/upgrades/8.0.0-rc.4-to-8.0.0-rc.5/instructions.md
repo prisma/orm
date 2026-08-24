@@ -30,6 +30,34 @@ changes:
       regex:
         - '\.distinctOn\('
       anyMatch: true
+  - id: groupby-pre-group-pagination-now-scopes-rows
+    summary: |
+      `take()`, `skip()`, `cursor()`, `distinct()`, `distinctOn()`, and `orderBy()` written before
+      `.groupBy(...)` on a `Collection` now scope the rows that get grouped, instead of being
+      silently dropped. `db.orm.<Model>.take(10).groupBy('x').aggregate(...)` used to group every
+      matching row; it now groups only the first 10 (by whatever `orderBy()` is active).
+
+      There is no reliable static pattern that separates a call site whose answer just became
+      correct from one whose answer is now different from before — both look identical in source.
+      Any test asserting values on a `.groupBy(...)` chain with a pre-group pagination clause
+      needs re-checking against the new (correct) numbers by hand.
+  - id: groupby-post-group-pagination-requires-order-by
+    summary: |
+      `GroupedCollection` gained its own `take()` / `skip()` / `orderBy()`, which page the grouped
+      rows themselves when written *after* `.groupBy(...)`. Post-group `take()` / `skip()` require
+      a prior post-group `orderBy()` — without one they are a compile error, the parameter type
+      narrows to `never`, because a database may return groups in any order and "the first n
+      groups" is undefined without one.
+
+      This is not a rote find-and-replace: `db.orm.<Model>.groupBy('x').take(10)` needs a caller
+      to pick what "first" means for their groups, which is a decision only they can make. Add an
+      `.orderBy(...)` naming one of the fields passed to `groupBy(...)` before the `take()` /
+      `skip()` call.
+    detection:
+      glob: "**/*.{ts,mts,cts}"
+      regex:
+        - '\.groupBy\('
+      anyMatch: true
 ---
 
 # 8.0.0-rc.4 → 8.0.0-rc.5 — Extension author upgrade instructions
@@ -67,3 +95,35 @@ wrong result set; either move the collection onto a Postgres-capable contract, o
 
 `Collection#distinct(...)` is unaffected — it lowers to a portable `ROW_NUMBER` dedup and needs
 no capability, on any target.
+
+## `groupby-pre-group-pagination-now-scopes-rows`
+
+Any `.take(...)`, `.skip(...)`, `.cursor(...)`, `.distinct(...)`, `.distinctOn(...)`, or
+`.orderBy(...)` your extension calls *before* `.groupBy(...)` on a `Collection` used to be
+silently dropped once `.groupBy(...)` joined the chain — the aggregate reduced over every
+matching row, ignoring the pagination clause entirely. It now scopes the rows that get grouped,
+the same way root `.aggregate()` scopes its rows (see the sibling entry for that fix, already
+shipped in `8.0.0-rc.4` → `8.0.0-rc.5`'s predecessor window).
+
+There is no detection regex for this one worth writing: the call sites that need re-checking
+look identical, in source, to the call sites that already worked correctly (a chain built with
+this scoping in mind, versus one that assumed the pagination clause was a no-op). Grep for
+`.groupBy(` and read every match with a pre-group pagination clause; if the test asserting its
+result seeds fewer distinct groups than pagination scope allows, or asserts totals computed over
+every row rather than the paginated window, the expected values need updating to match the now-
+correct behavior.
+
+## `groupby-post-group-pagination-requires-order-by`
+
+`GroupedCollection` (what `.groupBy(...)` returns) gained `take()`, `skip()`, and `orderBy()`,
+which page the *grouped* rows when written after `.groupBy(...)` — previously `.groupBy(...)` had
+no chain of its own past `.having(...)`. Calling post-group `take()` or `skip()` without a prior
+post-group `orderBy()` is a compile error: the parameter type narrows to `never`, because a
+database may return groups in any order and "the first n groups" has no defined meaning without
+one.
+
+If your extension's own code (or its test suite) calls `.groupBy(...).take(...)` or
+`.groupBy(...).skip(...)` with no `.orderBy(...)` between them, it will fail to compile after this
+upgrade. There is no default ordering to insert automatically — add an `.orderBy(...)` naming one
+of the fields you passed to `groupBy(...)` (ascending or descending is your call; whichever
+matches what "the first n groups" should mean for that query) before the `take()` / `skip()` call.

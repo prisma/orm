@@ -60,10 +60,7 @@ type SchemaVerifyDocument = CombinedVerifyResult['result'] & {
   readonly unclaimed: readonly string[];
 };
 
-const PUSH_THE_CONTRACT = runCommandAction(
-  'Push the contract to the database',
-  'prisma-cli db update',
-);
+const PUSH_THE_CONTRACT = runCommandAction('Push the contract to the database', '{bin} db update');
 const RECONCILE_BY_HAND: NextAction = {
   kind: 'user-choice',
   label: 'Or reconcile the differences by hand and verify again',

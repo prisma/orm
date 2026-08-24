@@ -42,9 +42,9 @@ These rules are load-bearing for the cluster. A new skill or a skill rewrite tha
 
 ### Verify the tool surface as you author, not afterwards
 
-**Every CLI flag, command name, error code, config key, and file path you cite must be verified against the framework source before the sentence ships.** Authoring against an imagined tool surface — *"`migrate --dry-run` probably exists; it's standard"* — is how the most common defect class in this cluster gets in: a confidently-worded claim about an API that doesn't ship. The agent the skill teaches will not catch it (the skill is what the agent loads instead of re-deriving the API); reviewers catch it only if they happen to check.
+**Every CLI flag, command name, error code, config key, and file path you cite must be verified against the framework source before the sentence ships.** Authoring against an imagined tool surface — *"`db migrate --dry-run` probably exists; it's standard"* — is how the most common defect class in this cluster gets in: a confidently-worded claim about an API that doesn't ship. The agent the skill teaches will not catch it (the skill is what the agent loads instead of re-deriving the API); reviewers catch it only if they happen to check.
 
-Verify *during* drafting, not at the end. The first draft of the `migration-review.md` pilot — written with the stated goal of "verify the tool surface before authoring" — still introduced three fabricated claims: a `--dry-run` flag on `migrate`, a "long-running operation" classifier that doesn't exist, and a destructive-op confirmation prompt on `migrate` (the prompt lives on `db update`). None of the three were caught by the author; all three were caught only by review. The lesson is that a final "verify pass" doesn't work — the verification step has to fire *at each tool-surface claim, while drafting it*, so the temptation to extrapolate from a similar command is gone before it leaves a trace in the file.
+Verify *during* drafting, not at the end. The first draft of the `migration-review.md` pilot — written with the stated goal of "verify the tool surface before authoring" — still introduced three fabricated claims: a `--dry-run` flag on `db migrate`, a "long-running operation" classifier that doesn't exist, and a destructive-op confirmation prompt on `db migrate` (the prompt lives on `db update`). None of the three were caught by the author; all three were caught only by review. The lesson is that a final "verify pass" doesn't work — the verification step has to fire *at each tool-surface claim, while drafting it*, so the temptation to extrapolate from a similar command is gone before it leaves a trace in the file.
 
 Use ripgrep against the framework source as you write. Verifying a flag:
 
@@ -89,7 +89,7 @@ The pilot rewrite of [`skills/prisma-8/references/migration-review.md`](./prisma
 - A five-step *"diamond convergence procedure"* for resolving concurrent migrations.
 - A four-step *"detect that main advanced"* workflow.
 - Procedural recipes for setting up refs, applying refs, and checking ref status.
-- Factually wrong tool surface (it referenced `migrations/refs.json`, `ref set --env`, etc. — APIs that don't exist).
+- Factually wrong tool surface (it referenced `migrations/refs.json`, `migration ref set --env`, etc. — APIs that don't exist).
 
 After the rewrite, the same ground is covered by one *Key Concepts* block that names the moving parts (**origin** = live DB marker, **destination** = ref or contract head, **migration graph** = path between them) and three short workflow sections that say *"the navigation is X → Y; ask the system about it with `migration status --to <name> --db $URL`."* Diamond convergence collapsed from five steps to one paragraph: *"it's the normal `edit → plan → migrate` loop applied to the post-merge state; port any data-transform logic from the abandoned `migration.ts` over."* The skill is 175 lines instead of 266, and an agent reading it can resolve situations the original five-step procedure didn't anticipate.
 
@@ -115,7 +115,7 @@ Anything that prints is a likely defect: a user-authored example is importing fr
 
 The exclusion list covers the three sanctioned sources of user-authored `@internal/*` imports: target façades (`postgres`, `mongo`, `sqlite`), extension façades (`extension-<name>`), and build-tool plugin packages (`<bundler>-plugin-<purpose>`, e.g. `@internal/vite-plugin-contract-emit`). Build-tool plugins are themselves one-package-per-integration façades — they ship their own public surface and are not internal to a target package.
 
-**The framework-rendered exception.** Some files in a user's project are written *by* the framework, not by the user — chiefly `migrations/<scope>/<timestamp>/migration.ts`, which `prisma-next migration create` renders. Those files import from `@internal/postgres/migration` (or `@internal/sqlite/migration` for SQLite). A skill describing those files should:
+**The framework-rendered exception.** Some files in a user's project are written *by* the framework, not by the user — chiefly `migrations/<scope>/<timestamp>/migration.ts`, which `prisma migration plan` renders. Those files import from `@internal/postgres/migration` (or `@internal/sqlite/migration` for SQLite). A skill describing those files should:
 
 1. Make explicit that the imports are framework-managed.
 2. Not show those imports as if the user typed them.

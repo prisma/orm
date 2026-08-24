@@ -87,7 +87,7 @@ For **either** kind:
 
 For **bug reports**, additionally:
 
-- **The exact command** that misbehaved (e.g. `prisma-next migration plan --name add-email`).
+- **The exact command** that misbehaved (e.g. `prisma migration plan --name add-email`).
 - **The full output**, with `-v` if a structured error envelope is involved. Redact `DATABASE_URL` and any other secrets.
 - **A minimal `src/prisma/contract.prisma` / `src/prisma/contract.ts` excerpt** that reproduces the issue. Strip unrelated models. Keep the original model and field names from the user's contract when they don't expose anything compromising — a faithful excerpt is much easier for the framework team (and future readers of the issue) to reason about than a re-themed one. Only rename to neutral placeholders (`User`, `Post`, `Tag`) when the original names would leak confidential domain detail (product names, internal codenames, customer identifiers, regulated-data field names).
 - **Steps to reproduce**, as a numbered list.

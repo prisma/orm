@@ -108,7 +108,7 @@ describe('loadOrmConfig', () => {
       const loaded = await loadOrmConfig({ cwd: projectDir() });
 
       expect(loaded.diagnostics[0]?.diagnostic.nextActions).toEqual([
-        { kind: 'run-command', label: 'Create a config file', command: '{bin} init' },
+        { kind: 'run-command', label: 'Create a config file', command: '{bin} orm init' },
       ]);
     });
 

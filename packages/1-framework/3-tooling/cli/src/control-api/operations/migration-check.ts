@@ -270,7 +270,7 @@ function checkDanglingRefs(space: CheckSpace): readonly CheckFailure[] {
         nextActions: [
           runCommandAction(
             'Point the ref at a graph node',
-            `prisma-cli ref set ${name} <valid-hash>`,
+            `{bin} migration ref set ${name} <valid-hash>`,
           ),
           chooseAction('Or delete the ref'),
         ],

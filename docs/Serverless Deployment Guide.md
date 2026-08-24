@@ -258,7 +258,7 @@ Migrations stay on Node, against the **origin** database connection string (not 
 
 There is no per-request migration story and there is no Hyperdrive control-plane driver. The reasons:
 
-- Migration commands (`prisma migrate`, `prisma db init`, `prisma db reset`) are control-plane operations: they speak to the `migration` plane through the control-plane Postgres driver, run in long-lived Node processes (CI runners, dev workstations, deploy hooks), and are inherently long-lived shapes — DDL does not benefit from per-request lifecycle.
+- Migration commands (`prisma db migrate`, `prisma db init`) are control-plane operations: they speak to the `migration` plane through the control-plane Postgres driver, run in long-lived Node processes (CI runners, dev workstations, deploy hooks), and are inherently long-lived shapes — DDL does not benefit from per-request lifecycle.
 - Hyperdrive caches query results at the edge. That is desirable for many runtime read patterns and undesirable for DDL: a stale read of the migration ledger or marker leads to duplicate-apply or skipped-apply confusion. The Cloudflare-recommended pattern is to bypass Hyperdrive for control-plane operations, and we follow that.
 
 The existing migration commands accept a connection string (typically via `DATABASE_URL`) and use the `@internal/driver-postgres/control` driver. Run them from CI / your deploy pipeline / a one-shot Node task pointed at the origin URL — see the existing migration docs and the [Getting Started guide](./onboarding/Getting-Started.md) for the command surface. Nothing about deploying to a per-request runtime changes that.

@@ -80,9 +80,12 @@ describe('format', () => {
   it('settles as a completed envelope and rewrites the source in place', async () => {
     const dir = await projectWithMessySource();
 
-    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(['format', '--json'], {
-      cwd: dir,
-    });
+    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(
+      ['contract', 'format', '--json'],
+      {
+        cwd: dir,
+      },
+    );
 
     expect(run.exitCode).toBe(0);
     expect(run.json.at(-1)).toMatchObject({
@@ -95,7 +98,7 @@ describe('format', () => {
   it('renders one summary block naming the file it formatted', async () => {
     const dir = await projectWithMessySource();
 
-    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(['format'], {
+    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(['contract', 'format'], {
       cwd: dir,
       isTty: { stdout: true },
     });
@@ -112,7 +115,7 @@ describe('format', () => {
   it('leaves stdout empty in human mode, having no machine-consumable lines', async () => {
     const dir = await projectWithMessySource();
 
-    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(['format'], {
+    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(['contract', 'format'], {
       cwd: dir,
       isTty: { stdout: true },
     });
@@ -124,10 +127,13 @@ describe('format', () => {
   it('renders the success line even under --quiet', async () => {
     const dir = await projectWithMessySource();
 
-    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(['format', '--quiet'], {
-      cwd: dir,
-      isTty: { stdout: true, stderr: true },
-    });
+    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(
+      ['contract', 'format', '--quiet'],
+      {
+        cwd: dir,
+        isTty: { stdout: true, stderr: true },
+      },
+    );
 
     expect(run.exitCode).toBe(0);
     expect(stripAnsi(run.stderr)).toContain('Formatted contract.prisma');
@@ -141,7 +147,10 @@ describe('format', () => {
       load: async () => ({}),
     });
 
-    const run = await harness(config).run(['format'], { cwd: dir, isTty: { stdout: true } });
+    const run = await harness(config).run(['contract', 'format'], {
+      cwd: dir,
+      isTty: { stdout: true },
+    });
 
     expect(run.presented?.data).toEqual({ formatted: false });
     expect(run.presented?.presentation.human).toEqual([
@@ -159,9 +168,12 @@ describe('format', () => {
     const broken = 'model {{{ broken\n';
     await writeFile(join(dir, 'contract.prisma'), broken, 'utf-8');
 
-    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(['format', '--json'], {
-      cwd: dir,
-    });
+    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(
+      ['contract', 'format', '--json'],
+      {
+        cwd: dir,
+      },
+    );
 
     expect(run.exitCode).toBe(2);
     expect(run.json.at(-1)).toMatchObject({
@@ -175,9 +187,12 @@ describe('format', () => {
     const dir = await projectDir();
     await writeFile(join(dir, 'contract.prisma'), 'model {{{ broken\n', 'utf-8');
 
-    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(['format', '--json'], {
-      cwd: dir,
-    });
+    const run = await harness(pslConfig(join(dir, 'contract.prisma'))).run(
+      ['contract', 'format', '--json'],
+      {
+        cwd: dir,
+      },
+    );
     const terminal = run.json.at(-1);
     const envelope =
       terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
@@ -190,9 +205,12 @@ describe('format', () => {
   it('reports the unreadable source rather than throwing', async () => {
     const dir = await projectDir();
 
-    const run = await harness(pslConfig(join(dir, 'missing.prisma'))).run(['format', '--json'], {
-      cwd: dir,
-    });
+    const run = await harness(pslConfig(join(dir, 'missing.prisma'))).run(
+      ['contract', 'format', '--json'],
+      {
+        cwd: dir,
+      },
+    );
 
     expect(run.exitCode).toBe(2);
     expect(run.json.at(-1)).toMatchObject({
@@ -208,7 +226,7 @@ describe('format', () => {
     await writeFile(join(second, 'schema', 'contract.prisma'), MESSY_PSL, 'utf-8');
     await writeFile(join(first, 'schema.prisma'), MESSY_PSL, 'utf-8');
 
-    const run = await harness(pslConfig('schema/contract.prisma')).run(['format'], {
+    const run = await harness(pslConfig('schema/contract.prisma')).run(['contract', 'format'], {
       cwd: second,
       isTty: { stdout: true },
     });
@@ -221,9 +239,12 @@ describe('format', () => {
   it('fails before the handler when the orm section is structurally invalid', async () => {
     const dir = await projectDir();
 
-    const run = await harness({ formatter: { indent: 'wide' } }).run(['format', '--json'], {
-      cwd: dir,
-    });
+    const run = await harness({ formatter: { indent: 'wide' } }).run(
+      ['contract', 'format', '--json'],
+      {
+        cwd: dir,
+      },
+    );
 
     expect(run.exitCode).toBe(2);
     expect(run.json.at(-1)).toMatchObject({
