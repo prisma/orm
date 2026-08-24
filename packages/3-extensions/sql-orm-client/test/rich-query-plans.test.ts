@@ -42,7 +42,7 @@ describe('SQL ORM rich AST query plans', () => {
           ),
         ),
       )
-      .take(5).state;
+      .limit(5).state;
 
     const plan = compileSelectWithIncludes(
       baseContract,

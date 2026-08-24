@@ -282,13 +282,13 @@ test('all() without include() does not have relation field', () => {
   expectTypeOf<Row>().not.toHaveProperty('assignee');
 });
 
-test('where().orderBy().skip().take().all() preserves row type', () => {
+test('where().orderBy().offset().limit().all() preserves row type', () => {
   const col = {} as MongoCollection<Contract, 'User'>;
   const result = col
     .where({} as never)
     .orderBy({ name: 1 })
-    .skip(10)
-    .take(5)
+    .offset(10)
+    .limit(5)
     .all();
   expectTypeOf(result).toExtend<AsyncIterableResult<InferRootRow<Contract, 'User'>>>();
 });
@@ -349,7 +349,7 @@ test('variant() preserves TVariant through chaining', () => {
   const chained = col
     .variant('Bug')
     .where({} as never)
-    .take(10);
+    .limit(10);
   type CreateParam = Parameters<typeof chained.create>[0];
   expectTypeOf<CreateParam>().toHaveProperty('severity');
   expectTypeOf<CreateParam>().not.toHaveProperty('type');

@@ -106,11 +106,11 @@ function dynamicAggregate(
 }
 
 describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation }, () => {
-  it('take() after orderBy() sums only the top n rows', async () => {
+  it('limit() after orderBy() sums only the top n rows', async () => {
     await withPostsRuntime(async (_runtime, posts) => {
       const top2 = await posts
         .orderBy((post) => post.views.desc())
-        .take(2)
+        .limit(2)
         .aggregate((aggregate) => ({ total: dynamicAggregate(aggregate)['sum']!('views') }));
 
       // Sum of the top 2 by views (50 + 40); the unpaginated sum over all
@@ -124,7 +124,7 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
       const stats = await posts
         .where((post) => post.views.gte(20))
         .orderBy((post) => post.views.desc())
-        .take(2)
+        .limit(2)
         .aggregate((aggregate) => ({ total: dynamicAggregate(aggregate)['sum']!('views') }));
 
       // Matching rows are 20/30/40/50 (sum 140); the top 2 of those is
@@ -152,7 +152,7 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
         .where((post) => post.views.gte(20))
         .where((post) => post.views.lte(40))
         .orderBy((post) => post.views.desc())
-        .take(2)
+        .limit(2)
         .aggregate((aggregate) => ({ total: dynamicAggregate(aggregate)['sum']!('views') }));
 
       // Matching rows are 20/30/40 (sum 90); the top 2 of those is 40 + 30.
@@ -164,14 +164,14 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
     });
   });
 
-  it('skip() without take() reduces over all-but-the-first-n', async () => {
+  it('offset() without limit() reduces over all-but-the-first-n', async () => {
     await withPostsRuntime(async (_runtime, posts) => {
       const stats = await posts
         .orderBy((post) => post.id.asc())
-        .skip(2)
+        .offset(2)
         .aggregate((aggregate) => ({ total: dynamicAggregate(aggregate)['sum']!('views') }));
 
-      // Ordered by id asc, skip(2) drops the 10/20 rows and reduces over
+      // Ordered by id asc, offset(2) drops the 10/20 rows and reduces over
       // 30 + 40 + 50; the unpaginated sum over all five rows is 150.
       // SQLite's grammar has no standalone OFFSET clause, so this case
       // used to fail with `near "OFFSET": syntax error`; the renderer now
@@ -182,11 +182,11 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
   });
 
   describe('groupBy', () => {
-    it('take() before groupBy() scopes which rows get grouped', async () => {
+    it('limit() before groupBy() scopes which rows get grouped', async () => {
       await withPostsRuntime(async (_runtime, posts) => {
         const grouped = await posts
           .orderBy((post) => post.views.desc())
-          .take(3)
+          .limit(3)
           .groupBy('userId')
           .aggregate((aggregate) => ({
             count: dynamicAggregate(aggregate)['count']!(),
@@ -205,16 +205,16 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
       });
     });
 
-    it('orderBy()/take() after groupBy() pages the groups themselves', async () => {
+    it('orderBy()/limit() after groupBy() pages the groups themselves', async () => {
       await withPostsRuntime(async (_runtime, posts) => {
         const grouped = await posts
           .groupBy('userId')
           .orderBy((group) => group.userId.desc())
-          .take(2)
+          .limit(2)
           .aggregate((aggregate) => ({ count: dynamicAggregate(aggregate)['count']!() }));
 
-        // Three distinct groups exist (userId 1, 2, 3); post-group take(2)
-        // returns only the top 2 by userId desc — if take() were dropped,
+        // Three distinct groups exist (userId 1, 2, 3); post-group limit(2)
+        // returns only the top 2 by userId desc — if limit() were dropped,
         // all 3 groups would come back instead.
         expect(grouped).toEqual([
           { userId: 3, count: 1 },
@@ -223,18 +223,18 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
       });
     });
 
-    it('post-group skip() without take() emits OFFSET with no LIMIT', async () => {
+    it('post-group offset() without limit() emits OFFSET with no LIMIT', async () => {
       await withPostsRuntime(async (_runtime, posts) => {
         const grouped = await posts
           .groupBy('userId')
           .orderBy((group) => group.userId.asc())
-          .skip(1)
+          .offset(1)
           .aggregate((aggregate) => ({ count: dynamicAggregate(aggregate)['count']!() }));
 
-        // Three distinct groups exist (userId 1, 2, 3); skip(1) with no take()
+        // Three distinct groups exist (userId 1, 2, 3); offset(1) with no limit()
         // drops the first group by userId and returns all-but-the-first —
         // the same "SQLite has no standalone OFFSET" renderer path root-level
-        // skip() already exercises above, now pinned for the grouped select.
+        // offset() already exercises above, now pinned for the grouped select.
         expect(grouped).toEqual([
           { userId: 2, count: 2 },
           { userId: 3, count: 1 },
@@ -246,19 +246,19 @@ describe('integration/aggregate (sqlite)', { timeout: timeouts.databaseOperation
       await withPostsRuntime(async (_runtime, posts) => {
         const grouped = await posts
           .orderBy((post) => post.views.desc())
-          .take(4)
+          .limit(4)
           .groupBy('userId')
           .orderBy((group) => group.userId.asc())
-          .take(2)
+          .limit(2)
           .aggregate((aggregate) => ({
             count: dynamicAggregate(aggregate)['count']!(),
             total: dynamicAggregate(aggregate)['sum']!('views'),
           }));
 
-        // Pre-group take(4) drops user 1's lowest row (views 10), leaving
+        // Pre-group limit(4) drops user 1's lowest row (views 10), leaving
         // user 1 with one row (views 20) instead of two — if that scoping
         // didn't apply, user 1 would read { count: 2, total: 30 }.
-        // Post-group take(2) then keeps only the lowest 2 of the 3 userIds
+        // Post-group limit(2) then keeps only the lowest 2 of the 3 userIds
         // that remain — if that didn't apply, user 3 ({ count: 1, total: 50
         // }) would appear as a third row.
         expect(grouped).toEqual([

@@ -21,10 +21,10 @@ export async function ormClientGetDashboardUsers(
       post
         .where((p) => p.title.ilike(`%${postTitleTerm}%`))
         .orderBy((p) => p.createdAt.desc())
-        .take(postsPerUser)
+        .limit(postsPerUser)
         .select('id', 'title', 'createdAt'),
     )
     .orderBy([(user) => user.kind.asc(), (user) => user.createdAt.desc()])
-    .take(limit)
+    .limit(limit)
     .all();
 }

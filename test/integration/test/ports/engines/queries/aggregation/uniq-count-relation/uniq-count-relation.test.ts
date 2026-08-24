@@ -78,7 +78,7 @@ describe('ports/engines/queries/aggregation/uniq-count-relation', () => {
                 .select('id')
                 .orderBy((comment) => comment.id.asc())
                 .cursor({ id: 1 })
-                .take(1),
+                .limit(1),
               total: comments.count(),
             }),
           )
@@ -88,7 +88,7 @@ describe('ports/engines/queries/aggregation/uniq-count-relation', () => {
                 .select('id')
                 .orderBy((category) => category.id.asc())
                 .cursor({ id: 1 })
-                .take(1),
+                .limit(1),
               total: categories.count(),
             }),
           )
@@ -104,7 +104,7 @@ describe('ports/engines/queries/aggregation/uniq-count-relation', () => {
   );
 
   it(
-    'relation counts remain unpaginated when nested rows use take',
+    'relation counts remain unpaginated when nested rows use limit',
     () =>
       withPostgresPort<BaseContract>({ contractJson: baseContractJson }, async (ctx) => {
         await seedPost(ctx, {
@@ -120,7 +120,7 @@ describe('ports/engines/queries/aggregation/uniq-count-relation', () => {
               rows: comments
                 .select('id')
                 .orderBy((comment) => comment.id.asc())
-                .take(1),
+                .limit(1),
               total: comments.count(),
             }),
           )
@@ -129,7 +129,7 @@ describe('ports/engines/queries/aggregation/uniq-count-relation', () => {
               rows: categories
                 .select('id')
                 .orderBy((category) => category.id.asc())
-                .take(1),
+                .limit(1),
               total: categories.count(),
             }),
           )
@@ -145,7 +145,7 @@ describe('ports/engines/queries/aggregation/uniq-count-relation', () => {
   );
 
   it(
-    'relation counts remain unpaginated when nested rows use skip',
+    'relation counts remain unpaginated when nested rows use offset',
     () =>
       withPostgresPort<BaseContract>({ contractJson: baseContractJson }, async (ctx) => {
         await seedPost(ctx, {
@@ -161,7 +161,7 @@ describe('ports/engines/queries/aggregation/uniq-count-relation', () => {
               rows: comments
                 .select('id')
                 .orderBy((comment) => comment.id.asc())
-                .skip(2),
+                .offset(2),
               total: comments.count(),
             }),
           )
@@ -170,7 +170,7 @@ describe('ports/engines/queries/aggregation/uniq-count-relation', () => {
               rows: categories
                 .select('id')
                 .orderBy((category) => category.id.asc())
-                .skip(2),
+                .offset(2),
               total: categories.count(),
             }),
           )

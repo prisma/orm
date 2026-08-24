@@ -125,7 +125,7 @@ describe('ports/engines/queries/aggregation/many_count_relation', () => {
               rows: comments
                 .select('id')
                 .cursor({ id: 1 } as never)
-                .take(1),
+                .limit(1),
               count: comments.count(),
             }),
           )
@@ -134,7 +134,7 @@ describe('ports/engines/queries/aggregation/many_count_relation', () => {
               rows: categories
                 .select('id')
                 .cursor({ id: 1 } as never)
-                .take(1),
+                .limit(1),
               count: categories.count(),
             }),
           )
@@ -161,11 +161,11 @@ describe('ports/engines/queries/aggregation/many_count_relation', () => {
         const result = await db.public.Post.where({ id: 1 })
           .select('id')
           .include('comments', (comments) =>
-            comments.combine({ rows: comments.select('id').take(1), count: comments.count() }),
+            comments.combine({ rows: comments.select('id').limit(1), count: comments.count() }),
           )
           .include('categories', (categories) =>
             categories.combine({
-              rows: categories.select('id').take(1),
+              rows: categories.select('id').limit(1),
               count: categories.count(),
             }),
           )
@@ -192,11 +192,11 @@ describe('ports/engines/queries/aggregation/many_count_relation', () => {
         const result = await db.public.Post.where({ id: 1 })
           .select('id')
           .include('comments', (comments) =>
-            comments.combine({ rows: comments.select('id').skip(3), count: comments.count() }),
+            comments.combine({ rows: comments.select('id').offset(3), count: comments.count() }),
           )
           .include('categories', (categories) =>
             categories.combine({
-              rows: categories.select('id').skip(3),
+              rows: categories.select('id').offset(3),
               count: categories.count(),
             }),
           )

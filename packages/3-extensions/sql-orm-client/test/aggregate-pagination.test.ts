@@ -27,21 +27,21 @@ function expectDerivedTableSource(source: unknown): asserts source is DerivedTab
 const numericField = 'views' as never;
 
 // Pagination composes through to the aggregate input on a nested scalar
-// refine — `include('posts', (p) => p.skip(5).take(10).count())` aggregates
+// refine — `include('posts', (p) => p.offset(5).limit(10).count())` aggregates
 // over a derived table carrying the LIMIT/OFFSET. The root-level `aggregate()`
-// terminal now does the same: `take`/`skip` wrap the source in a derived
+// terminal now does the same: `limit`/`offset` wrap the source in a derived
 // table aliased back to `tableName` (the same trick the plain-select path
 // uses for `distinct(cols)`) so the outer aggregate reduces over exactly
 // the rows the chain describes. Clauses before `groupBy()` go through the
 // same wrap, scoping the rows that get grouped.
 describe('aggregate pagination', () => {
-  it('aggregate() wraps take()/skip() in an input derived table', async () => {
+  it('aggregate() wraps limit()/offset() in an input derived table', async () => {
     const { collection, runtime } = createCollectionFor('Post');
     runtime.setNextResults([[{ totalViews: 500 }]]);
 
     await collection
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const ast = selectAstOf(runtime);
@@ -69,8 +69,8 @@ describe('aggregate pagination', () => {
 
     await collection
       .orderBy((post) => post.views.desc())
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const ast = selectAstOf(runtime);
@@ -84,8 +84,8 @@ describe('aggregate pagination', () => {
     runtime.setNextResults([[{ total: 3, sumViews: 500, avgViews: 166.67 }]]);
 
     await collection
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .aggregate((aggregate) => ({
         total: aggregate.count(),
         sumViews: aggregate.sum(numericField),
@@ -107,20 +107,20 @@ describe('aggregate pagination', () => {
     const paginated = createCollectionFor('Post');
     paginated.runtime.setNextResults([[{ total: 3 }]]);
     await paginated.collection
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .aggregate((aggregate) => ({ total: aggregate.count() }));
 
     expect(selectAstOf(paginated.runtime)).not.toEqual(selectAstOf(unpaginated.runtime));
   });
 
-  it('groupBy().aggregate() wraps pre-group take()/skip() in an input derived table', async () => {
+  it('groupBy().aggregate() wraps pre-group limit()/offset() in an input derived table', async () => {
     const { collection, runtime } = createCollectionFor('Post');
     runtime.setNextResults([[{ userId: 1, totalViews: 500 }]]);
 
     await collection
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .groupBy('userId')
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
@@ -143,7 +143,7 @@ describe('aggregate pagination', () => {
   });
 
   // Discriminating case: pre-group and post-group pagination are separate
-  // clauses at separate levels. If they merged, one of these two `take()`
+  // clauses at separate levels. If they merged, one of these two `limit()`
   // values would win and the other would vanish.
   it('pre-group and post-group pagination land in separate places, not merged', async () => {
     const { collection, runtime } = createCollectionFor('Post');
@@ -151,10 +151,10 @@ describe('aggregate pagination', () => {
 
     await collection
       .orderBy((post) => post.views.desc())
-      .take(10)
+      .limit(10)
       .groupBy('userId')
       .orderBy((group) => group.userId.asc())
-      .take(2)
+      .limit(2)
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const ast = selectAstOf(runtime);
@@ -165,12 +165,12 @@ describe('aggregate pagination', () => {
     expect(ast.from.query.orderBy).toEqual([OrderByItem.desc(ColumnRef.of('posts', 'views'))]);
   });
 
-  it('skip() without take() emits OFFSET with no LIMIT', async () => {
+  it('offset() without limit() emits OFFSET with no LIMIT', async () => {
     const { collection, runtime } = createCollectionFor('Post');
     runtime.setNextResults([[{ totalViews: 500 }]]);
 
     await collection
-      .skip(5)
+      .offset(5)
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const ast = selectAstOf(runtime);
@@ -207,8 +207,8 @@ describe('aggregate pagination', () => {
 
     await collection
       .where((post) => post.views.gte(100))
-      .skip(5)
-      .take(10)
+      .offset(5)
+      .limit(10)
       .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
     const execution = runtime.executions[0];
@@ -223,7 +223,7 @@ describe('aggregate pagination', () => {
     const { collection, runtime } = createCollectionFor('Post');
     runtime.setNextResults([[{ total: 3 }]]);
 
-    await collection.take(10).aggregate((aggregate) => ({ total: aggregate.count() }));
+    await collection.limit(10).aggregate((aggregate) => ({ total: aggregate.count() }));
 
     const ast = selectAstOf(runtime);
     expectDerivedTableSource(ast.from);
@@ -276,7 +276,7 @@ describe('aggregate pagination', () => {
       ]);
     });
 
-    // Discriminating case: `take(2)` must slice the ordered, deduped rows
+    // Discriminating case: `limit(2)` must slice the ordered, deduped rows
     // — the top 2 by views — not an arbitrarily-ordered set.
     it('orderBy resolves directly through the ranked-input alias, no reapplication needed', async () => {
       const { collection, runtime } = createCollectionFor('Post');
@@ -285,7 +285,7 @@ describe('aggregate pagination', () => {
       await collection
         .distinct('title')
         .orderBy((post) => post.views.desc())
-        .take(2)
+        .limit(2)
         .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
       const ast = selectAstOf(runtime);
@@ -299,13 +299,13 @@ describe('aggregate pagination', () => {
       expect(aggregateInput.orderBy).toEqual([OrderByItem.desc(ColumnRef.of('posts', 'views'))]);
     });
 
-    it('distinct() combined with skip() (no take()) emits OFFSET with no LIMIT on the deduped select', async () => {
+    it('distinct() combined with offset() (no limit()) emits OFFSET with no LIMIT on the deduped select', async () => {
       const { collection, runtime } = createCollectionFor('Post');
       runtime.setNextResults([[{ totalViews: 500 }]]);
 
       await collection
         .distinct('title')
-        .skip(3)
+        .offset(3)
         .aggregate((aggregate) => ({ totalViews: aggregate.sum(numericField) }));
 
       const ast = selectAstOf(runtime);

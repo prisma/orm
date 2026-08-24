@@ -1,5 +1,5 @@
 // Integration coverage for nested includes (depth >= 2) when the
-// nested level carries refinements (`orderBy`, `take`, `where`,
+// nested level carries refinements (`orderBy`, `limit`, `where`,
 // `select`) or runs against degenerate data (empty parents, missing
 // grandchildren, unsatisfied FKs).
 //
@@ -14,14 +14,14 @@ import { seedComments, seedPosts, seedUsers } from './runtime-helpers';
 
 describe('integration/nested-includes/refinements', () => {
   // ===========================================================================
-  // Refinements at depth 2: orderBy / take / where / select on the nested
+  // Refinements at depth 2: orderBy / limit / where / select on the nested
   // level must be honoured by the inner SELECT, not silently dropped by
   // the recursion.
   // ===========================================================================
 
   describe('depth-2 with refinements', () => {
     it(
-      'orderBy + take on depth-2 child applies inside the nested aggregate',
+      'orderBy + limit on depth-2 child applies inside the nested aggregate',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           const users = createUsersCollection(runtime);
@@ -35,7 +35,7 @@ describe('integration/nested-includes/refinements', () => {
 
           const rows = await users
             .include('posts', (posts) =>
-              posts.include('comments', (c) => c.orderBy((cc) => cc.id.asc()).take(2)),
+              posts.include('comments', (c) => c.orderBy((cc) => cc.id.asc()).limit(2)),
             )
             .all();
 

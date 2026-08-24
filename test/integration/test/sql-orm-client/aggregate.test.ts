@@ -148,7 +148,7 @@ describe('integration/aggregate', () => {
   // stopped applying would flip these back to the unpaginated numbers.
   describe('row-scoped aggregate values', () => {
     it(
-      'take() after orderBy() sums only the top n rows',
+      'limit() after orderBy() sums only the top n rows',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           const posts = createPostsCollection(runtime);
@@ -163,7 +163,7 @@ describe('integration/aggregate', () => {
 
           const top2 = await posts
             .orderBy((post) => post.views.desc())
-            .take(2)
+            .limit(2)
             .aggregate((aggregate) => ({ total: aggregate.sum(numericField) }));
 
           // Sum of the top 2 by views (50 + 40): the unpaginated sum over all
@@ -175,7 +175,7 @@ describe('integration/aggregate', () => {
     );
 
     it(
-      'skip() without take() sums all-but-the-first-n rows',
+      'offset() without limit() sums all-but-the-first-n rows',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           const posts = createPostsCollection(runtime);
@@ -190,7 +190,7 @@ describe('integration/aggregate', () => {
 
           const stats = await posts
             .orderBy((post) => post.id.asc())
-            .skip(2)
+            .offset(2)
             .aggregate((aggregate) => ({ total: aggregate.sum(numericField) }));
 
           // Skips the first two rows by id (views 10, 20), leaving 30+40+50.
@@ -217,7 +217,7 @@ describe('integration/aggregate', () => {
           const stats = await posts
             .where((post) => post.views.gte(20))
             .orderBy((post) => post.views.desc())
-            .take(2)
+            .limit(2)
             .aggregate((aggregate) => ({ total: aggregate.sum(numericField) }));
 
           // Matching rows are 20/30/40/50 (sum 140); the top 2 of those by
@@ -302,7 +302,7 @@ describe('integration/aggregate', () => {
             .where((post) => post.views.gte(20))
             .where((post) => post.views.lte(40))
             .orderBy((post) => post.views.desc())
-            .take(2)
+            .limit(2)
             .aggregate((aggregate) => ({ total: aggregate.sum(numericField) }));
 
           // Matching rows are 20/30/40 (sum 90); the top 2 of those is 40+30.

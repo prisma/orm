@@ -43,10 +43,10 @@ describe('ports/prisma/functional/methods-count', () => {
   );
 
   it(
-    'take',
+    'limit',
     () =>
       withCount(async ({ db }) => {
-        const rows = await db.public.User.take(2).all();
+        const rows = await db.public.User.limit(2).all();
         expect(rows.length).toBe(2);
       }),
     timeouts.spinUpPpgDev,

@@ -3,5 +3,5 @@ import { createOrmClient } from './client';
 
 export async function ormClientGetAdminUsers(limit: number, runtime: Runtime) {
   const db = createOrmClient(runtime);
-  return db.User.admins().take(limit).all();
+  return db.User.admins().limit(limit).all();
 }

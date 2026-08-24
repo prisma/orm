@@ -132,6 +132,8 @@ import {
 } from './types';
 import { normalizeWhereArg } from './where-interop';
 
+type EmptyAggregateValue = ReturnType<typeof emptyAggregateResult>;
+
 function applyCreateDefaults(
   ctx: CollectionContext<Contract<SqlStorage>>,
   namespaceId: string,
@@ -477,7 +479,7 @@ class CollectionImpl<
    *
    * // Refine the related collection:
    * const withRecent = await db.orm.User.include('posts', (posts) =>
-   *   posts.where({ published: true }).orderBy((p) => p.createdAt.desc()).take(5),
+   *   posts.where({ published: true }).orderBy((p) => p.createdAt.desc()).limit(5),
    * ).all();
    *
    * // Reduce a to-many relation to a scalar value:
@@ -485,7 +487,7 @@ class CollectionImpl<
    *
    * // Multiple sub-views via combine():
    * const overview = await db.orm.User.include('posts', (posts) =>
-   *   posts.combine({ recent: posts.take(3), total: posts.count() }),
+   *   posts.combine({ recent: posts.limit(3), total: posts.count() }),
    * ).all();
    * ```
    */
@@ -783,7 +785,7 @@ class CollectionImpl<
    * ```typescript
    * const users = await db.orm.User.include('posts', (posts) =>
    *   posts.combine({
-   *     recent: posts.where({ published: true }).take(3),
+   *     recent: posts.where({ published: true }).limit(3),
    *     total: posts.count(),
    *     averageViews: posts.avg('views'),
    *   }),
@@ -851,14 +853,14 @@ class CollectionImpl<
    * ```typescript
    * const page1 = await db.orm.Post
    *   .orderBy((p) => p.createdAt.desc())
-   *   .take(20)
+   *   .limit(20)
    *   .all();
    *
    * const last = page1[page1.length - 1]!;
    * const page2 = await db.orm.Post
    *   .orderBy((p) => p.createdAt.desc())
    *   .cursor({ createdAt: last.createdAt })
-   *   .take(20)
+   *   .limit(20)
    *   .all();
    * ```
    */
@@ -959,10 +961,10 @@ class CollectionImpl<
    * Apply `LIMIT n`. Replaces any previous limit set on this collection.
    *
    * ```typescript
-   * const firstTen = await db.orm.User.orderBy((u) => u.id.asc()).take(10).all();
+   * const firstTen = await db.orm.User.orderBy((u) => u.id.asc()).limit(10).all();
    * ```
    */
-  take(n: number): Collection<TContract, ModelName, Row, State> {
+  limit(n: number): Collection<TContract, ModelName, Row, State> {
     return this.#clone({ limit: n });
   }
 
@@ -972,12 +974,12 @@ class CollectionImpl<
    * ```typescript
    * const page2 = await db.orm.User
    *   .orderBy((u) => u.id.asc())
-   *   .skip(10)
-   *   .take(10)
+   *   .offset(10)
+   *   .limit(10)
    *   .all();
    * ```
    */
-  skip(n: number): Collection<TContract, ModelName, Row, State> {
+  offset(n: number): Collection<TContract, ModelName, Row, State> {
     return this.#clone({ offset: n });
   }
 
@@ -1084,7 +1086,7 @@ class CollectionImpl<
         : typeof filter === 'function'
           ? this.where(filter)
           : this.where(filter);
-    const limited = scoped.take(1).#withAnnotationsFromMeta(configure, 'first');
+    const limited = scoped.limit(1).#withAnnotationsFromMeta(configure, 'first');
     const rows = await limited.#dispatch().toArray();
     return rows[0] ?? null;
   }
@@ -2376,7 +2378,7 @@ class CollectionImpl<
    * and column — so the answer derives from the operation's declared row
    * rather than its name.
    */
-  #emptyAggregateValue(selector: AggregateSelector<unknown>): unknown {
+  #emptyAggregateValue(selector: AggregateSelector<unknown>): EmptyAggregateValue {
     const resolved = resolveAggregate({
       aggregates: this.ctx.context.aggregateDescriptors,
       contract: this.contract,

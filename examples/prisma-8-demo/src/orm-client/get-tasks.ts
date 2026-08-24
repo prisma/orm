@@ -3,15 +3,15 @@ import { createOrmClient } from './client';
 
 export async function ormClientGetTasks(limit: number, runtime: Runtime) {
   const db = createOrmClient(runtime);
-  return db.Task.take(limit).all();
+  return db.Task.limit(limit).all();
 }
 
 export async function ormClientGetBugs(limit: number, runtime: Runtime) {
   const db = createOrmClient(runtime);
-  return db.Task.bugs().take(limit).all();
+  return db.Task.bugs().limit(limit).all();
 }
 
 export async function ormClientGetFeatures(limit: number, runtime: Runtime) {
   const db = createOrmClient(runtime);
-  return db.Task.features().take(limit).all();
+  return db.Task.features().limit(limit).all();
 }

@@ -47,7 +47,7 @@ export function representativePlans(): ReadonlyArray<readonly [string, SelectAst
       'users',
       users.include('posts', (posts) =>
         posts.combine({
-          recent: posts.orderBy((post) => post.id.desc()).take(3),
+          recent: posts.orderBy((post) => post.id.desc()).limit(3),
           total: posts.count(),
         }),
       ).state,

@@ -18,7 +18,7 @@ Reach for the ORM first; drop to `db.query` when the ORM can't express the shape
 | Need | Choose | Why |
 |---|---|---|
 | Standard CRUD with reference relations | **ORM (`db.orm.<root>`)** | Collection-shaped; object `.where({ ... })`; `.create` / `.update` / `.delete` / `.upsert`. |
-| Eager-load a reference relation | **ORM `.include('<relation>')`** | Lowers to `$lookup`; composes with `.where` / `.select` / `.orderBy` / `.take`. |
+| Eager-load a reference relation | **ORM `.include('<relation>')`** | Lowers to `$lookup`; composes with `.where` / `.select` / `.orderBy` / `.limit`. |
 | Polymorphic root (discriminated variants) | **ORM `.variant('<VariantName>')`** | Narrows to one variant and injects the discriminator filter. |
 | Field-level Mongo updates (`$push`, `$inc`, dot-path `$set`) | **ORM `.update((f) => [f.field.inc(1)])`** | Field-accessor callback; plain-object `.update({ ... })` for whole-field replacement. |
 | Aggregation pipeline (group, facet, `$lookup` with reshaping) | **Query builder (`db.query.from(...)`)** | Full pipeline surface; typed row shape through `.build()`. |
@@ -43,7 +43,7 @@ const alice = await db.orm.users.where({ email: 'alice@example.com' }).first();
 const recent = await db.orm.posts
   .select('title', 'authorId', 'createdAt')
   .orderBy({ createdAt: -1 })
-  .take(10)
+  .limit(10)
   .all();
 ```
 
@@ -58,7 +58,7 @@ const articles = await db.orm.posts.variant('Article').all();
 const tutorials = await db.orm.posts.variant('Tutorial').where({ authorId }).all();
 ```
 
-**Sorting and pagination.** `.orderBy({ field: 1 | -1 })` (Mongo sort directions). `.take(n)` maps to `$limit`; `.skip(n)` maps to `$skip`.
+**Sorting and pagination.** `.orderBy({ field: 1 | -1 })` (Mongo sort directions). `.limit(n)` maps to `$limit`; `.offset(n)` maps to `$skip`.
 
 **`.first()` vs `.all()`.** `.first()` issues a limit-1 read; `.all()` returns every matching document. There is no `.first({ pk })` shorthand on Mongo — filter on `_id` explicitly: `.where({ _id: id }).first()`.
 

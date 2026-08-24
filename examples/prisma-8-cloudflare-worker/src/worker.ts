@@ -33,7 +33,7 @@ export default {
     if (url.pathname === '/orm/users') {
       const limit = parseLimit(url.searchParams.get('limit'), 10);
       const orm = createOrmClient(runtime);
-      const rows = await orm.User.newestFirst().take(limit).all();
+      const rows = await orm.User.newestFirst().limit(limit).all();
       return Response.json({ ok: true, route: 'orm/users', count: rows.length, rows });
     }
 
@@ -46,7 +46,7 @@ export default {
       const orm = createOrmClient(runtime);
       const rows = await orm.Post.where({ userId })
         .orderBy((post) => post.createdAt.desc())
-        .take(limit)
+        .limit(limit)
         .all();
       return Response.json({ ok: true, route: 'orm/posts', count: rows.length, rows });
     }

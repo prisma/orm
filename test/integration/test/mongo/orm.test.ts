@@ -209,7 +209,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     expect(results[2]!.name).toBe('Charlie');
   });
 
-  it('skip() and take() return correct subset', async () => {
+  it('offset() and limit() return correct subset', async () => {
     const db = ctx.client.db(ctx.dbName);
     await db.collection('users').insertMany([
       { name: 'Alice', email: 'alice@example.com', addresses: [] },
@@ -218,7 +218,7 @@ describeWithMongoDB('mongoOrm integration', (ctx) => {
     ]);
 
     const orm = mongoOrm({ contract, executor: ctx.runtime });
-    const results = await orm.users.orderBy({ name: 1 }).skip(1).take(1).all();
+    const results = await orm.users.orderBy({ name: 1 }).offset(1).limit(1).all();
 
     expect(results).toHaveLength(1);
     expect(results[0]!.name).toBe('Bob');

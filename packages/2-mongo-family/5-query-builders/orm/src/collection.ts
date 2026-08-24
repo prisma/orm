@@ -101,9 +101,9 @@ export interface MongoCollection<
     spec: Partial<Record<ModelFieldKeys<TContract, ModelName>, 1 | -1>>,
   ): MongoCollection<TContract, ModelName, TIncludes, TVariant>;
   /** Limits the number of results. Returns a new immutable collection. */
-  take(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariant>;
-  /** Skips the first `n` results. Returns a new immutable collection. */
-  skip(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariant>;
+  limit(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariant>;
+  /** Offsets the results by `n`. Returns a new immutable collection. */
+  offset(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariant>;
   /** Executes the query and returns all matching rows as an async iterable. */
   all(): AsyncIterableResult<IncludedRow<TContract, ModelName, TIncludes>>;
   /** Executes the query with limit 1. Returns the first matching row or `null`. */
@@ -326,11 +326,11 @@ class MongoCollectionImpl<
     return this.#clone({ orderBy: merged });
   }
 
-  take(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariant> {
+  limit(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariant> {
     return this.#clone({ limit: n });
   }
 
-  skip(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariant> {
+  offset(n: number): MongoCollection<TContract, ModelName, TIncludes, TVariant> {
     return this.#clone({ offset: n });
   }
 
@@ -941,7 +941,7 @@ class MongoCollectionImpl<
     ) {
       throw ormError(
         'ORM.OPERATION_UNSUPPORTED',
-        `${methodName}() does not support orderBy/skip/take. Remove windowing before calling .${methodName}()`,
+        `${methodName}() does not support orderBy/offset/limit. Remove windowing before calling .${methodName}()`,
         { meta: { method: methodName, reason: 'windowing' } },
       );
     }

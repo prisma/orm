@@ -17,7 +17,7 @@
 - [ ] Runs `contract emit`.
 - [ ] Runs `migration plan --name <slug>` (or `db update` for dev).
 - [ ] Runs `db migrate`.
-- [ ] Writes a query using `.include('posts', post => post.orderBy(...).take(3))`.
+- [ ] Writes a query using `.include('posts', post => post.orderBy(...).limit(3))`.
 
 ## Success criteria
 

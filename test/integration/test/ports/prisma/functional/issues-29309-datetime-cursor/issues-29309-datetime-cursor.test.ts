@@ -17,7 +17,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //     Prisma: starts FROM Jan 3, skip 1 (Jan 3 itself), take 3 → Jan 4, 5, 6 ✓
 //     prisma-next: starts AFTER Jan 3, skip 1 (skips Jan 4), take 3 → Jan 5, 6, 7 ✗
 //
-// A faithful port using `.orderBy().cursor().skip(1).take(3).all()` runs but
+// A faithful port using `.orderBy().cursor().offset(1).limit(3).all()` runs but
 // returns different rows → it.fails (genuine prisma-next gap).
 //
 // Dispositions:
@@ -40,7 +40,7 @@ describe('ports/prisma/functional/issues-29309-datetime-cursor', () => {
 
         const firstThree = await db.public.Event.where({ appId: 1 })
           .orderBy((e) => e.createdAt.asc())
-          .take(3)
+          .limit(3)
           .all();
         const cursorRow = firstThree[2]!; // 2025-01-03
 
@@ -50,8 +50,8 @@ describe('ports/prisma/functional/issues-29309-datetime-cursor', () => {
         const withCursor = await db.public.Event.where({ appId: 1 })
           .orderBy((e) => e.createdAt.asc())
           .cursor({ appId: cursorRow.appId, createdAt: cursorRow.createdAt })
-          .skip(1)
-          .take(3)
+          .offset(1)
+          .limit(3)
           .all();
 
         expect(withCursor).toEqual([

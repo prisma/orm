@@ -5,6 +5,6 @@ export async function ormClientGetUserPosts(userId: string, limit: number, runti
   const db = createOrmClient(runtime);
   return db.Post.forUser(userId)
     .orderBy((post) => post.createdAt.desc())
-    .take(limit)
+    .limit(limit)
     .all();
 }

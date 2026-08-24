@@ -386,12 +386,12 @@ describe('integration/nested-includes/strategy', () => {
             .include('posts', (posts) =>
               posts
                 .where((p) => p.views.gte(200))
-                .take(2)
+                .limit(2)
                 .count(),
             )
             .all();
 
-          // Three posts match views >= 200; take(2) caps the row set
+          // Three posts match views >= 200; limit(2) caps the row set
           // the aggregate sees — count = 2.
           expect(rows).toEqual([
             {
@@ -410,7 +410,7 @@ describe('integration/nested-includes/strategy', () => {
     );
 
     it(
-      'distinct(cols).orderBy().take().sum() aggregates the ordered top-N deduped rows',
+      'distinct(cols).orderBy().limit().sum() aggregates the ordered top-N deduped rows',
       async () => {
         await withCollectionRuntime(async (runtime) => {
           await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@example.com' }]);
@@ -429,7 +429,7 @@ describe('integration/nested-includes/strategy', () => {
               posts
                 .distinct('title')
                 .orderBy((post) => post.views.desc())
-                .take(2)
+                .limit(2)
                 .sum('views'),
             )
             .all();
@@ -468,7 +468,7 @@ describe('integration/nested-includes/strategy', () => {
           const rows = await users
             .include('posts', (posts) =>
               posts.combine({
-                recent: posts.orderBy((p) => p.id.desc()).take(2),
+                recent: posts.orderBy((p) => p.id.desc()).limit(2),
                 total: posts.count(),
               }),
             )

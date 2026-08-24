@@ -192,7 +192,7 @@ collection surface (`db.orm.public.Cafe`, `db.orm.public.Route`, `db.orm.public.
 — the PostGIS extension hangs `.contains` / `.within` / `.intersects` /
 `.intersectsBbox` / `.distanceSphere` / `.distance` / `.dwithin` directly
 on geometry fields, so spatial predicates compose with the usual
-`.where` / `.take` / `.orderBy` chain.
+`.where` / `.limit` / `.orderBy` chain.
 
 `findCafesNearPoint` is the exception: it projects a computed
 `meters` column alongside the model fields, which only the SQL builder

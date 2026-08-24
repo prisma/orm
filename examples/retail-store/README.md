@@ -5,14 +5,14 @@ An interactive e-commerce example application demonstrating Prisma Next's MongoD
 ## What This Demonstrates
 
 | Feature | Implementation |
-|---|---|
+| --- | --- |
 | **PSL contract with embedded value objects** | 8 `type` definitions (Price, Image, Address, CartItem, etc.) nested inside 7 models |
 | **ORM CRUD** | `create`, `createAll`, `update`, `delete`, `upsert` via `@internal/mongo-orm` |
 | **Reference relations** | `include('user')` compiles to `$lookup` for cart→user, order→user, invoice→order |
 | **Array update operators** | `$push`/`$pull` via `mongoRaw` for cart items and order status history |
 | **Aggregation pipelines** | `$match`→`$group`→`$sort` for event analytics, `$sample` for random products |
 | **Pipeline search** | `$regex` via `MongoOrExpr` + `MongoFieldFilter.of` for multi-field text search |
-| **Pagination** | ORM `.skip(n).take(n)` for paginated product listing |
+| **Pagination** | Mongo query-builder `.skip(n).limit(n)` for paginated product listing |
 | **Vector search** | `findSimilarProducts` via `$vectorSearch` (requires Atlas cluster) |
 | **Cookie-based auth** | Next.js middleware + signup/logout API routes with `userId` cookie |
 | **Interactive cart** | Add to Cart, remove, clear — all backed by PN data layer + CartProvider context |
@@ -107,7 +107,6 @@ middleware.ts             Auth middleware (redirects to /login)
 ```
 
 ## Framework Gaps
-
 
 - **ObjectId in filters**: `MongoFieldFilter.eq` with ObjectId values requires wrapping in `MongoParamRef` (see `src/data/object-id-filter.ts`)
 - **Schema migrations**: Migration artifacts are committed under `migrations/`; run `pnpm migration:apply` to apply. The planner handles indexes and collection validators but not all schema-level operations.

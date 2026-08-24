@@ -952,18 +952,18 @@ function buildDistinctNonLeafChildRowsSelect(options: {
  * pulls `.value` out).
  *
  * The refine state's pipeline composes through to the aggregate's
- * input set: `where` / `orderBy` / `take` / `skip` / `distinct` shape
+ * input set: `where` / `orderBy` / `limit` / `offset` / `distinct` shape
  * the rows the aggregate sees, matching the natural compositional
  * semantic of
  *
- *   `db.User.include('posts', p => p.where(W).take(N).count())  // ≤ N`
+ *   `db.User.include('posts', p => p.where(W).limit(N).count())  // ≤ N`
  *
- * When `take` / `skip` / `distinct` is set, the aggregate's input
+ * When `limit` / `offset` / `distinct` is set, the aggregate's input
  * cannot just be the bare correlated table — a top-level `LIMIT` on
  * the aggregating SELECT only trims the (already one-row) output, not
  * the rows being aggregated. We therefore wrap the source in a
  * derived SELECT that materialises the shaped row set, then
- * aggregate over that. `orderBy` alone (no `take` / `skip` /
+ * aggregate over that. `orderBy` alone (no `limit` / `offset` /
  * `distinct`) is dropped at the SQL level since reordering does not
  * change which rows are aggregated.
  */
@@ -1208,7 +1208,7 @@ function buildIncludeAggregateExpr(
  * Row branches reuse the standalone row-include builder; scalar
  * branches reuse `buildIncludeChildScalarSelect` — the `{value: ...}`
  * envelope survives into the combined JSON and the decoder unwraps
- * it per scalar branch. Distinct/take/skip semantics inside a row
+ * it per scalar branch. Distinct/limit/offset semantics inside a row
  * branch fan out naturally because the row builder is invoked with
  * a synthetic IncludeExpr whose `nested` is the branch's state.
  */

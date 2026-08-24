@@ -7,6 +7,6 @@ export async function getUsersWithPosts(runtime: Runtime, limit = 10) {
     .include('posts', (post) =>
       post.orderBy((p) => p.createdAt.desc()).select('id', 'title', 'createdAt'),
     )
-    .take(limit)
+    .limit(limit)
     .all();
 }

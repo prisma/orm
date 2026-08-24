@@ -18,7 +18,7 @@ import type { Contract } from './contract';
 const db = postgres<Contract>({ contractJson, url: process.env.DATABASE_URL! });
 
 // Anywhere in the process:
-const users = await db.orm.User.take(10).all();
+const users = await db.orm.User.limit(10).all();
 ```
 
 In a per-request runtime (Cloudflare Workers, AWS Lambda Node, Vercel Edge / Vercel Serverless, Deno Deploy, Bun edge):
@@ -36,7 +36,7 @@ export default {
   async fetch(_req: Request, env: Env): Promise<Response> {
     await using runtime = await db.connect({ url: env.HYPERDRIVE.connectionString });
     const orm = createOrmClient(runtime);
-    const users = await orm.User.take(10).all();
+    const users = await orm.User.limit(10).all();
     return Response.json(users);
   },
 };
@@ -61,7 +61,7 @@ This document is the rationale. The remainder explains why two clients, why they
 
 ### A long-lived process has one runtime lifetime; the wrapper can match it
 
-A Node process has one beginning and (essentially) one end. A `Runtime` constructed at boot is a `Runtime` valid until shutdown: the underlying `pg.Pool` (or singleton `pg.Client`) handles connection lifecycle internally, query routing serializes through the pool's checkout/release dance, and call sites never have to remember to release anything. Closure-caching the `Runtime` over `(stack, context, contract, driver)` is exactly right for this lifecycle. The same is true of the `orm` client and the `transaction()` member — they thread the cached runtime, and `db.orm.User.take(10).all()` reads the way a long-lived API should read.
+A Node process has one beginning and (essentially) one end. A `Runtime` constructed at boot is a `Runtime` valid until shutdown: the underlying `pg.Pool` (or singleton `pg.Client`) handles connection lifecycle internally, query routing serializes through the pool's checkout/release dance, and call sites never have to remember to release anything. Closure-caching the `Runtime` over `(stack, context, contract, driver)` is exactly right for this lifecycle. The same is true of the `orm` client and the `transaction()` member — they thread the cached runtime, and `db.orm.User.limit(10).all()` reads the way a long-lived API should read.
 
 ### A per-request runtime has many short, parallel runtime lifetimes; the wrapper cannot match them all with one cache
 
@@ -112,7 +112,7 @@ The returned object carries `[Symbol.asyncDispose]` that calls `runtime.close()`
 
 ```ts
 const orm = createOrmClient(runtime);
-const users = await orm.User.take(10).all();
+const users = await orm.User.limit(10).all();
 
 await withTransaction(runtime, async (tx) => {
   await tx.execute(/* ... */);

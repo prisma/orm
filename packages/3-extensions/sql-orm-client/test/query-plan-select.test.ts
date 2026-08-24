@@ -151,8 +151,8 @@ describe('compileSelectWithIncludes', () => {
       .orderBy((user) => user.id.desc())
       .cursor({ name: 'Alice', id: 7 })
       .distinctOn('email')
-      .take(10)
-      .skip(3)
+      .limit(10)
+      .offset(3)
       .select('id').state;
 
     const plan = compileSelect(baseContract, 'public', 'users', state);
@@ -337,8 +337,8 @@ describe('compileSelectWithIncludes', () => {
       posts
         .orderBy((post) => post.title.asc())
         .distinctOn('title')
-        .skip(1)
-        .take(2),
+        .offset(1)
+        .limit(2),
     ).state;
 
     const plan = compileSelectWithIncludes(
@@ -501,14 +501,14 @@ describe('compileSelectWithIncludes', () => {
     });
 
     // Pagination on a scalar refine composes through to the aggregate
-    // scope: `take(N)` / `skip(M)` shape the row set the aggregate sees.
+    // scope: `limit(N)` / `offset(M)` shape the row set the aggregate sees.
     it('pagination composes through to the correlated COUNT scope', () => {
       const { collection } = createCollection();
       const state = collection.include('posts', (posts) =>
         posts
           .where((post) => post.views.gte(100))
-          .skip(5)
-          .take(10)
+          .offset(5)
+          .limit(10)
           .count(),
       ).state;
 
@@ -542,7 +542,7 @@ describe('compileSelectWithIncludes', () => {
       );
     });
 
-    // `distinct(cols).orderBy(c).take(N).sum(...)` must aggregate the
+    // `distinct(cols).orderBy(c).limit(N).sum(...)` must aggregate the
     // ordered top-N deduped rows. The ROW_NUMBER dedup wrap strips
     // ordering from its output, so the orderBy is reapplied on the
     // wrapped alias before LIMIT slices the deduped rows.
@@ -552,7 +552,7 @@ describe('compileSelectWithIncludes', () => {
         posts
           .distinct('title')
           .orderBy((post) => post.views.desc())
-          .take(2)
+          .limit(2)
           .sum('views'),
       ).state;
 
@@ -678,7 +678,7 @@ describe('compileSelectWithIncludes', () => {
       const { collection } = createCollection();
       const state = collection.include('posts', (posts) =>
         posts.combine({
-          recent: posts.orderBy((p) => p.id.desc()).take(3),
+          recent: posts.orderBy((p) => p.id.desc()).limit(3),
           total: posts.count(),
         }),
       ).state;

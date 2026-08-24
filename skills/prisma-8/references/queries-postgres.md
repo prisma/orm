@@ -16,9 +16,9 @@ Reach for the ORM first; drop to `db.sql` when the ORM can't express the shape. 
 **Lane decision table:**
 
 | Need | Choose | Why |
-|---|---|---|
+| --- | --- | --- |
 | Standard CRUD with relations | **ORM (`db.orm.<Model>`)** | Highest ergonomics; fully typed; model-shaped. |
-| Eager-load related records | **ORM `.include(...)`** | Composes with `.where` / `.select` / `.orderBy` / `.take` per branch. |
+| Eager-load related records | **ORM `.include(...)`** | Composes with `.where` / `.select` / `.orderBy` / `.limit` per branch. |
 | Aggregate (count, sum, avg) | **ORM `.aggregate(...)`** | Typed result; works with grouping (`.groupBy(...).aggregate(...)`). |
 | `INSERT ... RETURNING` / `UPDATE ... RETURNING` typed result | **ORM mutations** (returns updated rows) or **`db.sql.<t>.insert(...).returning(...)`** | ORM returns inserted/updated rows; SQL builder exposes `.returning(...)` explicitly. |
 | Computed projection (e.g. `ST_DistanceSphere(location, point) AS meters`) alongside model fields | **SQL builder (`db.sql.<t>`)** | The ORM projects model fields; arbitrary expression projection is the SQL builder's seam. |
@@ -46,7 +46,7 @@ const alice = await db.orm.User
 const recentUsers = await db.orm.User
   .select('id', 'email', 'createdAt')
   .orderBy((u) => u.createdAt.desc())
-  .take(10)
+  .limit(10)
   .all();
 ```
 
@@ -95,13 +95,13 @@ await db.orm.User
   .all();
 ```
 
-**Sorting and pagination.** `.orderBy(...)` accepts a single lambda or an array of lambdas (each calling `.asc()` / `.desc()` on a field). `.take(n)` limits; `.skip(n)` offsets.
+**Sorting and pagination.** `.orderBy(...)` accepts a single lambda or an array of lambdas (each calling `.asc()` / `.desc()` on a field). `.limit(n)` limits; `.offset(n)` offsets.
 
 ```typescript
 await db.orm.Post
   .where((p) => p.authorId.eq(userId))
   .orderBy([(p) => p.createdAt.desc(), (p) => p.id.desc()])
-  .take(20)
+  .limit(20)
   .all();
 ```
 
@@ -110,14 +110,14 @@ await db.orm.Post
 ```typescript
 const page1 = await db.orm.Post
   .orderBy((p) => p.createdAt.desc())
-  .take(20)
+  .limit(20)
   .all();
 
 const last = page1[page1.length - 1]!;
 const page2 = await db.orm.Post
   .orderBy((p) => p.createdAt.desc())
   .cursor({ createdAt: last.createdAt })
-  .take(20)
+  .limit(20)
   .all();
 ```
 
@@ -127,7 +127,7 @@ Cursor keys must match fields in the active `orderBy`. For a composite `orderBy`
 
 ## Workflow — Eager-loading relations (`.include`)
 
-The concept: `.include('<relation>', (branch) => branch.<chain>)` adds a relation branch to the parent query. The branch is its own collection — compose `.where` / `.select` / `.orderBy` / `.take` on it just like the parent.
+The concept: `.include('<relation>', (branch) => branch.<chain>)` adds a relation branch to the parent query. The branch is its own collection — compose `.where` / `.select` / `.orderBy` / `.limit` on it just like the parent.
 
 ```typescript
 await db.orm.User
@@ -136,9 +136,9 @@ await db.orm.User
     post
       .select('id', 'title', 'createdAt')
       .orderBy((p) => p.createdAt.desc())
-      .take(5),
+      .limit(5),
   )
-  .take(10)
+  .limit(10)
   .all();
 // → Array<{ id, email, posts: Array<{ id, title, createdAt }> }>
 ```
@@ -165,7 +165,7 @@ await db.orm.User.include('posts', (posts) => posts.sumBigInt('views')).all();
 
 // Several sub-views of one relation at once:
 await db.orm.User.include('posts', (posts) =>
-  posts.combine({ recent: posts.take(3), total: posts.count() }),
+  posts.combine({ recent: posts.limit(3), total: posts.count() }),
 ).all();
 // → Array<{ ...user, posts: { recent: Post[]; total: number } }>
 ```
@@ -235,7 +235,7 @@ const byKind = await db.orm.User
 **The bare operations answer as JS numbers. The suffixed ones answer losslessly.** An aggregate's type is the one its target declares and its nullability matches SQL semantics, both read from the contract. On PostgreSQL:
 
 | Aggregate | Type | Empty result |
-|---|---|---|
+| --- | --- | --- |
 | `count()` | `number` | `0` |
 | `countBigInt()` | `bigint` | `0n` |
 | `sum(field)` over `int2` / `int4` / `int8` / `BigIntNumber` | `number \| null` | `null` (SQL `SUM` over zero rows is `NULL`) |
@@ -391,7 +391,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 8. **Setting `capabilities: { lateral: true }` in `prisma.config.ts`.** `defineConfig` does not take `capabilities`. Capabilities are declared by the active adapter and become part of the emitted contract; the Postgres adapter advertises `lateral`, `jsonAgg`, and `returning` out of the box. Enable extension capabilities through `extensions: [...]` in the config (see `references/contract.md`).
 9. **Confabulating a TypedSQL or `.stream()` surface.** Neither exists today. Raw SQL does: the client's raw lane, ``db.raw.sql`…` ``. See *What Prisma Next doesn't do yet* in [`queries.md`](./queries.md) for all three.
 10. **Mixing the ORM mutation return with `runtime.execute(plan)`.** ORM terminals issue the query themselves and return rows. `runtime.execute` is for SQL-builder plans.
-11. **Top-N grouped queries written as `groupBy(...).aggregate(...).sort().slice()` in JS.** That's a fallback because the grouped collection doesn't expose `.orderBy(...)` / `.take(...)`. Fine at small cardinalities; for large grouped result sets, drop to `db.sql.<table>`.
+11. **Ordering grouped rows by an aggregate metric.** The grouped collection supports `.orderBy(...)` on group keys plus `.limit(...)` / `.offset(...)`, but it cannot order by an aggregate alias such as `SUM(amount)`. Sorting the materialized aggregate result in JS is fine at small cardinalities; for large grouped result sets, drop to `db.sql.<table>`.
 
 ## Reference Files
 
@@ -407,7 +407,7 @@ Cross-namespace relations (e.g. `public.Profile` → `auth.User`) follow the sam
 - [ ] Reached for `countBigInt` / `sumBigInt` / `avgDecimal` where the value can outgrow a JS number or the exact decimal matters — `count()` and `sum` over an integer column throw `RUNTIME.DECODE_FAILED` outside ±(2^53 − 1) rather than rounding, and `avg` rounds as any double does.
 - [ ] Compared and serialised aggregate *results* as what they are — a `bigint` from a suffixed variant needs `0n` literals and `String(value)` rather than bare `JSON.stringify` — leaving the ORM's `having(...)` operands as numbers, and matching each SQL-builder comparison literal to the aggregate's own result codec (`fns.gt(fns.count(), 1)`).
 - [ ] Expressed ranges as chained `.where(...)` clauses or a single `and(...)` clause — did NOT reach for a non-existent `.between(...)` operator.
-- [ ] For cursor pagination, used `.orderBy(...).cursor({ field: lastValue }).take(n).all()` — did NOT hand-write a `.where(p => p.field.lt(cursor))` workaround when the `.cursor()` API serves the same purpose.
+- [ ] For cursor pagination, used `.orderBy(...).cursor({ field: lastValue }).limit(n).all()` — did NOT hand-write a `.where(p => p.field.lt(cursor))` workaround when the `.cursor()` API serves the same purpose.
 - [ ] For ORM combinators, imported `and` / `or` / `not` from the (currently internal) `@internal/sql-orm-client` and noted the façade gap to the user.
 - [ ] Executed SQL-builder plans via `db.runtime().execute(plan)` (or `tx.execute(plan)` inside a transaction).
 - [ ] Wrapped multi-statement work in `db.transaction(async (tx) => { ... })` where atomicity matters.

@@ -167,7 +167,7 @@ export default {
     // ORM — constructed against the per-request runtime.
     if (url.pathname === '/orm/users') {
       const orm = createOrmClient(runtime);
-      const rows = await orm.User.newestFirst().take(10).all();
+      const rows = await orm.User.newestFirst().limit(10).all();
       return Response.json(rows);
     }
 
@@ -267,7 +267,7 @@ The existing migration commands accept a connection string (typically via `DATAB
 
 - **Transaction affinity within a single underlying connection.** A `withTransaction(runtime, async (tx) => ...)` body runs all of its statements on the per-request runtime's single underlying `pg.Client`. Crossing runtime boundaries inside a transaction body is undefined; constructing a second `await using runtime2 = await db.connect(...)` inside a transaction body and routing some statements through it will not be transactional with the outer body. This is the same invariant Hyperdrive itself documents — transactions need to land on one client connection — and the per-request facade enforces it by structure (one `runtime` per `connect()`, one client per `runtime`).
 
-- **Isolate memory limits.** Workers isolates have bounded memory (128 MiB by default; higher on Workers Unbound). ORM `findMany`-style operations materialize the result set into a JS array before returning; `take(...)` is your hard memory cap on those. If you need to stream, use the SQL DSL with `runtime.execute(...)` — the iterator is cursor-backed by default and yields rows as they arrive, with `for-await ... break` cancelling cleanly without buffering the rest of the result set.
+- **Isolate memory limits.** Workers isolates have bounded memory (128 MiB by default; higher on Workers Unbound). ORM `findMany`-style operations materialize the result set into a JS array before returning; `limit(...)` is your hard memory cap on those. If you need to stream, use the SQL DSL with `runtime.execute(...)` — the iterator is cursor-backed by default and yields rows as they arrive, with `for-await ... break` cancelling cleanly without buffering the rest of the result set.
 
 - **Cursor enabled by default.** The default for `postgresServerless` is `cursor: { /* enabled */ }`. Long-lived `postgres()` defaults to `cursor: { disabled: true }`. The asymmetry is intentional (see [ADR 207](./architecture%20docs/adrs/ADR%20207%20-%20Per-environment%20facade%20asymmetry.md) and the cursor section above). To opt out on the per-request side, pass `cursor: { disabled: true }` to `postgresServerless({...})`.
 

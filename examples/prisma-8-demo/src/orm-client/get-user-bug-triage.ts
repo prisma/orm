@@ -20,6 +20,6 @@ export async function ormClientGetUserBugTriage(severity: string, limit: number,
         .orderBy((bug) => bug.createdAt.asc()),
     )
     .orderBy((user) => user.displayName.asc())
-    .take(limit)
+    .limit(limit)
     .all();
 }

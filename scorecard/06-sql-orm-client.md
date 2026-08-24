@@ -15,8 +15,8 @@ Legend:
 | `where(...)` (callback / where input / shorthand) | ✅ | ✅ | — | `test/integration/test/sql-orm-client/mn-filter.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`findMany › with filter`) |
 | `select(...)` projection | ✅ | ✅ | — | `test/integration/test/sql-orm-client/include.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` |
 | `orderBy(...)` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/self-relations.test.ts` (`orderBy on a depth-1 self-relation`); `test/e2e/framework/test/sqlite/orm.test.ts` (`with ordering`) |
-| `take` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`take() and skip() apply limit and offset`); `test/e2e/framework/test/sqlite/orm.test.ts` (`with take and skip`) |
-| `skip` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`take() and skip() apply limit and offset`); `test/e2e/framework/test/sqlite/orm.test.ts` (`with take and skip`) |
+| `limit` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`limit() and offset() apply limit and offset`); `test/e2e/framework/test/sqlite/orm.test.ts` (`with limit and offset`) |
+| `offset` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`limit() and offset() apply limit and offset`); `test/e2e/framework/test/sqlite/orm.test.ts` (`with limit and offset`) |
 | `cursor(...)` keyset pagination | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`cursor() applies forward and backward boundaries`) |
 | `distinct(...)` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`distinct() returns unique values for selected fields`) |
 | `distinctOn(...)` | ✅ | — | — | `test/integration/test/sql-orm-client/pagination.test.ts` (`distinctOn() keeps one row per key using orderBy precedence`) |

@@ -5,6 +5,6 @@ export async function ormClientBm25TopMatches(query: string, limit: number, runt
   const db = createOrmClient(runtime);
   return db.Item.where((item) => item.description.paradeDbMatch(query))
     .orderBy((item) => item.id.paradeDbScore().desc())
-    .take(limit)
+    .limit(limit)
     .all();
 }

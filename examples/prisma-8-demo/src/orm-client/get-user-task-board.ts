@@ -17,6 +17,6 @@ export async function ormClientGetUserTaskBoard(limit: number, runtime: Runtime)
   return db.User.newestFirst()
     .select('id', 'displayName', 'kind')
     .include('tasks', (tasks) => tasks.orderBy((task) => task.createdAt.asc()))
-    .take(limit)
+    .limit(limit)
     .all();
 }

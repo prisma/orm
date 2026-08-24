@@ -7,6 +7,7 @@
 The same chaining API works for both families. The consumer doesn't know (or care) whether the data lives in Postgres or MongoDB:
 
 **SQL ORM (existing):**
+
 ```typescript
 const db = orm({ contract, runtime });
 
@@ -22,13 +23,14 @@ const feed = await db.Post
   .select('id', 'title', 'userId', 'createdAt')
   .include('user', (user) => user.select('id', 'email', 'kind'))
   .orderBy([(post) => post.createdAt.desc()])
-  .take(10)
+  .limit(10)
   .all();
 
 const user = await db.User.byEmail('alice@example.com').first();
 ```
 
 **Mongo ORM (target — not yet implemented):**
+
 ```typescript
 const db = mongoOrm({ contract, runtime });
 
@@ -43,7 +45,7 @@ const tasks = await db.tasks
   .where((task) => task.assigneeId.eq('u1'))
   .include('assignee')
   .orderBy([(task) => task.createdAt.desc()])
-  .take(10)
+  .limit(10)
   .all();
 
 const user = await db.users.byEmail('alice@example.com').first();
@@ -78,7 +80,7 @@ Two ORM clients with divergent APIs for the same conceptual operations:
 
 ### Options-bag API for both families
 
-Rewrite both ORM clients to use `findMany({ where, include, select, orderBy, take })`.
+Rewrite both ORM clients to use `findMany({ where, include, select, orderBy, limit })`.
 
 **Rejected.** This loses the composability that makes the chaining API valuable. Custom collection subclasses can't add domain methods that participate in the chain. The options bag grows unwieldy as more operations are added (cursor, distinct, groupBy). The SQL ORM already proved the chaining pattern works well — switching to options-bag would be a regression.
 
@@ -86,7 +88,7 @@ Rewrite both ORM clients to use `findMany({ where, include, select, orderBy, tak
 
 Keep the SQL ORM's chaining API and the Mongo ORM's options-bag API. Let each family optimize for its native idioms.
 
-**Rejected.** The operations are the same — `where`, `select`, `include`, `orderBy`, `take`, `all`, `first`. Having different API shapes for identical operations forces users to context-switch between families. The value of a shared data layer is that the interface is consistent; family-specific details should be encapsulated, not exposed through API shape differences.
+**Rejected.** The operations are the same — `where`, `select`, `include`, `orderBy`, `limit`, `all`, `first`. Having different API shapes for identical operations forces users to context-switch between families. The value of a shared data layer is that the interface is consistent; family-specific details should be encapsulated, not exposed through API shape differences.
 
 ## Decision
 
@@ -95,8 +97,8 @@ The `Collection` class with fluent chaining is the shared ORM interface for all 
 ### What's shared (framework-level)
 
 | Concept | Description |
-|---|---|
-| **Collection chaining API** | `.where().select().include().orderBy().take().skip().all().first()` — immutable method chaining, each call returns a new collection with accumulated state |
+| --- | --- |
+| **Collection chaining API** | `.where().select().include().orderBy().limit().offset().all().first()` — immutable method chaining, each call returns a new collection with accumulated state |
 | **CollectionState** | The family-agnostic state bag: filters, includes, orderBy, selectedFields, limit, offset. Chaining methods accumulate state; terminal methods compile it |
 | **Row type inference** | `model.fields[f].codecId` → `CodecTypes[codecId]['output']` with nullable handling. A framework-level utility type, not per-family |
 | **Custom collection subclasses** | `class UserCollection extends Collection<C, 'User'>` with domain methods. The class extends a shared base; domain methods just call `this.where()` etc. |
@@ -106,7 +108,7 @@ The `Collection` class with fluent chaining is the shared ORM interface for all 
 ### What stays family-specific (internal plumbing)
 
 | Concern | SQL | Mongo |
-|---|---|---|
+| --- | --- | --- |
 | **Terminal compilation** | `CollectionState` → `SqlQueryPlan` (SQL AST) | `CollectionState` → `MongoQueryPlan` (FindCommand / AggregateCommand) |
 | **Include resolution** | Lateral joins, correlated subqueries, multi-query stitching | `$lookup` pipeline stages; embedded relations auto-projected |
 | **Where expression output** | SQL AST nodes (`AnyWhereExpr`) | Mongo filter documents (`MongoExpr`) |

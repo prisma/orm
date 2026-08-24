@@ -137,20 +137,20 @@ describe('MongoCollection chaining', () => {
     expect(sort.sort).toEqual({ name: 1, email: -1 });
   });
 
-  it('returns a new instance from take()', () => {
+  it('returns a new instance from limit()', () => {
     const executor = createMockExecutor();
     const col = createMongoCollection(contract, 'User', executor);
-    const limited = col.take(10);
+    const limited = col.limit(10);
     expect(limited).not.toBe(col);
     limited.all();
     const limit = executor.lastStages!.find((s) => s.kind === 'limit') as MongoLimitStage;
     expect(limit.limit).toBe(10);
   });
 
-  it('returns a new instance from skip()', () => {
+  it('returns a new instance from offset()', () => {
     const executor = createMockExecutor();
     const col = createMongoCollection(contract, 'User', executor);
-    const skipped = col.skip(5);
+    const skipped = col.offset(5);
     expect(skipped).not.toBe(col);
     skipped.all();
     const skip = executor.lastStages!.find((s) => s.kind === 'skip') as MongoSkipStage;
@@ -165,13 +165,13 @@ describe('MongoCollection chaining', () => {
     expect(executor.lastStages!).toHaveLength(0);
   });
 
-  it('chains where, orderBy, take, skip together', () => {
+  it('chains where, orderBy, limit, offset together', () => {
     const executor = createMockExecutor();
     const col = createMongoCollection(contract, 'User', executor)
       .where(MongoFieldFilter.eq('name', 'Alice'))
       .orderBy({ name: 1 })
-      .skip(10)
-      .take(5);
+      .offset(10)
+      .limit(5);
     col.all();
     const stageKinds = executor.lastStages!.map((s) => s.kind);
     expect(stageKinds).toEqual(['match', 'sort', 'skip', 'limit']);
@@ -994,50 +994,50 @@ describe('MongoCollection write methods', () => {
     it('update() throws with orderBy', async () => {
       const executor = createMockExecutor();
       await expect(withFilter(executor).orderBy({ name: 1 }).update({ name: 'X' })).rejects.toThrow(
-        'orderBy/skip/take',
+        'orderBy/offset/limit',
       );
     });
 
-    it('updateAll() throws with take', () => {
+    it('updateAll() throws with limit', () => {
       const executor = createMockExecutor();
-      expect(() => withFilter(executor).take(5).updateAll({ name: 'X' })).toThrow(
-        'orderBy/skip/take',
+      expect(() => withFilter(executor).limit(5).updateAll({ name: 'X' })).toThrow(
+        'orderBy/offset/limit',
       );
     });
 
-    it('updateAndCount() throws with skip', async () => {
+    it('updateAndCount() throws with offset', async () => {
       const executor = createMockExecutor();
-      await expect(withFilter(executor).skip(2).updateAndCount({ name: 'X' })).rejects.toThrow(
-        'orderBy/skip/take',
+      await expect(withFilter(executor).offset(2).updateAndCount({ name: 'X' })).rejects.toThrow(
+        'orderBy/offset/limit',
       );
     });
 
-    it('delete() throws with take', async () => {
+    it('delete() throws with limit', async () => {
       const executor = createMockExecutor();
-      await expect(withFilter(executor).take(1).delete()).rejects.toThrow('orderBy/skip/take');
+      await expect(withFilter(executor).limit(1).delete()).rejects.toThrow('orderBy/offset/limit');
     });
 
     it('deleteAll() throws with orderBy', () => {
       const executor = createMockExecutor();
       expect(() => withFilter(executor).orderBy({ name: -1 }).deleteAll()).toThrow(
-        'orderBy/skip/take',
+        'orderBy/offset/limit',
       );
     });
 
-    it('deleteAndCount() throws with skip', async () => {
+    it('deleteAndCount() throws with offset', async () => {
       const executor = createMockExecutor();
-      await expect(withFilter(executor).skip(3).deleteAndCount()).rejects.toThrow(
-        'orderBy/skip/take',
+      await expect(withFilter(executor).offset(3).deleteAndCount()).rejects.toThrow(
+        'orderBy/offset/limit',
       );
     });
 
-    it('upsert() throws with take', async () => {
+    it('upsert() throws with limit', async () => {
       const executor = createMockExecutor();
       await expect(
         withFilter(executor)
-          .take(1)
+          .limit(1)
           .upsert({ create: { ...defaultUserData, name: 'A' }, update: { name: 'B' } }),
-      ).rejects.toThrow('orderBy/skip/take');
+      ).rejects.toThrow('orderBy/offset/limit');
     });
   });
 

@@ -41,11 +41,11 @@ describe('e2e: ORM on SQLite', { timeout: timeouts.databaseOperation }, () => {
       });
     });
 
-    it('with take and skip', async () => {
+    it('with limit and offset', async () => {
       await withSqliteTestRuntime<Contract>(contractJsonPath, async ({ ormClient }) => {
         const users = await ormClient[UNBOUND_NAMESPACE_ID].User.orderBy((u) => u.id.asc())
-          .skip(1)
-          .take(2)
+          .offset(1)
+          .limit(2)
           .all();
         expect(users).toHaveLength(2);
         expect(users[0]!.id).toBe(2);

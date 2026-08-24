@@ -8,10 +8,10 @@
 // `.distinct(cols)` keeps one representative row per `(cols)` group; the
 // representative is picked by the caller's `.orderBy(...)` (lowest first
 // when ties are broken by `id.asc()`). Grandchildren attach only to the
-// surviving representative — dropped rows take their grandchildren with
+// surviving representative — dropped rows limit their grandchildren with
 // them.
 //
-// Refinements (`orderBy` / `take` / `where` / multi-column distinct) and
+// Refinements (`orderBy` / `limit` / `where` / multi-column distinct) and
 // edge cases (empty grandchildren, zero surviving distinct rows) live in
 // `./nested-includes-distinct-refinements.test.ts` to stay under the
 // per-file test-count threshold documented in `./nested-includes-helpers.ts`.

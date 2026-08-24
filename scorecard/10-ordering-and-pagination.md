@@ -16,8 +16,8 @@ Legend:
 | `orderBy` nulls first/last placement | 🟡 | 🟡 | — | |
 | `limit` (builder) | ✅ | ✅ | — | `test/integration/test/sql-builder/pagination.test.ts`; `test/e2e/framework/test/sqlite/sql-builder.test.ts` |
 | `offset` (builder) | ✅ | ✅ | — | `test/integration/test/sql-builder/pagination.test.ts`; `test/e2e/framework/test/sqlite/sql-builder.test.ts` |
-| ORM `take` | ✅ | ✅ | ✅ | `test/integration/test/sql-orm-client/pagination.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts`; `test/integration/test/mongo/orm.test.ts` |
-| ORM `skip` | ✅ | ✅ | ✅ | `test/integration/test/sql-orm-client/pagination.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts`; `test/integration/test/mongo/orm.test.ts` |
+| ORM `limit` | ✅ | ✅ | ✅ | `test/integration/test/sql-orm-client/pagination.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts`; `test/integration/test/mongo/orm.test.ts` |
+| ORM `offset` | ✅ | ✅ | ✅ | `test/integration/test/sql-orm-client/pagination.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts`; `test/integration/test/mongo/orm.test.ts` |
 | ORM `cursor` keyset pagination (P7's `cursor: { id }` + `skip: 1` maps onto keyset `.cursor()`) | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/pagination.test.ts` |
 | `distinct` | ✅ | 🟡 | — | `test/integration/test/sql-builder/distinct.test.ts`; `test/integration/test/sql-orm-client/pagination.test.ts` |
 | `distinctOn` | ✅ | — | — | `test/integration/test/sql-builder/distinct.test.ts`; `test/integration/test/sql-orm-client/pagination.test.ts` |

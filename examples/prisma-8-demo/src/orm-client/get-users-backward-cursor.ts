@@ -10,6 +10,6 @@ export async function ormClientGetUsersBackwardCursor(
   return db.User.orderBy((user) => user.id.desc())
     .cursor({ id: cursor })
     .select('id', 'email', 'kind')
-    .take(limit)
+    .limit(limit)
     .all();
 }

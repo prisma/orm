@@ -33,7 +33,7 @@ describe('integration/pagination', () => {
   );
 
   it(
-    'take() and skip() apply limit and offset to database results',
+    'limit() and offset() apply limit and offset to database results',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createUsersCollection(runtime);
@@ -47,8 +47,8 @@ describe('integration/pagination', () => {
 
         const rows = await users
           .orderBy((user) => user.id.asc())
-          .skip(1)
-          .take(2)
+          .offset(1)
+          .limit(2)
           .all();
 
         expect(rows.map((row) => row.id)).toEqual([2, 3]);

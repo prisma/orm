@@ -53,17 +53,17 @@ describe('ports/engines/queries/aggregation/sum', () => {
         await db.public.TestModel.create({ id: 3, float: 1.5, int: 2, bInt: 2n });
         await db.public.TestModel.create({ id: 4, float: 0, int: 1, bInt: 1n });
 
-        const takeTwo = await db.public.TestModel.take(2).aggregate((aggregate) => ({
+        const takeTwo = await db.public.TestModel.limit(2).aggregate((aggregate) => ({
           int: aggregate.sum('int'),
           bInt: aggregate.sum('bInt'),
           float: aggregate.sum('float'),
         }));
-        const takeFive = await db.public.TestModel.take(5).aggregate((aggregate) => ({
+        const takeFive = await db.public.TestModel.limit(5).aggregate((aggregate) => ({
           int: aggregate.sum('int'),
           bInt: aggregate.sum('bInt'),
           float: aggregate.sum('float'),
         }));
-        const takeNegativeFive = await db.public.TestModel.take(-5).aggregate((aggregate) => ({
+        const takeNegativeFive = await db.public.TestModel.limit(-5).aggregate((aggregate) => ({
           int: aggregate.sum('int'),
           bInt: aggregate.sum('bInt'),
           float: aggregate.sum('float'),
@@ -75,7 +75,7 @@ describe('ports/engines/queries/aggregation/sum', () => {
           bInt: aggregate.sum('bInt'),
           float: aggregate.sum('float'),
         }));
-        const skipTwo = await db.public.TestModel.skip(2).aggregate((aggregate) => ({
+        const skipTwo = await db.public.TestModel.offset(2).aggregate((aggregate) => ({
           int: aggregate.sum('int'),
           bInt: aggregate.sum('bInt'),
           float: aggregate.sum('float'),
@@ -136,13 +136,13 @@ describe('ports/engines/queries/aggregation/sum', () => {
         await db.public.TestModel.create({ id: 3, decimal: '1.5' as DecimalInput });
         await db.public.TestModel.create({ id: 4, decimal: '0.0' as DecimalInput });
 
-        const takeTwo = await db.public.TestModel.take(2).aggregate((aggregate) => ({
+        const takeTwo = await db.public.TestModel.limit(2).aggregate((aggregate) => ({
           decimal: aggregate.sum('decimal'),
         }));
-        const takeFive = await db.public.TestModel.take(5).aggregate((aggregate) => ({
+        const takeFive = await db.public.TestModel.limit(5).aggregate((aggregate) => ({
           decimal: aggregate.sum('decimal'),
         }));
-        const takeNegativeFive = await db.public.TestModel.take(-5).aggregate((aggregate) => ({
+        const takeNegativeFive = await db.public.TestModel.limit(-5).aggregate((aggregate) => ({
           decimal: aggregate.sum('decimal'),
         }));
         const whereIdGreaterThanTwo = await db.public.TestModel.where((row) =>
@@ -150,7 +150,7 @@ describe('ports/engines/queries/aggregation/sum', () => {
         ).aggregate((aggregate) => ({
           decimal: aggregate.sum('decimal'),
         }));
-        const skipTwo = await db.public.TestModel.skip(2).aggregate((aggregate) => ({
+        const skipTwo = await db.public.TestModel.offset(2).aggregate((aggregate) => ({
           decimal: aggregate.sum('decimal'),
         }));
         const cursorAtThree = await db.public.TestModel.orderBy((row) => row.id.asc())

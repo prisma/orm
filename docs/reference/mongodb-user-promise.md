@@ -102,7 +102,7 @@ This is out of scope for the PoC but is table-stakes for real Mongo adoption. Se
 const db = mongo.orm({ contract, runtime });
 
 // Simple query — returns typed User objects
-const users = await db.User.take(10).all();
+const users = await db.User.limit(10).all();
 
 // Filter with type-safe operators
 const admins = await db.User
@@ -116,9 +116,9 @@ const usersWithPosts = await db.User
     posts
       .where((post) => post.title.ilike('%mongo%'))
       .orderBy((post) => post.createdAt.desc())
-      .take(5)
+      .limit(5)
   )
-  .take(10)
+  .limit(10)
   .all();
 
 // Embedded data comes for free — Address is part of the User document

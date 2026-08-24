@@ -190,8 +190,8 @@ describe('integration/include', () => {
   );
 
   // Pagination composes through to the scalar aggregate scope: a
-  // `take(N)` / `skip(M)` on a count() refine shapes the row set the
-  // aggregate sees, so `where(W).take(N).count()` returns at most N.
+  // `limit(N)` / `offset(M)` on a count() refine shapes the row set the
+  // aggregate sees, so `where(W).limit(N).count()` returns at most N.
   // The correlated builder wraps the source in a derived SELECT that
   // materialises the paginated rows and aggregates over that, in a
   // single SQL execution.
@@ -215,12 +215,12 @@ describe('integration/include', () => {
           .include('posts', (posts) =>
             posts
               .where((post) => post.views.gte(200))
-              .take(2)
+              .limit(2)
               .count(),
           )
           .all();
 
-        // Four posts match `views >= 200`; `take(2)` caps the row set
+        // Four posts match `views >= 200`; `limit(2)` caps the row set
         // the aggregate sees — the count is over the paginated page,
         // not the unpaginated total.
         expect(rows).toEqual([
@@ -239,7 +239,7 @@ describe('integration/include', () => {
     timeouts.spinUpPpgDev,
   );
 
-  // `distinct(cols).orderBy(c).take(N).sum(...)` must aggregate the
+  // `distinct(cols).orderBy(c).limit(N).sum(...)` must aggregate the
   // ordered top-N deduped rows. The ROW_NUMBER dedup wrap strips
   // ordering from its output; without reapplying orderBy on the wrap
   // result, LIMIT slices an implementation-defined subset and SUM /
@@ -247,7 +247,7 @@ describe('integration/include', () => {
   // seed below is designed so the ordered-top-N sum (700) is distinct
   // from any plausible default-order slice.
   it(
-    'distinct(cols).orderBy().take().sum() aggregates the ordered top-N deduped rows',
+    'distinct(cols).orderBy().limit().sum() aggregates the ordered top-N deduped rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createUsersCollection(runtime);
@@ -260,7 +260,7 @@ describe('integration/include', () => {
         //   - title B: max-views representative = (id 13, views 300)
         //   - title C: (id 14, views 400)
         // Deduped set (3 rows): views = [200, 300, 400]
-        // orderBy(views.desc()).take(2)         => [400, 300]
+        // orderBy(views.desc()).limit(2)         => [400, 300]
         // sum('views')                          => 700
         await seedPosts(runtime, [
           { id: 10, title: 'A', userId: 1, views: 100 },
@@ -276,7 +276,7 @@ describe('integration/include', () => {
             posts
               .distinct('title')
               .orderBy((post) => post.views.desc())
-              .take(2)
+              .limit(2)
               .sum('views'),
           )
           .all();
@@ -426,7 +426,7 @@ describe('integration/include', () => {
   // subquery packs both branches; the parent + count + page roll up to
   // one SQL execution per query.
   it(
-    'include().combine({ recent: take(N), count: count() }) resolves in a single execution',
+    'include().combine({ recent: limit(N), count: count() }) resolves in a single execution',
     async () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createUsersCollection(runtime);
@@ -448,7 +448,7 @@ describe('integration/include', () => {
           .orderBy((user) => user.id.asc())
           .include('posts', (posts) =>
             posts.combine({
-              recent: posts.orderBy((post) => post.id.desc()).take(3),
+              recent: posts.orderBy((post) => post.id.desc()).limit(3),
               total: posts.count(),
             }),
           )
@@ -467,7 +467,7 @@ describe('integration/include', () => {
                 { id: 12, title: 'Post C', userId: 1, views: 300, embedding: null },
                 { id: 11, title: 'Post B', userId: 1, views: 200, embedding: null },
               ],
-              // The `take(3)` paginates the `recent` row branch but
+              // The `limit(3)` paginates the `recent` row branch but
               // does NOT enter the scalar count's scope — Alice has 4
               // posts total, not 3.
               total: 4,
@@ -513,7 +513,7 @@ describe('integration/include', () => {
           .include('posts', (posts) =>
             posts.combine({
               popular: posts.where((post) => post.views.gte(200)).orderBy((post) => post.id.asc()),
-              latestOne: posts.orderBy((post) => post.id.desc()).take(1),
+              latestOne: posts.orderBy((post) => post.id.desc()).limit(1),
               totalCount: posts.count(),
             }),
           )
@@ -578,8 +578,8 @@ describe('integration/include', () => {
           .include('posts', (posts) =>
             posts
               .orderBy((post) => post.id.asc())
-              .skip(1)
-              .take(1),
+              .offset(1)
+              .limit(1),
           )
           .all();
 

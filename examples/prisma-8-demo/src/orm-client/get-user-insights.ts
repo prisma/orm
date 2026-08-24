@@ -10,10 +10,10 @@ export async function ormClientGetUserInsights(limit: number, runtime: Runtime) 
         totalPosts: posts.count(),
         latestPost: posts
           .orderBy([(post) => post.createdAt.desc(), (post) => post.id.asc()])
-          .take(1)
+          .limit(1)
           .select('id', 'title', 'createdAt'),
       }),
     )
-    .take(limit)
+    .limit(limit)
     .all();
 }

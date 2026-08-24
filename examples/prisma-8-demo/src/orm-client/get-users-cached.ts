@@ -38,7 +38,7 @@ export async function ormClientGetUsersCached(
 ) {
   const db = createOrmClient(runtime);
   const ttl = options.ttlMs ?? 60_000;
-  return db.User.take(limit).all((meta) =>
+  return db.User.limit(limit).all((meta) =>
     meta.annotate(cacheAnnotation(options.key !== undefined ? { ttl, key: options.key } : { ttl })),
   );
 }

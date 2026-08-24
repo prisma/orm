@@ -62,19 +62,19 @@ describe('ports/engines/queries/aggregation/max', () => {
           { id: 4, float: 0, int: 1, bInt: 1n, string: 'g' },
         ]);
 
-        const takeTwo = await db.public.TestModel.take(2).aggregate((aggregate) => ({
+        const takeTwo = await db.public.TestModel.limit(2).aggregate((aggregate) => ({
           int: aggregate.max('int'),
           bInt: aggregate.max('bInt'),
           float: aggregate.max('float'),
           string: aggregate.max('string'),
         }));
-        const takeFive = await db.public.TestModel.take(5).aggregate((aggregate) => ({
+        const takeFive = await db.public.TestModel.limit(5).aggregate((aggregate) => ({
           int: aggregate.max('int'),
           bInt: aggregate.max('bInt'),
           float: aggregate.max('float'),
           string: aggregate.max('string'),
         }));
-        const takeNegativeFive = await db.public.TestModel.take(-5).aggregate((aggregate) => ({
+        const takeNegativeFive = await db.public.TestModel.limit(-5).aggregate((aggregate) => ({
           int: aggregate.max('int'),
           bInt: aggregate.max('bInt'),
           float: aggregate.max('float'),
@@ -88,7 +88,7 @@ describe('ports/engines/queries/aggregation/max', () => {
           float: aggregate.max('float'),
           string: aggregate.max('string'),
         }));
-        const skipTwo = await db.public.TestModel.skip(2).aggregate((aggregate) => ({
+        const skipTwo = await db.public.TestModel.offset(2).aggregate((aggregate) => ({
           int: aggregate.max('int'),
           bInt: aggregate.max('bInt'),
           float: aggregate.max('float'),
@@ -155,13 +155,13 @@ describe('ports/engines/queries/aggregation/max', () => {
           { id: 4, decimal: '0.0' },
         ]);
 
-        const takeTwo = await db.public.TestModel.take(2).aggregate((aggregate) => ({
+        const takeTwo = await db.public.TestModel.limit(2).aggregate((aggregate) => ({
           decimal: aggregate.max('decimal'),
         }));
-        const takeFive = await db.public.TestModel.take(5).aggregate((aggregate) => ({
+        const takeFive = await db.public.TestModel.limit(5).aggregate((aggregate) => ({
           decimal: aggregate.max('decimal'),
         }));
-        const takeNegativeFive = await db.public.TestModel.take(-5).aggregate((aggregate) => ({
+        const takeNegativeFive = await db.public.TestModel.limit(-5).aggregate((aggregate) => ({
           decimal: aggregate.max('decimal'),
         }));
         const whereIdGreaterThanTwo = await db.public.TestModel.where((row) =>
@@ -169,7 +169,7 @@ describe('ports/engines/queries/aggregation/max', () => {
         ).aggregate((aggregate) => ({
           decimal: aggregate.max('decimal'),
         }));
-        const skipTwo = await db.public.TestModel.skip(2).aggregate((aggregate) => ({
+        const skipTwo = await db.public.TestModel.offset(2).aggregate((aggregate) => ({
           decimal: aggregate.max('decimal'),
         }));
         const cursorAtThree = await db.public.TestModel.cursor({ id: 3 } as never).aggregate(

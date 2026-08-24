@@ -24,6 +24,6 @@ export async function ormClientGetFeatureRoadmap(
         .orderBy((feature) => feature.createdAt.asc()),
     )
     .orderBy((user) => user.displayName.asc())
-    .take(limit)
+    .limit(limit)
     .all();
 }

@@ -28,7 +28,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //     Prisma:      starts FROM id2 (price=20), skip 1 → id3 (price=30) ✓
 //     prisma-next: starts AFTER id2, skip 1 → beyond end → [] ✗
 //
-// A faithful port runs both queries with `.orderBy().cursor().skip(1).take(1).all()`
+// A faithful port runs both queries with `.orderBy().cursor().offset(1).limit(1).all()`
 // but the assertions from the upstream test will fail → it.fails (semantics gap).
 //
 // Dispositions:
@@ -53,8 +53,8 @@ describe('ports/prisma/functional/issues-29254-query-plan-cache-mutation', () =>
         // prisma-next: array of callbacks for multi-column orderBy.
         const result1 = await db.public.Item.orderBy([(i) => i.price.asc(), (i) => i.id.asc()])
           .cursor({ id: id1, price: 10 })
-          .skip(1)
-          .take(1)
+          .offset(1)
+          .limit(1)
           .all();
 
         // Prisma (inclusive cursor + skip=1): [{ id: id2, price: 20 }]
@@ -63,8 +63,8 @@ describe('ports/prisma/functional/issues-29254-query-plan-cache-mutation', () =>
 
         const result2 = await db.public.Item.orderBy([(i) => i.price.asc(), (i) => i.id.asc()])
           .cursor({ id: id2, price: 20 })
-          .skip(1)
-          .take(1)
+          .offset(1)
+          .limit(1)
           .all();
 
         // Prisma (inclusive cursor + skip=1): [{ id: id3, price: 30 }]

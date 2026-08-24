@@ -107,13 +107,13 @@ describe('Collection.all annotations', () => {
     expect(otelAnnotation.read(plan)).toBeUndefined();
   });
 
-  it('annotations survive across .where() and .take() chaining', async () => {
+  it('annotations survive across .where() and .limit() chaining', async () => {
     const { collection, runtime } = createCollection();
     runtime.setNextResults([[]]);
 
     await collection
       .where((user) => user.name.eq('Alice'))
-      .take(10)
+      .limit(10)
       .all((meta) => meta.annotate(cacheAnnotation({ ttl: 60 })))
       .toArray();
 

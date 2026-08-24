@@ -416,7 +416,7 @@ describe('integration/mutation-include-readback', () => {
                 recent: posts
                   .select('title')
                   .orderBy((post) => post.id.desc())
-                  .take(2),
+                  .limit(2),
                 total: posts.count(),
               }),
             )

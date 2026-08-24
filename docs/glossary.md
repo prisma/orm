@@ -140,7 +140,7 @@ A higher-level query interface that coordinates multiple queries on your behalf.
 
 ### Collection
 
-The primary ORM abstraction for querying a model. Each aggregate root gets a `Collection` instance (e.g., `db.users` is a `Collection<Contract, 'User'>`). Collections use immutable fluent chaining — each method call (`.where()`, `.include()`, `.take()`) returns a new Collection with accumulated state. Nothing executes until a terminal method (`.all()`, `.first()`) compiles the state into a family-specific query plan. The Collection interface is shared across families; only the terminal compilation differs. See [ADR 175](architecture%20docs/adrs/ADR%20175%20-%20Shared%20ORM%20Collection%20interface.md).
+The primary ORM abstraction for querying a model. Each aggregate root gets a `Collection` instance (e.g., `db.users` is a `Collection<Contract, 'User'>`). Collections use immutable fluent chaining — each method call (`.where()`, `.include()`, `.limit()`) returns a new Collection with accumulated state. Nothing executes until a terminal method (`.all()`, `.first()`) compiles the state into a family-specific query plan. The Collection interface is shared across families; only the terminal compilation differs. See [ADR 175](architecture%20docs/adrs/ADR%20175%20-%20Shared%20ORM%20Collection%20interface.md).
 
 ---
 
@@ -151,7 +151,7 @@ The primary ORM abstraction for querying a model. Each aggregate root gets a `Co
 One of three isolation zones that split the system by lifecycle phase. Each plane has its own packages, types, and import boundaries — code in one plane must not import executable code from another plane.
 
 | Plane | Phase | Concern |
-|---|---|---|
+| --- | --- | --- |
 | **Control plane** | Build / migration time | Authoring contracts, emitting artifacts, planning and running migrations, verifying database state |
 | **Execution plane** | Runtime | Validating contracts, building and executing query plans, ORM, middleware |
 | **Shared plane** | Both | Type-only code and validators safe for either plane (contract IR types, codec types, operation types) |
@@ -179,7 +179,7 @@ A composition of [framework components](#framework-component) for a given plane.
 Each plane has its own stack type:
 
 | Stack | Plane | What it carries |
-|---|---|---|
+| --- | --- | --- |
 | `ControlStack` | Control | The component descriptors and their aggregated contributions (type imports, renderers, extension IDs, authoring contributions) needed for contract emission and migration |
 | `ExecutionStack` | Execution | Runtime descriptors (target, adapter, driver, extensions), ready for instantiation |
 
@@ -262,7 +262,7 @@ The content-addressed hash over a migration's `(strippedManifest, ops)`. The ide
 The argument grammar for "name a contract" across every flag and positional that accepts one (`db migrate --to`, `db update --to`, `db sign [<contract>]`, `migration plan --from`, `migration status --to/--from`, `migration ref set`'s second argument). All forms resolve to a contract storage hash:
 
 | Form | Meaning |
-|---|---|
+| --- | --- |
 | `<hash>` or `<hash-prefix>` | Bare hex (6+ chars), matched against contract storage hashes |
 | `<ref-name>` | The contract the named ref points at |
 | `<migration-dir-name>` | The migration's `to`-contract |
@@ -276,7 +276,7 @@ Ambiguity within a namespace (two hashes sharing a short prefix; a hex-named dir
 The argument grammar for "name a migration" (used by `migration show <m>`, `migration check <m>`). All forms resolve to a migration package:
 
 | Form | Meaning |
-|---|---|
+| --- | --- |
 | `<hash>` or `<hash-prefix>` | Bare hex, matched against migration hashes |
 | `<migration-dir-name>` | The migration directly |
 
@@ -291,7 +291,7 @@ A read-only live-database operation that verifies the database satisfies the con
 A read-only filesystem operation that verifies on-disk migration packages are internally consistent and the graph is well-formed. Shape: `migration check [<m>]` — per-migration with the argument; graph-wide without. Exit codes: `0` (OK), `2` (PRECONDITION — bad argument or unknown migration), `4` (INTEGRITY_FAILED — one or more checks failed). Fine-grained discrimination uses PN codes:
 
 | PN code | Meaning |
-|---|---|
+| --- | --- |
 | `PN-MIG-CHECK-001 HASH_MISMATCH` | Recomputed migration hash disagrees with stored value |
 | `PN-MIG-CHECK-002 MANIFEST_INCOMPLETE` | `migration.json` or `ops.json` missing on disk |
 | `PN-MIG-CHECK-003 ORPHAN_MIGRATION` | Migration has no graph-connecting predecessor |
@@ -316,11 +316,9 @@ Codes `001`/`002` are reported per package across every contract space (the app 
 
 Planned refactors to bring internal naming in line with user-facing terminology:
 
-
 | User-facing term          | Current internal term               | Scope                                                             | Status  |
 | ------------------------- | ----------------------------------- | ----------------------------------------------------------------- | ------- |
 | extension / `extensions`  | extension pack / `extensions`   | Config property, contract key, docs, CLI output, error messages   | **Done** |
 | middleware / `middleware` | plugin / `plugins`                  | Runtime options, types, docs                                      | **Done** |
 | query builder             | query lane / lane                   | Architecture docs, package names, internal naming                 | Pending |
 | `migrate` (advance DB) / `run` (execute a migration) | `apply` (verb) / `migrationApply` | Control-api method + types, internal naming, docs | **In progress** |
-

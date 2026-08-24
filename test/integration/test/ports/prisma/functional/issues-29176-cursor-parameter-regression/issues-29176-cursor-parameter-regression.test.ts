@@ -20,7 +20,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   Prisma result: [{ result_index: 1 }, { result_index: 2 }]  (inclusive, FROM index 1)
 //   prisma-next result: [{ result_index: 2 }]                  (exclusive, AFTER index 1)
 //
-// A faithful port uses `.orderBy().cursor().take()` — it runs but returns a
+// A faithful port uses `.orderBy().cursor().limit()` — it runs but returns a
 // different result → it.fails (genuine prisma-next gap, not a botched port).
 //
 // Dispositions:
@@ -49,7 +49,7 @@ describe('ports/prisma/functional/issues-29176-cursor-parameter-regression', () 
         const results = await db.public.ListResult.where({ connection_uuid, query_ref })
           .orderBy((r) => r.result_index.asc())
           .cursor({ result_index: 1 })
-          .take(5)
+          .limit(5)
           .select('result_index')
           .all();
 

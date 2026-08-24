@@ -50,7 +50,7 @@ userCollection.include('posts', (posts) => {
   posts.create({} as never);
   // @ts-expect-error include refinement collection does not expose update()
   posts.update({} as never);
-  return posts.take(1);
+  return posts.limit(1);
 });
 
 postCollection.include('author', (author) => {

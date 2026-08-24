@@ -14,6 +14,6 @@ export async function ormClientGetPostEngagement(limit: number, runtime: SqliteR
   const db = createOrmClient(runtime);
   return db.Post.select('title', 'viewCount', 'impressionCount')
     .orderBy([(post) => post.title.asc()])
-    .take(limit)
+    .limit(limit)
     .all();
 }

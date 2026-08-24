@@ -15,8 +15,8 @@ Legend:
 | ORM `where` filter | — | — | ✅ | `test/integration/test/mongo/orm.test.ts` (`where() with filter expression narrows results`) |
 | ORM `select` projection | — | — | ✅ | `test/integration/test/mongo/orm.test.ts` (`select() restricts returned fields`) |
 | ORM `orderBy` | — | — | ✅ | `test/integration/test/mongo/orm.test.ts` (`orderBy() returns results in specified order`) |
-| ORM `take` | — | — | ✅ | `test/integration/test/mongo/orm.test.ts` (`skip() and take() return correct subset`) |
-| ORM `skip` | — | — | ✅ | `test/integration/test/mongo/orm.test.ts` (`skip() and take() return correct subset`) |
+| ORM `limit` | — | — | ✅ | `test/integration/test/mongo/orm.test.ts` (`offset() and limit() return correct subset`) |
+| ORM `offset` | — | — | ✅ | `test/integration/test/mongo/orm.test.ts` (`offset() and limit() return correct subset`) |
 | ORM `all()` | — | — | ✅ | `test/integration/test/mongo/orm.test.ts` (`all() on a non-polymorphic root`) |
 | ORM `first()` | — | — | 🟡 | |
 | ORM `include` (reference relation via `$lookup`) | — | — | ✅ | `test/integration/test/mongo/orm.test.ts` (`include() on a reference relation returns related docs via $lookup`) |

@@ -20,8 +20,8 @@ Legend:
 | `groupBy` | ✅ | 🟡 | ✅ | `test/integration/test/sql-orm-client/group-by.test.ts`; `test/integration/test/mongo/query-builder.test.ts` (`group with accumulators`) |
 | `having` | ✅ | 🟡 | 🟡 | `test/integration/test/sql-orm-client/group-by.test.ts` |
 | `groupBy` + `orderBy` (builder) | 🟡 | 🟡 | — | |
-| `groupBy` + `take` (builder) | 🟡 | 🟡 | — | |
-| `groupBy` + `skip` (builder) | 🟡 | 🟡 | — | |
+| `groupBy` + `limit` (builder) | 🟡 | 🟡 | — | |
+| `groupBy` + `offset` (builder) | 🟡 | 🟡 | — | |
 | Per-field non-null counts (`count(field)`) | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/include.test.ts` (`scalar count()`) |
 | Relation-scoped count in `include()` over explicit many-to-many | ✅ | 🟡 | — | `test/integration/test/ports/prisma/functional/filter-count-relations/filter-count-relations.test.ts` (`many-to-many` cases); `test/integration/test/ports/prisma/functional/issues-11974/issues-11974.test.ts`; `test/integration/test/ports/prisma/functional/issues-12557/issues-12557.test.ts` |
 | Relation-scoped aggregate `sum` in `include()` | ✅ | 🟡 | — | `test/integration/test/sql-orm-client/include.test.ts` (`scalar sum()`) |
@@ -31,4 +31,4 @@ Legend:
 | Mongo `bucket` aggregation | — | — | ✅ | `test/integration/test/mongo/query-builder.test.ts` (`groups documents into price ranges`) |
 | Mongo `facet` aggregation | — | — | ✅ | `test/integration/test/mongo/query-builder.test.ts` (`runs multiple sub-pipelines in parallel`) |
 | Mongo `sortByCount` aggregation | — | — | ✅ | `test/integration/test/mongo/query-builder.test.ts` (`counts and sorts by category frequency`) |
-| `aggregate` with `orderBy`/`cursor`/`take`/`skip` pre-aggregation | ❌ | ❌ | — | |
+| `aggregate` with `orderBy`/`cursor`/`limit`/`offset` pre-aggregation | ❌ | ❌ | — | |

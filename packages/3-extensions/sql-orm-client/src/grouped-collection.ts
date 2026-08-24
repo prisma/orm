@@ -57,6 +57,16 @@ type GroupByFieldName<
   NsId extends string = never,
 > = keyof DefaultModelRow<TContract, ModelName, NsId> & string;
 
+type GroupedAggregateRow<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  GroupFields extends readonly GroupByFieldName<TContract, ModelName, NsId>[],
+  NsId extends string,
+  Spec extends AggregateSpec,
+> = SimplifyDeep<
+  Pick<DefaultModelRow<TContract, ModelName, NsId>, GroupFields[number]> & AggregateResult<Spec>
+>;
+
 export class GroupedCollection<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -130,8 +140,8 @@ export class GroupedCollection<
   /**
    * Append an `ORDER BY` clause on the grouped rows themselves — orders by
    * group key. Ordering by an aggregate alias needs a builder surface over
-   * the aliases and isn't supported here. Unlocks post-group `take(...)` /
-   * `skip(...)`, which page a group order that would otherwise be undefined.
+   * the aliases and isn't supported here. Unlocks post-group `limit(...)` /
+   * `offset(...)`, which page a group order that would otherwise be undefined.
    */
   orderBy(
     selection:
@@ -173,7 +183,7 @@ export class GroupedCollection<
    * limit. Requires a prior `orderBy(...)` — a database may return groups in
    * any order, so "the first n groups" is undefined without one.
    */
-  take(
+  limit(
     n: HasOrderBy extends true ? number : never,
   ): GroupedCollection<TContract, ModelName, GroupFields, NsId, HasOrderBy> {
     return this.#clone({ postGroup: { ...this.postGroup, limit: n } });
@@ -181,10 +191,10 @@ export class GroupedCollection<
 
   /**
    * Apply `OFFSET n` to the grouped rows. Replaces any previous post-group
-   * offset. Requires a prior `orderBy(...)`, same as `take(...)` — Prisma
-   * pairs `skip`/`take` with `orderBy` on `groupBy` for the same reason.
+   * offset. Requires a prior `orderBy(...)`, same as `limit(...)` — both
+   * pagination methods need a deterministic group order.
    */
-  skip(
+  offset(
     n: HasOrderBy extends true ? number : never,
   ): GroupedCollection<TContract, ModelName, GroupFields, NsId, HasOrderBy> {
     return this.#clone({ postGroup: { ...this.postGroup, offset: n } });
@@ -200,14 +210,7 @@ export class GroupedCollection<
   async aggregate<Spec extends AggregateSpec>(
     fn: (aggregate: AggregateBuilder<TContract, ModelName, NsId>) => Spec,
     configure?: (meta: MetaBuilder<'read'>) => void,
-  ): Promise<
-    Array<
-      SimplifyDeep<
-        Pick<DefaultModelRow<TContract, ModelName, NsId>, GroupFields[number]> &
-          AggregateResult<Spec>
-      >
-    >
-  > {
+  ): Promise<Array<GroupedAggregateRow<TContract, ModelName, GroupFields, NsId, Spec>>> {
     const aggregateSpec = fn(
       createAggregateBuilder<TContract, ModelName, NsId>(
         this.contract,
@@ -271,13 +274,11 @@ export class GroupedCollection<
       for (const [alias] of aggregateEntries) {
         mapped[alias] = row[alias];
       }
-      return mapped;
-    }) as Array<
-      SimplifyDeep<
-        Pick<DefaultModelRow<TContract, ModelName, NsId>, GroupFields[number]> &
-          AggregateResult<Spec>
-      >
-    >;
+      return blindCast<
+        GroupedAggregateRow<TContract, ModelName, GroupFields, NsId, Spec>,
+        'group keys are mapped from storage columns and aggregate aliases are copied from the decoded query row'
+      >(mapped);
+    });
   }
 }
 

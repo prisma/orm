@@ -15,6 +15,6 @@ export async function ormClientGetPostEngagement(limit: number, runtime: Runtime
   const db = createOrmClient(runtime);
   return db.Post.select('title', 'viewCount', 'impressionCount', 'reachScore')
     .orderBy([(post) => post.title.asc()])
-    .take(limit)
+    .limit(limit)
     .all();
 }

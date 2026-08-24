@@ -1,5 +1,6 @@
 import type { DefaultModelRow } from '@prisma/orm-sqlite/orm-client';
 import type { SqliteRuntime } from '@prisma/orm-sqlite/runtime';
+import { castAs } from '@prisma/orm-sqlite/utils/casts';
 import type { Contract } from '../prisma/contract.d';
 import { createOrmClient } from './client';
 
@@ -12,7 +13,7 @@ type UserId = DefaultModelRow<Contract, 'User'>['id'];
  */
 export async function ormClientGetUserPosts(userId: string, limit: number, runtime: SqliteRuntime) {
   const db = createOrmClient(runtime);
-  return db.User.include('posts', (post) => post.orderBy((p) => p.createdAt.desc()).take(limit))
-    .where({ id: userId as UserId })
+  return db.User.include('posts', (post) => post.orderBy((p) => p.createdAt.desc()).limit(limit))
+    .where({ id: castAs<UserId>(userId) })
     .first();
 }

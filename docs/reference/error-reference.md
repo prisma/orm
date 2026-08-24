@@ -15,7 +15,7 @@ Codes that predate the dotted scheme were renamed at 0.16; the full old→new cr
 Namespaces:
 
 | Namespace | Covers |
-|---|---|
+| --- | --- |
 | `CONFIG` | Loading and validating `prisma.config.ts` |
 | `CLI` | Command-line argument and invocation errors |
 | `CONTRACT` | Contract authoring, emission, validation, and the contract↔database relationship (markers, schema verification) |
@@ -515,7 +515,7 @@ A mutation that expected the database to return a row got none — `create()`/`u
 
 ### ORM.OPERATION_UNSUPPORTED
 
-A valid ORM method was called in a configuration that does not support it: mutating an MTI variant collection with a method that requires `createAll()`, Mongo `upsert()` with dot-path field operations, or a Mongo mutation carrying windowing (`orderBy`/`skip`/`take`) or includes. Meta: `method`, `model`, `reason`, `field`.
+A valid ORM method was called in a configuration that does not support it: mutating an MTI variant collection with a method that requires `createAll()`, Mongo `upsert()` with dot-path field operations, or a Mongo mutation carrying windowing (`orderBy`/`offset`/`limit`) or includes. Meta: `method`, `model`, `reason`, `field`.
 
 ### ORM.RELATION_LINK_DUPLICATE
 

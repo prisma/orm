@@ -10,7 +10,7 @@ This example mirrors `examples/prisma-8-demo` (the Node demo), minus pgvector �
 - **Per-request `runtime`** via `await using runtime = await db.connect({ url: env.HYPERDRIVE.connectionString })`. The `[Symbol.asyncDispose]` ensures the underlying `pg.Client` is `end()`-ed when the `fetch` handler returns.
 - **All three query surfaces** through `Runtime`:
   - SQL DSL: `runtime.query(db.sql.public.user.select(...).build())`
-  - ORM client: `createOrmClient(runtime).User.newestFirst().take(10).all()`
+  - ORM client: `createOrmClient(runtime).User.newestFirst().limit(10).all()`
   - Transactions: `withTransaction(runtime, async (tx) => …)`
 - **Cursor early-break** over a streamed result set (`for await … break`), exercising the cursor path that `postgresServerless` enables by default.
 
@@ -20,8 +20,8 @@ Routes implemented in [`src/worker.ts`](src/worker.ts):
 | ------------------- | ----------------- | -------------------------------------------------------- |
 | `GET /health`       | —                 | DB-free liveness check                                   |
 | `GET /sql/users`    | SQL DSL           | `db.sql.public.user.select(...).limit(?)`                       |
-| `GET /orm/users`    | ORM client        | `User.newestFirst().take(?)`                             |
-| `GET /orm/posts`    | ORM client        | `Post.forUser(?).orderBy(...).take(?)`                   |
+| `GET /orm/users`    | ORM client        | `User.newestFirst().limit(?)`                             |
+| `GET /orm/posts`    | ORM client        | `Post.forUser(?).orderBy(...).limit(?)`                   |
 | `GET /tx/commit`    | `withTransaction` | INSERT post + UPDATE user atomically                     |
 | `GET /tx/rollback`  | `withTransaction` | Throws inside the body; verifies ROLLBACK propagates     |
 | `GET /cursor/large` | Cursor stream     | `for await … break` after N rows; cursor cancels cleanly |
@@ -156,7 +156,7 @@ The M1 audit's "this works in `wrangler dev`" claim was empirically validated ag
 ## Known limitations
 
 - **Transaction affinity** — every `withTransaction` body must run on the same `runtime` instance (the per-request one). Crossing `runtime` boundaries inside a transaction body is undefined.
-- **Isolate memory** — large result sets bound through cursor by default (`postgresServerless` enables cursor unconditionally). For ORM `findMany`-style operations the result set is materialised; size your `take(...)` accordingly.
+- **Isolate memory** — large result sets bound through cursor by default (`postgresServerless` enables cursor unconditionally). For ORM `findMany`-style operations the result set is materialised; size your `limit(...)` accordingly.
 - **`pg.Pool` not used** — the serverless facade routes through `PostgresDirectDriverImpl` (`pgClient` binding kind). No connection pooling within the isolate; that's Hyperdrive's job in production.
 - **Production `id`** — the committed `wrangler.jsonc` has a zero-stuffed Hyperdrive `id`. Deploy will fail until a real id is wired in (M4).
 - **Class-table-inheritance ORM queries** — the schema declares `Bug` and `Feature` as `@@base(Task)` discriminator variants for parity with `examples/prisma-8-demo`. The earlier `column "bug.id" does not exist` failure is now resolved: the emitted contract materialises the base-PK link column (`bug.id` / `feature.id`) on each variant table, so the variant join the ORM emits resolves. These queries are not yet exercised by this worker's routes or integration test; `examples/prisma-8-demo` covers the polymorphic-include path end-to-end.

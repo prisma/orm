@@ -7,7 +7,7 @@ This package provides a high-level ORM client surface on top of the runtime that
 ## Responsibilities
 
 - Expose typed `Collection` primitives for model-level data access
-- Build filter/order/include state from fluent APIs (`where`, `include`, `orderBy`, `take`, `skip`)
+- Build filter/order/include state from fluent APIs (`where`, `include`, `orderBy`, `limit`, `offset`)
 - Accept lane-agnostic `WhereArg` filter inputs (`WhereExpr` or `ToWhereExpr`) and normalize bound payloads inside ORM while preserving bound params/descriptors for runtime encoding and adapter lowering
 - Compile collection state into SQL AST query plans (`SqlQueryPlan`) without rendering SQL in ORM
 - Execute and stitch include trees across multiple plan executions
@@ -55,7 +55,7 @@ const db = orm({ contract, runtime });
 
 const posts = await db.Post
   .where((post) => post.userId.eq(userId))
-  .take(10)
+  .limit(10)
   .all();
 ```
 
@@ -67,7 +67,7 @@ const posts = await db.Post
 // Newest first.
 const posts = await db.Post
   .orderBy((post) => post.createdAt.desc())
-  .take(10)
+  .limit(10)
   .all();
 ```
 

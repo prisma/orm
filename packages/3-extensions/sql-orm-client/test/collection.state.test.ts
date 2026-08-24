@@ -168,7 +168,7 @@ describe('Collection', () => {
       const ordered = postCollection.orderBy((post) => post.userId.asc());
       expect(ordered.state.orderBy).toEqual([OrderByItem.asc(ColumnRef.of('posts', 'user_id'))]);
 
-      const paged = ordered.cursor({ userId: 7 }).take(10).skip(5);
+      const paged = ordered.cursor({ userId: 7 }).limit(10).offset(5);
       expect(paged.state.cursor).toEqual({ user_id: 7 });
       expect(paged.state.limit).toBe(10);
       expect(paged.state.offset).toBe(5);
@@ -182,7 +182,7 @@ describe('Collection', () => {
       const { collection } = createCollection();
 
       const withPosts = collection.include('posts', (posts) =>
-        posts.where((post) => post.views.gt(100)).take(5),
+        posts.where((post) => post.views.gt(100)).limit(5),
       );
       expect(withPosts.state.includes[0]).toMatchObject({
         relationName: 'posts',
@@ -216,7 +216,7 @@ describe('Collection', () => {
 
       const combined = collection.include('posts', (posts) =>
         posts.combine({
-          recent: posts.orderBy((post) => post.id.desc()).take(1),
+          recent: posts.orderBy((post) => post.id.desc()).limit(1),
           totalCount: posts.count(),
         }),
       );

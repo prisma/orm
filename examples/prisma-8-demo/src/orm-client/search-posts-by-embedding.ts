@@ -10,6 +10,6 @@ export async function ormClientSearchPostsByEmbedding(
   const db = createOrmClient(runtime);
   return db.Post.where((p) => p.embedding.cosineDistance(searchEmbedding).lt(maxDistance))
     .orderBy((p) => p.embedding.cosineDistance(searchEmbedding).asc())
-    .take(limit)
+    .limit(limit)
     .all();
 }

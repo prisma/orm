@@ -1,5 +1,5 @@
 // Integration coverage for `distinct()` on a non-leaf include combined
-// with refinements (`orderBy` / `take` / `where` / multi-column `distinct`)
+// with refinements (`orderBy` / `limit` / `where` / multi-column `distinct`)
 // and edge cases (empty grandchildren, zero surviving distinct rows).
 //
 // `.distinct(cols)` keeps one representative row per `(cols)` group; the
@@ -17,18 +17,18 @@ import { seedComments, seedPosts, seedUsers } from './runtime-helpers';
 
 describe('integration/nested-includes/distinct/refinements', () => {
   // ===========================================================================
-  // Refinements at the distinct level (orderBy / take / where / multi-column
+  // Refinements at the distinct level (orderBy / limit / where / multi-column
   // distinct) must compose correctly with the dedup lowering. Each refinement
   // applies inside the dedup wrapper before grandchildren attach.
   // ===========================================================================
 
   describe('distinct composes with refinements at the distinct level', () => {
     it(
-      'distinct + orderBy + take applies after dedup',
+      'distinct + orderBy + limit applies after dedup',
       async () => {
         // `.distinct('title')` collapses to one row per title — 'A' wins at
         // id=10, 'B' at id=12, 'C' at id=13 under orderBy [title.asc, id.asc].
-        // `take(2)` then keeps the first two distinct representatives in
+        // `limit(2)` then keeps the first two distinct representatives in
         // title-order: 'A' (id=10) and 'B' (id=12). Grandchildren attach
         // only to the survivors.
         await withCollectionRuntime(async (runtime) => {
@@ -56,7 +56,7 @@ describe('integration/nested-includes/distinct/refinements', () => {
                 .select('id', 'title')
                 .distinct('title')
                 .orderBy([(p) => p.title.asc(), (p) => p.id.asc()])
-                .take(2)
+                .limit(2)
                 .include('comments', (c) => c.select('body').orderBy((cc) => cc.id.asc())),
             )
             .all();

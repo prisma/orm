@@ -199,8 +199,8 @@ describe('GroupedCollection', () => {
 
     expect(typeof grouped['having']).toBe('function');
     expect(typeof grouped['aggregate']).toBe('function');
-    expect(typeof grouped['take']).toBe('function');
-    expect(typeof grouped['skip']).toBe('function');
+    expect(typeof grouped['limit']).toBe('function');
+    expect(typeof grouped['offset']).toBe('function');
     expect(typeof grouped['orderBy']).toBe('function');
     expect(grouped['all']).toBeUndefined();
     expect(grouped['first']).toBeUndefined();
@@ -208,15 +208,15 @@ describe('GroupedCollection', () => {
     expect(grouped['select']).toBeUndefined();
   });
 
-  describe('post-group take() / skip() / orderBy()', () => {
-    it('take() applies LIMIT to the grouped select', async () => {
+  describe('post-group limit() / offset() / orderBy()', () => {
+    it('limit() applies LIMIT to the grouped select', async () => {
       const { collection, runtime } = createCollectionFor('Post');
       runtime.setNextResults([[{ user_id: 1, count: 2 }]]);
 
       await collection
         .groupBy('userId')
         .orderBy((group) => group.userId.asc())
-        .take(5)
+        .limit(5)
         .aggregate((aggregate) => ({ count: aggregate.count() }));
 
       const ast = runtime.executions[0]?.plan.ast;
@@ -226,14 +226,14 @@ describe('GroupedCollection', () => {
       expect(ast.limit).toBe(5);
     });
 
-    it('skip() applies OFFSET to the grouped select', async () => {
+    it('offset() applies OFFSET to the grouped select', async () => {
       const { collection, runtime } = createCollectionFor('Post');
       runtime.setNextResults([[{ user_id: 1, count: 2 }]]);
 
       await collection
         .groupBy('userId')
         .orderBy((group) => group.userId.asc())
-        .skip(3)
+        .offset(3)
         .aggregate((aggregate) => ({ count: aggregate.count() }));
 
       const ast = runtime.executions[0]?.plan.ast;

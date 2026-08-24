@@ -5,6 +5,7 @@ This example demonstrates **Prisma Next in its native form**, using the Prisma N
 ## Purpose
 
 This demo shows:
+
 - Using Prisma Next's query lanes (SQL DSL, Raw SQL, etc.)
 - Creating Plans and executing them via the Runtime
 - Contract verification and marker management
@@ -364,7 +365,7 @@ Speedup: 26.2x faster
 The corresponding source files:
 
 - `src/orm-client/find-user-by-id-cached.ts` — `db.User.first({ id }, (meta) => meta.annotate(cacheAnnotation({ ttl })))`
-- `src/orm-client/get-users-cached.ts` — `db.User.take(n).all((meta) => meta.annotate(cacheAnnotation({ ttl, key? })))`
+- `src/orm-client/get-users-cached.ts` — `db.User.limit(n).all((meta) => meta.annotate(cacheAnnotation({ ttl, key? })))`
 - `src/queries/get-users-cached.ts` — `db.sql.public.user.select(...).annotate(cacheAnnotation({ ttl })).build()`
 
 Relevant points:
@@ -377,6 +378,7 @@ Relevant points:
 ## Setup
 
 1. Install dependencies:
+
    ```bash
    pnpm install
    ```
@@ -385,23 +387,28 @@ Relevant points:
    - Create a `.env` file
    - Add your PostgreSQL connection string: `DATABASE_URL=postgresql://user:pass@localhost:5432/prisma_next_demo?schema=public`
    - **Note**: This demo uses the pgvector extension. Ensure pgvector is installed in your PostgreSQL database:
+
      ```sql
      CREATE EXTENSION IF NOT EXISTS vector;
      ```
+
      The seed script will create the extension automatically if it doesn't exist.
 
 3. Emit contract and initialize database:
+
    ```bash
    pnpm emit
    pnpm db:init
    ```
 
 4. Seed the database:
+
    ```bash
    pnpm seed
    ```
 
 5. Run tests:
+
    ```bash
    pnpm test
    ```

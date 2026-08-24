@@ -7,6 +7,6 @@ export async function ormClientGetPostFeed(titleTerm: string, limit: number, run
     .select('id', 'title', 'userId', 'createdAt')
     .include('user', (user) => user.select('id', 'email', 'kind'))
     .orderBy([(post) => post.createdAt.desc(), (post) => post.id.asc()])
-    .take(limit)
+    .limit(limit)
     .all();
 }
