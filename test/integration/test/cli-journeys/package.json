@@ -2,11 +2,11 @@
   "name": "cli-journeys",
   "private": true,
   "type": "module",
-  "version": "8.0.0-rc.4",
+  "version": "8.0.0-rc.5",
   "description": "The CLI journeys. Its own manifest because it names the published packages a user's project installs, while the rest of test/integration names the workspace packages it exercises directly — two dependency shapes, so two manifests.",
   "dependencies": {
-    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.4",
-    "@prisma/orm-mongo": "workspace:8.0.0-rc.4",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.4"
+    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.5",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.5",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.5"
   }
 }

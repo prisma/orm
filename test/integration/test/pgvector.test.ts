@@ -15,7 +15,7 @@ describe('pgvector extension pack integration', () => {
     });
 
     const codecTypeImports = extractCodecTypeImports([target, adapter, ...extensions]);
-    expect(codecTypeImports.length).toBe(14);
+    expect(codecTypeImports.length).toBe(17);
     // Adapter codec types come first
     expect(codecTypeImports[0]).toEqual({
       package: '@internal/target-postgres/codec-types',

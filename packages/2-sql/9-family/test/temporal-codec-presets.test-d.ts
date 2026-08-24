@@ -5,7 +5,7 @@ import {
 } from '../src/core/timestamp-now-generator';
 
 const withPrecision = temporalCodecPresetWithPrecision({
-  codecId: 'pg/timestamp@1',
+  codecId: 'pg/timestamp-temporal@1',
   nativeType: 'timestamp',
 });
 const withoutPrecision = temporalCodecPreset({
@@ -14,7 +14,7 @@ const withoutPrecision = temporalCodecPreset({
 });
 
 test('codec id and native type survive as literals, not widened to string', () => {
-  expectTypeOf(withPrecision.output.codecId).toEqualTypeOf<'pg/timestamp@1'>();
+  expectTypeOf(withPrecision.output.codecId).toEqualTypeOf<'pg/timestamp-temporal@1'>();
   expectTypeOf(withPrecision.output.nativeType).toEqualTypeOf<'timestamp'>();
   expectTypeOf(withoutPrecision.output.codecId).toEqualTypeOf<'sqlite/datetime@1'>();
   expectTypeOf(withoutPrecision.output.nativeType).toEqualTypeOf<'text'>();

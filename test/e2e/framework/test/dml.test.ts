@@ -26,7 +26,7 @@ describe('DML E2E Tests', { timeout: 30000 }, () => {
       expect(inserted).toMatchObject({
         id: expect.any(Number),
         email: 'e2e@example.com',
-        created_at: expect.any(Date),
+        created_at: expect.any(Temporal.Instant),
         update_at: null,
       });
 
@@ -88,8 +88,8 @@ describe('DML E2E Tests - UUIDv7 client-generated IDs', { timeout: 30000 }, () =
       expect(row).toMatchObject({
         id: expect.stringMatching(UUIDV7_REGEX),
         name: 'uuidv7-test-event',
-        created_at: expect.any(Date),
-        scheduled_at: new Date('2024-01-15T10:30:00.000Z'),
+        created_at: expect.any(Temporal.Instant),
+        scheduled_at: '2024-01-15 10:30:00+00',
       });
     });
   });

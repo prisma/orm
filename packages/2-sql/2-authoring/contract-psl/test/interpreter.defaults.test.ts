@@ -700,7 +700,7 @@ model UuidNativeBad {
             createdAt: {
               kind: 'fieldPreset',
               output: {
-                codecId: 'pg/timestamptz@1',
+                codecId: 'pg/timestamptz-temporal@1',
                 nativeType: 'timestamptz',
               },
             },
@@ -1040,7 +1040,7 @@ model UuidNativeBad {
 
     const pgTimestampPrecision3 = {
       nativeType: 'timestamp',
-      codecId: 'pg/timestamp@1',
+      codecId: 'pg/timestamp-temporal@1',
       nullable: false,
       typeParams: { precision: 3 },
     };
@@ -1065,7 +1065,7 @@ model UuidNativeBad {
       const { column, defaults } = columnAndDefaults(model('temporal.timestamp()'));
       expect(column).toEqual({
         nativeType: 'timestamp',
-        codecId: 'pg/timestamp@1',
+        codecId: 'pg/timestamp-temporal@1',
         nullable: false,
       });
       expect(column).not.toHaveProperty('typeParams');
@@ -1078,7 +1078,7 @@ model UuidNativeBad {
       );
       expect(column).toEqual({
         nativeType: 'timestamptz',
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         nullable: false,
       });
       expect(defaults).toEqual([{ ref: stampedRef, onCreate: nowPhase, onUpdate: nowPhase }]);
@@ -1088,7 +1088,7 @@ model UuidNativeBad {
       const { column, defaults } = columnAndDefaults(model('temporal.timestamptz(onUpdate: now)'));
       expect(column).toEqual({
         nativeType: 'timestamptz',
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         nullable: false,
       });
       expect(defaults).toEqual([{ ref: stampedRef, onUpdate: nowPhase }]);

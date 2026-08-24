@@ -5,7 +5,6 @@ import {
   PG_BOOL_CODEC_ID,
   PG_BYTEA_CODEC_ID,
   PG_CHAR_CODEC_ID,
-  PG_DATE_CODEC_ID,
   PG_ENUM_CODEC_ID,
   PG_FLOAT_CODEC_ID,
   PG_FLOAT4_CODEC_ID,
@@ -20,9 +19,6 @@ import {
   PG_NUMERIC_CODEC_ID,
   PG_TEXT_ARRAY_CODEC_ID,
   PG_TEXT_CODEC_ID,
-  PG_TIME_CODEC_ID,
-  PG_TIMESTAMP_CODEC_ID,
-  PG_TIMESTAMPTZ_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
   PG_UUID_CODEC_ID,
   PG_VARBIT_CODEC_ID,
@@ -35,7 +31,6 @@ import {
   pgByteaDescriptor,
   pgCharColumn,
   pgCharDescriptor,
-  pgDateColumn,
   pgEnumDescriptor,
   pgFloat4Column,
   pgFloat8Column,
@@ -52,9 +47,6 @@ import {
   pgNumericColumn,
   pgTextArrayDescriptor,
   pgTextColumn,
-  pgTimeColumn,
-  pgTimestampColumn,
-  pgTimestamptzColumn,
   pgTimetzColumn,
   pgUuidColumn,
   pgVarbitColumn,
@@ -365,42 +357,11 @@ describe('column helpers', () => {
     expect(spec.typeParams).toEqual({});
   });
 
-  it('pgDateColumn packages a ColumnSpec for pg/date@1', () => {
-    const spec = pgDateColumn();
-    expect(spec.codecId).toBe(PG_DATE_CODEC_ID);
-    expect(spec.nativeType).toBe('date');
-    expect(spec.codecFactory(instanceCtx).id).toBe(PG_DATE_CODEC_ID);
-  });
-
   it('pgTextColumn packages a ColumnSpec for pg/text@1', () => {
     const spec = pgTextColumn();
     expect(spec.codecId).toBe(PG_TEXT_CODEC_ID);
     expect(spec.nativeType).toBe('text');
     expect(spec.codecFactory(instanceCtx).id).toBe(PG_TEXT_CODEC_ID);
-  });
-
-  it('pgTimeColumn packages a ColumnSpec for pg/time@1', () => {
-    const spec = pgTimeColumn({ precision: 2 });
-    expect(spec.codecId).toBe(PG_TIME_CODEC_ID);
-    expect(spec.nativeType).toBe('time');
-    expect(spec.typeParams).toEqual({ precision: 2 });
-    expect(spec.codecFactory(instanceCtx).id).toBe(PG_TIME_CODEC_ID);
-  });
-
-  it('pgTimestampColumn packages a ColumnSpec for pg/timestamp@1', () => {
-    const spec = pgTimestampColumn({ precision: 3 });
-    expect(spec.codecId).toBe(PG_TIMESTAMP_CODEC_ID);
-    expect(spec.nativeType).toBe('timestamp');
-    expect(spec.typeParams).toEqual({ precision: 3 });
-    expect(spec.codecFactory(instanceCtx).id).toBe(PG_TIMESTAMP_CODEC_ID);
-  });
-
-  it('pgTimestamptzColumn packages a ColumnSpec for pg/timestamptz@1', () => {
-    const spec = pgTimestamptzColumn({ precision: 6 });
-    expect(spec.codecId).toBe(PG_TIMESTAMPTZ_CODEC_ID);
-    expect(spec.nativeType).toBe('timestamptz');
-    expect(spec.typeParams).toEqual({ precision: 6 });
-    expect(spec.codecFactory(instanceCtx).id).toBe(PG_TIMESTAMPTZ_CODEC_ID);
   });
 
   it('pgTimetzColumn packages a ColumnSpec for pg/timetz@1', () => {

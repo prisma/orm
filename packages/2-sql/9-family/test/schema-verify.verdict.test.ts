@@ -342,6 +342,7 @@ describe('differ verdict — defaults (default is a child node of the column)', 
       user: createContractTable({
         created: {
           nativeType: 'timestamptz',
+          codecId: 'pg/timestamptz-temporal@1',
           nullable: false,
           default: { kind: 'function', expression: 'now()' },
         },

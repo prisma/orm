@@ -106,7 +106,7 @@ export async function executeMigrateShowPlan(
       dbConnection,
       hasDriver,
       why: 'migrate --show needs a database connection to read the live marker (or pass --from <contract> for an offline preview)',
-      retryCommand: 'prisma-cli migrate --show --from <contract>',
+      retryCommand: '{bin} db migrate --show --from <contract>',
     });
     if (missingDb) {
       return notOk(missingDb);
@@ -185,7 +185,7 @@ export async function executeMigrateShowPlan(
         dbConnection,
         hasDriver,
         why: '@db resolves to the live database marker and requires a --db connection',
-        retryCommand: 'prisma-cli migrate --show --from @db --db $DATABASE_URL',
+        retryCommand: '{bin} db migrate --show --from @db --db $DATABASE_URL',
       });
       if (missingDb) {
         return notOk(missingDb);

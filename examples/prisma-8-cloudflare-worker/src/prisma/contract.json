@@ -111,7 +111,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -181,7 +181,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -293,7 +293,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -525,7 +525,7 @@
             "post": {
               "columns": {
                 "createdAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -587,7 +587,7 @@
             "task": {
               "columns": {
                 "createdAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -680,7 +680,7 @@
                   "nullable": true
                 },
                 "createdAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -739,7 +739,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "de272efc7ecaae2426ba5d77ee5a4ab02160de13a1a540d651eabba36e358aa5"
+    "storageHash": "60b95ce10b31fa8eee53c62e8196ce66f04ff6f79bab00590b12eb56a8b26e4b"
   },
   "execution": {
     "executionHash": "d5124fa06e1417dd4575e0b5a868a0216ec0ed912c7b5f652225db35e038dee4",

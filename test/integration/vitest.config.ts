@@ -50,6 +50,7 @@ export default defineConfig({
     execArgv: ['--no-wasm-code-gc', '--no-wasm-tier-up', '--no-memory-protection-keys'],
     globals: true,
     environment: 'node',
+    setupFiles: ['./test/setup-temporal.ts'],
     include: ['test/**/*.test.ts'],
     exclude: [...configDefaults.exclude, ...initJourneyExclude],
     typecheck: {

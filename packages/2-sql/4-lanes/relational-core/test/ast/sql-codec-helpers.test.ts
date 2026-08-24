@@ -5,7 +5,6 @@ import {
   SQL_FLOAT_CODEC_ID,
   SQL_INT_CODEC_ID,
   SQL_TEXT_CODEC_ID,
-  SQL_TIMESTAMP_CODEC_ID,
   SQL_VARCHAR_CODEC_ID,
 } from '../../src/ast/sql-codec-helpers';
 import {
@@ -13,7 +12,6 @@ import {
   sqlFloatDescriptor,
   sqlIntDescriptor,
   sqlTextDescriptor,
-  sqlTimestampDescriptor,
   sqlVarcharDescriptor,
 } from '../../src/ast/sql-codecs';
 
@@ -23,7 +21,6 @@ const descriptorsByScalar = {
   int: sqlIntDescriptor,
   float: sqlFloatDescriptor,
   text: sqlTextDescriptor,
-  timestamp: sqlTimestampDescriptor,
 } as const satisfies Record<string, AnyCodecDescriptor>;
 
 describe('sql-codec-helpers', () => {
@@ -34,14 +31,12 @@ describe('sql-codec-helpers', () => {
       int: SQL_INT_CODEC_ID,
       float: SQL_FLOAT_CODEC_ID,
       text: SQL_TEXT_CODEC_ID,
-      timestamp: SQL_TIMESTAMP_CODEC_ID,
     }).toEqual({
       char: 'sql/char@1',
       varchar: 'sql/varchar@1',
       int: 'sql/int@1',
       float: 'sql/float@1',
       text: 'sql/text@1',
-      timestamp: 'sql/timestamp@1',
     });
   });
 
@@ -61,12 +56,6 @@ describe('sql-codec-helpers', () => {
     { scalar: 'int', id: SQL_INT_CODEC_ID, targetTypes: ['int'], hasParamsSchema: true },
     { scalar: 'float', id: SQL_FLOAT_CODEC_ID, targetTypes: ['float'], hasParamsSchema: true },
     { scalar: 'text', id: SQL_TEXT_CODEC_ID, targetTypes: ['text'], hasParamsSchema: true },
-    {
-      scalar: 'timestamp',
-      id: SQL_TIMESTAMP_CODEC_ID,
-      targetTypes: ['timestamp'],
-      hasParamsSchema: true,
-    },
   ];
 
   it.each(codecDefinitionCases)(
@@ -113,26 +102,6 @@ describe('sql-codec-helpers', () => {
     expect(await codec.decode('user_001', {})).toBe('user_001');
   });
 
-  it('round-trips Date values for timestamp codecs', async () => {
-    const codec = sqlTimestampDescriptor.factory({})({ name: 'test' });
-    const instant = new Date('2024-01-15T10:30:00Z');
-    expect(await codec.encode(instant, {})).toBe(instant);
-    expect(await codec.decode(instant, {})).toBe(instant);
-  });
-
-  it('serializes timestamps to zone-less ISO strings for the JSON contract', () => {
-    const codec = sqlTimestampDescriptor.factory({})({ name: 'test' });
-    const instant = new Date('2024-01-15T10:30:00Z');
-    expect(codec.encodeJson(instant)).toBe('2024-01-15T10:30:00.000');
-    expect(codec.decodeJson('2024-01-15T10:30:00.000')).toEqual(instant);
-  });
-
-  it('throws on invalid JSON input for timestamp codecs', () => {
-    const codec = sqlTimestampDescriptor.factory({})({ name: 'test' });
-    expect(() => codec.decodeJson(42)).toThrow(/Expected ISO date string/);
-    expect(() => codec.decodeJson('not-a-date')).toThrow(/Expected a zone-less ISO date-time/);
-  });
-
   describe('renderOutputType', () => {
     it('sql/char@1 renders Char<length>', () => {
       expect(sqlCharDescriptor.renderOutputType?.({ length: 36 })).toBe('Char<36>');
@@ -160,22 +129,6 @@ describe('sql-codec-helpers', () => {
       expect(() =>
         sqlVarcharDescriptor.renderOutputType?.({ length: 'bad' as unknown as number }),
       ).toThrow(/expected integer "length"/);
-    });
-
-    it('sql/timestamp@1 renders Timestamp<P> with precision', () => {
-      expect(sqlTimestampDescriptor.renderOutputType?.({ precision: 3 })).toBe('Timestamp<3>');
-    });
-
-    it('sql/timestamp@1 renders bare Timestamp when precision absent', () => {
-      expect(sqlTimestampDescriptor.renderOutputType?.({})).toBe('Timestamp');
-    });
-
-    it('sql/timestamp@1 throws on invalid precision type', () => {
-      expect(() =>
-        sqlTimestampDescriptor.renderOutputType?.({
-          precision: 'bad' as unknown as number,
-        }),
-      ).toThrow(/expected integer "precision"/);
     });
 
     it('sql/int@1 has no renderOutputType', () => {

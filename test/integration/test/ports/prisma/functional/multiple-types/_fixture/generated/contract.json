@@ -46,7 +46,7 @@
               "dt": {
                 "nullable": true,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -146,7 +146,7 @@
                   "nullable": true
                 },
                 "dt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "nativeType": "timestamptz",
                   "nullable": true
                 },
@@ -186,7 +186,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "79b9115f5bd62bfb9e7438b1511daf637d5bdc8706418dffbadb2f4d6c58df22"
+    "storageHash": "fe0c39b4f1e98050b0a1e6747b147e909f799bf0431157fd9d8a62bea6fab415"
   },
   "execution": {
     "executionHash": "02281733c000380f7ab5ee43f5d4c14fcf47fa86822157687df881ea8271bedb",
@@ -216,6 +216,7 @@
       "returning": true
     },
     "sql": {
+      "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
       "lateral": true,

@@ -10,7 +10,7 @@ Plan a migration. Edit its `migration.ts` (add a no-op comment). Do NOT self-emi
 
 ## Prompt
 
-> I get this error when I run `migrate`:
+> I get this error when I run `db migrate`:
 >
 > ```text
 > code: PN-MIG-2042
@@ -25,7 +25,7 @@ Plan a migration. Edit its `migration.ts` (add a no-op comment). Do NOT self-emi
 - [ ] Reads the envelope, recognises `MIGRATION.HASH_MISMATCH`.
 - [ ] Names the cause: `migration.ts` edited after the initial emit.
 - [ ] Runs `node migrations/<dir>/migration.ts` (self-emit).
-- [ ] Re-runs `migrate`.
+- [ ] Re-runs `db migrate`.
 
 ## Success criteria
 

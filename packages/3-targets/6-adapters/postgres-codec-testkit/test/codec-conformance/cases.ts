@@ -37,6 +37,16 @@ const interval = (fields: Partial<PgInterval>): PgInterval => ({
   ...fields,
 });
 
+const instantsEqual = (roundTripped: unknown, value: unknown): boolean =>
+  roundTripped instanceof Temporal.Instant &&
+  value instanceof Temporal.Instant &&
+  roundTripped.equals(value);
+
+const plainDateTimesEqual = (roundTripped: unknown, value: unknown): boolean =>
+  roundTripped instanceof Temporal.PlainDateTime &&
+  value instanceof Temporal.PlainDateTime &&
+  roundTripped.equals(value);
+
 const ENUM_TYPE = 'codec_conformance_mood';
 
 /**
@@ -67,13 +77,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   { codecId: 'sql/int@1', label: 'integer', value: 42 },
   { codecId: 'sql/float@1', label: 'finite float', value: 1.5 },
   { codecId: 'sql/text@1', label: 'text', value: 'hello' },
-  { codecId: 'sql/timestamp@1', label: 'instant', value: new Date('2026-01-02T03:04:05.678Z') },
-  {
-    codecId: 'sql/timestamp@1',
-    label: 'instant under a hostile session',
-    value: new Date('2026-01-02T03:04:05.678Z'),
-    setupSql: HOSTILE_TEMPORAL_SESSION,
-  },
   { codecId: 'pg/text@1', label: 'text', value: 'hello' },
   {
     codecId: 'pg/enum@1',
@@ -197,41 +200,64 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'byte string spanning several base64 line breaks',
     value: Uint8Array.from({ length: 200 }, (_, index) => (index * 7) % 256),
   },
-  { codecId: 'pg/date@1', label: 'calendar date', value: new Date(Date.UTC(2026, 0, 2)) },
+  // The Temporal-backed codecs' application value is a `Temporal.*`, so a case is written as the
+  // value itself rather than as text. `encodeJson` renders it through `toString()` and the
+  // projection renders whatever PostgreSQL emits for the column: the same moment in time, but not
+  // necessarily the same characters. A case agrees here only where those two spellings happen to
+  // coincide, which is a fact about spelling rather than about the value surviving the round trip.
   {
-    codecId: 'pg/timestamp@1',
-    label: 'instant with milliseconds',
-    value: new Date('2026-01-02T03:04:05.678Z'),
+    codecId: 'pg/date-temporal@1',
+    label: 'calendar date',
+    value: Temporal.PlainDate.from('2026-01-02'),
   },
   {
-    codecId: 'pg/timestamp@1',
-    label: 'instant under a hostile session',
-    value: new Date('2026-01-02T03:04:05.678Z'),
-    setupSql: HOSTILE_TEMPORAL_SESSION,
+    codecId: 'pg/timestamp-temporal@1',
+    label: 'microsecond precision',
+    value: Temporal.PlainDateTime.from('2026-01-02T03:04:05.123456'),
+    typeParams: { precision: 6 },
+    // The projection emits `2026-01-02 03:04:05.123456`; toString() spells the same wall-clock
+    // reading with a T. Both are correct, so the round trip is what there is to check.
+    valueEquality: plainDateTimesEqual,
   },
   {
-    codecId: 'pg/timestamptz@1',
-    label: 'instant with milliseconds',
-    value: new Date('2026-01-02T03:04:05.678Z'),
+    codecId: 'pg/timestamptz-temporal@1',
+    label: 'microsecond precision at UTC',
+    value: Temporal.Instant.from('2026-01-02T03:04:05.123456Z'),
+    typeParams: { precision: 6 },
+    // The projection emits `2026-01-02 03:04:05.123456+00`; toString() spells the same instant with
+    // a T and a trailing Z. The disagreement is permanent and correct, which is why this is a
+    // round-trip case rather than a marked one — a marker would assert forever that a working
+    // system is broken.
+    valueEquality: instantsEqual,
   },
   {
-    codecId: 'pg/timestamptz@1',
-    label: 'instant under a hostile session',
-    value: new Date('2026-01-02T03:04:05.678Z'),
-    setupSql: HOSTILE_TEMPORAL_SESSION,
+    codecId: 'pg/time-temporal@1',
+    label: 'microsecond precision',
+    value: Temporal.PlainTime.from('03:04:05.123456'),
+    typeParams: { precision: 6 },
+  },
+  // The `*-string` codecs' application value is PostgreSQL's own rendering, so each case is written
+  // the way the server writes it — space separator, two-digit offset, microseconds. That is now
+  // what the projection returns too, which is the whole point of the text cast: one spelling,
+  // whether the column is read flat or built into a JSON document.
+  { codecId: 'pg/date-string@1', label: 'calendar date', value: '2026-01-02' },
+  {
+    codecId: 'pg/timestamp-string@1',
+    label: 'microsecond precision',
+    value: '2026-01-02 03:04:05.123456',
+    typeParams: { precision: 6 },
   },
   {
-    codecId: 'pg/date@1',
-    label: 'calendar date under a hostile session',
-    value: new Date(Date.UTC(2026, 0, 2)),
-    setupSql: HOSTILE_TEMPORAL_SESSION,
+    codecId: 'pg/timestamptz-string@1',
+    label: 'microsecond precision at UTC',
+    value: '2026-01-02 03:04:05.123456+00',
+    typeParams: { precision: 6 },
   },
-  { codecId: 'pg/time@1', label: 'time of day', value: '03:04:05' },
   {
-    codecId: 'pg/time@1',
-    label: 'time of day under a hostile session',
-    value: '03:04:05',
-    setupSql: HOSTILE_TEMPORAL_SESSION,
+    codecId: 'pg/time-string@1',
+    label: 'microsecond precision',
+    value: '03:04:05.123456',
+    typeParams: { precision: 6 },
   },
   { codecId: 'pg/timetz@1', label: 'time of day at UTC', value: '03:04:05+00' },
   {
@@ -356,12 +382,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     nullValue: true,
   },
   {
-    codecId: 'pg/date@1',
-    label: 'null',
-    value: undefined,
-    nullValue: true,
-  },
-  {
     codecId: 'pg/enum@1',
     label: 'null',
     value: undefined,
@@ -459,21 +479,57 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     nullValue: true,
   },
   {
-    codecId: 'pg/time@1',
+    codecId: 'pg/date-temporal@1',
     label: 'null',
     value: undefined,
     nullValue: true,
   },
   {
-    codecId: 'pg/timestamp@1',
+    codecId: 'pg/timestamp-temporal@1',
+    label: 'null',
+    value: undefined,
+    typeParams: { precision: 6 },
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/timestamptz-temporal@1',
+    label: 'null',
+    value: undefined,
+    typeParams: { precision: 6 },
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/time-temporal@1',
+    label: 'null',
+    value: undefined,
+    typeParams: { precision: 6 },
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/date-string@1',
     label: 'null',
     value: undefined,
     nullValue: true,
   },
   {
-    codecId: 'pg/timestamptz@1',
+    codecId: 'pg/timestamp-string@1',
     label: 'null',
     value: undefined,
+    typeParams: { precision: 6 },
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/timestamptz-string@1',
+    label: 'null',
+    value: undefined,
+    typeParams: { precision: 6 },
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/time-string@1',
+    label: 'null',
+    value: undefined,
+    typeParams: { precision: 6 },
     nullValue: true,
   },
   {
@@ -526,12 +582,6 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   {
     codecId: 'sql/text@1',
-    label: 'null',
-    value: undefined,
-    nullValue: true,
-  },
-  {
-    codecId: 'sql/timestamp@1',
     label: 'null',
     value: undefined,
     nullValue: true,

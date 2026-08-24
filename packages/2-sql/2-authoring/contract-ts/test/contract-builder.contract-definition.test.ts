@@ -188,7 +188,7 @@ describe('shared contract definition lowering', () => {
   it('encodes literal defaults through codecLookup during storage lowering', () => {
     const codecLookup: CodecLookup = {
       get: (id) => {
-        if (id !== 'pg/timestamptz@1') {
+        if (id !== 'pg/timestamptz-temporal@1') {
           return undefined;
         }
 
@@ -201,7 +201,7 @@ describe('shared contract definition lowering', () => {
           decodeJson: (json: unknown) => new Date(json as string),
         };
       },
-      targetTypesFor: (id) => (id === 'pg/timestamptz@1' ? ['timestamptz'] : undefined),
+      targetTypesFor: (id) => (id === 'pg/timestamptz-temporal@1' ? ['timestamptz'] : undefined),
       renderOutputTypeFor: () => undefined,
     };
 
@@ -219,7 +219,7 @@ describe('shared contract definition lowering', () => {
                 fieldName: 'scheduledAt',
                 columnName: 'scheduled_at',
                 descriptor: {
-                  codecId: 'pg/timestamptz@1',
+                  codecId: 'pg/timestamptz-temporal@1',
                   nativeType: 'timestamptz',
                 },
                 nullable: false,
@@ -255,7 +255,7 @@ describe('shared contract definition lowering', () => {
               fieldName: 'updatedAt',
               columnName: 'updated_at',
               descriptor: {
-                codecId: 'pg/timestamptz@1',
+                codecId: 'pg/timestamptz-temporal@1',
                 nativeType: 'timestamptz',
               },
               nullable: false,

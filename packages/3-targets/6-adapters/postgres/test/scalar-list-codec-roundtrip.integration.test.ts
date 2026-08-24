@@ -3,7 +3,7 @@
  *
  * Verifies that the runtime codec path correctly maps the element codec over a JS
  * array when the column's CodecRef carries `many: true`. Four element types are
- * covered: DateTime (pg/timestamptz@1), Bytes (pg/bytea@1), Decimal (pg/numeric@1),
+ * covered: DateTime (pg/timestamptz-temporal@1), Bytes (pg/bytea@1), Decimal (pg/numeric@1),
  * and BigInt (pg/int8@1) — the types the previous JSON fallback path broke because
  * their per-element wire representation differs from their JSON form.
  *
@@ -73,7 +73,7 @@ function buildListContract(): Contract<SqlStorage> {
                   id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
                   dates: {
                     nativeType: 'timestamptz',
-                    codecId: 'pg/timestamptz@1',
+                    codecId: 'pg/timestamptz-temporal@1',
                     nullable: true,
                     many: true,
                   },
@@ -123,7 +123,7 @@ const TABLE = TableSource.named('ListTest');
 
 function buildInsertAst(row: {
   id: number;
-  dates: Date[] | null;
+  dates: Temporal.Instant[] | null;
   bytes: Uint8Array[] | null;
   decimals: string[] | null;
   bigints: bigint[] | null;
@@ -131,7 +131,9 @@ function buildInsertAst(row: {
   return InsertAst.into(TABLE).withRows([
     {
       id: ParamRef.of(row.id, { codec: { codecId: 'pg/int4@1' } }),
-      dates: ParamRef.of(row.dates, { codec: { codecId: 'pg/timestamptz@1', many: true } }),
+      dates: ParamRef.of(row.dates, {
+        codec: { codecId: 'pg/timestamptz-temporal@1', many: true },
+      }),
       bytes: ParamRef.of(row.bytes, { codec: { codecId: 'pg/bytea@1', many: true } }),
       decimals: ParamRef.of(row.decimals, {
         codec: { codecId: 'pg/numeric@1', typeParams: { precision: 30, scale: 10 }, many: true },
@@ -146,7 +148,7 @@ function buildSelectByIdAst(id: number): SelectAst {
     .withProjection([
       ProjectionItem.of('id', ColumnRef.of('ListTest', 'id'), { codecId: 'pg/int4@1' }),
       ProjectionItem.of('dates', ColumnRef.of('ListTest', 'dates'), {
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         many: true,
       }),
       ProjectionItem.of('bytes', ColumnRef.of('ListTest', 'bytes'), {
@@ -226,7 +228,10 @@ describe('scalar-list codec round-trip (element-wise encode/decode)', { concurre
   }, async () => {
     const contract = getContract();
 
-    const dates = [new Date('2026-01-02T03:04:05.000Z'), new Date('2025-06-15T12:00:00.000Z')];
+    const dates = [
+      Temporal.Instant.from('2026-01-02T03:04:05Z'),
+      Temporal.Instant.from('2025-06-15T12:00:00Z'),
+    ];
 
     await runtime!
       .query(
@@ -240,11 +245,10 @@ describe('scalar-list codec round-trip (element-wise encode/decode)', { concurre
     const rows = await runtime!.query(planFromAst(buildSelectByIdAst(100), contract)).toArray();
 
     expect(rows).toHaveLength(1);
-    const row = rows[0] as unknown as { dates: Date[] };
+    const row = rows[0] as unknown as { dates: Temporal.Instant[] };
     expect(row.dates).toHaveLength(2);
-    expect(row.dates[0]).toBeInstanceOf(Date);
-    expect((row.dates[0] as Date).toISOString()).toBe(dates[0]!.toISOString());
-    expect((row.dates[1] as Date).toISOString()).toBe(dates[1]!.toISOString());
+    expect(row.dates[0]).toBeInstanceOf(Temporal.Instant);
+    expect(row.dates.map((d) => d.toString())).toEqual(dates.map((d) => d.toString()));
   });
 
   it('round-trips Bytes[] with per-element codec fidelity', {

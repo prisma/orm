@@ -129,7 +129,7 @@ describe('migration tamper detection', () => {
     const project = await tamperedProject();
     const { config, counters } = driverConfig(project);
 
-    const run = await harness(config).run(['migrate', '--json'], { cwd: project.dir });
+    const run = await harness(config).run(['db', 'migrate', '--json'], { cwd: project.dir });
 
     expectIntegrityRefusal(run);
     expect(counters.connections).toBe(0);

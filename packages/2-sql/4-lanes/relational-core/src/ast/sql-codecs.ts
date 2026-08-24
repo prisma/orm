@@ -27,7 +27,6 @@ import {
   SQL_FLOAT_CODEC_ID,
   SQL_INT_CODEC_ID,
   SQL_TEXT_CODEC_ID,
-  SQL_TIMESTAMP_CODEC_ID,
   SQL_VARCHAR_CODEC_ID,
   sqlCharDecode,
   sqlCharEncode,
@@ -40,26 +39,16 @@ import {
   sqlIntEncode,
   sqlTextDecode,
   sqlTextEncode,
-  sqlTimestampDecode,
-  sqlTimestampDecodeJson,
-  sqlTimestampEncode,
-  sqlTimestampEncodeJson,
-  sqlTimestampRenderOutputType,
   sqlVarcharDecode,
   sqlVarcharEncode,
   sqlVarcharRenderOutputType,
 } from './sql-codec-helpers';
 
 type LengthParams = { readonly length?: number };
-type PrecisionParams = { readonly precision?: number };
 
 const lengthParamsSchema = arktype({
   'length?': 'number.integer > 0',
 }) satisfies StandardSchemaV1<LengthParams>;
-
-const precisionParamsSchema = arktype({
-  'precision?': 'number.integer >= 0 & number.integer <= 6',
-}) satisfies StandardSchemaV1<PrecisionParams>;
 
 export class SqlTextCodec extends CodecImpl<
   typeof SQL_TEXT_CODEC_ID,
@@ -256,49 +245,3 @@ export const sqlVarcharColumn = (params: LengthParams = {}) =>
 
 sqlVarcharColumn satisfies ColumnHelperFor<SqlVarcharDescriptor>;
 sqlVarcharColumn satisfies ColumnHelperForStrict<SqlVarcharDescriptor>;
-
-export class SqlTimestampCodec extends CodecImpl<
-  typeof SQL_TIMESTAMP_CODEC_ID,
-  readonly ['equality', 'order'],
-  Date,
-  Date
-> {
-  async encode(value: Date, _ctx: CodecCallContext): Promise<Date> {
-    return sqlTimestampEncode(value);
-  }
-  async decode(wire: Date, _ctx: CodecCallContext): Promise<Date> {
-    return sqlTimestampDecode(wire);
-  }
-  encodeJson(value: Date): JsonValue {
-    return sqlTimestampEncodeJson(value);
-  }
-  decodeJson(json: JsonValue): Date {
-    return sqlTimestampDecodeJson(json);
-  }
-}
-
-export class SqlTimestampDescriptor extends CodecDescriptorImpl<PrecisionParams> {
-  override readonly codecId = SQL_TIMESTAMP_CODEC_ID;
-  override readonly traits = ['equality', 'order'] as const;
-  override readonly targetTypes = ['timestamp'] as const;
-  override readonly paramsSchema: StandardSchemaV1<PrecisionParams> = precisionParamsSchema;
-  override renderOutputType(params: PrecisionParams): string | undefined {
-    return sqlTimestampRenderOutputType(params);
-  }
-  override factory(_params: PrecisionParams): (ctx: CodecInstanceContext) => SqlTimestampCodec {
-    return () => new SqlTimestampCodec(this);
-  }
-}
-
-export const sqlTimestampDescriptor = new SqlTimestampDescriptor();
-
-export const sqlTimestampColumn = (params: PrecisionParams = {}) =>
-  column(
-    sqlTimestampDescriptor.factory(params),
-    sqlTimestampDescriptor.codecId,
-    params,
-    'timestamp',
-  );
-
-sqlTimestampColumn satisfies ColumnHelperFor<SqlTimestampDescriptor>;
-sqlTimestampColumn satisfies ColumnHelperForStrict<SqlTimestampDescriptor>;

@@ -191,7 +191,7 @@ describe('migrate --to resolves the apply contract', () => {
   it('applies the target bundle destination contract when --to names an older node', async () => {
     const cwd = await buildAppliedProject();
 
-    const run = await harness(ormConfig(cwd)).run(['migrate', '--to', C1, '--json'], {
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', C1, '--json'], {
       cwd,
     });
 
@@ -202,7 +202,7 @@ describe('migrate --to resolves the apply contract', () => {
   it('applies the emitted contract when --to is omitted', async () => {
     const cwd = await buildAppliedProject();
 
-    const run = await harness(ormConfig(cwd)).run(['migrate', '--json'], { cwd });
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
 
     expect(run.exitCode).toBe(0);
     expect(appliedContractHash()).toBe(C2);
@@ -214,7 +214,7 @@ describe('migrate --to resolves the apply contract', () => {
     await writeFile(snapshotPath, '{ not json');
     const snapshotRelative = relative(cwd, snapshotPath);
 
-    const run = await harness(ormConfig(cwd)).run(['migrate', '--to', C1, '--json'], {
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--to', C1, '--json'], {
       cwd,
     });
     const error = errorOf(run);
@@ -231,7 +231,7 @@ describe('migrate --to resolves the apply contract', () => {
     const cwd = await buildAppliedProject();
     await rm(join(cwd, 'contract.json'));
 
-    const run = await harness(ormConfig(cwd)).run(['migrate', '--json'], { cwd });
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
     const error = errorOf(run);
 
     expect(run.exitCode).not.toBe(0);
@@ -245,7 +245,7 @@ describe('migrate --to resolves the apply contract', () => {
     const cwd = await buildAppliedProject();
     await writeFile(join(cwd, 'contract.json'), '{ not json');
 
-    const run = await harness(ormConfig(cwd)).run(['migrate', '--json'], { cwd });
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
     const error = errorOf(run);
 
     expect(run.exitCode).not.toBe(0);

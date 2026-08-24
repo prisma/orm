@@ -146,12 +146,6 @@ export async function createJourneyProject(
     writeMinimalPackageJson(dir);
 
     const target = cell.target === 'mongo' ? 'mongodb' : 'postgres';
-    // `--skip-skills` matters here: this journey verifies
-    // scaffold/install/emit/migrate only; skill registration is
-    // intentionally not exercised. Without the flag, project-level skill
-    // install pulls the `prisma/prisma/skills#v<cliVersion>` tag from
-    // GitHub, which does not exist for an in-development minor (the tag is
-    // only cut after publish), so every release-bump PR's CI goes red.
     const initResult = await runNode(
       [
         CLI_BIN,
@@ -163,7 +157,6 @@ export async function createJourneyProject(
         cell.authoring,
         '--yes',
         '--skip-install',
-        '--skip-skills',
       ],
       dir,
     );

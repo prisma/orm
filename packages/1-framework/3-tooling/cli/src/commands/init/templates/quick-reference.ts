@@ -43,7 +43,7 @@ export function quickReferenceMd(
     pkg,
     configEntrypoint: targetEntrypoint(target, 'config', resolveImportSpecifier),
     schemaSample: schemaSample(target, authoring, resolveImportSpecifier),
-    requirements: requirementsBlock(target),
+    requirements: requirementsBlock(target, pkgRun),
   };
   const templateFile = `quick-reference-${target}.md`;
   return renderTemplate(templateFile, variables, vars);
@@ -60,7 +60,7 @@ export function quickReferenceMd(
  * shouldn't ship Mongo's `db.runCommand` (and vice versa) just because
  * we couldn't be bothered to branch.
  */
-function requirementsBlock(target: TargetId): string {
+function requirementsBlock(target: TargetId, pkgRun: string): string {
   const label = TARGET_LABEL[target];
   const minVersion = MIN_SERVER_VERSION[target];
   const verifyCommand =
@@ -69,6 +69,6 @@ function requirementsBlock(target: TargetId): string {
     '## Requirements',
     '',
     `- **${label} ${minVersion} or newer.** Older servers are not supported. Run ${verifyCommand} against your server to verify.`,
-    '- The CLI never connects to your database without explicit consent. Pass `--probe-db` to `prisma orm init` if you want `init` to verify the server version itself.',
+    `- The CLI never connects to your database without explicit consent. Pass \`--probe-db\` to \`${pkgRun} orm init\` if you want \`init\` to verify the server version itself.`,
   ].join('\n');
 }

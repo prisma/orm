@@ -11,7 +11,7 @@ import { createTestProjectDir } from '../utils/test-project-dir';
  * the destructive act the consent token exists for. Both skip flags are
  * passed, so no run needs a package-manager runner and none is seeded.
  */
-const NO_PACKAGE_WORK = ['--skip-install', '--skip-skills'] as const;
+const NO_PACKAGE_WORK = ['--skip-install'] as const;
 
 const SCHEMA_PATH = 'src/prisma/contract.prisma';
 const HAND_WRITTEN_SCHEMA = 'model KeepMe {\n  id String @id\n}\n';

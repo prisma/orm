@@ -1110,7 +1110,11 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
       {
         event: makeTable({
           id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          created_at: { nativeType: 'timestamp', codecId: 'pg/timestamp@1', nullable: true },
+          created_at: {
+            nativeType: 'timestamp',
+            codecId: 'pg/timestamp-temporal@1',
+            nullable: true,
+          },
         }),
       },
       'text-to-timestamp-updated',
@@ -1137,7 +1141,7 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
           id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
           created_at: {
             nativeType: 'timestamptz',
-            codecId: 'pg/timestamptz@1',
+            codecId: 'pg/timestamptz-temporal@1',
             nullable: true,
           },
         }),
@@ -1159,7 +1163,11 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
       {
         event: makeTable({
           id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
-          created_at: { nativeType: 'timestamptz', codecId: 'pg/timestamptz@1', nullable: false },
+          created_at: {
+            nativeType: 'timestamptz',
+            codecId: 'pg/timestamptz-temporal@1',
+            nullable: false,
+          },
         }),
       },
       'timestamptz-default-baseline',
@@ -1172,7 +1180,7 @@ describe('PostgresMigrationPlanner - reconciliation integration', { concurrent: 
           id: { nativeType: 'uuid', codecId: 'pg/uuid@1', nullable: false },
           created_at: {
             nativeType: 'timestamptz',
-            codecId: 'pg/timestamptz@1',
+            codecId: 'pg/timestamptz-temporal@1',
             nullable: false,
             default: { kind: 'literal', value: '2023-01-01T00:00:00.000Z' },
           },

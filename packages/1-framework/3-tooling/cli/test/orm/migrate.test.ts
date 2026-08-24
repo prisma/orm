@@ -187,7 +187,7 @@ describe('migrate', () => {
   it('settles as a completed envelope carrying the apply document', async () => {
     const cwd = await buildProject();
 
-    const run = await harness(ormConfig(cwd)).run(['migrate', '--json'], { cwd });
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
 
     expect(run.exitCode).toBe(0);
     expect(run.presented?.data).toMatchObject({
@@ -215,7 +215,7 @@ describe('migrate', () => {
       },
     );
 
-    const run = await harness(ormConfig(cwd)).run(['migrate', '--json'], { cwd });
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
 
     expect(stepEvents(run.events)).toEqual([
       { kind: 'step-started', step: 'Applying app space', id: 'app' },
@@ -226,7 +226,7 @@ describe('migrate', () => {
   it('lays the applied spaces out as a tree the engine draws', async () => {
     const cwd = await buildProject();
 
-    const run = await harness(ormConfig(cwd)).run(['migrate'], {
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate'], {
       cwd,
       isTty: { stdout: true },
     });
@@ -266,7 +266,7 @@ describe('migrate', () => {
       {
         kind: 'run-command',
         label: 'Check every space against the database',
-        command: 'prisma-cli migration status',
+        command: '{bin} migration status',
       },
     ]);
   });
@@ -274,7 +274,7 @@ describe('migrate', () => {
   it('writes nothing to stdout in human mode', async () => {
     const cwd = await buildProject();
 
-    const run = await harness(ormConfig(cwd)).run(['migrate'], {
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate'], {
       cwd,
       isTty: { stdout: true, stderr: true },
     });
@@ -286,7 +286,7 @@ describe('migrate', () => {
   it('takes the connection from --db over the config', async () => {
     const cwd = await buildProject();
 
-    await harness(ormConfig(cwd)).run(['migrate', '--db', 'postgres://other/db', '--json'], {
+    await harness(ormConfig(cwd)).run(['db', 'migrate', '--db', 'postgres://other/db', '--json'], {
       cwd,
     });
 
@@ -296,7 +296,7 @@ describe('migrate', () => {
   it('errors when no connection is configured', async () => {
     const cwd = await buildProject();
 
-    const run = await harness(ormConfig(cwd, { db: undefined })).run(['migrate', '--json'], {
+    const run = await harness(ormConfig(cwd, { db: undefined })).run(['db', 'migrate', '--json'], {
       cwd,
     });
 
@@ -313,7 +313,7 @@ describe('migrate', () => {
     const run = await harness({
       ...config,
       target: { ...(config['target'] as Record<string, unknown>), migrations: undefined },
-    }).run(['migrate', '--json'], { cwd });
+    }).run(['db', 'migrate', '--json'], { cwd });
 
     expect(run.exitCode).toBe(2);
     expect(envelopeOf(run.json)).toMatchObject({
@@ -333,7 +333,7 @@ describe('migrate', () => {
       }),
     );
 
-    const run = await harness(ormConfig(cwd)).run(['migrate', '--json'], { cwd });
+    const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
 
     expect(run.exitCode).toBe(2);
     expect(envelopeOf(run.json)).toMatchObject({
@@ -348,7 +348,7 @@ describe('migrate', () => {
       mocks.connect.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:5432'));
       mocks.close.mockRejectedValue(new Error('close on an unconnected client'));
 
-      const run = await harness(ormConfig(cwd)).run(['migrate', '--json'], { cwd });
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
       const settled = JSON.stringify(run.json.at(-1));
 
       expect(run.exitCode).toBe(2);
@@ -360,7 +360,7 @@ describe('migrate', () => {
       const cwd = await buildProject();
       mocks.close.mockRejectedValue(new Error('close failed'));
 
-      const run = await harness(ormConfig(cwd)).run(['migrate', '--json'], { cwd });
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--json'], { cwd });
 
       expect(run.exitCode).toBe(0);
       expect(envelopeOf(run.json)).toMatchObject({ ok: true });
@@ -371,7 +371,7 @@ describe('migrate', () => {
     it('previews the route without applying anything', async () => {
       const cwd = await buildProject();
 
-      const run = await harness(ormConfig(cwd)).run(['migrate', '--show', '--json'], {
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--show', '--json'], {
         cwd,
       });
 
@@ -389,7 +389,7 @@ describe('migrate', () => {
     it('keeps the human-only rendering out of the result document', async () => {
       const cwd = await buildProject();
 
-      const run = await harness(ormConfig(cwd)).run(['migrate', '--show', '--json'], {
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--show', '--json'], {
         cwd,
       });
 
@@ -403,7 +403,7 @@ describe('migrate', () => {
     it('ships the topology as a drawing whose spans carry tone', async () => {
       const cwd = await buildProject();
 
-      const run = await harness(ormConfig(cwd)).run(['migrate', '--show'], {
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--show'], {
         cwd,
         isTty: { stdout: true },
       });
@@ -419,7 +419,7 @@ describe('migrate', () => {
     it('announces how many migrations will run', async () => {
       const cwd = await buildProject();
 
-      const run = await harness(ormConfig(cwd)).run(['migrate', '--show'], {
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--show'], {
         cwd,
         isTty: { stdout: true },
       });
@@ -434,7 +434,7 @@ describe('migrate', () => {
     it('keeps every arrow in the run list in one column', async () => {
       const cwd = await buildProject();
 
-      const run = await harness(ormConfig(cwd)).run(['migrate', '--show'], {
+      const run = await harness(ormConfig(cwd)).run(['db', 'migrate', '--show'], {
         cwd,
         isTty: { stdout: true, stderr: true },
       });
@@ -452,9 +452,12 @@ describe('migrate', () => {
     it('plans offline when --from names a contract', async () => {
       const cwd = await buildProject();
 
-      const run = await harness(ormConfig(cwd)).run(['migrate', '--show', '--from', C1, '--json'], {
-        cwd,
-      });
+      const run = await harness(ormConfig(cwd)).run(
+        ['db', 'migrate', '--show', '--from', C1, '--json'],
+        {
+          cwd,
+        },
+      );
 
       expect(run.exitCode).toBe(0);
       expect(mocks.connect).not.toHaveBeenCalled();
@@ -467,7 +470,7 @@ describe('migrate', () => {
       const cwd = await buildProject();
 
       const run = await harness(ormConfig(cwd)).run(
-        ['migrate', '--show', '--from', C1, '--to', C2],
+        ['db', 'migrate', '--show', '--from', C1, '--to', C2],
         {
           cwd,
           isTty: { stdout: true },

@@ -80,13 +80,13 @@ export function starterSchema(
 }
 
 /**
- * Renders a short authoring-appropriate schema sample (FR5.1) for embedding
- * in `prisma-next.md`. Returns a complete fenced markdown code block.
+ * Renders a short authoring-appropriate schema sample for embedding in
+ * `prisma-next.md`. Returns a complete fenced markdown code block.
  *
  * The sample intentionally shows just one model: it's illustrative, not
  * a substitute for the full scaffolded contract file. The TS samples use
- * the same outer shape as `starterSchemaTs*` (FR5.3) so a user reading
- * the doc and the file side-by-side sees the same structure.
+ * the same outer shape as `starterSchemaTs*` so a user reading the doc and
+ * the file side-by-side sees the same structure.
  */
 export function schemaSample(
   target: TargetId,
@@ -177,8 +177,8 @@ model User {
   username  String?
   name      String?
   posts     Post[]
-  createdAt DateTime @default(now())
-  updatedAt temporal.updatedAt()
+  createdAt TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
 }
 
 model Post {
@@ -187,8 +187,8 @@ model Post {
   content   String?
   author    User     @relation(fields: [authorId], references: [id])
   authorId  Int
-  createdAt DateTime @default(now())
-  updatedAt temporal.updatedAt()
+  createdAt TimestamptzString @default(now())
+  updatedAt temporal.updatedAtString()
 }
 `;
 }
@@ -226,8 +226,8 @@ export const contract = defineContract({}, ({ field, model, rel }) => {
       email: field.text().unique(),
       username: field.text().optional(),
       name: field.text().optional(),
-      createdAt: field.temporal.createdAt(),
-      updatedAt: field.temporal.updatedAt(),
+      createdAt: field.temporal.createdAtString(),
+      updatedAt: field.temporal.updatedAtString(),
     },
   });
 
@@ -237,8 +237,8 @@ export const contract = defineContract({}, ({ field, model, rel }) => {
       title: field.text(),
       content: field.text().optional(),
       authorId: field.uuidString(),
-      createdAt: field.temporal.createdAt(),
-      updatedAt: field.temporal.updatedAt(),
+      createdAt: field.temporal.createdAtString(),
+      updatedAt: field.temporal.updatedAtString(),
     },
   });
 

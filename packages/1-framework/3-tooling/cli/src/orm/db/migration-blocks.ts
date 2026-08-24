@@ -255,7 +255,7 @@ export function migrationResultNextActions(
           result.perSpace !== undefined && result.perSpace.length === 1
             ? 'Confirm the space is up to date'
             : 'Confirm every space is up to date',
-          'prisma-cli migration status',
+          '{bin} migration status',
         ),
       ];
 }

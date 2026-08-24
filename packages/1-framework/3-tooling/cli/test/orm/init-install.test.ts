@@ -72,19 +72,19 @@ function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }
 }
 
 function skillCalls(): readonly RunnerCall[] {
-  return calls.filter((call) => call.args.includes('skills@latest'));
+  return calls.filter((call) => call.args.includes('skills'));
 }
 
 describe('init installs', () => {
   it(
-    'pins the engine to the exact version the installed @prisma/cli declares',
+    'pins the engine to the exact version the installed prisma package declares',
     async () => {
-      const cliManifestDir = join(projectDir, 'node_modules', '@prisma', 'cli');
+      const cliManifestDir = join(projectDir, 'node_modules', 'prisma');
       mkdirSync(cliManifestDir, { recursive: true });
       writeFileSync(
         join(cliManifestDir, 'package.json'),
         JSON.stringify({
-          name: '@prisma/cli',
+          name: 'prisma',
           version: '8.0.0-rc.4',
           dependencies: { '@prisma/cli-engine': '0.1.1' },
         }),
@@ -117,7 +117,7 @@ describe('init installs', () => {
         },
         {
           file: expect.any(String),
-          args: ['add', '-D', '@prisma/cli@next', '@types/node'],
+          args: ['add', '-D', 'prisma@next', '@types/node'],
           cwd: projectDir,
         },
         {
@@ -131,7 +131,7 @@ describe('init installs', () => {
         packagesInstalled: {
           status: 'installed',
           deps: ['@prisma/orm-postgres', 'dotenv'],
-          devDeps: ['@prisma/cli@next', '@types/node', '@prisma/cli-engine@next'],
+          devDeps: ['prisma@next', '@types/node', '@prisma/cli-engine@next'],
         },
         contractEmitted: true,
       });
@@ -143,7 +143,7 @@ describe('init installs', () => {
   it(
     'announces each package-manager run as a step',
     async () => {
-      const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
       expect(run.events).toContainEqual(
         expect.objectContaining({
@@ -215,67 +215,14 @@ describe('init installs', () => {
   );
 
   it(
-    'completes at exit 6 when the agent-skill install fails',
+    'runs no skills command — the family-level `prisma init` owns skills setup',
     async () => {
-      script = [
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 1, stderr: 'skills: registry unreachable' },
-      ];
-
       const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
-      expect(run.exitCode).toBe(6);
-      expect(envelopeOf(run)).toMatchObject({
-        ok: true,
-        exitCode: 6,
-        diagnostics: [{ code: 'CLI.INIT_SKILL_INSTALL_FAILED', severity: 'error' }],
-      });
-      expect(skillCalls()).toHaveLength(1);
-    },
-    timeouts.coldTransformImport,
-  );
-
-  it(
-    'sends a failed skill install to the skill commands, never back through init',
-    async () => {
-      script = [
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 0, stderr: '' },
-        { exitCode: 1, stderr: 'skills: registry unreachable' },
-      ];
-
-      const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
-      const finding = envelopeOf(run)?.diagnostics?.[0];
-
-      expect(finding?.nextActions).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kind: 'run-command',
-            command: expect.stringContaining('skills@latest add'),
-          }),
-        ]),
-      );
-      expect(JSON.stringify(finding?.nextActions)).not.toContain('prisma-next init');
-    },
-    timeouts.coldTransformImport,
-  );
-
-  it(
-    'runs one skill install per source, naming the skill and the agents',
-    async () => {
-      await harness().run(scaffoldArgv(), { cwd: projectDir });
-
-      const first = skillCalls()[0];
-
-      expect(skillCalls()).toHaveLength(3);
-      expect(first).toMatchObject({ cwd: projectDir });
-      expect(first?.args).toEqual(
-        expect.arrayContaining(['skills@latest', 'add', '--skill', 'prisma-8']),
-      );
-      expect(first?.args.at(-1)).toBe('-y');
+      expect(run.exitCode).toBe(0);
+      expect(skillCalls()).toEqual([]);
+      expect(calls).toHaveLength(3);
+      expect(JSON.stringify(run.presented?.data)).not.toContain('skills sync');
     },
     timeouts.coldTransformImport,
   );
@@ -286,13 +233,13 @@ describe('init installs', () => {
       async () => {
         script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
 
-        const run = await harness('pnpm').run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
 
         expect(run.exitCode).toBe(0);
         expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
           'pnpm add @prisma/orm-postgres dotenv',
           'npm add @prisma/orm-postgres dotenv',
-          'npm add -D @prisma/cli@next @types/node',
+          'npm add -D prisma@next @types/node',
           'npm add -D @prisma/cli-engine@next',
         ]);
         expect(run.events).toContainEqual(
@@ -316,7 +263,7 @@ describe('init installs', () => {
           },
         ];
 
-        const run = await harness('pnpm').run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
         const warnings = run.presented?.data;
 
         expect(JSON.stringify(warnings)).not.toContain('hunter2');
@@ -324,18 +271,6 @@ describe('init installs', () => {
         expect(warnings).toMatchObject({
           warnings: expect.arrayContaining([expect.stringContaining('ERR_PNPM_WORKSPACE')]),
         });
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'drives the agent-skill install with the manager that worked',
-      async () => {
-        script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
-
-        await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
-
-        expect(skillCalls()[0]?.file).toBe('npx');
       },
       timeouts.coldTransformImport,
     );
@@ -390,11 +325,11 @@ describe('init installs', () => {
     );
   });
 
-  describe('the skip flags', () => {
+  describe('--skip-install', () => {
     it(
-      'installs nothing and emits nothing under --skip-install',
+      'installs nothing and emits nothing',
       async () => {
-        const run = await harness().run(scaffoldArgv('--skip-install', '--skip-skills'), {
+        const run = await harness().run(scaffoldArgv('--skip-install'), {
           cwd: projectDir,
         });
 
@@ -406,37 +341,8 @@ describe('init installs', () => {
           contractEmitted: false,
         });
         expect(run.presented?.presentation.next).toContainEqual(
-          expect.objectContaining({ kind: 'run-command', command: 'prisma-cli contract emit' }),
+          expect.objectContaining({ kind: 'run-command', command: 'prisma contract emit' }),
         );
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'still installs the agent skills when only the dependencies are skipped',
-      async () => {
-        const run = await harness().run(scaffoldArgv('--skip-install'), { cwd: projectDir });
-
-        expect(run.exitCode).toBe(0);
-        expect(skillCalls()).toHaveLength(3);
-      },
-      timeouts.coldTransformImport,
-    );
-
-    it(
-      'warns about the skipped skills under --skip-skills, naming the install commands',
-      async () => {
-        const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
-        const warnings = run.presented?.presentation.json;
-
-        expect(skillCalls()).toEqual([]);
-        expect(warnings).toMatchObject({
-          warnings: expect.arrayContaining([
-            expect.stringContaining('--skip-skills'),
-            expect.stringContaining('skills@latest add'),
-          ]),
-        });
-        expect(JSON.stringify(warnings)).not.toContain('prisma-next init --skip-install');
       },
       timeouts.coldTransformImport,
     );

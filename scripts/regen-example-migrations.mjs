@@ -382,7 +382,7 @@ function emitMigrationContract(exampleDir, migrationDir, realConfigAbsPath, cont
   const tmpConfig = buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily ?? 'mongo');
   writeFileSync(tmpConfigPath, tmpConfig, 'utf8');
 
-  const tmpEmitDir = mkdtempSync(join(tmpdir(), 'pn-regen-example-'));
+  const tmpEmitDir = mkdtempSync(join(exampleDir, '.pn-regen-example-'));
 
   let emitOutput;
   try {

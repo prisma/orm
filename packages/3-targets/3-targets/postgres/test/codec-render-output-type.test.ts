@@ -11,9 +11,6 @@ import {
   pgJsonDescriptor,
   pgNumericDescriptor,
   pgTextDescriptor,
-  pgTimeDescriptor,
-  pgTimestampDescriptor,
-  pgTimestamptzDescriptor,
   pgTimetzDescriptor,
   pgVarbitDescriptor,
   pgVarcharDescriptor,
@@ -110,38 +107,6 @@ describe('codec renderOutputType', () => {
 
     it('renders VarBit<length>', () => {
       expect(renderer?.({ length: 16 })).toBe('VarBit<16>');
-    });
-  });
-
-  describe('pg/timestamp@1', () => {
-    const renderer = rendererFor(pgTimestampDescriptor);
-
-    it('renders Timestamp<P> when precision is present', () => {
-      expect(renderer?.({ precision: 3 })).toBe('Timestamp<3>');
-    });
-
-    it('renders Timestamp when precision is missing', () => {
-      expect(renderer?.({})).toBe('Timestamp');
-    });
-  });
-
-  describe('pg/timestamptz@1', () => {
-    const renderer = rendererFor(pgTimestamptzDescriptor);
-
-    it('renders Timestamptz<P>', () => {
-      expect(renderer?.({ precision: 6 })).toBe('Timestamptz<6>');
-    });
-
-    it('renders Timestamptz when precision is missing', () => {
-      expect(renderer?.({})).toBe('Timestamptz');
-    });
-  });
-
-  describe('pg/time@1', () => {
-    const renderer = rendererFor(pgTimeDescriptor);
-
-    it('renders Time<P>', () => {
-      expect(renderer?.({ precision: 0 })).toBe('Time<0>');
     });
   });
 

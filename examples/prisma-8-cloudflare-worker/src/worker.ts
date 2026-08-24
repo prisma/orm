@@ -1,3 +1,5 @@
+import 'temporal-polyfill/full/global';
+
 import { withTransaction } from '@prisma/orm-postgres/family-runtime';
 import { Client } from 'pg';
 import { createOrmClient } from './orm-client/client';
@@ -62,7 +64,7 @@ export default {
               {
                 title: `Post written in tx for ${userId}`,
                 userId,
-                createdAt: new Date(),
+                createdAt: Temporal.Now.instant(),
               },
             ])
             .build(),

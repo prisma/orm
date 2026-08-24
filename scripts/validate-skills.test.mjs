@@ -25,6 +25,59 @@ describe('validateSkillMd', () => {
     deepStrictEqual(validateSkillMd(validSkill), []);
   });
 
+  it('passes a metadata map of strings', () => {
+    const stamped = `---
+name: prisma-8
+description: A skill.
+metadata:
+  library: '@prisma/orm-postgres'
+  library_version: '8.0.0-rc.4'
+---
+
+# Prisma 8
+`;
+    deepStrictEqual(validateSkillMd(stamped), []);
+  });
+
+  it('fails when a metadata value is not a string', () => {
+    const numeric = `---
+name: prisma-8
+description: A skill.
+metadata:
+  library_version: 8.1
+---
+
+# Prisma 8
+`;
+    const errors = validateSkillMd(numeric);
+    strictEqual(errors.length, 1);
+    strictEqual(errors[0].includes('library_version'), true);
+  });
+
+  it('fails when metadata is not a map', () => {
+    const scalar = `---
+name: prisma-8
+description: A skill.
+metadata: nope
+---
+
+# Prisma 8
+`;
+    strictEqual(validateSkillMd(scalar).length, 1);
+  });
+
+  it('fails when metadata is an unquoted timestamp', () => {
+    const dated = `---
+name: prisma-8
+description: A skill.
+metadata: 2026-08-21
+---
+
+# Prisma 8
+`;
+    strictEqual(validateSkillMd(dated).length, 1);
+  });
+
   it('fails when bare colons break YAML parsing', () => {
     const broken = `---
 name: drive-discussion
@@ -125,9 +178,9 @@ description: Wire this skill with adapterPacks: [examplePack] for the example ta
     strictEqual(offences[0].errors[0].startsWith('frontmatter parse error:'), true);
   });
 
-  it('scans the hoisted upgrade skills under the skills/ root', () => {
+  it('scans every skill directory under the skills/ root', () => {
     const root = mkdtempSync(join(tmpdir(), 'validate-skills-nested-'));
-    for (const name of ['prisma-next-upgrade', 'prisma-8-extension-upgrade']) {
+    for (const name of ['prisma-8', 'prisma-8-example']) {
       const skillDir = join(root, 'skills', name);
       mkdirSync(skillDir, { recursive: true });
       writeFileSync(join(skillDir, 'SKILL.md'), validSkill.replace('example-skill', name));

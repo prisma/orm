@@ -6,6 +6,43 @@ Changelog tracking starts at **v0.12.0**, the first release cut after this conve
 
 <!-- New release entries go here, newest first, each mirroring docs/releases/v<version>.md under a `## v<version>` header. -->
 
+## v8.0.0-rc.5
+
+The ORM command family now ships the unified CLI's command paths directly, the Postgres runtime survives dropped idle connections, aggregation respects the chain it terminates, and the raw lane lets an outer query reuse an inner query's typed return columns.
+
+The upgrade recipe for this hop: the [user recipe](https://github.com/prisma/prisma/tree/v8.0.0-rc.5/skills/prisma-next-upgrade/upgrades/8.0.0-rc.4-to-8.0.0-rc.5/).
+
+### Breaking changes
+
+- **The ORM command family is keyed by the unified CLI's mount paths** — `@prisma/orm-toolchain`'s command family now publishes the six moved commands under their unified spellings (`contract format`, `db migrate`, `migration ref list|set|delete`, `orm init`) instead of the retired standalone grammar (`format`, `migrate`, `ref …`, `init`), and every help example and error remediation names those paths (with the `{bin}` placeholder instead of a hardcoded binary name). Through the unified `prisma` CLI nothing moves — these were already the mounted paths — but a host that mounts the family by key, or a script driving the workspace binary with the old spellings, must respell the six commands. ([#30102](https://github.com/prisma/prisma/pull/30102))
+
+  Before:
+
+  ```bash
+  prisma migrate --to production
+  prisma ref set staging 4cb4256
+  ```
+
+  After:
+
+  ```bash
+  prisma db migrate --to production
+  prisma migration ref set staging 4cb4256
+  ```
+
+### Features
+
+- A row-spec'd raw query exposes `.returns`, a record of typed column refs, so an outer raw query can reuse an inner query's declared column (for example a CTE's aggregate) instead of restating its codec id. ([#30075](https://github.com/prisma/prisma/pull/30075))
+
+### Fixes
+
+- `aggregate()` now reduces over exactly the rows a chain's `take` / `skip` / `cursor` / `distinct` / `distinctOn` describes, instead of silently reducing over every matching row. ([#30067](https://github.com/prisma/prisma/pull/30067))
+- `groupBy()` now scopes pre-group pagination to the rows it groups instead of dropping it, and `GroupedCollection` gained `take` / `skip` / `orderBy` to page the groups themselves. ([#30092](https://github.com/prisma/prisma/pull/30092))
+- The Postgres runtime attaches `'error'` listeners to every pool and client it creates or receives, so a dropped idle connection (database restart, pooler timeout, network blip) no longer crashes the process as an uncaught exception. Pools your own code constructs and uses directly still need a listener — see the [upgrade recipe](https://github.com/prisma/prisma/tree/v8.0.0-rc.5/skills/prisma-next-upgrade/upgrades/8.0.0-rc.4-to-8.0.0-rc.5/). ([#30081](https://github.com/prisma/prisma/pull/30081))
+- The PSL language server recognizes connection errors raised by any bundled copy of vscode-jsonrpc, instead of crashing when a duplicated copy raised them. ([#30077](https://github.com/prisma/prisma/pull/30077))
+- CLI error text interpolates the configured migrations directory instead of assuming the default path. ([#30041](https://github.com/prisma/prisma/pull/30041))
+- `orm init`'s failure messages no longer name retired flags or binaries (`--no-skill`, `--force`, `prisma-cli init`); they point at the flags that exist (`--skip-skills`, `--confirm <directory name>`) and the mounted `prisma orm init`. ([#30083](https://github.com/prisma/prisma/pull/30083))
+
 ## v8.0.0-rc.2
 
 

@@ -14,7 +14,7 @@ const TIMESTAMP_NOW_PHASE = { kind: 'generator', id: 'timestampNow' };
 
 describe('temporalCodecPresetWithPrecision', () => {
   const preset = temporalCodecPresetWithPrecision({
-    codecId: 'pg/timestamp@1',
+    codecId: 'pg/timestamp-temporal@1',
     nativeType: 'timestamp',
   });
 
@@ -28,7 +28,7 @@ describe('temporalCodecPresetWithPrecision', () => {
 
   it('maps the precision arg into typeParams and each phase token to the timestampNow generator', () => {
     expect(preset.output).toEqual({
-      codecId: 'pg/timestamp@1',
+      codecId: 'pg/timestamp-temporal@1',
       nativeType: 'timestamp',
       typeParams: { precision: { kind: 'arg', index: 0 } },
       executionDefaults: {
@@ -41,10 +41,10 @@ describe('temporalCodecPresetWithPrecision', () => {
   it('carries the caller-supplied codec and native type', () => {
     expect(
       temporalCodecPresetWithPrecision({
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         nativeType: 'timestamptz',
       }).output,
-    ).toMatchObject({ codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' });
+    ).toMatchObject({ codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' });
   });
 
   it('declares neither id nor unique, so it takes the plain helper path', () => {
@@ -78,12 +78,12 @@ describe('temporalCodecPreset', () => {
 describe('temporalAuthoringPresets', () => {
   it('is unchanged by the per-codec preset factories', () => {
     expect(
-      temporalAuthoringPresets({ codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' }),
+      temporalAuthoringPresets({ codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' }),
     ).toEqual({
       createdAt: {
         kind: 'fieldPreset',
         output: {
-          codecId: 'pg/timestamptz@1',
+          codecId: 'pg/timestamptz-temporal@1',
           nativeType: 'timestamptz',
           default: { kind: 'function', expression: 'now()' },
         },
@@ -91,7 +91,7 @@ describe('temporalAuthoringPresets', () => {
       updatedAt: {
         kind: 'fieldPreset',
         output: {
-          codecId: 'pg/timestamptz@1',
+          codecId: 'pg/timestamptz-temporal@1',
           nativeType: 'timestamptz',
           executionDefaults: { onCreate: TIMESTAMP_NOW_PHASE, onUpdate: TIMESTAMP_NOW_PHASE },
         },
@@ -115,13 +115,19 @@ describe('temporalAuthoringPresets', () => {
 describe('downstream mirrors track the factories', () => {
   it('contract-psl mirrors the postgres timestamp preset', () => {
     expect(temporalCodecPresetMirrors.pgTimestamp).toEqual(
-      temporalCodecPresetWithPrecision({ codecId: 'pg/timestamp@1', nativeType: 'timestamp' }),
+      temporalCodecPresetWithPrecision({
+        codecId: 'pg/timestamp-temporal@1',
+        nativeType: 'timestamp',
+      }),
     );
   });
 
   it('contract-psl mirrors the postgres timestamptz preset', () => {
     expect(temporalCodecPresetMirrors.pgTimestamptz).toEqual(
-      temporalCodecPresetWithPrecision({ codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' }),
+      temporalCodecPresetWithPrecision({
+        codecId: 'pg/timestamptz-temporal@1',
+        nativeType: 'timestamptz',
+      }),
     );
   });
 
@@ -133,7 +139,7 @@ describe('downstream mirrors track the factories', () => {
 
   it('contract-ts mirrors the precision-bearing preset over its portable codec', () => {
     expect(sqlTimestampPresetMirror).toEqual(
-      temporalCodecPresetWithPrecision({ codecId: 'sql/timestamp@1', nativeType: 'timestamp' }),
+      temporalCodecPresetWithPrecision({ codecId: 'test/timestamp@1', nativeType: 'timestamp' }),
     );
   });
 
@@ -144,7 +150,7 @@ describe('downstream mirrors track the factories', () => {
   // prove a fiction of `updatedAt` identical to the real `timestamptz`.
   it('contract-psl mirrors the postgres createdAt/updatedAt convenience pair', () => {
     expect(temporalConvenienceMirrors.postgres).toEqual(
-      temporalAuthoringPresets({ codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' }),
+      temporalAuthoringPresets({ codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' }),
     );
   });
 

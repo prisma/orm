@@ -137,3 +137,51 @@ describe('createPostgresTypeMap', () => {
     });
   });
 });
+
+describe('representation-explicit spellings stay out of introspection', () => {
+  const map = createPostgresTypeMap();
+
+  it.each([
+    ['date', 'Date'],
+    ['timestamp', 'Timestamp'],
+    ['timestamp without time zone', 'Timestamp'],
+    ['timestamptz', 'Timestamptz'],
+    ['timestamp with time zone', 'Timestamptz'],
+    ['time', 'Time'],
+    ['time without time zone', 'Time'],
+  ])('resolves %s to the bare %s, never a *String spelling', (nativeType, pslName) => {
+    expect(map.resolve(nativeType)).toMatchObject({ pslType: { name: pslName } });
+  });
+
+  it('keeps precision on the bare spelling', () => {
+    expect(map.resolve('timestamptz(6)')).toMatchObject({
+      pslType: { name: 'Timestamptz', args: ['6'] },
+    });
+  });
+
+  it('never produces a *String name for any native type it knows', () => {
+    const natives = [
+      'date',
+      'timestamp',
+      'timestamp without time zone',
+      'timestamptz',
+      'timestamp with time zone',
+      'time',
+      'time without time zone',
+      'timetz',
+      'timestamptz(6)',
+      'timestamp(3)',
+      'time(3)',
+    ];
+
+    const produced = natives.map((nativeType) => map.resolve(nativeType));
+
+    const stringSpellings = produced.flatMap((resolution) =>
+      'pslType' in resolution && resolution.pslType.name.endsWith('String')
+        ? [resolution.pslType.name]
+        : [],
+    );
+
+    expect(stringSpellings).toEqual([]);
+  });
+});

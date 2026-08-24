@@ -14,11 +14,7 @@ import {
   requiredGitattributesLines,
 } from '../commands/init/hygiene-gitattributes';
 import { mergeGitignore } from '../commands/init/hygiene-gitignore';
-import {
-  ensureEsmModuleType,
-  mergePackageScripts,
-  REQUIRED_SCRIPTS,
-} from '../commands/init/hygiene-package-scripts';
+import { ensureEsmModuleType, mergePackageScripts } from '../commands/init/hygiene-package-scripts';
 import { findStaleArtifacts, removeDependency } from '../commands/init/reinit-cleanup';
 import { legacySkillDirs } from '../commands/init/skill-sources';
 import {
@@ -178,7 +174,7 @@ function planScaffold(ctx: {
   const configContractPath = isAbsolute(inputs.schemaPath)
     ? inputs.schemaPath
     : `./${inputs.schemaPath}`;
-  const runPrefix = formatRunCommand(packageManager, 'prisma-cli', '').trimEnd();
+  const runPrefix = formatRunCommand(packageManager, 'prisma', '').trimEnd();
 
   const files: FileEntry[] = [
     {
@@ -286,10 +282,7 @@ function planScaffold(ctx: {
         changed = true;
       }
     }
-    const { content: withScripts, warnings: scriptWarnings } = mergePackageScripts(
-      working,
-      REQUIRED_SCRIPTS,
-    );
+    const { content: withScripts, warnings: scriptWarnings } = mergePackageScripts(working);
     if (withScripts !== null) {
       working = withScripts;
       changed = true;

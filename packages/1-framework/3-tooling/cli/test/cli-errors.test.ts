@@ -56,11 +56,11 @@ describe('errorPathUnreachable', () => {
     const envelope = errorPathUnreachable(failure).toEnvelope();
     expect(envelope.code).toBe('MIGRATION.PATH_UNREACHABLE');
     expect(envelope.fix).toContain(
-      `prisma-cli migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
+      `{bin} migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
     );
-    expect(envelope.fix).toContain(`prisma-cli migrate --to ${targetHash}`);
-    expect(envelope.fix).toContain('prisma-cli migration list');
-    expect(envelope.fix).toContain('prisma-cli migration show');
+    expect(envelope.fix).toContain(`{bin} db migrate --to ${targetHash}`);
+    expect(envelope.fix).toContain('{bin} migration list');
+    expect(envelope.fix).toContain('{bin} migration show');
     expect((envelope.fix ?? '').toLowerCase()).toContain('destructive');
     expect((envelope.fix ?? '').toLowerCase()).toContain('hint');
   });
@@ -75,7 +75,7 @@ describe('errorPathUnreachable', () => {
     const envelope = errorPathUnreachable(failure).toEnvelope();
     // A never-planned space has an EMPTY graph, and `--to <hash>` only
     // resolves against graph nodes — the remediation must run verbatim.
-    expect(envelope.fix).toContain('prisma-cli migration plan --name <slug>');
+    expect(envelope.fix).toContain('{bin} migration plan --name <slug>');
     expect(envelope.fix).not.toContain('--to');
     expect(envelope.fix).not.toContain('--from');
     expect(envelope.fix).not.toContain('<unknown>');
@@ -89,7 +89,7 @@ describe('errorPathUnreachable', () => {
       meta: { spaceId: 'app' },
     };
     const envelope = errorPathUnreachable(failure).toEnvelope();
-    expect(envelope.fix).toContain('prisma-cli migration plan');
+    expect(envelope.fix).toContain('{bin} migration plan');
     expect(envelope.fix).not.toContain('--from');
     expect(envelope.fix).not.toContain('--to');
     expect(envelope.fix).not.toContain('<unknown>');
@@ -115,9 +115,9 @@ describe('errorPathUnreachable', () => {
 
     // fix: the plan-then-apply sequence pointing at the now-working command.
     expect(envelope.fix).toContain(
-      `prisma-cli migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
+      `{bin} migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
     );
-    expect(envelope.fix).toContain(`prisma-cli migrate --to ${targetHash}`);
+    expect(envelope.fix).toContain(`{bin} db migrate --to ${targetHash}`);
     expect((envelope.fix ?? '').toLowerCase()).toContain('destructive');
     expect((envelope.fix ?? '').toLowerCase()).toContain('hint');
   });
@@ -127,7 +127,7 @@ describe('errorPathUnreachable', () => {
     const envelope = errorPathUnreachable(failure).toEnvelope();
 
     expect(envelope.why).toContain('<empty>');
-    expect(envelope.fix).toContain(`prisma-cli migration plan --to ${targetHash} --name <slug>`);
+    expect(envelope.fix).toContain(`{bin} migration plan --to ${targetHash} --name <slug>`);
     expect(envelope.fix).not.toContain('--from <empty>');
     expect(envelope.fix).not.toMatch(/--from\s/);
   });
@@ -143,8 +143,8 @@ describe('errorPathUnreachable', () => {
 
     // A never-planned space has an empty graph; the fix must not
     // prescribe a `--to <hash>` the empty graph cannot resolve.
-    expect(envelope.fix).toContain('prisma-cli migration plan --name <slug>');
-    expect(envelope.fix).toContain('prisma-cli migrate');
+    expect(envelope.fix).toContain('{bin} migration plan --name <slug>');
+    expect(envelope.fix).toContain('{bin} db migrate');
     expect(envelope.fix).not.toContain('--to');
     expect((envelope.fix ?? '').toLowerCase()).toContain('destructive');
     expect((envelope.fix ?? '').toLowerCase()).toContain('hint');
@@ -193,7 +193,7 @@ describe('typed next actions on the CLI factories', () => {
       {
         kind: 'run-command',
         label: 'Extend the migration graph',
-        command: 'prisma-cli migration plan',
+        command: '{bin} migration plan',
       },
     ]);
   });
@@ -206,7 +206,7 @@ describe('typed next actions on the CLI factories', () => {
       {
         kind: 'run-command',
         label: "See every space's migrations",
-        command: 'prisma-cli migration list',
+        command: '{bin} migration list',
       },
     ]);
   });
@@ -221,12 +221,12 @@ describe('typed next actions on the CLI factories', () => {
       {
         kind: 'run-command',
         label: 'Catch the on-disk graph up to the live marker',
-        command: `prisma-cli migration plan --from ${graphTip}`,
+        command: `{bin} migration plan --from ${graphTip}`,
       },
       {
         kind: 'run-command',
         label: 'Point the local db ref at the live marker',
-        command: `prisma-cli ref set db ${markerHash}`,
+        command: `{bin} migration ref set db ${markerHash}`,
       },
       {
         kind: 'user-choice',
@@ -251,12 +251,12 @@ describe('typed next actions on the CLI factories', () => {
       {
         kind: 'run-command',
         label: 'Plan the missing edge',
-        command: `prisma-cli migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
+        command: `{bin} migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
       },
       {
         kind: 'run-command',
         label: 'Apply it',
-        command: `prisma-cli migrate --to ${targetHash}`,
+        command: `{bin} db migrate --to ${targetHash}`,
       },
     ]);
   });

@@ -9,7 +9,7 @@ import type { ContractWithTypeMaps } from '@internal/sql-contract/types';
 type CodecTypes = {
   readonly 'pg/int4@1': { readonly output: number };
   readonly 'pg/text@1': { readonly output: string };
-  readonly 'pg/timestamptz@1': { readonly output: string };
+  readonly 'pg/timestamptz-string@1': { readonly output: string };
 };
 
 // Contract type representing the contract data structure
@@ -22,7 +22,7 @@ export type Contract = ContractWithTypeMaps<BaseContract<
         readonly columns: {
           readonly id: { readonly nativeType: 'int4'; readonly codecId: 'pg/int4@1'; nullable: false };
           readonly email: { readonly nativeType: 'text'; readonly codecId: 'pg/text@1'; nullable: false };
-          readonly createdAt: { readonly nativeType: 'timestamptz'; readonly codecId: 'pg/timestamptz@1'; nullable: false };
+          readonly createdAt: { readonly nativeType: 'timestamptz'; readonly codecId: 'pg/timestamptz-string@1'; nullable: false };
         };
         readonly primaryKey: { readonly columns: readonly ['id'] };
         readonly uniques: ReadonlyArray<never>;
@@ -65,7 +65,7 @@ export type Contract = ContractWithTypeMaps<BaseContract<
         };
         readonly createdAt: {
           readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/timestamptz@1' };
+          readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/timestamptz-string@1' };
         };
       };
       readonly relations: Record<string, never>;

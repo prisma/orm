@@ -4,7 +4,7 @@ import type { StorageColumn } from '@internal/sql-contract/types';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { postgresLowerEntityHandles } from '../src/core/authoring';
-import { pgTimestampDecodeJson, renderLength } from '../src/core/codec-helpers';
+import { renderLength } from '../src/core/codec-helpers';
 import { pgNumericDescriptor } from '../src/core/codecs';
 import { errorPostgresMigrationStackMissing } from '../src/core/errors';
 import {
@@ -48,15 +48,6 @@ describe('postgresError sites', () => {
     const error = catchError(() => renderLength('VarChar', { length: 1.5 }));
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({ code: 'RUNTIME.TYPE_PARAMS_INVALID' });
-  });
-
-  it('pgTimestampDecodeJson rejects non-string JSON as RUNTIME.DECODE_FAILED', () => {
-    const error = catchError(() => pgTimestampDecodeJson(5));
-    expect(isStructuredError(error)).toBe(true);
-    expect(error).toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      message: 'Expected ISO date string for pg/timestamp@1, got number',
-    });
   });
 
   it('pg/numeric encodeJson rejects a non-numeral value as RUNTIME.ENCODE_FAILED', () => {

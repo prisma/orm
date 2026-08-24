@@ -89,6 +89,7 @@ export {
   temporalAuthoringPresets,
   temporalCodecPreset,
   temporalCodecPresetWithPrecision,
+  temporalStringAuthoringPresets,
   timestampNowControlDescriptor,
 } from '../core/timestamp-now-generator';
 

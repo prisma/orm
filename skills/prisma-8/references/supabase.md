@@ -111,7 +111,7 @@ The pieces:
 - **Predicates are verbatim SQL strings.** Quote camelCase column names inside them (`\"userId\"`), and cast where needed — `auth.uid()` returns `uuid`. Renames in your contract do not rewrite predicate bodies.
 - **TS-builder parity exists.** `@internal/postgres/contract-builder` exports `policySelect` / `policyInsert` / `policyUpdate` / `policyDelete` / `policyAll`, `rlsEnabled(Model)`, and `role('anon')` — mirroring the PSL lowering key-for-key (identical emitted wire names). PSL is the canonical path shown here.
 
-Emit + migrate as usual (`prisma-next contract emit`, then `references/migrations.md`). The plan creates your table, its FK, `ENABLE ROW LEVEL SECURITY`, and the `CREATE POLICY` statements — and **no DDL for `auth.*`**.
+Emit + migrate as usual (`prisma contract emit`, then `references/migrations.md`). The plan creates your table, its FK, `ENABLE ROW LEVEL SECURITY`, and the `CREATE POLICY` statements — and **no DDL for `auth.*`**.
 
 ## Workflow — `db.ts` with the `supabase()` factory
 
@@ -189,7 +189,7 @@ Other boundaries to respect: `asUser` / `asAnon` have **no** `.supabase`; the ad
 
 The concept: RLS policies are row filters on top of ordinary table privileges — a role with policies but no `GRANT` gets `permission denied`, not filtered rows. On Supabase the two directions are easy to get backwards:
 
-- **Your own `public` tables need nothing.** Supabase ships `ALTER DEFAULT PRIVILEGES` on `public`, so tables created by `prisma-next db init` / `migrate` inherit full grants for `anon` / `authenticated` / `service_role` automatically — the same as dashboard-created tables. RLS policies are what actually protect the rows; do not add per-table grants, and do not narrow the defaults unless you have a reason.
+- **Your own `public` tables need nothing.** Supabase ships `ALTER DEFAULT PRIVILEGES` on `public`, so tables created by `prisma db init` / `prisma db migrate` inherit full grants for `anon` / `authenticated` / `service_role` automatically — the same as dashboard-created tables. RLS policies are what actually protect the rows; do not add per-table grants, and do not narrow the defaults unless you have a reason.
 - **The one grant you do need is for admin reads of Supabase-internal tables** — `service_role` has no table privileges on `auth.*` / `storage.*` (see *Admin reads* above for the narrow `GRANT USAGE` / `GRANT SELECT` pair).
 
 Run grants via the Supabase SQL editor or `psql`. Symptom of a missing grant: `permission denied for table …` (sqlState `42501`) instead of an empty result.

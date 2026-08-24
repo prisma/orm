@@ -3,7 +3,7 @@ import { blindCast } from '@internal/utils/casts';
 /**
  * The package.json `scripts` entries `init` adds idempotently (FR3.5).
  * The script *name* mirrors the CLI subcommand path (`contract:emit` →
- * `prisma-cli contract emit`) so the script is greppable: a user
+ * `prisma contract emit`) so the script is greppable: a user
  * encountering `npm run contract:emit` in CI logs can navigate
  * straight to the equivalent CLI invocation.
  *
@@ -16,7 +16,7 @@ export interface RequiredScript {
 }
 
 export const REQUIRED_SCRIPTS: readonly RequiredScript[] = [
-  { name: 'contract:emit', command: 'prisma-cli contract emit' },
+  { name: 'contract:emit', command: 'prisma contract emit' },
 ];
 
 export interface PackageScriptsMergeResult {
@@ -86,7 +86,7 @@ export function mergePackageScripts(
     }
     if (existingValue !== command) {
       warnings.push(
-        `package.json already has a "${name}" script with a different command — keeping yours.\n  existing: ${existingValue}\n  expected: ${command}\nIf you want the default, remove your "${name}" script and re-run \`init\`.`,
+        `package.json already has a "${name}" script with a different command — keeping yours.\n  existing: ${existingValue}\n  expected: ${command}\nIf you want the default, remove your "${name}" script and re-run \`orm init\`.`,
       );
     }
   }

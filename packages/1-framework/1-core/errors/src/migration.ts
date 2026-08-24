@@ -79,7 +79,7 @@ export function errorDataTransformContractMismatch(options: {
 export function errorMigrationFileMissing(dir: string): CliStructuredError {
   return new CliStructuredError('MIGRATION.FILE_MISSING', 'migration.ts not found', {
     why: `No migration.ts file was found at "${dir}"`,
-    fix: 'Scaffold one with `prisma migration new` or `prisma migration plan`.',
+    fix: 'Scaffold one with `{bin} migration new` or `{bin} migration plan`.',
     nextActions: [
       { kind: 'run-command', label: 'Scaffold an empty migration', command: '{bin} migration new' },
       {

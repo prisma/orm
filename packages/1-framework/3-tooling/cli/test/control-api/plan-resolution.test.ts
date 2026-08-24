@@ -279,7 +279,7 @@ describe('resolveFromForPlan', () => {
       vi.fn().mockRejectedValue(
         new MigrationToolsError('MIGRATION.REF_NOT_RESOLVABLE', `Ref "db" is not resolvable`, {
           why: 'Ref "db" has no pointer file, and the hash being resolved is not a node in the migration graph either.',
-          fix: 'Create the ref with "prisma-cli ref set db <hash>" (or advance it via "prisma-cli db update --advance-ref db"), or pass a hash that is a node in the migration graph.',
+          fix: 'Create the ref with "{bin} migration ref set db <hash>" (or advance it via "{bin} db update --advance-ref db"), or pass a hash that is a node in the migration graph.',
           meta: { refName: 'db' },
         }),
       ),
@@ -337,7 +337,7 @@ describe('resolveFromForPlan', () => {
       vi.fn().mockRejectedValue(
         new MigrationToolsError('MIGRATION.REF_NOT_RESOLVABLE', `Ref "staging" is not resolvable`, {
           why: 'Ref "staging" has no pointer file, and the hash being resolved is not a node in the migration graph either.',
-          fix: 'Create the ref with "prisma-cli ref set staging <hash>" (or advance it via "prisma-cli db update --advance-ref staging"), or pass a hash that is a node in the migration graph.',
+          fix: 'Create the ref with "{bin} migration ref set staging <hash>" (or advance it via "{bin} db update --advance-ref staging"), or pass a hash that is a node in the migration graph.',
           meta: { refName: 'staging' },
         }),
       ),

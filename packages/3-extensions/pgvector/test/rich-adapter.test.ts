@@ -49,7 +49,7 @@ const contract = new SqlContractSerializer().deserializeContract({
                 id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
                 email: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
                 createdAt: {
-                  codecId: 'pg/timestamptz@1',
+                  codecId: 'pg/timestamptz-temporal@1',
                   nativeType: 'timestamptz',
                   nullable: false,
                 },

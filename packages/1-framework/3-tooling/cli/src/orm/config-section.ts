@@ -18,7 +18,7 @@ export const ORM_CONFIG_SECTION_NAME = 'orm';
 const MISSING_CONFIG_ACTION: NextAction = {
   kind: 'run-command',
   label: 'Create a config file',
-  command: 'prisma orm init',
+  command: '{bin} orm init',
 };
 
 function editConfigAction(field: string): NextAction {

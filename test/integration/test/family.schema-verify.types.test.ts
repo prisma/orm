@@ -119,7 +119,9 @@ describe('family instance schemaVerify - types', () => {
         targetId: 'postgres',
       });
       expect(registry.get('pg/text@1')).toMatchObject({ nativeType: 'text' });
-      expect(registry.get('pg/timestamptz@1')).toMatchObject({ nativeType: 'timestamptz' });
+      expect(registry.get('pg/timestamptz-temporal@1')).toMatchObject({
+        nativeType: 'timestamptz',
+      });
       expect(registry.get('pg/bool@1')).toMatchObject({ nativeType: 'bool' });
     });
 

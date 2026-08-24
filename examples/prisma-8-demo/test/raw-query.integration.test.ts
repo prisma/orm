@@ -53,21 +53,21 @@ async function seed(runtime: Runtime): Promise<void> {
       id: userIds.ada,
       email: 'ada@example.com',
       displayName: 'Ada',
-      createdAt: new Date('2024-05-01T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-01T00:00:00.000Z'),
       kind: 'admin' as const,
     },
     {
       id: userIds.grace,
       email: 'grace@example.com',
       displayName: 'Grace',
-      createdAt: new Date('2024-05-02T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-02T00:00:00.000Z'),
       kind: 'admin' as const,
     },
     {
       id: userIds.linus,
       email: 'linus@example.com',
       displayName: 'Linus',
-      createdAt: new Date('2024-05-03T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-03T00:00:00.000Z'),
       kind: 'user' as const,
     },
   ];
@@ -81,7 +81,7 @@ async function seed(runtime: Runtime): Promise<void> {
       title: 'Analytical engine notes',
       userId: userIds.ada,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-05-10T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-10T10:00:00.000Z'),
       viewCount: 10,
     },
     {
@@ -89,7 +89,7 @@ async function seed(runtime: Runtime): Promise<void> {
       title: 'Bernoulli numbers',
       userId: userIds.ada,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-05-11T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-11T10:00:00.000Z'),
       viewCount: 20,
     },
     {
@@ -97,7 +97,7 @@ async function seed(runtime: Runtime): Promise<void> {
       title: 'Compiler design',
       userId: userIds.grace,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-05-12T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-05-12T10:00:00.000Z'),
       viewCount: 30,
     },
   ];

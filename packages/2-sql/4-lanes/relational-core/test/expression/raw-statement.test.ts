@@ -58,7 +58,7 @@ describe('raw statement terminators', () => {
     });
 
     it('carries interpolated params into the node in template order', () => {
-      const since = param('2026-01-01', { codecId: 'pg/timestamptz@1' });
+      const since = param('2026-01-01', { codecId: 'pg/timestamptz-string@1' });
       const plan = rawSql`select id from "user" where created_at > ${since} and id > ${7}`
         .returnsRow({ id: 'pg/int4@1' })
         .build();
@@ -110,10 +110,10 @@ describe('raw statement terminators', () => {
 
   describe('expression terminator alongside the statement terminators', () => {
     it('still produces a RawExpr from .returns()', () => {
-      const expr = rawSql`now()`.returns('pg/timestamptz@1');
+      const expr = rawSql`now()`.returns('pg/timestamptz-temporal@1');
 
       expect(expr.buildAst()).toBeInstanceOf(RawExpr);
-      expect(expr.returnType).toEqual({ codecId: 'pg/timestamptz@1', nullable: false });
+      expect(expr.returnType).toEqual({ codecId: 'pg/timestamptz-temporal@1', nullable: false });
     });
   });
 
@@ -182,7 +182,7 @@ describe('raw tag without a plan context', () => {
 
     const builder = expressionOnly`now()`;
 
-    expect(builder.returns('pg/timestamptz@1').buildAst()).toBeInstanceOf(RawExpr);
+    expect(builder.returns('pg/timestamptz-temporal@1').buildAst()).toBeInstanceOf(RawExpr);
     expect('returnsRow' in builder).toBe(false);
     expect('affectedCount' in builder).toBe(false);
   });

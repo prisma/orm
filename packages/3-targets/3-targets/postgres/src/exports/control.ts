@@ -91,4 +91,9 @@ const postgresTargetDescriptor: SqlControlTargetDescriptor<'postgres', PostgresP
     },
   };
 
+export {
+  INSTANT_NOW_GENERATOR_ID,
+  instantNowControlDescriptor,
+} from '../core/instant-now-generator';
+
 export default postgresTargetDescriptor;

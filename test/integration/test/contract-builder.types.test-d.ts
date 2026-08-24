@@ -4,7 +4,7 @@ import {
   int4Column,
   jsonbColumn,
   textColumn,
-  timestamptzColumn,
+  timestamptzTemporalColumn,
 } from '@internal/adapter-postgres/column-types';
 import { arktypeJson } from '@internal/extension-arktype-json/column-types';
 import arktypeJsonRuntime from '@internal/extension-arktype-json/runtime';
@@ -50,7 +50,7 @@ test('builder contract types match fixture contract types', () => {
         fields: {
           id: field.column(int4Column).id(),
           email: field.column(textColumn),
-          createdAt: field.column(timestamptzColumn),
+          createdAt: field.column(timestamptzTemporalColumn),
         },
       }).sql({ table: 'user' }),
     },
@@ -85,7 +85,7 @@ test('ResultType inference works identically to fixture contract', () => {
         fields: {
           id: field.column(int4Column).id(),
           email: field.column(textColumn),
-          createdAt: field.column(timestamptzColumn),
+          createdAt: field.column(timestamptzTemporalColumn),
         },
       }).sql({ table: 'user' }),
     },
@@ -123,7 +123,7 @@ test('refined object contract preserves downstream model token inference', () =>
     fields: {
       id: field.column(int4Column).id(),
       email: field.column(textColumn),
-      createdAt: field.column(timestamptzColumn),
+      createdAt: field.column(timestamptzTemporalColumn),
     },
   });
 
@@ -258,7 +258,7 @@ test('integrated callback authoring exposes composition-shaped type helpers', ()
   ).toEqualTypeOf<'pg/jsonb@1'>();
   expectTypeOf(
     contract.storage.namespaces['public'].entries.table.user.columns.createdAt.codecId,
-  ).toEqualTypeOf<'pg/timestamptz@1'>();
+  ).toEqualTypeOf<'pg/timestamptz-temporal@1'>();
   // `role.typeRef` and `embedding.typeRef` capture is gated on the
   // descriptor-level generic forwarding noted above; the contract
   // still carries the correct typeRef strings at runtime.
@@ -390,7 +390,7 @@ test('codec type inference via type option', () => {
         fields: {
           id: field.column(int4Column).id(),
           email: field.column(textColumn),
-          createdAt: field.column(timestamptzColumn),
+          createdAt: field.column(timestamptzTemporalColumn),
         },
       }).sql({ table: 'user' }),
     },
@@ -411,7 +411,7 @@ test('codec type inference via type option', () => {
   const _testRow: Row = {
     id: 1,
     email: 'test@example.com',
-    createdAt: new Date('2024-01-01T00:00:00Z'),
+    createdAt: Temporal.Instant.from('2024-01-01T00:00:00Z'),
   } as Row;
 
   expectTypeOf(_testRow).toEqualTypeOf<Row>();
@@ -551,7 +551,7 @@ const enumContract = defineContract({
       fields: {
         id: field.column(int4Column).id(),
         email: field.column(textColumn),
-        createdAt: field.column(timestamptzColumn),
+        createdAt: field.column(timestamptzTemporalColumn),
         role: field.namedType(Role),
         status: field.namedType(Status).optional(),
         priority: field.namedType(PriorityInt),
@@ -593,7 +593,7 @@ test('read: non-enum fields keep their codec output, unchanged from main', () =>
   type Row = ResultType<typeof plan>;
   expectTypeOf<Row['id']>().toEqualTypeOf<number>();
   expectTypeOf<Row['email']>().toEqualTypeOf<string>();
-  expectTypeOf<Row['createdAt']>().toEqualTypeOf<Date>();
+  expectTypeOf<Row['createdAt']>().toEqualTypeOf<Temporal.Instant>();
 });
 
 test('write: enum insert accepts the value union and rejects out-of-union literals', () => {

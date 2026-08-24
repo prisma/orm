@@ -25,7 +25,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/date@1",
+                  "codecId": "pg/date-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -71,7 +71,7 @@
                   "nullable": false
                 },
                 "createdAt": {
-                  "codecId": "pg/date@1",
+                  "codecId": "pg/date-temporal@1",
                   "nativeType": "date",
                   "nullable": false
                 },
@@ -97,7 +97,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "38905e75eda15c870e1f3d3368c7c26705ae006e6f1df56e960535d7ece222f1"
+    "storageHash": "a60cd237f46459d3cdd8d0afabbd1f682f377517ea746c88cc008378c2ced089"
   },
   "capabilities": {
     "postgres": {
@@ -109,6 +109,7 @@
       "returning": true
     },
     "sql": {
+      "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
       "lateral": true,

@@ -6,11 +6,11 @@
 
 ## Setup
 
-A `prisma-next init`-scaffolded project (any target).
+A `prisma orm init`-scaffolded project (any target).
 
 ## Prompt
 
-> I want to report that `prisma-next migration plan` exits 0 even when the planner found no diff — that's surprising
+> I want to report that `prisma migration plan` exits 0 even when the planner found no diff — that's surprising
 
 ## Expected agent behaviour
 
@@ -18,7 +18,7 @@ A `prisma-next init`-scaffolded project (any target).
 - [ ] Agent classifies as a **bug report** (the CLI exit code is arguably wrong vs. documented behaviour). Not a feature request.
 - [ ] Agent produces a minimal reproduction:
   - A small `schema.psl` excerpt (renamed to neutral domain names like `User`, `Post`).
-  - The exact command (`prisma-next migration plan --name no-op`) and its full output.
+  - The exact command (`prisma migration plan --name no-op`) and its full output.
   - A numbered list of steps to reproduce.
 - [ ] Agent collects the environment block:
   - Prisma Next version (from `pnpm ls @internal/postgres` or similar).

@@ -186,7 +186,7 @@ model Reading {
       if (!contract) throw new Error('authoring produced no contract');
 
       expect(findStorageColumn(contract, 'dates')).toMatchObject({
-        codecId: 'pg/timestamptz@1',
+        codecId: 'pg/timestamptz-temporal@1',
         many: true,
       });
       expect(findStorageColumn(contract, 'payloads')).toMatchObject({
@@ -211,7 +211,10 @@ model Reading {
       const payloadsRef = listCodecRefFor(contract, 'payloads');
       const amountsRef = listCodecRefFor(contract, 'amounts');
 
-      const dates = [new Date('2026-01-02T03:04:05.000Z'), new Date('2025-06-15T12:00:00.000Z')];
+      const dates = [
+        Temporal.Instant.from('2026-01-02T03:04:05Z'),
+        Temporal.Instant.from('2025-06-15T12:00:00Z'),
+      ];
       const payloads = [new Uint8Array([1, 2, 3]), new Uint8Array([255, 0, 127])];
       const amounts = ['1.5', '999999999999.99', '-0.001'];
 
@@ -245,14 +248,19 @@ model Reading {
 
         const rows = await runtime.query(planFromAst(select, contract)).toArray();
         expect(rows).toHaveLength(1);
-        const row = rows[0] as unknown as {
-          dates: Date[];
+        // `rows[0]!` rather than a hop through `unknown`: the plan is built from a dynamically
+        // assembled AST, so it carries no literal row type and indexing yields `undefined` under
+        // `noUncheckedIndexedAccess`. The length assertion above is what rules that out. Going
+        // through `unknown` hid both that and the element types — `dates` read as `Date[]` here
+        // long after the column started handing back `Temporal.Instant`.
+        const row = rows[0]! as {
+          dates: Temporal.Instant[];
           payloads: Uint8Array[];
           amounts: string[];
         };
 
-        expect(row.dates.map((value) => value.toISOString())).toEqual(
-          dates.map((value) => value.toISOString()),
+        expect(row.dates.map((value) => value.toString())).toEqual(
+          dates.map((value) => value.toString()),
         );
         expect(row.payloads.map((value) => [...value])).toEqual(
           payloads.map((value) => [...value]),
@@ -329,7 +337,7 @@ model Reading {
 
         const rows = await runtime.query(planFromAst(select, contract)).toArray();
         expect(rows).toHaveLength(1);
-        const row = rows[0] as unknown as {
+        const row = rows[0]! as {
           tags: string[];
           scores: number[];
         };

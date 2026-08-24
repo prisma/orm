@@ -6,7 +6,7 @@
 
 ## Setup
 
-A `prisma-next init`-scaffolded project.
+A `prisma orm init`-scaffolded project.
 
 ## Prompt sequence
 

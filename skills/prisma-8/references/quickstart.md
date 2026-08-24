@@ -154,7 +154,7 @@ Run the snippet from *Your first arc — connect, write, read* above against wha
 Now ask the user what they want to build. Route to the skill that owns that move:
 
 - More queries (filters, joins, transactions) → `references/queries.md`.
-- Add a model, change a field, add a relation → `references/contract.md`. They'll touch `contract emit` and `db update` (or `migration plan` + `migrate`) as part of that workflow.
+- Add a model, change a field, add a relation → `references/contract.md`. They'll touch `contract emit` and `db update` (or `migration plan` + `db migrate`) as part of that workflow.
 - Middleware, environment config, multiple targets → `references/runtime.md`.
 - Vite / Next.js / dev-server integration → `references/build.md`.
 - They want a fuller toolbelt overview at this point — *Commands you'll use day-to-day* below is the one-glance summary.
@@ -272,7 +272,7 @@ A reference table — not a script to recite at the user. Commands surface in th
 | Re-emit `contract.json` + `contract.d.ts` after editing the contract source | `prisma contract emit` | `references/contract.md` |
 | Quick dev-only schema sync (no migration history kept) | `prisma db update` | `references/migrations.md` |
 | Plan a migration from a contract diff | `prisma migration plan --name <slug>` | `references/migrations.md` |
-| Apply pending migrations | `prisma migrate` | `references/migrations.md` |
+| Apply pending migrations | `prisma db migrate` | `references/migrations.md` |
 | Inspect the live database | `prisma db schema` | `references/debug.md` |
 | Confirm the DB matches the contract (drift check) | `prisma db verify` | `references/debug.md` |
 | Bring an existing DB into a PN contract | `prisma contract infer --db "$DATABASE_URL"` | this skill (brownfield) |
@@ -289,7 +289,7 @@ Switch authoring later by re-running `prisma orm init` in the same directory. Th
 ## Common Pitfalls
 
 1. **Running `prisma orm init <project-name>` with a positional argument.** `init` operates on the current working directory; there is no positional project-name argument. `mkdir foo && cd foo && pnpm dlx @prisma/cli@next orm init`.
-2. **`init` doesn't connect to your database.** It only scaffolds files and installs dependencies (and runs the initial `contract emit`). You connect with `db init` / `db update` / `migrate`. If `init` succeeds and queries fail, the issue is `DATABASE_URL`, not `init`.
+2. **`init` doesn't connect to your database.** It only scaffolds files and installs dependencies (and runs the initial `contract emit`). You connect with `db init` / `db update` / `db migrate`. If `init` succeeds and queries fail, the issue is `DATABASE_URL`, not `init`.
 3. **Treating inferred PSL as the final contract.** `contract infer` produces a starting point. Don't `db sign` against a contract you haven't read.
 4. **Forgetting to emit after editing the contract.** The contract artefacts (`contract.json`, `contract.d.ts`) are stale until you run `contract emit`. If the type-checker says a model "doesn't exist", you skipped emit.
 5. **Setting `DATABASE_URL` in `prisma.config.ts` instead of `.env`.** The config reads `.env` automatically via `dotenv/config`. Hardcoding the URL leaks credentials and bypasses per-environment overrides. See `references/runtime.md`.
@@ -299,7 +299,7 @@ Switch authoring later by re-running `prisma orm init` in the same directory. Th
 ## What Prisma Next doesn't do yet
 
 - **Migration from another ORM.** Prisma Next doesn't migrate your schema *from* Drizzle / Prisma 6/7 / Sequelize / TypeORM / Kysely / Knex / a raw driver. Workaround: install the matching `@internal/migrate-from-<orm>-skill` if one exists for your source, or treat the source as a brownfield database and `contract infer` from it. If you need a guided migration flow built-in, file a feature request via the `references/feedback.md` skill.
-- **`prisma db push`-style production sync.** `db update` is the quick development path; for production, use migrations (`migration plan` + `migrate`). PN deliberately does not offer a "push-to-prod-without-a-migration" surface — see `references/migrations.md`.
+- **`prisma db push`-style production sync.** `db update` is the quick development path; for production, use migrations (`migration plan` + `db migrate`). PN deliberately does not offer a "push-to-prod-without-a-migration" surface — see `references/migrations.md`.
 - **Studio / GUI database browser.** Use `prisma db schema` for a CLI tree-style summary of the live DB. If you need an interactive UI, file a feature request via the `references/feedback.md` skill.
 
 ## Reference Files

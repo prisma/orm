@@ -8,9 +8,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Upstream seeds two Resource rows (date @unique) at 2011-01-01 and 2022-02-02 and
 // reads them back concurrently, asserting each round-trips to the matching `Date`.
-// prisma-next DateTime (pg/timestamptz@1) round-trips to a `Date`, matching upstream.
-// Upstream passes ISO strings; prisma-next's DateTime input is a `Date`, so create
-// and the where/first filters use the equivalent `Date` (same instant).
+// prisma-next DateTime is `pg/timestamptz-temporal@1`, whose application value is a
+// `Temporal.Instant` rather than a `Date`.
 //
 // Dispositions (per upstream test):
 //   - 'findUnique date with Promise.all'      → PORTED: two concurrent `.first({date})`.
@@ -22,8 +21,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 
 const dateInput1 = '2011-01-01T00:00:00Z';
 const dateInput2 = '2022-02-02T00:00:00Z';
-const dateOutput1 = new Date(dateInput1);
-const dateOutput2 = new Date(dateInput2);
+const dateOutput1 = Temporal.Instant.from(dateInput1);
+const dateOutput2 = Temporal.Instant.from(dateInput2);
 
 function withDateBatch(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
   return withPostgresPort<Contract>({ contractJson }, async (ctx) => {

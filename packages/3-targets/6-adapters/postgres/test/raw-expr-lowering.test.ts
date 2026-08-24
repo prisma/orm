@@ -56,7 +56,7 @@ describe('RawExpr postgres lowering', () => {
   it('lowers a zero-interpolation RawExpr to a verbatim SQL fragment', () => {
     const rawExpr = new RawExpr({
       parts: ['now()'],
-      returns: { codecId: 'pg/timestamptz@1', nullable: false },
+      returns: { codecId: 'test/never-resolved@1', nullable: false },
     });
 
     const ast = selectWithWhere(rawExpr);

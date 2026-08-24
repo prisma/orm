@@ -246,7 +246,7 @@ export function errorAmbiguousTarget(
     : '';
   return new MigrationToolsError('MIGRATION.AMBIGUOUS_TARGET', 'Ambiguous migration target', {
     why: `The migration history has diverged into multiple branches: ${branchTips.join(', ')}. This typically happens when two developers plan migrations from the same starting point.${divergenceInfo}`,
-    fix: 'Use `ref set <name> <hash>` to target a specific branch, delete one of the conflicting migration directories and re-run `migration plan`, or use --from <hash> to explicitly select a starting point.',
+    fix: 'Use `{bin} migration ref set <name> <hash>` to target a specific branch, delete one of the conflicting migration directories and re-run `{bin} migration plan`, or use --from <hash> to explicitly select a starting point.',
     meta: {
       branchTips,
       ...(context ? { divergencePoint: context.divergencePoint, branches: context.branches } : {}),
@@ -297,7 +297,7 @@ export function errorNoTarget(reachableHashes: readonly string[]): MigrationTool
 export function errorInvalidRefValue(value: string): MigrationToolsError {
   return new MigrationToolsError('MIGRATION.INVALID_REF_VALUE', 'Invalid ref value', {
     why: `Ref value "${value}" is not a valid contract hash. Values must be a 64-character hex digest or "empty".`,
-    fix: 'Use a valid storage hash from `prisma contract emit` output or an existing migration.',
+    fix: 'Use a valid storage hash from `{bin} contract emit` output or an existing migration.',
     nextActions: [
       {
         kind: 'run-command',
@@ -471,12 +471,12 @@ export function errorRefNotResolvable(refName: string): MigrationToolsError {
     `Ref "${refName}" is not resolvable`,
     {
       why: `Ref "${refName}" has no pointer file, and the hash being resolved is not a node in the migration graph either — there is nothing to materialize a contract from.`,
-      fix: `Create the ref with "prisma ref set ${refName} <hash>" (or advance it via "prisma db update --advance-ref ${refName}"), or pass a hash that is a node in the migration graph.`,
+      fix: `Create the ref with "{bin} migration ref set ${refName} <hash>" (or advance it via "{bin} db update --advance-ref ${refName}"), or pass a hash that is a node in the migration graph.`,
       nextActions: [
         {
           kind: 'run-command',
           label: `Create the ref "${refName}"`,
-          command: `{bin} ref set ${refName} <hash>`,
+          command: `{bin} migration ref set ${refName} <hash>`,
         },
         {
           kind: 'run-command',
@@ -502,7 +502,7 @@ export function errorBundleNotFoundForGraphNode(
     : `No migration bundle found for graph node ${hash}`;
   return new MigrationToolsError('MIGRATION.BUNDLE_NOT_FOUND_FOR_GRAPH_NODE', summary, {
     why: `The hash ${hash} is a graph node but no on-disk migration package has a destination (\`to\`) hash matching it.`,
-    fix: 'Provide a ref or hash that corresponds to an existing migration package, or run `migration list` to see available migrations.',
+    fix: 'Provide a ref or hash that corresponds to an existing migration package, or run `{bin} migration list` to see available migrations.',
     meta: { hash, ...(explicitLabel ? { explicitLabel } : {}) },
   });
 }
@@ -532,7 +532,7 @@ export function errorHashNotInGraph(hash: string, graph: MigrationGraph): Migrat
     `Hash "${hash}" is not a node in the migration graph`,
     {
       why: `The migration graph contains nodes ${reachableList}; "${hash}" isn't one of them.`,
-      fix: `Pass a hash that's the from-or-to of an on-disk migration bundle, use --from with a graph-node hash, or run "prisma migration plan" to introduce it.`,
+      fix: `Pass a hash that's the from-or-to of an on-disk migration bundle, use --from with a graph-node hash, or run "{bin} migration plan" to introduce it.`,
       nextActions: [
         {
           kind: 'user-choice',
@@ -560,7 +560,7 @@ export function errorContractSnapshotMissing(
     'Contract snapshot is missing',
     {
       why: `Expected a contract snapshot for ${storageHash} at "${expectedPath}" but the file does not exist.`,
-      fix: "Re-emit the contract snapshot by re-running the command that authored the migration referencing this hash (`prisma migration plan` for app-space migrations; the extension's contract-space build for extension spaces), or restore migrations/snapshots/ from version control.",
+      fix: "Re-emit the contract snapshot by re-running the command that authored the migration referencing this hash (`{bin} migration plan` for app-space migrations; the extension's contract-space build for extension spaces), or restore migrations/snapshots/ from version control.",
       nextActions: [
         {
           kind: 'run-command',

@@ -23,7 +23,7 @@ const authoringTypes = {
   Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1', nativeType: 'inet' } },
   Timestamptz: {
     kind: 'typeConstructor',
-    output: { codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' },
+    output: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' },
   },
   VarChar: {
     kind: 'typeConstructor',
@@ -164,7 +164,7 @@ describe('Postgres PSL inference round trip', () => {
               json_value: { codecId: 'pg/json@1', nativeType: 'json', nullable: false },
               jsonb_value: { codecId: 'pg/jsonb@1', nativeType: 'jsonb', nullable: false },
               occurred_at: {
-                codecId: 'pg/timestamptz@1',
+                codecId: 'pg/timestamptz-temporal@1',
                 nativeType: 'timestamptz',
                 nullable: false,
               },

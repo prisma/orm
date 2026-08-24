@@ -29,6 +29,11 @@ CLAUDE.local.md
 .agents/skills/
 .claude/skills/
 
+# The user-facing skill tree copied into each shipping package by
+# `scripts/sync-package-skills.ts` (run from their `prepack`). The
+# canonical source of truth is `skills/` at the repository root.
+packages/9-public/@prisma/*/skills/
+
 # Per-machine install lockfile written by `skills add`. Local only;
 # our canonical source is `skills-contrib/` (for contributors) and the
 # git-pinned tag (for external consumers via `prisma-next init`).

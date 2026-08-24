@@ -566,18 +566,20 @@ It's easy to add unnecessary type casts (`as unknown as T`) or optional chaining
 **❌ WRONG: Adding unnecessary type casts without checking the actual type**
 
 ```typescript
-// Codec accepts string | Date, but we cast Date to string
-const c = codecLookup.get('pg/timestamptz@1');
-const encoded = c.encode(date as unknown as string);  // Unnecessary cast!
+// Assumed the codec wanted text, so the value got cast on the way in
+const c = codecLookup.get('pg/timestamptz-temporal@1');
+const encoded = c.encode(instant as unknown as string);  // Unnecessary cast!
 ```
 
 **✅ CORRECT: Check the actual type signature first**
 
 ```typescript
-// Codec interface: encode(value: string | Date): Promise<string>
-const c = codecLookup.get('pg/timestamptz@1');
-const encoded = await c.encode(date);  // Date is already accepted!
+// Codec interface: encode(value: Temporal.Instant): Promise<string>
+const c = codecLookup.get('pg/timestamptz-temporal@1');
+const encoded = await c.encode(instant);  // A Temporal.Instant is what it takes
 ```
+
+The cast is not merely redundant here — it is load-bearing in the wrong direction. `pg/timestamptz-temporal@1` encodes a `Temporal.Instant` and checks that nominally, so a cast that smuggles a `string` or a `Date` past the compiler buys a `RUNTIME.ENCODE_FAILED` at the boundary. Its sibling `pg/timestamptz-string@1` is the one that takes a `string`; which one a column uses is a contract decision, not something to paper over at the call site.
 
 **When to use type casts:**
 - Only when testing invalid inputs: `// @ts-expect-error - Testing invalid input`
@@ -589,9 +591,9 @@ const encoded = await c.encode(date);  // Date is already accepted!
 **❌ WRONG: Using optional chaining when values are guaranteed to exist**
 
 ```typescript
-// codecLookup.get('pg/timestamptz@1') is guaranteed to return a codec in tests
-const c = codecLookup.get('pg/timestamptz@1') as
-  | { encode: (value: string | Date) => Promise<string> }
+// codecLookup.get('pg/timestamptz-temporal@1') is guaranteed to return a codec in tests
+const c = codecLookup.get('pg/timestamptz-temporal@1') as
+  | { encode: (value: Temporal.Instant) => Promise<string> }
   | undefined;
 if (!c) {
   throw new Error('codec not found');
@@ -602,7 +604,7 @@ if (!c) {
 
 ```typescript
 // In test context, the codec lookup always has the timestamp codec registered
-const c = codecLookup.get('pg/timestamptz@1')!;
+const c = codecLookup.get('pg/timestamptz-temporal@1')!;
 ```
 
 **When to use optional chaining:**
@@ -615,15 +617,15 @@ const c = codecLookup.get('pg/timestamptz@1')!;
 **❌ WRONG: Adding `| undefined` to type assertions when values are guaranteed**
 
 ```typescript
-const c = codecLookup.get('pg/timestamptz@1') as
-  | { encode: (value: string | Date) => Promise<string> }
+const c = codecLookup.get('pg/timestamptz-temporal@1') as
+  | { encode: (value: Temporal.Instant) => Promise<string> }
   | undefined;  // Unnecessary - value is guaranteed to exist
 ```
 
 **✅ CORRECT: Only include `| undefined` if the value might actually be undefined**
 
 ```typescript
-const c = codecLookup.get('pg/timestamptz@1')!;
+const c = codecLookup.get('pg/timestamptz-temporal@1')!;
 ```
 
 ### Best Practices

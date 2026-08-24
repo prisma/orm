@@ -415,7 +415,7 @@ describe('SqlContractSerializer logic validation', () => {
                 default: { kind: 'function', expression: 'autoincrement()' },
               },
               createdAt: {
-                codecId: 'pg/timestamptz@1',
+                codecId: 'pg/timestamptz-temporal@1',
                 nativeType: 'timestamptz',
                 nullable: false,
                 default: { kind: 'function', expression: 'now()' },
@@ -468,7 +468,7 @@ describe('SqlContractSerializer logic validation', () => {
             columns: {
               id: { codecId: 'pg/text@1', nativeType: 'text', nullable: false },
               createdAt: {
-                codecId: 'pg/timestamptz@1',
+                codecId: 'pg/timestamptz-temporal@1',
                 nativeType: 'timestamptz',
                 nullable: false,
                 default: { kind: 'literal', value: '2024-01-01T00:00:00.000Z' },

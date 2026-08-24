@@ -4,7 +4,6 @@ import {
   SQL_FLOAT_CODEC_ID,
   SQL_INT_CODEC_ID,
   SQL_TEXT_CODEC_ID,
-  SQL_TIMESTAMP_CODEC_ID,
   SQL_VARCHAR_CODEC_ID,
 } from '../../src/ast/sql-codec-helpers';
 import {
@@ -16,8 +15,6 @@ import {
   sqlIntDescriptor,
   sqlTextColumn,
   sqlTextDescriptor,
-  sqlTimestampColumn,
-  sqlTimestampDescriptor,
   sqlVarcharColumn,
   sqlVarcharDescriptor,
 } from '../../src/ast/sql-codecs';
@@ -155,58 +152,6 @@ describe('sql-codecs', () => {
     });
   });
 
-  describe('sql/timestamp@1', () => {
-    const codec = sqlTimestampDescriptor.factory({ precision: 3 })(instanceCtx);
-
-    it('id proxies through the descriptor', () => {
-      expect(codec.id).toBe(SQL_TIMESTAMP_CODEC_ID);
-    });
-
-    it('round-trips Date values', async () => {
-      const instant = new Date('2024-01-15T10:30:00Z');
-      expect(await codec.encode(instant, callCtx)).toBe(instant);
-      expect(await codec.decode(instant, callCtx)).toBe(instant);
-    });
-
-    it('serializes Date to a zone-less ISO 8601 string for JSON', () => {
-      const instant = new Date('2024-01-15T10:30:00Z');
-      expect(codec.encodeJson(instant)).toBe('2024-01-15T10:30:00.000');
-      expect(codec.decodeJson('2024-01-15T10:30:00.000')).toEqual(instant);
-    });
-
-    // The pair is UTC on both sides, so the JSON is the same text on every
-    // machine. Reading the zone-less form through `new Date` directly would
-    // resolve it in the process's zone and shift the instant.
-    it('reads the zone-less form as UTC whatever the process zone', () => {
-      expect(codec.decodeJson('2024-07-15T10:30:00').getTime()).toBe(
-        Date.UTC(2024, 6, 15, 10, 30, 0),
-      );
-    });
-
-    it('rejects an offset-bearing string rather than reinterpreting it', () => {
-      expect(() => codec.decodeJson('2024-01-15T10:30:00.000Z')).toThrow(
-        /Expected a zone-less ISO date-time/,
-      );
-      expect(() => codec.decodeJson('2024-01-15T10:30:00+02:00')).toThrow(
-        /Expected a zone-less ISO date-time/,
-      );
-    });
-
-    it('throws on invalid JSON input', () => {
-      expect(() => codec.decodeJson(42)).toThrow(/Expected ISO date string/);
-      expect(() => codec.decodeJson('not-a-date')).toThrow(/Expected a zone-less ISO date-time/);
-      expect(() => codec.decodeJson('2024-13-01T00:00:00')).toThrow(/Invalid ISO date string/);
-    });
-
-    it('renderOutputType returns Timestamp<precision>', () => {
-      expect(sqlTimestampDescriptor.renderOutputType?.({ precision: 3 })).toBe('Timestamp<3>');
-    });
-
-    it('renderOutputType returns bare Timestamp when precision absent', () => {
-      expect(sqlTimestampDescriptor.renderOutputType?.({})).toBe('Timestamp');
-    });
-  });
-
   describe('column helpers', () => {
     it('sqlTextColumn produces a ColumnSpec with text nativeType and no typeParams', () => {
       const spec = sqlTextColumn();
@@ -248,16 +193,6 @@ describe('sql-codecs', () => {
       const spec = sqlVarcharColumn({ length: 64 });
       expect(spec.typeParams).toEqual({ length: 64 });
     });
-
-    it('sqlTimestampColumn defaults typeParams to {} when invoked without arguments', () => {
-      const spec = sqlTimestampColumn();
-      expect(spec.typeParams).toEqual({});
-    });
-
-    it('sqlTimestampColumn carries the explicit precision param', () => {
-      const spec = sqlTimestampColumn({ precision: 6 });
-      expect(spec.typeParams).toEqual({ precision: 6 });
-    });
   });
 
   describe('descriptor metadata', () => {
@@ -267,7 +202,6 @@ describe('sql-codecs', () => {
       expect(sqlFloatDescriptor.codecId).toBe(SQL_FLOAT_CODEC_ID);
       expect(sqlCharDescriptor.codecId).toBe(SQL_CHAR_CODEC_ID);
       expect(sqlVarcharDescriptor.codecId).toBe(SQL_VARCHAR_CODEC_ID);
-      expect(sqlTimestampDescriptor.codecId).toBe(SQL_TIMESTAMP_CODEC_ID);
     });
 
     it('exposes traits and targetTypes for each codec', () => {
@@ -282,7 +216,6 @@ describe('sql-codecs', () => {
 
       expect(sqlCharDescriptor.targetTypes).toEqual(['char']);
       expect(sqlVarcharDescriptor.targetTypes).toEqual(['varchar']);
-      expect(sqlTimestampDescriptor.targetTypes).toEqual(['timestamp']);
     });
   });
 });

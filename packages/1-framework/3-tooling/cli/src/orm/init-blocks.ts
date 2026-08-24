@@ -43,7 +43,6 @@ function scaffoldTree(document: InitOutput): Block {
 export function buildInitNextActions(inputs: {
   readonly contractEmitted: boolean;
   readonly schemaPath: string;
-  readonly skillRegistered: boolean;
 }): readonly NextAction[] {
   const actions: NextAction[] = [
     chooseAction('Set DATABASE_URL in your environment (export it or add it to .env)'),
@@ -58,13 +57,9 @@ export function buildInitNextActions(inputs: {
   actions.push(
     chooseAction('Open prisma-next.md for a quick reference on writing your first typed query'),
   );
-  if (inputs.skillRegistered) {
-    actions.push(
-      chooseAction(
-        'Prisma Next skills are registered with your agent runtime — ask it to add a model, run a query, or plan a migration',
-      ),
-    );
-  }
+  actions.push(
+    runCommandAction('Set up the Prisma agent skills for your coding agent', 'prisma init'),
+  );
   return actions;
 }
 

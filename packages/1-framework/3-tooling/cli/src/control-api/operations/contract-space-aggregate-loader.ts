@@ -149,7 +149,7 @@ export function mapIntegrityViolations(
       `Contract-space contract validation failed for "${contractUnreadable.spaceId}"`,
       {
         why: contractUnreadable.detail,
-        fix: 'Re-emit the extension contract with `prisma-cli contract emit`, or fix the extension pack descriptor producing the invalid contract.',
+        fix: 'Re-emit the extension contract with `{bin} contract emit`, or fix the extension pack descriptor producing the invalid contract.',
         violations: [contractUnreadable],
       },
     );

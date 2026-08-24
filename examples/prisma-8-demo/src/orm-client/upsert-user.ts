@@ -10,7 +10,7 @@ export interface OrmClientUpsertUserInput {
   readonly email: string;
   readonly displayName: string;
   readonly kind: 'admin' | 'user';
-  readonly createdAt?: Date;
+  readonly createdAt?: Temporal.Instant;
 }
 
 export async function ormClientUpsertUser(data: OrmClientUpsertUserInput, runtime: Runtime) {
@@ -21,7 +21,7 @@ export async function ormClientUpsertUser(data: OrmClientUpsertUserInput, runtim
       email: data.email,
       displayName: data.displayName,
       kind: data.kind,
-      createdAt: data.createdAt ?? new Date(),
+      createdAt: data.createdAt ?? Temporal.Now.instant(),
     },
     update: {
       email: data.email,

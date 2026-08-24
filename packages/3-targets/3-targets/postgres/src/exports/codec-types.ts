@@ -44,6 +44,15 @@ export type Time<P extends number | undefined = undefined> = BrandedString<{ __t
 export type Timetz<P extends number | undefined = undefined> = BrandedString<{
   __timetzPrecision: P;
 }>;
+export type TimestampString<P extends number | undefined = undefined> = BrandedString<{
+  __timestampStringPrecision: P;
+}>;
+export type TimestamptzString<P extends number | undefined = undefined> = BrandedString<{
+  __timestamptzStringPrecision: P;
+}>;
+export type TimeString<P extends number | undefined = undefined> = BrandedString<{
+  __timeStringPrecision: P;
+}>;
 export type Interval<P extends number | undefined = undefined> = BrandedString<{
   __intervalPrecision: P;
 }>;

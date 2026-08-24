@@ -22,7 +22,7 @@ Canonical channels:
 ## When Not to Use
 
 - User wants to fix the bug themselves in the user's own code. The fix lives in another workflow reference (debug / contract / migrations / queries / runtime / build). Open the right reference first; only fall back to feedback if the user explicitly wants the framework to do something differently.
-- User wants to upgrade Prisma Next (the bug may already be fixed) → the `prisma-next-upgrade` skill (separately installed); this skill mentions it as a pre-flight check.
+- User wants to upgrade Prisma Next (the bug may already be fixed) → [`upgrade-app.md`](upgrade-app.md); this reference mentions it as a pre-flight check.
 - The user's question is already covered by a workflow reference in this skill (*"how do I add a column?"* → `references/contract.md`; *"what's the right query interface?"* → `references/queries.md`). Route to the workflow reference, not to the team — open the reference, answer the question, and only escalate to Discord if the agent can't.
 
 ## Key Concepts
@@ -87,7 +87,7 @@ For **either** kind:
 
 For **bug reports**, additionally:
 
-- **The exact command** that misbehaved (e.g. `prisma-next migration plan --name add-email`).
+- **The exact command** that misbehaved (e.g. `prisma migration plan --name add-email`).
 - **The full output**, with `-v` if a structured error envelope is involved. Redact `DATABASE_URL` and any other secrets.
 - **A minimal `src/prisma/contract.prisma` / `src/prisma/contract.ts` excerpt** that reproduces the issue. Strip unrelated models. Keep the original model and field names from the user's contract when they don't expose anything compromising — a faithful excerpt is much easier for the framework team (and future readers of the issue) to reason about than a re-themed one. Only rename to neutral placeholders (`User`, `Post`, `Tag`) when the original names would leak confidential domain detail (product names, internal codenames, customer identifiers, regulated-data field names).
 - **Steps to reproduce**, as a numbered list.
@@ -217,7 +217,7 @@ When step 1 picked the Discord channel (steps 2–7 do not apply):
 
 ### 9. Follow up
 
-- **Issue path**: record the issue URL in the user's project notes (or in the project's `wip/` if there is one) so a later upgrade or related work can reference it. If the bug is the symptom of an old version of Prisma Next, suggest the user run `prisma-next-upgrade` (the separately-installed upgrade skill) — many bugs are fixed in newer releases.
+- **Issue path**: record the issue URL in the user's project notes (or in the project's `wip/` if there is one) so a later upgrade or related work can reference it. If the bug is the symptom of an old version of Prisma Next, suggest an upgrade following [`upgrade-app.md`](upgrade-app.md) — many bugs are fixed in newer releases.
 - **Discord path**: once the conversation on Discord settles into a concrete bug or a concrete feature request, return to step 1 of this skill and file the issue (the Discord thread becomes the *Notes* / *Where the gap surfaces* reference in the issue body).
 
 ## Common Pitfalls
@@ -248,4 +248,4 @@ When step 1 picked the Discord channel (steps 2–7 do not apply):
 - [ ] Body shown to the user for confirmation before submission.
 - [ ] Submitted via `gh issue create` (preferred) or via the prefilled new-issue URL.
 - [ ] Issue URL captured for future reference.
-- [ ] Suggested `prisma-next-upgrade` if the bug may already be fixed in a newer release.
+- [ ] Suggested an upgrade ([`upgrade-app.md`](upgrade-app.md)) if the bug may already be fixed in a newer release.

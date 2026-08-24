@@ -29,7 +29,7 @@ The point: when the user asks about a feature Prisma Next doesn't have yet, the 
 > Open Prisma Studio.
 
 - [ ] Agent names the gap: Studio not shipped.
-- [ ] Agent suggests `prisma-next db schema` for CLI tree output.
+- [ ] Agent suggests `prisma db schema` for CLI tree output.
 - [ ] Agent routes to `prisma-next-feedback` for the feature request.
 
 ### 03d — EXPLAIN
@@ -45,7 +45,7 @@ The point: when the user asks about a feature Prisma Next doesn't have yet, the 
 > Apply pending migrations from app startup code.
 
 - [ ] Agent names the gap: no runtime-apply migrations API.
-- [ ] Agent suggests `prisma-next migrate` from the deploy pipeline.
+- [ ] Agent suggests `prisma db migrate` from the deploy pipeline.
 - [ ] Agent routes to `prisma-next-feedback` for the feature request.
 
 ### 03f — Next.js plugin

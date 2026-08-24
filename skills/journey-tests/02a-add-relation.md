@@ -16,7 +16,7 @@
 - [ ] Uses explicit `onDelete: Cascade` or makes a deliberate choice.
 - [ ] Runs `contract emit`.
 - [ ] Runs `migration plan --name <slug>` (or `db update` for dev).
-- [ ] Runs `migrate`.
+- [ ] Runs `db migrate`.
 - [ ] Writes a query using `.include('posts', post => post.orderBy(...).take(3))`.
 
 ## Success criteria

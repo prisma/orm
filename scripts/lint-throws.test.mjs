@@ -76,7 +76,7 @@ describe('filterNoBareThrowDiags', () => {
     assert.deepEqual(filterNoBareThrowDiags([{ category: 'lint', message: 'something' }]), []);
   });
 
-  it('does not count plugin fixtures or repo tooling scripts', () => {
+  it('does not count plugin fixtures, repo tooling scripts, or published upgrade codemods', () => {
     const msg = 'no-bare-throw: bare `throw new Error(...)`';
     const diags = [
       {
@@ -86,6 +86,11 @@ describe('filterNoBareThrowDiags', () => {
       },
       { category: 'plugin', message: msg, location: { path: 'scripts/lint-throws.mjs' } },
       { category: 'plugin', message: msg, location: { path: 'scripts/bump-version.ts' } },
+      {
+        category: 'plugin',
+        message: msg,
+        location: { path: 'skills/prisma-8/upgrading/app/upgrades/0.9-to-0.10/codemod.ts' },
+      },
       { category: 'plugin', message: msg, location: { path: 'packages/x/src/scripts.ts' } },
       { category: 'plugin', message: msg, location: { path: 'packages/x/src/thing.ts' } },
     ];

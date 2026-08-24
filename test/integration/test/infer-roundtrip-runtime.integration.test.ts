@@ -163,7 +163,7 @@ withTempDir(({ createTempDir }) => {
     );
   });
 
-  describe('Runtime: date columns decode via pg/date@1 in both top-level select and include()', () => {
+  describe('Runtime: date columns decode via pg/date-temporal@1 in both top-level select and include()', () => {
     let database: Awaited<ReturnType<typeof createDevDatabase>>;
 
     beforeAll(async () => {
@@ -217,7 +217,7 @@ withTempDir(({ createTempDir }) => {
               namespaceId: 'public',
             });
             const rows = await records.select('id', 'notedOn').all();
-            expect(rows).toEqual([{ id: 1, notedOn: new Date(Date.UTC(2024, 0, 15)) }]);
+            expect(rows).toEqual([{ id: 1, notedOn: Temporal.PlainDate.from('2024-01-15') }]);
 
             const owners = new Collection({ runtime, context }, 'Owner', {
               namespaceId: 'public',
@@ -231,10 +231,10 @@ withTempDir(({ createTempDir }) => {
               // no-bare-casts rule.
               .include('records' as never, (record) => record.select('notedOn'))
               .all();
-            // `pg/date@1.decodeJson` accepts the bare `YYYY-MM-DD` that
+            // `pg/date-temporal@1.decodeJson` accepts the bare `YYYY-MM-DD` that
             // `json_agg` renders.
             expect(includeResult).toEqual([
-              { id: 1, records: [{ notedOn: new Date(Date.UTC(2024, 0, 15)) }] },
+              { id: 1, records: [{ notedOn: Temporal.PlainDate.from('2024-01-15') }] },
             ]);
           } finally {
             await runtime.close();

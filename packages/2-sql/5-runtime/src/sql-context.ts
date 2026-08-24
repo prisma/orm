@@ -417,7 +417,7 @@ function assertColumnCodecIntegrity(
 
         if (descriptor.isParameterized && ref.typeParams === undefined) {
           // Some parameterized codecs declare every paramsSchema field as optional
-          // (e.g. `pg/timestamptz@1` precision). Defer to the descriptor's own
+          // (e.g. `pg/timestamptz-temporal@1` precision). Defer to the descriptor's own
           // schema rather than rejecting purely on structural absence: probe the
           // schema with an empty params object and only fail when the schema
           // rejects it (i.e. at least one field is required).

@@ -16,7 +16,7 @@ import { CliStructuredError } from './control';
 export function errorMarkerMissing(options?: { readonly why?: string }): CliStructuredError {
   return new CliStructuredError('CONTRACT.MARKER_MISSING', 'Database not signed', {
     why: options?.why ?? 'No database signature (marker) found',
-    fix: 'Run `prisma db sign --db <url>` to sign the database',
+    fix: 'Run `{bin} db sign --db <url>` to sign the database',
     nextActions: [
       { kind: 'run-command', label: 'Sign the database', command: '{bin} db sign --db <url>' },
     ],
@@ -78,7 +78,7 @@ export function errorMarkerRowCorrupt(options: {
     'Marker row is corrupt or incompatible',
     {
       why: options.why,
-      fix: `The ${options.markerLocation} row for space "${options.space}" contains invalid data. Delete the row, then run \`prisma db sign --db <url>\` to write a fresh marker.`,
+      fix: `The ${options.markerLocation} row for space "${options.space}" contains invalid data. Delete the row, then run \`{bin} db sign --db <url>\` to write a fresh marker.`,
       nextActions: [
         {
           kind: 'run-command',
@@ -138,10 +138,10 @@ function errorLegacyMarkerShape(options: {
   return errorRunnerFailed(
     `Legacy marker-table shape detected on ${options.markerLocation} (no \`space\` column). ` +
       'Prisma Next is in pre-1.0; the previous transitional auto-migration to the per-space-row schema has been removed. ' +
-      `Drop \`${options.markerLocation}\` and re-run \`prisma db init\` to reinitialise from a clean baseline.`,
+      `Drop \`${options.markerLocation}\` and re-run \`{bin} db init\` to reinitialise from a clean baseline.`,
     {
       why: options.why,
-      fix: 'Legacy marker-table shape detected. Drop `prisma_contract.marker` (Postgres) or `_prisma_marker` (SQLite) and re-run `prisma db init` to recreate it with the current per-space schema.',
+      fix: 'Legacy marker-table shape detected. Drop `prisma_contract.marker` (Postgres) or `_prisma_marker` (SQLite) and re-run `{bin} db init` to recreate it with the current per-space schema.',
       nextActions: [
         {
           kind: 'run-command',
@@ -221,7 +221,7 @@ export function errorMarkerRequired(options?: {
 }): CliStructuredError {
   return new CliStructuredError('CONTRACT.MARKER_REQUIRED', 'Database must be signed first', {
     why: options?.why ?? 'No database signature (marker) found',
-    fix: options?.fix ?? 'Run `prisma db init` first to sign the database',
+    fix: options?.fix ?? 'Run `{bin} db init` first to sign the database',
     nextActions: options?.nextActions ?? [
       { kind: 'run-command', label: 'Sign the database', command: '{bin} db init' },
     ],
@@ -239,7 +239,7 @@ export function errorSchemaVerificationFailed(options: {
 }): CliStructuredError {
   return new CliStructuredError('CONTRACT.SCHEMA_VERIFICATION_FAILED', options.summary, {
     why: 'Database schema does not satisfy the contract',
-    fix: 'Run `prisma db update` to reconcile, or adjust your contract to match the database',
+    fix: 'Run `{bin} db update` to reconcile, or adjust your contract to match the database',
     nextActions: [
       { kind: 'run-command', label: 'Reconcile the database', command: '{bin} db update' },
       { kind: 'edit-file', label: 'Adjust your contract to match the database' },

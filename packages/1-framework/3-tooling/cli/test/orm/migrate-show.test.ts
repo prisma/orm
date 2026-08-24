@@ -198,7 +198,7 @@ describe('migrate --show', () => {
     const cwd = await buildProject();
 
     const run = await harness(ormConfig(cwd)).run(
-      ['migrate', '--show', '--from', C2.slice(7, 13), '--json'],
+      ['db', 'migrate', '--show', '--from', C2.slice(7, 13), '--json'],
       { cwd },
     );
 
@@ -210,7 +210,7 @@ describe('migrate --show', () => {
     const cwd = await buildProject();
 
     const run = await harness(ormConfig(cwd)).run(
-      ['migrate', '--show', '--from', C2.slice(7, 13), '--to', C1.slice(7, 13), '--json'],
+      ['db', 'migrate', '--show', '--from', C2.slice(7, 13), '--to', C1.slice(7, 13), '--json'],
       { cwd },
     );
 
@@ -222,7 +222,7 @@ describe('migrate --show', () => {
     const cwd = await buildProject();
 
     const run = await harness(ormConfig(cwd, { db: undefined })).run(
-      ['migrate', '--show', '--json'],
+      ['db', 'migrate', '--show', '--json'],
       { cwd },
     );
 
@@ -237,7 +237,7 @@ describe('migrate --show', () => {
     const cwd = await buildProject();
 
     const run = await harness(ormConfig(cwd, { db: undefined })).run(
-      ['migrate', '--show', '--from', '@db', '--json'],
+      ['db', 'migrate', '--show', '--from', '@db', '--json'],
       { cwd },
     );
 
@@ -264,7 +264,7 @@ describe('migrate --show', () => {
     });
 
     const run = await harness(ormConfig(cwd)).run(
-      ['migrate', '--show', '--from', EMPTY, '--to', 'prod', '--json'],
+      ['db', 'migrate', '--show', '--from', EMPTY, '--to', 'prod', '--json'],
       { cwd },
     );
 
@@ -283,7 +283,7 @@ describe('migrate --show', () => {
       const cwd = await buildProject();
 
       const run = await harness(ormConfig(cwd)).run(
-        ['migrate', '--show', '--from', EMPTY, '--to', C1.slice(7, 13)],
+        ['db', 'migrate', '--show', '--from', EMPTY, '--to', C1.slice(7, 13)],
         { cwd, isTty: { stdout: true } },
       );
       const lines = drawingLines(run.presented?.presentation.human ?? []);
@@ -300,7 +300,7 @@ describe('migrate --show', () => {
       await addExtensionSpace(cwd);
 
       const run = await harness(ormConfig(cwd, { extensions: [pgvectorExtension()] })).run(
-        ['migrate', '--show', '--from', EMPTY],
+        ['db', 'migrate', '--show', '--from', EMPTY],
         { cwd, isTty: { stdout: true } },
       );
       const lines = drawingLines(run.presented?.presentation.human ?? []);
@@ -318,7 +318,7 @@ describe('migrate --show', () => {
       const extDirName = await addExtensionSpace(cwd);
 
       const run = await harness(ormConfig(cwd, { extensions: [pgvectorExtension()] })).run(
-        ['migrate', '--show', '--from', C1.slice(7, 13), '--to', C2.slice(7, 13), '--json'],
+        ['db', 'migrate', '--show', '--from', C1.slice(7, 13), '--to', C2.slice(7, 13), '--json'],
         { cwd },
       );
       const document = run.presented?.data as {
@@ -339,7 +339,7 @@ describe('migrate --show', () => {
       await addExtensionSpace(cwd);
 
       const run = await harness(ormConfig(cwd, { extensions: [pgvectorExtension()] })).run(
-        ['migrate', '--show', '--from', EMPTY, '--json'],
+        ['db', 'migrate', '--show', '--from', EMPTY, '--json'],
         { cwd },
       );
       const document = run.presented?.data as {

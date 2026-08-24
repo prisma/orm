@@ -1,8 +1,8 @@
 # @internal/extension-author-tools
 
-CLI tools that pair with the [`prisma-8-extension-upgrade`](../../../skills/prisma-8-extension-upgrade/SKILL.md) agent skill. Today this package ships one tool; future tools for extension authors using the upgrade-skill flow will land here.
+CLI tools that pair with the extension-upgrade branch of the [`prisma-8`](../../../skills/prisma-8/references/upgrade-extension.md) agent skill. Today this package ships one tool; future tools for extension authors using the upgrade-skill flow will land here.
 
-The agent-readable upgrade procedure itself (the SKILL.md, the `upgrades/<from>-to-<to>/instructions.md` set, the README) lives at [`skills/prisma-8-extension-upgrade/`](../../../skills/prisma-8-extension-upgrade/) and is distributed via `npx skills add prisma/prisma/skills --skill prisma-8-extension-upgrade -y`. This package is the npm-published companion that supplies the CI bin the skill drives.
+The agent-readable upgrade procedure itself (the flow in [`references/upgrade-extension.md`](../../../skills/prisma-8/references/upgrade-extension.md) and the `upgrades/<from>-to-<to>/instructions.md` set under [`upgrading/extension/`](../../../skills/prisma-8/upgrading/extension/)) ships inside the `@prisma/orm-*` tarballs. This package is the npm-published companion that supplies the CI bin the skill drives.
 
 ## Installation
 
@@ -18,7 +18,7 @@ npm install --save-dev @internal/extension-author-tools
 
 CI guard for extension packages. Asserts that every `@internal/*` entry under the package's `peerDependencies` (and, optionally, `dependencies`) is pinned to an exact version, not a range.
 
-This is the invariant the [`prisma-8-extension-upgrade`](../../../skills/prisma-8-extension-upgrade/SKILL.md) skill relies on at upgrade time: extension authors pin every `@internal/*` peer to a single exact version per release of their extension, so the skill can mechanically advance both the framework deps and the extension's published version in lockstep.
+This is the invariant the [extension-upgrade flow](../../../skills/prisma-8/references/upgrade-extension.md) relies on at upgrade time: extension authors pin every `@internal/*` peer to a single exact version per release of their extension, so the skill can mechanically advance both the framework deps and the extension's published version in lockstep.
 
 Run from the extension's repository root:
 

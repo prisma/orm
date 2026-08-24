@@ -9,7 +9,6 @@ import {
   pgInt4Descriptor,
   pgInt8Descriptor,
   pgTextDescriptor,
-  pgTimestampDescriptor,
 } from '../src/core/codecs';
 
 function valueRendererFor(
@@ -109,14 +108,6 @@ describe('codec renderValueLiteral', () => {
     it('escapes double quotes in member values', () => {
       expect(renderer?.('say "hi"', 'output')).toBe('"say \\"hi\\""');
       expect(renderer?.("it's", 'output')).toBe('"it\'s"');
-    });
-  });
-
-  describe('non-narrowable codecs', () => {
-    it('pg/timestamp@1 returns undefined (Date output is not a literal)', () => {
-      expect(
-        valueRendererFor(pgTimestampDescriptor)?.('2024-01-01T00:00:00.000Z', 'output'),
-      ).toBeUndefined();
     });
   });
 });

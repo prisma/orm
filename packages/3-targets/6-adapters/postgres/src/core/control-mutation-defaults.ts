@@ -11,6 +11,7 @@ import type {
 import { builtinGeneratorRegistryMetadata } from '@internal/ids';
 import type { FuncCallSig } from '@internal/psl-parser';
 import { int, num, oneOf, optional, str } from '@internal/psl-parser';
+import { instantNowControlDescriptor } from '@internal/target-postgres/control';
 
 function invalidArgumentDiagnostic(input: {
   readonly context: DefaultFunctionLoweringContext;
@@ -186,7 +187,7 @@ export const postgresScalarAuthoringTypes = {
   },
   DateTime: {
     kind: 'typeConstructor',
-    output: { codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' },
+    output: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' },
   },
   Json: {
     kind: 'typeConstructor',
@@ -240,7 +241,7 @@ export const postgresNativeAuthoringTypes = {
     kind: 'typeConstructor',
     args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
     output: {
-      codecId: 'pg/timestamp@1',
+      codecId: 'pg/timestamp-temporal@1',
       nativeType: 'timestamp',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
@@ -249,7 +250,7 @@ export const postgresNativeAuthoringTypes = {
     kind: 'typeConstructor',
     args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
     output: {
-      codecId: 'pg/timestamptz@1',
+      codecId: 'pg/timestamptz-temporal@1',
       nativeType: 'timestamptz',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
@@ -258,7 +259,7 @@ export const postgresNativeAuthoringTypes = {
     kind: 'typeConstructor',
     args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
     output: {
-      codecId: 'pg/time@1',
+      codecId: 'pg/time-temporal@1',
       nativeType: 'time',
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
@@ -276,7 +277,45 @@ export const postgresNativeAuthoringTypes = {
   Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1', nativeType: 'inet' } },
   SmallInt: { kind: 'typeConstructor', output: { codecId: 'pg/int2@1', nativeType: 'int2' } },
   Real: { kind: 'typeConstructor', output: { codecId: 'pg/float4@1', nativeType: 'float4' } },
-  Date: { kind: 'typeConstructor', output: { codecId: 'pg/date@1', nativeType: 'date' } },
+  Date: {
+    kind: 'typeConstructor',
+    output: { codecId: 'pg/date-temporal@1', nativeType: 'date' },
+  },
+  // The representation-explicit spellings. Same columns, same precision, same native types — the
+  // only difference is that a read hands back PostgreSQL's own text instead of a `Temporal.*`, so a
+  // value Temporal cannot express still round-trips. Authoring-only: they claim no introspection
+  // mapping, because a bare `timestamptz` column introspects to the Temporal-backed name.
+  DateString: {
+    kind: 'typeConstructor',
+    output: { codecId: 'pg/date-string@1', nativeType: 'date' },
+  },
+  TimestampString: {
+    kind: 'typeConstructor',
+    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    output: {
+      codecId: 'pg/timestamp-string@1',
+      nativeType: 'timestamp',
+      typeParams: { precision: { kind: 'arg', index: 0 } },
+    },
+  },
+  TimestamptzString: {
+    kind: 'typeConstructor',
+    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    output: {
+      codecId: 'pg/timestamptz-string@1',
+      nativeType: 'timestamptz',
+      typeParams: { precision: { kind: 'arg', index: 0 } },
+    },
+  },
+  TimeString: {
+    kind: 'typeConstructor',
+    args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
+    output: {
+      codecId: 'pg/time-string@1',
+      nativeType: 'time',
+      typeParams: { precision: { kind: 'arg', index: 0 } },
+    },
+  },
 } as const satisfies AuthoringTypeNamespace;
 
 export const postgresAuthoringTypes = {
@@ -300,5 +339,6 @@ export function createPostgresMutationDefaultGeneratorDescriptors(): readonly Mu
       }),
     ),
     timestampNowControlDescriptor(),
+    instantNowControlDescriptor(),
   ];
 }

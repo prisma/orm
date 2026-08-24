@@ -10,7 +10,7 @@ export interface OrmClientCreateUserInput {
   readonly email: string;
   readonly displayName: string;
   readonly kind: 'admin' | 'user';
-  readonly createdAt: Date;
+  readonly createdAt: Temporal.Instant;
 }
 
 export async function ormClientCreateUser(data: OrmClientCreateUserInput, runtime: Runtime) {

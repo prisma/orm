@@ -2,10 +2,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import type { PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
-import { expectDefined } from '@repo/test-utils/typed-expectations';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_SKILL_SOURCES } from '../../src/commands/init/skill-sources';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
@@ -38,7 +36,7 @@ function scaffoldArgv(...extra: string[]): string[] {
   return ['orm', 'init', '--target', 'postgres', '--authoring', 'psl', ...extra];
 }
 
-const SKIP_ALL = ['--skip-install', '--skip-skills'] as const;
+const SKIP_ALL = ['--skip-install'] as const;
 
 /**
  * The emit step spawns the project-local `@prisma/cli` bin, which the mocked
@@ -46,18 +44,18 @@ const SKIP_ALL = ['--skip-install', '--skip-skills'] as const;
  * do not pass `--skip-install`.
  */
 function installFakeProjectLocalCli(dir: string): void {
-  const packageDir = join(dir, 'node_modules/@prisma/cli');
+  const packageDir = join(dir, 'node_modules/prisma');
   mkdirSync(join(packageDir, 'bin'), { recursive: true });
   writeFileSync(
     join(packageDir, 'package.json'),
     JSON.stringify({
-      name: '@prisma/cli',
+      name: 'prisma',
       version: '0.0.0-test',
       type: 'module',
-      bin: { 'prisma-cli': './bin/prisma-cli.mjs' },
+      bin: { prisma: './bin/prisma.mjs' },
     }),
   );
-  writeFileSync(join(packageDir, 'bin/prisma-cli.mjs'), '');
+  writeFileSync(join(packageDir, 'bin/prisma.mjs'), '');
 }
 
 function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }) {
@@ -154,16 +152,30 @@ describe('init scaffold', () => {
     );
   });
 
+  describe('the skill-sync wiring it does not write', () => {
+    it(
+      'adds no postinstall script and no skill gitignore entries',
+      async () => {
+        const run = await harness().run(scaffoldArgv('--skip-install'), { cwd: projectDir });
+        const manifest = JSON.parse(readFileSync(join(projectDir, 'package.json'), 'utf-8'));
+        const gitignore = readFileSync(join(projectDir, '.gitignore'), 'utf-8');
+
+        expect(run.exitCode).toBe(0);
+        expect(manifest.scripts?.postinstall).toBeUndefined();
+        expect(gitignore).not.toContain('skills/prisma-8/');
+      },
+      timeouts.coldTransformImport,
+    );
+  });
+
   describe('the files it removes', () => {
     it(
-      'deletes a retired agent-skill directory even on a first run, leaving installed skills alone under --skip-skills',
+      'deletes a retired agent-skill directory even on a first run, leaving an installed skill alone',
       async () => {
         const retired = join(projectDir, '.claude/skills/prisma-next-queries');
         mkdirSync(retired, { recursive: true });
         writeFileSync(join(retired, 'SKILL.md'), '# stale\n', 'utf-8');
-        const [firstSource] = DEFAULT_SKILL_SOURCES;
-        expectDefined(firstSource);
-        const installed = join(projectDir, `.agents/skills/${firstSource.skill}`);
+        const installed = join(projectDir, '.agents/skills/prisma-8');
         mkdirSync(installed, { recursive: true });
         writeFileSync(join(installed, 'SKILL.md'), '# installed\n', 'utf-8');
 
@@ -241,11 +253,11 @@ describe('init scaffold', () => {
         );
         installFakeProjectLocalCli(projectDir);
 
-        const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+        const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
         expect(envelopeOf(run)).toMatchObject({ ok: true });
         expect(run.exitCode).toBe(0);
-        expect(calls[1]?.args).toEqual(['add', '-D', '@prisma/cli@next']);
+        expect(calls[1]?.args).toEqual(['add', '-D', 'prisma@next']);
         expect(calls[2]?.args).toEqual(['add', '-D', '@prisma/cli-engine@next']);
       },
       timeouts.coldTransformImport,
@@ -261,7 +273,7 @@ describe('init scaffold', () => {
           'utf-8',
         );
 
-        const run = await harness().run(scaffoldArgv('--skip-skills'), { cwd: projectDir });
+        const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
         expect(run.presented?.data).toMatchObject({
           warnings: expect.arrayContaining([expect.stringContaining('catalog overrides detected')]),

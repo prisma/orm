@@ -5,7 +5,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { participatesInLockstep, rewriteWorkspaceDeps } from './set-version-utils.ts';
+import {
+  participatesInLockstep,
+  rewriteWorkspaceDeps,
+  stampSkillMetadata,
+} from './set-version-utils.ts';
 
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
@@ -85,5 +89,15 @@ for (const manifestPath of trackedManifests) {
   );
   updatedCount++;
 }
+
+// The user-facing skills ship inside the `@prisma/orm-*` tarballs and carry
+// the version they were published with in their frontmatter, so a consumer
+// can tell whether its synced copy still matches its installed packages.
+const skillPath = path.join(rootDir, 'skills', 'prisma-8', 'SKILL.md');
+await fs.writeFile(
+  skillPath,
+  stampSkillMetadata(await fs.readFile(skillPath, 'utf-8'), 'library_version', version),
+);
+console.log(`Stamped ${path.relative(rootDir, skillPath)} with library_version ${version}`);
 
 console.log(`\nDone! Updated ${updatedCount} packages.`);

@@ -5,8 +5,11 @@
  * embeddings (this example exercises the per-request facade, not vectors).
  */
 
+import 'temporal-polyfill/full/global';
 import { db } from '../src/prisma/db';
 import { EXAMPLE_ROOT, HYPERDRIVE_VAR, loadLocalEnv } from './env';
+
+const firstPostDay = Temporal.PlainDate.from('2026-04-10');
 
 async function main() {
   loadLocalEnv(EXAMPLE_ROOT);
@@ -24,7 +27,7 @@ async function main() {
         {
           email: 'alice@example.com',
           displayName: 'Alice',
-          createdAt: new Date('2026-04-01T00:00:00.000Z'),
+          createdAt: Temporal.Instant.from('2026-04-01T00:00:00.000Z'),
           kind: 'admin',
           address: { street: '123 Main St', city: 'San Francisco', zip: '94102', country: 'US' },
         },
@@ -38,7 +41,7 @@ async function main() {
         {
           email: 'bob@example.com',
           displayName: 'Bob',
-          createdAt: new Date('2026-04-02T00:00:00.000Z'),
+          createdAt: Temporal.Instant.from('2026-04-02T00:00:00.000Z'),
           kind: 'user',
           address: { street: '456 Oak Ave', city: 'Portland', zip: null, country: 'US' },
         },
@@ -73,7 +76,7 @@ async function main() {
           {
             title: `Alice post ${i + 1}`,
             userId: alice.id,
-            createdAt: new Date(Date.UTC(2026, 3, 10 + i)),
+            createdAt: firstPostDay.add({ days: i }).toZonedDateTime('UTC').toInstant(),
           },
         ])
         .build(),
@@ -87,7 +90,10 @@ async function main() {
           {
             title: `Bob post ${i + 1}`,
             userId: bob.id,
-            createdAt: new Date(Date.UTC(2026, 3, 20 + i)),
+            createdAt: firstPostDay
+              .add({ days: 10 + i })
+              .toZonedDateTime('UTC')
+              .toInstant(),
           },
         ])
         .build(),

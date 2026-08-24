@@ -214,7 +214,7 @@ namespace public {
     ['BigInt', { codecId: 'pg/int8@1', nativeType: 'int8' }],
     ['Float', { codecId: 'pg/float8@1', nativeType: 'float8' }],
     ['Decimal', { codecId: 'pg/numeric@1', nativeType: 'numeric' }],
-    ['DateTime', { codecId: 'pg/timestamptz@1', nativeType: 'timestamptz' }],
+    ['DateTime', { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' }],
     ['Json', { codecId: 'pg/json@1', nativeType: 'json' }],
     ['Jsonb', { codecId: 'pg/jsonb@1', nativeType: 'jsonb' }],
     ['Bytes', { codecId: 'pg/bytea@1', nativeType: 'bytea' }],

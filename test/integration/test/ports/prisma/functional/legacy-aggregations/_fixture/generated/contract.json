@@ -36,7 +36,7 @@
               "createdAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               },
@@ -64,7 +64,7 @@
               "updatedAt": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "kind": "scalar"
                 }
               }
@@ -203,7 +203,7 @@
                   "nullable": true
                 },
                 "createdAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "default": {
                     "expression": "now()",
                     "kind": "function"
@@ -227,7 +227,7 @@
                   "nullable": false
                 },
                 "updatedAt": {
-                  "codecId": "pg/timestamptz@1",
+                  "codecId": "pg/timestamptz-temporal@1",
                   "nativeType": "timestamptz",
                   "nullable": false
                 }
@@ -311,10 +311,10 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "5627fa94f4b54c4467081e89496c83e2496e010938322aaa558b20cadd8dca9e"
+    "storageHash": "5eba83ca89146f79e95e703b59d4401bc8b1b764fe3f02d229f3067fbf19fadf"
   },
   "execution": {
-    "executionHash": "27a88f1138300d9ca801a02b0455dd8d3172476231ba8433307683757567343e",
+    "executionHash": "825a03304d5822bc78cb404d7b7c546dac3bbe074261c78e6ab2ed24c4f20331",
     "mutations": {
       "defaults": [
         {
@@ -330,11 +330,11 @@
         },
         {
           "onCreate": {
-            "id": "timestampNow",
+            "id": "instantNow",
             "kind": "generator"
           },
           "onUpdate": {
-            "id": "timestampNow",
+            "id": "instantNow",
             "kind": "generator"
           },
           "ref": {
@@ -367,6 +367,7 @@
       "returning": true
     },
     "sql": {
+      "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
       "lateral": true,

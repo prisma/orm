@@ -10,7 +10,7 @@ Topic branch with a planned migration. Meanwhile, `main` advanced with a differe
 
 ## Prompt
 
-> I rebased my branch onto main and now `migrate` fails. My migration says it's from hash X but the previous one wrote hash Y.
+> I rebased my branch onto main and now `db migrate` fails. My migration says it's from hash X but the previous one wrote hash Y.
 
 ## Expected agent behavior
 

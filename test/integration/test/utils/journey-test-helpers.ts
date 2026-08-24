@@ -368,7 +368,7 @@ export async function runMigrate(
   extraArgs: readonly string[] = [],
   options?: RunCommandOptions,
 ): Promise<EngineCommandResult> {
-  return runOnEngine(ctx, ['migrate', ...extraArgs], options);
+  return runOnEngine(ctx, ['db', 'migrate', ...extraArgs], options);
 }
 
 export async function runMigrationStatus(
@@ -539,7 +539,7 @@ export async function runRef(
   subcommandArgs: readonly string[],
   options?: RunCommandOptions,
 ): Promise<EngineCommandResult> {
-  return runOnEngine(ctx, ['ref', ...subcommandArgs], options);
+  return runOnEngine(ctx, ['migration', 'ref', ...subcommandArgs], options);
 }
 
 /**
@@ -560,7 +560,7 @@ export async function runFormat(
   extraArgs: readonly string[] = [],
   options?: RunCommandOptions,
 ): Promise<EngineCommandResult> {
-  return runOnEngine(ctx, ['format', ...extraArgs], options);
+  return runOnEngine(ctx, ['contract', 'format', ...extraArgs], options);
 }
 
 /**

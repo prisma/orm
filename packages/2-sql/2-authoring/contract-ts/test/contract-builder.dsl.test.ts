@@ -31,7 +31,7 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
 
 const int4Column = columnDescriptor('pg/int4@1');
 const textColumn = columnDescriptor('pg/text@1');
-const timestamptzColumn = columnDescriptor('pg/timestamptz@1');
+const timestamptzTemporalColumn = columnDescriptor('pg/timestamptz-temporal@1');
 
 function defineTestContract<
   const Definition extends Omit<ContractInput, 'target' | 'family' | 'createNamespace'>,
@@ -109,7 +109,7 @@ describe('contract DSL authoring surface', () => {
           .id({ name: 'app_user_pkey' }),
         email: field.column(textColumn).unique({ name: 'app_user_email_key' }),
         role: field.namedType(types.Role),
-        createdAt: field.column(timestamptzColumn).column('created_at').defaultSql('now()'),
+        createdAt: field.column(timestamptzTemporalColumn).column('created_at').defaultSql('now()'),
       },
     }).sql({
       table: 'app_user',
@@ -252,7 +252,7 @@ describe('contract DSL authoring surface', () => {
       fields: {
         id: field.column(int4Column).id({ name: 'blog_post_pkey' }),
         authorId: field.column(textColumn).sql({ column: 'author_id' }),
-        createdAt: field.column(timestamptzColumn).sql({ column: 'created_at' }),
+        createdAt: field.column(timestamptzTemporalColumn).sql({ column: 'created_at' }),
       },
       relations: {
         author: rel
@@ -568,7 +568,7 @@ describe('contract DSL authoring surface', () => {
     const BlogPost = model('BlogPost', {
       fields: {
         id: field.column(int4Column).id(),
-        createdAt: field.column(timestamptzColumn),
+        createdAt: field.column(timestamptzTemporalColumn),
         authorId: field.column(textColumn).column('author_identifier'),
       },
     }).sql(({ cols, constraints }) => ({
@@ -628,8 +628,8 @@ describe('contract DSL authoring surface', () => {
         const BlogPost = model('BlogPost', {
           fields: {
             id: field.column(int4Column).id(),
-            createdAt: field.column(timestamptzColumn),
-            created_at: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
+            created_at: field.column(timestamptzTemporalColumn),
           },
         });
 

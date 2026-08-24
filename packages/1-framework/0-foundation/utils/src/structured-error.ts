@@ -10,7 +10,7 @@ import { ifDefined } from './defined';
  * human edit), `done` (nothing further is required).
  *
  * A `command` never hardcodes a binary name. Write `{bin}` where the binary
- * goes — `{bin} ref set <name> <hash>` — and the surface that renders the
+ * goes — `{bin} migration ref set <name> <hash>` — and the surface that renders the
  * action substitutes the name of the binary the user actually ran. Angle
  * brackets mark a value only the user can supply; everything outside them is
  * literal and runnable.

@@ -37,7 +37,7 @@ export interface Codec<
   TWire = unknown,
   TInput = unknown,
 > {
-  /** Unique codec identifier in `namespace/name@version` format (e.g. `pg/timestamptz@1`). The factory sets this to the descriptor's `codecId`; consumers use it as a back-reference for descriptor lookups and for decode-error diagnostics. */
+  /** Unique codec identifier in `namespace/name@version` format (e.g. `pg/timestamptz-temporal@1`). The factory sets this to the descriptor's `codecId`; consumers use it as a back-reference for descriptor lookups and for decode-error diagnostics. */
   readonly id: Id;
   /** Phantom carrier for the `TTraits` generic; type-only, undefined at runtime. Runtime traits live on {@link CodecDescriptor.traits}. Implemented as a string-key phantom (`__codecTraits`) rather than `unique symbol` so bundlers that split `.d.ts` chunks do not strand symbol identity on chunk-private paths (the same `TS2742` family that the public re-export of `CodecTypes` works around). */
   readonly __codecTraits?: TTraits;

@@ -141,6 +141,7 @@ export interface PostgresCodecConformanceCase {
    * recorded kind can rot as projections change.
    */
   readonly notYetCanonical?: ExpectedProjectionFailure;
+  readonly valueEquality?: (roundTripped: unknown, value: unknown) => boolean;
 }
 
 export interface CodecProjectionOutcome {
@@ -404,7 +405,9 @@ export async function runPostgresCodecProjection(
 
   const base = { sql, rawJson, projected, expected } as const;
 
-  if (!isDeepStrictEqual(projected, expected)) {
+  // A case judged on round-trip equality skips this gate by design: its two spellings are both
+  // correct and differ, so comparing them would only ever report a disagreement that is not a defect.
+  if (conformanceCase.valueEquality === undefined && !isDeepStrictEqual(projected, expected)) {
     return {
       ...base,
       failure: {
@@ -427,7 +430,12 @@ export async function runPostgresCodecProjection(
     };
   }
 
-  if (!isDeepStrictEqual(roundTripped, conformanceCase.value)) {
+  const roundTripAgrees =
+    conformanceCase.valueEquality === undefined
+      ? isDeepStrictEqual(roundTripped, conformanceCase.value)
+      : conformanceCase.valueEquality(roundTripped, conformanceCase.value);
+
+  if (!roundTripAgrees) {
     return {
       ...base,
       failure: {

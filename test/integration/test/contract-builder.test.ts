@@ -1,6 +1,10 @@
 // Intentionally uses verbose sql-contract-ts/contract-builder import: this file tests the
 // base defineContract API directly (not the facade wrapper).
-import { int4Column, textColumn, timestamptzColumn } from '@internal/adapter-postgres/column-types';
+import {
+  int4Column,
+  textColumn,
+  timestamptzTemporalColumn,
+} from '@internal/adapter-postgres/column-types';
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { ResultType } from '@internal/framework-components/runtime';
 import { sql } from '@internal/sql-builder/runtime';
@@ -27,7 +31,7 @@ describe('builder integration', () => {
           fields: {
             id: field.column(int4Column).id(),
             email: field.column(textColumn),
-            createdAt: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
           },
         }).sql({ table: 'user' }),
       },
@@ -99,7 +103,7 @@ describe('builder integration', () => {
     // Runtime check that they match expected values
     expect(userTableType.columns.id.codecId).toBe('pg/int4@1');
     expect(userTableType.columns.email.codecId).toBe('pg/text@1');
-    expect(userTableType.columns.createdAt.codecId).toBe('pg/timestamptz@1');
+    expect(userTableType.columns.createdAt.codecId).toBe('pg/timestamptz-temporal@1');
 
     // Verify nullable is literal false, not boolean
     expectTypeOf(userTableType.columns.id.nullable).toEqualTypeOf<false>();
@@ -135,7 +139,7 @@ describe('builder integration', () => {
           fields: {
             id: field.column(int4Column).id(),
             email: field.column(textColumn),
-            createdAt: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
           },
         }).sql({ table: 'user' }),
       },
@@ -156,7 +160,7 @@ describe('builder integration', () => {
           fields: {
             id: field.column(int4Column).id(),
             email: field.column(textColumn),
-            createdAt: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
           },
         }).sql({ table: 'user' }),
       },
@@ -199,7 +203,7 @@ describe('builder integration', () => {
           fields: {
             id: field.column(int4Column).id(),
             email: field.column(textColumn),
-            createdAt: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
           },
         }).sql({ table: 'user' }),
       },
@@ -220,7 +224,7 @@ describe('builder integration', () => {
     const row: Row = {
       id: 1,
       email: 'test@example.com',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
+      createdAt: Temporal.Instant.from('2024-01-01T00:00:00Z'),
     };
     expect(row).toBeDefined();
 
@@ -245,7 +249,7 @@ describe('builder integration', () => {
           fields: {
             id: field.column(int4Column).id(),
             email: field.column(textColumn),
-            createdAt: field.column(timestamptzColumn),
+            createdAt: field.column(timestamptzTemporalColumn),
           },
         }).sql({ table: 'user' }),
       },

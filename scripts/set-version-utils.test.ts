@@ -5,6 +5,7 @@ import {
   type MutablePackageJson,
   participatesInLockstep,
   rewriteWorkspaceDeps,
+  stampSkillMetadata,
 } from './set-version-utils.ts';
 
 describe('participatesInLockstep', () => {
@@ -157,5 +158,66 @@ describe('rewriteWorkspaceDeps', () => {
     rewriteWorkspaceDeps(pkg, '0.8.0');
     assert.equal(pkg.version, '0.7.0'); // version is the caller's job, not the helper's
     assert.equal(pkg.dependencies, undefined);
+  });
+});
+
+describe('stampSkillMetadata', () => {
+  const skillMd = [
+    '---',
+    'name: prisma-8',
+    'description: >-',
+    '  Something about library_version that must not be rewritten.',
+    'metadata:',
+    "  library: '@prisma/orm-postgres'",
+    "  library_version: '0.16.0'",
+    '---',
+    '',
+    '# Prisma Next (Prisma 8)',
+    '',
+    'library_version: 0.16.0 in the body is prose, not the stamp.',
+    '',
+  ].join('\n');
+
+  it('rewrites the stamp inside the metadata block, quoted', () => {
+    assert.match(
+      stampSkillMetadata(skillMd, 'library_version', '8.1.0'),
+      /^ {2}library_version: '8\.1\.0'$/m,
+    );
+  });
+
+  it('leaves everything but the stamp alone', () => {
+    const stamped = stampSkillMetadata(skillMd, 'library_version', '8.1.0');
+    assert.equal(stamped, skillMd.replace("library_version: '0.16.0'", "library_version: '8.1.0'"));
+  });
+
+  it('rewrites any metadata key, not only the version', () => {
+    const stamped = stampSkillMetadata(skillMd, 'library', '@prisma/orm-sqlite');
+    assert.match(stamped, /^ {2}library: '@prisma\/orm-sqlite'$/m);
+    assert.match(stamped, /^ {2}library_version: '0\.16\.0'$/m);
+  });
+
+  it('is idempotent', () => {
+    const once = stampSkillMetadata(skillMd, 'library_version', '8.1.0');
+    assert.equal(stampSkillMetadata(once, 'library_version', '8.1.0'), once);
+  });
+
+  it('rejects a skill whose metadata block carries no such key', () => {
+    const unstamped = ['---', 'name: prisma-8', 'metadata:', '  library: x', '---', ''].join('\n');
+    assert.throws(
+      () => stampSkillMetadata(unstamped, 'library_version', '8.1.0'),
+      /library_version/,
+    );
+  });
+
+  it('rejects a skill with no metadata block', () => {
+    const bare = ['---', 'name: prisma-8', 'description: x', '---', ''].join('\n');
+    assert.throws(() => stampSkillMetadata(bare, 'library_version', '8.1.0'), /metadata/);
+  });
+
+  it('rejects a file with no frontmatter', () => {
+    assert.throws(
+      () => stampSkillMetadata('# no frontmatter\n', 'library_version', '8.1.0'),
+      /frontmatter/,
+    );
   });
 });

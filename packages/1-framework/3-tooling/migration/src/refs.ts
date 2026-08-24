@@ -84,12 +84,12 @@ export async function readRef(refsDir: string, name: string): Promise<RefEntry> 
     if (error instanceof Error && (error as { code?: string }).code === 'ENOENT') {
       throw new MigrationToolsError('MIGRATION.UNKNOWN_REF', `Unknown ref "${name}"`, {
         why: `No ref file found at "${filePath}".`,
-        fix: `Create the ref with: prisma ref set ${name} <hash>`,
+        fix: `Create the ref with: {bin} migration ref set ${name} <hash>`,
         nextActions: [
           {
             kind: 'run-command',
             label: `Create the ref "${name}"`,
-            command: `{bin} ref set ${name} <hash>`,
+            command: `{bin} migration ref set ${name} <hash>`,
           },
         ],
         meta: { refName: name, filePath },
@@ -269,9 +269,13 @@ export async function deleteRef(refsDir: string, name: string): Promise<void> {
     if (error instanceof Error && (error as { code?: string }).code === 'ENOENT') {
       throw new MigrationToolsError('MIGRATION.UNKNOWN_REF', `Unknown ref "${name}"`, {
         why: `No ref file found at "${filePath}".`,
-        fix: 'Run `prisma ref list` to see available refs.',
+        fix: 'Run `{bin} migration ref list` to see available refs.',
         nextActions: [
-          { kind: 'run-command', label: 'List the available refs', command: '{bin} ref list' },
+          {
+            kind: 'run-command',
+            label: 'List the available refs',
+            command: '{bin} migration ref list',
+          },
         ],
         meta: { refName: name, filePath },
       });
@@ -336,12 +340,12 @@ export function resolveRef(refs: Refs, name: string): RefEntry {
   if (!Object.hasOwn(refs, name)) {
     throw new MigrationToolsError('MIGRATION.UNKNOWN_REF', `Unknown ref "${name}"`, {
       why: `No ref named "${name}" exists.`,
-      fix: `Available refs: ${Object.keys(refs).join(', ') || '(none)'}. Create a ref with: prisma ref set ${name} <hash>`,
+      fix: `Available refs: ${Object.keys(refs).join(', ') || '(none)'}. Create a ref with: {bin} migration ref set ${name} <hash>`,
       nextActions: [
         {
           kind: 'run-command',
           label: `Create the ref "${name}"`,
-          command: `{bin} ref set ${name} <hash>`,
+          command: `{bin} migration ref set ${name} <hash>`,
           reason: `Available refs: ${Object.keys(refs).join(', ') || '(none)'}.`,
         },
       ],

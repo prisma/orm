@@ -129,8 +129,8 @@ A breaking change shipping in this release has a matching upgrade-instructions d
 
 **Recipe links must be absolute, tag-pinned URLs** — `https://github.com/prisma/prisma/blob/v$NEXT/...`. The notes file becomes the GitHub Release body via `--notes-file`, and the Release page does **not** reliably resolve repo-relative links, so a relative recipe path would publish as a dead migration link. Pinning to the release tag (`/blob/v$NEXT/`) means the link always resolves and never rots as the recipe tree evolves on `main`:
 
-- User-facing migrations: `https://github.com/prisma/prisma/blob/v$NEXT/skills/upgrade/prisma-next-upgrade/upgrades/<prev.minor>-to-<head.minor>/`
-- Extension-author migrations: `https://github.com/prisma/prisma/blob/v$NEXT/skills/extension-author/prisma-8-extension-upgrade/upgrades/<prev.minor>-to-<head.minor>/`
+- User-facing migrations: `https://github.com/prisma/prisma/blob/v$NEXT/skills/prisma-8/upgrading/app/upgrades/<prev.minor>-to-<head.minor>/`
+- Extension-author migrations: `https://github.com/prisma/prisma/blob/v$NEXT/skills/prisma-8/upgrading/extension/upgrades/<prev.minor>-to-<head.minor>/`
 
 A breaking change can affect one or both audiences — link whichever recipe directories exist.
 
@@ -250,7 +250,7 @@ Cutting `v0.12.0` from `origin/main` (previous stable tag `v0.11.0`).
 3. PR #1240's title is `TML-2536: contract deserializer seam`. Read TML-2536 in Linear → the user-facing outcome is "contract deserialization now goes through an explicit adapter seam". Write that outcome in public words; cite #1240, not TML-2536.
 4. Triage: #1240 changes the contract format → **always-include, breaking**. A CI-cache tweak (#1237) and a test-only refactor (#1239) → **default-exclude**, dropped silently. A new `includeMany` capability (#1234) → feature. A null-handling bug fix (#1242) → fix. First-time contributor @somebody on #1238.
 5. Categorize: Breaking changes (#1240) → Features (#1234) → Fixes (#1242) → New contributors (@somebody, #1238).
-6. The breaking change's transition is `0.11-to-0.12`. The recipe dir `skills/upgrade/prisma-next-upgrade/upgrades/0.11-to-0.12/` exists in the checkout → the breaking note links it as a tag-pinned URL, `https://github.com/prisma/prisma/blob/v0.12.0/skills/upgrade/prisma-next-upgrade/upgrades/0.11-to-0.12/`. (If it were absent, the note would describe the required adapter migration inline instead.)
+6. The breaking change's transition is `0.11-to-0.12`. The recipe dir `skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/` exists in the checkout → the breaking note links it as a tag-pinned URL, `https://github.com/prisma/prisma/blob/v0.12.0/skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/`. (If it were absent, the note would describe the required adapter migration inline instead.)
 7. #1240 is a code-visible contract-shape/runtime change, so it earns a before/after example — lifted from the `0.11-to-0.12` recipe (a TS runtime change, so a `ts` fence). @somebody's contributor line, with absolute links: `- [@somebody](https://github.com/somebody) made their first contribution in [#1238](https://github.com/prisma/prisma-next/pull/1238)`.
 8. Write `docs/releases/v0.12.0.md` (every PR ref + handle an absolute link; the breaking entry carries a before/after):
 
@@ -261,7 +261,7 @@ Contract deserialization gains an explicit adapter seam, and queries can now eag
 
 ## Breaking changes
 
-- **Contract deserialization requires an adapter seam** — deserialization now goes through an explicit seam adapter; existing code must register one. See the [0.11-to-0.12 upgrade recipe](https://github.com/prisma/prisma-next/blob/v0.12.0/skills/upgrade/prisma-next-upgrade/upgrades/0.11-to-0.12/). ([#1240](https://github.com/prisma/prisma-next/pull/1240))
+- **Contract deserialization requires an adapter seam** — deserialization now goes through an explicit seam adapter; existing code must register one. See the [0.11-to-0.12 upgrade recipe](https://github.com/prisma/prisma-next/blob/v0.12.0/skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/). ([#1240](https://github.com/prisma/prisma-next/pull/1240))
 
   Before:
 

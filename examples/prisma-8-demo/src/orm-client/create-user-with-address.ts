@@ -10,7 +10,7 @@ export interface OrmClientCreateUserWithAddressInput {
   readonly email: string;
   readonly displayName: string;
   readonly kind: 'admin' | 'user';
-  readonly createdAt: Date;
+  readonly createdAt: Temporal.Instant;
   readonly address: AddressInput;
 }
 

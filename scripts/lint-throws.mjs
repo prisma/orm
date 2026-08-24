@@ -36,7 +36,7 @@ const GIT_ROOT = process.cwd();
 // `@internal/*` resolvable), so the ban would prescribe an impossible fix
 // there. The plugin still reports them; only the CI count ignores them.
 const UNCOUNTED_PATH_RE =
-  /biome-plugins\/fixtures\/|(^|\/)scripts\/[^/]+\.(mjs|ts)$|(^|\/)skills\/[^/]+\/upgrades\//;
+  /biome-plugins\/fixtures\/|(^|\/)scripts\/[^/]+\.(mjs|ts)$|(^|\/)skills\/.+\/upgrades\//;
 
 export function filterNoBareThrowDiags(diagnostics) {
   return diagnostics.filter(

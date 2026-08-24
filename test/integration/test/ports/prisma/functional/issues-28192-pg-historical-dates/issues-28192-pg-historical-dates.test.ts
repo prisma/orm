@@ -10,16 +10,22 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // round-trip correctly through the ORM — the date, timestamp, and timestamptz fields
 // all preserve the original Date value.
 //
-// In prisma-next: pg/date@1 accepts Date|string and returns Date (time-stripped to UTC
-// midnight). pg/timestamp@1 and pg/timestamptz@1 both accept and return Date.
+// In prisma-next the three columns carry representation-explicit codecs:
+// `pg/date-temporal@1` reads a `Temporal.PlainDate`, `pg/timestamp-temporal@1` a
+// `Temporal.PlainDateTime`, and `pg/timestamptz-temporal@1` a `Temporal.Instant`. Each parses
+// PostgreSQL's own text rather than going through a `Date`.
 //
-// The upstream computes the expected `date` value by stripping the time component:
-//   const date = new Date(new Date(timestampString).toISOString().split('T')[0])
-// This is mirrored faithfully below.
+// The upstream computes the expected `date` value by stripping the time component; the
+// Temporal equivalent is `PlainDateTime.toPlainDate()`, mirrored faithfully below.
+//
+// Values are compared through `toString()`. The original assertion was a `toMatchObject`, which
+// a Temporal value defeats: it has no own enumerable properties, so a subset matcher finds nothing
+// to compare and passes for any pair of same-typed values. (`toEqual` does not have this problem —
+// Vitest compares these correctly — but the text also puts the actual value in the failure diff.)
 
 // These cases have 2-digit calendar years (00–99 AD) in the date column.
-// pg/date@1 misparses 2-digit-year dates returned from PGlite: the wire format
-// omits the century, so year 31 is interpreted as 1931. Marked it.fails.
+// The it.fails markers were recorded against the retired Date-typed date codec, which misparsed
+// PGlite's century-omitting wire format (year 31 read as 1931).
 const twoDigitYearData = [
   { label: '31 AD timestamp', timestampString: '0031-01-01T00:00:00.000Z' },
   { label: '32 AD timestamp', timestampString: '0032-01-01T00:00:00.000Z' },
@@ -43,23 +49,42 @@ function withIssue28192(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
   return withPostgresPort<Contract>({ contractJson }, fn);
 }
 
+function representations(timestampString: string): {
+  readonly date: Temporal.PlainDate;
+  readonly timestamp: Temporal.PlainDateTime;
+  readonly timestamptz: Temporal.Instant;
+} {
+  const timestamp = Temporal.PlainDateTime.from(timestampString);
+  let timestamptz: Temporal.Instant;
+  try {
+    timestamptz = Temporal.Instant.from(timestampString);
+  } catch {
+    timestamptz = timestamp.toZonedDateTime('UTC').toInstant();
+  }
+  return { date: timestamp.toPlainDate(), timestamp, timestamptz };
+}
+
+function asStrings(value: {
+  readonly date: Temporal.PlainDate;
+  readonly timestamp: Temporal.PlainDateTime;
+  readonly timestamptz: Temporal.Instant;
+}): Record<string, string> {
+  return {
+    date: value.date.toString(),
+    timestamp: value.timestamp.toString(),
+    timestamptz: value.timestamptz.toString(),
+  };
+}
+
 describe('ports/prisma/functional/issues-28192-pg-historical-dates', () => {
   describe('historical dates with 2-digit years (00-99 AD)', () => {
     it.fails.each(twoDigitYearData)(
       'correctly parses $label',
       ({ timestampString }) =>
         withIssue28192(async ({ db }) => {
-          const timestamp = new Date(timestampString);
-          const result = await db.public.TestData.create({
-            date: timestamp,
-            timestamp,
-            timestamptz: timestamp,
-          });
-
-          // date strips the time component; upstream derives expected date identically.
-          const datePart = new Date(timestampString).toISOString().split('T')[0] ?? '';
-          const date = new Date(datePart);
-          expect(result).toMatchObject({ date, timestamp, timestamptz: timestamp });
+          const written = representations(timestampString);
+          const result = await db.public.TestData.create(written);
+          expect(asStrings(result)).toEqual(asStrings(written));
         }),
       timeouts.spinUpPpgDev,
     );
@@ -70,17 +95,9 @@ describe('ports/prisma/functional/issues-28192-pg-historical-dates', () => {
       'correctly parses $label',
       ({ timestampString }) =>
         withIssue28192(async ({ db }) => {
-          const timestamp = new Date(timestampString);
-          const result = await db.public.TestData.create({
-            date: timestamp,
-            timestamp,
-            timestamptz: timestamp,
-          });
-
-          // date strips the time component; upstream derives expected date identically.
-          const datePart = new Date(timestampString).toISOString().split('T')[0] ?? '';
-          const date = new Date(datePart);
-          expect(result).toMatchObject({ date, timestamp, timestamptz: timestamp });
+          const written = representations(timestampString);
+          const result = await db.public.TestData.create(written);
+          expect(asStrings(result)).toEqual(asStrings(written));
         }),
       timeouts.spinUpPpgDev,
     );

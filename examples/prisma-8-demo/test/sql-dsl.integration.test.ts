@@ -64,21 +64,21 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       id: seededUserIds.alice,
       email: 'alice@example.com',
       displayName: 'Alice',
-      createdAt: new Date('2024-03-01T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-01T00:00:00.000Z'),
       kind: 'admin' as const,
     },
     {
       id: seededUserIds.bob,
       email: 'bob@example.com',
       displayName: 'Bob',
-      createdAt: new Date('2024-03-02T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-02T00:00:00.000Z'),
       kind: 'user' as const,
     },
     {
       id: seededUserIds.carol,
       email: 'carol@example.com',
       displayName: 'Carol',
-      createdAt: new Date('2024-03-03T00:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-03T00:00:00.000Z'),
       kind: 'user' as const,
     },
   ];
@@ -97,7 +97,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Alice close',
       userId: seededUserIds.alice,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-10T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-10T10:00:00.000Z'),
       embedding: makeVector([1, 0, 0]),
     },
     {
@@ -105,7 +105,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Alice far',
       userId: seededUserIds.alice,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-11T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-11T10:00:00.000Z'),
       embedding: makeVector([0.7, 0.3, 0]),
     },
     {
@@ -113,7 +113,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Bob close',
       userId: seededUserIds.bob,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-12T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-12T10:00:00.000Z'),
       embedding: makeVector([0.5, 0.5, 0]),
     },
     {
@@ -121,7 +121,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Bob mid',
       userId: seededUserIds.bob,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-13T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-13T10:00:00.000Z'),
       embedding: makeVector([0, 1, 0]),
     },
     {
@@ -129,7 +129,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Bob far',
       userId: seededUserIds.bob,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-14T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-14T10:00:00.000Z'),
       embedding: makeVector([-1, 0, 0]),
     },
     {
@@ -137,7 +137,7 @@ async function seedCrossAuthorSimilarity(runtime: Runtime): Promise<void> {
       title: 'Carol unembedded',
       userId: seededUserIds.carol,
       priority: db.enums.public.Priority.members.Low,
-      createdAt: new Date('2024-03-15T10:00:00.000Z'),
+      createdAt: Temporal.Instant.from('2024-03-15T10:00:00.000Z'),
     },
   ];
 

@@ -210,7 +210,7 @@ describe('cross-consumer contract-space integrity matrix', () => {
   it('migrate refuses the all-three project with layout drift taking precedence', async () => {
     const project = await allThreeFixture();
 
-    const run = await harness(driverConfig(project)).run(['migrate', '--json'], {
+    const run = await harness(driverConfig(project)).run(['db', 'migrate', '--json'], {
       cwd: project.dir,
     });
     const terminal = run.json.at(-1) as

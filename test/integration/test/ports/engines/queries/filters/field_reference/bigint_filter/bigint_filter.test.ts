@@ -50,8 +50,8 @@ function withBigIntFieldReference(fn: Parameters<typeof withPostgresPort<Contrac
         bytes2: Uint8Array.from([1, 2, 3]),
         bool: false,
         bool2: false,
-        dt: new Date('1900-10-10T01:10:10.001Z'),
-        dt2: new Date('1900-10-10T01:10:10.001Z'),
+        dt: Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
+        dt2: Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
       },
       {
         id: 2,
@@ -67,8 +67,8 @@ function withBigIntFieldReference(fn: Parameters<typeof withPostgresPort<Contrac
         bytes2: Uint8Array.from([1, 2, 3, 4]),
         bool: false,
         bool2: true,
-        dt: new Date('1900-10-10T01:10:10.001Z'),
-        dt2: new Date('1901-10-10T01:10:10.001Z'),
+        dt: Temporal.Instant.from('1900-10-10T01:10:10.001Z'),
+        dt2: Temporal.Instant.from('1901-10-10T01:10:10.001Z'),
       },
       { id: 3 },
     ]);

@@ -165,7 +165,7 @@ describe('table().insert()', () => {
   it('.build() passes RawExpr values through without re-wrapping', () => {
     const raw = new RawExpr({
       parts: ['now()'],
-      returns: { codecId: 'pg/timestamptz@1', nullable: false },
+      returns: { codecId: 'test/never-resolved@1', nullable: false },
     });
     const ast = tbl.insert({ id: 1, name: raw, note: null }).build();
     const nameCell = ast.rows[0]! as unknown as { name: InsertValue };

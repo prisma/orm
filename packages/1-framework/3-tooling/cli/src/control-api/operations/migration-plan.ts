@@ -272,7 +272,7 @@ async function executeMigrationPlanCommandInner(
       return notOk(
         errorFileNotFound(contractPathAbsolute, {
           why: `Contract file not found at ${contractPathAbsolute}`,
-          fix: `Run \`prisma-cli contract emit\` to generate ${contractPath}, or update \`config.contract.output\` in ${configPath}`,
+          fix: `Run \`{bin} contract emit\` to generate ${contractPath}, or update \`config.contract.output\` in ${configPath}`,
         }),
       );
     }

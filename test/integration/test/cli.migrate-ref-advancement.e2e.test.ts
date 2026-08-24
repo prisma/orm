@@ -62,7 +62,7 @@ async function runMigrationPlan(project: Project, args: readonly string[]): Prom
 }
 
 async function runMigrate(project: Project, args: readonly string[]): Promise<EngineRunResult> {
-  const run = await runOnEngine(project, ['migrate', ...args]);
+  const run = await runOnEngine(project, ['db', 'migrate', ...args]);
   expect(run.exitCode, `migrate failed:\n${run.stderr}`).toBe(0);
   return run;
 }
@@ -72,7 +72,7 @@ function runMigrateAllowFailure(
   project: Project,
   args: readonly string[],
 ): Promise<EngineRunResult> {
-  return runOnEngine(project, ['migrate', ...args]);
+  return runOnEngine(project, ['db', 'migrate', ...args]);
 }
 
 function appRefsDir(testDir: string): string {

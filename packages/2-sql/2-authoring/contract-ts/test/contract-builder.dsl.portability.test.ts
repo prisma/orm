@@ -9,7 +9,7 @@ import { unboundTables } from './unbound-tables';
 type PortableSqlCodecTypes = {
   readonly 'sql/char@1': { output: string };
   readonly 'sql/text@1': { output: string };
-  readonly 'sql/timestamp@1': { output: string };
+  readonly 'test/timestamp@1': { output: string };
 };
 
 type PortableTargetPack<TTarget extends string> = TargetPackRef<'sql', TTarget> & {
@@ -43,14 +43,14 @@ const sqliteTargetPack = {
 
 const uuidColumn = columnDescriptor('sql/char@1', 'character', { length: 36 });
 const textColumn = columnDescriptor('sql/text@1');
-const timestampColumn = columnDescriptor('sql/timestamp@1');
+const portableTimestampColumn = columnDescriptor('test/timestamp@1');
 
 function buildPortableContract<TTarget extends string>(target: PortableTargetPack<TTarget>) {
   const UserBase = model('User', {
     fields: {
       id: field.column(uuidColumn).id({ name: 'app_user_pkey' }),
       email: field.column(textColumn).unique({ name: 'app_user_email_key' }),
-      createdAt: field.column(timestampColumn).defaultSql('CURRENT_TIMESTAMP'),
+      createdAt: field.column(portableTimestampColumn).defaultSql('CURRENT_TIMESTAMP'),
     },
   }).sql({
     table: 'app_user',
@@ -104,7 +104,7 @@ describe('contract DSL portability coverage', () => {
     expect(postgresContract.target).toBe('postgres');
     expect(sqliteContract.target).toBe('sqlite');
     expect(postgresStorageTables['app_user']?.columns['created_at']).toMatchObject({
-      codecId: 'sql/timestamp@1',
+      codecId: 'test/timestamp@1',
       nativeType: 'timestamp',
       default: {
         kind: 'function',

@@ -9,14 +9,14 @@ describe('normalizeError', () => {
   describe('a prisma/prisma error carrying fix prose', () => {
     const raised = new CliStructuredError('MIGRATION.SPACE_NOT_FOUND', 'Unknown contract space', {
       why: 'No directory named "billing" exists under the migrations root.',
-      fix: 'Run `prisma-cli migration list` to see every space.',
+      fix: 'Run `{bin} migration list` to see every space.',
       where: { path: '/app/migrations' },
       meta: { spaceId: 'billing' },
     });
 
     it('turns the fix prose into a single next action', () => {
       expect(normalizeError(raised).nextActions).toEqual([
-        { kind: 'user-choice', label: 'Run `prisma-cli migration list` to see every space.' },
+        { kind: 'user-choice', label: 'Run `{bin} migration list` to see every space.' },
       ]);
     });
 
@@ -32,7 +32,7 @@ describe('normalizeError', () => {
         where: { path: '/app/migrations' },
         meta: { spaceId: 'billing' },
         nextActions: [
-          { kind: 'user-choice', label: 'Run `prisma-cli migration list` to see every space.' },
+          { kind: 'user-choice', label: 'Run `{bin} migration list` to see every space.' },
         ],
       });
     });
@@ -46,14 +46,14 @@ describe('normalizeError', () => {
         'MIGRATION.PATH_UNREACHABLE',
         'Cannot reach target',
         {
-          fix: 'Plan the missing edge, then apply it:\n  1. prisma-cli migration plan\n  2. prisma-cli migrate',
+          fix: 'Plan the missing edge, then apply it:\n  1. {bin} migration plan\n  2. {bin} db migrate',
         },
       );
 
       expect(normalizeError(multiline).nextActions).toEqual([
         { kind: 'user-choice', label: 'Plan the missing edge, then apply it:' },
-        { kind: 'user-choice', label: '1. prisma-cli migration plan' },
-        { kind: 'user-choice', label: '2. prisma-cli migrate' },
+        { kind: 'user-choice', label: '1. {bin} migration plan' },
+        { kind: 'user-choice', label: '2. {bin} db migrate' },
       ]);
     });
   });
@@ -75,7 +75,7 @@ describe('normalizeError', () => {
         {
           kind: 'run-command',
           label: "See every space's migrations",
-          command: 'prisma-cli migration list',
+          command: '{bin} migration list',
         },
       ]);
     });
@@ -89,7 +89,7 @@ describe('normalizeError', () => {
   describe('a structuredError() value, which carries no toEnvelope method', () => {
     const raised = structuredError('CONTRACT.VALIDATION_FAILED', 'Contract is not valid', {
       why: 'storage.storageHash is missing',
-      fix: 'Run `prisma-cli contract emit` to regenerate.',
+      fix: 'Run `{bin} contract emit` to regenerate.',
       where: { path: '/app/contract.json' },
       meta: { target: 'postgres' },
     });
@@ -103,9 +103,7 @@ describe('normalizeError', () => {
         why: 'storage.storageHash is missing',
         where: { path: '/app/contract.json' },
         meta: { target: 'postgres' },
-        nextActions: [
-          { kind: 'user-choice', label: 'Run `prisma-cli contract emit` to regenerate.' },
-        ],
+        nextActions: [{ kind: 'user-choice', label: 'Run `{bin} contract emit` to regenerate.' }],
       });
     });
   });
@@ -136,7 +134,7 @@ describe('normalizeError', () => {
 
   describe('an already-conformant engine error', () => {
     const conformant = new EngineStructuredError('CLI.CONSENT_REQUIRED', 'Consent is required', {
-      nextActions: [{ kind: 'run-command', label: 'Confirm', command: 'prisma-cli db update' }],
+      nextActions: [{ kind: 'run-command', label: 'Confirm', command: '{bin} db update' }],
     });
 
     it('is returned untouched', () => {
@@ -183,7 +181,7 @@ describe('toEngineDiagnostic', () => {
   it('projects an error onto the protocol diagnostic shape', () => {
     const raised = new CliStructuredError('CONFIG.FILE_NOT_FOUND', 'Config file not found', {
       why: 'No prisma.config.ts in /app',
-      fix: "Run 'prisma-cli init' to create a config file",
+      fix: "Run '{bin} orm init' to create a config file",
       where: { path: '/app/prisma.config.ts' },
     });
 
@@ -193,9 +191,7 @@ describe('toEngineDiagnostic', () => {
       summary: 'Config file not found',
       why: 'No prisma.config.ts in /app',
       where: { path: '/app/prisma.config.ts' },
-      nextActions: [
-        { kind: 'user-choice', label: "Run 'prisma-cli init' to create a config file" },
-      ],
+      nextActions: [{ kind: 'user-choice', label: "Run '{bin} orm init' to create a config file" }],
     });
   });
 

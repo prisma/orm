@@ -4,7 +4,7 @@ import {
   type LoweredStatement,
   RawExpr,
 } from '@internal/sql-relational-core/ast';
-import { PG_TIMESTAMPTZ_CODEC_ID } from '@internal/target-postgres/codec-ids';
+import { PG_TIMESTAMPTZ_STRING_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import {
   int4,
   int8,
@@ -88,7 +88,7 @@ export const infoSchemaTables = pgTable(
 
 export const NOW = new RawExpr({
   parts: ['now()'],
-  returns: { codecId: PG_TIMESTAMPTZ_CODEC_ID, nullable: false },
+  returns: { codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID, nullable: false },
 });
 
 type Lower = (query: AnyQueryAst) => LoweredStatement;

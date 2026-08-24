@@ -110,7 +110,7 @@ describe('CliStructuredError', () => {
 
   describe('nextActions', () => {
     const nextActions: readonly NextAction[] = [
-      { kind: 'run-command', label: 'Create the config', command: '{bin} init' },
+      { kind: 'run-command', label: 'Create the config', command: '{bin} orm init' },
     ];
 
     it('carries nextActions onto the error and the envelope, {bin} left unsubstituted', () => {
@@ -132,12 +132,12 @@ describe('CliStructuredError', () => {
     it('keeps fix alongside nextActions — both survive the transition', () => {
       const error = new CliStructuredError('CONFIG.FILE_NOT_FOUND', 'Test error', {
         why: 'No config file',
-        fix: "Run 'prisma orm init' to create a config file",
+        fix: "Run '{bin} orm init' to create a config file",
         nextActions,
       });
       const envelope = error.toEnvelope();
 
-      expect(envelope.fix).toBe("Run 'prisma orm init' to create a config file");
+      expect(envelope.fix).toBe("Run '{bin} orm init' to create a config file");
       expect(envelope.nextActions).toEqual(nextActions);
     });
   });
@@ -279,14 +279,14 @@ describe('Config Errors', () => {
 
   it('errorDatabaseConnectionRequired with commandName shows fully copyable command', () => {
     const error = errorDatabaseConnectionRequired({ commandName: 'db init' });
-    expect(error.fix).toContain('Run `prisma db init --db <url>`');
+    expect(error.fix).toContain('Run `{bin} db init --db <url>`');
   });
 
   it('errorDatabaseConnectionRequired with retryCommand preserves command flags', () => {
     const error = errorDatabaseConnectionRequired({
-      retryCommand: 'prisma db verify --schema-only --strict --db <url>',
+      retryCommand: '{bin} db verify --schema-only --strict --db <url>',
     });
-    expect(error.fix).toContain('Run `prisma db verify --schema-only --strict --db <url>`');
+    expect(error.fix).toContain('Run `{bin} db verify --schema-only --strict --db <url>`');
   });
 
   it('errorQueryRunnerFactoryRequired creates correct error', () => {

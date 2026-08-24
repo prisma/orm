@@ -163,7 +163,7 @@ describe('Runtime Errors', () => {
     expect(error.toEnvelope().code).toBe('CONTRACT.MARKER_ROW_CORRUPT');
     expect(error.message).toBe('Marker row is corrupt or incompatible');
     expect(error.fix).toContain('space "app"');
-    expect(error.fix).toContain('prisma db sign');
+    expect(error.fix).toContain('{bin} db sign');
   });
 
   it('errorMarkerReadFailed creates CONTRACT.MARKER_READ_FAILED envelope', () => {
@@ -229,7 +229,7 @@ describe('Runtime Errors', () => {
       expect(envelope.code).toBe('MIGRATION.RUNNER_FAILED');
       expect(envelope.fix).toContain('Legacy marker-table shape detected');
       expect(envelope.fix).toContain('prisma_contract.marker');
-      expect(envelope.fix).toContain('prisma db init');
+      expect(envelope.fix).toContain('{bin} db init');
     }
   });
 

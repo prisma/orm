@@ -11,7 +11,7 @@ describe('buildNoPathSummary', () => {
         refName: undefined,
       }),
     ).toBe(
-      "No migration path from the database state (aaaaaaaaaaaa) to the application's contract (bbbbbbbbbbbb). Run `prisma-cli migration plan --name <name>` to author one.",
+      "No migration path from the database state (aaaaaaaaaaaa) to the application's contract (bbbbbbbbbbbb). Run `{bin} migration plan --name <name>` to author one.",
     );
   });
 
@@ -24,7 +24,7 @@ describe('buildNoPathSummary', () => {
         refName: 'prod',
       }),
     ).toBe(
-      'No migration path from the database state (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb via `prod`). Run `prisma-cli migration plan --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
+      'No migration path from the database state (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb via `prod`). Run `{bin} migration plan --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
     );
   });
 
@@ -37,7 +37,7 @@ describe('buildNoPathSummary', () => {
         refName: undefined,
       }),
     ).toBe(
-      'No migration path from the database state (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb). Run `prisma-cli migration plan --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
+      'No migration path from the database state (aaaaaaaaaaaa) to the target (bbbbbbbbbbbb). Run `{bin} migration plan --name <name>` to author one, or pass `--to <contract>` to pick a reachable target.',
     );
   });
 
@@ -50,7 +50,7 @@ describe('buildNoPathSummary', () => {
         refName: undefined,
       }),
     ).toBe(
-      "No migration path from the database state to the application's contract (bbbbbbbbbbbb). Run `prisma-cli migration plan --name <name>` to author one.",
+      "No migration path from the database state to the application's contract (bbbbbbbbbbbb). Run `{bin} migration plan --name <name>` to author one.",
     );
   });
 });
@@ -75,7 +75,7 @@ describe('buildStatusHeadline', () => {
         markerDiverged: false,
         markerHash: 'marker',
       }),
-    ).toBe('2 pending — run `prisma-cli migrate --to deadbeef`');
+    ).toBe('2 pending — run `{bin} db migrate --to deadbeef`');
   });
 
   it('reports divergence when the marker is not in the on-disk graph', () => {

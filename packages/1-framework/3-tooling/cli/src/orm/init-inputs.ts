@@ -26,7 +26,6 @@ export interface InitFlagValues {
   readonly probeDb: boolean;
   readonly strictProbe: boolean;
   readonly skipInstall: boolean;
-  readonly skipSkills: boolean;
   readonly keepPreviousFacade: boolean;
 }
 
@@ -47,7 +46,6 @@ export interface ResolvedInitInputs {
    * user kept it.
    */
   readonly removePreviousFacade: string | null;
-  readonly installProjectSkill: boolean;
 }
 
 const REQUIRED_FLAG_PROMPTS = new Set(['target', 'authoring']);
@@ -252,6 +250,5 @@ export async function resolveInitInputs(ctx: {
     strictProbe: flags.strictProbe,
     reinit,
     removePreviousFacade,
-    installProjectSkill: !flags.skipSkills,
   };
 }

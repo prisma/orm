@@ -4,7 +4,7 @@ import {
   int4Column,
   jsonbColumn,
   textColumn,
-  timestamptzColumn,
+  timestamptzTemporalColumn,
 } from '@internal/adapter-postgres/column-types';
 import {
   defineContract,
@@ -34,7 +34,7 @@ const User = model('User', {
     id: field.column(int4Column).defaultSql('autoincrement()').id(),
     email: field.namedType(types.Email).unique(),
     role: field.namedType(enums.Role),
-    createdAt: field.column(timestamptzColumn).defaultSql('now()'),
+    createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()'),
     isActive: field.column(boolColumn).default(true),
     profile: field.column(jsonbColumn).optional(),
   },

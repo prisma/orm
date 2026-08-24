@@ -29,7 +29,7 @@ describe('postgres column type helpers', () => {
       int4: { codecId: 'pg/int4@1', nullable: false },
       jsonb: { codecId: 'pg/jsonb@1', nullable: false },
       textArray: { codecId: 'pg/text-array@1', nullable: false },
-      timestamptz: { codecId: 'pg/timestamptz@1', nullable: false },
+      timestamptz: { codecId: 'pg/timestamptz-string@1', nullable: false },
     });
   });
 

@@ -7,7 +7,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // packages/client/tests/functional/issues/29309-datetime-cursor
 // (postgres matrix entry; sqlProviders minus sqlite — we port postgres).
 //
-// Subject: pagination cursor against a DATE column (pg/date@1) works correctly.
+// Subject: pagination cursor against a DATE column (pg/date-temporal@1) works correctly.
 //
 // Cursor semantics gap:
 //   Prisma cursor is INCLUSIVE (starts FROM the cursor row).
@@ -32,7 +32,7 @@ describe('ports/prisma/functional/issues-29309-datetime-cursor', () => {
         for (let day = 1; day <= 10; day++) {
           rows.push({
             appId: 1,
-            createdAt: new Date(`2025-01-${String(day).padStart(2, '0')}Z`),
+            createdAt: Temporal.PlainDate.from(`2025-01-${String(day).padStart(2, '0')}`),
             value: day * 100,
           });
         }
@@ -57,17 +57,17 @@ describe('ports/prisma/functional/issues-29309-datetime-cursor', () => {
         expect(withCursor).toEqual([
           {
             appId: 1,
-            createdAt: new Date('2025-01-04T00:00:00.000Z'),
+            createdAt: Temporal.PlainDate.from('2025-01-04'),
             value: 400,
           },
           {
             appId: 1,
-            createdAt: new Date('2025-01-05T00:00:00.000Z'),
+            createdAt: Temporal.PlainDate.from('2025-01-05'),
             value: 500,
           },
           {
             appId: 1,
-            createdAt: new Date('2025-01-06T00:00:00.000Z'),
+            createdAt: Temporal.PlainDate.from('2025-01-06'),
             value: 600,
           },
         ]);

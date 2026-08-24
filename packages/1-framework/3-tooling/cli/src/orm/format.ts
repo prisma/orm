@@ -38,7 +38,7 @@ export function createFormatCommand(execute: typeof executeFormat = executeForma
         "is 'psl'; a TypeScript or unset source is left untouched. Indent and newline\n" +
         'are read from the optional formatter config section, defaulting to two\n' +
         'spaces and the system newline.',
-      examples: ['format', 'format --json'],
+      examples: ['contract format', 'contract format --json'],
     },
     needs: { config: ormConfigSection },
     handler: async (_args, ctx) => {

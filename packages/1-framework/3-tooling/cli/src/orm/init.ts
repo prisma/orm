@@ -1,6 +1,5 @@
 import { ifDefined } from '@internal/utils/defined';
 import { docsUrlFor } from '@internal/utils/structured-error';
-import type { PackageManagerId } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { CliStructuredError, notOk, ok } from '@prisma/cli-engine/protocol';
@@ -14,25 +13,15 @@ import {
   type InstallStatus,
 } from '../commands/init/output';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import { resolveProjectSkillInstallCommands } from '../commands/init/skill-sources';
 import { targetPackageName } from '../commands/init/templates/code-templates';
 import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
 import { chooseAction } from '../utils/next-actions';
 import { defineOrmCommand } from './define-command';
 import { buildInitNextActions, initPresentations } from './init-blocks';
-import {
-  EMIT_COMMAND,
-  emitFailedFinding,
-  installFailedFinding,
-  skillInstallFailedFinding,
-} from './init-diagnostics';
+import { EMIT_COMMAND, emitFailedFinding, installFailedFinding } from './init-diagnostics';
 import { emitScaffoldedContract } from './init-emit';
 import { resolveInitInputs } from './init-inputs';
-import {
-  engineDevDependencySpec,
-  installAgentSkills,
-  installProjectDependencies,
-} from './init-packages';
+import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
 import { normalizeError } from './normalize-error';
 
@@ -40,7 +29,6 @@ import { normalizeError } from './normalize-error';
 const INIT_EXIT_CODES = {
   4: 'scaffold written; dependency install failed',
   5: 'scaffold written and installed; contract emit failed',
-  6: 'scaffold complete; agent-skill install failed',
 } as const;
 
 function probeWarning(
@@ -85,15 +73,14 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         'Run it interactively for a guided setup, or supply --target and --authoring\n' +
         'for a fully scriptable run (CI, AI coding agents, automation).',
       examples: [
-        'init',
+        'orm init',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'init --target postgres --authoring psl',
+        'orm init --target postgres --authoring psl',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'init --target mongodb --authoring typescript --json',
-        'init --skip-install',
-        'init --skip-skills',
+        'orm init --target mongodb --authoring typescript --json',
+        'orm init --skip-install',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
-        'init --target postgres --keep-previous-facade',
+        'orm init --target postgres --keep-previous-facade',
       ],
     },
     args: {
@@ -119,7 +106,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }),
         strictProbe: flag.boolean({ brief: 'Treat a failed --probe-db as fatal' }),
         skipInstall: flag.boolean({ brief: 'Skip dependency installation and contract emission' }),
-        skipSkills: flag.boolean({ brief: 'Skip the Prisma Next agent-skill install' }),
         keepPreviousFacade: flag.boolean({
           brief: 'Keep the previous target package in package.json when switching targets',
         }),
@@ -150,26 +136,26 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       }
 
       const deps = [targetPackageName(inputs.target, scaffold.resolveImportSpecifier), 'dotenv'];
-      // The CLI the scaffolded scripts run is the unified `@prisma/cli`, whose
-      // v8 line publishes under the `next` dist-tag (the `prisma-next` shim is
-      // no longer published). `@prisma/cli-engine` — the config file's
+      // The CLI the scaffolded scripts run is `prisma`, the unified CLI's
+      // published name, whose v8 line publishes under the `next` dist-tag (the
+      // `prisma-next` shim is no longer published). It is the package that
+      // carries the `prisma` binary, which is what the scaffolded scripts
+      // invoke. `@prisma/cli-engine` — the config file's
       // defineConfig import — is deliberately absent here: the CLI declares it
       // as an exact peer, so it installs in a second step at the version the
       // just-installed CLI names. Under moduleResolution 'bundler' the
       // scaffolded files reference process.env, which only typechecks with
       // Node's ambient types present; a project that already pins @types/node
       // keeps its own major.
-      const cliDevDeps = ['@prisma/cli@next'];
+      const cliDevDeps = ['prisma@next'];
       const devDeps: string[] = scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node'];
 
       const findings: Diagnostic[] = [];
       const extraActions: NextAction[] = [];
-      let installedManager: PackageManagerId | undefined;
       let packagesInstalled: InstallStatus = 'skipped';
       let contractEmitted = false;
-      let skillRegistered = false;
 
-      const settle = (exitCode: 0 | 4 | 5 | 6) => {
+      const settle = (exitCode: 0 | 4 | 5) => {
         const installed = packagesInstalled === 'installed';
         const document: InitOutput = {
           ok: true,
@@ -190,7 +176,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             contractEmitted,
             emitCommand: EMIT_COMMAND,
             schemaPath: inputs.schemaPath,
-            skillRegistered,
           }),
           warnings,
         };
@@ -221,7 +206,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
                 ...buildInitNextActions({
                   contractEmitted,
                   schemaPath: inputs.schemaPath,
-                  skillRegistered,
                 }),
               ],
             }),
@@ -260,7 +244,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         }
         devDeps.push(engineSpec);
         packagesInstalled = 'installed';
-        installedManager = outcome.manager;
 
         const emitStep = 'Emit the contract';
         ctx.report({ kind: 'step-started', step: emitStep });
@@ -276,7 +259,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       } else {
         extraActions.push(
           chooseAction(
-            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version @prisma/cli declares as its peer, as development dependencies)`,
+            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version prisma declares as its dependency, as development dependencies)`,
           ),
         );
       }
@@ -304,33 +287,6 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             ),
           );
         }
-      }
-
-      // The skills install through the same manager the dependencies did, and
-      // needs no scaffold, so the commands stand alone: whether it is skipped or
-      // fails, what the user is told to run is the install itself — never `init`
-      // again, which would re-scaffold over the schema they have since written.
-      const skillCommands = resolveProjectSkillInstallCommands(
-        installedManager ?? packageManager,
-        ctx.env,
-      );
-
-      if (inputs.installProjectSkill) {
-        const failure = await installAgentSkills({
-          packages: ctx.packages,
-          cwd: ctx.cwd,
-          env: ctx.env,
-          manager: installedManager,
-        });
-        if (failure !== undefined) {
-          findings.push(skillInstallFailedFinding(failure, scaffold.filesWritten, skillCommands));
-          return settle(6);
-        }
-        skillRegistered = true;
-      } else {
-        warn(
-          `Skipped the Prisma Next agent-skill install (--skip-skills). To install them later, run: ${skillCommands.map((command) => `\`${command}\``).join(' && ')}`,
-        );
       }
 
       return settle(0);

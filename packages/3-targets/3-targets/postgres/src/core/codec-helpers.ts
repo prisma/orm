@@ -1,19 +1,29 @@
 /**
  * Shared encode/decode/render constants for the Postgres target codecs.
  *
- * The codec implementations live in `codecs.ts` (TML-2357). This file retains the conversion helpers + emit-path type renderers that the codec methods compose with — keeping a single source of truth for non-trivial conversions while the codec methods provide the framework-required `Promise<…>` boundary.
+ * The codec implementations live in `codecs.ts` (TML-2357); the temporal codecs and the helpers
+ * they alone use live in `temporal-codecs.ts`, `temporal-string-codecs.ts` and
+ * `temporal-codec-helpers.ts`. This file retains the conversion helpers + emit-path type renderers that the codec methods compose with — keeping a single source of truth for non-trivial conversions while the codec methods provide the framework-required `Promise<…>` boundary.
  *
  * Trivial identity passthroughs are inlined directly in the codec methods; only conversions with shape (custom JSON round-trip, decode normalisation, parameterised renderers) live here.
  */
 
 import type { JsonValue } from '@internal/contract/types';
+import type { StandardSchemaV1 } from '@standard-schema/spec';
+import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
+
+export type PrecisionParams = { readonly precision?: number };
+
+export const precisionParamsSchema = arktype({
+  'precision?': 'number.integer >= 0 & number.integer <= 6',
+}) satisfies StandardSchemaV1<PrecisionParams>;
 
 export function renderLength(
   typeName: string,
-  typeParams: Record<string, unknown>,
+  typeParams: { readonly length?: unknown },
 ): string | undefined {
-  const length = typeParams['length'];
+  const length = typeParams.length;
   if (length === undefined) {
     return undefined;
   }
@@ -27,8 +37,11 @@ export function renderLength(
   return `${typeName}<${length}>`;
 }
 
-export function renderPrecision(typeName: string, typeParams: Record<string, unknown>): string {
-  const precision = typeParams['precision'];
+export function renderPrecision(
+  typeName: string,
+  typeParams: { readonly precision?: unknown },
+): string {
+  const precision = typeParams.precision;
   if (precision === undefined) {
     return typeName;
   }
@@ -229,125 +242,6 @@ export const pgNumericRenderOutputType = (typeParams: {
     );
   }
   return `Numeric<${precision}, ${scale}>`;
-};
-
-const ISO_8601_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?$/;
-const ISO_8601_TIMESTAMPTZ =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
-
-export const pgTimestampEncodeJson = (value: Date): JsonValue => value.toISOString().slice(0, -1);
-export const pgTimestampDecodeJson = (json: JsonValue): Date => {
-  if (typeof json !== 'string') {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      `Expected ISO date string for pg/timestamp@1, got ${typeof json}`,
-      { meta: { codecId: 'pg/timestamp@1', received: typeof json } },
-    );
-  }
-  if (!ISO_8601_TIMESTAMP.test(json)) {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      `Invalid ISO date string for pg/timestamp@1: ${json}`,
-      { meta: { codecId: 'pg/timestamp@1', received: json } },
-    );
-  }
-  const date = new Date(`${json}Z`);
-  if (Number.isNaN(date.getTime())) {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      `Invalid ISO date string for pg/timestamp@1: ${json}`,
-      { meta: { codecId: 'pg/timestamp@1', received: json } },
-    );
-  }
-  return date;
-};
-
-export const pgTimestamptzEncodeJson = (value: Date): JsonValue =>
-  value.toISOString().replace(/Z$/, '+00:00');
-export const pgTimestamptzDecodeJson = (json: JsonValue): Date => {
-  if (typeof json !== 'string') {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      `Expected ISO date string for pg/timestamptz@1, got ${typeof json}`,
-      { meta: { codecId: 'pg/timestamptz@1', received: typeof json } },
-    );
-  }
-  if (!ISO_8601_TIMESTAMPTZ.test(json)) {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      `Invalid ISO date string for pg/timestamptz@1: ${json}`,
-      { meta: { codecId: 'pg/timestamptz@1', received: json } },
-    );
-  }
-  const date = new Date(json);
-  if (Number.isNaN(date.getTime())) {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      `Invalid ISO date string for pg/timestamptz@1: ${json}`,
-      { meta: { codecId: 'pg/timestamptz@1', received: json } },
-    );
-  }
-  return date;
-};
-
-const ISO_8601_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-function formatDateOnly(year: number, month: number, day: number): string {
-  return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
-/**
- * A Postgres `date` has no time-of-day or timezone component, so `pg/date@1`
- * canonicalizes its JS-level value as a `Date` at UTC midnight
- * (`Date.UTC(y, m, d)`), independent of the process's local timezone.
- *
- * `pgDateEncode` reads the calendar date via UTC getters (matching that
- * canonical form) and formats it as `YYYY-MM-DD` directly, bypassing the pg
- * driver's own `Date` serialization (`dateToString`), which reads *local*
- * getters and would shift the calendar day near midnight in negative-UTC-offset
- * environments.
- */
-export const pgDateEncode = (value: Date): string =>
-  formatDateOnly(value.getUTCFullYear(), value.getUTCMonth() + 1, value.getUTCDate());
-
-/**
- * Normalizes the pg driver's already-parsed `Date` for a `date` column into
- * the canonical UTC-midnight form. The driver (via `postgres-date`) builds
- * that `Date` at *local* midnight from the wire text; reading it back with the
- * same (local) getters recovers the exact calendar date the driver parsed,
- * and reconstructing via `Date.UTC` makes the result's instant independent of
- * the process's timezone.
- */
-export const pgDateDecode = (wire: Date): Date =>
-  new Date(Date.UTC(wire.getFullYear(), wire.getMonth(), wire.getDate()));
-
-export const pgDateEncodeJson = (value: Date): JsonValue => pgDateEncode(value);
-
-export const pgDateDecodeJson = (json: JsonValue): Date => {
-  if (typeof json !== 'string') {
-    throw postgresError(
-      'RUNTIME.DECODE_FAILED',
-      `Expected date string for pg/date@1, got ${typeof json}`,
-      { meta: { codecId: 'pg/date@1', received: typeof json } },
-    );
-  }
-  const match = ISO_8601_DATE.exec(json);
-  if (!match) {
-    throw postgresError('RUNTIME.DECODE_FAILED', `Invalid date string for pg/date@1: ${json}`, {
-      meta: { codecId: 'pg/date@1', received: json },
-    });
-  }
-  const [, yearText, monthText, dayText] = match;
-  const year = Number(yearText);
-  const month = Number(monthText) - 1;
-  const day = Number(dayText);
-  const date = new Date(Date.UTC(year, month, day));
-  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) {
-    throw postgresError('RUNTIME.DECODE_FAILED', `Invalid date string for pg/date@1: ${json}`, {
-      meta: { codecId: 'pg/date@1', received: json },
-    });
-  }
-  return date;
 };
 
 /**

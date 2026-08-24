@@ -8,7 +8,7 @@ Exit codes (CLI): an expected structured failure exits `2`, a user abort exits `
 
 Some codes are not failures to run at all. `db verify`, `db sign` and `migration check` answer a question about the project, and a bad answer is still an answer: they finish, report their findings as diagnostics on a successful envelope, and exit `4`. Exit `2` is reserved for the cases where those commands could not do the job — an unknown `--space`, a migration reference that resolves to nothing, an unreachable database, a contract that has not been emitted. Every entry whose code can arrive on one of those runs says so and names the command. Each of those commands declares the numbers it can exit with, and its `--help` text spells out what each one means.
 
-A command may also **complete with findings**: it ran to its end and has a result to report, and the problems it found ride that result as diagnostics carrying the codes on this page. Those runs exit with a documented per-command code in the `4`–`99` band rather than `2`, and the entry below says so. `prisma orm init` is the case today: its scaffold is on disk whatever happens next, so a failed dependency install, contract emit, or agent-skill install is a finding on a completed run at exit `4`, `5` or `6`.
+A command may also **complete with findings**: it ran to its end and has a result to report, and the problems it found ride that result as diagnostics carrying the codes on this page. Those runs exit with a documented per-command code in the `4`–`99` band rather than `2`, and the entry below says so. `prisma orm init` is the case today: its scaffold is on disk whatever happens next, so a failed dependency install or contract emit is a finding on a completed run at exit `4` or `5`.
 
 Codes that predate the dotted scheme were renamed at 0.16; the full old→new crosswalk (`PN-DOMAIN-NNNN` → `NAMESPACE.SUBCODE`) is in [ADR 239](../architecture%20docs/adrs/ADR%20239%20-%20Errors%20are%20structural%20envelopes%20with%20dotted%20namespace%20codes.md).
 
@@ -143,7 +143,7 @@ The code was raised by the commander `init` (deleted in the S5 cutover), whose c
 
 ### CLI.INIT_SKILL_INSTALL_FAILED
 
-During `prisma orm init`, the project-level skills install failed after a successful dependency install and emit. Init runs one `skills add` per default skill through the project's package manager — e.g. `pnpm dlx skills@latest add prisma/prisma/skills#v<version> --agent cursor claude-code codex windsurf --skill prisma-8 -y` — for the `prisma-8`, `prisma-next-upgrade`, and `prisma-8-extension-upgrade` skills. The project itself is complete without the skills; the user can fix the underlying issue (network, registry, PATH) and install manually, or re-run with `--skip-skills`. `init` completes with this as a finding and exits 6. Meta: `filesWritten`, plus `skillInstall` (the attempted command, the manager, its exit code and the tail of its stderr).
+Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skills add`, and raised this at exit `6` when that fetch failed. The skills now ship inside the `@prisma/orm-*` packages a project installs, and `orm init` no longer touches them at all: skills setup belongs to the family-level `prisma init` command, and `prisma skills sync` copies the skills out of the installed packages whenever it runs. Init's remaining failure exits are `4` (dependency install failed) and `5` (contract emission failed); there is no exit `6`, and nothing raises this code.
 
 ### CLI.INIT_STRICT_PROBE_WITHOUT_PROBE
 
@@ -740,6 +740,19 @@ A whole-query raw statement returned a result that omits a column its row spec d
 ### RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION
 
 A raw-SQL tagged template interpolated a JS value whose type cannot be auto-inferred to a codec (anything other than number, bigint, string, boolean, or Uint8Array). Wrap the value in `param(...)` with an explicit codec.
+
+### RUNTIME.TEMPORAL_UNAVAILABLE
+
+A value that only a global `Temporal` implementation can produce or read was needed in a runtime that has none. Two paths raise it, and they carry different metadata:
+
+- A Temporal-backed codec (`pg/date-temporal@1`, `pg/timestamp-temporal@1`, `pg/timestamptz-temporal@1`, `pg/time-temporal@1`) encoding or decoding a value. Meta: `codecId`, `operation` (`'encode'` or `'decode'`).
+- The `instantNow` mutation-default generator producing a value — for `temporal.updatedAt()`, or for a `temporal.timestamptz(…)` / `timestamp(…)` preset given an `onCreate`/`onUpdate` of `'now'`. No codec is involved. Meta: `generatorId`. (`temporal.createdAt()` is unaffected: it lowers to a PostgreSQL `now()` storage default, which never reaches a client-side clock.)
+
+The check is lazy: registering the target, validating a contract, building a runtime, resolving a descriptor and constructing a codec instance all succeed without `Temporal`. Only producing or interpreting a value fails.
+
+That covers more than an explicit write. It is raised on **reads**, because the check is the first thing a Temporal codec does on decode — selecting the column is enough. And it is raised on an **insert into a table carrying `temporal.updatedAt()`**, because that column's clock produces a `Temporal.Instant` even when your code never mentions a temporal value; that path reports `generatorId` rather than `codecId`, since no codec has been reached yet.
+
+Install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type — `DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)` — to read and write PostgreSQL's own text, which needs no Temporal at all.
 
 ### RUNTIME.TRANSACTION_CLOSED
 

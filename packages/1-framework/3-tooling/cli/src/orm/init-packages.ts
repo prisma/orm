@@ -5,12 +5,6 @@ import type { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 import { isRecognisedPnpmResolutionError } from '../commands/init/pnpm-fallback';
 import { redactSecrets } from '../commands/init/redact-secrets';
-import {
-  DEFAULT_SKILL_AGENTS,
-  DEFAULT_SKILL_SOURCES,
-  formatSkillSourceUrl,
-  type SkillInstallEnv,
-} from '../commands/init/skill-sources';
 
 /** What one install pair produced, and which manager finished it. */
 export interface InstallOutcome {
@@ -18,7 +12,7 @@ export interface InstallOutcome {
   readonly failure: CliStructuredError | undefined;
   /**
    * The manager override that succeeded, when the pnpm fallback fired. The
-   * agent-skill install reuses it: driving `pnpm dlx` right after `pnpm add`
+   * follow-up engine install reuses it: driving pnpm right after `pnpm add`
    * failed to resolve a workspace specifier would fail the same way.
    */
   readonly manager: PackageManagerId | undefined;
@@ -80,7 +74,7 @@ function retriedWarning(failure: CliStructuredError): string {
 /**
  * The engine dependency spec a fresh scaffold installs. The scaffolded
  * `prisma.config.ts` imports `defineConfig` from `@prisma/cli-engine`, and the
- * installed `@prisma/cli` names the exact engine version it runs against — so
+ * installed `prisma` names the exact engine version it runs against — so
  * the spec is read from the manifest the install just placed, never guessed
  * from a dist-tag (whose `latest` has lagged that version before and broken
  * the very next command). A CLI without a readable engine entry falls back to
@@ -89,7 +83,7 @@ function retriedWarning(failure: CliStructuredError): string {
 export function engineDevDependencySpec(cwd: string): string {
   try {
     const manifest: unknown = JSON.parse(
-      readFileSync(join(cwd, 'node_modules', '@prisma', 'cli', 'package.json'), 'utf-8'),
+      readFileSync(join(cwd, 'node_modules', 'prisma', 'package.json'), 'utf-8'),
     );
     if (typeof manifest === 'object' && manifest !== null) {
       for (const field of ['dependencies', 'peerDependencies'] as const) {
@@ -151,33 +145,4 @@ export async function installProjectDependencies(ctx: {
   // npm bypassed pnpm's resolver, so the workspace catalog is not what ended
   // up installed — saying otherwise alongside the fallback would contradict it.
   return { failure: undefined, manager: 'npm', warnings: [fallbackWarning(failure)] };
-}
-
-function skillArgs(url: string, skill: string): readonly string[] {
-  return ['add', url, '--agent', ...DEFAULT_SKILL_AGENTS, '--skill', skill, '-y'];
-}
-
-/**
- * Registers every Prisma Next skill with the agent runtimes, in order. The
- * first failure stops the loop: the user opted into Prisma Next by running
- * `init`, and a half-installed skill set leaves the project ambiguous.
- */
-export async function installAgentSkills(ctx: {
-  readonly packages: PackageOperations;
-  readonly cwd: string;
-  readonly env: SkillInstallEnv;
-  readonly manager: PackageManagerId | undefined;
-}): Promise<CliStructuredError | undefined> {
-  for (const source of DEFAULT_SKILL_SOURCES) {
-    const result = await ctx.packages.run({
-      package: 'skills@latest',
-      args: skillArgs(formatSkillSourceUrl(source, ctx.env), source.skill),
-      cwd: ctx.cwd,
-      ...ifDefined('manager', ctx.manager),
-    });
-    if (!result.ok) {
-      return result.failure;
-    }
-  }
-  return undefined;
 }
