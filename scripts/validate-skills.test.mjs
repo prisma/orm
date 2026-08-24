@@ -66,6 +66,18 @@ metadata: nope
     strictEqual(validateSkillMd(scalar).length, 1);
   });
 
+  it('fails when metadata is an unquoted timestamp', () => {
+    const dated = `---
+name: prisma-8
+description: A skill.
+metadata: 2026-08-21
+---
+
+# Prisma 8
+`;
+    strictEqual(validateSkillMd(dated).length, 1);
+  });
+
   it('fails when bare colons break YAML parsing', () => {
     const broken = `---
 name: drive-discussion

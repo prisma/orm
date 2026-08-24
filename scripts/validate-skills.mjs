@@ -61,11 +61,10 @@ export function validateSkillMd(content) {
   // `8.1` as a number, and a consumer comparing it against a package version
   // string finds no match.
   if (data.metadata !== undefined) {
-    if (
-      typeof data.metadata !== 'object' ||
-      data.metadata === null ||
-      Array.isArray(data.metadata)
-    ) {
+    // A prototype check rather than `typeof`: YAML parses an unquoted
+    // timestamp as a Date, which is object-typed but has no enumerable
+    // entries, so it would sail through the per-entry check below.
+    if (data.metadata === null || Object.getPrototypeOf(data.metadata) !== Object.prototype) {
       errors.push("invalid 'metadata' (must be a map of string keys to string values)");
     } else {
       for (const [key, value] of Object.entries(data.metadata)) {
