@@ -4,6 +4,9 @@
  * Split out of `codecs.ts`, which the eight representation-explicit temporal codecs had grown past
  * two thousand lines. Their Temporal-valued counterparts live in `temporal-codecs.ts`, and the
  * substrate both halves share lives in `temporal-codec-helpers.ts`.
+ *
+ * A nested read projects the column through `::text`, so it returns the same spelling a flat read
+ * does — including the session `TimeZone`'s offset, which both paths inherit alike.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -16,7 +19,7 @@ import {
   column,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
-import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
+import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
@@ -32,7 +35,6 @@ import {
   PG_TIME_NATIVE_TYPE,
   PG_TIMESTAMP_NATIVE_TYPE,
   PG_TIMESTAMPTZ_NATIVE_TYPE,
-  serverTextJsonProjection,
 } from './temporal-codec-helpers';
 
 /**
@@ -85,7 +87,10 @@ export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
     return PG_DATE_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
+    // The cast sits inside the projection, not around the JSON constructor: what `jsonProjection`
+    // returns is the argument the constructor receives, so casting here happens before PostgreSQL
+    // builds the JSON value rather than after, when the rendering is already fixed.
+    return CastExpr.as(expression, 'text');
   }
   override readonly codecId = PG_DATE_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -132,7 +137,7 @@ export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<Precisi
     return PG_TIMESTAMP_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
+    return CastExpr.as(expression, 'text');
   }
   override readonly codecId = PG_TIMESTAMP_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -190,7 +195,7 @@ export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<Preci
     return PG_TIMESTAMPTZ_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
+    return CastExpr.as(expression, 'text');
   }
   override readonly codecId = PG_TIMESTAMPTZ_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
@@ -247,7 +252,7 @@ export class PgTimeStringDescriptor extends PostgresCodecDescriptor<PrecisionPar
     return PG_TIME_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return serverTextJsonProjection(expression);
+    return CastExpr.as(expression, 'text');
   }
   override readonly codecId = PG_TIME_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;

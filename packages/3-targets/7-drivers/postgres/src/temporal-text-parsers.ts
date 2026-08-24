@@ -27,8 +27,22 @@ const TEMPORAL_ARRAY_OIDS: ReadonlySet<number> = new Set([
   TIMESTAMPTZ_ARRAY_OID,
 ]);
 
-type PgTypeOid = Parameters<typeof pgTypes.getTypeParser>[0];
 type TextParser = (value: string) => unknown;
+
+/**
+ * `pg-types`' own view of `getTypeParser`, which its published types understate.
+ *
+ * The declared parameter is `TypeId`, an enum of **scalar** OIDs only, but the function is a plain
+ * lookup in an OID-keyed map — its own source comment says the oid is whatever
+ * `SELECT oid FROM pg_type WHERE typname = …` returns. So the narrowing is a defect in the type
+ * rather than a constraint of the function, and correcting it here is more honest than asserting at
+ * each call site that some array OID is secretly an enum member. It also types the passthrough
+ * below, which forwards an arbitrary OID for every type this module does not claim.
+ */
+const getTypeParser = blindCast<
+  (oid: number, format?: 'text' | 'binary' | undefined) => TextParser,
+  "pg-types' TypeId enum lists only scalar OIDs; getTypeParser resolves any OID from its map"
+>(pgTypes.getTypeParser);
 
 function serverText(value: string): string {
   return value;
@@ -36,20 +50,22 @@ function serverText(value: string): string {
 
 let textArrayParser: TextParser | undefined;
 
-// `text[]` splits the array literal into JS array elements and leaves each element as the server
-// wrote it — the array structure without any per-element interpretation.
+/**
+ * Borrows `pg`'s own `text[]` parser for the temporal array OIDs.
+ *
+ * It splits the array literal into elements and leaves each one exactly as the server wrote it,
+ * which is the whole requirement: the array structure interpreted, the elements not. Delegating
+ * rather than reimplementing means array-literal quoting, escaping, nesting and NULL handling stay
+ * `pg`'s problem, and a fix there arrives here for free.
+ *
+ * `pg` exposes the underlying `arrayParser` too, and `arrayParser.create(value).parse()` is the
+ * same code path — `parseStringArray` is literally that call behind a null guard. Reaching for it
+ * would drop the OID from this file, but only by copying that guard back in, so it trades a number
+ * for a duplicated fragment of the parser this module is trying not to reimplement.
+ */
 function parseTextArray(): TextParser {
-  const parser: TextParser =
-    textArrayParser ??
-    pgTypes.getTypeParser(
-      blindCast<
-        PgTypeOid,
-        "pg-types' TypeId enum lists only scalar OIDs, but getTypeParser resolves any OID; 1009 is text[]"
-      >(TEXT_ARRAY_OID),
-      'text',
-    );
-  textArrayParser = parser;
-  return parser;
+  textArrayParser ??= getTypeParser(TEXT_ARRAY_OID, 'text');
+  return textArrayParser;
 }
 
 /**
@@ -75,6 +91,6 @@ export const temporalTextTypes: CustomTypesConfig = {
     if (TEMPORAL_ARRAY_OIDS.has(oid)) {
       return parseTextArray();
     }
-    return pgTypes.getTypeParser(oid, format);
+    return getTypeParser(oid, format);
   },
 };

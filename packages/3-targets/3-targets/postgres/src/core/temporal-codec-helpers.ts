@@ -6,8 +6,6 @@
  * them beside the generic codec helpers meant a reader of either had to skip the other.
  */
 
-import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
-
 /** The PostgreSQL type each representation pair stores into. Both halves of a pair share one. */
 export const PG_DATE_NATIVE_TYPE = 'date';
 export const PG_TIMESTAMP_NATIVE_TYPE = 'timestamp without time zone';
@@ -227,31 +225,3 @@ export const pgTimeTemporalDecode = (wire: string): Temporal.PlainTime =>
 
 export const pgTimeTemporalEncode = (value: Temporal.PlainTime): string =>
   encodeTemporalValue(TIME_TEMPORAL, value);
-
-/**
- * Projects a temporal value as the text PostgreSQL itself renders for it.
- *
- * This position used to hold the opposite policy. A `timestamptz` handed straight to a JSON
- * constructor renders in the session's `TimeZone`, so the same stored instant read as `+00:00`,
- * `-05:00` or `+05:30` depending on who was connected; the previous projection resolved the instant
- * to UTC and spelled it out with an explicit `to_char` format so that no session setting could move
- * it. That pinning is deliberately gone, for two reasons it could not reconcile:
- *
- * - Its format string ended in `.MS` — **milliseconds**. Every nested read silently truncated the
- *   microseconds PostgreSQL had stored, which is a live loss of data rather than a formatting
- *   preference.
- * - A flat read of the same column returns the server's own text. Pinning one path and not the
- *   other meant the two disagreed about what the value was, and having them agree is the point of
- *   this representation.
- *
- * So a nested read is now session-`TimeZone`-dependent exactly as a flat read already was. Nothing
- * downstream minds which offset the session picks: `Temporal.Instant.from()` accepts any of them
- * and resolves to the same instant, and the `*-string` codecs are handing back whatever the server
- * said by definition. Session-dependent output is a documented non-goal to hide, not a defect.
- *
- * The cast belongs inside the projection for the reason spelled out on {@link
- * decimalTextJsonProjection}: what `jsonProjection` returns is the argument the JSON constructor
- * receives, so casting here happens before PostgreSQL builds the JSON value rather than after.
- */
-export const serverTextJsonProjection = (expression: ProjectionExpr): ProjectionExpr =>
-  CastExpr.as(expression, 'text');
