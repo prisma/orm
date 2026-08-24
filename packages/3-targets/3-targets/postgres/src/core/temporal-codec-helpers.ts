@@ -1,12 +1,3 @@
-/**
- * The shared substrate of the eight representation-explicit temporal codecs.
- *
- * Split out of `codec-helpers.ts` when the temporal codecs moved into files of their own: these
- * helpers serve `temporal-codecs.ts` and `temporal-string-codecs.ts` and nothing else, so keeping
- * them beside the generic codec helpers meant a reader of either had to skip the other.
- */
-
-/** The PostgreSQL type each representation pair stores into. Both halves of a pair share one. */
 export const PG_DATE_NATIVE_TYPE = 'date';
 export const PG_TIMESTAMP_NATIVE_TYPE = 'timestamp without time zone';
 export const PG_TIMESTAMPTZ_NATIVE_TYPE = 'timestamp with time zone';
@@ -25,31 +16,12 @@ import {
   errorTemporalWrongType,
 } from './errors';
 
-/**
- * Temporal-backed codecs: read and write PostgreSQL's temporal text through the global `Temporal`
- * API, which is the authoritative parser *and* the authoritative range check. Nothing below
- * hand-rolls an ISO grammar or a range test — a value Temporal declines is a value this
- * representation cannot carry, and that is reported rather than worked around.
- */
-
 const POSTGRES_TEMPORAL_SENTINELS: ReadonlySet<string> = new Set(['infinity', '-infinity']);
 
 const EXPANDED_YEAR_DIGITS = 6;
 const ORDINARY_YEAR_DIGITS = 4;
 const BC_SUFFIX = ' BC';
 
-/**
- * Bridges the two spellings PostgreSQL and Temporal use for years outside `0001`–`9999`, and
- * nothing else. PostgreSQL writes an era suffix (`0044-03-15 BC`) and leaves expanded years bare
- * (`12026-01-02`); Temporal wants a signed six-digit proleptic year (`-000043-03-15`,
- * `+012026-01-02`) and note the off-by-one — 44 BC is proleptic year −43, because there is no year
- * zero in the era numbering and there is one in the proleptic.
- *
- * Anything that is not one of those two spellings is returned untouched, including every ordinary
- * date and every non-ISO `DateStyle` rendering. Those go to `Temporal.*.from()` exactly as the
- * server wrote them and are rejected there — this is deliberately not a normaliser that tries to
- * make unparseable text parse.
- */
 function adaptPostgresEra(text: string): string {
   const isBc = text.endsWith(BC_SUFFIX);
   const body = isBc ? text.slice(0, -BC_SUFFIX.length) : text;
@@ -71,12 +43,6 @@ function adaptPostgresEra(text: string): string {
   return `${sign}${digits}${body.slice(yearEnd)}`;
 }
 
-/**
- * The lazy capability check. Called at the top of every encode and decode, never during descriptor
- * assembly or contract validation, so a client whose columns are all `*-string` constructs and runs
- * with no Temporal anywhere. `typeof` rather than a property read because an absent global is a
- * ReferenceError on any other form of access.
- */
 export function requireTemporal(codecId: string, operation: 'decode' | 'encode'): void {
   if (typeof Temporal === 'undefined') {
     throw errorTemporalUnavailable(codecId, operation);
@@ -86,10 +52,6 @@ export function requireTemporal(codecId: string, operation: 'decode' | 'encode')
 interface TemporalCodecIdentity {
   readonly codecId: string;
   readonly stringType: string;
-  /**
-   * The `Symbol.toStringTag` the codec's application value carries — `'Temporal.Instant'` and its
-   * siblings. Used as the nominal identity of the value on encode; see {@link encodeTemporalValue}.
-   */
   readonly temporalTag: string;
 }
 
@@ -121,21 +83,6 @@ function decodeTemporalText<T>(
   }
 }
 
-/**
- * Encodes a `Temporal.*` application value to the text PostgreSQL is sent.
- *
- * The type check is **nominal**, on `Symbol.toStringTag`, not structural. A structural parameter
- * type — anything with a `toString()` and an optional `calendarId` — is satisfied by a `Date`, at
- * compile time and at runtime alike, so a `Date` reaching this function used to be encoded as
- * `Date.prototype.toString()`: `'Tue Aug 18 2026 15:09:05 GMT+0000 (Coordinated Universal Time)'`,
- * which PostgreSQL rejects with a syntax error naming neither the codec nor the cause. The tag is
- * the cheapest identity that holds across a native Temporal and a polyfilled one, where an
- * `instanceof` against either realm's classes would not.
- *
- * The rejection is a structured `RUNTIME.ENCODE_FAILED`, so it reaches the caller with its code
- * and its `fix` intact rather than being re-wrapped by the generic encode path. `fix` is where the
- * `*String` escape hatch is named, which is the one thing a caller who hit this can act on.
- */
 function encodeTemporalValue(
   identity: TemporalCodecIdentity,
   value: { readonly calendarId?: string; toString: () => string },
@@ -159,7 +106,6 @@ function encodeTemporalValue(
   return value.toString();
 }
 
-/** Names what actually arrived, so the encode failure is actionable without a debugger. */
 function describeEncodeInput(value: unknown, tag: unknown): string {
   if (typeof tag === 'string') {
     return `a ${tag}`;
@@ -194,7 +140,6 @@ const TIME_TEMPORAL: TemporalCodecIdentity = {
   temporalTag: 'Temporal.PlainTime',
 };
 
-// A time-of-day carries no year, so the era adaptation has nothing to do for it.
 const unadapted = (text: string): string => text;
 
 export const pgDateTemporalDecode = (wire: string): Temporal.PlainDate =>

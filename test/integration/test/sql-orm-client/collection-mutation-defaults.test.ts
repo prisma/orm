@@ -172,9 +172,6 @@ describe('@updatedAt mutation defaults via Collection', () => {
       expect(dateParams[2]).toBe(first);
     });
 
-    // The guarantee belongs to the generator, not to a representation, so it has to hold for a
-    // column authored either way. `timestampNow` hands the driver a wire-level `Date` that never
-    // passes through a codec, which is what lets one clock serve both.
     it('gives every row in an insert one value on a *String column too', async () => {
       const { collection, runtime } = setupTagCollection('pg/timestamptz-string@1');
       runtime.setNextResults([

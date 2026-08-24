@@ -1,14 +1,3 @@
-/**
- * The four temporal codecs whose application value is a `Temporal.*`.
- *
- * Split out of `codecs.ts`, which the eight representation-explicit temporal codecs had grown past
- * two thousand lines. Their text-valued counterparts live in `temporal-string-codecs.ts`, and the
- * substrate both halves share lives in `temporal-codec-helpers.ts`.
- *
- * A nested read projects the column through `::text`, so it returns the same spelling a flat read
- * does — including the session `TimeZone`'s offset, which both paths inherit alike.
- */
-
 import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
@@ -45,20 +34,6 @@ import {
   pgTimeTemporalEncode,
 } from './temporal-codec-helpers';
 
-/**
- * Temporal-backed temporal codecs: the application value is the `Temporal.*` type that matches the
- * column's native type, and the wire value is PostgreSQL's own text in both directions.
- *
- * `Temporal.*.from()` is the authoritative parser and the authoritative range check — these codecs
- * add only PostgreSQL's `infinity` sentinels and the named era adaptation for BC and expanded
- * years. Anything Temporal declines is reported as unrepresentable, naming the `*String` type that
- * reads the same column losslessly.
- *
- * The application type reaches the generated declaration through `TInput` rather than
- * `renderOutputType`: the emitter only consults a renderer for a column carrying non-empty type
- * params, so a bare `Timestamp` would fall through it. `Temporal` is referenced as an ambient
- * global and no polyfill type is imported, which is why these carry no `typeImports` entry.
- */
 export class PgDateTemporalCodec extends CodecImpl<
   typeof PG_DATE_TEMPORAL_CODEC_ID,
   readonly ['equality', 'order'],
@@ -86,9 +61,6 @@ export class PgDateTemporalDescriptor extends PostgresCodecDescriptor<void> {
     return PG_DATE_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    // The cast sits inside the projection, not around the JSON constructor: what `jsonProjection`
-    // returns is the argument the constructor receives, so casting here happens before PostgreSQL
-    // builds the JSON value rather than after, when the rendering is already fixed.
     return CastExpr.as(expression, 'text');
   }
   override readonly codecId = PG_DATE_TEMPORAL_CODEC_ID;

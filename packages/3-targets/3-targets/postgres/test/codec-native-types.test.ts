@@ -1,30 +1,7 @@
-/**
- * The DDL spelling and the JSON projection of every codec this package ships.
- *
- * Both are declared per codec and consumed entirely from elsewhere — `nativeTypeFor` by the
- * migration planner when it renders a column, `projectJson` by the query lane when it builds a
- * nested read. The suites that exercise them therefore live in other packages, which leaves the
- * declarations themselves unpinned here: a codec could change the type it renders, or lose its
- * array lift, and nothing in this package would notice.
- *
- * The table is the point. It is not a recording of what the code returns — it is the mapping from
- * codec id to PostgreSQL type, checked against PostgreSQL's own type names, and it is what makes an
- * accidental change to one of them visible as a diff in an expectation rather than as a silently
- * different `CREATE TABLE`.
- */
-
 import { ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import { codecDescriptors } from '../src/core/codecs';
 
-/**
- * Codec id → the type PostgreSQL is asked to create.
- *
- * Several spellings are deliberately the long form (`timestamp with time zone`, not
- * `timestamptz`): that is what the planner emits, and the short identifier is a separate string
- * carried on the column. `pg/enum@1` is absent because its type name comes from its params — it is
- * covered by its own suite, which supplies them.
- */
 const DDL_TYPES: Readonly<Record<string, string>> = {
   'sql/char@1': 'character',
   'sql/varchar@1': 'character varying',
@@ -65,7 +42,6 @@ const DDL_TYPES: Readonly<Record<string, string>> = {
   'pg/text-array@1': 'text[]',
 };
 
-/** Params-bearing descriptors whose native type cannot be rendered from an empty ref. */
 const NEEDS_PARAMS = new Set(['pg/enum@1']);
 
 const parameterless = codecDescriptors.filter((d) => !NEEDS_PARAMS.has(d.codecId));
@@ -92,13 +68,9 @@ describe('every shipped codec projects a scalar read and lifts an array read', (
     const lifted = d.projectJson(source, { codecId: id, many: true });
 
     expect(scalar).toBeDefined();
-    // The array lift always wraps the element projection in a subquery, so it can never be the
-    // same node as the scalar one — including for the codecs whose scalar projection is identity.
     expect(lifted).not.toBe(scalar);
   });
 
-  // The two ends of the range, pinned so the assertion above cannot be satisfied by a projection
-  // that wraps everything indiscriminately.
   it('passes an identity-projected column through untouched', () => {
     const text = codecDescriptors.find((d) => d.codecId === 'pg/text@1');
     expect(text?.projectJson(source, { codecId: 'pg/text@1' })).toBe(source);

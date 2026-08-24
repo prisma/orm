@@ -163,8 +163,6 @@ describe('table().insert()', () => {
   });
 
   it('.build() passes RawExpr values through without re-wrapping', () => {
-    // The assertion is that `.build()` passes the RawExpr through untouched, so this codec is
-    // never resolved; a fictional id says so rather than implying the choice matters.
     const raw = new RawExpr({
       parts: ['now()'],
       returns: { codecId: 'test/never-resolved@1', nullable: false },

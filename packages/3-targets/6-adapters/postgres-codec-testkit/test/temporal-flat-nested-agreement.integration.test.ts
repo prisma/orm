@@ -1,20 +1,3 @@
-/**
- * Flat and nested reads of a temporal column must return the same text.
- *
- * A flat read transports the server's own rendering of the column. A nested read goes through the
- * descriptor's `jsonProjection` and lands inside a JSON document. Those were two different answers
- * until the projection started casting to `text`: `timestamptz` in particular went through a
- * UTC-pinned `to_char` whose format ended in `.MS`, so a nested read returned a different offset
- * *and* three fewer digits than a flat read of the same row.
- *
- * Every fixture below therefore carries a `.123456` microsecond component. That is the whole
- * discrimination: with the retired millisecond format still in place these assertions fail on the
- * truncated digits, whereas a whole-second fixture would pass either way and prove nothing.
- *
- * This measures the projection, not the codecs — both readings are taken as raw SQL text, so a case
- * cannot be rescued by a codec that happens to normalise the two spellings back together.
- */
-
 import postgresControlDriverDescriptor from '@internal/driver-postgres/control';
 import { postgresCodecDescriptorRegistry } from '@internal/target-postgres/codecs';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
@@ -30,14 +13,9 @@ const PRECISION = { precision: 6 } as const;
 interface AgreementCase {
   readonly codecId: string;
   readonly typeParams?: { readonly precision: number };
-  /** A SQL literal, so the row is created without going near a codec. */
   readonly literal: string;
 }
 
-/**
- * Spellings taken from a live server rather than written from memory — the same matrix the Temporal
- * codecs were settled against.
- */
 const AGREEMENT_CASES: readonly AgreementCase[] = [
   { codecId: 'pg/date-string@1', literal: "date '2026-01-02'" },
   { codecId: 'pg/date-temporal@1', literal: "date '2026-01-02'" },
@@ -158,7 +136,6 @@ describe('temporal flat and nested reads agree', () => {
     const utc = await readBothWays(tstz, ["SET TimeZone = 'UTC'"]);
     const tokyo = await readBothWays(tstz, ["SET TimeZone = 'Asia/Tokyo'"]);
 
-    // The pinned projection this replaced would have produced the same UTC text under both.
     expect({ utc, tokyo }).toEqual({
       utc: {
         flat: '2026-01-02 03:04:05.123456+00',

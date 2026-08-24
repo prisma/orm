@@ -19,17 +19,6 @@ const longBytes = Uint8Array.from(
 );
 const shortBytes = Uint8Array.from(Buffer.from('FDSF', 'base64'));
 
-/**
- * Replaces every `Temporal.Instant` in a result with its text, recursively.
- *
- * Running both the actual and the expected side through this keeps the whole-shape comparison
- * while putting the `dt` columns in the failure diff as text rather than as opaque objects.
- * `toEqual` does compare instants correctly on its own; `toMatchObject` would not, since a Temporal
- * value has no own enumerable properties for a subset matcher to find.
- *
- * Typed arrays are returned untouched; enumerating one would turn a `Uint8Array` into a record of
- * index keys and break the byte comparisons this suite also makes.
- */
 function instantsAsText(value: unknown): unknown {
   if (value instanceof Temporal.Instant) {
     return value.toString();

@@ -49,18 +49,12 @@ function withIssue28192(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
   return withPostgresPort<Contract>({ contractJson }, fn);
 }
 
-/**
- * One source string, the three representations the three columns take. Strings without an
- * offset are read as UTC, which is what `new Date(...)` did for the same inputs upstream.
- */
 function representations(timestampString: string): {
   readonly date: Temporal.PlainDate;
   readonly timestamp: Temporal.PlainDateTime;
   readonly timestamptz: Temporal.Instant;
 } {
   const timestamp = Temporal.PlainDateTime.from(timestampString);
-  // `Instant.from` is the authority on whether the text carries an offset; anything it
-  // refuses is offset-free and is read as UTC.
   let timestamptz: Temporal.Instant;
   try {
     timestamptz = Temporal.Instant.from(timestampString);

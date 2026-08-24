@@ -1,7 +1,3 @@
-// This worker reads Temporal-backed temporal columns, and workerd ships no global `Temporal`.
-// Installed here rather than in a test setup so the deployed worker has it too.
-// `full/global` rather than `global`: the default build omits non-ISO calendars and its published
-// types resolve to `export {}`.
 import 'temporal-polyfill/full/global';
 
 import { withTransaction } from '@prisma/orm-postgres/family-runtime';

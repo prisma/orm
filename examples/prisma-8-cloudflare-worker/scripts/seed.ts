@@ -5,15 +5,10 @@
  * embeddings (this example exercises the per-request facade, not vectors).
  */
 
-// Node ships no global `Temporal`, and this script writes Temporal-backed columns.
-// `full/global` rather than `global`: the default build omits non-ISO calendars and its
-// published types resolve to `export {}`.
 import 'temporal-polyfill/full/global';
 import { db } from '../src/prisma/db';
 import { EXAMPLE_ROOT, HYPERDRIVE_VAR, loadLocalEnv } from './env';
 
-// A `timestamptz` column takes a `Temporal.Instant`. Day arithmetic belongs on a `PlainDate`,
-// which is then anchored to a zone to get one — no `Date` in the chain at any point.
 const firstPostDay = Temporal.PlainDate.from('2026-04-10');
 
 async function main() {

@@ -13,24 +13,12 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
 
-/**
- * The optional precision every parameterised temporal type carries, and the schema that validates
- * it. Shared rather than private because `timetz` and `interval` take the same parameter as the
- * eight representation-explicit temporal codecs, and those now live in files of their own.
- */
 export type PrecisionParams = { readonly precision?: number };
 
 export const precisionParamsSchema = arktype({
   'precision?': 'number.integer >= 0 & number.integer <= 6',
 }) satisfies StandardSchemaV1<PrecisionParams>;
 
-/**
- * The emit path hands these renderers whatever the contract carried: `renderOutputTypeFor` reads
- * `typeParams` out of the contract and calls straight through without validating it. So the
- * property is declared `unknown` rather than `number` — that is what it is at runtime, it keeps the
- * guards below live rather than dead, and it lets a descriptor pass its own precisely-typed params
- * without a cast.
- */
 export function renderLength(
   typeName: string,
   typeParams: { readonly length?: unknown },

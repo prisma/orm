@@ -228,18 +228,6 @@ describe('storage entries', () => {
   });
 });
 
-/**
- * The two halves of a type parameter have to agree on what they accept.
- *
- * The authoring surface decides which literals a schema may write; the codec's control hook decides
- * which of them survive into a native type at planning time. A value the first accepts and the
- * second refuses is not a validation error the user can act on — it is a schema that emits cleanly
- * and then fails on `db update`, several commands later, with a message about type parameters the
- * user never typed.
- *
- * `Timestamp(0)` was exactly that: `minimum: 0` in the type constructor, a positive-integer check
- * in `expandPrecision`.
- */
 describe('precision bounds agree between authoring and expansion', () => {
   const precisionBearing = [
     ['Timestamp', 'pg/timestamp-temporal@1', 'timestamp'],

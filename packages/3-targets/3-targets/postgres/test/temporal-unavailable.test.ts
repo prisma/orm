@@ -1,12 +1,3 @@
-/**
- * The capability check is lazy, and this pins where "lazy" starts and stops.
- *
- * The property that matters is not "we throw a nice error" — it is that a runtime with no Temporal
- * gets all the way through registering codecs, resolving descriptors, and building a column before
- * anything notices. Only invoking a Temporal-backed codec is allowed to fail. That is what lets a
- * contract built entirely from the `*-string` codecs run on a host that has never heard of Temporal.
- */
-
 import { describe, expect, it } from 'vitest';
 import {
   PG_DATE_TEMPORAL_CODEC_ID,
@@ -29,11 +20,6 @@ import { pgDateStringDescriptor } from '../src/core/temporal-string-codecs';
 const instanceCtx = { name: '<test>' };
 const callCtx = {};
 
-/**
- * Awaits its body with no global `Temporal`. `await` rather than a bare return is load-bearing: the
- * window has to span the codec calls, or the global is back before any of them run and the test
- * proves nothing.
- */
 async function withoutTemporal<T>(body: () => Promise<T>): Promise<T> {
   const original = Reflect.get(globalThis, 'Temporal');
   Reflect.deleteProperty(globalThis, 'Temporal');
@@ -58,7 +44,6 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
           codecId: PG_TIMESTAMP_TEMPORAL_CODEC_ID,
         }),
         columnCodecId: pgDateTemporalColumn().codecId,
-        // Instantiating the codec is still fine — only using it needs Temporal.
         instantiated: pgDateTemporalDescriptor.factory()(instanceCtx).id,
       };
     });
@@ -119,11 +104,6 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
     expect(decoded).toBe('infinity');
   });
 
-  // The generator is the other half of the laziness contract. A `*String` column's clock hands out
-  // text and needs nothing, but `temporal.updatedAt()` on a Temporal-backed column produces a
-  // `Temporal.Instant` — so an insert into such a table fails without an implementation even though
-  // the caller never mentioned a temporal value. The error names the generator rather than a codec,
-  // because that is what the author has to change.
   it('fails the instantNow generator with the capability error, naming its *String alternative', async () => {
     const outcome = await withoutTemporal(async () => {
       await Promise.resolve();

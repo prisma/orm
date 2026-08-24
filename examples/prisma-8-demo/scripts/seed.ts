@@ -20,9 +20,6 @@ import 'dotenv/config';
 
 import { loadAppConfig } from '../src/app-config';
 import { createOrmClient } from '../src/orm-client/client';
-// Node ships no global `Temporal`, and this script writes Temporal-backed columns.
-// `full/global` rather than `global`: the default build omits non-ISO calendars and its
-// published types resolve to `export {}`.
 import 'temporal-polyfill/full/global';
 import { db } from '../src/prisma/db';
 

@@ -44,14 +44,6 @@ export function timestampNowControlDescriptor(): MutationDefaultGeneratorDescrip
  * else is shared so PSL `temporal.updatedAt()` and TS
  * `field.temporal.updatedAt()` lower to byte-identical contracts across
  * targets by construction.
- *
- * `generatorId` selects which clock answers the phases, defaulting to
- * {@link TIMESTAMP_NOW_GENERATOR_ID}. A generated default is bound through the
- * column's codec like any other parameter, so the value a generator produces
- * has to be one that codec accepts: a target whose column carries a rich
- * application value names its own generator here rather than binding this
- * one's. The id is the only thing that varies — a caller cannot reach in and
- * change a phase, the storage default, or the shape either preset lowers to.
  */
 /* @__NO_SIDE_EFFECTS__ */
 export function temporalAuthoringPresets<
@@ -88,20 +80,6 @@ export function temporalAuthoringPresets<
   } as const satisfies Record<string, AuthoringFieldPresetDescriptor>;
 }
 
-/**
- * The representation-explicit siblings of {@link temporalAuthoringPresets}, under names that say
- * which representation they select: `createdAtString` / `updatedAtString` beside `createdAt` /
- * `updatedAt`.
- *
- * Delegates rather than restating, so the two pairs cannot drift in the shape they lower to: the
- * storage default, both phases and the precision handling are literally the same objects.
- *
- * The clock is the one thing that legitimately differs. A `*String` column takes text, so it uses
- * the shared {@link TIMESTAMP_NOW_GENERATOR_ID} — this factory takes no `generatorId` because a
- * string codec has no reason to want another one. A Temporal-backed sibling passes its own id to
- * {@link temporalAuthoringPresets} directly.
- */
-/* @__NO_SIDE_EFFECTS__ */
 export function temporalStringAuthoringPresets<
   const CodecId extends string,
   const NativeType extends string,
@@ -158,9 +136,6 @@ function temporalPhaseTemplate<const Index extends number, const GeneratorId ext
  * All three arguments are optional: omitting `precision` omits `typeParams`
  * entirely, and omitting a phase omits that phase (both omitted omits
  * `executionDefaults`).
- *
- * `generatorId` answers the `now` token, defaulting to {@link TIMESTAMP_NOW_GENERATOR_ID}; see
- * {@link temporalAuthoringPresets} for why a target with a rich application value names its own.
  */
 /* @__NO_SIDE_EFFECTS__ */
 export function temporalCodecPresetWithPrecision<

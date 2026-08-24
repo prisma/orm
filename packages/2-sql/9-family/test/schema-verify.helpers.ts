@@ -73,13 +73,6 @@ export function createTestSchemaIR(tables: Record<string, SqlTableIR>): SqlSchem
 /**
  * Creates a minimal contract table for testing.
  */
-/**
- * Most PostgreSQL codec ids are `pg/<nativeType>@1`, so a test column can name only its native type
- * and have the id inferred. The temporal types are deliberately not among them: each has two codecs
- * — one carrying a `Temporal.*` value, one carrying the server's text — and no default. Inferring one
- * would put back the implicit choice the representation-explicit codecs exist to remove, so a
- * temporal column has to say which it means.
- */
 const NO_INFERRED_CODEC = new Set(['date', 'timestamp', 'timestamptz', 'time']);
 
 function codecIdFor(

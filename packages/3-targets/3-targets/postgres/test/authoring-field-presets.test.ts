@@ -131,12 +131,6 @@ describe('postgres temporal per-codec presets', () => {
     );
   });
 
-  // Both halves carry a generator on both phases, which is what makes the string representation a
-  // drop-in for the Temporal one rather than a lesser variant of it. The generator differs because
-  // the value does: a Temporal-backed column takes a `Temporal.Instant`, a `*String` column takes
-  // text, and a generator has no column context with which to decide between them. That the two
-  // behave alike is proven behaviourally in
-  // `test/integration/test/temporal-defaults/temporal-defaults.integration.test.ts`.
   it.each([
     ['updatedAt', 'instantNow'],
     ['updatedAtString', 'timestampNow'],

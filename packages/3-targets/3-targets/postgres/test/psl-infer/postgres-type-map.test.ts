@@ -138,12 +138,6 @@ describe('createPostgresTypeMap', () => {
   });
 });
 
-/**
- * Introspection reads a column and picks a PSL spelling for it. Both representations are spelled
- * differently but stored identically, so nothing in the column can say which one the author wanted
- * — the map therefore commits to the Temporal-backed name and leaves the `*String` spellings as
- * something a human opts into.
- */
 describe('representation-explicit spellings stay out of introspection', () => {
   const map = createPostgresTypeMap();
 

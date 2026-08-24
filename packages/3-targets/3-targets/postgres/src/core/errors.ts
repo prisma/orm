@@ -65,17 +65,6 @@ export function errorPostgresMigrationStackMissing(operation: string): CliStruct
   );
 }
 
-/**
- * A Temporal-backed codec was invoked in a runtime with no `Temporal` implementation.
- *
- * Raised lazily, at the moment a value is encoded or decoded, never while assembling descriptors or
- * validating a contract — a client whose contract uses only the `*-string` codecs has to construct
- * and run in a runtime that has never heard of Temporal.
- *
- * `structuredError` rather than a plain `Error` so the generic decode path forwards it with this
- * code intact instead of re-wrapping it as `RUNTIME.DECODE_FAILED`, which would bury the one thing
- * the caller needs to act on.
- */
 export function errorTemporalUnavailable(codecId: string, operation: string): StructuredError {
   return postgresError(
     'RUNTIME.TEMPORAL_UNAVAILABLE',
@@ -88,14 +77,6 @@ export function errorTemporalUnavailable(codecId: string, operation: string): St
   );
 }
 
-/**
- * A mutation default generator that produces a `Temporal.*` value was invoked in a runtime with no
- * `Temporal` implementation.
- *
- * The same code as {@link errorTemporalUnavailable} and the same lazy timing, but a generator is
- * not a codec: it is reached because a column carries `temporal.createdAt()` or
- * `temporal.updatedAt()`, so the fix names the `*String` presets rather than a `*String` type.
- */
 export function errorTemporalUnavailableForDefault(generatorId: string): StructuredError {
   return postgresError(
     'RUNTIME.TEMPORAL_UNAVAILABLE',
@@ -108,15 +89,6 @@ export function errorTemporalUnavailableForDefault(generatorId: string): Structu
   );
 }
 
-/**
- * A value crossed the boundary of what a `Temporal.*` type can represent.
- *
- * Both directions raise it: PostgreSQL text that Temporal cannot parse (`infinity`, a `DateStyle`
- * the server renders non-ISO, a year beyond Temporal's range) and application values PostgreSQL
- * would not accept back. The message names the `*String` type that reads the same column as the
- * server's own text, because that type existing is the entire reason this is a recoverable
- * situation rather than a dead end.
- */
 export function errorTemporalUnrepresentable(options: {
   readonly codecId: string;
   readonly operation: 'decode' | 'encode';
@@ -139,22 +111,6 @@ export function errorTemporalUnrepresentable(options: {
   );
 }
 
-/**
- * A write carried a non-ISO calendar. Rejected rather than silently discarded: PostgreSQL stores no
- * calendar, so accepting the value would quietly drop the one thing the author went out of their
- * way to specify.
- */
-/**
- * A Temporal codec was handed a value that is not the Temporal type it encodes.
- *
- * The guard is nominal — it reads `Symbol.toStringTag` rather than probing for
- * methods — because the structural shape a Temporal value presents is one a
- * `Date` also satisfies: both carry `toString()`, and `calendarId` is optional.
- * A structural check therefore admits a `Date`, whose `toString()` renders
- * `Tue Aug 18 2026 15:09:05 GMT+0000 (Coordinated Universal Time)` — which
- * PostgreSQL rejects with a bare syntax error naming neither the codec nor the
- * cause. Failing here instead keeps the diagnosis at the codec boundary.
- */
 export function errorTemporalWrongType(
   codecId: string,
   temporalTag: string,

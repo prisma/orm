@@ -37,11 +37,6 @@ const interval = (fields: Partial<PgInterval>): PgInterval => ({
   ...fields,
 });
 
-/**
- * Round-trip equality for the Temporal-backed codecs. `instanceof` as well as `equals` so that a
- * value of the wrong type fails: two objects with no own enumerable properties can compare equal
- * structurally even when they denote different moments.
- */
 const instantsEqual = (roundTripped: unknown, value: unknown): boolean =>
   roundTripped instanceof Temporal.Instant &&
   value instanceof Temporal.Instant &&

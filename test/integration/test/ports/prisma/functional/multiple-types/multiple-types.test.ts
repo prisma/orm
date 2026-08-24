@@ -139,9 +139,6 @@ describe('ports/prisma/functional/multiple-types', () => {
           bool: true,
           dec: '0.0625',
         });
-        // `dt` is asserted through its text because the assertion above is a `toMatchObject`,
-        // which a Temporal value defeats: no own enumerable properties, so the subset matcher
-        // finds nothing to compare and passes for any instant.
         expect(valuesRow?.dt?.toString()).toBe(instant.toString());
       }),
     timeouts.spinUpPpgDev,

@@ -1,16 +1,3 @@
-/**
- * The Temporal-backed codecs against a real PostgreSQL, through the whole runtime.
- *
- * The codec-level suite in `@internal/target-postgres` covers the boundaries exhaustively against
- * literal spellings. What only a database can settle is the other half: that those spellings are
- * the ones a server actually emits, and that what PostgreSQL does to a value on the way in — round
- * a nanosecond, carry it into the next second, re-render an instant in the session's zone — comes
- * back as the value this representation promises.
- *
- * Also here rather than in the codec suite: the generic decode path. `RUNTIME.TEMPORAL_UNAVAILABLE`
- * has to survive it with its code intact, and that path lives in the SQL runtime.
- */
-
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import postgresRuntimeDriverDescriptor from '@internal/driver-postgres/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
@@ -168,8 +155,6 @@ describe('Temporal codecs round-trip through PostgreSQL', () => {
     const context = createExecutionContext({ contract: buildContract(), stack });
     const stackInstance = instantiateExecutionStack(stack);
 
-    // A pinned client: the DateStyle test sets a session variable and then reads on the same
-    // session, which only holds when every statement runs on one connection.
     const driver = postgresRuntimeDriverDescriptor.create();
     await driver.connect({ kind: 'pgClient', client });
     session = driver;
@@ -203,7 +188,6 @@ describe('Temporal codecs round-trip through PostgreSQL', () => {
     return rows[0] as unknown as MomentRow;
   }
 
-  // Reads without asserting a shape: the rejection cases only care that the decode throws.
   async function readRaw(id: number): Promise<unknown> {
     const rows = await runtime!
       .query(planFromAst(buildSelectByIdAst(id), buildContract()))
@@ -249,7 +233,6 @@ describe('Temporal codecs round-trip through PostgreSQL', () => {
     await insert({
       id: 2,
       d: null,
-      // .999999999 rounds up through every field: second, minute, hour, and the date.
       ts: Temporal.PlainDateTime.from('2026-01-02T23:59:59.999999999'),
       tstz: Temporal.Instant.from('2026-01-02T03:04:05.123456789Z'),
       t: null,
@@ -279,8 +262,6 @@ describe('Temporal codecs round-trip through PostgreSQL', () => {
   it('reads BC and expanded-year values that PostgreSQL stores and Temporal spells differently', {
     timeout: timeouts.spinUpPpgDev,
   }, async () => {
-    // Written as SQL literals: PostgreSQL rejects Temporal's own signed-year spelling on input,
-    // reading the leading sign as a time zone displacement. Reads are what this covers.
     await session!.execute({
       sql: `INSERT INTO "Moments" (id, d, ts, tstz, t) VALUES
           (3, date '0044-03-15 BC', timestamp '0044-03-15 12:00:00 BC',

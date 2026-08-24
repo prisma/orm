@@ -1,18 +1,3 @@
-/**
- * The representation taxonomy, in executable form.
- *
- * Every PostgreSQL temporal type offers two representations, and the table below is the contract:
- * one native type, two codecs, one of which hands back a `Temporal.*` and one of which hands back
- * PostgreSQL's own text. These assertions are written against that contract rather than against
- * what the descriptors happen to declare — a test that reads a descriptor's `codecId` and asserts
- * it equals that same `codecId` would pass no matter what the code said.
- *
- * The surface exercised here is reached in production only from the emitter and the authoring
- * helpers, both of which live in other packages. That is why it needs covering from here: the
- * integration suites that drive it prove the pipeline works, not that this package's half of it
- * declares the right things.
- */
-
 import { ColumnRef, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
 import {
@@ -57,27 +42,17 @@ interface Representation {
     ) => ProjectionExpr;
   };
   readonly column: (...args: never[]) => ColumnSpecShape;
-  /** The spelling the emitter renders for a read, or `undefined` where the codec renders none. */
   readonly rendersAtPrecisionSix: string | undefined;
 }
 
 interface TaxonomyRow {
-  /**
-   * The short native-type identifier a contract carries, and what introspection resolves against.
-   */
   readonly nativeType: string;
-  /** The spelling rendered into DDL, which for two of the four is not the identifier. */
   readonly ddlType: string;
-  /** Whether the pair's types carry a precision argument. */
   readonly precisionBearing: boolean;
   readonly temporal: Representation;
   readonly string: Representation;
 }
 
-/**
- * One row per PostgreSQL temporal type, transcribed from the project spec's taxonomy table.
- * `pg/timetz@1` and `pg/interval@1` are deliberately absent: they have one representation, not two.
- */
 const TAXONOMY: readonly TaxonomyRow[] = [
   {
     nativeType: 'date',
@@ -93,8 +68,6 @@ const TAXONOMY: readonly TaxonomyRow[] = [
       codecId: 'pg/date-string@1',
       descriptor: pgDateStringDescriptor,
       column: pgDateStringColumn,
-      // A void-params descriptor's renderer is never consulted, and branding the type would make
-      // a plain string unassignable on writes. Deliberate; see PgDateStringDescriptor.
       rendersAtPrecisionSix: undefined,
     },
   },
@@ -178,15 +151,10 @@ describe('the eight representation-explicit temporal codecs', () => {
       expect(rep.descriptor.nativeTypeFor({ codecId: rep.codecId })).toBe(row.ddlType);
     });
 
-    // Representation is a choice about what a read hands back, never about what can be compared:
-    // a column must sort and match identically whichever half of the pair it was authored with.
     it('carries equality and ordering', () => {
       expect(rep.descriptor.traits).toEqual(['equality', 'order']);
     });
 
-    // Introspection ownership. A bare `timestamptz` column has to resolve to exactly one codec, so
-    // the string half claims no target type at all — choosing it is always something an author
-    // writes down.
     it(
       kind === 'temporal'
         ? 'claims its native type for introspection'

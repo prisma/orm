@@ -726,23 +726,6 @@ export const postgresAuthoringFieldPresets = {
       nativeType: 'timestamptz',
     },
   },
-  /**
-   * Each helper names the representation it selects. The unsuffixed four read and write
-   * `Temporal.*` values; the `*String` four carry PostgreSQL's own text, which is the escape hatch
-   * for the values Temporal has no way to express — `infinity`, BC and expanded years, and any
-   * rendering a non-ISO `DateStyle` produces.
-   *
-   * Both halves lower through the same shared factories, so a pair differs in exactly two things:
-   * the codec it names, and the clock that answers `updatedAt`. The storage default on
-   * `createdAt` and the optional precision are literally the same.
-   *
-   * The clock has to differ because the value does. A generated default is bound through the
-   * column's codec like any other parameter, so the Temporal half needs a generator producing a
-   * `Temporal.Instant` (`instantNow`, contributed by this target) while the `*String` half keeps
-   * the family's `timestampNow`, whose `Date` an identity codec is happy to take. A generator
-   * receives no column or codec context, so the id it is reached by is the only place that choice
-   * can be made.
-   */
   temporal: {
     .../* @__PURE__ */ temporalAuthoringPresets({
       codecId: 'pg/timestamptz-temporal@1',

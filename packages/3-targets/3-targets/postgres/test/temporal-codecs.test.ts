@@ -1,16 +1,3 @@
-/**
- * The Temporal-backed codecs, at the codec boundary.
- *
- * Every spelling fed to a decode here was taken from a real PostgreSQL server rather than written
- * from memory — see the sibling integration suite, which reads the same values back out of a
- * database and asserts the same results. The point of duplicating them as literals is that this
- * file can then cover the boundaries exhaustively and instantly, without a server per case.
- *
- * `Temporal.*.from()` is the authoritative parser and range check. So the rejection tests are not
- * asserting "our validator says no" — they are asserting that we let Temporal say no and reported
- * it usefully, which is why each one pins the error's code and the `*String` type it recommends.
- */
-
 import type { JsonValue } from '@internal/contract/types';
 import { describe, expect, it } from 'vitest';
 import {
@@ -111,16 +98,7 @@ describe('Temporal-backed temporal codecs', () => {
     });
   });
 
-  /**
-   * The nested-read path. A relation read never calls `decode` — PostgreSQL builds the JSON and the
-   * codec's `decodeJson` reads it back — so this pair is what makes an `include(...)` return the
-   * same value the flat read does. Both directions are exercised here because they are separately
-   * reachable: `encodeJson` renders a value into a contract literal, `decodeJson` reads a projected
-   * column.
-   */
   describe('the JSON path carries the same values as the wire path', () => {
-    // Each row closes over its own codec so the four different `encodeJson` signatures never meet
-    // in a union — `text` renders the value, `read` reads a projection back as its own spelling.
     const cases = [
       {
         id: 'pg/date-temporal@1',
@@ -154,9 +132,6 @@ describe('Temporal-backed temporal codecs', () => {
       },
     ] as const;
 
-    // The projected text is what the `::text` cast makes PostgreSQL emit — a space separator and a
-    // two-digit offset, not the `T`/`Z` spelling Temporal writes. Reading it back is the whole
-    // point: the projection and `toString()` are different directions and need not agree.
     it.each(cases)('$id decodes the projected server text', ({ read, projected, text }) => {
       expect(read(projected)).toBe(text);
     });
@@ -213,10 +188,6 @@ describe('Temporal-backed temporal codecs', () => {
       },
     );
 
-    // Temporal rejects `infinity` on its own, so asserting only that the read fails would pass
-    // whether or not the sentinel branch existed. What that branch buys is a message that explains
-    // what the value *is* rather than "Cannot parse", and pinning its wording is the only thing
-    // that fails when someone deletes it.
     it.each([
       ['date', dateCodec, 'infinity'],
       ['date', dateCodec, '-infinity'],
@@ -303,12 +274,6 @@ describe('Temporal-backed temporal codecs', () => {
   });
 });
 
-/**
- * The temporal target types had no single-claimant assertion, which is exactly why a second claimant
- * could be registered beside each of them without anything failing: `byTargetType` was ambiguous for
- * the whole window in which both the Date-typed and the Temporal codec existed. With the old ones
- * gone, this locks the resolution — the sibling assertions on `int8` and `numeric` are the pattern.
- */
 describe('one claimant per temporal target type', () => {
   it.each([
     ['date', pgDateTemporalDescriptor],
@@ -328,18 +293,6 @@ describe('one claimant per temporal target type', () => {
   });
 });
 
-/**
- * The encode-side type check is nominal, on `Symbol.toStringTag`, and this is why.
- *
- * The parameter used to be typed structurally — anything with a `toString()` and an optional
- * `calendarId`. A `Date` satisfies that at compile time *and* at runtime, so a `Date` reaching an
- * encode was serialized with `Date.prototype.toString()` and sent to PostgreSQL as
- * `'Tue Aug 18 2026 15:09:05 GMT+0000 (Coordinated Universal Time)'`. The server rejected it with a
- * syntax error that named neither the codec nor the cause, and the mistake was invisible until then.
- *
- * That is not hypothetical: it is how `temporal.updatedAt()` shipped broken on every Temporal-backed
- * column, because the shared `timestampNow` generator hands out a `Date`.
- */
 describe('encode refuses a value that is not the codec’s own Temporal type', () => {
   it.each([
     ['pg/date-temporal@1', dateCodec, 'Temporal.PlainDate'],
@@ -347,7 +300,6 @@ describe('encode refuses a value that is not the codec’s own Temporal type', (
     ['pg/timestamptz-temporal@1', timestamptzCodec, 'Temporal.Instant'],
     ['pg/time-temporal@1', timeCodec, 'Temporal.PlainTime'],
   ])('%s rejects a Date rather than serializing it', async (codecId, codec, expectedType) => {
-    // The cast is the whole point: production code cannot reach this, and a test has to.
     await expect(codec.encode(new Date() as never, callCtx)).rejects.toThrow(
       new RegExp(`Codec '${codecId}' encodes a ${expectedType}, but received a Date`),
     );

@@ -128,9 +128,6 @@ const MIN_MAX_PRESERVING_CODECS = [
   PG_INTERVAL_CODEC_ID,
   PG_INET_CODEC_ID,
   PG_TEXT_ARRAY_CODEC_ID,
-  // PostgreSQL orders the stored values and returns one of them, so an extremum over any of these
-  // columns is a value of the same type — the representation-explicit codecs preserve their input
-  // exactly as the codecs over the same native types do, whichever representation they hand back.
   PG_DATE_STRING_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,

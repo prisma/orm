@@ -27,8 +27,6 @@ function createPostgresMutationDefaultGenerators() {
       stability: 'field' as const,
     })),
     timestampNowRuntimeGenerator(),
-    // The Temporal-backed sibling. `stability: 'query'` for the same reason `timestampNow` has it:
-    // one instant across every row and every temporal-defaulted column of one ORM operation.
     {
       id: INSTANT_NOW_GENERATOR_ID,
       generate: () => instantNow(),

@@ -1,14 +1,3 @@
-/**
- * The four temporal codecs whose application value is PostgreSQL's own text.
- *
- * Split out of `codecs.ts`, which the eight representation-explicit temporal codecs had grown past
- * two thousand lines. Their Temporal-valued counterparts live in `temporal-codecs.ts`, and the
- * substrate both halves share lives in `temporal-codec-helpers.ts`.
- *
- * A nested read projects the column through `::text`, so it returns the same spelling a flat read
- * does — including the session `TimeZone`'s offset, which both paths inherit alike.
- */
-
 import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
@@ -37,20 +26,6 @@ import {
   PG_TIMESTAMPTZ_NATIVE_TYPE,
 } from './temporal-codec-helpers';
 
-/**
- * Representation-explicit temporal codecs whose application value is PostgreSQL's own text.
- *
- * Every direction is identity: a value is bound exactly as the application supplied it, and the
- * server's rendering is returned exactly as it arrived. PostgreSQL alone decides which inputs are
- * valid and how an accepted value is normalised, so these codecs neither validate, normalise, nor
- * canonicalise. That is what makes them the lossless escape hatch for values with no counterpart in
- * a richer temporal representation — `infinity`, BC and expanded-year dates, microsecond precision —
- * and what makes session settings such as `DateStyle` and `TimeZone` observable rather than hidden.
- *
- * `targetTypes` is empty on all four: introspection ownership of `date` / `timestamp` /
- * `timestamptz` / `time` belongs to the codecs that carry the richer representation, and these are
- * selected explicitly by the schema author instead.
- */
 export class PgDateStringCodec extends CodecImpl<
   typeof PG_DATE_STRING_CODEC_ID,
   readonly ['equality', 'order'],
@@ -73,23 +48,11 @@ export class PgDateStringCodec extends CodecImpl<
   }
 }
 
-/**
- * Alone among the four, this descriptor carries no `renderOutputType`, so a `date` column reads as
- * plain `string` rather than a branded `DateString`. Two reasons, both structural: the emitter only
- * consults `renderOutputType` for a column with non-empty type params, and a `date` has no
- * precision to carry — so a renderer here would never be called. Branding the codec's own type
- * instead would reach the declaration, but it would also make the *write* side branded, and a
- * plain string literal is no longer assignable to it. The asymmetry is the honest shape; please
- * don't tidy it away.
- */
 export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
   protected override nativeType(): string {
     return PG_DATE_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    // The cast sits inside the projection, not around the JSON constructor: what `jsonProjection`
-    // returns is the argument the constructor receives, so casting here happens before PostgreSQL
-    // builds the JSON value rather than after, when the rendering is already fixed.
     return CastExpr.as(expression, 'text');
   }
   override readonly codecId = PG_DATE_STRING_CODEC_ID;

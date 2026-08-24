@@ -1,18 +1,3 @@
-/**
- * Full-stack proof that the `*-string` temporal codecs are a lossless escape hatch.
- *
- * Two properties, neither of which a unit test can establish, because both are about what a real
- * PostgreSQL server does rather than about what the codec does:
- *
- * - Values with no counterpart in a richer temporal representation — `infinity`, BC dates, expanded
- *   years, microsecond precision — survive a write and a read with the server's rendering intact.
- * - Session settings that change how the server renders a stored value are *observable* through
- *   these codecs. Nothing between the wire and the application re-formats or pins the output, so a
- *   non-default `DateStyle` or `TimeZone` shows up in the value the caller receives.
- *
- * The whole suite runs with no global `Temporal`, which is the point of the representation.
- */
-
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import postgresRuntimeDriverDescriptor from '@internal/driver-postgres/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
@@ -174,8 +159,6 @@ describe('temporal string codecs round-trip PostgreSQL text', () => {
     const context = createExecutionContext({ contract: buildContract(), stack });
     const stackInstance = instantiateExecutionStack(stack);
 
-    // A pinned client, not a pool: the session-rendering tests below issue `SET` and then read on
-    // the same session, which only holds when every statement runs on one connection.
     const driver = postgresRuntimeDriverDescriptor.create();
     await driver.connect({ kind: 'pgClient', client });
     session = driver;
@@ -310,9 +293,6 @@ describe('temporal string codecs round-trip PostgreSQL text', () => {
       expect(await read(1)).toEqual({
         d: '02.01.2026',
         ts: '02.01.2026 03:04:05.123456',
-        // German DateStyle swaps the numeric offset for the zone abbreviation — a rendering no
-        // client-side formatter would produce, and the clearest evidence the server's own text is
-        // what reaches the caller.
         tstz: '02.01.2026 03:04:05.123456 UTC',
         t: '03:04:05.123456',
       });
