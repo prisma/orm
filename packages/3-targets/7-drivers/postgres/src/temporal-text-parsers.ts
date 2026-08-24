@@ -11,8 +11,6 @@ const TIME_ARRAY_OID = 1183;
 const TIMESTAMP_ARRAY_OID = 1115;
 const TIMESTAMPTZ_ARRAY_OID = 1185;
 
-const TEXT_ARRAY_OID = 1009;
-
 const TEMPORAL_SCALAR_OIDS: ReadonlySet<number> = new Set([
   DATE_OID,
   TIME_OID,
@@ -57,24 +55,36 @@ function serverText(value: string): string {
   return value;
 }
 
-let textArrayParser: TextParser | undefined;
+/** `pg-types`' `arrayParser` as it exists at runtime; its published type says otherwise — see below. */
+type ArrayParser = {
+  readonly create: (source: string) => { readonly parse: () => unknown[] };
+};
 
 /**
- * Borrows `pg`'s own `text[]` parser for the temporal array OIDs.
+ * Splits a PostgreSQL array literal into its elements, leaving each one exactly as the server wrote
+ * it. That is the whole requirement here: the array structure interpreted, the elements not.
  *
- * It splits the array literal into elements and leaves each one exactly as the server wrote it,
- * which is the whole requirement: the array structure interpreted, the elements not. Delegating
- * rather than reimplementing means array-literal quoting, escaping, nesting and NULL handling stay
- * `pg`'s problem, and a fix there arrives here for free.
+ * `pg`'s own parser does the splitting, so array-literal quoting, escaping, nesting and NULL
+ * handling stay its problem and a fix there arrives here for free. Called with no transform, which
+ * is what leaves the elements as text.
  *
- * `pg` exposes the underlying `arrayParser` too, and `arrayParser.create(value).parse()` is the
- * same code path — `parseStringArray` is literally that call behind a null guard. Reaching for it
- * would drop the OID from this file, but only by copying that guard back in, so it trades a number
- * for a duplicated fragment of the parser this module is trying not to reimplement.
+ * The published type declares `arrayParser` as `(source, transform) => any[]`, but at runtime it is
+ * `{ create }` — `create(source, transform)` returns an object with a `parse()`. The cast corrects
+ * that declaration rather than asserting anything about a value.
+ *
+ * The empty-input guard mirrors `pg-types`' own `parseStringArray`, which is the wrapper this
+ * bypasses: `pg` hands `null` straight through for an SQL NULL, and `array.parse` would throw on it.
  */
-function parseTextArray(): TextParser {
-  textArrayParser ??= getTypeParser(TEXT_ARRAY_OID, 'text');
-  return textArrayParser;
+function parseTextArray(value: string): unknown {
+  if (!value) {
+    return null;
+  }
+  return blindCast<
+    ArrayParser,
+    'pg-types declares arrayParser as a function; at runtime it is an object exposing create()'
+  >(pgTypes.arrayParser)
+    .create(value)
+    .parse();
 }
 
 /**
@@ -98,7 +108,7 @@ export const temporalTextTypes: CustomTypesConfig = {
       return serverText;
     }
     if (TEMPORAL_ARRAY_OIDS.has(oid)) {
-      return parseTextArray();
+      return parseTextArray;
     }
     return getTypeParser(oid, format);
   },
