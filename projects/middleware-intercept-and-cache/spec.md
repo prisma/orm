@@ -68,7 +68,7 @@ const plan = db.sql
   .build()
 
 // ORM
-const users = await db.orm.User.take(10).all()
+const users = await db.orm.User.limit(10).all()
 ```
 
 **After** — applicability-typed annotations:
