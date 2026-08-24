@@ -77,7 +77,7 @@ function skillCalls(): readonly RunnerCall[] {
 
 describe('init installs', () => {
   it(
-    'pins the engine to the exact version the installed @prisma/cli declares',
+    'pins the engine to the exact version the installed prisma package declares',
     async () => {
       const cliManifestDir = join(projectDir, 'node_modules', 'prisma');
       mkdirSync(cliManifestDir, { recursive: true });

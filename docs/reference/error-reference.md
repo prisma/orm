@@ -143,7 +143,7 @@ The code was raised by the commander `init` (deleted in the S5 cutover), whose c
 
 ### CLI.INIT_SKILL_INSTALL_FAILED
 
-Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skills add`, and raised this at exit `6` when that fetch failed. The skills now ship inside the `@prisma/orm-*` packages a project installs, and `orm init` no longer touches them at all: skills setup belongs to the family-level `prisma init` command, and `prisma skills sync` copies the skills out of the installed packages whenever it runs. Init exits `4` or `5` now — there is no exit `6`, and nothing raises this code.
+Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skills add`, and raised this at exit `6` when that fetch failed. The skills now ship inside the `@prisma/orm-*` packages a project installs, and `orm init` no longer touches them at all: skills setup belongs to the family-level `prisma init` command, and `prisma skills sync` copies the skills out of the installed packages whenever it runs. Init's remaining failure exits are `4` (dependency install failed) and `5` (contract emission failed); there is no exit `6`, and nothing raises this code.
 
 ### CLI.INIT_STRICT_PROBE_WITHOUT_PROBE
 
