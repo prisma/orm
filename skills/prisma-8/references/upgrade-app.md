@@ -69,7 +69,12 @@ For each `(from, to)` step in the chain:
 
 4. **Apply each change.** For each entry in `changes[]`:
    - If the entry has a `detection` block (glob + content predicate), run it; skip the change if no files match. No `detection` → apply unconditionally.
-   - If the entry names a `script:` (relative path next to `instructions.md`), invoke it from the project root: `*.ts` via `pnpm exec tsx <path>`, `*.sh` via `bash <path>`, codemods per the script's own prose. No `script` → follow the prose body directly.
+   - If the entry names a `script:` (a relative path next to `instructions.md`), invoke it from the project root:
+     - `*.ts` → `pnpm exec tsx <skill>/upgrading/app/upgrades/<from>-to-<to>/<script>`
+     - `*.sh` → `bash <skill>/upgrading/app/upgrades/<from>-to-<to>/<script>`
+     - codemods → invoke per the script's own prose.
+
+     No `script` → follow the prose body directly.
 
    Empty `changes[]` (placeholder shape for transitions with no user-side breaking changes) is a no-op — proceed to validation.
 
