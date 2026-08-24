@@ -17,7 +17,7 @@ description: >-
   (schema.prisma + @prisma/client projects).
 metadata:
   library: '@prisma/orm-postgres'
-  library_version: '8.0.0-rc.5'
+  library_version: '8.0.0-rc.6'
 ---
 
 # Prisma Next (Prisma 8)

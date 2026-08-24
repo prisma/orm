@@ -3,16 +3,16 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@internal/adapter-postgres": "workspace:8.0.0-rc.5",
-    "@internal/cli": "workspace:8.0.0-rc.5",
-    "@internal/family-sql": "workspace:8.0.0-rc.5",
-    "@internal/sql-contract-ts": "workspace:8.0.0-rc.5",
-    "@internal/target-postgres": "workspace:8.0.0-rc.5",
-    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.5",
-    "@prisma/orm-mongo": "workspace:8.0.0-rc.5",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.5",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.5",
+    "@internal/adapter-postgres": "workspace:8.0.0-rc.6",
+    "@internal/cli": "workspace:8.0.0-rc.6",
+    "@internal/family-sql": "workspace:8.0.0-rc.6",
+    "@internal/sql-contract-ts": "workspace:8.0.0-rc.6",
+    "@internal/target-postgres": "workspace:8.0.0-rc.6",
+    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.6",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.6",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.6",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.6",
     "pg": "catalog:"
   },
-  "version": "8.0.0-rc.5"
+  "version": "8.0.0-rc.6"
 }

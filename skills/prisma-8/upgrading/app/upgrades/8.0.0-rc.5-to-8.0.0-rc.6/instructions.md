@@ -105,40 +105,32 @@ changes:
       regex:
         - "(Date|Timestamp|Timestamptz|Time)(\\([0-9]+\\))?\\s+@default\\(\""
       anyMatch: true
-
+  - id: orm-init-no-longer-installs-agent-skills
+    summary: |
+      `prisma orm init` no longer installs agent skills: the GitHub fetch (`npx skills add`)
+      is removed and nothing inside `orm init` replaces it. Agent-skills setup belongs to the
+      family-level `prisma init` command. The `--skip-skills` flag is removed with the
+      behavior it opted out of. Existing projects keep whatever skills they already have;
+      only scripts that invoke `orm init` and expect it to deliver skills (or pass
+      `--skip-skills`) need to change.
+    detection:
+      glob: "**/*.{sh,yml,yaml,json,md}"
+      regex:
+        - '\borm\s+init\b'
+      anyMatch: true
+  - id: contract-artifacts-restamp
+    summary: |
+      The emitted `contract.json` / `contract.d.ts` embed the toolchain version, which moves
+      to 8.0.0-rc.6. Run `contract emit` once after upgrading so the emitted artifacts match
+      the installed toolchain. The restamp is independent of the other changes in this
+      release.
+    detection:
+      glob: "**/contract.json"
+      contains:
+        - '"version": "8.0.0-rc.5"'
 ---
 
-# 8.0.0-rc.4 → 8.0.0-rc.5 — User upgrade instructions
-
-## `attach-pg-client-error-listener`
-
-Walk every file matched by `detection.glob`. For each `pg.Client` or `pg.Pool` your code constructs and uses directly (not one handed to `postgres({ pg: ... })` / `supabase({ pg: ... })` — the runtime covers those since rc.5), attach an `'error'` listener right after construction, before `connect()`:
-
-```ts
-const client = new pg.Client({ connectionString });
-client.on('error', () => {});
-await client.connect();
-```
-
-A no-op listener is enough: connect and query failures still reject their own promises, so nothing real is masked — the listener only stops a dropped idle connection from becoming an uncaught exception. If the handle is long-lived and you have a logging channel, log the error instead of discarding it.
-
-Note that a surrounding `try/catch` does **not** cover this case — the `'error'` event is emitted on the client object asynchronously, outside any promise chain the `catch` can see.
-
-# 8.0.0-rc.4 → 8.0.0-rc.5 — User upgrade instructions
-
-## `attach-pg-client-error-listener`
-
-Walk every file matched by `detection.glob`. For each `pg.Client` or `pg.Pool` your code constructs and uses directly (not one handed to `postgres({ pg: ... })` / `supabase({ pg: ... })` — the runtime covers those since rc.5), attach an `'error'` listener right after construction, before `connect()`:
-
-```ts
-const client = new pg.Client({ connectionString });
-client.on('error', () => {});
-await client.connect();
-```
-
-A no-op listener is enough: connect and query failures still reject their own promises, so nothing real is masked — the listener only stops a dropped idle connection from becoming an uncaught exception. If the handle is long-lived and you have a logging channel, log the error instead of discarding it.
-
-Note that a surrounding `try/catch` does **not** cover this case — the `'error'` event is emitted on the client object asynchronously, outside any promise chain the `catch` can see.
+# 8.0.0-rc.5 → 8.0.0-rc.6 — User upgrade instructions
 
 # PostgreSQL temporal representations
 
@@ -153,4 +145,13 @@ naming the `*String` type that reads the same column losslessly. And a nested re
 text a flat read does, because temporal expressions are cast to `text` before PostgreSQL builds the
 JSON, which means both reflect the session `TimeZone`.
 
+## `orm-init-no-longer-installs-agent-skills`
 
+Nothing to change in an existing project: skills already on disk stay as they are. Walk every `orm init` invocation the detection finds (a mention in prose that is not a command needs no action):
+
+- An invocation passing `--skip-skills`: drop the flag — it no longer exists and the invocation fails with an unknown-flag error. The behavior it opted out of is gone, so the flagless invocation is the equivalent.
+- A plain invocation with no flag: the scaffold itself is unchanged, but it no longer installs agent skills. If the script (or the person following it) relied on that, run `prisma init` in the project afterwards; that command owns skills setup now. If skills were incidental, no change is needed.
+
+## `contract-artifacts-restamp`
+
+For every `contract.json` matched by `detection`, run the project's emit command (`prisma contract emit`, or the project's `contract:emit` script) once after upgrading. The only expected diff is the embedded `version` moving to `8.0.0-rc.6`.

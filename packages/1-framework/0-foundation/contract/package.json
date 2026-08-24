@@ -1,7 +1,7 @@
 {
   "name": "@internal/contract",
   "private": true,
-  "version": "8.0.0-rc.5",
+  "version": "8.0.0-rc.6",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,13 +16,13 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/utils": "workspace:8.0.0-rc.5",
+    "@internal/utils": "workspace:8.0.0-rc.6",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "catalog:"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.5",
-    "@repo/tsdown": "workspace:8.0.0-rc.5",
+    "@repo/tsconfig": "workspace:8.0.0-rc.6",
+    "@repo/tsdown": "workspace:8.0.0-rc.6",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
