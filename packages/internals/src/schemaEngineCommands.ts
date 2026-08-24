@@ -75,7 +75,7 @@ export function parseJsonFromStderr(stderr: string): SchemaEngineLogLine[] {
  * back to the raw stderr so the error always carries some diagnostic content.
  */
 export function formatSchemaEngineError(logs: SchemaEngineLogLine[], stderr: string): string {
-  const messages = logs.map((log) => log.fields.message).filter(Boolean)
+  const messages = logs.map((log) => log.fields.message).filter((message) => Boolean(message?.trim()))
   return messages.length > 0 ? messages.join('\n') : stderr
 }
 

@@ -60,6 +60,10 @@ describe('formatSchemaEngineError', () => {
   test('falls back to the raw stderr when log lines have empty messages', () => {
     expect(formatSchemaEngineError([log('')], 'raw stderr')).toBe('raw stderr')
   })
+
+  test('falls back to the raw stderr when log lines have whitespace-only messages', () => {
+    expect(formatSchemaEngineError([log('   ')], 'raw stderr')).toBe('raw stderr')
+  })
 })
 
 describe('parseJsonFromStderr', () => {
