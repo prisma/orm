@@ -182,9 +182,11 @@ There is no codemod: the retired ids map to *two* replacements each, and which o
 should name is a judgement about what its consumers do with the column. Sweep by id, decide per
 site, then re-emit any committed contract artifact.
 
-The behavioural reference — precision, the values Temporal rejects, the driver's text boundary,
-and flat/nested agreement — is in the repository's
-[PostgreSQL temporal types](https://github.com/prisma/prisma/blob/main/docs/reference/postgres-temporal-types.md)
-documentation.
+Four behaviours bear on an extension's own codecs. Writes serialize at full precision and let
+PostgreSQL round to the column's declared precision, carries included. A Temporal codec rejects
+`infinity`, years beyond roughly ±271821, and non-ISO `DateStyle` output, naming the `*String` type
+that reads them losslessly. The driver hands temporal OIDs through as server text rather than
+building a `Date`. And temporal expressions are cast to `text` before PostgreSQL builds JSON, so a
+nested read returns the same text a flat one does.
 
 

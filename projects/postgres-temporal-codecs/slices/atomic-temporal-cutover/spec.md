@@ -112,14 +112,15 @@ One reviewer holds one question: *does a PostgreSQL temporal value cross every b
 - `packages/1-framework/3-tooling/cli/src/commands/init/templates/code-templates.ts` — the scaffold's four temporal touchpoints move to the `*String` variants (added at D5; see § What `prisma init` scaffolds).
 - `temporal-polyfill` as a **devDependency** of the test packages that exercise Temporal codecs; global install in test setup only.
 - Fixture regeneration: `test/integration/**`, `packages/3-extensions/**` (paradedb, pgvector, supabase, postgis, sql-orm-client), `packages/2-sql/4-lanes/sql-builder/test/fixtures/**`.
-- User + architecture documentation for the representation model, Temporal requirement, raw-string contract, and unsupported values.
+- Upgrade-instruction entries under `skills/prisma-8/upgrading/` for the representation model, Temporal requirement, raw-string contract, and unsupported values. **Amended during delivery**: a standalone reference document was written and then removed at the operator's request — it restated what these entries already carry.
 
 **Out:**
 
 - `timetz` and `interval` — behaviour unchanged, no Temporal or string variants.
 - SQLite and MongoDB temporal representations.
 - Any production dependency on a Temporal polyfill.
-- An ADR. Operator decision: this lands within the existing ADR 030 / ADR 202 boundaries; the documentation DoD item is satisfied by user-facing docs.
+- An ADR. Operator decision: this lands within the existing ADR 030 / ADR 202 boundaries; the documentation DoD item is satisfied by the upgrade-instruction entries.
+- A standalone reference document under `docs/reference/`. Removed at the operator's request; the upgrade entries are the surface consumers reach, and they are gated by `check:upgrade-coverage`.
 
 ## Pre-investigated edge cases
 

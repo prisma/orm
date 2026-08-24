@@ -147,8 +147,10 @@ Temporal and the string representation is per column and only you know which val
 holds. Work through the schema first, re-emit, then let the generated `contract.d.ts` types drive
 the application-code changes — the compiler will point at every site whose value type moved.
 
-The full reference, including precision behaviour, the values Temporal rejects and why, and the
-driver's text boundary, is in the repository's [PostgreSQL temporal types](https://github.com/prisma/prisma/blob/main/docs/reference/postgres-temporal-types.md)
-documentation.
+Two behaviours are worth knowing before you choose. A Temporal codec rejects what `Temporal` cannot
+denote — `infinity`, years beyond roughly ±271821, and output rendered under a non-ISO `DateStyle` —
+naming the `*String` type that reads the same column losslessly. And a nested read returns the same
+text a flat read does, because temporal expressions are cast to `text` before PostgreSQL builds the
+JSON, which means both reflect the session `TimeZone`.
 
 

@@ -68,7 +68,7 @@ Removing `sql/timestamp@1` retires the generic `field.timestamp()` path and its 
 - A missing global Temporal implementation produces `RUNTIME.TEMPORAL_UNAVAILABLE` lazily when a Temporal codec is invoked, with actionable global-polyfill guidance. The PostgreSQL target owns this error: `PostgresTargetErrorCode` and an internal `errorTemporalUnavailable(codecId, operation)` factory live in `packages/3-targets/3-targets/postgres/src/core/errors.ts`, while a `requireTemporal()` helper in `codec-helpers.ts` performs the capability check. The factory records the codec ID and operation and explains how to install a global implementation. It returns a structured error so generic encode and decode machinery passes the stable code through unchanged instead of wrapping it as `RUNTIME.ENCODE_FAILED` or `RUNTIME.DECODE_FAILED`. The generic SQL runtime and framework error modules remain unaware of Temporal. String codecs and runtime construction never require Temporal.
 - The generic codec runtime, execution-context assembly, and descriptor factory lifecycle gain no PostgreSQL- or Temporal-specific hooks. PostgreSQL-specific behavior stays in the target codecs and driver.
 - The private `Date` produced by `timestampNow` remains operation-scoped and wire-compatible for mutation defaults. It does not widen generated contract types or reintroduce a user-selectable Date codec.
-- Documentation explains representation semantics, raw PostgreSQL string behavior, Temporal installation expectations, unsupported values, precision behavior, and migration away from `sql/timestamp@1` and the old PostgreSQL temporal codec IDs.
+- Migration guidance explains representation semantics, raw PostgreSQL string behavior, Temporal installation expectations, unsupported values, precision behavior, and the move away from `sql/timestamp@1` and the old PostgreSQL temporal codec IDs. **Amended during delivery** (operator decision): this ships as upgrade-instruction entries under `skills/prisma-8/upgrading/`, not as a standalone reference document. A reference doc was written and then removed — it restated what the upgrade entries already carry, and the entries are the surface a consumer actually reaches, gated by `check:upgrade-coverage`.
 
 ## Transitional-shape constraints
 
@@ -91,7 +91,7 @@ Removing `sql/timestamp@1` retires the generic `field.timestamp()` path and its 
 - [ ] `temporal.createdAt()` and `temporal.updatedAt()` retain their storage-default and one-value-per-ORM-operation semantics, and their `*String` counterparts provide equivalent behavior.
 - [ ] `sql/timestamp@1`, the generic `field.timestamp()` helper, old PostgreSQL temporal codec IDs, and all production references to their public Date representation are removed without compatibility shims.
 - [ ] PostgreSQL `timetz` and `interval` behavior is unchanged, and no Temporal-specific knowledge is added to the generic SQL runtime.
-- [ ] Canonical user and architecture documentation describes the final representation model, runtime requirement, raw string contract, driver boundary, and unsupported-value behavior.
+- [ ] Upgrade instructions for both substrates describe the final representation model, runtime requirement, raw string contract, driver boundary, and unsupported-value behavior. **Amended during delivery** — this originally required a canonical reference document; see the migration-guidance bullet above for why that was removed.
 
 ## Open Questions
 
