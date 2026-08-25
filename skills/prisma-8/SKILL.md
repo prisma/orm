@@ -40,7 +40,7 @@ Three steps the user does:
 
 Everything else — queries, runtime wiring, build integration, debugging, feedback — sits on top of those three.
 
-One cross-cutting migration fact: `migration plan` does **not** chain from the newest migration on disk. Its origin is `--from`, else the `db` ref, else an empty database — so with no ref it silently plans from scratch. If plan output says `from: (baseline)` while migrations already exist, stop: that plan is almost always wrong. [`references/migration-model.md`](references/migration-model.md) § *The trap* has the exits.
+One cross-cutting migration fact: `migration plan` does **not** chain from the newest migration on disk. Its origin is `--from`, else the `db` ref, else an empty database — so a project with no ref keeps planning from scratch. Over existing migrations the CLI refuses that (`MIGRATION.PLAN_ORIGIN_UNKNOWN`) instead of writing a full-create package; choose the exit that matches your intent rather than reflexively passing `--from @empty`. [`references/migration-model.md`](references/migration-model.md) § *The trap* explains which to choose.
 
 ## Routing table
 
