@@ -72,7 +72,7 @@ It is **offline** — it never consults a database, never reads a marker. Whatev
 
 The human output names the resolved origin on its `from:` line. **`from: (baseline)` means the origin resolved to nothing — the plan starts from an empty database** and will contain a create for every object in the contract.
 
-**Auto-baseline.** When the graph is *empty* and the origin resolved through a ref to a real hash (the typical first plan after `db update` cycles), the planner emits **two** bundles in one invocation — a baseline `null → ref-hash` plus the delta `ref-hash → contract` — so the ref's hash becomes a graph node and the plan is applyable. Expect two new directories in `git status`. Details and the related refusals (`MIGRATION.HASH_NOT_IN_GRAPH`, `MIGRATION.SNAPSHOT_MISSING`) are in `references/migrations.md` § *Dev → ship transition*.
+**Auto-baseline.** When the graph is *empty* and the origin resolved through a ref to a real hash (the typical first plan after `db update` cycles), the planner emits **two** bundles in one invocation — a baseline `null → ref-hash` plus the delta `ref-hash → contract` — so the ref's hash becomes a graph node and the plan can be applied. Expect two new directories in `git status`. Details and the related refusals (`MIGRATION.HASH_NOT_IN_GRAPH`, `MIGRATION.SNAPSHOT_MISSING`) are in `references/migrations.md` § *Dev → ship transition*.
 
 ## The trap — a greenfield plan over existing migrations
 

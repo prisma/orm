@@ -35,7 +35,7 @@ A live DB is therefore the authoritative source of origin. The "recorded marker"
 
 The **destination** is the contract hash you want the database to be at. Two ways to name a destination:
 
-- **A `--to <name>`** — a named pointer to a hash, stored under `migrations/app/refs/<name>`. Refs are named after environments by convention (`staging`, `production`) to communicate *"this is where production is expected to be"*. The ref itself is just a hash + an optional set of required invariants; it has nothing to do with which database you connect to.
+- **A `--to <name>`** — a named pointer to a hash, stored under `migrations/app/refs/<name>.json`. Refs are named after environments by convention (`staging`, `production`) to communicate *"this is where production is expected to be"*. The ref itself is just a hash + an optional set of required invariants; it has nothing to do with which database you connect to.
 - **The current contract head** — implicit when no `--to` is passed. This is the hash of the current `contract.json` on disk.
 
 `--to staging` does **not** mean "connect to the staging database." It means "navigate the database I connected to (via `--db` or config) toward whatever hash this ref points at." Database selection is orthogonal: pass `--db $STAGING_DATABASE_URL` to actually point at staging.
