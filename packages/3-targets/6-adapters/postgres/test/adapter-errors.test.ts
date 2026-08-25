@@ -142,6 +142,22 @@ describe('adapter-postgres structured error codes', () => {
     );
   });
 
+  it('raises RUNTIME.AST_INVALID for a non-finite LIMIT or OFFSET', () => {
+    const base = () =>
+      SelectAst.from(TableSource.named('user', undefined, 'public')).withProjection([
+        ProjectionItem.of('id', ColumnRef.of('user', 'id')),
+      ]);
+    for (const ast of [
+      base().withLimit(Number.NaN),
+      base().withLimit(Number.POSITIVE_INFINITY),
+      base().withOffset(Number.NaN),
+    ]) {
+      expect(structuredCodeOf(() => renderLoweredSql(ast, contract, codecLookup))).toBe(
+        'RUNTIME.AST_INVALID',
+      );
+    }
+  });
+
   it('raises RUNTIME.AST_INVALID for an INSERT with zero rows', () => {
     const ast = InsertAst.into(TableSource.named('user', undefined, 'public')).withRows([]);
     expect(structuredCodeOf(() => renderLoweredSql(ast, contract, codecLookup))).toBe(
