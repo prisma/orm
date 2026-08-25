@@ -87,7 +87,7 @@ export function structuredError(
   });
 }
 
-export const DOCS_ERRORS_VERSION = 'next';
+export const DOCS_ERRORS_VERSION = 'v8';
 export const DOCS_BASE = `https://docs.prisma.io/docs/orm/${DOCS_ERRORS_VERSION}/reference/error-reference`;
 
 export function docsUrlFor(code: string): string {
