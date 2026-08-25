@@ -18,7 +18,7 @@
   "dependencies": {
     "@internal/config": "workspace:8.0.0-rc.7",
     "@internal/utils": "workspace:8.0.0-rc.7",
-    "@vercel/detect-agent": "^1.2.4",
+    "@vercel/detect-agent": "^1.2.5",
     "arktype": "catalog:",
     "c12": "^3.3.4",
     "pathe": "^2.0.3"

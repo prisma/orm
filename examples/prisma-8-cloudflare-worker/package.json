@@ -35,7 +35,7 @@
     "@types/pg": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "wrangler": "4.119.0"
   },
   "version": "8.0.0-rc.7"
