@@ -1,6 +1,6 @@
 {
   "name": "@repo/test-utils",
-  "version": "8.0.0-rc.6",
+  "version": "8.0.0-rc.7",
   "private": true,
   "type": "module",
   "sideEffects": false,
@@ -13,15 +13,15 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.6",
-    "@internal/utils": "workspace:8.0.0-rc.6"
+    "@internal/contract": "workspace:8.0.0-rc.7",
+    "@internal/utils": "workspace:8.0.0-rc.7"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.6",
+    "@repo/tsconfig": "workspace:8.0.0-rc.7",
     "@prisma/dev": "catalog:",
     "@types/pg": "catalog:",
     "pg": "catalog:",
-    "@repo/tsdown": "workspace:8.0.0-rc.6",
+    "@repo/tsdown": "workspace:8.0.0-rc.7",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

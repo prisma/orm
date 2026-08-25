@@ -3,12 +3,12 @@
   "type": "module",
   "private": true,
   "sideEffects": false,
-  "version": "8.0.0-rc.6",
+  "version": "8.0.0-rc.7",
   "description": "Base tsdown configuration for the monorepo",
   "license": "MIT",
   "devDependencies": {
-    "@internal/publish-surface": "workspace:8.0.0-rc.6",
-    "@repo/tsconfig": "workspace:8.0.0-rc.6",
+    "@internal/publish-surface": "workspace:8.0.0-rc.7",
+    "@repo/tsconfig": "workspace:8.0.0-rc.7",
     "es-module-lexer": "^2.3.1",
     "tsdown": "catalog:",
     "typescript": "catalog:"

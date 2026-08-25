@@ -489,7 +489,7 @@ function rewritePackageJsonForTarballs(dir: string, cell: CellId, tarballs: Pack
   // (0.2.0+), and should track what the workspace pins.
   pkg.devDependencies = {
     ...(pkg.devDependencies ?? {}),
-    '@prisma/cli-engine': '0.2.2',
+    '@prisma/cli-engine': '0.2.3',
     '@types/node': '^24.10.4',
     typescript: '^5.9.3',
   };

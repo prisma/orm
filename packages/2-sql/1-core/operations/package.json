@@ -1,7 +1,7 @@
 {
   "name": "@internal/sql-operations",
   "private": true,
-  "version": "8.0.0-rc.6",
+  "version": "8.0.0-rc.7",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,15 +16,15 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/operations": "workspace:8.0.0-rc.6",
-    "@internal/sql-contract": "workspace:8.0.0-rc.6",
+    "@internal/operations": "workspace:8.0.0-rc.7",
+    "@internal/sql-contract": "workspace:8.0.0-rc.7",
     "arktype": "^2.2.2"
   },
   "devDependencies": {
-    "@internal/emitter": "workspace:8.0.0-rc.6",
-    "@repo/test-utils": "workspace:8.0.0-rc.6",
-    "@repo/tsconfig": "workspace:8.0.0-rc.6",
-    "@repo/tsdown": "workspace:8.0.0-rc.6",
+    "@internal/emitter": "workspace:8.0.0-rc.7",
+    "@repo/test-utils": "workspace:8.0.0-rc.7",
+    "@repo/tsconfig": "workspace:8.0.0-rc.7",
+    "@repo/tsdown": "workspace:8.0.0-rc.7",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

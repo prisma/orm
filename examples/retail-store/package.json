@@ -18,8 +18,8 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-extension-middleware-cache": "workspace:8.0.0-rc.6",
-    "@prisma/orm-mongo": "workspace:8.0.0-rc.6",
+    "@prisma/orm-extension-middleware-cache": "workspace:8.0.0-rc.7",
+    "@prisma/orm-mongo": "workspace:8.0.0-rc.7",
     "@radix-ui/react-dropdown-menu": "^2.1.24",
     "@radix-ui/react-label": "^2.1.15",
     "@radix-ui/react-radio-group": "^1.4.7",
@@ -39,9 +39,9 @@
     "tailwindcss": "^4.3.3"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.2.2",
-    "@repo/test-utils": "workspace:8.0.0-rc.6",
-    "@repo/tsconfig": "workspace:8.0.0-rc.6",
+    "@prisma/cli-engine": "0.2.3",
+    "@repo/test-utils": "workspace:8.0.0-rc.7",
+    "@repo/tsconfig": "workspace:8.0.0-rc.7",
     "@types/node": "catalog:",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
@@ -51,5 +51,5 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.6"
+  "version": "8.0.0-rc.7"
 }

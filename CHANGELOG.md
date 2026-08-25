@@ -6,6 +6,14 @@ Changelog tracking starts at **v0.12.0**, the first release cut after this conve
 
 <!-- New release entries go here, newest first, each mirroring docs/releases/v<version>.md under a `## v<version>` header. -->
 
+## v8.0.0-rc.7
+
+A single operational change: the toolchain releases against `@prisma/cli-engine@0.2.3`, the engine whose config loader ships the `prisma init` scaffold fixes from the unified CLI's rc line. No ORM authoring, runtime, or CLI surface changes ship in this release.
+
+### Breaking changes
+
+- **The engine peer moves to `@prisma/cli-engine@0.2.3`** — `@prisma/orm-toolchain` declares the unified CLI's engine as an exact peer, and this release peers 0.2.3 (up from 0.2.2). Installs assembled by the unified `prisma` CLI resolve one engine as before; a host that pins the engine itself must move to 0.2.3. ([prisma/prisma-cli#225](https://github.com/prisma/prisma-cli/pull/225), [prisma/prisma-cli#227](https://github.com/prisma/prisma-cli/pull/227))
+
 ## v8.0.0-rc.6
 
 PostgreSQL temporal columns move from `Date` to explicit `Temporal`-or-text representations, the prisma-8 agent skill ships inside the ORM packages a project installs, `prisma orm init` hands agent-skills setup to the family-level `prisma init`, and the toolchain releases against `@prisma/cli-engine@0.2.2` — the engine that evaluates `prisma.config.ts` correctly under pnpm symlink layouts.
