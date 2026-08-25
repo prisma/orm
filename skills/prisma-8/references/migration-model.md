@@ -48,13 +48,13 @@ pnpm prisma migration ref list
 pnpm prisma migration ref delete <name>
 ```
 
-`migration ref set` refuses a hash that is not a node of the migration graph (`MIGRATION.HASH_NOT_IN_GRAPH`) — a ref is a pointer *into the graph*, so the node has to exist first. Find node hashes with `migration list`.
+`migration ref set` requires the target to be the `to` hash of an on-disk migration. A hash outside the graph is refused (`MIGRATION.HASH_NOT_IN_GRAPH`); a hash that appears in the graph only as a `from` — no bundle produces it — is refused too (`MIGRATION.REF_SET_BUNDLE_NOT_FOUND`). Find node hashes with `migration list`.
 
 ### Who advances refs
 
 | Command | Ref advancement |
 |---|---|
-| `db init` / `db update` (default URL) | Implicitly advance `db` (override the name with `--advance-ref <name>`; suppressed when `--db <non-default-url>` is passed without `--advance-ref`) |
+| `db init` / `db update` (default URL) | Implicitly advance `db` (override the name with `--advance-ref <name>`; suppressed whenever `--db` is passed without `--advance-ref`, regardless of the URL — even `--db $DATABASE_URL` pointing at the default database) |
 | `db migrate --advance-ref <name>` | The **only** apply-time advancement |
 | plain `db migrate` | **Never advances anything** — deliberate: deploy and CI applies must not infer dev intent |
 | `migration plan` | Never advances anything — chaining discipline is yours |
@@ -64,7 +64,7 @@ pnpm prisma migration ref delete <name>
 
 `migration plan` resolves its origin in exactly this order:
 
-1. Explicit `--from <ref-name | hash | hash-prefix | migration-dir | migration-dir^>`.
+1. Explicit `--from <ref-name | hash | hash-prefix | migration-dir | migration-dir^ | ./path | @contract | @db>` — `@db` reads the live database's marker and is the one origin form that is not offline.
 2. No `--from` → the `db` ref (`migrations/app/refs/db.json`).
 3. No `db` ref → **greenfield: the plan starts from the empty database.**
 
@@ -78,7 +78,7 @@ The human output names the resolved origin on its `from:` line. **`from: (baseli
 
 **A plan whose origin resolved to greenfield while migrations already exist on disk is almost always a mistake.** Nothing warns you at plan time. The package it writes is a full-create migration, and it cannot do what you meant: a database that has the prior migrations applied refuses it (`MIGRATION.PATH_UNREACHABLE` — no path from its marker to the new plan's destination), and running its create statements against any populated schema fails outright. The mistake surfaces at apply time, after the bad artifact is on disk and possibly committed.
 
-How it happens: origin resolution fell all the way through — no `--from`, no `db` ref. A project that never runs `db init` / `db update` (the deploy-first path below) never acquires a `db` ref, so *every* default plan resolves to greenfield. The first time that is correct (it is the baseline); every later time it is the trap.
+How it happens: origin resolution fell all the way through — no `--from`, no `db` ref. A project that never runs `db init` / `db update` (the deploy-first path below) never acquires a `db` ref, so *every* default plan resolves to greenfield. Running the dev loop with an explicit `--db` has the same effect: `db init` / `db update` with that flag never advance the ref, whatever URL it carries. The first time that is correct (it is the baseline); every later time it is the trap.
 
 **Recognize it** before applying, at either layer:
 
@@ -155,7 +155,7 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 2. **Expecting `migration plan` or plain `db migrate` to keep the `db` ref current.** Neither touches refs. Only `db init` / `db update` advance implicitly, and only `--advance-ref` advances at apply time.
 3. **Expecting a deploy to update refs.** Deploys write the database's marker; the files under `migrations/app/refs/` only change when you change them.
 4. **Reading `from: (baseline)` as informational.** Over a non-empty migrations directory it is the trap announcing itself. Stop and pick an exit before applying or committing.
-5. **`migration ref set` with a hash that is not a graph node.** Refused (`MIGRATION.HASH_NOT_IN_GRAPH`) — plan the edge that introduces the hash first (baseline or delta), then set the ref.
+5. **`migration ref set` with a hash no on-disk migration produces.** A ref target must be the `to` hash of an on-disk migration bundle. A hash outside the graph is refused (`MIGRATION.HASH_NOT_IN_GRAPH`); a from-only graph node is refused with `MIGRATION.REF_SET_BUNDLE_NOT_FOUND`, whose fix text points at fixtures and is unhelpful here. Either way: plan the edge whose `to` is the hash first (baseline or delta), then set the ref.
 6. **Treating `db` as reserved.** It's a naming default. Setting it yourself is fine and sometimes exactly right (deploy-first chaining, retrofit); just expect dev commands on the default URL to overwrite it.
 7. **Authoring the first migration after the first deploy.** Then no graph node corresponds to what shipped, and every incremental path needs the retrofit. Baseline before the first deploy — it's one command.
 

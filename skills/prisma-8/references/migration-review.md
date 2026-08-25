@@ -143,7 +143,7 @@ pnpm prisma migration ref list | grep production
 pnpm prisma migration ref delete production
 ```
 
-`migration ref set` writes a file at `migrations/app/refs/<name>` carrying the hash and any required invariants. Refs are commit-friendly artifacts — keep them in git; the team agrees on what `production` points at the same way they agree on what `main` is. The hash being set must be a node of the migration graph, or the command refuses (`MIGRATION.HASH_NOT_IN_GRAPH`).
+`migration ref set` writes a file at `migrations/app/refs/<name>.json` carrying the hash and any required invariants. Refs are commit-friendly artifacts — keep them in git; the team agrees on what `production` points at the same way they agree on what `main` is. The hash being set must be the `to` of an on-disk migration, or the command refuses — see `references/migration-model.md` for the refusal codes.
 
 Two ref roles, one mechanism: environment refs like `production` are the contract CD will migrate that environment to (a forward promise), while the `db` ref is a checkpoint of where the project's dev database was last brought to — written by `db init` / `db update`, consumed by `migration plan` as its default origin. `references/migration-model.md` covers the `db` ref, advancement rules, and plan-origin resolution.
 
