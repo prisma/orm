@@ -175,6 +175,10 @@ Reserved: a command was asked for a `--json` sub-format it does not support; the
 
 The main CLI received mutually exclusive output flags: `--format pretty` together with `--json`. Use `--format json` or `--json` alone for JSON output. Meta: none.
 
+### CLI.PLAN_FROM_CONFLICT
+
+`migration plan` received both `--from <contract>` and `--from-scratch`, which name contradictory origins; there is no rule for which wins. Pass the origin once — either `--from <contract>` or `--from-scratch`. Meta: `from`.
+
 ### CLI.PROJECT_MANIFEST_INVALID
 
 A `package.json` found while resolving the project import root is not valid JSON, or parses to something other than a JSON object. Emission reads the nearest manifest to decide which package names generated files should import; fix the manifest's JSON and re-run. The parse failure (when there is one) is attached as `cause`. Meta: `path`.
@@ -1073,6 +1077,10 @@ Migration planning (typically during `db init`/`db update`) failed because of co
 ### MIGRATION.PLAN_NOT_ARRAY
 
 An authored migration's `operations` getter returned something other than an array. Fix the migration class so `operations` returns an array of operations. Meta: `dir`, `actualValue` (when known).
+
+### MIGRATION.PLAN_ORIGIN_UNKNOWN
+
+`migration plan` was run without `--from` and without a `db` ref while migrations already exist on disk. Planning would silently fall back to an empty-database origin and produce a migration that recreates everything the existing history already creates, so the command refuses. Set the `db` ref (`migration ref set db <contract>` or `db update`), pass `--from <contract>`, or pass `--from-scratch` to deliberately plan from an empty database. Meta: `reachableRefs`, `graphTipHash` (when the graph has a tip).
 
 ### MIGRATION.POLICY_VIOLATION
 
