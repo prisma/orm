@@ -76,11 +76,11 @@ The human output names the resolved origin on its `from:` line. **`from: (baseli
 
 ## The trap — a greenfield plan over existing migrations
 
-**A plan whose origin resolved to greenfield while migrations already exist on disk is almost always a mistake.** Nothing warns you at plan time. The package it writes is a full-create migration, and it cannot do what you meant: a database that has the prior migrations applied refuses it (`MIGRATION.PATH_UNREACHABLE` — no path from its marker to the new plan's destination), and running its create statements against any populated schema fails outright. The mistake surfaces at apply time, after the bad artifact is on disk and possibly committed.
+**A plan whose origin is the empty contract while migrations already exist on disk is almost always a mistake.** A full-create migration cannot do what you meant: a database that has the prior migrations applied refuses it (`MIGRATION.PATH_UNREACHABLE` — no path from its marker to the new plan's destination), and running its create statements against any populated schema fails outright. The CLI refuses this at plan time: when origin resolution falls all the way through (no `--from`, no `db` ref) and migrations exist, `migration plan` stops with `MIGRATION.PLAN_ORIGIN_UNKNOWN` instead of writing the package — the error's suggestions are the three exits below; do not reflexively take the `--from @empty` one, pick by intent.
 
-How it happens: origin resolution fell all the way through — no `--from`, no `db` ref. A project that never runs `db init` / `db update` (the deploy-first path below) never acquires a `db` ref, so *every* default plan resolves to greenfield. Running the dev loop with an explicit `--db` has the same effect: `db init` / `db update` with that flag never advance the ref, whatever URL it carries. The first time that is correct (it is the baseline); every later time it is the trap.
+How the fall-through happens: a project that never runs `db init` / `db update` (the deploy-first path below) never acquires a `db` ref, so *every* default plan resolves to the empty origin. Running the dev loop with an explicit `--db` has the same effect: `db init` / `db update` with that flag never advance the ref, whatever URL it carries. The first time that is correct (it is the baseline; an empty migration graph plans silently); every later time it is the trap the refusal catches.
 
-**Recognize it** before applying, at either layer:
+**Recognize a from-empty plan** that was produced anyway (an explicit `--from @empty`, or an older CLI without the refusal), at either layer:
 
 - Plan output says `from: (baseline)` — while `migrations/app/` already contains migration directories.
 - The new package's `migration.json` has `"from": null` — while sibling migrations exist.
@@ -161,7 +161,6 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 
 ## What Prisma Next doesn't do yet
 
-- **No refusal or warning when a default plan resolves to greenfield over a non-empty graph.** The CLI writes the full-create package silently; reading the `from:` line is on you. The `--from @empty` spelling of a deliberate empty origin is also not accepted yet — a deliberate greenfield plan today means keeping a plan whose origin fell through to empty. If you want the CLI to refuse or warn here, file a feature request via the `references/feedback.md` skill.
 - **No plan-time ref advancement.** `migration plan` cannot advance a ref for you; keeping the chain current is manual (`migration ref set` after each plan, or `--from` every time). If you want a plan-time advancement flag, file a feature request via the `references/feedback.md` skill.
 
 ## Checklist

@@ -25,4 +25,4 @@ A project with one committed, applied migration (`null → H1`) and **no** `migr
 - [ ] The committed plan's `migration.json` has `"from": "<H1>"`, not `null`.
 - [ ] Agent either set the `db` ref to a graph node or explained the `--from` chaining it used.
 - [ ] Agent did NOT apply or commit a `from: (baseline)` package.
-- [ ] Agent did NOT invent a warning/refusal from the CLI — it read the `from:` line itself.
+- [ ] Agent handled `MIGRATION.PLAN_ORIGIN_UNKNOWN` correctly if it hit the refusal: it chose the exit matching its intent instead of reflexively passing `--from @empty`.
