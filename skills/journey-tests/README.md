@@ -43,6 +43,7 @@ Cross-runtime automation against a moving model surface is its own research proj
 | [`02f-merge-preview.md`](02f-merge-preview.md) | migration-review | AC5f |
 | [`02g-diamond-convergence.md`](02g-diamond-convergence.md) | migration-review, migrations | AC5g |
 | [`02h-query-interface.md`](02h-query-interface.md) | queries | AC5h |
+| [`02i-greenfield-trap.md`](02i-greenfield-trap.md) | migration-model, migrations | — |
 | [`03-capability-gaps.md`](03-capability-gaps.md) | contract, migrations, queries, build, debug, feedback | AC6 |
 | [`05-build-vite.md`](05-build-vite.md) | build | AC8b |
 | [`05b-build-nextjs-gap.md`](05b-build-nextjs-gap.md) | build, feedback | AC8b (Next.js path) |
