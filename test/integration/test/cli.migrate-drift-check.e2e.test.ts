@@ -182,7 +182,7 @@ withTempDir(({ createTempDir }) => {
           await withJourney(createTempDir, connectionString, async (ctx) => {
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
             expect((await planMigrationAndSelfEmit(ctx, ['--name', 'initial'])).exitCode).toBe(0);
-            expect((await runMigrate(ctx)).exitCode).toBe(0);
+            expect((await runMigrate(ctx, ['--advance-ref', 'db'])).exitCode).toBe(0);
 
             swapContract(ctx, 'contract-additive');
             expect((await runContractEmit(ctx)).exitCode).toBe(0);
