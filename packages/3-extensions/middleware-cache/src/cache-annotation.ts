@@ -17,11 +17,24 @@ import { defineAnnotation } from '@internal/framework-components/runtime';
  *   **not** rehash it, so the caller is responsible for ensuring the
  *   string is bounded in size and free of sensitive data they do not
  *   want flowing into logs / Redis `KEYS` / persistence dumps.
+ * - `dedupe` — Per-query toggle for in-process miss deduplication
+ *   (single-flight). When `true`, concurrent identical misses for the
+ *   same effective key in the same process share one leader execution;
+ *   followers wait for the leader's result. When `false`, each miss
+ *   executes independently.
+ * - `tags` — Optional list of cache tags to associate with this entry.
+ *   Tags enable bulk cache invalidation: uncache by tag(s) will clear
+ *   all entries that have those tags, regardless of key pattern.
  */
 export interface CachePayload {
+  readonly enabled?: boolean;
   readonly ttl?: number;
   readonly skip?: boolean;
   readonly key?: string;
+  readonly namespace?: string;
+  readonly dedupe?: boolean;
+  readonly tags?: readonly string[];
+  readonly store?: string;
 }
 
 /**

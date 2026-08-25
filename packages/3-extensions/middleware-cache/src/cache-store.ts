@@ -11,11 +11,17 @@
  *   telemetry) and is **not** used by the in-memory store itself for
  *   expiry — TTL is driven by the store's own clock plus the `ttlMs`
  *   passed to `set`. Custom stores may use it differently.
+ * - `tags` are optional labels attached to this cache entry. Multiple
+ *   entries can share the same tag; bulk invalidation is possible via
+ *   `delByTag`.
  */
 export interface CachedEntry {
   readonly rows: readonly Record<string, unknown>[];
   readonly storedAt: number;
+  readonly tags?: readonly string[] | undefined;
 }
+
+export const CACHE_INTERNAL_GENERATION_PREFIX = '__prisma_next_cache:generation:';
 
 /**
  * Pluggable cache backend used by the cache middleware.
@@ -24,7 +30,7 @@ export interface CachedEntry {
  * `createInMemoryCacheStore`. Users can supply Redis, Memcached, or any
  * other backend by implementing this interface.
  *
- * The interface is intentionally minimal:
+ * The required interface is intentionally small:
  *
  * - `get` returns the entry if it exists and has not expired, or
  *   `undefined` otherwise. Implementations that gate on TTL should
@@ -36,7 +42,22 @@ export interface CachedEntry {
  *   forget at scale; the cache middleware does not rely on `set`
  *   completing before subsequent `get`s.
  *
- * Both methods are async to leave the door open for I/O-backed stores
+ * - `list` (optional) returns all live keys or only those matching a
+ *   prefix. Implementations should avoid returning expired entries.
+ *   Required when using `uncacheOnMutation` or `uncacheAnnotation`.
+ * - `del` (optional) removes a key from the store.
+ *   Required when using `uncacheOnMutation` or `uncacheAnnotation`.
+ * - `delByTag` (optional) removes all entries that have any of the given
+ *   tags. Useful for bulk cache invalidation. Implementations may delete
+ *   synchronously or asynchronously; the middleware awaits the result
+ *   but does not retry on failure.
+ * - `incr` (optional) increments a numeric counter stored under a key.
+ *   Used by generation-based invalidation when the cache must stay
+ *   coherent across multiple instances sharing the same backend. Store
+ *   implementations that support generation mode in clustered setups
+ *   should implement this method.
+ *
+ * All methods are async to leave the door open for I/O-backed stores
  * (Redis, S3, etc.). The default in-memory store completes
  * synchronously and wraps the result in `Promise.resolve` for type
  * conformance.
@@ -44,6 +65,10 @@ export interface CachedEntry {
 export interface CacheStore {
   get(key: string): Promise<CachedEntry | undefined>;
   set(key: string, entry: CachedEntry, ttlMs: number): Promise<void>;
+  list?(prefix?: string): Promise<readonly string[]>;
+  del?(key: string): Promise<void>;
+  delByTag?(tags: readonly string[]): Promise<void>;
+  incr?(key: string, delta?: number): Promise<number>;
 }
 
 /**
@@ -64,6 +89,10 @@ export interface InMemoryCacheStoreOptions {
 interface StoredRecord {
   readonly entry: CachedEntry;
   readonly expiresAt: number;
+}
+
+interface StoredCounter {
+  readonly value: number;
 }
 
 /**
@@ -93,8 +122,27 @@ export function createInMemoryCacheStore(options: InMemoryCacheStoreOptions): Ca
   const maxEntries = options.maxEntries;
   const clock = options.clock ?? Date.now;
   const map = new Map<string, StoredRecord>();
+  const counters = new Map<string, StoredCounter>();
+  const tagIndex = new Map<string, Set<string>>();
+
+  function isGenerationKey(key: string): boolean {
+    return key.startsWith(CACHE_INTERNAL_GENERATION_PREFIX);
+  }
+
+  function generationKeyEntry(value: number): CachedEntry {
+    return {
+      rows: [],
+      storedAt: value,
+    };
+  }
 
   function get(key: string): Promise<CachedEntry | undefined> {
+    if (isGenerationKey(key)) {
+      return Promise.resolve(
+        counters.get(key) === undefined ? undefined : generationKeyEntry(counters.get(key)!.value),
+      );
+    }
+
     const record = map.get(key);
     if (record === undefined) {
       return Promise.resolve(undefined);
@@ -110,6 +158,27 @@ export function createInMemoryCacheStore(options: InMemoryCacheStoreOptions): Ca
   }
 
   function set(key: string, entry: CachedEntry, ttlMs: number): Promise<void> {
+    if (isGenerationKey(key)) {
+      counters.set(key, { value: entry.storedAt });
+      return Promise.resolve();
+    }
+
+    // If the key already exists, clean up its old tags.
+    if (map.has(key)) {
+      const oldEntry = map.get(key)?.entry;
+      if (oldEntry?.tags) {
+        for (const tag of oldEntry.tags) {
+          const tagSet = tagIndex.get(tag);
+          if (tagSet) {
+            tagSet.delete(key);
+            if (tagSet.size === 0) {
+              tagIndex.delete(tag);
+            }
+          }
+        }
+      }
+    }
+
     const expiresAt = clock() + ttlMs;
     // Re-set semantics: if the key is already present, deleting first
     // ensures the new value lands at the end of the iteration order
@@ -121,6 +190,16 @@ export function createInMemoryCacheStore(options: InMemoryCacheStoreOptions): Ca
     }
     map.set(key, { entry, expiresAt });
 
+    // Index the new tags
+    if (entry.tags) {
+      for (const tag of entry.tags) {
+        if (!tagIndex.has(tag)) {
+          tagIndex.set(tag, new Set());
+        }
+        tagIndex.get(tag)!.add(key);
+      }
+    }
+
     // Evict LRU entries until the live count is within bounds. The
     // iterator yields keys in insertion order; the first one is the
     // oldest (LRU).
@@ -129,11 +208,109 @@ export function createInMemoryCacheStore(options: InMemoryCacheStoreOptions): Ca
       if (oldest.done) {
         break;
       }
-      map.delete(oldest.value);
+      const keyToEvict = oldest.value;
+      const evictedRecord = map.get(keyToEvict);
+      if (evictedRecord?.entry.tags) {
+        for (const tag of evictedRecord.entry.tags) {
+          const tagSet = tagIndex.get(tag);
+          if (tagSet) {
+            tagSet.delete(keyToEvict);
+            if (tagSet.size === 0) {
+              tagIndex.delete(tag);
+            }
+          }
+        }
+      }
+      map.delete(keyToEvict);
     }
 
     return Promise.resolve();
   }
 
-  return { get, set };
+  function unlinkTaggedKey(key: string, tags: readonly string[] | undefined): void {
+    if (tags === undefined) return;
+    for (const tag of tags) {
+      const tagSet = tagIndex.get(tag);
+      if (tagSet === undefined) continue;
+      tagSet.delete(key);
+      if (tagSet.size === 0) tagIndex.delete(tag);
+    }
+  }
+
+  function deleteCacheKey(key: string): void {
+    const record = map.get(key);
+    unlinkTaggedKey(key, record?.entry.tags);
+    map.delete(key);
+  }
+
+  function list(prefix?: string): Promise<readonly string[]> {
+    if (prefix !== undefined && prefix.startsWith(CACHE_INTERNAL_GENERATION_PREFIX)) {
+      return Promise.resolve([...counters.keys()].filter((key) => key.startsWith(prefix)));
+    }
+
+    const now = clock();
+    for (const [key, record] of map) {
+      if (now >= record.expiresAt) {
+        deleteCacheKey(key);
+      }
+    }
+    const keys =
+      prefix === undefined
+        ? [...map.keys()]
+        : [...map.keys()].filter((key) => key.startsWith(prefix));
+    return Promise.resolve(keys);
+  }
+
+  function del(key: string): Promise<void> {
+    if (isGenerationKey(key)) {
+      counters.delete(key);
+      return Promise.resolve();
+    }
+
+    deleteCacheKey(key);
+    return Promise.resolve();
+  }
+
+  function incr(key: string, delta = 1): Promise<number> {
+    if (!isGenerationKey(key)) {
+      const current = counters.get(key)?.value ?? 0;
+      const next = current + delta;
+      counters.set(key, { value: next });
+      return Promise.resolve(next);
+    }
+
+    const current = counters.get(key)?.value ?? 0;
+    const next = current + delta;
+    counters.set(key, { value: next });
+    return Promise.resolve(next);
+  }
+
+  function delByTag(tags: readonly string[]): Promise<void> {
+    const keysToDelete = new Set<string>();
+    for (const tag of tags) {
+      const tagSet = tagIndex.get(tag);
+      if (tagSet) {
+        for (const key of tagSet) {
+          keysToDelete.add(key);
+        }
+      }
+    }
+
+    for (const key of keysToDelete) {
+      if (map.has(key)) {
+        deleteCacheKey(key);
+      } else {
+        for (const tag of tags) {
+          const tagSet = tagIndex.get(tag);
+          if (tagSet === undefined) continue;
+          tagSet.delete(key);
+          if (tagSet.size === 0) tagIndex.delete(tag);
+        }
+      }
+    }
+
+    return Promise.resolve();
+  }
+
+  return { get, set, list, del, delByTag, incr };
 }

@@ -42,6 +42,8 @@ function makeCtx(overrides?: Partial<RuntimeMiddlewareContext>): RuntimeMiddlewa
 function spyStore(): CacheStore & {
   readonly getSpy: ReturnType<typeof vi.fn>;
   readonly setSpy: ReturnType<typeof vi.fn>;
+  readonly listSpy: ReturnType<typeof vi.fn>;
+  readonly delSpy: ReturnType<typeof vi.fn>;
   readonly inner: Map<string, CachedEntry>;
 } {
   const inner = new Map<string, CachedEntry>();
@@ -49,7 +51,24 @@ function spyStore(): CacheStore & {
   const setSpy = vi.fn(async (key: string, entry: CachedEntry, _ttlMs: number) => {
     inner.set(key, entry);
   });
-  return { get: getSpy, set: setSpy, getSpy, setSpy, inner };
+  const listSpy = vi.fn(async (prefix?: string) => {
+    const keys = [...inner.keys()];
+    return prefix === undefined ? keys : keys.filter((key) => key.startsWith(prefix));
+  });
+  const delSpy = vi.fn(async (key: string) => {
+    inner.delete(key);
+  });
+  return {
+    get: getSpy,
+    set: setSpy,
+    list: listSpy,
+    del: delSpy,
+    getSpy,
+    setSpy,
+    listSpy,
+    delSpy,
+    inner,
+  };
 }
 
 async function drain<T>(iter: AsyncIterable<T>): Promise<T[]> {
