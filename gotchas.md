@@ -15,7 +15,7 @@ The capture workflow is documented in [`.claude/skills/record-gotchas/SKILL.md`]
 ## Contents
 
 - [Demo fixture contract snapshots fail to deserialize during `migrate` (PN-CLI-4003)](#demo-fixture-contract-snapshots-fail-to-deserialize-during-migrate-pn-cli-4003)
-- [`migration plan` silently plans from an empty database when no `db` ref exists](#migration-plan-silently-plans-from-an-empty-database-when-no-db-ref-exists)
+- [`migration plan` silently planned from an empty database when no `db` ref existed (resolved)](#migration-plan-silently-planned-from-an-empty-database-when-no-db-ref-existed-resolved)
 - [`migration plan --from db` fails with MIGRATION.NO_TARGET once a rollback cycle exists](#migration-plan---from-db-fails-with-migrationno_target-once-a-rollback-cycle-exists)
 
 ---
