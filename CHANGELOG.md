@@ -22,11 +22,16 @@ The upgrade recipe for this hop: the [user recipe](https://github.com/prisma/pri
   occurredAt Timestamptz  // read as Date
   ```
 
-  After:
+  After (read as `Temporal.Instant`):
 
   ```prisma
-  occurredAt Timestamptz        // read as Temporal.Instant
-  occurredAt TimestamptzString  // or: keep PostgreSQL's text unchanged
+  occurredAt Timestamptz
+  ```
+
+  Or, to keep PostgreSQL's text unchanged:
+
+  ```prisma
+  occurredAt TimestamptzString
   ```
 
 - **`prisma orm init` no longer installs agent skills** — the GitHub fetch (`npx skills add`) is removed and nothing replaces it inside `orm init`: agent-skills setup belongs to the family-level `prisma init` command, which init's next-steps now point to. The `--skip-skills` flag is removed with the behavior it opted out of, and the skill-install failure exit (code 6) is retired. Scaffolding is otherwise unchanged. ([#30097](https://github.com/prisma/prisma/pull/30097))
