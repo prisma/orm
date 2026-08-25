@@ -29,7 +29,13 @@ export type ContractRefProvenance =
    * via `readAllMarkers()` before using it. Check `provenance.kind ===
    * 'reserved-db'` to detect this case and perform the DB lookup.
    */
-  | { readonly kind: 'reserved-db' };
+  | { readonly kind: 'reserved-db' }
+  /**
+   * Resolved from the `@empty` reserved token — the empty contract
+   * (`EMPTY_CONTRACT_HASH`), the origin with no prior storage state.
+   * Offline-resolvable.
+   */
+  | { readonly kind: 'reserved-empty' };
 
 /** A resolved contract reference: the target hash and how it was derived. */
 export interface ContractRef {

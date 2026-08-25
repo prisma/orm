@@ -203,11 +203,8 @@ export const migrationPlanCommand = defineOrmCommand({
       name: flag.string({ brief: 'Name slug for the migration directory', placeholder: 'slug' }),
       from: flag.string({
         brief:
-          'Starting contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path)',
+          'Starting contract reference (hash, prefix, ref name, migration dir name, <dir>^, @empty, or ./path)',
         placeholder: 'contract',
-      }),
-      fromScratch: flag.boolean({
-        brief: 'Plan from an empty database deliberately, ignoring existing migrations',
       }),
       to: flag.string({
         brief:
@@ -240,7 +237,6 @@ export const migrationPlanCommand = defineOrmCommand({
         configPath: projectConfigPathFor(ctx.cwd),
         ...ifDefined('name', args.flags.name),
         ...ifDefined('from', args.flags.from),
-        fromScratch: args.flags.fromScratch,
         ...ifDefined('to', args.flags.to),
       },
       Date.now(),

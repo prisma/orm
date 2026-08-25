@@ -1,5 +1,6 @@
 import type { Result } from '@internal/utils/result';
 import { notOk, ok } from '@internal/utils/result';
+import { EMPTY_CONTRACT_HASH } from '../constants';
 import { validateRefName } from '../refs';
 import type {
   ContractRef,
@@ -19,6 +20,8 @@ import { findEdgeByDirName, isFullHash, isHexPrefix } from './types';
  * - `@db` — the live database marker (connection-required); callers MUST
  *   check `result.value.provenance.kind === 'reserved-db'` and resolve the
  *   actual hash via `readAllMarkers()` before using `result.value.hash`
+ * - `@empty` — the empty contract (offline; resolves to
+ *   `EMPTY_CONTRACT_HASH`, the origin with no prior storage state)
  * - Full storage hash (64 hex chars or `empty`)
  * - Hex prefix (6+ hex chars, must uniquely identify one contract)
  * - Ref name (looked up in the refs index)
@@ -51,6 +54,10 @@ export function parseContractRef(
     // must NOT be used directly. This is enforced by convention; callers
     // should check `provenance.kind` before using the hash.
     return ok({ hash: '', provenance: { kind: 'reserved-db' } });
+  }
+
+  if (input === '@empty') {
+    return ok({ hash: EMPTY_CONTRACT_HASH, provenance: { kind: 'reserved-empty' } });
   }
 
   if (isFullHash(input)) {

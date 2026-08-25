@@ -422,7 +422,7 @@ export function errorSnapshotMissing(
 /**
  * Default origin resolution for `migration plan` found nothing (no `--from`,
  * no `db` ref) while migrations already exist on disk. Planning would silently
- * produce a from-scratch migration that ignores the existing history — almost
+ * produce an empty-origin migration that ignores the existing history — almost
  * always a mistake — so the command refuses and names the three exits.
  */
 export function errorPlanOriginUnknown(
@@ -447,7 +447,7 @@ export function errorPlanOriginUnknown(
       fix: [
         `Set the \`db\` ref to the contract your dev database is at (\`${refSetCommand}\`), or advance it via \`{bin} db update\`.`,
         `Or pass the origin explicitly: \`{bin} migration plan ${fromSuggestion}\`.`,
-        'Or pass --from-scratch to deliberately plan from an empty database.',
+        'Or pass --from @empty to deliberately plan from an empty database.',
       ].join('\n'),
       nextActions: [
         runCommandAction('Point the db ref at the origin contract', refSetCommand),
@@ -463,33 +463,13 @@ export function errorPlanOriginUnknown(
             ]),
         runCommandAction(
           'Plan from an empty database deliberately',
-          '{bin} migration plan --from-scratch',
+          '{bin} migration plan --from @empty',
         ),
       ],
       meta: {
         reachableRefs: reachableRefs.map((r) => r.name),
         ...(graphTipHash !== null ? { graphTipHash } : {}),
       },
-    },
-  );
-}
-
-/** `--from <contract>` and `--from-scratch` name contradictory origins. */
-export function errorPlanFromConflict(optionsFrom: string): ActionableCliError {
-  return new ActionableCliError(
-    'CLI.PLAN_FROM_CONFLICT',
-    'Cannot combine --from with --from-scratch',
-    {
-      why: `--from names "${optionsFrom}" as the origin while --from-scratch asks for an empty-database origin; there is no rule for which wins.`,
-      fix: 'Pass the origin once — either --from <contract> or --from-scratch.',
-      nextActions: [
-        runCommandAction(
-          'Plan from the named origin',
-          `{bin} migration plan --from ${optionsFrom}`,
-        ),
-        runCommandAction('Or plan from an empty database', '{bin} migration plan --from-scratch'),
-      ],
-      meta: { from: optionsFrom },
     },
   );
 }

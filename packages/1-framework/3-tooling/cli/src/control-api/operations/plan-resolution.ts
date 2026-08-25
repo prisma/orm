@@ -14,7 +14,6 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import {
   CliStructuredError,
   errorPlanForgotTheFlag,
-  errorPlanFromConflict,
   errorPlanOriginUnknown,
   errorSnapshotMissing,
   mapRefResolutionError,
@@ -47,7 +46,6 @@ export type FromResolution =
 
 export interface ResolveFromForPlanInput {
   readonly optionsFrom?: string | undefined;
-  readonly fromScratch?: boolean | undefined;
   readonly space: AggregateContractSpace;
 }
 
@@ -195,13 +193,6 @@ export async function resolveFromForPlan(
   const graph = space.graph();
   const refs = space.refs;
 
-  if (input.fromScratch === true) {
-    if (optionsFrom !== undefined) {
-      return notOk(errorPlanFromConflict(optionsFrom));
-    }
-    return ok({ kind: 'greenfield', fromHash: null, fromContract: null });
-  }
-
   if (optionsFrom === undefined) {
     const dbRef = refs['db'];
     if (!dbRef) {
@@ -233,6 +224,10 @@ export async function resolveFromForPlan(
       return notOk(errorPlanForgotTheFlag(optionsFrom, getReachableRefs(refs, graph), graphTip));
     }
     return notOk(mapRefResolutionError(refResult.failure));
+  }
+
+  if (refResult.value.provenance.kind === 'reserved-empty') {
+    return ok({ kind: 'greenfield', fromHash: null, fromContract: null });
   }
 
   return resolveFromPolicy(refResult.value, input, refs, optionsFrom);

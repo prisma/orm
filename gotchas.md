@@ -67,7 +67,7 @@ $ pnpm prisma-next migrate --to prod --db $DB --config fixtures/diamond/prisma.c
 
 **Workaround.** Either apply with `prisma-next migrate --advance-ref db` from the start, or always pass `--from <latest-migration-dir>`. A CLI warning when the graph is non-empty but planning resolves to greenfield would remove the trap entirely.
 
-**Resolved.** `migration plan` now refuses this case instead of planning: when default origin resolution finds no `--from` and no `db` ref while migrations exist on disk, it fails with `MIGRATION.PLAN_ORIGIN_UNKNOWN` and names the three exits — set the `db` ref (`migration ref set db <contract>`, or advance it via `db update`), pass `--from <contract>`, or pass `--from-scratch` to plan from an empty database deliberately. The first plan of a fresh project (empty graph) stays silently greenfield.
+**Resolved.** `migration plan` now refuses this case instead of planning: when default origin resolution finds no `--from` and no `db` ref while migrations exist on disk, it fails with `MIGRATION.PLAN_ORIGIN_UNKNOWN` and names the three exits — set the `db` ref (`migration ref set db <contract>`, or advance it via `db update`), pass `--from <contract>`, or pass `--from @empty` to plan from an empty database deliberately. The first plan of a fresh project (empty graph) stays silently greenfield.
 
 **Reproduction.**
 1. Fresh project: `contract emit`, `migration plan --name init`, `migrate` (no `--advance-ref`).

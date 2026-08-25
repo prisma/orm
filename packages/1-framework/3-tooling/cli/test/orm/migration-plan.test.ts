@@ -349,7 +349,7 @@ describe('migration plan', () => {
     expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
   });
 
-  it('plans a greenfield migration over existing history with --from-scratch', async () => {
+  it('plans a greenfield migration over existing history with --from @empty', async () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
     await seedMigrationPackage({
       appMigrationsDir: project.appMigrationsDir,
@@ -359,27 +359,12 @@ describe('migration plan', () => {
     });
 
     const run = await harness(project).run(
-      ['migration', 'plan', '--from-scratch', '--name', 'rebuild', '--json'],
+      ['migration', 'plan', '--from', '@empty', '--name', 'rebuild', '--json'],
       { cwd: project.dir },
     );
 
     expect(run.exitCode).toBe(0);
     expect(run.presented?.data).toMatchObject({ ok: true, from: null, to: HASH_TO });
-  });
-
-  it('errors when --from and --from-scratch are combined', async () => {
-    const project = await plannableProject();
-
-    const run = await harness(project).run(
-      ['migration', 'plan', '--from', 'db', '--from-scratch', '--json'],
-      { cwd: project.dir },
-    );
-
-    expect(run.exitCode).toBe(2);
-    expect(run.json.at(-1)).toMatchObject({
-      kind: 'result',
-      envelope: { ok: false, error: { code: 'CLI.PLAN_FROM_CONFLICT' } },
-    });
   });
 
   it('errors when --from names a hash outside the graph', async () => {

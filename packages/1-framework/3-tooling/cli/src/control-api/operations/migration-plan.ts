@@ -66,7 +66,6 @@ export interface MigrationPlanOptions {
   readonly configPath?: string;
   readonly name?: string;
   readonly from?: string;
-  readonly fromScratch?: boolean;
   readonly to?: string;
 }
 
@@ -344,7 +343,6 @@ async function executeMigrationPlanCommandInner(
 
   const resolutionResult = await resolveFromForPlan({
     optionsFrom: options.from,
-    fromScratch: options.fromScratch,
     space: resolutionSpace,
   });
 

@@ -264,6 +264,18 @@ describe('parseContractRef', () => {
     });
   });
 
+  describe('@empty reserved token', () => {
+    it('resolves @empty to the empty contract hash offline', () => {
+      const ctx = createContext();
+      const result = parseContractRef('@empty', ctx);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.hash).toBe(EMPTY_CONTRACT_HASH);
+        expect(result.value.provenance).toEqual({ kind: 'reserved-empty' });
+      }
+    });
+  });
+
   describe('ambiguity between interpretation forms', () => {
     it('reports ambiguity when input matches both a ref and a dir name', () => {
       const ctx = createContext({
