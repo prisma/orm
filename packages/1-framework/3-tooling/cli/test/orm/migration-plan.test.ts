@@ -326,6 +326,62 @@ describe('migration plan', () => {
     });
   });
 
+  it('errors when migrations exist but no db ref and no --from names an origin', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+    await seedMigrationPackage({
+      appMigrationsDir: project.appMigrationsDir,
+      dirName: '20260101T0000_initial',
+      from: null,
+      to: HASH_FROM,
+    });
+
+    const run = await harness(project).run(['migration', 'plan', '--json'], { cwd: project.dir });
+
+    expect(run.exitCode).toBe(2);
+    const terminal = run.json.at(-1);
+    const envelope =
+      terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
+    expect(envelope).toMatchObject({
+      ok: false,
+      error: { code: 'MIGRATION.PLAN_ORIGIN_UNKNOWN' },
+    });
+    expect(envelope?.nextActions.length).toBeGreaterThan(0);
+    expect(await plannedDirs(project)).toEqual(['20260101T0000_initial']);
+  });
+
+  it('plans a greenfield migration over existing history with --from-scratch', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+    await seedMigrationPackage({
+      appMigrationsDir: project.appMigrationsDir,
+      dirName: '20260101T0000_initial',
+      from: null,
+      to: HASH_FROM,
+    });
+
+    const run = await harness(project).run(
+      ['migration', 'plan', '--from-scratch', '--name', 'rebuild', '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.data).toMatchObject({ ok: true, from: null, to: HASH_TO });
+  });
+
+  it('errors when --from and --from-scratch are combined', async () => {
+    const project = await plannableProject();
+
+    const run = await harness(project).run(
+      ['migration', 'plan', '--from', 'db', '--from-scratch', '--json'],
+      { cwd: project.dir },
+    );
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: { ok: false, error: { code: 'CLI.PLAN_FROM_CONFLICT' } },
+    });
+  });
+
   it('errors when --from names a hash outside the graph', async () => {
     const project = await plannableProject();
 

@@ -138,9 +138,14 @@ describe('migration tamper detection', () => {
   it('migration plan refuses before planning work', async () => {
     const project = await tamperedProject();
 
-    const run = await harness(offlineConfig({ project })).run(['migration', 'plan', '--json'], {
-      cwd: project.dir,
-    });
+    // --from-scratch settles origin resolution (the tampered project has
+    // migrations but no db ref) so the run reaches the integrity check.
+    const run = await harness(offlineConfig({ project })).run(
+      ['migration', 'plan', '--from-scratch', '--json'],
+      {
+        cwd: project.dir,
+      },
+    );
 
     expectIntegrityRefusal(run);
   });

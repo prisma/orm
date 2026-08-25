@@ -14,6 +14,8 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import {
   CliStructuredError,
   errorPlanForgotTheFlag,
+  errorPlanFromConflict,
+  errorPlanOriginUnknown,
   errorSnapshotMissing,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
@@ -45,6 +47,7 @@ export type FromResolution =
 
 export interface ResolveFromForPlanInput {
   readonly optionsFrom?: string | undefined;
+  readonly fromScratch?: boolean | undefined;
   readonly space: AggregateContractSpace;
 }
 
@@ -192,10 +195,25 @@ export async function resolveFromForPlan(
   const graph = space.graph();
   const refs = space.refs;
 
+  if (input.fromScratch === true) {
+    if (optionsFrom !== undefined) {
+      return notOk(errorPlanFromConflict(optionsFrom));
+    }
+    return ok({ kind: 'greenfield', fromHash: null, fromContract: null });
+  }
+
   if (optionsFrom === undefined) {
     const dbRef = refs['db'];
     if (!dbRef) {
-      return ok({ kind: 'greenfield', fromHash: null, fromContract: null });
+      if (graphIsEmpty(space)) {
+        return ok({ kind: 'greenfield', fromHash: null, fromContract: null });
+      }
+      return notOk(
+        errorPlanOriginUnknown(
+          getReachableRefs(refs, graph),
+          findLatestMigration(graph)?.to ?? null,
+        ),
+      );
     }
     return resolveFromPolicy(
       { hash: dbRef.hash, provenance: { kind: 'ref', refName: 'db' } },

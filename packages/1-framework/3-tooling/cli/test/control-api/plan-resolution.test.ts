@@ -135,6 +135,66 @@ describe('resolveFromForPlan', () => {
     }
   });
 
+  it('refuses plan-origin-unknown when db ref is absent, --from is omitted, and migrations exist', async () => {
+    const bundles = [makePkg(E, HASH_A, 'm1'), makePkg(HASH_A, HASH_B, 'm2')];
+    const space = makeSpace(bundles, { staging: { hash: HASH_B, invariants: [] } });
+    const result = await resolveFromForPlan(baseInput({ space }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expectRefuse(result.failure, 'MIGRATION.PLAN_ORIGIN_UNKNOWN', '--from-scratch');
+      expect(result.failure.fix).toContain('--from staging');
+      expect(result.failure.fix).toContain('ref set db');
+      expect(result.failure.meta?.['graphTipHash']).toBe(HASH_B);
+    }
+  });
+
+  it('suggests the graph tip when no ref reaches the graph', async () => {
+    const bundles = [makePkg(E, HASH_A, 'm1')];
+    const space = makeSpace(bundles);
+    const result = await resolveFromForPlan(baseInput({ space }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expectRefuse(result.failure, 'MIGRATION.PLAN_ORIGIN_UNKNOWN', `--from ${HASH_A}`);
+    }
+  });
+
+  it('returns greenfield for --from-scratch over a non-empty graph with no db ref', async () => {
+    const bundles = [makePkg(E, HASH_A, 'm1')];
+    const space = makeSpace(bundles);
+    const result = await resolveFromForPlan(baseInput({ space, fromScratch: true }));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({ kind: 'greenfield', fromHash: null, fromContract: null });
+    }
+  });
+
+  it('returns greenfield for --from-scratch even when a db ref exists', async () => {
+    const bundles = [makePkg(E, HASH_A, 'm1')];
+    const space = makeSpace(bundles, { db: { hash: HASH_A, invariants: [] } });
+    const result = await resolveFromForPlan(baseInput({ space, fromScratch: true }));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value).toEqual({ kind: 'greenfield', fromHash: null, fromContract: null });
+    }
+  });
+
+  it('refuses when --from and --from-scratch are combined', async () => {
+    const bundles = [makePkg(E, HASH_A, 'm1')];
+    const space = makeSpace(bundles);
+    const result = await resolveFromForPlan(
+      baseInput({ space, optionsFrom: HASH_A, fromScratch: true }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expectRefuse(result.failure, 'CLI.PLAN_FROM_CONFLICT', '--from-scratch');
+    }
+  });
+
   it('returns auto-baseline when graph is empty and the db ref resolves through the store', async () => {
     const space = makeSpace(
       [],

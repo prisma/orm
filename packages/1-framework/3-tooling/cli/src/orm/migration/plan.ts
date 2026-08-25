@@ -206,6 +206,9 @@ export const migrationPlanCommand = defineOrmCommand({
           'Starting contract reference (hash, prefix, ref name, migration dir name, <dir>^, or ./path)',
         placeholder: 'contract',
       }),
+      fromScratch: flag.boolean({
+        brief: 'Plan from an empty database deliberately, ignoring existing migrations',
+      }),
       to: flag.string({
         brief:
           'Destination contract reference; defaults to the emitted contract. Same grammar as --from',
@@ -237,6 +240,7 @@ export const migrationPlanCommand = defineOrmCommand({
         configPath: projectConfigPathFor(ctx.cwd),
         ...ifDefined('name', args.flags.name),
         ...ifDefined('from', args.flags.from),
+        fromScratch: args.flags.fromScratch,
         ...ifDefined('to', args.flags.to),
       },
       Date.now(),
