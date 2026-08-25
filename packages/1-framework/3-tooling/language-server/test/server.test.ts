@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   type ClientCapabilities,
   type CompletionItem,
+  CompletionItemKind,
   type CompletionList,
   CompletionRequest,
   createConnection,
@@ -729,6 +730,28 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       textEdit: { newText: 'model ' },
     });
     expect(items.find((item) => item.label === 'model')?.insertTextFormat).toBeUndefined();
+  });
+
+  it('returns Prisma 8 completions for a VS Code-shaped Windows document URI', async () => {
+    const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+    try {
+      const windowsDocumentUri = 'file:///d%3A/project/next.prisma';
+      harness = startHarness(async () => resolutionForInputs(['D:\\project\\next.prisma']));
+      await harness.initialize();
+      openDocument(harness, windowsDocumentUri, '// use prisma-next\n');
+      await harness.waitForDiagnostics(windowsDocumentUri);
+
+      const items = completionItems(
+        await requestCompletion(harness, windowsDocumentUri, { line: 1, character: 0 }),
+      );
+      expect(items.find((item) => item.label === 'namespace')).toMatchObject({
+        kind: CompletionItemKind.Keyword,
+        detail: 'PSL declaration keyword',
+      });
+      expect(items.map((item) => item.label)).not.toContain('datasource');
+    } finally {
+      platform.mockRestore();
+    }
   });
 
   it('returns declaration keyword snippets when the client supports snippets', async () => {
