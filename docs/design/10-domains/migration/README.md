@@ -268,10 +268,10 @@ Grouped by intent.
 
 - **Author** — write a contract or migration in PSL or TypeScript (the meta-verb).
 - **`contract emit`** — produce `contract.json` + `contract.d.ts` from contract source.
-- **`migration plan`** — diff `<ref>` ref's contract → current contract; scaffold a migration package with ops auto-filled; advance the named ref to the new contract's hash. *The "freeze + promise" verb.*
+- **`migration plan`** — diff `<ref>` ref's contract → current contract; scaffold a migration package with ops auto-filled; advance the named ref to the new contract's hash. *The "freeze + promise" verb.* (Ref advancement — `--advance <ref>` — is resolved in the domain model but not yet implemented; tracked under [TML-2560](https://linear.app/prisma-company/issue/TML-2560). Today `plan` advances no ref.)
 - **`migration new`** — scaffold a migration package with `from`/`to` storage hashes but **no ops**. For hand-authored migrations. *Sibling of `plan` — same artifact shape, different ops source.*
 - **`migration compile`** — execute `migration.ts`, (re)write `ops.json` + `migration.json`. The TS → JSON build step; consumers run this after editing `migration.ts` by hand.
-- **`ref set <name> <contract>`** — directly set a ref's target contract. Rarely used by hand; the normal path is `migration plan` advancing a ref atomically. Verb is `set` (not `move`) because refs are stored values being written, not entities traversing the graph — the spatial-movement vocabulary is reserved for `migrate`. No default contract: writing a production-class ref accidentally is too dangerous.
+- **`ref set <name> <contract>`** — directly set a ref's target contract. (In the domain model the normal path is `migration plan --advance <ref>` advancing a ref atomically; that is not yet implemented — tracked under [TML-2560](https://linear.app/prisma-company/issue/TML-2560) — so today `ref set` is the way refs move, and it is the first remedy `MIGRATION.PLAN_ORIGIN_UNKNOWN` suggests.) Verb is `set` (not `move`) because refs are stored values being written, not entities traversing the graph — the spatial-movement vocabulary is reserved for `migrate`. No default contract: writing a production-class ref accidentally is too dangerous.
 
 ### Mutating a live database
 
