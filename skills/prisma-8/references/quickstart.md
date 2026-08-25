@@ -55,7 +55,7 @@ Every application that consumes Prisma Next uses the same shape:
     │       ├── contract.json
     │       └── contract.d.ts
     └── app/                          ← created on first `migration plan` / `db init`
-        ├── refs/head.json
+        ├── refs/db.json
         └── <timestamp>_<slug>/
             ├── migration.json
             ├── ops.json

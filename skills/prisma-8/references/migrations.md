@@ -24,13 +24,14 @@ Once the contract changes, you choose how the change reaches the database. This 
 ## When Not to Use
 
 - User wants to know what migrations *will run on deploy* / on merge, or to manage refs and invariants → `references/migration-review.md`.
+- User is deciding where a plan should chain from, saw `from: (baseline)` unexpectedly, is setting up migrations for a deploy-first (Composer / CD-managed) project, or is retrofitting migrations onto an existing database → `references/migration-model.md`.
 - User wants to edit the contract → `references/contract.md`.
 - User wants a deeper read of a single structured error envelope → `references/debug.md`.
 
 ## Key Concepts
 
 - **`db update` (quick path).** Reads the emitted contract, diffs against the live DB, applies the change. Optional `--dry-run` prints the plan without executing. Interactive destructive-op confirmation (or `-y` to auto-accept). **Writes no migration directory.** Operations needing data transforms are not handled by this path — `db update` excludes the `data` operation class entirely and short-circuits where a data transform would be required. Use only against a database that has no shared history with anyone else (your local dev DB).
-- **`migration plan` (formal path).** Reads the emitted contract, diffs against the head of the on-disk migration graph, writes a new migration package under `migrations/app/<YYYYMMDDTHHMM>_<snake_slug>/`. If any operation needs a data transform, the package's `migration.ts` contains `placeholder(...)` calls you fill in.
+- **`migration plan` (formal path).** Reads the emitted contract, diffs it against a resolved origin — explicit `--from`, else the `db` ref, else the empty database; there is no "head of the graph" to chain from (see `references/migration-model.md`) — and writes a new migration package under `migrations/app/<YYYYMMDDTHHMM>_<snake_slug>/`. If any operation needs a data transform, the package's `migration.ts` contains `placeholder(...)` calls you fill in.
 - **The `app/` segment in migration paths is the consuming application's contract-space id.** Every migration *you* author lives under `migrations/app/`. Extensions your contract depends on get their own sibling directories (`migrations/<extension-space-id>/`) — those are managed by the extension package and you don't write into them. The `app/` segment lands automatically the first time you run `migration plan` / `db init` against an app-level config.
 - **Migration package files** (inside each `migrations/app/<dir>/`):
   - `migration.json` — manifest (metadata + `migrationHash`).
@@ -106,7 +107,7 @@ migrations/app/refs/
 └── db.json                 # { "hash": "<hex>", "invariants": [] }
 ```
 
-**First `migration plan` after dev iteration.** `migration plan` defaults `--from` to the `db` ref. When the on-disk migration graph is still **empty** and the `db` ref points at a non-null hash with a store entry (typical after one or more `db update` cycles), the planner emits **two** bundles instead of one:
+**First `migration plan` after dev iteration.** `migration plan` defaults `--from` to the `db` ref (and, when no `db` ref exists at all, falls back to planning from an empty database with no warning — over a non-empty graph that fallback is almost always a mistake; see `references/migration-model.md` § *The trap*). When the on-disk migration graph is still **empty** and the `db` ref points at a non-null hash with a store entry (typical after one or more `db update` cycles), the planner emits **two** bundles instead of one:
 
 1. Baseline: `null → from-hash` (introduces `from-hash` as a graph node)
 2. Delta: `from-hash → current_contract`
@@ -478,7 +479,8 @@ In non-interactive contexts (CI, `--no-interactive`, `--json`), the destructive-
 6. **Aggregate `check` closure in Postgres `this.dataTransform`.** Returning `count(*)` or `bool_and(...)` breaks the precheck/postcheck contract — both sides resolve to constants. Use a rowset shape: `select('id').where(<violation>).limit(1)`.
 7. **Two contract references in one migration.** Building a query plan against a different contract than the one passed to `this.dataTransform(endContract, ...)` raises `PN-MIG-2005`. Always import `endContract` once at module scope and use the same reference.
 8. **Renaming and expecting the planner to detect it (Postgres).** Prisma Next has no in-contract rename hint today; the planner emits a destructive drop+add. Hand-edit `migration.ts` to rewrite the destructive op as a `rawSql({ ... })` that issues `ALTER TABLE ... RENAME COLUMN ...` (or use the two-migration keep / backfill / drop pattern), then self-emit. See `references/contract.md` § *Edit a field — rename*.
-9. **Hand-authoring `migration.ts` from a blank file, or rewriting the rendered import line.** Migration files are framework-rendered — let `prisma migration plan` (or `migration new`) render the package, then edit only the holes the framework leaves for you. On Postgres leave the rendered `@internal/postgres/migration` (or `@internal/sqlite/migration`) import path alone; on Mongo use `@internal/family-mongo/migration` + `@internal/target-mongo/migration` as rendered. Add symbols to the existing factory import line rather than introducing new import paths.
+9. **Planning with no `db` ref and no `--from` in a project that already has migrations.** The origin silently resolves to the empty database and the plan is a full-create migration. Recognize it by `from: (baseline)` in the plan output; exits in `references/migration-model.md` § *The trap*.
+10. **Hand-authoring `migration.ts` from a blank file, or rewriting the rendered import line.** Migration files are framework-rendered — let `prisma migration plan` (or `migration new`) render the package, then edit only the holes the framework leaves for you. On Postgres leave the rendered `@internal/postgres/migration` (or `@internal/sqlite/migration`) import path alone; on Mongo use `@internal/family-mongo/migration` + `@internal/target-mongo/migration` as rendered. Add symbols to the existing factory import line rather than introducing new import paths.
 
 ## What Prisma Next doesn't do yet
 
@@ -508,6 +510,7 @@ The CLI collects anonymous usage data by default. To opt out, set `PRISMA_NEXT_D
 
 - [ ] Contract emitted (`contract.json` + `contract.d.ts` current).
 - [ ] Chose the right path: `db update` (local dev) vs `migration plan` + `db migrate` (anything shared).
+- [ ] For `migration plan`: confirmed the output's `from:` line names the intended origin — not `(baseline)` over an existing graph (`references/migration-model.md`).
 - [ ] For `migration plan`: ran `migration show` to review before `db migrate`.
 - [ ] Filled every `placeholder(...)` in `migration.ts` (if any), built against `endContract`.
 - [ ] `check` closures are rowset queries, not scalar aggregates.
