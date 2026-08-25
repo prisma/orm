@@ -68,8 +68,41 @@ describe('quoteIdentifier', () => {
 
     expect(result).toBe(`"${identifier}"`);
     expect(warnSpy).toHaveBeenCalledWith(
-      `Identifier "${identifier.slice(0, 20)}..." exceeds PostgreSQL's 63-character limit and will be truncated`,
+      `Identifier "${identifier.slice(0, 20)}..." exceeds PostgreSQL's 63-byte limit and will be truncated`,
     );
+
+    warnSpy.mockRestore();
+  });
+
+  it('warns for a multibyte identifier over 63 bytes but under 63 characters', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // A Cyrillic column name: 50 characters, 96 UTF-8 bytes. Postgres measures
+    // the byte length, so it stores this name truncated to 63 bytes — the
+    // declared object can then never be matched against the live one.
+    const identifier = 'электронная_почта_адрес_подтверждена_пользователем';
+
+    const result = quoteIdentifier(identifier);
+
+    expect(identifier.length).toBeLessThanOrEqual(63);
+    expect(new TextEncoder().encode(identifier).length).toBeGreaterThan(63);
+    expect(result).toBe(`"${identifier}"`);
+    expect(warnSpy).toHaveBeenCalledWith(
+      `Identifier "${identifier.slice(0, 20)}..." exceeds PostgreSQL's 63-byte limit and will be truncated`,
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it('stays silent for a multibyte identifier that is exactly 63 bytes', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // '€' (U+20AC) is 3 UTF-8 bytes: 21 characters = 63 bytes, exactly at the limit.
+    const identifier = '€'.repeat(21);
+
+    const result = quoteIdentifier(identifier);
+
+    expect(new TextEncoder().encode(identifier).length).toBe(63);
+    expect(result).toBe(`"${identifier}"`);
+    expect(warnSpy).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
   });
