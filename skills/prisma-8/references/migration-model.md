@@ -64,7 +64,7 @@ pnpm prisma migration ref delete <name>
 
 `migration plan` resolves its origin in exactly this order:
 
-1. Explicit `--from <ref-name | hash | hash-prefix | migration-dir | migration-dir^ | ./path | @contract | @db>` — `@db` reads the live database's marker and is the one origin form that is not offline.
+1. Explicit `--from <ref-name | hash | hash-prefix | migration-dir | migration-dir^ | ./path | @contract | @db | @empty>` — `@db` reads the live database's marker and is the one origin form that is not offline; `@empty` names the empty database deliberately.
 2. No `--from` → the `db` ref (`migrations/app/refs/db.json`).
 3. No `db` ref → **greenfield: the plan starts from the empty database.**
 
@@ -90,7 +90,7 @@ How it happens: origin resolution fell all the way through — no `--from`, no `
 
 1. **Set a ref to the intended origin, then re-plan with the default.** Usually the last shipped migration's `to` hash: `migration list` to find it, `migration ref set db <hash>`, `migration plan --name <slug>`. Do this when you want future plans to chain without flags.
 2. **Pass the origin explicitly:** `migration plan --from <ref-or-hash-or-migration-dir> --name <slug>`. Do this for a one-off, or when a different ref (e.g. `production`) is the honest origin.
-3. **You genuinely mean from-scratch** — a first baseline, or a deliberate rebuild of everything. Keep the plan. This is the only case where `from: (baseline)` over a non-empty directory is right, and it should be rare enough to say out loud.
+3. **You genuinely mean the empty origin** — a first baseline, or a deliberate rebuild of everything. Say it explicitly: `migration plan --from @empty --name <slug>`. This is the only case where `from: (baseline)` over a non-empty directory is right, and it should be rare enough to say out loud.
 
 ## Workflow — the dev loop
 
@@ -161,15 +161,15 @@ The concept: the database exists and its marker is accurate (hash **M**) — it 
 
 ## What Prisma Next doesn't do yet
 
-- **No refusal or warning when a default plan resolves to greenfield over a non-empty graph.** The CLI writes the from-scratch package silently; reading the `from:` line is on you. If you want the CLI to refuse or warn here, file a feature request via the `references/feedback.md` skill.
+- **No refusal or warning when a default plan resolves to greenfield over a non-empty graph.** The CLI writes the full-create package silently; reading the `from:` line is on you. The `--from @empty` spelling of a deliberate empty origin is also not accepted yet — a deliberate greenfield plan today means keeping a plan whose origin fell through to empty. If you want the CLI to refuse or warn here, file a feature request via the `references/feedback.md` skill.
 - **No plan-time ref advancement.** `migration plan` cannot advance a ref for you; keeping the chain current is manual (`migration ref set` after each plan, or `--from` every time). If you want a plan-time advancement flag, file a feature request via the `references/feedback.md` skill.
 
 ## Checklist
 
-- [ ] Named the intended origin before planning — a ref, a hash, or a deliberate from-scratch.
+- [ ] Named the intended origin before planning — a ref, a hash, or a deliberate `--from @empty`.
 - [ ] Read the plan output's `from:` line and confirmed it names that origin — not `(baseline)` over an existing graph.
 - [ ] In a deploy-first project: baseline authored and committed before the first deploy; every later plan chained via the `db` ref or `--from`.
 - [ ] After each plan in a loop where nothing advances refs: advanced the `db` ref (`migration ref set db <to-hash>`) or resolved to pass `--from` next time.
 - [ ] For a marked database with no on-disk migrations: made the graph reach the marker's hash (auto-baseline via `db update`, or an offline baseline plan) before planning deltas.
 - [ ] Did NOT expect plain `db migrate`, `migration plan`, or a deploy to advance any ref.
-- [ ] Did NOT apply or commit a `from: (baseline)` plan without confirming from-scratch was the intent.
+- [ ] Did NOT apply or commit a `from: (baseline)` plan without confirming the empty origin was the intent.
