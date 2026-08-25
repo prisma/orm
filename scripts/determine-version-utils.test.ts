@@ -6,6 +6,7 @@ import {
   computeNextMinor,
   computeNextReleaseVersion,
   parseVersion,
+  planPushPublish,
 } from './determine-version-utils.ts';
 
 describe('parseVersion', () => {
@@ -113,6 +114,43 @@ describe('composeDevVersion', () => {
       version: '8.0.0-rc.1-dev.1',
       tag: 'dev',
     });
+  });
+});
+
+describe('planPushPublish', () => {
+  it('plans a dev-only publish when the root version is unchanged', () => {
+    assert.deepEqual(
+      planPushPublish('8.0.0-rc.7', { available: true, version: '8.0.0-rc.7' }, '8.0.0-rc.7-dev.3'),
+      { version: '8.0.0-rc.7-dev.4', tag: 'dev' },
+    );
+  });
+
+  it('plans a release plus a dev follow-up when the root version changed', () => {
+    assert.deepEqual(
+      planPushPublish('8.0.0-rc.7', { available: true, version: '8.0.0-rc.6' }, '8.0.0-rc.6-dev.1'),
+      { version: '8.0.0-rc.7', tag: 'latest', devVersion: '8.0.0-rc.7-dev.1' },
+    );
+  });
+
+  it('continues the dev counter in the follow-up when dev is already on the new base', () => {
+    assert.deepEqual(
+      planPushPublish('8.0.0-rc.7', { available: true, version: '8.0.0-rc.6' }, '8.0.0-rc.7-dev.2'),
+      { version: '8.0.0-rc.7', tag: 'latest', devVersion: '8.0.0-rc.7-dev.3' },
+    );
+  });
+
+  it('falls back to the dev path when the previous version is unreadable', () => {
+    assert.deepEqual(planPushPublish('8.0.0-rc.7', { available: false }, undefined), {
+      version: '8.0.0-rc.7-dev.1',
+      tag: 'dev',
+    });
+  });
+
+  it('plans a stable release with its dev follow-up', () => {
+    assert.deepEqual(
+      planPushPublish('8.1.0', { available: true, version: '8.0.0' }, '8.0.0-dev.5'),
+      { version: '8.1.0', tag: 'latest', devVersion: '8.1.0-dev.1' },
+    );
   });
 });
 

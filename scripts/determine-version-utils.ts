@@ -63,6 +63,35 @@ export function computeNextReleaseVersion(current: string): string {
 export interface VersionResult {
   version: string;
   tag: string;
+  devVersion?: string;
+}
+
+export type PreviousVersionLookup =
+  | { available: true; version: string | undefined }
+  | { available: false };
+
+/**
+ * The publish plan for a push to `main`. A changed root version means
+ * the push is a release bump: publish `<base>` under `latest`, plus a
+ * `<base>-dev.N` follow-up so the `dev` dist-tag never falls behind
+ * `latest`. An unchanged (or unreadable — a transient git error must
+ * never silently promote to `latest`) previous version means the usual
+ * dev-only publish. Adopted from prisma/composer#241.
+ */
+export function planPushPublish(
+  base: string,
+  previous: PreviousVersionLookup,
+  latestDevVersion: string | undefined,
+): VersionResult {
+  const isReleaseBump = previous.available && previous.version !== base;
+  if (isReleaseBump) {
+    return {
+      version: base,
+      tag: 'latest',
+      devVersion: composeDevVersion(base, latestDevVersion).version,
+    };
+  }
+  return composeDevVersion(base, latestDevVersion);
 }
 
 /**

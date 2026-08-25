@@ -14,7 +14,12 @@ name: Publish to npm
 #     pre-release for RC-line versions like `8.0.0-rc.N`). `latest`
 #     tracks the newest release, RC or stable — the package names this
 #     repo publishes have no pre-v8 stable audience to protect. This is
-#     how a merged `chore(release): ...` PR auto-ships.
+#     how a merged `chore(release): ...` PR auto-ships. The same run then
+#     publishes `<base>-dev.N` under `dev`, so every push to `main` —
+#     release or not — leaves the `dev` dist-tag on a build of that
+#     commit (adopted from prisma/composer#241). When releases skipped
+#     the dev publish, `dev` sat on the previous base until the next
+#     routine push — which broke prisma-cli's dev channel on 2026-08-25.
 #   - workflow_dispatch                                 → publish `<base>`
 #     under the chosen dist-tag (default `latest`); also the dry-run path.
 
@@ -224,6 +229,49 @@ jobs:
               --title "v$VERSION" \
               --notes-file "docs/releases/v$VERSION.md" \
               $PRERELEASE_FLAG
+          fi
+
+      # --- Dev follow-up, release pushes only (devVersion is empty otherwise).
+      # Keeps the `dev` dist-tag on a build of the released base instead of the
+      # previous one (adopted from prisma/composer#241). Runs before the
+      # prisma-cli notification below: the repin that notification triggers
+      # builds prisma-cli's dev channel against this repo's `dev` tag, so `dev`
+      # must already point at the new base when the dispatch fires. The release
+      # steps above already ran the full check battery against this commit;
+      # only the version stamp changes here, so the follow-up re-runs just the
+      # version-sensitive dependency-specifier check before publishing.
+
+      - name: Set package versions (dev follow-up)
+        if: ${{ steps.version.outputs.devVersion != '' }}
+        run: node scripts/set-version.ts "${{ steps.version.outputs.devVersion }}"
+
+      - name: Build packages (dev follow-up)
+        if: ${{ steps.version.outputs.devVersion != '' }}
+        run: pnpm build
+
+      - name: Check publish dependency specifiers (dev follow-up)
+        if: ${{ steps.version.outputs.devVersion != '' }}
+        run: pnpm check:publish-deps
+
+      - name: Publish packages (dev follow-up)
+        if: ${{ steps.version.outputs.devVersion != '' }}
+        env:
+          NPM_CONFIG_PROVENANCE: "true"
+        run: node scripts/publish-packages.mjs --tag dev
+
+      - name: Create lightweight git tag (dev follow-up)
+        if: ${{ steps.version.outputs.devVersion != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.devVersion }}
+        run: |
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists; skipping"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+              -X POST \
+              -f ref="refs/tags/v$VERSION" \
+              -f "sha=$GITHUB_SHA"
           fi
 
       # Tell prisma-cli a family package shipped, so its auto-repin

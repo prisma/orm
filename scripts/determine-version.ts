@@ -16,6 +16,10 @@
  *                          (these package names have no pre-v8 stable
  *                          audience to protect; the bare `prisma`
  *                          package, which does, is published elsewhere).
+ *                          The plan then also carries `devVersion`
+ *                          (`<base>-dev.N`) so the workflow can publish
+ *                          a dev build of the same commit — the `dev`
+ *                          dist-tag must never fall behind `latest`.
  *                         Otherwise, `<base>-dev.N`, dist-tag `dev`
  *                          (N is the next available build number,
  *                          discovered by querying npm).
@@ -24,16 +28,16 @@
  *                          Useful as a manual escape hatch (re-publish
  *                          after a transient failure, cut a beta).
  *
- * Outputs `version` and `tag` to `$GITHUB_OUTPUT` for downstream
- * workflow steps to consume.
+ * Outputs `version`, `tag`, and `devVersion` (empty unless the push is
+ * a release bump) to `$GITHUB_OUTPUT` for downstream workflow steps.
  */
 
 import { execFileSync, execSync } from 'node:child_process';
 import { appendFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'pathe';
-import type { VersionResult } from './determine-version-utils.ts';
-import { assertCanonicalBase, composeDevVersion } from './determine-version-utils.ts';
+import type { PreviousVersionLookup, VersionResult } from './determine-version-utils.ts';
+import { assertCanonicalBase, planPushPublish } from './determine-version-utils.ts';
 
 // The counter reads one package's `dev` dist-tag as the high-water mark, so
 // that package must be one this repo still publishes on every dev build.
@@ -70,10 +74,6 @@ function getLatestDevVersion(): string | undefined {
   return run(`npm view "${PACKAGE_NAME}" dist-tags.dev`);
 }
 
-type PreviousVersionLookup =
-  | { available: true; version: string | undefined }
-  | { available: false };
-
 /**
  * Reads the root `package.json` `version` at `PUSH_BEFORE_SHA` (the ref
  * that `main` pointed at *before* the push). Distinguishes "we
@@ -107,6 +107,7 @@ function writeGitHubOutput(result: VersionResult): void {
   if (outputFile) {
     appendFileSync(outputFile, `version<<EOF\n${result.version}\nEOF\n`);
     appendFileSync(outputFile, `tag<<EOF\n${result.tag}\nEOF\n`);
+    appendFileSync(outputFile, `devVersion<<EOF\n${result.devVersion ?? ''}\nEOF\n`);
   }
 }
 
@@ -129,24 +130,12 @@ switch (eventName) {
     break;
 
   case 'push': {
-    // If the root `version` differs from what main was pointing at before
-    // this push, the push contains a release bump — cut a release
-    // automatically under `latest` (which tracks the newest release,
-    // RC or stable, for every package this repo publishes). Otherwise,
-    // produce the usual `<base>-dev.N` tarball.
-    //
-    // `available: false` (shallow clone, missing SHA) deliberately falls
-    // through to the dev path: a transient git error must never silently
-    // promote to `latest`.
     const previous = readPreviousRootVersion();
-    const isReleaseBump = previous.available && previous.version !== baseVersion;
-    if (isReleaseBump) {
+    result = planPushPublish(baseVersion, previous, getLatestDevVersion());
+    if (result.tag === 'latest') {
       console.log(
-        `Previous root version: ${previous.version ?? '(unset)'} → release bump detected.`,
+        `Previous root version: ${previous.available ? (previous.version ?? '(unset)') : '(unreadable)'} → release bump detected.`,
       );
-      result = { version: baseVersion, tag: 'latest' };
-    } else {
-      result = composeDevVersion(baseVersion, getLatestDevVersion());
     }
     break;
   }
@@ -157,4 +146,7 @@ switch (eventName) {
 
 console.log(`Resolved version:      ${result.version}`);
 console.log(`Resolved dist-tag:     ${result.tag}`);
+if (result.devVersion) {
+  console.log(`Dev follow-up version: ${result.devVersion}`);
+}
 writeGitHubOutput(result);
