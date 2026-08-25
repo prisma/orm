@@ -44,7 +44,7 @@ contract emit
 db update               # off-graph reconciliation; rebuild from desired state
 ```
 
-`db update` is *not* the dev-DB equivalent of `migrate`. It does not produce a migration, does not walk the graph, does not advance a ref. It tears down and rebuilds the database to satisfy the current contract. That makes it the right verb during iteration (no junk migrations in the PR) and the wrong verb for anything reaching production (no audit trail; destructive).
+`db update` is *not* the dev-DB equivalent of `migrate`. It does not produce a migration and does not walk the graph. It tears down and rebuilds the database to satisfy the current contract, and on the default dev URL it advances the `db` ref to record the contract the dev database now satisfies — the checkpoint `migration plan` chains from (see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)). That makes it the right verb during iteration (no junk migrations in the PR) and the wrong verb for anything reaching production (no audit trail; destructive).
 
 A rewind during iteration is also `db update --to <contract>` — same verb, parameterised by target.
 

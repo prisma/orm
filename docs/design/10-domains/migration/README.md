@@ -77,7 +77,7 @@ We explicitly **reject the dev/deploy verb split** that other systems (notably P
 
 ### Off-graph reconciliation is not migration
 
-`db update` reconciles a live database to a target contract **without walking the migration graph**. It does not produce a migration, does not advance a ref, does not consult the marker's prior contract. It is dev-only.
+`db update` reconciles a live database to a target contract **without walking the migration graph**. It does not produce a migration and does not consult the marker's prior contract. On the project's default dev URL it implicitly advances the `db` ref — recording the contract hash the dev database has been brought to, which offline `migration plan` uses as its default origin (`--advance-ref <name>` overrides; `--db <non-default-url>` opts out; see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)). It is dev-only.
 
 - `db update` → reconcile to current contract (the 90% case).
 - `db update --to <contract>` → reconcile to any contract we can name (see *Contract references* below).
@@ -146,6 +146,7 @@ The load-bearing semantics of a ref is **"the contract CD will `migrate --to` in
 Consequences:
 - Refs are **environment-named** (`production`, `staging`, ...). The Git-generic `head` ref has been dropped — it carried no information the emitted `contract.json` doesn't already imply.
 - A ref is a *promise* the repo makes about the next CD run. The PR is the moment that promise is staked.
+- The `db` ref differs in meaning, not mechanics: it records the contract the project's dev database has been brought to (advanced implicitly by `db init`/`db update` on the default URL) and serves as `migration plan`'s default origin. A default name, not a magic one — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md).
 
 ### Initialization vs adoption-by-signing
 
@@ -276,7 +277,7 @@ Grouped by intent.
 
 - **`migrate --to <contract>`** — *the* migration verb. Walks the graph from the marker's current contract to the target. Forward-only. Same verb everywhere (dev, staging, production); only the DB URL changes.
 - **`db init`** — bootstrap an empty database, or adopt an existing one by executing initial migrations from `∅`. Lays down structure. Live, may mutate.
-- **`db update`** — off-graph reconciliation. `db update` reconciles to the current contract; `db update --to <hash>` reconciles to any contract we can name on disk. **Dev-only.** Does not produce a migration, does not consult the graph, does not advance any ref.
+- **`db update`** — off-graph reconciliation. `db update` reconciles to the current contract; `db update --to <hash>` reconciles to any contract we can name on disk. **Dev-only.** Does not produce a migration and does not consult the graph; on the default dev URL it implicitly advances the `db` ref (`--advance-ref <name>` overrides, `--db <non-default-url>` opts out — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)).
 - **`db sign [<contract>]`** *(explicit form: `db sign --contract <contract>`)* — verify the live DB satisfies a contract, then write the contract hash into the marker. **Refuses if it doesn't satisfy.** No structural mutation. The adoption path for an already-matching DB. Without an argument, defaults to the current `contract.json`. The argument names *the thing being signed* — distinct from `--to` (movement) used by `migrate` and `db update`.
 
 ### Verification
