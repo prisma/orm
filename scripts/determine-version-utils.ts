@@ -95,6 +95,25 @@ export function planPushPublish(
 }
 
 /**
+ * The publish plan for a `workflow_dispatch`. A real (non-dry-run)
+ * `latest` dispatch is the recovery path for a failed release publish,
+ * so it carries the same `<base>-dev.N` follow-up as a release push —
+ * recovering the release must also recover the `dev` dist-tag.
+ * Dry runs and non-`latest` dispatches publish only the requested tag.
+ */
+export function planDispatchPublish(
+  base: string,
+  tag: string,
+  isDryRun: boolean,
+  latestDevVersion: string | undefined,
+): VersionResult {
+  if (tag === 'latest' && !isDryRun) {
+    return { version: base, tag, devVersion: composeDevVersion(base, latestDevVersion).version };
+  }
+  return { version: base, tag };
+}
+
+/**
  * Composes the `<base>-dev.N` version for a routine (non-release) push,
  * given the version currently published under the `dev` dist-tag. The
  * counter continues while the base is unchanged and resets to 1 when

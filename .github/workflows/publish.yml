@@ -22,6 +22,9 @@ name: Publish to npm
 #     routine push — which broke prisma-cli's dev channel on 2026-08-25.
 #   - workflow_dispatch                                 → publish `<base>`
 #     under the chosen dist-tag (default `latest`); also the dry-run path.
+#     A real `latest` dispatch (the recovery path for a failed release
+#     publish) runs the dev follow-up too, so recovering the release also
+#     recovers the `dev` dist-tag.
 
 on:
   push:
@@ -88,6 +91,9 @@ jobs:
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
           INPUT_DIST_TAG: ${{ github.event.inputs.dist-tag }}
+          # A dry-run dispatch must never emit `devVersion` — the dev
+          # follow-up steps below key off it and would publish for real.
+          INPUT_DRY_RUN: ${{ github.event.inputs.dry-run }}
           # `before` is the ref `main` pointed at before this push.
           # `determine-version.ts` reads the root `package.json` at that ref
           # to detect release bumps. Empty for `workflow_dispatch`, which
@@ -231,7 +237,8 @@ jobs:
               $PRERELEASE_FLAG
           fi
 
-      # --- Dev follow-up, release pushes only (devVersion is empty otherwise).
+      # --- Dev follow-up, release publishes only: release-bump pushes and
+      # real `latest` recovery dispatches (devVersion is empty otherwise).
       # Keeps the `dev` dist-tag on a build of the released base instead of the
       # previous one (adopted from prisma/composer#241). Runs before the
       # prisma-cli notification below: the repin that notification triggers
@@ -253,14 +260,16 @@ jobs:
         if: ${{ steps.version.outputs.devVersion != '' }}
         run: pnpm check:publish-deps
 
+      # `devVersion` is never emitted for a dry run; the extra dry-run guard
+      # keeps this mutating step independently guarded like every other.
       - name: Publish packages (dev follow-up)
-        if: ${{ steps.version.outputs.devVersion != '' }}
+        if: ${{ steps.version.outputs.devVersion != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.dry-run != 'true') }}
         env:
           NPM_CONFIG_PROVENANCE: "true"
         run: node scripts/publish-packages.mjs --tag dev
 
       - name: Create lightweight git tag (dev follow-up)
-        if: ${{ steps.version.outputs.devVersion != '' }}
+        if: ${{ steps.version.outputs.devVersion != '' && (github.event_name != 'workflow_dispatch' || github.event.inputs.dry-run != 'true') }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.devVersion }}

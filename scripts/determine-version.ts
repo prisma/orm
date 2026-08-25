@@ -26,7 +26,10 @@
  * - `workflow_dispatch` → `<base>` (no suffix), dist-tag from
  *                          `INPUT_DIST_TAG` (defaults to `latest`).
  *                          Useful as a manual escape hatch (re-publish
- *                          after a transient failure, cut a beta).
+ *                          after a transient failure, cut a beta). A
+ *                          real (non-dry-run) `latest` dispatch also
+ *                          carries `devVersion`, so recovering a failed
+ *                          release recovers the `dev` dist-tag too.
  *
  * Outputs `version`, `tag`, and `devVersion` (empty unless the push is
  * a release bump) to `$GITHUB_OUTPUT` for downstream workflow steps.
@@ -37,7 +40,11 @@ import { appendFileSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'pathe';
 import type { PreviousVersionLookup, VersionResult } from './determine-version-utils.ts';
-import { assertCanonicalBase, planPushPublish } from './determine-version-utils.ts';
+import {
+  assertCanonicalBase,
+  planDispatchPublish,
+  planPushPublish,
+} from './determine-version-utils.ts';
 
 // The counter reads one package's `dev` dist-tag as the high-water mark, so
 // that package must be one this repo still publishes on every dev build.
@@ -126,7 +133,12 @@ switch (eventName) {
   case 'workflow_dispatch':
     // `??` is wrong here: an empty INPUT_DIST_TAG would slip through as
     // the dist-tag and cause `pnpm publish --tag ""` to fail downstream.
-    result = { version: baseVersion, tag: inputDistTag || 'latest' };
+    result = planDispatchPublish(
+      baseVersion,
+      inputDistTag || 'latest',
+      process.env.INPUT_DRY_RUN === 'true',
+      getLatestDevVersion(),
+    );
     break;
 
   case 'push': {

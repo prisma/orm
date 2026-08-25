@@ -6,6 +6,7 @@ import {
   computeNextMinor,
   computeNextReleaseVersion,
   parseVersion,
+  planDispatchPublish,
   planPushPublish,
 } from './determine-version-utils.ts';
 
@@ -151,6 +152,38 @@ describe('planPushPublish', () => {
       planPushPublish('8.1.0', { available: true, version: '8.0.0' }, '8.0.0-dev.5'),
       { version: '8.1.0', tag: 'latest', devVersion: '8.1.0-dev.1' },
     );
+  });
+});
+
+describe('planDispatchPublish', () => {
+  it('plans a dev follow-up for a real latest dispatch', () => {
+    assert.deepEqual(planDispatchPublish('8.0.0-rc.7', 'latest', false, '8.0.0-rc.6-dev.1'), {
+      version: '8.0.0-rc.7',
+      tag: 'latest',
+      devVersion: '8.0.0-rc.7-dev.1',
+    });
+  });
+
+  it('continues the dev counter when dev is already on the base', () => {
+    assert.deepEqual(planDispatchPublish('8.0.0-rc.7', 'latest', false, '8.0.0-rc.7-dev.2'), {
+      version: '8.0.0-rc.7',
+      tag: 'latest',
+      devVersion: '8.0.0-rc.7-dev.3',
+    });
+  });
+
+  it('plans no dev follow-up for a dry run', () => {
+    assert.deepEqual(planDispatchPublish('8.0.0-rc.7', 'latest', true, '8.0.0-rc.6-dev.1'), {
+      version: '8.0.0-rc.7',
+      tag: 'latest',
+    });
+  });
+
+  it('plans no dev follow-up for a non-latest dispatch', () => {
+    assert.deepEqual(planDispatchPublish('8.0.0-rc.7', 'beta', false, '8.0.0-rc.6-dev.1'), {
+      version: '8.0.0-rc.7',
+      tag: 'beta',
+    });
   });
 });
 
