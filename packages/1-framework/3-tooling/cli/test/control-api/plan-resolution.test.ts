@@ -519,6 +519,31 @@ describe('resolveToForPlan', () => {
     expect(contractAt).toHaveBeenCalledWith(HASH_A, undefined);
   });
 
+  it('refuses @empty as a target with a wrong-grammar error pointing at --from', async () => {
+    const bundles = [makePkg(E, HASH_A, 'm1')];
+    const contractAt = vi.fn();
+    const space = makeSpace(bundles, {}, contractAt);
+    const result = await resolveToForPlan('@empty', baseToInput({ space }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expectRefuse(result.failure, 'MIGRATION.REF_WRONG_GRAMMAR', '--from @empty');
+      expect(result.failure.message).toContain('origin');
+      expect(result.failure.meta?.['input']).toBe('@empty');
+    }
+    expect(contractAt).not.toHaveBeenCalled();
+  });
+
+  it('refuses @empty as a target on an empty graph too', async () => {
+    const space = makeSpace([]);
+    const result = await resolveToForPlan('@empty', baseToInput({ space }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expectRefuse(result.failure, 'MIGRATION.REF_WRONG_GRAMMAR', '--from @empty');
+    }
+  });
+
   it('maps a not-found reference to a structured error', async () => {
     const bundles = [makePkg(E, HASH_A, 'm1')];
     const space = makeSpace(bundles);

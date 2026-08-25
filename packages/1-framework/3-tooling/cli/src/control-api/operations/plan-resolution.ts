@@ -257,6 +257,19 @@ export async function resolveToForPlan(
     return notOk(mapRefResolutionError(refResult.failure));
   }
 
+  if (refResult.value.provenance.kind === 'reserved-empty') {
+    return notOk(
+      mapRefResolutionError({
+        kind: 'wrong-grammar',
+        input: optionsTo,
+        expectedGrammar: 'contract',
+        message:
+          '`@empty` is only valid as an origin (`--from`); planning a migration to the empty contract is not supported through this shortcut',
+        fix: 'Pass `--to` a contract hash, ref name, or migration directory name. To plan starting from an empty database, use `--from @empty`.',
+      }),
+    );
+  }
+
   const resolution = await resolveContractRef(refResult.value, space, {
     explicitLabel: optionsTo,
     artifactRole: 'to',
