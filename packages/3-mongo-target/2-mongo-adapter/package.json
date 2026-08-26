@@ -33,7 +33,7 @@
     "@internal/operations": "workspace:8.0.0-rc.8",
     "@internal/utils": "workspace:8.0.0-rc.8",
     "arktype": "catalog:",
-    "bson": "^7.3.1"
+    "bson": "^7.3.2"
   },
   "devDependencies": {
     "mongodb": "catalog:",
