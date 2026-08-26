@@ -21,7 +21,7 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.7",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.8",
     "arktype": "catalog:",
     "pg": "catalog:",
     "temporal-polyfill": "^1.0.4"
@@ -29,8 +29,8 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.20.3",
     "@cloudflare/workers-types": "5.20260804.1",
-    "@prisma/cli-engine": "0.2.3",
-    "@repo/tsconfig": "workspace:8.0.0-rc.7",
+    "@prisma/cli-engine": "0.3.0",
+    "@repo/tsconfig": "workspace:8.0.0-rc.8",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "tsx": "catalog:",
@@ -38,5 +38,5 @@
     "vitest": "^4.1.10",
     "wrangler": "4.119.0"
   },
-  "version": "8.0.0-rc.7"
+  "version": "8.0.0-rc.8"
 }

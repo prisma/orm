@@ -1,7 +1,7 @@
 {
   "name": "@internal/extension-author-tools",
   "private": true,
-  "version": "8.0.0-rc.7",
+  "version": "8.0.0-rc.8",
   "license": "Apache-2.0",
   "type": "module",
   "description": "CLI tools that pair with the extension-upgrade branch of the prisma-8 agent skill — including `prisma-8-check-pins`, the CI guard that asserts every `@internal/*` peerDep on an extension package is exact-version-pinned. Future tools for extension authors employing the upgrade skill ship from this package.",

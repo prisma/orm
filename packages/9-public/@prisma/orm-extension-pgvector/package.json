@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-extension-pgvector",
-  "version": "8.0.0-rc.7",
+  "version": "8.0.0-rc.8",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -15,24 +15,24 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.7",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.7",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.7",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.8",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.8",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.8",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "^2.2.2"
   },
   "devDependencies": {
-    "@internal/extension-pgvector": "workspace:8.0.0-rc.7",
-    "@repo/tsconfig": "workspace:8.0.0-rc.7",
-    "@internal/publish-surface": "workspace:8.0.0-rc.7",
-    "@repo/tsdown": "workspace:8.0.0-rc.7",
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.7",
+    "@internal/extension-pgvector": "workspace:8.0.0-rc.8",
+    "@repo/tsconfig": "workspace:8.0.0-rc.8",
+    "@internal/publish-surface": "workspace:8.0.0-rc.8",
+    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.8",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
   "peerDependencies": {
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.7",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.8",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

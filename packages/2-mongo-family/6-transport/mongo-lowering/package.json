@@ -1,7 +1,7 @@
 {
   "name": "@internal/mongo-lowering",
   "private": true,
-  "version": "8.0.0-rc.7",
+  "version": "8.0.0-rc.8",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -16,14 +16,14 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/framework-components": "workspace:8.0.0-rc.7",
-    "@internal/mongo-query-ast": "workspace:8.0.0-rc.7",
-    "@internal/mongo-wire": "workspace:8.0.0-rc.7"
+    "@internal/framework-components": "workspace:8.0.0-rc.8",
+    "@internal/mongo-query-ast": "workspace:8.0.0-rc.8",
+    "@internal/mongo-wire": "workspace:8.0.0-rc.8"
   },
   "devDependencies": {
     "mongodb": "catalog:",
-    "@repo/tsconfig": "workspace:8.0.0-rc.7",
-    "@repo/tsdown": "workspace:8.0.0-rc.7",
+    "@repo/tsconfig": "workspace:8.0.0-rc.8",
+    "@repo/tsdown": "workspace:8.0.0-rc.8",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
