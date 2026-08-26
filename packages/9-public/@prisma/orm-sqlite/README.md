@@ -46,7 +46,3 @@ This package ships no bin. The ORM commands run inside the unified `prisma` CLI,
 ## Responsibilities
 
 Composition only. Every behavior it exposes lives in the platform packages; this package chooses the default combination of them and gives it one name.
-
-## Dependencies
-
-`@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-sqlite`, and `@prisma/orm-toolchain` at exact lockstep versions, plus `pathe`.

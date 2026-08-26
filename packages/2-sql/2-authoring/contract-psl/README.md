@@ -115,17 +115,6 @@ Contract-level default (specifier options bag):
   - `prismaContract(schemaPath, { output?, target, createNamespace, composedExtensionPackRefs?, defaultControlPolicy?, enumInferenceCodecs? })` — scalar column descriptors are derived from the composed stack's authoring type namespace at load time.
   - Provider input is fully preassembled by composition layers (for example `@internal/family-sql/control` helpers).
 
-## Dependencies
-
-- **Depends on**
-  - `@internal/psl-parser` for parser + parser result types
-  - `@internal/sql-contract-ts` for SQL authoring builder composition
-  - `pathe` for provider path resolution
-  - `@internal/contract` and `@internal/utils`
-- **Used by**
-  - PSL contract providers configured via `contract.source`
-  - Composition helpers such as `@internal/family-sql/control` that assemble provider inputs
-
 ## Architecture
 
 ```mermaid

@@ -14,14 +14,6 @@ This package defines the in-memory representation of MongoDB collection schemas 
 - **Canonical serialization**: `canonicalize()` produces a key-order-independent string representation of values. Used by the planner for index lookup keys.
 - **Visitor pattern**: `MongoSchemaVisitor<R>` enables extensible traversal without modifying AST nodes.
 
-## Dependencies
-
-- **`@internal/mongo-contract`**: `MongoIndexKey` type for index key definitions.
-
-**Dependents:**
-
-- `@internal/adapter-mongo` — uses the schema IR via `contractToMongoSchemaIR()` for contract-to-schema conversion, migration planning, and filter evaluation.
-
 ## Usage
 
 ```typescript

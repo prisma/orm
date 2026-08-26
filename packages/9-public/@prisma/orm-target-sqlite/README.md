@@ -17,7 +17,3 @@ A bare namespace import (e.g. `@prisma/orm-target-sqlite/adapter`) aggregates th
 ## Responsibilities
 
 Everything SQLite-specific: native type normalization, DDL generation, control tables, and the database connection. Shared SQL semantics live in `@prisma/orm-family-sql`.
-
-## Dependencies
-
-`@prisma/orm-framework`, `@prisma/orm-family-sql`, and `@prisma/orm-toolchain` (exact lockstep pins), plus small third-party runtime libraries.

@@ -14,14 +14,6 @@ Prints Prisma Schema Language (PSL) from `PslDocumentAst` (`@internal/framework-
 - Preserve `@map` / `@@map` and relation attributes from AST nodes.
 - Generate deterministic output so snapshot-based tests remain stable.
 
-## Dependencies
-
-- **Depends on**
-  - `@internal/framework-components`
-- **Used by**
-  - `@internal/cli` (consumes `printPsl(ast)` after the SQL family produces the AST)
-  - `@internal/family-sql` (tests; consumes the printer to verify AST construction)
-
 ## Related Docs
 
 - `docs/Architecture Overview.md`

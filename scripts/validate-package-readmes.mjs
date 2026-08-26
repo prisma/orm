@@ -3,7 +3,14 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 
 function listSrcParents() {
-  const out = execSync("find packages -type d -name src | sed 's|/src$||'", { encoding: 'utf8' });
+  let out;
+  try {
+    out = execSync("find packages -type d -name src | sed 's|/src$||'", { encoding: 'utf8' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`Failed to list package source directories: ${message}\n`);
+    process.exit(1);
+  }
   return out
     .split(/\r?\n/)
     .filter(Boolean)
@@ -24,8 +31,6 @@ for (const dir of dirs) {
   if (!/^#\s+/m.test(txt)) warnings.push(`${dir}: README missing top-level title`);
   if (!/^##\s+Responsibilities/m.test(txt))
     warnings.push(`${dir}: README missing 'Responsibilities' section`);
-  if (!/^##\s+Dependencies/m.test(txt))
-    warnings.push(`${dir}: README missing 'Dependencies' section`);
 }
 
 if (errors.length) {

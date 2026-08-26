@@ -24,15 +24,6 @@ and silently swallows every error in the sending path.
   parent. The child enriches with system probes, POSTs to the backend
   with a 1–2 s timeout, exits.
 
-## Dependencies
-
-- Node built-ins only. Config-dir resolution follows the XDG Base
-  Directory Specification on Unix (incl. macOS — the spec deliberately
-  picks XDG over the macOS-native `~/Library/Preferences/` convention so
-  the path is test-overridable and consistent across platforms) and uses
-  `%APPDATA%` on Windows. `child_process`, `node:crypto.randomUUID`,
-  `node:fs`, `node:os`, `node:path` are the only inbound modules.
-
 ## For contributors
 
 The endpoint URL is a module-level constant pinned to the deployed

@@ -171,15 +171,6 @@ See [ADR 204 — Single-Path Async Codec Runtime](../../../../docs/architecture%
 - Defines projection row inference types
 - Defines `AnyColumnBuilder` helper type for accepting column builders with any operation types
 
-## Dependencies
-
-- **`@internal/contract`**: Core contract types
-- **`@internal/operations`**: Operation registry used by schema builders
-- **`@internal/sql-contract`**: SQL contract types (via `@internal/sql-contract/types`)
-- **`arktype`**: Parameter schema typing for codec definitions
-
-**Note**: This package does not depend on specific adapters (e.g., `@internal/adapter-postgres`). Test fixtures define `CodecTypes` inline to remain adapter-agnostic and avoid cyclic dependencies.
-
 ## Package Structure
 
 This package follows the standard `exports/` directory pattern:

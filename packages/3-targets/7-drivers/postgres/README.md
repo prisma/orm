@@ -72,10 +72,6 @@ flowchart TD
 - Manages connections and executes statements
 - Handles PostgreSQL protocol
 
-## Dependencies
-
-- **`@internal/sql-contract`**: SQL contract types (via `@internal/sql-contract/types`)
-
 ## Related Subsystems
 
 - **[Adapters & Targets](../../docs/architecture%20docs/subsystems/5.%20Adapters%20&%20Targets.md)**: Driver specification

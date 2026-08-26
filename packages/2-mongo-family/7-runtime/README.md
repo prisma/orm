@@ -53,16 +53,6 @@ Custom or third-party codecs (encryption, vendor scalars) are contributed via an
 - **Middleware lifecycle inheritance**: `MongoRuntime` extends `RuntimeCore<MongoQueryPlan, MongoExecutionPlan, MongoMiddleware>` and uses the framework query lifecycle (`beforeQuery` / `interceptQuery` / `onRow` / `afterQuery`) and execute lifecycle (`beforeExecute` / `interceptExecute` / `afterExecute`). Mongo does **not** override `runBeforeCompile` (Mongo middleware has no `beforeCompile` hook today).
 - **Lifecycle management**: Connection lifecycle via `close()`.
 
-## Dependencies
-
-- **Depends on**:
-  - `@internal/mongo-codec` (`MongoCodecRegistry` for decode)
-  - `@internal/mongo-lowering` (`MongoAdapter`, `MongoDriver` interfaces)
-  - `@internal/mongo-query-ast` (`MongoQueryPlan`, `AnyMongoCommand` — the typed plan shape)
-  - `@internal/framework-components` (`RuntimeCore` base class, operation-specific middleware runners, `RuntimeMiddleware` SPI, `AsyncIterableResult` return type, `RuntimeAdapterDescriptor` / `ExecutionStack` for the stack composition model)
-- **Depended on by**:
-  - Integration tests (`test/integration/test/mongo/` and `test/integration/test/cross-package/cross-family-middleware.test.ts`)
-
 ## Architecture
 
 `MongoRuntimeImpl` extends `RuntimeCore<MongoQueryPlan, MongoExecutionPlan, MongoMiddleware>` and overrides:

@@ -13,11 +13,6 @@ pass options supported by the underlying `uniku` generator.
 - Emit contract-safe execution defaults (no executable code stored in the contract).
 - Generate values at runtime using `uniku` when mutation defaults require them.
 
-## Dependencies
-
-- `@internal/contract` for shared contract types (`ExecutionMutationDefaultValue`).
-- `uniku` for ID generator implementations.
-
 ## Architecture
 
 ```mermaid

@@ -256,14 +256,6 @@ Use this pattern for any utility that:
 
 Utilities that don't import `vitest` (e.g., `timeouts`, database helpers) can safely be included in the main export.
 
-## Dependencies
-
-**Zero dependencies on other `@internal/*` packages** - This allows test-utils to be used by all packages without circular dependencies.
-
-**External dependencies (devDependencies only):**
-- `@prisma/dev`: Dev database server (one connection at a time; attempts to open a second connection while the first is active will fail, and ports are auto-assigned per server)
-- `pg`: PostgreSQL client
-
 ## Usage
 
 ### Integration Tests

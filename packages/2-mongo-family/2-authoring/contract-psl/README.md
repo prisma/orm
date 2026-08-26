@@ -13,14 +13,3 @@ PSL-to-Mongo contract interpreter for Prisma Next. Transforms Prisma Schema Lang
 
 - **Per-index `collation`**: PSL authoring does not support the `collation` index option. Users requiring per-index collation must use the TypeScript contract builder (`@internal/mongo-contract-ts`).
 - **`partialFilterExpression` / `wildcardProjection`**: These object-valued index options are not supported in PSL and require the TypeScript contract builder.
-
-## Dependencies
-
-- **Depends on**:
-  - `@internal/psl-parser` (PSL AST types and parser)
-  - `@internal/contract` (domain types: `DomainField`, `DomainReferenceRelation`, `Contract`)
-  - `@internal/config` (contract source types: `ContractConfig`, `ContractSourceDiagnostic`)
-  - `@internal/utils` (result types)
-- **Depended on by**:
-  - `@internal/family-mongo` (control stack composition)
-  - `examples/mongo-demo` (via `prisma.config.ts`)

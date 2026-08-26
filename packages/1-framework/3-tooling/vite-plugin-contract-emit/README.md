@@ -120,12 +120,6 @@ graph TD
 > `ContractEmitResult.validationWarning` is the dependency-validation message
 > from the operation; render it through your plugin's logger when present.
 
-## Dependencies
-
-- **@internal/cli**: Uses the control-api `executeContractEmit` and
-  `disposeEmitQueue` exports — the canonical publish path
-- **vite**: Peer dependency (`^7.0.0 || ^8.0.0`)
-
 ## Examples
 
 - `examples/prisma-8-demo` — plain Vite + React SPA, covers TS-first and PSL-first contracts. Run `pnpm dev`, edit `prisma/contract.ts`, watch the artifacts regenerate.

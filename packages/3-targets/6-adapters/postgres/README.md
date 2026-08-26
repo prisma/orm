@@ -135,12 +135,6 @@ flowchart TD
   - `jsonColumn`, `jsonbColumn` — untyped raw JSON / JSONB column descriptors
   - For schema-typed JSON columns, use the per-library extension package (`@internal/extension-arktype-json` for arktype). The schema-accepting `json(schema)` / `jsonb(schema)` overloads previously shipped here retired in Phase C of the codec-registry-unification project.
 
-## Dependencies
-
-- **`@internal/sql-contract`**: SQL contract types
-- **`@internal/sql-relational-core`**: SQL AST types and codec registry
-- **`@internal/cli`**: CLI config types and extension pack manifest types
-
 ## Related Subsystems
 
 - **[Adapters & Targets](../../../../docs/architecture%20docs/subsystems/5.%20Adapters%20&%20Targets.md)**: Detailed adapter specification

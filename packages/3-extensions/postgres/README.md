@@ -145,18 +145,6 @@ Each `connect()` call constructs a fresh `pg.Client` and a fresh `Runtime`. No `
 - Connect the internal Postgres driver through `db.connect(...)` or from initial binding options
 - Memoize runtime so repeated `db.runtime()` calls return one instance
 
-## Dependencies
-
-- `@internal/sql-runtime` for stack/context/runtime primitives
-- `@internal/framework-components/execution` for stack instantiation
-- `@internal/target-postgres` for target descriptor
-- `@internal/adapter-postgres` for adapter descriptor
-- `@internal/driver-postgres` for driver descriptor
-- `@internal/sql-builder` for `sql(...)`
-- `@internal/sql-orm-client` for `orm(...)`
-- `@internal/sql-contract` for contract types (contract validation now flows through the `ContractSerializer` SPI surfaced by the SQL family target descriptor; the `postgres<Contract>(...)` facade wraps it)
-- `pg` for `Pool` construction (URL / `pgPool` binding on the Node factory) and `Client` construction (`pgClient` binding on the Node factory; per-`connect()` on the serverless facade)
-
 ## Architecture
 
 ```mermaid

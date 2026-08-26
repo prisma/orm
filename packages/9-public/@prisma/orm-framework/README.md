@@ -21,7 +21,3 @@ Each subpath namespace consolidates one internal framework module; a bare namesp
 ## Responsibilities
 
 Everything runtime and authoring code needs independently of a concrete database: contract representation and validation, component wiring, PSL handling, and shared utilities. No database drivers, no build tooling (that is `@prisma/orm-toolchain`).
-
-## Dependencies
-
-Self-contained apart from small third-party runtime libraries (`arktype`, `@standard-schema/spec`, `pathe`, `uniku`). It is the root of the platform-package graph: the family, target, and toolchain packages all depend on it.

@@ -124,13 +124,6 @@ flowchart TD
 **Types Export (`types.ts`)**
 - Re-exports SQLite-specific types
 
-## Dependencies
-
-- **`@internal/sql-contract`**: SQL contract types
-- **`@internal/sql-relational-core`**: SQL AST types and codec registry
-- **`@internal/sql-runtime`**: Runtime adapter descriptor types
-- **`@internal/framework-components`**: Descriptor types
-
 ## Related Subsystems
 
 - **[Adapters & Targets](../../../../docs/architecture%20docs/subsystems/5.%20Adapters%20&%20Targets.md)**: Detailed adapter specification

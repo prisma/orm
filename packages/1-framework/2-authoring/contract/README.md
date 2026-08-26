@@ -26,10 +26,6 @@ This package is the extracted shared descriptor layer from the contract authorin
 - **No target-specific logic**: It must remain target-family agnostic and cannot import from `@internal/sql-*` or other family-specific modules
 - **Shared by multiple layers**: SQL authoring, target packs, extension packs, and ID helpers all consume these types
 
-## Dependencies
-
-- Runtime dependencies: none
-
 ## Exports
 
 - `IndexDef`
