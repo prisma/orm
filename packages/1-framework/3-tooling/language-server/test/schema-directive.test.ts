@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isPrismaNextSchema } from '../src/prisma-next-directive';
+import { isPrismaNextSchema } from '../src/schema-directive';
 
 describe('isPrismaNextSchema', () => {
   it('accepts a schema whose first line is the directive', () => {
@@ -23,9 +23,10 @@ describe('isPrismaNextSchema', () => {
     expect(isPrismaNextSchema('//   use   prisma-next\n')).toBe(true);
   });
 
-  it('rejects a token attached to prisma-next', () => {
-    expect(isPrismaNextSchema('// use prisma-next2\n')).toBe(false);
-    expect(isPrismaNextSchema('// use prisma-nextgen\n')).toBe(false);
+  it('rejects a token attached to the directive name', () => {
+    for (const suffix of ['2', 'gen']) {
+      expect(isPrismaNextSchema(`// use prisma-next${suffix}\n`)).toBe(false);
+    }
   });
 
   it('rejects a directive that is not the first content of the file', () => {

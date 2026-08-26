@@ -37,12 +37,12 @@ import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mappin
 import { computeFoldingRanges } from './folding-ranges';
 import { guardedConnection } from './guarded-connection';
 import type { PipelineInputs } from './pipeline';
-import { isPrismaNextSchema } from './prisma-next-directive';
 import {
   createProjectArtifacts,
   type DocumentArtifacts,
   type ProjectArtifacts,
 } from './project-artifacts';
+import { isPrismaNextSchema } from './schema-directive';
 import type { SchemaInputSet } from './schema-inputs';
 import { buildSemanticTokens, semanticTokensLegend } from './semantic-tokens';
 
