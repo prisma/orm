@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 
+/** Returns package directories that contain a source directory. */
 function listSrcParents() {
   let out;
   try {
-    out = execSync("find packages -type d -name src | sed 's|/src$||'", { encoding: 'utf8' });
+    out = execFileSync('find', ['packages', '-type', 'd', '-name', 'src'], { encoding: 'utf8' });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`Failed to list package source directories: ${message}\n`);
@@ -14,6 +15,7 @@ function listSrcParents() {
   return out
     .split(/\r?\n/)
     .filter(Boolean)
+    .map((p) => p.replace(/\/src$/, ''))
     .filter((p) => !/coverage|\.turbo|node_modules/.test(p));
 }
 

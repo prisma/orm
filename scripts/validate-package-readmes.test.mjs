@@ -33,4 +33,24 @@ describe('validate package READMEs', () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it('fails when package discovery fails', () => {
+    const root = mkdtempSync(join(tmpdir(), 'validate-package-readmes-'));
+
+    try {
+      const result = spawnSync(
+        process.execPath,
+        [join(process.cwd(), 'scripts/validate-package-readmes.mjs')],
+        {
+          cwd: root,
+          encoding: 'utf8',
+        },
+      );
+
+      assert.equal(result.status, 1);
+      assert.match(result.stderr, /Failed to list package source directories/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
