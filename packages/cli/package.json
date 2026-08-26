@@ -31,7 +31,7 @@
   "main": "build/index.js",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/cli"
   },
   "homepage": "https://www.prisma.io",

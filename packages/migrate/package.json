@@ -6,7 +6,7 @@
   "types": "dist/migrate/src/index.d.ts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/migrate"
   },
   "author": "Tim Suchanek <suchanek@prisma.io>",

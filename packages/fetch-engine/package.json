@@ -9,7 +9,7 @@
   "homepage": "https://www.prisma.io",
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/fetch-engine"
   },
   "bugs": "https://github.com/prisma/prisma/issues",
