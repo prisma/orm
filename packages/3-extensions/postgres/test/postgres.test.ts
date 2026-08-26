@@ -1,9 +1,11 @@
-import type { Contract } from '@internal/contract/types';
-import { coreHash } from '@internal/contract/types';
-import type { SqlStorage } from '@internal/sql-contract/types';
-import type { Runtime } from '@internal/sql-runtime';
-import { PostgresSchema } from '@internal/target-postgres/types';
-import { createContract } from '@repo/test-utils';
+import type { Contract } from '@prisma-next/contract/types';
+import type { ScopeField, Subquery } from '@prisma-next/sql-builder/types';
+import type { SqlStorage } from '@prisma-next/sql-contract/types';
+import { ProjectionItem, SelectAst, TableSource } from '@prisma-next/sql-relational-core/ast';
+import { planFromAst } from '@prisma-next/sql-relational-core/plan';
+import type { Runtime } from '@prisma-next/sql-runtime';
+import { createContract } from '@prisma-next/test-utils';
+import { blindCast } from '@prisma-next/utils/casts';
 import { beforeEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
 
 // Only mock the third-party pg boundary. Real drivers, adapters, and runtimes
@@ -21,7 +23,6 @@ vi.mock('pg', () => {
   const connectSpy = vi.fn().mockResolvedValue(new FakePoolClient());
 
   class Pool {
-    on = vi.fn().mockReturnThis();
     static readonly _endSpy = poolEndSpy;
     static readonly _connectSpy = connectSpy;
     static readonly _querySpy = querySpy;
@@ -34,25 +35,18 @@ vi.mock('pg', () => {
 
     connect = connectSpy;
     end = poolEndSpy;
-    totalCount = 0;
-    idleCount = 0;
-    waitingCount = 0;
   }
 
   class Client {
-    on = vi.fn().mockReturnThis();
     connect = vi.fn().mockResolvedValue(undefined);
     query = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
     end = vi.fn().mockResolvedValue(undefined);
-    escapeIdentifier = vi.fn();
-    escapeLiteral = vi.fn();
   }
 
   return { Pool, Client };
 });
 
 import { Client, Pool } from 'pg';
-import { buildNativeEnumsMapForNamespace } from '../src/runtime/native-enums';
 import postgres, { type PostgresClient } from '../src/runtime/postgres';
 
 const contract = createContract<SqlStorage>();
@@ -71,7 +65,6 @@ beforeEach(() => {
     Object.assign(new (Pool as unknown as new () => object)(), {
       query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
       release: vi.fn(),
-      on: vi.fn(),
     }),
   );
 });
@@ -247,25 +240,6 @@ describe('postgres', () => {
     expect(db.context).toBeDefined();
   });
 
-  it('exposes contract on the facade', () => {
-    const db = postgres({
-      contract,
-      url: 'postgres://localhost:5432/db',
-    });
-
-    expect(db.contract).toBeDefined();
-    expect(db.contract.target).toBe(contract.target);
-  });
-
-  it('db.contract is typed as TContract', () => {
-    const db = postgres({
-      contract,
-      url: 'postgres://localhost:5432/db',
-    });
-
-    expectTypeOf(db.contract).toEqualTypeOf<Contract<SqlStorage>>();
-  });
-
   it('creates pool from url with explicit timeout defaults (pool options passed)', () => {
     const db = postgres({
       contract,
@@ -355,7 +329,6 @@ describe('postgres', () => {
     const fakeClient = {
       query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
       release: vi.fn(),
-      on: vi.fn(),
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
@@ -374,7 +347,6 @@ describe('postgres', () => {
     const fakeClient = {
       query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
       release: vi.fn(),
-      on: vi.fn(),
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
@@ -395,7 +367,6 @@ describe('postgres', () => {
     const fakeClient = {
       query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
       release: vi.fn(),
-      on: vi.fn(),
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
@@ -411,12 +382,378 @@ describe('postgres', () => {
     expect(receivedTx!.orm).toBeDefined();
   });
 
+  it('transaction tempTable() creates and drops a typed temp table with generated name', async () => {
+    const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
+    const fakeClient = {
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    };
+    (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
+
+    const db = postgres({ contract, pg: pool });
+    await db.connect();
+
+    const subquery = blindCast<
+      Subquery<{ id: ScopeField }>,
+      'test fixture for temp-table typed subquery'
+    >({
+      buildAst: () =>
+        SelectAst.from(TableSource.named('source_table')).withProjection([
+          ProjectionItem.of('id', db.raw`1`.returns('pg/int4@1').buildAst()),
+        ]),
+      getRowFields: () => ({ id: { codecId: 'pg/int4@1', nullable: false } }),
+    });
+
+    await db.transaction(async (tx) => {
+      const temp = await tx.tempTable().as(subquery);
+      expect(temp.name).toMatch(/^pn_temp_[a-f0-9]+$/);
+      expect(temp.fields['id']?.codecId).toBe('pg/int4@1');
+      expect('buildAst' in temp).toBe(true);
+      expect('getJoinOuterScope' in temp).toBe(true);
+      await temp.drop();
+    });
+
+    await db.close();
+
+    const issuedSql = fakeClient.query.mock.calls.map((call) => {
+      const arg = call[0] as string | { text?: string };
+      return typeof arg === 'string' ? arg : (arg.text ?? '');
+    });
+    expect(issuedSql.some((sql) => sql.startsWith('CREATE TEMP TABLE'))).toBe(true);
+    expect(issuedSql.some((sql) => sql.startsWith('DROP TABLE IF EXISTS'))).toBe(true);
+  });
+
+  it('transaction tempTable() uses an internal table name', async () => {
+    const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
+    const fakeClient = {
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    };
+    (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
+
+    const db = postgres({ contract, pg: pool });
+    await db.connect();
+
+    const subquery = blindCast<
+      Subquery<{ id: ScopeField; email: ScopeField }>,
+      'test fixture for temp-table typed subquery'
+    >({
+      buildAst: () =>
+        SelectAst.from(TableSource.named('source_table')).withProjection([
+          ProjectionItem.of('id', db.raw`1`.returns('pg/int4@1').buildAst()),
+          ProjectionItem.of('email', db.raw`'a@example.com'`.returns('pg/text@1').buildAst()),
+        ]),
+      getRowFields: () => ({
+        id: { codecId: 'pg/int4@1', nullable: false },
+        email: { codecId: 'pg/text@1', nullable: false },
+      }),
+    });
+
+    let tableName: string | undefined;
+    await db.transaction(async (tx) => {
+      const temp = await tx.tempTable().as(subquery);
+      tableName = temp.name;
+      expect(temp.name).toMatch(/^pn_temp_[a-f0-9]+$/);
+      expect(temp.fields).toEqual({
+        id: { codecId: 'pg/int4@1', nullable: false },
+        email: { codecId: 'pg/text@1', nullable: false },
+      });
+      await temp.drop();
+    });
+
+    await db.close();
+
+    const issuedSql = fakeClient.query.mock.calls.map((call) => {
+      const arg = call[0] as string | { text?: string };
+      return typeof arg === 'string' ? arg : (arg.text ?? '');
+    });
+    expect(tableName).toBeDefined();
+    expect(
+      issuedSql.some((sql) => sql.includes(`CREATE TEMP TABLE "${tableName}" ON COMMIT DROP AS`)),
+    ).toBe(true);
+    expect(issuedSql.some((sql) => sql.includes(`DROP TABLE IF EXISTS "${tableName}"`))).toBe(true);
+  });
+
+  it('transaction tempTable() can be reused in tx.sql join composition within the same transaction', async () => {
+    const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
+    const fakeClient = {
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    };
+    (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
+
+    const db = postgres({ contract, pg: pool });
+    await db.connect();
+
+    const subquery = blindCast<
+      Subquery<{ id: ScopeField; email: ScopeField }>,
+      'test fixture for temp-table typed subquery'
+    >({
+      buildAst: () =>
+        SelectAst.from(TableSource.named('source_table')).withProjection([
+          ProjectionItem.of('id', db.raw`1`.returns('pg/int4@1').buildAst()),
+          ProjectionItem.of('email', db.raw`'a@example.com'`.returns('pg/text@1').buildAst()),
+        ]),
+      getRowFields: () => ({
+        id: { codecId: 'pg/int4@1', nullable: false },
+        email: { codecId: 'pg/text@1', nullable: false },
+      }),
+    });
+
+    let recentUsersName: string | undefined;
+    await db.transaction(async (tx) => {
+      const recentUsers = await tx.tempTable().as(subquery);
+      recentUsersName = recentUsers.name;
+
+      await tx
+        .execute(
+          planFromAst(
+            SelectAst.from(recentUsers.buildAst()).withProjection([
+              ProjectionItem.of('id', db.raw`1`.returns('pg/int4@1').buildAst()),
+              ProjectionItem.of('email', db.raw`'a@example.com'`.returns('pg/text@1').buildAst()),
+            ]),
+            contract,
+            'dsl',
+          ),
+        )
+        .toArray();
+
+      await recentUsers.drop();
+    });
+
+    await db.close();
+
+    const issuedSql = fakeClient.query.mock.calls.map((call) => {
+      const arg = call[0] as string | { text?: string };
+      return typeof arg === 'string' ? arg : (arg.text ?? '');
+    });
+    expect(recentUsersName).toBeDefined();
+    expect(
+      issuedSql.some((sql) =>
+        sql.includes(`CREATE TEMP TABLE "${recentUsersName}" ON COMMIT DROP AS`),
+      ),
+    ).toBe(true);
+    expect(
+      issuedSql.some((sql) => sql.includes(`FROM "${recentUsersName}" AS "${recentUsersName}"`)),
+    ).toBe(true);
+  });
+
+  it('transaction tempTable().from() issues CREATE TABLE with ON COMMIT DROP and INSERT', async () => {
+    const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
+    const fakeClient = {
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    };
+    (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
+
+    const db = postgres({ contract, pg: pool });
+    await db.connect();
+
+    let tableName: string | undefined;
+    await db.transaction(async (tx) => {
+      const handle = await tx.tempTable().from([
+        { name: 'id', type: 'int4' },
+        { name: 'label', type: 'text' },
+      ]);
+      tableName = handle.name;
+      await handle.append([
+        ['1', 'Alice'],
+        ['2', 'Bob'],
+      ]);
+      expect(handle.name).toMatch(/^pn_temp_[a-f0-9]+$/);
+    });
+
+    await db.close();
+
+    const issuedSql = fakeClient.query.mock.calls.map((call) => {
+      const arg = call[0] as string | { text?: string };
+      return typeof arg === 'string' ? arg : (arg.text ?? '');
+    });
+
+    expect(tableName).toBeDefined();
+    expect(
+      issuedSql.some(
+        (sql) =>
+          sql.includes(`CREATE TEMP TABLE "${tableName}"`) &&
+          sql.includes('"id" int4') &&
+          sql.includes('"label" text') &&
+          sql.includes('ON COMMIT DROP'),
+      ),
+    ).toBe(true);
+    expect(
+      issuedSql.some(
+        (sql) =>
+          sql.includes(`INSERT INTO "${tableName}"`) &&
+          sql.includes("'1'") &&
+          sql.includes("'Alice'"),
+      ),
+    ).toBe(true);
+  });
+
+  it('transaction tempTable().from() with empty rows skips INSERT', async () => {
+    const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
+    const fakeClient = {
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    };
+    (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
+
+    const db = postgres({ contract, pg: pool });
+    await db.connect();
+
+    await db.transaction(async (tx) => {
+      await tx.tempTable().from([{ name: 'id', type: 'int4' }]);
+    });
+
+    await db.close();
+
+    const issuedSql = fakeClient.query.mock.calls.map((call) => {
+      const arg = call[0] as string | { text?: string };
+      return typeof arg === 'string' ? arg : (arg.text ?? '');
+    });
+
+    expect(issuedSql.some((sql) => sql.includes('CREATE TEMP TABLE'))).toBe(true);
+    expect(issuedSql.some((sql) => sql.startsWith('INSERT INTO'))).toBe(false);
+  });
+
+  it('transaction tempTable().from() inlines null, number and boolean as SQL literals', async () => {
+    const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
+    const fakeClient = {
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    };
+    (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
+
+    const db = postgres({ contract, pg: pool });
+    await db.connect();
+
+    let tableName: string | undefined;
+    await db.transaction(async (tx) => {
+      const handle = await tx.tempTable().from([
+        { name: 'n', type: 'int4' },
+        { name: 'flag', type: 'bool' },
+        { name: 'nullable', type: 'text' },
+      ]);
+      tableName = handle.name;
+      await handle.append([[42, true, null]]);
+    });
+
+    await db.close();
+
+    const issuedSql = fakeClient.query.mock.calls.map((call) => {
+      const arg = call[0] as string | { text?: string };
+      return typeof arg === 'string' ? arg : (arg.text ?? '');
+    });
+
+    const insertSql = issuedSql.find((sql) => sql.startsWith(`INSERT INTO "${tableName}"`)) ?? '';
+    expect(insertSql).toContain('42');
+    expect(insertSql).toContain('TRUE');
+    expect(insertSql).toContain('NULL');
+  });
+
+  it('transaction tempTable().from() handle supports append() with raw rows', async () => {
+    const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
+    const fakeClient = {
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    };
+    (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
+
+    const db = postgres({ contract, pg: pool });
+    await db.connect();
+
+    let tableName: string | undefined;
+    await db.transaction(async (tx) => {
+      const handle = await tx.tempTable().from([{ name: 'id', type: 'int4' }]);
+      tableName = handle.name;
+      await handle.append([['1']]);
+      await handle.append([['2'], ['3']]);
+    });
+
+    await db.close();
+
+    const issuedSql = fakeClient.query.mock.calls.map((call) => {
+      const arg = call[0] as string | { text?: string };
+      return typeof arg === 'string' ? arg : (arg.text ?? '');
+    });
+
+    expect(issuedSql.filter((sql) => sql.startsWith(`INSERT INTO "${tableName}"`))).toHaveLength(2);
+    const appendSql = issuedSql.find(
+      (sql) => sql.startsWith(`INSERT INTO "${tableName}"`) && sql.includes("'2'"),
+    );
+    expect(appendSql).toMatch(/INSERT INTO "[A-Za-z0-9_]+" VALUES \('2'\), \('3'\)/);
+  });
+
+  it('transaction tempTable().as() handle supports append() with a subquery (INSERT INTO ... SELECT)', async () => {
+    const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
+    const fakeClient = {
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    };
+    (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
+
+    const db = postgres({ contract, pg: pool });
+    await db.connect();
+
+    const subquery = blindCast<Subquery<{ id: ScopeField }>, 'test fixture'>({
+      buildAst: () =>
+        SelectAst.from(TableSource.named('source_table')).withProjection([
+          ProjectionItem.of('id', db.raw`1`.returns('pg/int4@1').buildAst()),
+        ]),
+      getRowFields: () => ({ id: { codecId: 'pg/int4@1', nullable: false } }),
+    });
+
+    let tableName: string | undefined;
+    await db.transaction(async (tx) => {
+      const handle = await tx.tempTable().as(subquery);
+      tableName = handle.name;
+      await handle.append(subquery);
+    });
+
+    await db.close();
+
+    const issuedSql = fakeClient.query.mock.calls.map((call) => {
+      const arg = call[0] as string | { text?: string };
+      return typeof arg === 'string' ? arg : (arg.text ?? '');
+    });
+
+    expect(
+      issuedSql.some(
+        (sql) => sql.startsWith(`INSERT INTO "${tableName}"`) && sql.includes('SELECT'),
+      ),
+    ).toBe(true);
+  });
+
+  it('transaction tempTable().append() with empty rows is a no-op', async () => {
+    const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
+    const fakeClient = {
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+    };
+    (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
+
+    const db = postgres({ contract, pg: pool });
+    await db.connect();
+
+    await db.transaction(async (tx) => {
+      const handle = await tx.tempTable().from([{ name: 'x', type: 'int4' }]);
+      await handle.append([]);
+    });
+
+    await db.close();
+
+    const issuedSql = fakeClient.query.mock.calls.map((call) => {
+      const arg = call[0] as string | { text?: string };
+      return typeof arg === 'string' ? arg : (arg.text ?? '');
+    });
+    expect(issuedSql.some((sql) => sql.startsWith('INSERT INTO'))).toBe(false);
+  });
+
   it('transaction() lazily creates runtime before connect()', async () => {
     const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
     const fakeClient = {
       query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
       release: vi.fn(),
-      on: vi.fn(),
     };
     (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
 
@@ -492,106 +829,6 @@ describe('postgres', () => {
 
       expect(db.enums.public.Role.values).toEqual(['user', 'admin']);
       expect(poolConnectSpy()).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('db.nativeEnums (facade)', () => {
-    // Built from real `PostgresSchema` IR instances (not plain literals):
-    // `PostgresContractSerializer.serializeContract` carries `entries.valueSet`
-    // for any namespace it recognizes via `isPostgresSchema`, matching how a
-    // real Postgres contract always rehydrates through the serializer at the
-    // `postgres()` call site. `db.nativeEnums` reads that `valueSet` entry —
-    // the same generic entry a `native_enum`'s `deriveValueSet` hook produces
-    // — not the (never re-serialized) `native_enum` entity itself.
-    const publicNs = new PostgresSchema({
-      id: 'public',
-      entries: {
-        table: {},
-        valueSet: {
-          AalLevel: { kind: 'valueSet', values: ['aal1', 'aal2'] },
-        },
-      },
-    });
-    const auditNs = new PostgresSchema({
-      id: 'audit',
-      entries: {
-        table: {},
-        valueSet: {
-          AalLevel: { kind: 'valueSet', values: ['low', 'high'] },
-        },
-      },
-    });
-
-    const twoNamespaceStorage = {
-      ...contract,
-      storage: {
-        ...contract.storage,
-        namespaces: { public: publicNs, audit: auditNs },
-      },
-    };
-
-    // A literal-keyed contract so `db.nativeEnums.public` and `.audit` resolve
-    // to distinct namespace maps, proving per-namespace resolution rather than
-    // falling back to a single shared `Record<string, ...>`. Each namespace's
-    // enum accessors are still looked up by bracket access (`['AalLevel']`):
-    // `NamespacedNativeEnums` intentionally keeps entity names as an open
-    // index signature (see native-enums.ts), not a per-name literal facade.
-    type TwoNsStorageContract = Contract<SqlStorage> & {
-      readonly storage: (typeof twoNamespaceStorage)['storage'];
-    };
-
-    it('exposes native enum members per namespace and resolves same-named native enums independently', () => {
-      const db = postgres<TwoNsStorageContract>({
-        contract: twoNamespaceStorage,
-        url: 'postgres://localhost:5432/db',
-      });
-
-      const publicAalLevel = db.nativeEnums.public['AalLevel'];
-      const auditAalLevel = db.nativeEnums.audit['AalLevel'];
-
-      expect(publicAalLevel?.values).toEqual(['aal1', 'aal2']);
-      expect(auditAalLevel?.values).toEqual(['low', 'high']);
-      expect(publicAalLevel?.names).toEqual(['aal1', 'aal2']);
-      expect(publicAalLevel?.has('aal1')).toBe(true);
-      expect(publicAalLevel?.nameOf('aal2')).toBe('aal2');
-      expect(auditAalLevel?.nameOf('high')).toBe('high');
-    });
-
-    it('builds the nativeEnums surface eagerly, without a runtime', () => {
-      const db = postgres<TwoNsStorageContract>({
-        contract: twoNamespaceStorage,
-        url: 'postgres://localhost:5432/db',
-      });
-
-      expect(db.nativeEnums.public['AalLevel']?.values).toEqual(['aal1', 'aal2']);
-      expect(poolConnectSpy()).not.toHaveBeenCalled();
-    });
-
-    // F02: the accessor must read the same plain namespace shape a
-    // `validateContract`'d JSON contract carries, not a hydrated
-    // `PostgresSchema` class instance — symmetric with `db.enums`
-    // (`buildNamespacedEnums`), which already works on plain data.
-    it('resolves members from a plain (non-hydrated) contract, not just a hydrated PostgresSchema', () => {
-      const plainStorage: SqlStorage = {
-        storageHash: coreHash('test-storage-hash'),
-        namespaces: {
-          public: {
-            id: 'public',
-            kind: 'postgres-schema',
-            entries: {
-              table: {},
-              valueSet: {
-                AalLevel: { kind: 'valueSet', values: ['aal1', 'aal2', 'aal3'] },
-              },
-            },
-          },
-        },
-      };
-
-      const result = buildNativeEnumsMapForNamespace(plainStorage, 'public');
-
-      expect(result['AalLevel']?.values).toEqual(['aal1', 'aal2', 'aal3']);
-      expect(result['AalLevel']?.has('aal2')).toBe(true);
     });
   });
 });
