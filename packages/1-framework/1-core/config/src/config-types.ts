@@ -115,7 +115,7 @@ export interface PrismaNextConfig<
 
 /**
  * Builds the ORM section of `prisma.config.ts`. The result nests under the
- * `orm` key of the engine's `defineConfig` — the marker lives on the envelope,
+ * `orm` key of the engine's `definePrismaConfig` — the marker lives on the envelope,
  * not here. Structural validation happens in the config loader, which reports
  * per-section diagnostics instead of failing the whole load.
  *

@@ -306,13 +306,13 @@ function rewriteContractSnapshotSpecifiers(source, snapshotsImportPath, toHash, 
 function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
   if (contractFamily === 'sql') {
     return (
-      `import { defineConfig as engineDefineConfig } from '@prisma/cli-engine';\n` +
+      `import { definePrismaConfig } from '@prisma/cli-engine';\n` +
       `import { defineConfig } from '${frameworkConfigTypes}';\n` +
       `import { prismaContract } from '${sqlContractPslProvider}';\n` +
       `import postgresPackRef from '${targetPostgresPack}';\n` +
       `import { postgresCreateNamespace } from '${targetPostgresTypes}';\n` +
       `import realConfig from '${realConfigAbsPath}';\n\n` +
-      'export default engineDefineConfig({\n' +
+      'export default definePrismaConfig({\n' +
       '  orm: defineConfig({\n' +
       '    ...realConfig.orm,\n' +
       `    contract: prismaContract('${schemaSrc}', {\n` +
@@ -325,11 +325,11 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
   }
   // Default: mongo
   return (
-    `import { defineConfig as engineDefineConfig } from '@prisma/cli-engine';\n` +
+    `import { definePrismaConfig } from '@prisma/cli-engine';\n` +
     `import { defineConfig } from '${frameworkConfigTypes}';\n` +
     `import { mongoContract } from '${mongoContractPslProvider}';\n` +
     `import realConfig from '${realConfigAbsPath}';\n\n` +
-    'export default engineDefineConfig({\n' +
+    'export default definePrismaConfig({\n' +
     '  orm: defineConfig({\n' +
     '    ...realConfig.orm,\n' +
     `    contract: mongoContract('${schemaSrc}'),\n` +

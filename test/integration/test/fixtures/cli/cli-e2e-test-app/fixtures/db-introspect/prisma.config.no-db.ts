@@ -3,11 +3,11 @@ import { defineConfig as ormConfig } from '@internal/cli/config-types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import postgres from '@internal/target-postgres/control';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import { contract } from './contract';
 
 // This config does not include db.connection
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     family: sql,
     target: postgres,

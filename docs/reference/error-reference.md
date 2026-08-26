@@ -71,7 +71,7 @@ Reserved: `db verify` needs `db.queryRunnerFactory` in `prisma.config.ts` and it
 
 ### CONFIG.VERSION_MARKER_MISSING
 
-The config module evaluated, but its default export was not created by the current `defineConfig` — a plain object export, a spread copy of a `defineConfig` result, or a config produced by a different `defineConfig` (for example a classic Prisma 7 config file). Raised by the config loader before validation; loading fails outright and every command exits `2` with this error. The fix is to create the config with `defineConfig` (imported from your target package's `/config` entrypoint, for example `@prisma/orm-postgres/config`) and export its return value directly. The path, when known, is carried in `where.path`. Meta: none.
+The config module evaluated, but its default export was not created by the current `definePrismaConfig` — a plain object export, a spread copy of a `definePrismaConfig` result, or a config produced by a different config builder (for example a classic Prisma 7 config file). Raised by the config loader before validation; loading fails outright and every command exits `2` with this error. The fix is to create the config with `definePrismaConfig` from `@prisma/cli-engine`, nest your settings under its `orm` section, and export its return value directly. The path, when known, is carried in `where.path`. Meta: none.
 
 ## CLI
 

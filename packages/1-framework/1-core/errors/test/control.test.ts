@@ -443,8 +443,8 @@ describe('Config Errors', () => {
   it('errorConfigVersionMarkerMissing creates correct error', () => {
     const error = errorConfigVersionMarkerMissing('/project/prisma.config.ts');
     expect(error.code).toBe('CONFIG.VERSION_MARKER_MISSING');
-    expect(error.message).toBe('Config is not a defineConfig result');
-    expect(error.fix).toContain('defineConfig');
+    expect(error.message).toBe('Config is not a definePrismaConfig result');
+    expect(error.fix).toContain('definePrismaConfig');
     expect(error.where?.path).toBe('/project/prisma.config.ts');
     expect(error.docsUrl).toBe(docsUrlFor('CONFIG.VERSION_MARKER_MISSING'));
   });

@@ -67,7 +67,7 @@ describe('re-scaffolding over an existing project', () => {
         });
 
         expect(run.exitCode).toBe(0);
-        expect(readProjectFile('prisma.config.ts')).toContain('defineConfig');
+        expect(readProjectFile('prisma.config.ts')).toContain('definePrismaConfig');
       },
       timeouts.coldTransformImport,
     );

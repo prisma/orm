@@ -141,7 +141,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // `prisma-next` shim is no longer published). It is the package that
       // carries the `prisma` binary, which is what the scaffolded scripts
       // invoke. `@prisma/cli-engine` — the config file's
-      // defineConfig import — is deliberately absent here: the CLI declares it
+      // definePrismaConfig import — is deliberately absent here: the CLI declares it
       // as an exact peer, so it installs in a second step at the version the
       // just-installed CLI names. Under moduleResolution 'bundler' the
       // scaffolded files reference process.env, which only typechecks with

@@ -620,7 +620,7 @@ describe('emit command: additional fixtures', () => {
     }
   });
 
-  it('rejects plain-object configs that were not created by defineConfig', {
+  it('rejects plain-object configs that were not created by definePrismaConfig', {
     timeout: timeouts.typeScriptCompilation,
   }, async () => {
     const testSetup = setupIntegrationTestDirectoryFromFixtures(

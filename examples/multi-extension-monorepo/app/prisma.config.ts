@@ -7,12 +7,12 @@
  * `migration plan`, `db init`, and `db update`.
  */
 
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 import audit from '../packages/audit/src/control';
 import featureFlags from '../packages/feature-flags/src/control';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     contract: './src/contract.prisma',
     extensions: [audit, featureFlags],

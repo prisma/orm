@@ -20,13 +20,13 @@ ADMIN
 
 function pslConfig(): string {
   return `import postgresAdapter from '@prisma/orm-postgres/adapter/control';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import sql from '@prisma/orm-postgres/family/control';
 import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
 import postgres from '@prisma/orm-postgres/target/control';
 import { postgresCreateNamespace } from '@prisma/orm-postgres/target/types';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: {
   family: sql,
   target: postgres,
@@ -78,11 +78,11 @@ withTempDir(({ createTempDir }) => {
         writeFileSync(
           ctx.configPath,
           `import postgresAdapter from '@prisma/orm-postgres/adapter/control';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import sql from '@prisma/orm-postgres/family/control';
 import postgres from '@prisma/orm-postgres/target/control';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: {
   family: sql,
   target: postgres,

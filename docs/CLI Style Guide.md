@@ -249,7 +249,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 - Prompts: target (Postgres or Mongo, default Postgres) and schema location (default `prisma/contract.prisma`). The contract output path is derived from the schema path (replace extension with `.json`); no separate prompt.
 - Detects the package manager from lockfiles (`pnpm-lock.yaml`, `yarn.lock`, `bun.lock`/`bun.lockb`, `package.json#packageManager`, falls back to npm), installs the target facade package as a dependency and `@prisma/cli` (from the `next` dist-tag) plus `@prisma/cli-engine` as dev dependencies, then runs `prisma contract emit` programmatically to produce `contract.json` and `contract.d.ts`.
 - Scaffolds (all colocated; no `src/prisma/` split):
-  - `prisma.config.ts` at the project root — the engine envelope: `defineConfig` from `@prisma/cli-engine` wrapping the target facade's `defineConfig` (e.g. `@prisma/orm-postgres/config`) under an `orm` key.
+  - `prisma.config.ts` at the project root — the engine envelope: `definePrismaConfig` from `@prisma/cli-engine` wrapping the target facade's `defineConfig` (e.g. `@prisma/orm-postgres/config`) under an `orm` key.
   - `prisma/contract.prisma` (PSL) — starter schema with two related models so the user has something to query immediately.
   - `prisma/db.ts` — runtime client (e.g. `postgres<Contract>({ contractJson })`) typed against the emitted contract.
   - `prisma/contract.json` and `prisma/contract.d.ts` — emitted by the post-install `contract emit` step.

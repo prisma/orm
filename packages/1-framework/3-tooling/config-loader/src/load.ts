@@ -214,7 +214,7 @@ export async function loadConfig(
   const [requestedLayer] = result.layers ?? [];
   const layerConfig = requestedLayer?.config;
 
-  // The engine's shape: defineConfig from @prisma/cli-engine stamps the
+  // The engine's shape: definePrismaConfig from @prisma/cli-engine stamps the
   // enumerable `$prismaConfig` key and nests the whole Prisma Next config as
   // the `orm` section.
   const engineMarker = isRecord(layerConfig) ? layerConfig['$prismaConfig'] : undefined;

@@ -46,7 +46,7 @@ describe('requireConfigSections', () => {
 });
 
 // Temp-dir fixtures cannot import @prisma/cli-engine, so they stamp the marker
-// the same way defineConfig does: an enumerable $prismaConfig key wrapping the
+// the same way definePrismaConfig does: an enumerable $prismaConfig key wrapping the
 // orm section.
 const PARTIAL_CONFIG_SOURCE = `
 export default { $prismaConfig: 1, orm: { family: { kind: 'family' } } };

@@ -171,17 +171,17 @@ export function errorConfigEvaluationFailed(
 }
 
 /**
- * Config module evaluated, but its export does not carry the defineConfig
+ * Config module evaluated, but its export does not carry the definePrismaConfig
  * version marker (plain object export, or a config produced by a different
  * defineConfig such as classic Prisma's).
  */
 export function errorConfigVersionMarkerMissing(configPath?: string): CliStructuredError {
   return new CliStructuredError(
     'CONFIG.VERSION_MARKER_MISSING',
-    'Config is not a defineConfig result',
+    'Config is not a definePrismaConfig result',
     {
-      why: 'The config module evaluated, but its default export was not created by a current defineConfig',
-      fix: "Create the config with defineConfig from '@prisma/cli-engine', nest your settings under its `orm` section, and export its return value directly",
+      why: 'The config module evaluated, but its default export was not created by a current definePrismaConfig',
+      fix: "Create the config with definePrismaConfig from '@prisma/cli-engine', nest your settings under its `orm` section, and export its return value directly",
       docsUrl: docsUrlFor('CONFIG.VERSION_MARKER_MISSING'),
       ...(configPath ? { where: { path: configPath } } : {}),
     },

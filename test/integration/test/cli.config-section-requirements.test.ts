@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createTestDir, runOnEngine } from './utils/cli-test-helpers';
 
 // The fixture cannot import @prisma/cli-engine, so it stamps the engine
-// envelope marker the same way defineConfig does.
+// envelope marker the same way definePrismaConfig does.
 function markedConfig(brokenSection: string): string {
   return `
 const descriptorBase = { familyId: 'sql', targetId: 'postgres', version: '0.0.1', manifest: {} };

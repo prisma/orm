@@ -314,6 +314,6 @@ export function transitiveImports(source: string, root: ImportRoot): string[] {
 /**
  * Published packages this workspace does not own but `init` installs into a
  * scaffolded application directly, so its files may import them:
- * `@prisma/cli-engine` is the config file's `defineConfig` import.
+ * `@prisma/cli-engine` is the config file's `definePrismaConfig` import.
  */
 const EXTERNAL_DIRECT_DEPENDENCIES: ReadonlySet<string> = new Set(['@prisma/cli-engine']);

@@ -3,7 +3,7 @@ import { defineConfig as ormConfig } from '@internal/cli/config-types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import postgres from '@internal/target-postgres/control';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import testContractSpaceExtension from '../../../../contract-space-fixture/control';
 import { contract } from './contract';
 
@@ -11,7 +11,7 @@ import { contract } from './contract';
 // pinned `migrations/<space-id>/` artefacts on disk. Used by the
 // contract-space verifier integration tests to exercise the
 // `declaredButUnmigrated` violation path (AC-16).
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     family: sql,
     target: postgres,

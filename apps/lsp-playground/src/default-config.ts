@@ -27,10 +27,10 @@ export async function generateDefaultPostgresConfig(absoluteSchemaPath: string):
   await mkdir(PLAYGROUND_DIR, { recursive: true });
   const configPath = join(PLAYGROUND_DIR, 'prisma.config.ts');
   const json = JSON.stringify(absoluteSchemaPath);
-  const contents = `import { defineConfig } from '@prisma/cli-engine';
+  const contents = `import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     contract: ${json},
     output: 'output',
