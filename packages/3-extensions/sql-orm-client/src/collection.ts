@@ -1281,7 +1281,7 @@ class CollectionImpl<
     const rows = await this.#createAllWithAnnotations(
       [
         blindCast<
-          ResolvedCreateInput<TContract, ModelName, State['variantName'], State['nsId']>,
+          ResolvedScalarCreateInput<TContract, ModelName, State['variantName'], State['nsId']>,
           'absence of nested callbacks selects the scalar create overload input'
         >(data),
       ],
@@ -1327,7 +1327,12 @@ class CollectionImpl<
    * compiled insert plan.
    */
   createAll(
-    data: readonly ResolvedCreateInput<TContract, ModelName, State['variantName'], State['nsId']>[],
+    data: readonly ResolvedScalarCreateInput<
+      TContract,
+      ModelName,
+      State['variantName'],
+      State['nsId']
+    >[],
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<Row> {
     return this.#createAllWithAnnotations(
@@ -1337,7 +1342,12 @@ class CollectionImpl<
   }
 
   #createAllWithAnnotations(
-    data: readonly ResolvedCreateInput<TContract, ModelName, State['variantName'], State['nsId']>[],
+    data: readonly ResolvedScalarCreateInput<
+      TContract,
+      ModelName,
+      State['variantName'],
+      State['nsId']
+    >[],
     annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
   ): AsyncIterableResult<Row> {
     if (data.length === 0) {
@@ -1634,7 +1644,12 @@ class CollectionImpl<
    * Not supported on MTI variants — use `createAll(...)` instead.
    */
   async createAndCount(
-    data: readonly ResolvedCreateInput<TContract, ModelName, State['variantName']>[],
+    data: readonly ResolvedScalarCreateInput<
+      TContract,
+      ModelName,
+      State['variantName'],
+      State['nsId']
+    >[],
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
     if (data.length === 0) {
