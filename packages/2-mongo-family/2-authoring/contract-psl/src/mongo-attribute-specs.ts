@@ -1,4 +1,4 @@
-import type { ContractSourceDiagnostic } from '@prisma-next/config/config-types';
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ArgType,
   AttributeSpec,
@@ -8,7 +8,7 @@ import type {
   InterpretCtx,
   ModelSymbol,
   TypedFuncCall,
-} from '@prisma-next/psl-parser';
+} from '@internal/psl-parser';
 import {
   bool,
   entityRef,
@@ -25,12 +25,8 @@ import {
   oneOf,
   optional,
   str,
-} from '@prisma-next/psl-parser';
-import type {
-  FieldAttributeAst,
-  ModelAttributeAst,
-  SourceFile,
-} from '@prisma-next/psl-parser/syntax';
+} from '@internal/psl-parser';
+import type { FieldAttributeAst, ModelAttributeAst, SourceFile } from '@internal/psl-parser/syntax';
 
 export function findModelAttributeNode(
   model: ModelSymbol,

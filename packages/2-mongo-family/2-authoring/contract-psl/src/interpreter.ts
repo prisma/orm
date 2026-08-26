@@ -463,7 +463,7 @@ function resolvePolymorphism(input: {
         Object.entries(collections).filter(([key]) => key !== variantCollectionName),
       );
       if (scopedVariantIndexes.length > 0 && baseColl) {
-        const baseIndexes = (baseColl['indexes'] ?? []) as MongoIndex[];
+        const baseIndexes = collectionIndexes(baseColl);
         collections = {
           ...filtered,
           [baseCollection]: {
@@ -475,7 +475,7 @@ function resolvePolymorphism(input: {
         collections = filtered;
       }
     } else if (baseColl) {
-      const existingIndexes = (baseColl['indexes'] ?? []) as MongoIndex[];
+      const existingIndexes = collectionIndexes(baseColl);
       const variantIndexSet = new Set<MongoIndex>(variantOwnIndexes);
       const withoutUnscopedVariants = existingIndexes.filter((idx) => !variantIndexSet.has(idx));
       const mergedIndexes = [...withoutUnscopedVariants];
@@ -506,6 +506,13 @@ function resolvePolymorphism(input: {
   return { models: patched, roots, collections, diagnostics };
 }
 
+function collectionIndexes(collection: Record<string, unknown>): MongoIndex[] {
+  return blindCast<
+    MongoIndex[],
+    'Mongo collection indexes are constructed as MongoIndex arrays by this interpreter'
+  >(collection['indexes'] ?? []);
+}
+
 // Property-order-stable serialization for structural equality of plain
 // JSON-compatible values. Used for comparing MongoIndex shapes in
 // the variant-merge dedup path where a future change to the spread order
@@ -516,7 +523,7 @@ function canonicalJson(value: unknown): string {
     return `[${value.map(canonicalJson).join(',')}]`;
   }
   if (value && typeof value === 'object') {
-    return `{${Object.entries(value as Record<string, unknown>)
+    return `{${Object.entries(value)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
       .join(',')}}`;
@@ -860,8 +867,7 @@ function collectIndexes(
             return mapped ? `${mapped}.$**` : `${prefix}.$**`;
           })
         : (fieldMappings.pslNameToMapped.get(pf.name) ?? pf.name);
-      const direction: MongoIndexKeyDirection =
-        pf.direction != null ? (pf.direction as MongoIndexKeyDirection) : defaultDirection;
+      const direction: MongoIndexKeyDirection = pf.direction ?? defaultDirection;
       return { field: mappedName, direction };
     });
 
@@ -1264,7 +1270,7 @@ export function interpretPslDocumentToMongoContract(
     modelIndexesByName.set(pslModel.name, modelIndexes);
     const existingColl = collections[collectionName];
     if (existingColl && modelIndexes.length > 0) {
-      const existingIndexes = (existingColl['indexes'] ?? []) as MongoIndex[];
+      const existingIndexes = collectionIndexes(existingColl);
       collections[collectionName] = { indexes: [...existingIndexes, ...modelIndexes] };
     } else if (!existingColl) {
       collections[collectionName] = modelIndexes.length > 0 ? { indexes: modelIndexes } : {};

@@ -6,7 +6,7 @@ export { parseQuotedStringLiteral };
 export interface ParsedIndexField {
   readonly name: string;
   readonly isWildcard: boolean;
-  readonly direction?: number;
+  readonly direction?: 1 | -1;
 }
 
 export function lowerFirst(value: string): string {

@@ -1,6 +1,6 @@
-import type { PslDiagnostic } from '@prisma-next/framework-components/psl-ast';
-import { blindCast } from '@prisma-next/utils/casts';
-import { notOk, ok, type Result } from '@prisma-next/utils/result';
+import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
+import { blindCast } from '@internal/utils/casts';
+import { notOk, ok, type Result } from '@internal/utils/result';
 import { StringLiteralExprAst } from '../../syntax/ast/expressions';
 import type { ArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
