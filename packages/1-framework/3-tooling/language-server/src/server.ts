@@ -37,6 +37,7 @@ import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mappin
 import { computeFoldingRanges } from './folding-ranges';
 import { guardedConnection } from './guarded-connection';
 import type { PipelineInputs } from './pipeline';
+import { isPrismaNextSchema } from './prisma-next-directive';
 import {
   createProjectArtifacts,
   type DocumentArtifacts,
@@ -379,12 +380,16 @@ function createServerOn(connection: Connection): LanguageServer {
       return [];
     }
 
+    const source = document.getText();
+    if (!isPrismaNextSchema(source)) {
+      return [];
+    }
+
     const project = await resolveProjectForDocument(uri);
     if (project === undefined) {
       return [];
     }
 
-    const source = document.getText();
     let formatted: string;
     try {
       formatted = format(source, project.formatter);
@@ -652,7 +657,13 @@ function createServerOn(connection: Connection): LanguageServer {
     getDocumentAst: (uri) => artifactsForDocument(uri)?.document(uri),
     // `| undefined` only because the uri may be unmanaged (closed, non-input,
     // or projectless); a managed document's project always yields a symbolTable.
-    getProjectSymbolTable: (uri) => artifactsForDocument(uri)?.symbolTable(),
+    getProjectSymbolTable: (uri) => {
+      const artifacts = artifactsForDocument(uri);
+      if (artifacts?.document(uri) === undefined) {
+        return undefined;
+      }
+      return artifacts.symbolTable();
+    },
   };
 }
 
