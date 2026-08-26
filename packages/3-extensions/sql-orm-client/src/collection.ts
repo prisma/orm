@@ -122,6 +122,7 @@ import {
   type RelatedModelName,
   type RelationTargetNamespace,
   type ResolvedCreateInput,
+  type ResolvedScalarCreateInput,
   type RuntimeQueryable,
   type ShorthandWhereFilter,
   type UniqueConstraintCriterion,
@@ -1705,7 +1706,7 @@ class CollectionImpl<
    */
   async upsert(
     input: {
-      create: ResolvedCreateInput<TContract, ModelName, State['variantName']>;
+      create: ResolvedScalarCreateInput<TContract, ModelName, State['variantName'], State['nsId']>;
       update: Partial<DefaultModelRow<TContract, ModelName>>;
       conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
     },

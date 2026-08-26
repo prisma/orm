@@ -1291,7 +1291,7 @@ type OptionalCreateFieldNames<
     : never;
 }[CreateFieldNames<TContract, ModelName, NsId>];
 
-export type CreateInput<
+type ScalarCreateInput<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
@@ -1304,7 +1304,13 @@ export type CreateInput<
       DefaultModelRow<TContract, ModelName, NsId>,
       OptionalCreateFieldNames<TContract, ModelName, NsId>
     >
-  > &
+  >;
+
+export type CreateInput<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = ScalarCreateInput<TContract, ModelName, NsId> &
   RelationMutationFields<TContract, ModelName, 'create'>;
 
 type IsPolymorphicBase<
@@ -1352,6 +1358,22 @@ export type ResolvedCreateInput<
       ? VariantCreateInput<TContract, ModelName, VName, NsId>
       : never
     : CreateInput<TContract, ModelName, NsId>;
+
+export type ResolvedScalarCreateInput<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  VName extends string | undefined,
+  NsId extends string = never,
+> =
+  IsPolymorphicBase<TContract, ModelName, NsId> extends true
+    ? VName extends string
+      ? Omit<
+          ScalarCreateInput<TContract, ModelName, NsId>,
+          DiscriminatorFieldName<TContract, ModelName, NsId>
+        > &
+          ScalarCreateInput<TContract, VName, NsId>
+      : never
+    : ScalarCreateInput<TContract, ModelName, NsId>;
 
 type ModelStorageTableDef<TContract extends Contract<SqlStorage>, ModelName extends string> =
   ModelTableName<TContract, ModelName> extends infer TableName extends string
