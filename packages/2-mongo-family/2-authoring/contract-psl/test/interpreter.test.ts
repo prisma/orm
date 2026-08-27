@@ -1474,6 +1474,24 @@ describe('interpretPslDocumentToMongoContract', () => {
       expect(indexes![0]!['language_override']).toBe('idioma');
     });
 
+    it('preserves an own __proto__ text-index weight', () => {
+      const ir = interpretOk(`
+        model Article {
+          id    ObjectId @id @map("_id")
+          title String
+          @@textIndex([title], weights: "{\\"__proto__\\": 10}")
+        }
+      `);
+      const weights = getIndexes(ir, 'article')?.[0]?.['weights'];
+
+      expect(weights).not.toBeNull();
+      expect(typeof weights).toBe('object');
+      if (typeof weights !== 'object' || weights === null)
+        throw new Error('Expected weights object');
+      expect(Object.hasOwn(weights, '__proto__')).toBe(true);
+      expect(Object.getOwnPropertyDescriptor(weights, '__proto__')?.value).toBe(10);
+    });
+
     it.each([
       ['nonnumeric', '{"title": "high"}'],
       ['below range', '{"title": 0}'],

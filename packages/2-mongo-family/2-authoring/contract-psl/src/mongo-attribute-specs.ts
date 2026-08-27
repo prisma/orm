@@ -230,7 +230,7 @@ function textIndexWeights(): ArgType<Record<string, number>> {
       const parsed = jsonObject.parse(arg, ctx);
       if (!parsed.ok) return parsed;
 
-      const weights: Record<string, number> = {};
+      const entries: [string, number][] = [];
       for (const [field, value] of Object.entries(parsed.value)) {
         if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 99_999) {
           return notOk([
@@ -242,9 +242,9 @@ function textIndexWeights(): ArgType<Record<string, number>> {
             },
           ]);
         }
-        weights[field] = value;
+        entries.push([field, value]);
       }
-      return ok(weights);
+      return ok(Object.fromEntries(entries));
     },
   };
 }
