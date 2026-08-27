@@ -386,7 +386,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
         id       ObjectId @id @map("_id")
         metadata String
         tags     String
-        @@index([wildcard()], include: "[metadata, tags]")
+        @@index([wildcard()], include: ["metadata", "tags"])
       }
     `);
 
@@ -403,7 +403,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
       model Events {
         id       ObjectId @id @map("_id")
         internal String
-        @@index([wildcard()], exclude: "[internal]")
+        @@index([wildcard()], exclude: ["internal"])
       }
     `);
 
@@ -440,7 +440,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
         id    ObjectId @id @map("_id")
         title String
         body  String
-        @@textIndex([title, body], weights: "{\\"title\\": 10, \\"body\\": 5}", language: "english")
+        @@textIndex([title, body], weights: { title: 10, body: 5 }, language: "english")
       }
     `);
 
