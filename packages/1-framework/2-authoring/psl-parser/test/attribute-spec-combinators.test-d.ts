@@ -1,6 +1,6 @@
 import { expectTypeOf, test } from 'vitest';
-import type { ArgType } from '../src/exports';
-import { identifier, list, oneOf, str } from '../src/exports';
+import type { ArgType, OutOf } from '../src/exports';
+import { identifier, list, num, oneOf, str } from '../src/exports';
 
 test('identifier pins its name as the output literal type', () => {
   expectTypeOf(identifier('NoAction')).toEqualTypeOf<ArgType<'NoAction'>>();
@@ -10,6 +10,24 @@ test('oneOf infers the union of its alternatives output types', () => {
   expectTypeOf(oneOf(identifier('NoAction'), identifier('Cascade'))).toEqualTypeOf<
     ArgType<'NoAction' | 'Cascade'>
   >();
+});
+
+test('pinned str preserves its output literal type', () => {
+  const pinned = str('hashed');
+
+  expectTypeOf<OutOf<typeof pinned>>().toEqualTypeOf<'hashed'>();
+});
+
+test('pinned num preserves its output literal type', () => {
+  const pinned = num(-1);
+
+  expectTypeOf<OutOf<typeof pinned>>().toEqualTypeOf<-1>();
+});
+
+test('oneOf preserves pinned string and number literal alternatives', () => {
+  const pinned = oneOf(str('hashed'), str('2dsphere'), num(-1));
+
+  expectTypeOf<OutOf<typeof pinned>>().toEqualTypeOf<'hashed' | '2dsphere' | -1>();
 });
 
 test('oneOf with no alternatives is a compile error', () => {
