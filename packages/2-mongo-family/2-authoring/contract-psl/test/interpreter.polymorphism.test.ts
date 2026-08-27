@@ -1,3 +1,4 @@
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { crossRef } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
@@ -81,6 +82,22 @@ function interpretOk(schema: string) {
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error('Expected ok result');
   return result.value;
+}
+
+function expectInvalidAttributeSyntax(
+  result: ReturnType<typeof interpret>,
+  message: RegExp,
+): ContractSourceDiagnostic {
+  expect(result.ok).toBe(false);
+  if (result.ok) throw new Error('Expected interpretation to fail');
+  const diagnostics = result.failure.diagnostics.filter(
+    (diagnostic) => diagnostic.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+  );
+  expect(diagnostics).toHaveLength(1);
+  const diagnostic = diagnostics[0];
+  if (!diagnostic) throw new Error('Expected PSL_INVALID_ATTRIBUTE_SYNTAX diagnostic');
+  expect(diagnostic.message).toMatch(message);
+  return diagnostic;
 }
 
 describe('interpretPslDocumentToMongoContract — polymorphism', () => {
@@ -381,6 +398,27 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       );
     });
 
+    it('emits one syntax diagnostic for a malformed variant @@map', () => {
+      const result = interpret(`
+        model Task {
+          id   ObjectId @id @map("_id")
+          type String
+
+          @@discriminator(type)
+          @@map("tasks")
+        }
+
+        model Bug {
+          severity String
+
+          @@base(Task, "bug")
+          @@map(42)
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /Expected a string literal/);
+    });
+
     it('diagnoses variant with @@map to different collection', () => {
       const result = interpret(`
         model Task {
@@ -651,18 +689,12 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
         }
       `);
 
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
       // `title` is inherited from the base, not declared on Bug, so it is absent
       // from Bug's own field set; `fieldRef('self')` rejects it at the grammar
       // layer (Option A) as PSL_INVALID_ATTRIBUTE_SYNTAX rather than the
       // downstream PSL_INDEX_FIELD_NOT_FOUND.
-      const diag = result.failure.diagnostics.find(
-        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      );
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/Expected one of/);
-      expect(diag?.span?.start.offset).toBeGreaterThan(0);
+      const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
+      expect(diag.span?.start.offset).toBeGreaterThan(0);
     });
   });
 

@@ -1,3 +1,4 @@
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import {
   type Contract,
@@ -125,6 +126,22 @@ function interpretOk(
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error('Expected ok result');
   return result.value;
+}
+
+function expectInvalidAttributeSyntax(
+  result: ReturnType<typeof interpret>,
+  message: RegExp,
+): ContractSourceDiagnostic {
+  expect(result.ok).toBe(false);
+  if (result.ok) throw new Error('Expected interpretation to fail');
+  const diagnostics = result.failure.diagnostics.filter(
+    (diagnostic) => diagnostic.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+  );
+  expect(diagnostics).toHaveLength(1);
+  const diagnostic = diagnostics[0];
+  if (!diagnostic) throw new Error('Expected PSL_INVALID_ATTRIBUTE_SYNTAX diagnostic');
+  expect(diagnostic.message).toMatch(message);
+  return diagnostic;
 }
 
 function getIndexes(
@@ -394,6 +411,23 @@ describe('interpretPslDocumentToMongoContract', () => {
           },
         },
       });
+    });
+
+    it('emits one syntax diagnostic for a malformed target field @map', () => {
+      const result = interpret(`
+        model Parent {
+          id       ObjectId @id @map(42)
+          children Child[]
+        }
+
+        model Child {
+          id       ObjectId @id @map("_id")
+          parentId ObjectId
+          parent   Parent @relation(fields: [parentId], references: [id])
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /Expected a string literal/);
     });
 
     it('uses mapped field names in relation on-clauses', () => {
@@ -1200,6 +1234,18 @@ describe('interpretPslDocumentToMongoContract', () => {
       expect(indexes![0]!['keys']).toEqual([{ field: 'metadata.$**', direction: 1 }]);
     });
 
+    it('treats a declared wildcard field with sort as a normal field', () => {
+      const ir = interpretOk(`
+        model Events {
+          id       ObjectId @id @map("_id")
+          wildcard String
+          @@index([wildcard(sort: Desc)])
+        }
+      `);
+      const indexes = getIndexes(ir, 'events');
+      expect(indexes![0]!['keys']).toEqual([{ field: 'wildcard', direction: -1 }]);
+    });
+
     it('creates descending index from sort: Desc', () => {
       const ir = interpretOk(`
         model Events {
@@ -1309,6 +1355,30 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
       const indexes = getIndexes(ir, 'events');
       expect(indexes![0]!['wildcardProjection']).toEqual({ metadata: 1, tags: 1 });
+    });
+
+    it('rejects a malformed projection list at the attribute boundary', () => {
+      const result = interpret(`
+        model Events {
+          id       ObjectId @id @map("_id")
+          metadata String
+          @@index([wildcard()], include: "metadata")
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /projection list/);
+    });
+
+    it('rejects a malformed text-index projection list at the attribute boundary', () => {
+      const result = interpret(`
+        model Article {
+          id    ObjectId @id @map("_id")
+          title String
+          @@textIndex([title], exclude: "title")
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /projection list/);
     });
 
     it('parses exclude as wildcardProjection with 0 values', () => {
@@ -1574,15 +1644,9 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([nonexistent])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find(
-        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      );
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/Expected one of/);
-      expect(diag?.span?.start.offset).toBeGreaterThan(0);
-      expect(diag?.span?.end.offset).toBeGreaterThan(diag?.span?.start.offset ?? 0);
+      const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
+      expect(diag.span?.start.offset).toBeGreaterThan(0);
+      expect(diag.span?.end.offset).toBeGreaterThan(diag.span?.start.offset ?? 0);
     });
 
     it('rejects @@unique that references an undeclared field', () => {
@@ -1593,13 +1657,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([nonexistent])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find(
-        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      );
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/Expected one of/);
+      expectInvalidAttributeSyntax(result, /Expected one of/);
     });
 
     it('rejects @@textIndex that references an undeclared field', () => {
@@ -1610,13 +1668,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@textIndex([nonexistent])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find(
-        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      );
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/Expected one of/);
+      expectInvalidAttributeSyntax(result, /Expected one of/);
     });
 
     it('rejects @@index wildcard scope referencing an undeclared field', () => {
@@ -1627,13 +1679,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard(nonexistent)])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find(
-        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      );
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/Expected one of/);
+      expectInvalidAttributeSyntax(result, /Expected one of/);
     });
 
     it('emits one diagnostic when one of multiple keys is undeclared', () => {

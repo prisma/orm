@@ -21,12 +21,14 @@ import {
   json,
   list,
   modelAttribute,
+  nodePslSpan,
   num,
   oneOf,
   optional,
   str,
 } from '@internal/psl-parser';
 import type { FieldAttributeAst, ModelAttributeAst, SourceFile } from '@internal/psl-parser/syntax';
+import { notOk, ok } from '@internal/utils/result';
 
 export function findModelAttributeNode(
   model: ModelSymbol,
@@ -178,6 +180,47 @@ function indexFieldElement(fieldNames: readonly string[]): ArgType<string | Type
   return oneOf(...arms);
 }
 
+export type MongoProjectionList = readonly string[];
+
+function projectionList(): ArgType<MongoProjectionList> {
+  const stringLiteral = str();
+  return {
+    kind: 'mongoProjectionList',
+    label: 'Mongo projection list',
+    parse: (arg, ctx) => {
+      const parsed = stringLiteral.parse(arg, ctx);
+      if (!parsed.ok) return parsed;
+
+      const raw = parsed.value.trim();
+      if (!raw.startsWith('[') || !raw.endsWith(']')) {
+        return notOk([
+          {
+            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+            message: 'Expected a projection list string such as "[field, nested.path]"',
+            sourceId: ctx.sourceId,
+            span: nodePslSpan(arg.syntax, ctx.sourceFile),
+          },
+        ]);
+      }
+
+      const inner = raw.slice(1, -1).trim();
+      if (inner.length === 0) return ok([]);
+      const fields = inner.split(',').map((field) => field.trim());
+      if (fields.some((field) => field.length === 0)) {
+        return notOk([
+          {
+            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+            message: 'Expected a projection list string without empty fields',
+            sourceId: ctx.sourceId,
+            span: nodePslSpan(arg.syntax, ctx.sourceFile),
+          },
+        ]);
+      }
+      return ok(fields);
+    },
+  };
+}
+
 const collationNamedArgs = {
   collationLocale: optional(str()),
   collationStrength: optional(int()),
@@ -190,12 +233,12 @@ const collationNamedArgs = {
   collationNormalization: optional(bool()),
 };
 
-// Argument spec shared by model-level `@@index` and `@@unique` — same argument
-// surface, only the attribute name differs. `fieldNames` seeds the per-field
-// sorted arms of each element.
-export function buildIndexModelSpec(name: 'index' | 'unique', fieldNames: readonly string[]) {
+function buildIndexModelSpec(
+  name: 'index' | 'unique',
+  fieldElement: ArgType<string | TypedFuncCall>,
+) {
   return modelAttribute(name, {
-    positional: [{ key: 'fields', type: list(indexFieldElement(fieldNames), { nonEmpty: true }) }],
+    positional: [{ key: 'fields', type: list(fieldElement, { nonEmpty: true }) }],
     named: {
       type: optional(
         oneOf(num(1), num(-1), str('text'), str('2dsphere'), str('2d'), str('hashed')),
@@ -203,8 +246,8 @@ export function buildIndexModelSpec(name: 'index' | 'unique', fieldNames: readon
       sparse: optional(bool()),
       expireAfterSeconds: optional(int()),
       filter: optional(json()),
-      include: optional(str()),
-      exclude: optional(str()),
+      include: optional(projectionList()),
+      exclude: optional(projectionList()),
       default_language: optional(str()),
       languageOverride: optional(str()),
       ...collationNamedArgs,
@@ -212,21 +255,26 @@ export function buildIndexModelSpec(name: 'index' | 'unique', fieldNames: readon
   });
 }
 
-// Argument spec for model-level `@@textIndex`. Shares the field-list element and
-// collation args with `@@index`/`@@unique`, but its text-search options differ:
-// `weights` (json), `language` (note: `language`, not `default_language`), and
-// `languageOverride`. It does not accept `type`/`sparse`/`expireAfterSeconds`.
-export function buildTextIndexModelSpec(fieldNames: readonly string[]) {
+function buildTextIndexModelSpec(fieldElement: ArgType<string | TypedFuncCall>) {
   return modelAttribute('textIndex', {
-    positional: [{ key: 'fields', type: list(indexFieldElement(fieldNames), { nonEmpty: true }) }],
+    positional: [{ key: 'fields', type: list(fieldElement, { nonEmpty: true }) }],
     named: {
       filter: optional(json()),
-      include: optional(str()),
-      exclude: optional(str()),
+      include: optional(projectionList()),
+      exclude: optional(projectionList()),
       weights: optional(json()),
       language: optional(str()),
       languageOverride: optional(str()),
       ...collationNamedArgs,
     },
   });
+}
+
+export function buildIndexModelSpecs(fieldNames: readonly string[]) {
+  const fieldElement = indexFieldElement(fieldNames);
+  return {
+    index: buildIndexModelSpec('index', fieldElement),
+    unique: buildIndexModelSpec('unique', fieldElement),
+    textIndex: buildTextIndexModelSpec(fieldElement),
+  };
 }
