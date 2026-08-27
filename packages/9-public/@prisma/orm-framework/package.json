@@ -18,7 +18,7 @@
     "@standard-schema/spec": "^1.1.0",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
-    "uniku": "^0.5.0"
+    "uniku": "^0.6.0"
   },
   "devDependencies": {
     "@internal/config": "workspace:8.0.0-rc.8",
