@@ -5,9 +5,11 @@ import { StringLiteralExprAst } from '../../syntax/ast/expressions';
 import type { ArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
-// Reads an opaque JSON object from a quoted JSON string — the ADR's one text-encoded surface
-// exception (e.g. an index `filter` / `weights` argument). The string is decoded by the parser,
-// then JSON-parsed; a non-object (array/scalar) or invalid JSON is a diagnostic.
+/**
+ * Reads an opaque JSON object from a quoted JSON string — the ADR's one text-encoded surface
+ * exception (e.g. an index `filter` / `weights` argument). The string is decoded by the parser,
+ * then JSON-parsed; a non-object (array/scalar) or invalid JSON is a diagnostic.
+ */
 export function json(): ArgType<Record<string, unknown>> {
   return {
     kind: 'json',

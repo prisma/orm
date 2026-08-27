@@ -111,7 +111,10 @@ describe('str', () => {
     const result = str('hashed').parse(expr, ctx);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.failure).toHaveLength(1);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
   });
 
   it('rejects a number literal against the pinned value', () => {
@@ -120,7 +123,10 @@ describe('str', () => {
     const result = str('hashed').parse(expr, ctx);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.failure).toHaveLength(1);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
   });
 });
 
@@ -347,7 +353,10 @@ describe('json', () => {
     const result = json().parse(expr, ctx);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.failure).toHaveLength(1);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
   });
 
   it('rejects an invalid-JSON string', () => {
@@ -356,7 +365,10 @@ describe('json', () => {
     const result = json().parse(expr, ctx);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.failure).toHaveLength(1);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
   });
 
   it('rejects a bare identifier', () => {
@@ -377,7 +389,10 @@ describe('json', () => {
     const result = json().parse(expr, ctx);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.failure).toHaveLength(1);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
   });
 });
 
