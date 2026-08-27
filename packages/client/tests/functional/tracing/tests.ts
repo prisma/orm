@@ -127,6 +127,16 @@ testMatrix.setupTestSuite(
         ['js_d1', 'js_libsql', 'js_planetscale', 'js_mssql', 'js_mariadb'].includes(driverAdapter)) ||
       (clientEngineExecutor === 'remote' && [Providers.SQLSERVER, Providers.MYSQL].includes(provider))
 
+    // The pg driver adapter reports the server address and port on the
+    // connection info, which surface as `server.address` / `server.port`
+    // attributes on `db_query` spans. It backs the `js_pg` and
+    // `js_pg_cockroachdb` flavors as well as the remote executor for
+    // PostgreSQL and CockroachDB.
+    const usesPgAdapter =
+      driverAdapter === AdapterProviders.JS_PG ||
+      driverAdapter === AdapterProviders.JS_PG_COCKROACHDB ||
+      (clientEngineExecutor === 'remote' && [Providers.POSTGRESQL, Providers.COCKROACHDB].includes(provider))
+
     beforeEach(async () => {
       await prisma.$connect()
       inMemorySpanExporter.reset()
@@ -159,6 +169,11 @@ testMatrix.setupTestSuite(
 
       if (provider === Providers.MONGODB) {
         span.attributes['db.operation.name'] = expect.toBeString()
+      }
+
+      if (usesPgAdapter) {
+        span.attributes['server.address'] = expect.toBeString()
+        span.attributes['server.port'] = expect.toBeNumber()
       }
 
       return span
