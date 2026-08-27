@@ -689,10 +689,6 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
         }
       `);
 
-      // `title` is inherited from the base, not declared on Bug, so it is absent
-      // from Bug's own field set; `fieldRef('self')` rejects it at the grammar
-      // layer (Option A) as PSL_INVALID_ATTRIBUTE_SYNTAX rather than the
-      // downstream PSL_INDEX_FIELD_NOT_FOUND.
       const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
       expect(diag.span?.start.offset).toBeGreaterThan(0);
     });

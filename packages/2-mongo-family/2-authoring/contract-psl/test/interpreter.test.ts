@@ -1631,11 +1631,6 @@ describe('interpretPslDocumentToMongoContract', () => {
       }
     });
 
-    // With the spec migration, a field absent from the model is rejected at the
-    // grammar layer by `fieldRef('self')` (operator Option A): no field-element
-    // arm matches, so the element surfaces PSL_INVALID_ATTRIBUTE_SYNTAX with the
-    // `oneOf` "Expected one of" message. The downstream PSL_INDEX_FIELD_NOT_FOUND
-    // now guards only present-but-not-indexable fields (e.g. relation fields).
     it('rejects @@index that references an undeclared field', () => {
       const result = interpret(`
         model User {
