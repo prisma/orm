@@ -21,14 +21,13 @@ import {
   json,
   list,
   modelAttribute,
-  nodePslSpan,
   num,
   oneOf,
   optional,
+  record,
   str,
 } from '@internal/psl-parser';
 import type { FieldAttributeAst, ModelAttributeAst, SourceFile } from '@internal/psl-parser/syntax';
-import { notOk, ok } from '@internal/utils/result';
 
 export function findModelAttributeNode(
   model: ModelSymbol,
@@ -166,87 +165,13 @@ const sortSig = {
   named: { sort: oneOf(identifier('Asc'), identifier('Desc')) },
 } satisfies FuncCallSig;
 
-// One element of an `@@index`/`@@unique` field list, composed per model from its
-// field names (like `buildDefaultSpec`): a bare field reference (`name`), a
-// `wildcard(scope?)` call, or a `field(sort: Asc|Desc)` call. Output is a field
-// name string or a `TypedFuncCall`; the wildcard and bare-field arms are fixed,
-// the sorted arms are one `funcCall(name, sortSig)` per field.
 function indexFieldElement(fieldNames: readonly string[]): ArgType<string | TypedFuncCall> {
   const arms: readonly [ArgType<string | TypedFuncCall>, ...ArgType<string | TypedFuncCall>[]] = [
     fieldRef('self'),
-    funcCall('wildcard', { positional: [{ key: 'scope', type: optional(fieldRef('self')) }] }),
+    funcCall('wildcard', { positional: [{ key: 'scope', type: optional(entityRef()) }] }),
     ...fieldNames.map((name) => funcCall(name, sortSig)),
   ];
   return oneOf(...arms);
-}
-
-export type MongoProjectionList = readonly string[];
-
-function projectionList(): ArgType<MongoProjectionList> {
-  const stringLiteral = str();
-  return {
-    kind: 'mongoProjectionList',
-    label: 'Mongo projection list',
-    parse: (arg, ctx) => {
-      const parsed = stringLiteral.parse(arg, ctx);
-      if (!parsed.ok) return parsed;
-
-      const raw = parsed.value.trim();
-      if (!raw.startsWith('[') || !raw.endsWith(']')) {
-        return notOk([
-          {
-            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-            message: 'Expected a projection list string such as "[field, nested.path]"',
-            sourceId: ctx.sourceId,
-            span: nodePslSpan(arg.syntax, ctx.sourceFile),
-          },
-        ]);
-      }
-
-      const inner = raw.slice(1, -1).trim();
-      if (inner.length === 0) return ok([]);
-      const fields = inner.split(',').map((field) => field.trim());
-      if (fields.some((field) => field.length === 0)) {
-        return notOk([
-          {
-            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-            message: 'Expected a projection list string without empty fields',
-            sourceId: ctx.sourceId,
-            span: nodePslSpan(arg.syntax, ctx.sourceFile),
-          },
-        ]);
-      }
-      return ok(fields);
-    },
-  };
-}
-
-function textIndexWeights(): ArgType<Record<string, number>> {
-  const jsonObject = json();
-  return {
-    kind: 'mongoTextIndexWeights',
-    label: 'Mongo text index weights',
-    parse: (arg, ctx) => {
-      const parsed = jsonObject.parse(arg, ctx);
-      if (!parsed.ok) return parsed;
-
-      const entries: [string, number][] = [];
-      for (const [field, value] of Object.entries(parsed.value)) {
-        if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 99_999) {
-          return notOk([
-            {
-              code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-              message: `Expected text index weight "${field}" to be an integer from 1 to 99,999`,
-              sourceId: ctx.sourceId,
-              span: nodePslSpan(arg.syntax, ctx.sourceFile),
-            },
-          ]);
-        }
-        entries.push([field, value]);
-      }
-      return ok(Object.fromEntries(entries));
-    },
-  };
 }
 
 const collationNamedArgs = {
@@ -274,8 +199,8 @@ function buildIndexModelSpec(
       sparse: optional(bool()),
       expireAfterSeconds: optional(int()),
       filter: optional(json()),
-      include: optional(projectionList()),
-      exclude: optional(projectionList()),
+      include: optional(list(str())),
+      exclude: optional(list(str())),
       default_language: optional(str()),
       languageOverride: optional(str()),
       ...collationNamedArgs,
@@ -288,9 +213,7 @@ function buildTextIndexModelSpec(fieldElement: ArgType<string | TypedFuncCall>) 
     positional: [{ key: 'fields', type: list(fieldElement, { nonEmpty: true }) }],
     named: {
       filter: optional(json()),
-      include: optional(projectionList()),
-      exclude: optional(projectionList()),
-      weights: optional(textIndexWeights()),
+      weights: optional(record(int({ min: 1, max: 99_999 }))),
       language: optional(str()),
       languageOverride: optional(str()),
       ...collationNamedArgs,

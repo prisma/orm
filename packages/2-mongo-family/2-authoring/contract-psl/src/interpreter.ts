@@ -63,12 +63,11 @@ import {
   findModelAttributeNode,
   interpretFieldAttribute,
   interpretModelAttribute,
-  type MongoProjectionList,
   mapFieldSpec,
   mapModelSpec,
   relationFieldSpec,
 } from './mongo-attribute-specs';
-import { getAttribute, lowerFirst, type ParsedIndexField } from './psl-helpers';
+import { getAttribute, lowerFirst } from './psl-helpers';
 
 /**
  * Encode an authored enum value to its codec-encoded JSON form via the codec resolved by id from the
@@ -529,44 +528,27 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-// The spec's pinned `type` combinators already constrain the value to the exact
-// index-direction alphabet at runtime; normalize it to the Mongo key-direction
-// type, defaulting to ascending (1) when absent.
-function normalizeIndexType(value: number | string | undefined): MongoIndexKeyDirection {
-  switch (value) {
-    case -1:
-      return -1;
-    case 'text':
-      return 'text';
-    case '2dsphere':
-      return '2dsphere';
-    case '2d':
-      return '2d';
-    case 'hashed':
-      return 'hashed';
-    default:
-      return 1;
-  }
-}
+type ParsedIndexField =
+  | {
+      readonly kind: 'field';
+      readonly name: string;
+      readonly direction?: 1 | -1;
+    }
+  | {
+      readonly kind: 'wildcard';
+      readonly scope?: string;
+    };
 
-// Map one interpreted `@@index`/`@@unique` field element to the same
-// `ParsedIndexField` shape the loop consumes. Discriminates the element union
-// structurally (a bare string field, a `wildcard(scope?)` call, or a
-// `field(sort:)` call) so no cast is needed; `args` values are `unknown` and
-// narrowed by comparison.
 function normalizeIndexField(element: string | TypedFuncCall): ParsedIndexField {
   if (typeof element === 'string') {
-    return { name: element, isWildcard: false };
+    return { kind: 'field', name: element };
   }
   if (element.fn === 'wildcard' && element.args['sort'] === undefined) {
     const scope = element.args['scope'];
-    return {
-      name: typeof scope === 'string' ? `${scope}.$**` : '$**',
-      isWildcard: true,
-    };
+    return typeof scope === 'string' ? { kind: 'wildcard', scope } : { kind: 'wildcard' };
   }
   const sort = element.args['sort'];
-  return { name: element.fn, isWildcard: false, direction: sort === 'Desc' ? -1 : 1 };
+  return { kind: 'field', name: element.fn, direction: sort === 'Desc' ? -1 : 1 };
 }
 
 interface SpecCollationArgs {
@@ -633,7 +615,7 @@ function resolveIndexKeys(
   defaultDirection: MongoIndexKeyDirection,
   ctx: IndexBuildContext,
 ): ResolvedIndexKeys | undefined {
-  const wildcardCount = parsedFields.filter((field) => field.isWildcard).length;
+  const wildcardCount = parsedFields.filter((field) => field.kind === 'wildcard').length;
   if (wildcardCount > 1) {
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
@@ -645,8 +627,7 @@ function resolveIndexKeys(
   }
 
   for (const field of parsedFields) {
-    const wildcardMatch = field.isWildcard ? field.name.match(/^(.+)\.\$\*\*$/) : undefined;
-    const fieldName = field.isWildcard ? wildcardMatch?.[1] : field.name;
+    const fieldName = field.kind === 'wildcard' ? field.scope : field.name;
     if (fieldName !== undefined && !ctx.indexableFieldNames.has(fieldName)) {
       ctx.diagnostics.push({
         code: 'PSL_INDEX_FIELD_NOT_FOUND',
@@ -659,20 +640,20 @@ function resolveIndexKeys(
   }
 
   const keys = parsedFields.map((field) => {
-    const mappedName = field.isWildcard
-      ? field.name.replace(/^(.+)\.\$\*\*$/, (_, prefix: string) => {
-          const mapped = ctx.fieldMappings.pslNameToMapped.get(prefix);
-          return mapped ? `${mapped}.$**` : `${prefix}.$**`;
-        })
-      : (ctx.fieldMappings.pslNameToMapped.get(field.name) ?? field.name);
+    if (field.kind === 'wildcard') {
+      if (field.scope === undefined) return { field: '$**', direction: defaultDirection };
+      const mappedScope = ctx.fieldMappings.pslNameToMapped.get(field.scope) ?? field.scope;
+      return { field: `${mappedScope}.$**`, direction: defaultDirection };
+    }
+    const mappedName = ctx.fieldMappings.pslNameToMapped.get(field.name) ?? field.name;
     return { field: mappedName, direction: field.direction ?? defaultDirection };
   });
   return { keys, hasWildcard: wildcardCount === 1 };
 }
 
 function buildProjection(
-  include: MongoProjectionList | undefined,
-  exclude: MongoProjectionList | undefined,
+  include: readonly string[] | undefined,
+  exclude: readonly string[] | undefined,
   hasWildcard: boolean,
   ctx: IndexBuildContext,
 ): Record<string, 0 | 1> | null | undefined {
@@ -710,7 +691,7 @@ function buildNormalIndex(
 ): MongoIndex | undefined {
   const parsedFields = parsed.fields.map(normalizeIndexField);
   if (parsedFields.length === 0) return undefined;
-  const defaultDirection = normalizeIndexType(parsed.type);
+  const defaultDirection = parsed.type ?? 1;
   const resolved = resolveIndexKeys(parsedFields, defaultDirection, ctx);
   if (!resolved) return undefined;
 
@@ -803,13 +784,6 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoInd
     return undefined;
   }
 
-  const wildcardProjection = buildProjection(
-    parsed.include,
-    parsed.exclude,
-    resolved.hasWildcard,
-    ctx,
-  );
-  if (wildcardProjection === null) return undefined;
   const collation = buildCollationFromSpec(parsed);
   if (collation === null) {
     ctx.diagnostics.push({
@@ -824,7 +798,6 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoInd
   return new MongoIndex({
     keys: resolved.keys,
     ...(parsed.filter !== undefined && { partialFilterExpression: parsed.filter }),
-    ...(wildcardProjection !== undefined && { wildcardProjection }),
     ...(collation !== undefined && { collation }),
     ...ifDefined('weights', parsed.weights),
     ...(parsed.language !== undefined && { default_language: parsed.language }),

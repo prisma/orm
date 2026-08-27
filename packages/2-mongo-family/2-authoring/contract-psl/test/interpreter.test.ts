@@ -1,4 +1,3 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import {
   type Contract,
@@ -24,6 +23,7 @@ import {
   type InterpretPslDocumentToMongoContractInput,
   interpretPslDocumentToMongoContract,
 } from '../src/interpreter';
+import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
 
 function buildSymbolTableInput(
   schema: string,
@@ -126,22 +126,6 @@ function interpretOk(
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error('Expected ok result');
   return result.value;
-}
-
-function expectInvalidAttributeSyntax(
-  result: ReturnType<typeof interpret>,
-  message: RegExp,
-): ContractSourceDiagnostic {
-  expect(result.ok).toBe(false);
-  if (result.ok) throw new Error('Expected interpretation to fail');
-  const diagnostics = result.failure.diagnostics.filter(
-    (diagnostic) => diagnostic.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-  );
-  expect(diagnostics).toHaveLength(1);
-  const diagnostic = diagnostics[0];
-  if (!diagnostic) throw new Error('Expected PSL_INVALID_ATTRIBUTE_SYNTAX diagnostic');
-  expect(diagnostic.message).toMatch(message);
-  return diagnostic;
 }
 
 function getIndexes(
@@ -597,13 +581,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           author   User @relation(fields: [missing], references: [id])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find(
-        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      );
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/missing/);
+      expectInvalidAttributeSyntax(result, /missing.*does not exist/i);
     });
   });
 
@@ -1075,7 +1053,7 @@ describe('interpretPslDocumentToMongoContract', () => {
   });
 
   describe('index authoring', () => {
-    it('creates ascending index from @@index', () => {
+    it('defaults index direction to the ascending literal', () => {
       const ir = interpretOk(`
         model User {
           id    ObjectId @id @map("_id")
@@ -1088,6 +1066,17 @@ describe('interpretPslDocumentToMongoContract', () => {
         | undefined;
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([{ field: 'email', direction: 1 }]);
+    });
+
+    it('uses the exact descending index type literal', () => {
+      const ir = interpretOk(`
+        model User {
+          id    ObjectId @id @map("_id")
+          email String
+          @@index([email], type: -1)
+        }
+      `);
+      expect(getIndexes(ir, 'user')?.[0]?.['keys']).toEqual([{ field: 'email', direction: -1 }]);
     });
 
     it('creates unique index from @@unique', () => {
@@ -1393,20 +1382,19 @@ describe('interpretPslDocumentToMongoContract', () => {
       }
     });
 
-    it('parses include as wildcardProjection with 1 values', () => {
+    it('parses native include paths as wildcardProjection with 1 values', () => {
       const ir = interpretOk(`
         model Events {
           id       ObjectId @id @map("_id")
           metadata String
-          tags     String
-          @@index([wildcard()], include: "[metadata, tags]")
+          @@index([wildcard()], include: ["metadata", "nested.path"])
         }
       `);
       const indexes = getIndexes(ir, 'events');
-      expect(indexes![0]!['wildcardProjection']).toEqual({ metadata: 1, tags: 1 });
+      expect(indexes![0]!['wildcardProjection']).toEqual({ metadata: 1, 'nested.path': 1 });
     });
 
-    it('rejects a malformed projection list at the attribute boundary', () => {
+    it('rejects a non-list projection at the attribute boundary', () => {
       const result = interpret(`
         model Events {
           id       ObjectId @id @map("_id")
@@ -1415,27 +1403,30 @@ describe('interpretPslDocumentToMongoContract', () => {
         }
       `);
 
-      expectInvalidAttributeSyntax(result, /projection list/);
+      expectInvalidAttributeSyntax(result, /Expected a list/);
     });
 
-    it('rejects a malformed text-index projection list at the attribute boundary', () => {
-      const result = interpret(`
-        model Article {
-          id    ObjectId @id @map("_id")
-          title String
-          @@textIndex([title], exclude: "title")
-        }
-      `);
+    it.each(['include', 'exclude'])(
+      'rejects @@textIndex %s at the attribute boundary',
+      (option) => {
+        const result = interpret(`
+          model Article {
+            id    ObjectId @id @map("_id")
+            title String
+            @@textIndex([title], ${option}: ["title"])
+          }
+        `);
 
-      expectInvalidAttributeSyntax(result, /projection list/);
-    });
+        expectInvalidAttributeSyntax(result, /received unknown argument/i);
+      },
+    );
 
-    it('parses exclude as wildcardProjection with 0 values', () => {
+    it('parses native exclude paths as wildcardProjection with 0 values', () => {
       const ir = interpretOk(`
         model Events {
           id       ObjectId @id @map("_id")
           internal String
-          @@index([wildcard()], exclude: "[internal, _class]")
+          @@index([wildcard()], exclude: ["internal", "_class"])
         }
       `);
       const indexes = getIndexes(ir, 'events');
@@ -1465,7 +1456,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           id    ObjectId @id @map("_id")
           title String
           body  String
-          @@textIndex([title, body], weights: "{\\"title\\": 1, \\"body\\": 99999}", language: "english", languageOverride: "idioma")
+          @@textIndex([title, body], weights: { title: 1, body: 99999 }, language: "english", languageOverride: "idioma")
         }
       `);
       const indexes = getIndexes(ir, 'article');
@@ -1479,7 +1470,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Article {
           id    ObjectId @id @map("_id")
           title String
-          @@textIndex([title], weights: "{\\"__proto__\\": 10}")
+          @@textIndex([title], weights: { "__proto__": 10 })
         }
       `);
       const weights = getIndexes(ir, 'article')?.[0]?.['weights'];
@@ -1493,20 +1484,20 @@ describe('interpretPslDocumentToMongoContract', () => {
     });
 
     it.each([
-      ['nonnumeric', '{"title": "high"}'],
-      ['below range', '{"title": 0}'],
-      ['above range', '{"title": 100000}'],
-      ['non-integer', '{"title": 1.5}'],
-    ])('rejects %s text-index weights at the attribute boundary', (_label, weights) => {
+      ['nonnumeric', '{ title: "high" }'],
+      ['below range', '{ title: 0 }'],
+      ['above range', '{ title: 100000 }'],
+      ['non-integer', '{ title: 1.5 }'],
+    ])('rejects %s native text-index weights at the attribute boundary', (_label, weights) => {
       const result = interpret(`
         model Article {
           id    ObjectId @id @map("_id")
           title String
-          @@textIndex([title], weights: ${JSON.stringify(weights)})
+          @@textIndex([title], weights: ${weights})
         }
       `);
 
-      expectInvalidAttributeSyntax(result, /weight.*integer.*1.*99,999/i);
+      expectInvalidAttributeSyntax(result, /integer|between|99,?999/i);
     });
 
     it('creates @@unique with collation', () => {
@@ -1593,7 +1584,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Events {
           id       ObjectId @id @map("_id")
           metadata String
-          @@index([wildcard()], include: "[metadata]", exclude: "[_class]")
+          @@index([wildcard()], include: ["metadata"], exclude: ["_class"])
         }
       `);
       expect(result.ok).toBe(false);
@@ -1611,7 +1602,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Events {
           id     ObjectId @id @map("_id")
           status String
-          @@index([status], include: "[status]")
+          @@index([status], include: ["status"])
         }
       `);
       expect(result.ok).toBe(false);
@@ -1758,7 +1749,14 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard(nonexistent)])
         }
       `);
-      expectInvalidAttributeSyntax(result, /Expected one of/);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_INDEX_FIELD_NOT_FOUND',
+          message: expect.stringMatching(/nonexistent/),
+        }),
+      ]);
     });
 
     it('emits one diagnostic when one of multiple keys is undeclared', () => {

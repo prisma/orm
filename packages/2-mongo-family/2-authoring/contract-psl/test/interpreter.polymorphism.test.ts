@@ -1,4 +1,3 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { crossRef } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
@@ -13,6 +12,7 @@ import type { SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { interpretPslDocumentToMongoContract } from '../src/interpreter';
+import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
@@ -82,22 +82,6 @@ function interpretOk(schema: string) {
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error('Expected ok result');
   return result.value;
-}
-
-function expectInvalidAttributeSyntax(
-  result: ReturnType<typeof interpret>,
-  message: RegExp,
-): ContractSourceDiagnostic {
-  expect(result.ok).toBe(false);
-  if (result.ok) throw new Error('Expected interpretation to fail');
-  const diagnostics = result.failure.diagnostics.filter(
-    (diagnostic) => diagnostic.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-  );
-  expect(diagnostics).toHaveLength(1);
-  const diagnostic = diagnostics[0];
-  if (!diagnostic) throw new Error('Expected PSL_INVALID_ATTRIBUTE_SYNTAX diagnostic');
-  expect(diagnostic.message).toMatch(message);
-  return diagnostic;
 }
 
 describe('interpretPslDocumentToMongoContract — polymorphism', () => {
