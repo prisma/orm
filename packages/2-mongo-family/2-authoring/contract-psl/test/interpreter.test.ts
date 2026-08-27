@@ -1344,6 +1344,55 @@ describe('interpretPslDocumentToMongoContract', () => {
       });
     });
 
+    it.each(['index', 'textIndex'])('accepts every finite collation value for @@%s', (kind) => {
+      const options = [
+        'collationStrength: 1',
+        'collationStrength: 5',
+        'collationCaseFirst: "upper"',
+        'collationCaseFirst: "lower"',
+        'collationCaseFirst: "off"',
+        'collationAlternate: "non-ignorable"',
+        'collationAlternate: "shifted"',
+        'collationMaxVariable: "punct"',
+        'collationMaxVariable: "space"',
+      ];
+      const models = options
+        .map(
+          (option, index) => `
+            model Item${index} {
+              id    ObjectId @id @map("_id")
+              value String
+              @@${kind}([value], collationLocale: "en", ${option})
+            }
+          `,
+        )
+        .join('\n');
+
+      expect(interpret(models).ok).toBe(true);
+    });
+
+    it.each(['index', 'textIndex'])('rejects invalid finite collation values for @@%s', (kind) => {
+      const invalidOptions = [
+        'collationStrength: 0',
+        'collationStrength: 6',
+        'collationCaseFirst: "invalid"',
+        'collationAlternate: "invalid"',
+        'collationMaxVariable: "invalid"',
+      ];
+
+      for (const option of invalidOptions) {
+        const result = interpret(`
+          model Item {
+            id    ObjectId @id @map("_id")
+            value String
+            @@${kind}([value], collationLocale: "en", ${option})
+          }
+        `);
+
+        expectInvalidAttributeSyntax(result, /Expected one of/);
+      }
+    });
+
     it('parses include as wildcardProjection with 1 values', () => {
       const ir = interpretOk(`
         model Events {
@@ -1416,13 +1465,30 @@ describe('interpretPslDocumentToMongoContract', () => {
           id    ObjectId @id @map("_id")
           title String
           body  String
-          @@textIndex([title, body], weights: "{\\"title\\": 10, \\"body\\": 5}", language: "english", languageOverride: "idioma")
+          @@textIndex([title, body], weights: "{\\"title\\": 1, \\"body\\": 99999}", language: "english", languageOverride: "idioma")
         }
       `);
       const indexes = getIndexes(ir, 'article');
-      expect(indexes![0]!['weights']).toEqual({ title: 10, body: 5 });
+      expect(indexes![0]!['weights']).toEqual({ title: 1, body: 99999 });
       expect(indexes![0]!['default_language']).toBe('english');
       expect(indexes![0]!['language_override']).toBe('idioma');
+    });
+
+    it.each([
+      ['nonnumeric', '{"title": "high"}'],
+      ['below range', '{"title": 0}'],
+      ['above range', '{"title": 100000}'],
+      ['non-integer', '{"title": 1.5}'],
+    ])('rejects %s text-index weights at the attribute boundary', (_label, weights) => {
+      const result = interpret(`
+        model Article {
+          id    ObjectId @id @map("_id")
+          title String
+          @@textIndex([title], weights: ${JSON.stringify(weights)})
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /weight.*integer.*1.*99,999/i);
     });
 
     it('creates @@unique with collation', () => {

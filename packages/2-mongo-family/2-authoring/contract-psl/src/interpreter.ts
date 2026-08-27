@@ -569,10 +569,6 @@ function normalizeIndexField(element: string | TypedFuncCall): ParsedIndexField 
   return { name: element.fn, isWildcard: false, direction: sort === 'Desc' ? -1 : 1 };
 }
 
-// Interpreted collation named-args of an `@@index`/`@@unique`/`@@textIndex`.
-// Semantics from spec values: `undefined` when no collation arg is present,
-// `null` when some are present but `collationLocale` is absent (the semantic
-// "collationLocale is required" rule), otherwise the options.
 interface SpecCollationArgs {
   readonly collationLocale?: string;
   readonly collationStrength?: number;
@@ -612,21 +608,6 @@ function buildCollationFromSpec(args: SpecCollationArgs): CollationOptions | nul
   if (args.collationNormalization !== undefined)
     collation.normalization = args.collationNormalization;
   return collation;
-}
-
-// Filter an interpreted `weights` json object down to its numeric entries — the
-// only weight values MongoDB accepts. `Record<string, unknown>` values are
-// narrowed by `typeof`, so no cast is needed. Returns `undefined` only when the
-// arg was absent; a present-but-empty object stays `{}` to match prior behavior.
-function extractWeights(
-  raw: Record<string, unknown> | undefined,
-): Record<string, number> | undefined {
-  if (raw === undefined) return undefined;
-  const weights: Record<string, number> = {};
-  for (const [key, value] of Object.entries(raw)) {
-    if (typeof value === 'number') weights[key] = value;
-  }
-  return weights;
 }
 
 type IndexModelSpecs = ReturnType<typeof buildIndexModelSpecs>;
@@ -845,7 +826,7 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoInd
     ...(parsed.filter !== undefined && { partialFilterExpression: parsed.filter }),
     ...(wildcardProjection !== undefined && { wildcardProjection }),
     ...(collation !== undefined && { collation }),
-    ...ifDefined('weights', extractWeights(parsed.weights)),
+    ...ifDefined('weights', parsed.weights),
     ...(parsed.language !== undefined && { default_language: parsed.language }),
     ...(parsed.languageOverride !== undefined && { language_override: parsed.languageOverride }),
   });

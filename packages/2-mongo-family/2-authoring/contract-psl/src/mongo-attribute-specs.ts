@@ -221,14 +221,42 @@ function projectionList(): ArgType<MongoProjectionList> {
   };
 }
 
+function textIndexWeights(): ArgType<Record<string, number>> {
+  const jsonObject = json();
+  return {
+    kind: 'mongoTextIndexWeights',
+    label: 'Mongo text index weights',
+    parse: (arg, ctx) => {
+      const parsed = jsonObject.parse(arg, ctx);
+      if (!parsed.ok) return parsed;
+
+      const weights: Record<string, number> = {};
+      for (const [field, value] of Object.entries(parsed.value)) {
+        if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 99_999) {
+          return notOk([
+            {
+              code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+              message: `Expected text index weight "${field}" to be an integer from 1 to 99,999`,
+              sourceId: ctx.sourceId,
+              span: nodePslSpan(arg.syntax, ctx.sourceFile),
+            },
+          ]);
+        }
+        weights[field] = value;
+      }
+      return ok(weights);
+    },
+  };
+}
+
 const collationNamedArgs = {
   collationLocale: optional(str()),
-  collationStrength: optional(int()),
+  collationStrength: optional(oneOf(num(1), num(2), num(3), num(4), num(5))),
   collationCaseLevel: optional(bool()),
-  collationCaseFirst: optional(str()),
+  collationCaseFirst: optional(oneOf(str('upper'), str('lower'), str('off'))),
   collationNumericOrdering: optional(bool()),
-  collationAlternate: optional(str()),
-  collationMaxVariable: optional(str()),
+  collationAlternate: optional(oneOf(str('non-ignorable'), str('shifted'))),
+  collationMaxVariable: optional(oneOf(str('punct'), str('space'))),
   collationBackwards: optional(bool()),
   collationNormalization: optional(bool()),
 };
@@ -262,7 +290,7 @@ function buildTextIndexModelSpec(fieldElement: ArgType<string | TypedFuncCall>) 
       filter: optional(json()),
       include: optional(projectionList()),
       exclude: optional(projectionList()),
-      weights: optional(json()),
+      weights: optional(textIndexWeights()),
       language: optional(str()),
       languageOverride: optional(str()),
       ...collationNamedArgs,
