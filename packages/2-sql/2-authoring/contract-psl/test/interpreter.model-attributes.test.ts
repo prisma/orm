@@ -6,10 +6,13 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import {
+  createBuiltinLikeControlMutationDefaults,
   postgresScalarTypeDescriptors,
   postgresTarget,
   symbolTableInputFromParseArgs,
 } from './fixtures';
+
+const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
 
 const stampModelSpec = modelAttribute('stamp', {
   positional: [{ key: 'label', type: str() }],
@@ -61,6 +64,7 @@ function interpretWith(
     ...document,
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
+    controlMutationDefaults: builtinControlMutationDefaults,
     composedExtensionContracts: new Map(),
     createNamespace,
     capabilities: { sql: { scalarList: true } },
@@ -117,7 +121,9 @@ describe('contributed model attributes (AuthoringContributions.modelAttributes)'
     const ctx = stampFactoryContexts[0];
     expect(ctx?.model.name).toBe('Widget');
     expect(Object.keys(ctx?.symbols.topLevel.models ?? {})).toContain('Widget');
-    expect(ctx?.controlMutationDefaults).toBeInstanceOf(Map);
+    expect(ctx?.controlMutationDefaults).toBe(
+      builtinControlMutationDefaults.defaultFunctionRegistry,
+    );
   });
 
   it('threads the declaring namespace id into the lowering context', () => {
