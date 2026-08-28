@@ -46,6 +46,12 @@ Sequence: contribution surface (core) → plain-data assembly (psl-parser) → t
 - **Focus:** integration-test package only (plus its devDependency on `@internal/language-server` if absent). No production changes anywhere.
 - **Model tier:** resumed implementer. **Gates:** integration package typecheck/lint + the new test + `pnpm lint:deps`.
 
+### Dispatch 6: strip-added-comments (added at PR stage, operator-directed)
+
+- **Outcome:** zero comment lines added by this PR remain in `.ts` files — every `//` / JSDoc line the slice introduced is removed; behavior and types byte-identical otherwise. (Operator call, 2026-08-28; supersedes the per-ruling doc-comment instructions.)
+- **Builds on:** the open PR #30154 head.
+- **Model tier:** resumed implementer. **Gates:** touched-package typecheck/lint/test; grep `git diff origin/main...HEAD -- '*.ts' | grep -E '^\+\s*(//|/\*|\*)'` → empty.
+
 ## Handoff-contract checks
 
 - **Linearity:** strict chain 1→2→3→4; the one non-linear edge is dispatch 4 also consuming dispatch 2's registry surface directly (named above).
