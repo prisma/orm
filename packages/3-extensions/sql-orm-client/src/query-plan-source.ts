@@ -20,6 +20,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { assertDefined } from '@internal/utils/assertions';
+import { ifDefined } from '@internal/utils/defined';
 import {
   type PolymorphismInfo,
   resolvePolymorphismInfo,
@@ -93,15 +94,27 @@ function buildCursorWhere(
 
   const entries: CursorOrderEntry[] = [];
   for (const order of orderBy) {
-    if (order.expr.kind !== 'column-ref') continue;
-    const column = order.expr.column;
     if (order.nulls !== undefined) {
+      const subject =
+        order.expr.kind === 'column-ref'
+          ? `orderBy column "${order.expr.column}"`
+          : 'an expression orderBy entry';
       throw ormError(
         'ORM.CURSOR_ORDER_NULLS_UNSUPPORTED',
-        `Cursor pagination cannot express nulls placement: orderBy column "${column}" uses nulls: '${order.nulls}'. Remove the nulls option or paginate with skip/take.`,
-        { meta: { column, nulls: order.nulls } },
+        `Cursor pagination cannot express nulls placement: ${subject} uses nulls: '${order.nulls}'. Remove the nulls option or paginate with limit/offset.`,
+        {
+          meta: {
+            ...ifDefined(
+              'column',
+              order.expr.kind === 'column-ref' ? order.expr.column : undefined,
+            ),
+            nulls: order.nulls,
+          },
+        },
       );
     }
+    if (order.expr.kind !== 'column-ref') continue;
+    const column = order.expr.column;
     const value = cursor[column];
     if (value === undefined) {
       throw ormError(

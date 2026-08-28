@@ -42,7 +42,6 @@ export type ExpressionBuilder<AvailableScope extends Scope, QC extends QueryCont
 ) => Expression<BooleanCodecType>;
 
 export type OrderByDirection = Direction;
-export type { OrderByNulls };
 
 export type OrderByOptions = {
   direction?: OrderByDirection;

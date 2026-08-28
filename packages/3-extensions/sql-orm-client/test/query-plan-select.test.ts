@@ -169,6 +169,25 @@ describe('compileSelectWithIncludes', () => {
     expect(() => compileSelect(baseContract, 'public', 'users', state)).toThrow('nulls placement');
   });
 
+  it('rejects cursor pagination when an expression orderBy carries nulls placement', () => {
+    const opExpr = new OperationExpr({
+      method: 'cosineDistance',
+      self: ColumnRef.of('posts', 'embedding'),
+      args: [ParamRef.of([1, 2, 3], { name: 'searchVec', codec: { codecId: 'pg/vector@1' } })],
+      returns: { codecId: 'builtin/float8', nullable: false },
+      lowering: { targetFamily: 'sql', strategy: 'function', template: '{{self}} <=> {{arg0}}' },
+    });
+
+    const { collection } = createCollectionFor('Post');
+    const state = {
+      ...collection.state,
+      orderBy: [OrderByItem.desc(opExpr, 'last'), OrderByItem.asc(ColumnRef.of('posts', 'id'))],
+      cursor: { id: 9 },
+    };
+
+    expect(() => compileSelect(baseContract, 'public', 'posts', state)).toThrow('nulls placement');
+  });
+
   it('builds lexicographic cursor filters with distinctOn, limit, and offset', () => {
     const { collection } = createCollection();
     const state = collection
