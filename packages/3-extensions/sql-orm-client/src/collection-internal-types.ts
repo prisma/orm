@@ -133,9 +133,13 @@ export type IncludeRefinementValue<
       : IncludeRelationValue<TContract, ParentModelName, RelName, V, NsId>
     : IncludeRelationValue<TContract, ParentModelName, RelName, DefaultIncludedRow, NsId>;
 
-export type WhereInput<TContract extends Contract<SqlStorage>, ModelName extends string> =
-  | ((model: ModelAccessor<TContract, ModelName>) => AnyExpression)
-  | ShorthandWhereFilter<TContract, ModelName>;
+export type WhereInput<
+  TContract extends Contract<SqlStorage>,
+  NsId extends string,
+  ModelName extends string,
+> =
+  | ((model: ModelAccessor<TContract, ModelName, NsId>) => AnyExpression)
+  | ShorthandWhereFilter<TContract, NsId, ModelName>;
 
 export interface IncludeRefinementEvaluation {
   readonly nestedState: import('./types').CollectionState;

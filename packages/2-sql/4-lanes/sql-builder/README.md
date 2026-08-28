@@ -52,6 +52,24 @@ const counts = await db.posts
   .all();
 ```
 
+### Reusable where filters
+
+Use `WhereFilter<Contract, Namespace, Table>` when a SQL-builder predicate needs to be constructed outside `.where()`. The contract coordinate preserves field and operator autocomplete and reports invalid predicates where the helper is authored.
+
+```typescript
+import type { WhereFilter } from '@prisma/orm-postgres/builder/types';
+import type { Contract } from './prisma/contract.d';
+
+function userById(id: string): WhereFilter<Contract, 'public', 'user'> {
+  return (fields, operators) => operators.eq(fields.id, id);
+}
+
+const plan = db.sql.public.user
+  .select('id', 'email')
+  .where(userById('00000000-0000-0000-0000-000000000001'))
+  .build();
+```
+
 ## Architecture
 
 - **Domain:** SQL

@@ -335,7 +335,7 @@ class CollectionImpl<
     ) => WhereArg,
   ): Collection<TContract, ModelName, Row, WithWhereState<State>>;
   where(
-    filters: ShorthandWhereFilter<TContract, ModelName, State['nsId']>,
+    filters: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Collection<TContract, ModelName, Row, WithWhereState<State>>;
   where(
     input:
@@ -356,12 +356,12 @@ class CollectionImpl<
             State['nsId']
           >,
         ) => WhereArg)
-      | ShorthandWhereFilter<TContract, ModelName, State['nsId']>,
+      | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Collection<TContract, ModelName, Row, WithWhereState<State>> {
     const whereArg =
       typeof input === 'function'
         ? input(
-            createModelAccessor<TContract, ModelName, State['variantName']>(
+            createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
               this.ctx.context,
               this.namespaceId,
               this.modelName,
@@ -717,15 +717,25 @@ class CollectionImpl<
   orderBy(
     selection:
       | ((
-          model: VariantAwareModelAccessor<TContract, ModelName, State['variantName']>,
+          model: VariantAwareModelAccessor<
+            TContract,
+            ModelName,
+            State['variantName'],
+            State['nsId']
+          >,
         ) => OrderByItem)
       | ReadonlyArray<
           (
-            model: VariantAwareModelAccessor<TContract, ModelName, State['variantName']>,
+            model: VariantAwareModelAccessor<
+              TContract,
+              ModelName,
+              State['variantName'],
+              State['nsId']
+            >,
           ) => OrderByItem
         >,
   ): Collection<TContract, ModelName, Row, WithOrderByState<State>> {
-    const accessor = createModelAccessor<TContract, ModelName, State['variantName']>(
+    const accessor = createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
       this.ctx.context,
       this.namespaceId,
       this.modelName,
@@ -1065,7 +1075,7 @@ class CollectionImpl<
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null>;
   async first(
-    filter: ShorthandWhereFilter<TContract, ModelName, State['nsId']>,
+    filter: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null>;
   async first(
@@ -1078,7 +1088,7 @@ class CollectionImpl<
             State['nsId']
           >,
         ) => WhereArg)
-      | ShorthandWhereFilter<TContract, ModelName, State['nsId']>,
+      | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null> {
     const scoped =
@@ -2339,7 +2349,7 @@ class CollectionImpl<
         this.namespaceId,
         this.modelName,
         blindCast<
-          ShorthandWhereFilter<TContract, ModelName>,
+          ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
           'identity columns were resolved from this model before building the shorthand filter'
         >(criterion),
       ) ?? null
@@ -2359,7 +2369,7 @@ class CollectionImpl<
       this.namespaceId,
       this.modelName,
       blindCast<
-        ShorthandWhereFilter<TContract, ModelName>,
+        ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
         'mutation reload criterion contains resolved fields for this model'
       >(criterion),
     );

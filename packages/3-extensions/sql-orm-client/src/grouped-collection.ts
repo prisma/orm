@@ -78,7 +78,7 @@ export class GroupedCollection<
   private readonly contract: TContract;
   readonly modelName: ModelName;
   readonly tableName: string;
-  readonly namespaceId: string;
+  readonly namespaceId: NsId;
   readonly preGroupState: CollectionState;
   readonly groupByFields: readonly string[];
   readonly groupByColumns: readonly string[];
@@ -94,7 +94,10 @@ export class GroupedCollection<
     this.contract = ctx.context.contract;
     this.modelName = modelName;
     this.tableName = options.tableName;
-    this.namespaceId = options.namespaceId;
+    this.namespaceId = blindCast<
+      NsId,
+      'GroupedCollection preserves the namespace type supplied by its parent collection'
+    >(options.namespaceId);
     this.preGroupState = options.preGroupState;
     this.groupByFields = options.groupByFields;
     this.groupByColumns = options.groupByColumns;
@@ -167,7 +170,7 @@ export class GroupedCollection<
         { meta: { method: 'orderBy', model: this.modelName } },
       );
     }
-    const accessor = createModelAccessor<TContract, ModelName>(
+    const accessor = createModelAccessor<TContract, ModelName, undefined, NsId>(
       this.ctx.context,
       this.namespaceId,
       this.modelName,

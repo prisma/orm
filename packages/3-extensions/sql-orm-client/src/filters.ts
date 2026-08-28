@@ -32,12 +32,13 @@ export function all(): AnyExpression {
 
 export function shorthandToWhereExpr<
   TContract extends Contract<SqlStorage>,
+  NsId extends string,
   ModelName extends string,
 >(
   context: ExecutionContext<TContract>,
-  namespaceId: string,
+  namespaceId: NsId,
   modelName: ModelName,
-  filters: ShorthandWhereFilter<TContract, ModelName>,
+  filters: ShorthandWhereFilter<TContract, NsId, ModelName>,
 ): AnyExpression | undefined {
   const contract = context.contract;
   const tableName = resolveModelTableName(contract, namespaceId, modelName);

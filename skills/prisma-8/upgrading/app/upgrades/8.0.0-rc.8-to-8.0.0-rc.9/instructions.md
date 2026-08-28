@@ -16,6 +16,9 @@ changes:
       glob: "**/*.prisma"
       matches:
         - '\bweights\s*:\s*"\{\s*(?:\\.|[^"\\])*\}"'
+  - id: namespace-qualify-sql-orm-filter-types
+    summary: |
+      SQL ORM reusable filter types now require the domain namespace before the model name: `<Contract, Namespace, Model>`.
 ---
 
 # 8.0.0-rc.8 → 8.0.0-rc.9 — User upgrade instructions
@@ -27,3 +30,7 @@ For every Prisma schema matched by `detection`, replace encoded projection strin
 ## `mongo-text-index-weights-use-native-records`
 
 For every Prisma schema matched by `detection`, replace the encoded JSON string passed to `weights` with a native PSL record. For example, change `weights: "{\"title\": 10}"` to `weights: { title: 10 }`, preserving every field name and numeric weight.
+
+## `namespace-qualify-sql-orm-filter-types`
+
+Find TypeScript references to `ShorthandWhereFilter`, `RelationPredicate`, `RelationPredicateInput`, and `RelationFilterAccessor`. Add the model's domain namespace as the second generic argument and place the model name third. Rewrite `ShorthandWhereFilter<Contract, Model>` as `ShorthandWhereFilter<Contract, Namespace, Model>` and `ShorthandWhereFilter<Contract, Model, Namespace>` as `ShorthandWhereFilter<Contract, Namespace, Model>`. Rewrite the relation types from `<Contract, Model>` to `<Contract, Namespace, Model>`. Use the namespace facet through which the model is queried, such as `'public'` for `db.public.User`.
