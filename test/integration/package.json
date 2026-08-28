@@ -73,6 +73,7 @@
   },
   "devDependencies": {
     "@internal/framework-components": "workspace:8.0.0-rc.8",
+    "@internal/language-server": "workspace:8.0.0-rc.8",
     "@internal/middleware-cache": "workspace:8.0.0-rc.8",
     "@internal/mongo-lowering": "workspace:8.0.0-rc.8",
     "@prisma/cli-engine": "0.3.0",

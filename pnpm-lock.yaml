@@ -5350,6 +5350,9 @@ importers:
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.8
         version: link:../../packages/1-framework/1-core/framework-components
+      '@internal/language-server':
+        specifier: workspace:8.0.0-rc.8
+        version: link:../../packages/1-framework/3-tooling/language-server
       '@internal/middleware-cache':
         specifier: workspace:8.0.0-rc.8
         version: link:../../packages/3-extensions/middleware-cache
