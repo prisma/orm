@@ -91,53 +91,10 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build packages (restored from Turbo cache)
         run: pnpm build
-      - name: Lint dependencies
-        run: pnpm lint:deps
-      - name: Lint code shape
-        run: pnpm lint:code
-      - name: Lint packages
-        run: pnpm lint:packages
-      - name: Lint examples
-        run: pnpm lint:examples
-      - name: Validate rules
-        run: pnpm lint:rules
-      - name: Validate rule symlinks
-        run: pnpm lint:rules:symlinks
-      - name: Validate skills
-        run: pnpm lint:skills
-      - name: Check rules footprint
-        run: pnpm lint:rules:footprint
-      - name: Validate package READMEs
-        run: pnpm lint:docs
-      - name: Validate package manifests (license declarations)
-        run: pnpm lint:manifests
-      - name: Lint workflow triggers (forbid Pwn Request pattern)
-        run: pnpm lint:workflows
-      - name: Test scripts/
-        run: pnpm test:scripts
-      - name: Lint casts
-        run: pnpm lint:casts
-      - name: Lint throws
-        run: pnpm lint:throws
-      - name: Lint framework vocabulary
-        run: pnpm lint:framework-vocabulary
-      - name: Lint consumer internal imports
-        run: pnpm lint:consumer-internal-imports
-      - name: Lint the legacy product name
-        run: pnpm lint:legacy-name
-
-      - name: Lint publishability matches the directory layout
-        run: pnpm lint:publishability
-      - name: Check upgrade-instruction coverage
+      - name: Run lint gates
         env:
           BASE: ${{ github.base_ref || 'main' }}
-        run: pnpm check:upgrade-coverage --mode pr --prev "origin/$BASE"
-      - name: Check error-reference completeness
-        run: pnpm check:error-reference
-      - name: Check release notes
-        env:
-          BASE: ${{ github.base_ref || 'main' }}
-        run: pnpm check:release-notes --mode pr --prev "origin/$BASE"
+        run: pnpm lint:ci
 
   fixtures:
     name: Fixtures
