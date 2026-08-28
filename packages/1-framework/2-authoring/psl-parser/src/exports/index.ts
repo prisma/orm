@@ -36,6 +36,8 @@ export {
   namespacePslExtensionBlocks,
 } from '@internal/framework-components/psl-ast';
 export { getPositionalArgument, parseQuotedStringLiteral } from '../attribute-helpers';
+export type { AssembledAttributeSpecs } from '../attribute-spec/assemble';
+export { assembleAttributeSpecs } from '../attribute-spec/assemble';
 export { bool } from '../attribute-spec/combinators/bool';
 export { leafDiagnostic } from '../attribute-spec/combinators/diagnostic';
 export { entityRef } from '../attribute-spec/combinators/entity-ref';
@@ -57,6 +59,13 @@ export type { ArgBindingSpec } from '../attribute-spec/interpret';
 export { interpretArgs, interpretAttribute } from '../attribute-spec/interpret';
 export { modelAttribute } from '../attribute-spec/model-attribute';
 export { optional } from '../attribute-spec/optional';
+export type {
+  AttributeSpecContext,
+  AttributeSpecNamespace,
+  FieldAttributeSpecContext,
+  FieldAttributeSpecFactory,
+  ModelAttributeSpecFactory,
+} from '../attribute-spec/spec-context';
 export type {
   ArgType,
   AttributeLevel,
