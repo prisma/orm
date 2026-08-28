@@ -162,22 +162,14 @@ jobs:
         run: pnpm fixtures:check
 
   test-packages:
-    name: Package Tests (${{ matrix.shard }})
+    name: Package Tests (${{ matrix.index }}/4)
     needs: [build, changes]
     if: needs.changes.outputs.inert != 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - index: 1
-            shard: 1/4
-          - index: 2
-            shard: 2/4
-          - index: 3
-            shard: 3/4
-          - index: 4
-            shard: 4/4
+        index: [1, 2, 3, 4]
     env:
       TEST_TIMEOUT_MULTIPLIER: 2
     services:
@@ -210,7 +202,7 @@ jobs:
         continue-on-error: true
         env:
           VITEST_COVERAGE_SHARD: ${{ matrix.index }}
-        run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=${{ matrix.shard }}
+        run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=${{ matrix.index }}/4
       # Run-scoped cache keys transport blobs because download-artifact is not
       # allowlisted. Shard-first prefixes support partial reruns without crossing runs.
       - name: Save package coverage shard
@@ -230,6 +222,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TEST_TIMEOUT_MULTIPLIER: 2
+      RUN_TEST_STEPS: ${{ needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true' }}
       # Used by examples/prisma-8-cloudflare-worker's vitest-pool-workers
       # integration test. Mirrors the .env.example pattern; the container is
       # brought up by `pnpm db:up` below (docker-compose, not a service
@@ -256,19 +249,21 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Install dependencies (skip bin linking)
-        if: needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true'
+        if: env.RUN_TEST_STEPS == 'true'
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build packages (restored from Turbo cache; needed for bin linking)
-        if: needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true'
+        if: env.RUN_TEST_STEPS == 'true'
         run: pnpm build
       - name: Link bins
-        if: needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true'
+        if: env.RUN_TEST_STEPS == 'true'
         run: pnpm install --frozen-lockfile
       - name: Start cloudflare-worker Postgres (5433, pg_stat_statements)
-        if: needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true'
+        if: env.RUN_TEST_STEPS == 'true'
         run: pnpm --filter prisma-8-cloudflare-worker db:up
+      # GitHub Actions has no step-level matrix, and the merge needs every blob
+      # in this workspace, so the four fan-in restores remain explicit.
       - name: Restore package coverage shard 1
-        if: ${{ !cancelled() && needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true' }}
+        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .vitest/blob/blob-1-4.json
@@ -277,7 +272,7 @@ jobs:
             package-coverage-${{ runner.os }}-${{ github.run_id }}-1-
           fail-on-cache-miss: true
       - name: Restore package coverage shard 2
-        if: ${{ !cancelled() && needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true' }}
+        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .vitest/blob/blob-2-4.json
@@ -286,7 +281,7 @@ jobs:
             package-coverage-${{ runner.os }}-${{ github.run_id }}-2-
           fail-on-cache-miss: true
       - name: Restore package coverage shard 3
-        if: ${{ !cancelled() && needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true' }}
+        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .vitest/blob/blob-3-4.json
@@ -295,7 +290,7 @@ jobs:
             package-coverage-${{ runner.os }}-${{ github.run_id }}-3-
           fail-on-cache-miss: true
       - name: Restore package coverage shard 4
-        if: ${{ !cancelled() && needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true' }}
+        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .vitest/blob/blob-4-4.json
@@ -304,16 +299,16 @@ jobs:
             package-coverage-${{ runner.os }}-${{ github.run_id }}-4-
           fail-on-cache-miss: true
       - name: Merge package tests and coverage
-        if: ${{ !cancelled() && needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true' }}
+        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
         run: pnpm coverage:packages:merge
       - name: Report package coverage
-        if: ${{ !cancelled() && needs.changes.outputs.inert != 'true' }}
+        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
         run: pnpm coverage:report
       - name: Test examples
-        if: ${{ !cancelled() && needs.changes.outputs.inert != 'true' }}
+        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
         run: pnpm test:examples
       - name: Check working tree is clean
-        if: ${{ !cancelled() && needs.changes.outputs.inert != 'true' }}
+        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
         run: pnpm check:clean-tree
       - name: Propagate prerequisite or package-shard failure
         if: ${{ !cancelled() && (needs.build.result != 'success' || needs.changes.result != 'success' || (needs.changes.outputs.inert != 'true' && needs.test-packages.result != 'success')) }}

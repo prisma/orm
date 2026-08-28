@@ -290,13 +290,14 @@ describe('coverage config', () => {
       ?.body;
 
     assert.ok(shardJob);
-    assert.match(shardJob, /^ {4}name: Package Tests \(\$\{\{ matrix\.shard \}\}\)$/m);
+    assert.match(shardJob, /^ {4}name: Package Tests \(\$\{\{ matrix\.index \}\}\/4\)$/m);
     assert.match(shardJob, /^ {4}if: needs\.changes\.outputs\.inert != 'true'$/m);
-    assert.equal(shardJob.match(/shard: [1-4]\/4/g)?.length, 4);
+    assert.match(shardJob, /index: \[1, 2, 3, 4\]/);
+    assert.doesNotMatch(shardJob, /^\s+shard:/m);
     assert.match(shardJob, /VITEST_COVERAGE_SHARD: \$\{\{ matrix\.index \}\}/);
     assert.match(
       shardJob,
-      /run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=\$\{\{ matrix\.shard \}\}/,
+      /run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=\$\{\{ matrix\.index \}\}\/4/,
     );
     assert.match(shardJob, /uses: actions\/cache\/save@27d5ce7f107fe9357f9df03efb73ab90386fccae/);
     assert.match(shardJob, /path: \.vitest\/blob\/blob-\$\{\{ matrix\.index \}\}-4\.json/);
@@ -312,6 +313,18 @@ describe('coverage config', () => {
     assert.ok(testJob);
     assert.match(testJob, /^ {4}name: Test$/m);
     assert.match(testJob, /^ {4}needs: \[build, changes, test-packages\]$/m);
+    assert.match(
+      testJob,
+      /RUN_TEST_STEPS: \$\{\{ needs\.build\.result == 'success' && needs\.changes\.result == 'success' && needs\.changes\.outputs\.inert != 'true' \}\}/,
+    );
+    assert.equal(
+      testJob.match(
+        /needs\.build\.result == 'success' && needs\.changes\.result == 'success' && needs\.changes\.outputs\.inert != 'true'/g,
+      )?.length,
+      1,
+    );
+    assert.match(testJob, /if: env\.RUN_TEST_STEPS == 'true'/);
+    assert.match(testJob, /GitHub Actions has no step-level matrix/);
     assert.equal(
       testJob.match(/uses: actions\/cache\/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae/g)
         ?.length,
@@ -327,16 +340,16 @@ describe('coverage config', () => {
     assert.match(testJob, /needs\.test-packages\.result != 'success'[\s\S]*run: exit 1/);
     assert.match(
       testJob,
-      /run: pnpm coverage:packages:merge\n {6}- name: Report package coverage\n {8}if: \$\{\{ !cancelled\(\) && needs\.changes\.outputs\.inert != 'true' \}\}\n {8}run: pnpm coverage:report/,
+      /run: pnpm coverage:packages:merge\n {6}- name: Report package coverage\n {8}if: \$\{\{ !cancelled\(\) && env\.RUN_TEST_STEPS == 'true' \}\}\n {8}run: pnpm coverage:report/,
     );
     assert.match(
       testJob,
-      /- name: Test examples\n {8}if: \$\{\{ !cancelled\(\) && needs\.changes\.outputs\.inert != 'true' \}\}\n {8}run: pnpm test:examples/,
+      /- name: Test examples\n {8}if: \$\{\{ !cancelled\(\) && env\.RUN_TEST_STEPS == 'true' \}\}\n {8}run: pnpm test:examples/,
     );
     assert.doesNotMatch(workflow, /\n {2}coverage:\n/);
     assert.equal(
       workflow.match(
-        /run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob/g,
+        /run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=\$\{\{ matrix\.index \}\}\/4/g,
       )?.length,
       1,
     );
