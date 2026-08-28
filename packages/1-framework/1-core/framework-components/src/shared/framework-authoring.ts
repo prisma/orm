@@ -507,12 +507,6 @@ export interface AuthoringModelAttributeLoweringOutput {
  * - `attribute` is the bare `@@` attribute name this descriptor claims and,
  *   by the one-string rule, the `entries` slot its lowered entities are
  *   grouped under (`entries[attribute][key]`).
- * - `spec` is opaque to the framework core: an ADR-231 attribute-spec kit
- *   `AttributeSpec<Out>` value (`modelAttribute(name, {...})` from
- *   `@internal/psl-parser`). Framework core does not depend on
- *   psl-parser and never inspects this field; the family interpreter,
- *   which does depend on psl-parser, parses the attribute's arguments
- *   against it.
  * - `lower` receives the parsed arguments and the declaring model's
  *   context, and returns the entity to file into `entries`, or `undefined`
  *   after pushing a diagnostic via `ctx.diagnostics`.
