@@ -641,7 +641,6 @@ export const postgresAuthoringPslBlockDescriptors = {
 
 const postgresRlsSpec = modelAttribute('rls', {});
 
-/** `@@rls` takes nothing from the declaring model, so the factory returns one hoisted spec and its identity stays stable across calls. */
 const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
 
 /**

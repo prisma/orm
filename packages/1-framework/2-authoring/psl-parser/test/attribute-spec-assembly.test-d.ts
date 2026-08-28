@@ -41,11 +41,6 @@ test('a field factory is not usable where a model factory is required', () => {
   expectTypeOf<FieldAttributeSpecFactory>().not.toExtend<ModelAttributeSpecFactory>();
 });
 
-// The reverse direction is intentional, not an oversight: parameters are
-// contravariant and `FieldAttributeSpecContext extends AttributeSpecContext`,
-// so a model factory is assignable where a field factory is required — it
-// simply ignores the extra `field`. The two levels are deliberately not
-// mutually exclusive.
 test('a model factory is usable where a field factory is required', () => {
   expectTypeOf<ModelAttributeSpecFactory>().toExtend<FieldAttributeSpecFactory>();
 });

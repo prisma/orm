@@ -8,13 +8,6 @@ import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import type { FieldAttributeSpecFactory, ModelAttributeSpecFactory } from './spec-context';
 
-/**
- * The composed stack's attribute specs as plain frozen data — deliberately
- * not a service. Consumers that know which attribute they want read their own
- * registered namespace, where access is total and `InferAttr`-typed; this view
- * exists for the consumers that genuinely face unknown names (editor
- * enumeration, unknown-attribute diagnostics), where partiality is inherent.
- */
 export interface AssembledAttributeSpecs {
   readonly model: Readonly<Record<string, ModelAttributeSpecFactory>>;
   readonly field: Readonly<Record<string, FieldAttributeSpecFactory>>;
@@ -32,13 +25,6 @@ function* modelAttributeDescriptors(
   }
 }
 
-/**
- * Merges the two sources of model-level specs — the family's built-ins and
- * the `spec` factories of contributed model-attribute descriptors, keyed by
- * the attribute name each descriptor claims rather than by its registration
- * path — and narrows the field-level built-ins. Field specs come from
- * built-ins alone; model-attribute descriptors are a model-level channel.
- */
 export function assembleAttributeSpecs(
   contributions: AssembledAuthoringContributions,
 ): AssembledAttributeSpecs {

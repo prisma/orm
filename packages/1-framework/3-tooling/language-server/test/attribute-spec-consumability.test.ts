@@ -11,13 +11,6 @@ vi.mock('@internal/config-loader', { spy: true });
 
 const rlsSpec = modelAttribute('rls', {});
 
-/**
- * A target pack registering an `@@rls` model attribute the way a real one
- * does — under a namespaced registration path, so the path segment
- * (`security`) and the claimed attribute name (`rls`) differ. Enumerating
- * `modelAttributes` by key would surface the segment; only
- * `assembleAttributeSpecs` surfaces the attribute name.
- */
 const targetPack = {
   kind: 'target',
   id: 'demo-target',
@@ -72,8 +65,6 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     const specs = assembleAttributeSpecs(contributions);
 
     expect('rls' in specs.model).toBe(true);
-    // The registration path is `security.rlsMarker`; reading the namespace
-    // tree's own keys would never yield the attribute name.
     expect(Object.keys(contributions.modelAttributes)).toEqual(['security']);
   });
 
