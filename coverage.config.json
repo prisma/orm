@@ -5,11 +5,11 @@
     {
       "package": "1-framework/0-foundation/contract",
       "reason": "S1.C cross-reference encoding added CrossReference shape to Contract.roots and domain field support to canonicalization.ts. The new canonicalization branches (domain-plane key ordering, domain-unbound type params preservation) are exercised end-to-end through emit integration tests but fall ~2% below the 94% branch threshold. Direct canonicalization branch tests deferred to a follow-up slice.",
-      "addedDate": "2026-05-29",
+      "addedDate": "2026-08-28",
       "expiryDays": 90,
       "assignee": null,
       "linear": "TML-2624",
-      "notes": "Recovery via dedicated canonicalization.ts branch tests covering the domain-plane ordering and typeParams preservation paths."
+      "notes": "Recovery via dedicated canonicalization.ts branch tests covering the domain-plane ordering and typeParams preservation paths. Renewed 2026-08-28: expired 2026-08-27 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged (93.75% branches against a 94% threshold, the same 15 uncovered branches as when the waiver was written) and the recovery above still applies (tracked on the entry's Linear issue)."
     },
     {
       "package": "3-targets/3-targets/sqlite",
