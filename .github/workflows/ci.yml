@@ -203,26 +203,26 @@ jobs:
         env:
           VITEST_COVERAGE_SHARD: ${{ matrix.index }}
         run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=${{ matrix.index }}/4
-      # Run-scoped cache keys transport blobs because download-artifact is not
-      # allowlisted. Shard-first prefixes support partial reruns without crossing runs.
-      - name: Save package coverage shard
+      - name: Upload package coverage shard
         if: ${{ !cancelled() }}
-        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
+          name: package-coverage-${{ matrix.index }}
           path: .vitest/blob/blob-${{ matrix.index }}-4.json
-          key: package-coverage-${{ runner.os }}-${{ github.run_id }}-${{ matrix.index }}-${{ github.run_attempt }}
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
       - name: Propagate package test failure
         if: steps.package-tests.outcome == 'failure'
         run: exit 1
 
-  test:
-    name: Test
-    needs: [build, changes, test-packages]
-    if: ${{ !cancelled() }}
+  test-examples:
+    name: Test Examples
+    needs: [build, changes]
+    if: needs.changes.outputs.inert != 'true'
     runs-on: ubuntu-latest
     env:
       TEST_TIMEOUT_MULTIPLIER: 2
-      RUN_TEST_STEPS: ${{ needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true' }}
       # Used by examples/prisma-8-cloudflare-worker's vitest-pool-workers
       # integration test. Mirrors the .env.example pattern; the container is
       # brought up by `pnpm db:up` below (docker-compose, not a service
@@ -249,69 +249,61 @@ jobs:
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Install dependencies (skip bin linking)
-        if: env.RUN_TEST_STEPS == 'true'
         run: pnpm install --frozen-lockfile --ignore-scripts
       - name: Build packages (restored from Turbo cache; needed for bin linking)
-        if: env.RUN_TEST_STEPS == 'true'
         run: pnpm build
       - name: Link bins
-        if: env.RUN_TEST_STEPS == 'true'
         run: pnpm install --frozen-lockfile
       - name: Start cloudflare-worker Postgres (5433, pg_stat_statements)
-        if: env.RUN_TEST_STEPS == 'true'
         run: pnpm --filter prisma-8-cloudflare-worker db:up
-      # GitHub Actions has no step-level matrix, and the merge needs every blob
-      # in this workspace, so the four fan-in restores remain explicit.
-      - name: Restore package coverage shard 1
-        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: .vitest/blob/blob-1-4.json
-          key: package-coverage-${{ runner.os }}-${{ github.run_id }}-1-${{ github.run_attempt }}
-          restore-keys: |
-            package-coverage-${{ runner.os }}-${{ github.run_id }}-1-
-          fail-on-cache-miss: true
-      - name: Restore package coverage shard 2
-        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: .vitest/blob/blob-2-4.json
-          key: package-coverage-${{ runner.os }}-${{ github.run_id }}-2-${{ github.run_attempt }}
-          restore-keys: |
-            package-coverage-${{ runner.os }}-${{ github.run_id }}-2-
-          fail-on-cache-miss: true
-      - name: Restore package coverage shard 3
-        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: .vitest/blob/blob-3-4.json
-          key: package-coverage-${{ runner.os }}-${{ github.run_id }}-3-${{ github.run_attempt }}
-          restore-keys: |
-            package-coverage-${{ runner.os }}-${{ github.run_id }}-3-
-          fail-on-cache-miss: true
-      - name: Restore package coverage shard 4
-        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
-        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
-        with:
-          path: .vitest/blob/blob-4-4.json
-          key: package-coverage-${{ runner.os }}-${{ github.run_id }}-4-${{ github.run_attempt }}
-          restore-keys: |
-            package-coverage-${{ runner.os }}-${{ github.run_id }}-4-
-          fail-on-cache-miss: true
-      - name: Merge package tests and coverage
-        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
-        run: pnpm coverage:packages:merge
-      - name: Report package coverage
-        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
-        run: pnpm coverage:report
       - name: Test examples
-        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
         run: pnpm test:examples
       - name: Check working tree is clean
-        if: ${{ !cancelled() && env.RUN_TEST_STEPS == 'true' }}
         run: pnpm check:clean-tree
-      - name: Propagate prerequisite or package-shard failure
-        if: ${{ !cancelled() && (needs.build.result != 'success' || needs.changes.result != 'success' || (needs.changes.outputs.inert != 'true' && needs.test-packages.result != 'success')) }}
+
+  coverage:
+    name: Coverage
+    needs: [build, changes, test-packages]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.changes.result == 'success' && needs.changes.outputs.inert != 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build packages (restored from Turbo cache)
+        run: pnpm build
+      - name: Download package coverage shards
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: package-coverage-*
+          path: .vitest/blob
+          merge-multiple: true
+      - name: Verify package coverage shards
+        run: |
+          test -f .vitest/blob/blob-1-4.json
+          test -f .vitest/blob/blob-2-4.json
+          test -f .vitest/blob/blob-3-4.json
+          test -f .vitest/blob/blob-4-4.json
+      - name: Merge package tests and coverage
+        run: pnpm coverage:packages:merge
+      - name: Report package coverage
+        if: ${{ !cancelled() }}
+        run: pnpm coverage:report
+      - name: Check working tree is clean
+        if: ${{ !cancelled() }}
+        run: pnpm check:clean-tree
+
+  test:
+    name: Test
+    needs: [build, changes, test-packages, test-examples, coverage]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Propagate test failures
+        if: ${{ needs.build.result != 'success' || needs.changes.result != 'success' || (needs.changes.outputs.inert != 'true' && (needs.test-packages.result != 'success' || needs.test-examples.result != 'success' || needs.coverage.result != 'success')) }}
         run: exit 1
 
   test-e2e:

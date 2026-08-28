@@ -281,10 +281,16 @@ describe('coverage config', () => {
     assert.match(rootVitestConfig, /reportOnFailure:\s*true/);
   });
 
-  it('shards package tests and merges coverage behind one Test gate', async () => {
+  it('fans sharded coverage artifacts into one stable Test gate', async () => {
     const repositoryRoot = join(import.meta.dirname, '..');
     const workflow = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
-    const shardJob = workflow.match(/\n {2}test-packages:\n(?<body>[\s\S]*?)(?=\n {2}test:\n)/)
+    const shardJob = workflow.match(
+      /\n {2}test-packages:\n(?<body>[\s\S]*?)(?=\n {2}test-examples:\n)/,
+    )?.groups?.body;
+    const examplesJob = workflow.match(
+      /\n {2}test-examples:\n(?<body>[\s\S]*?)(?=\n {2}coverage:\n)/,
+    )?.groups?.body;
+    const coverageJob = workflow.match(/\n {2}coverage:\n(?<body>[\s\S]*?)(?=\n {2}test:\n)/)
       ?.groups?.body;
     const testJob = workflow.match(/\n {2}test:\n(?<body>[\s\S]*?)(?=\n {2}test-e2e:\n)/)?.groups
       ?.body;
@@ -293,66 +299,58 @@ describe('coverage config', () => {
     assert.match(shardJob, /^ {4}name: Package Tests \(\$\{\{ matrix\.index \}\}\/4\)$/m);
     assert.match(shardJob, /^ {4}if: needs\.changes\.outputs\.inert != 'true'$/m);
     assert.match(shardJob, /index: \[1, 2, 3, 4\]/);
-    assert.doesNotMatch(shardJob, /^\s+shard:/m);
     assert.match(shardJob, /VITEST_COVERAGE_SHARD: \$\{\{ matrix\.index \}\}/);
     assert.match(
       shardJob,
       /run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=\$\{\{ matrix\.index \}\}\/4/,
     );
-    assert.match(shardJob, /uses: actions\/cache\/save@27d5ce7f107fe9357f9df03efb73ab90386fccae/);
-    assert.match(shardJob, /path: \.vitest\/blob\/blob-\$\{\{ matrix\.index \}\}-4\.json/);
     assert.match(
       shardJob,
-      /key: package-coverage-\$\{\{ runner\.os \}\}-\$\{\{ github\.run_id \}\}-\$\{\{ matrix\.index \}\}-\$\{\{ github\.run_attempt \}\}/,
+      /uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/,
     );
+    assert.match(shardJob, /name: package-coverage-\$\{\{ matrix\.index \}\}/);
+    assert.match(shardJob, /path: \.vitest\/blob\/blob-\$\{\{ matrix\.index \}\}-4\.json/);
+    assert.match(shardJob, /if-no-files-found: error/);
+    assert.match(shardJob, /include-hidden-files: true/);
     assert.match(
       shardJob,
       /continue-on-error: true[\s\S]*if: steps\.package-tests\.outcome == 'failure'\n {8}run: exit 1/,
     );
 
+    assert.ok(examplesJob);
+    assert.match(examplesJob, /^ {4}name: Test Examples$/m);
+    assert.match(examplesJob, /^ {4}needs: \[build, changes\]$/m);
+    assert.match(examplesJob, /run: pnpm test:examples/);
+
+    assert.ok(coverageJob);
+    assert.match(coverageJob, /^ {4}name: Coverage$/m);
+    assert.match(coverageJob, /^ {4}needs: \[build, changes, test-packages\]$/m);
+    assert.doesNotMatch(coverageJob, /^ {4}services:/m);
+    assert.match(
+      coverageJob,
+      /uses: actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c/,
+    );
+    assert.match(coverageJob, /pattern: package-coverage-\*/);
+    assert.match(coverageJob, /path: \.vitest\/blob/);
+    assert.match(coverageJob, /merge-multiple: true/);
+    assert.equal(coverageJob.match(/test -f \.vitest\/blob\/blob-[1-4]-4\.json/g)?.length, 4);
+    assert.match(
+      coverageJob,
+      /run: pnpm coverage:packages:merge\n {6}- name: Report package coverage\n {8}if: \$\{\{ !cancelled\(\) \}\}\n {8}run: pnpm coverage:report/,
+    );
+
     assert.ok(testJob);
     assert.match(testJob, /^ {4}name: Test$/m);
-    assert.match(testJob, /^ {4}needs: \[build, changes, test-packages\]$/m);
     assert.match(
       testJob,
-      /RUN_TEST_STEPS: \$\{\{ needs\.build\.result == 'success' && needs\.changes\.result == 'success' && needs\.changes\.outputs\.inert != 'true' \}\}/,
+      /^ {4}needs: \[build, changes, test-packages, test-examples, coverage\]$/m,
     );
-    assert.equal(
-      testJob.match(
-        /needs\.build\.result == 'success' && needs\.changes\.result == 'success' && needs\.changes\.outputs\.inert != 'true'/g,
-      )?.length,
-      1,
-    );
-    assert.match(testJob, /if: env\.RUN_TEST_STEPS == 'true'/);
-    assert.match(testJob, /GitHub Actions has no step-level matrix/);
-    assert.equal(
-      testJob.match(/uses: actions\/cache\/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae/g)
-        ?.length,
-      4,
-    );
-    assert.equal(testJob.match(/fail-on-cache-miss: true/g)?.length, 4);
-    assert.equal(
-      testJob.match(
-        /path: \.vitest\/blob\/blob-([1-4])-4\.json\n {10}key: package-coverage-\$\{\{ runner\.os \}\}-\$\{\{ github\.run_id \}\}-\1-\$\{\{ github\.run_attempt \}\}\n {10}restore-keys: \|\n {12}package-coverage-\$\{\{ runner\.os \}\}-\$\{\{ github\.run_id \}\}-\1-/g,
-      )?.length,
-      4,
-    );
-    assert.match(testJob, /needs\.test-packages\.result != 'success'[\s\S]*run: exit 1/);
-    assert.match(
-      testJob,
-      /run: pnpm coverage:packages:merge\n {6}- name: Report package coverage\n {8}if: \$\{\{ !cancelled\(\) && env\.RUN_TEST_STEPS == 'true' \}\}\n {8}run: pnpm coverage:report/,
-    );
-    assert.match(
-      testJob,
-      /- name: Test examples\n {8}if: \$\{\{ !cancelled\(\) && env\.RUN_TEST_STEPS == 'true' \}\}\n {8}run: pnpm test:examples/,
-    );
-    assert.doesNotMatch(workflow, /\n {2}coverage:\n/);
-    assert.equal(
-      workflow.match(
-        /run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=\$\{\{ matrix\.index \}\}\/4/g,
-      )?.length,
-      1,
-    );
+    assert.match(testJob, /needs\.test-packages\.result != 'success'/);
+    assert.match(testJob, /needs\.test-examples\.result != 'success'/);
+    assert.match(testJob, /needs\.coverage\.result != 'success'/);
+    assert.match(testJob, /run: exit 1/);
+
+    assert.doesNotMatch(workflow, /actions\/cache\/(?:save|restore)@/);
     assert.equal(workflow.match(/run: pnpm coverage:packages:merge/g)?.length, 1);
     assert.equal(workflow.match(/run: pnpm coverage:report/g)?.length, 1);
     assert.equal(workflow.match(/run: pnpm test:examples/g)?.length, 1);
