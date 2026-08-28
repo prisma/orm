@@ -9,6 +9,7 @@ import type { Codec } from '../shared/codec';
 import type { AnyCodecDescriptor } from '../shared/codec-descriptor';
 import type { CodecLookup, CodecRef, CodecRegistry } from '../shared/codec-types';
 import type {
+  AuthoringAttributeSpecContributions,
   AuthoringContributions,
   AuthoringEntityTypeNamespace,
   AuthoringFieldNamespace,
@@ -21,6 +22,7 @@ import {
   assertResolvableTypeConstructorTemplates,
   collectContributedDescriptorPaths,
   collectScalarTypeConstructors,
+  mergeAuthoringAttributeSpecs,
   mergeAuthoringNamespaces,
 } from '../shared/framework-authoring';
 import type { ComponentMetadata } from '../shared/framework-components';
@@ -50,6 +52,8 @@ export interface AssembledAuthoringContributions {
   readonly entityTypes: AuthoringEntityTypeNamespace;
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
   readonly modelAttributes: AuthoringModelAttributeDescriptorNamespace;
+  /** Every family built-in attribute spec the composed components contribute, merged per level; both levels are present and may be empty. */
+  readonly attributeSpecs: AuthoringAttributeSpecContributions;
   /** The single {@link AuthoringContributions.valueObjectStorageType} declared across the composed components, validated at assembly against the merged `type` namespace. */
   readonly valueObjectStorageType?: string;
 }
@@ -179,6 +183,11 @@ export function assembleAuthoringContributions(
   const entityTypes = {} as Record<string, unknown>;
   const pslBlockDescriptors: Record<string, unknown> = {};
   const modelAttributes: Record<string, unknown> = {};
+  const attributeSpecs: {
+    readonly model: Record<string, unknown>;
+    readonly field: Record<string, unknown>;
+  } = { model: {}, field: {} };
+  const attributeSpecOwners = new Map<string, string>();
 
   const pathOwners = new Map<string, string>();
   const claimContributedPaths = (
@@ -263,6 +272,14 @@ export function assembleAuthoringContributions(
         'modelAttribute',
       );
     }
+    if (descriptor.authoring?.attributeSpecs) {
+      mergeAuthoringAttributeSpecs(
+        attributeSpecs,
+        descriptor.authoring.attributeSpecs,
+        descriptorId,
+        attributeSpecOwners,
+      );
+    }
   }
 
   const fieldNamespace = field as AuthoringFieldNamespace;
@@ -300,6 +317,7 @@ export function assembleAuthoringContributions(
     entityTypes: entityTypeNamespace,
     pslBlockDescriptors: pslBlockDescriptorNamespace,
     modelAttributes: modelAttributeNamespace,
+    attributeSpecs,
     ...(valueObjectStorageDeclaration !== undefined
       ? { valueObjectStorageType: valueObjectStorageDeclaration.name }
       : {}),

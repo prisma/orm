@@ -414,6 +414,7 @@ export const pgvectorAuthoringContributions = {
   field: {},
   pslBlockDescriptors: {},
   modelAttributes: {},
+  attributeSpecs: { model: {}, field: {} },
   type: {
     ...postgresScalarAuthoringTypes,
     pgvector: {
@@ -556,6 +557,7 @@ export function createPostgresTestContext(
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
+      attributeSpecs: { model: {}, field: {} },
       valueObjectStorageType: 'Jsonb',
     },
     codecLookup: postgresCodecLookup,

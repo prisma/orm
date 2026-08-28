@@ -134,6 +134,7 @@ describe('assembleAuthoringContributions', () => {
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
+      attributeSpecs: { model: {}, field: {} },
     });
   });
 
@@ -1342,6 +1343,7 @@ describe('createControlStack', () => {
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
+      attributeSpecs: { model: {}, field: {} },
     });
     expect(state.scalarTypes).toEqual([]);
   });

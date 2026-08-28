@@ -507,12 +507,13 @@ export interface AuthoringModelAttributeLoweringOutput {
  * - `attribute` is the bare `@@` attribute name this descriptor claims and,
  *   by the one-string rule, the `entries` slot its lowered entities are
  *   grouped under (`entries[attribute][key]`).
- * - `spec` is opaque to the framework core: an ADR-231 attribute-spec kit
- *   `AttributeSpec<Out>` value (`modelAttribute(name, {...})` from
+ * - `spec` is opaque to the framework core: a *factory* over the family's
+ *   uniform attribute-spec context that returns an ADR-231 attribute-spec kit
+ *   `AttributeSpec<Out>` value (built with `modelAttribute(name, {...})` from
  *   `@internal/psl-parser`). Framework core does not depend on
  *   psl-parser and never inspects this field; the family interpreter,
- *   which does depend on psl-parser, parses the attribute's arguments
- *   against it.
+ *   which does depend on psl-parser, invokes the factory with the declaring
+ *   model's context and parses the attribute's arguments against the result.
  * - `lower` receives the parsed arguments and the declaring model's
  *   context, and returns the entity to file into `entries`, or `undefined`
  *   after pushing a diagnostic via `ctx.diagnostics`.
@@ -537,6 +538,24 @@ export type AuthoringModelAttributeDescriptorNamespace = {
     | AuthoringModelAttributeDescriptor
     | AuthoringModelAttributeDescriptorNamespace;
 };
+
+/**
+ * Family built-in attribute specs, keyed by bare attribute name within each
+ * level (`@@` model attributes and `@` field attributes are separate
+ * namespaces, so the same name may be claimed once at each).
+ *
+ * Entries are opaque to the framework core for the same reason
+ * {@link AuthoringModelAttributeDescriptor.spec} is: an entry is a factory
+ * over the family's uniform attribute-spec context returning an ADR-231
+ * `AttributeSpec`, a type `@internal/psl-parser` owns and core does not
+ * depend on. Core validates only that each entry is a function and that no
+ * name is claimed twice per level; the family layer, which does depend on
+ * psl-parser, restores the typing.
+ */
+export interface AuthoringAttributeSpecContributions {
+  readonly model: Readonly<Record<string, unknown>>;
+  readonly field: Readonly<Record<string, unknown>>;
+}
 
 export interface AuthoringContributions {
   readonly type?: AuthoringTypeNamespace;
@@ -563,6 +582,15 @@ export interface AuthoringContributions {
    * declarative spec and the lowering.
    */
   readonly modelAttributes?: AuthoringModelAttributeDescriptorNamespace;
+  /**
+   * Built-in attribute specs this contribution registers, split by the level
+   * the attribute is written at. Unlike {@link modelAttributes} — target and
+   * extension descriptors that also carry a lowering — these are the family's
+   * own built-ins: the attributes the family interpreter already understands,
+   * published so consumers facing an unknown attribute name (editor tooling,
+   * unknown-attribute diagnostics) can enumerate them.
+   */
+  readonly attributeSpecs?: AuthoringAttributeSpecContributions;
   /**
    * Names the top-level type constructor that stores embedded value-object
    * fields (fields typed as a value-object `type` block). A single named
@@ -842,6 +870,65 @@ export function mergeAuthoringNamespaces(
     }
 
     mergeAuthoringNamespaces(existingValue, sourceValue, currentPath, descriptorKind, label);
+  }
+}
+
+const ATTRIBUTE_SPEC_LEVELS = ['model', 'field'] as const;
+
+/**
+ * Merges one component's {@link AuthoringAttributeSpecContributions} into the
+ * assembly accumulator, checking at the composition boundary what the erased
+ * entry type cannot express: each level is a record, each entry is a spec
+ * factory, and no attribute name is claimed twice at the same level. `owners`
+ * carries the level-qualified claims made so far, so a duplicate is reported
+ * naming both contributors.
+ */
+export function mergeAuthoringAttributeSpecs(
+  target: { readonly model: Record<string, unknown>; readonly field: Record<string, unknown> },
+  source: AuthoringAttributeSpecContributions,
+  contributedBy: string,
+  owners: Map<string, string>,
+): void {
+  const invalidContribution = (detail: string) =>
+    runtimeError(
+      'CONTRACT.PACK_CONTRIBUTION_INVALID',
+      `Invalid authoring attributeSpecs contribution from descriptor "${contributedBy}". ${detail}`,
+    );
+  if (!isCopyableNamespaceObject(source)) {
+    throw invalidContribution('Expected a record carrying a "model" and a "field" level.');
+  }
+  for (const level of ATTRIBUTE_SPEC_LEVELS) {
+    const contributed: unknown = source[level];
+    if (!isCopyableNamespaceObject(contributed)) {
+      throw invalidContribution(
+        `The "${level}" level must be a record of spec factories keyed by attribute name.`,
+      );
+    }
+    for (const [attribute, factory] of Object.entries(contributed)) {
+      const entryPath = `${level}.${attribute}`;
+      const invalidEntry = (detail: string) =>
+        runtimeError(
+          'CONTRACT.PACK_CONTRIBUTION_INVALID',
+          `Invalid authoring attributeSpecs entry "${entryPath}" contributed by descriptor "${contributedBy}". ${detail}`,
+        );
+      if (attribute === '__proto__' || attribute === 'constructor' || attribute === 'prototype') {
+        throw invalidEntry(`Attribute names must not use "${attribute}".`);
+      }
+      if (typeof factory !== 'function') {
+        throw invalidEntry('Each entry must be a spec factory function.');
+      }
+      const existingOwner = owners.get(entryPath);
+      if (existingOwner !== undefined) {
+        throw runtimeError(
+          'CONTRACT.PACK_CONTRIBUTION_INVALID',
+          `Duplicate authoring attributeSpecs entry "${entryPath}". ` +
+            `Descriptor "${contributedBy}" conflicts with "${existingOwner}". ` +
+            'Each attribute name may be claimed once per level.',
+        );
+      }
+      owners.set(entryPath, contributedBy);
+      target[level][attribute] = factory;
+    }
   }
 }
 
