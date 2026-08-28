@@ -41,7 +41,7 @@ The classification lives in one place — the [`.github/actions/detect-inert-dif
 
 ## Constraints that shaped this
 
-- **Hardened Allowed-Actions policy.** The repository only permits an explicit SHA-pinned allow-list of actions. Package coverage transport uses SHA-pinned `actions/upload-artifact` and `actions/download-artifact`; both repositories must remain on that allow-list. See [supply chain](./supply-chain.md).
+- **Hardened Allowed-Actions policy.** GitHub-created actions in the `actions` and `github` organizations are allowed as a category, while non-GitHub actions require explicit approval. Package coverage transport uses full-SHA-pinned `actions/upload-artifact` and `actions/download-artifact`, so it needs no individual allow-list entries. See GitHub's [allowed-actions documentation](https://docs.github.com/en/organizations/managing-organization-settings/disabling-or-limiting-github-actions-for-your-organization#allowing-select-actions-and-reusable-workflows-to-run) and [supply chain](./supply-chain.md).
 - **No third-party cache action or remote-cache token.** Caching is first-party `actions/cache` only, preserving the fork-PR posture in [supply chain](./supply-chain.md) (fork PRs get cold caches by design).
 - **Least-privilege token.** `ci.yml` grants `GITHUB_TOKEN` only `contents: read`; the caches use the runner's cache runtime token, not `GITHUB_TOKEN`. Checkout steps set `persist-credentials: false`.
 
