@@ -20,6 +20,7 @@
     "@internal/framework-components": "workspace:8.0.0-rc.8",
     "@internal/migration-tools": "workspace:8.0.0-rc.8",
     "@internal/mongo-contract": "workspace:8.0.0-rc.8",
+    "@internal/mongo-contract-psl": "workspace:8.0.0-rc.8",
     "@internal/mongo-emitter": "workspace:8.0.0-rc.8",
     "@internal/mongo-query-ast": "workspace:8.0.0-rc.8",
     "@internal/mongo-schema-ir": "workspace:8.0.0-rc.8",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@internal/mongo-contract-ts": "workspace:8.0.0-rc.8",
+    "@internal/psl-parser": "workspace:8.0.0-rc.8",
     "@repo/test-utils": "workspace:8.0.0-rc.8",
     "@repo/tsconfig": "workspace:8.0.0-rc.8",
     "@repo/tsdown": "workspace:8.0.0-rc.8",

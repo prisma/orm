@@ -2222,6 +2222,9 @@ importers:
       '@internal/mongo-contract':
         specifier: workspace:8.0.0-rc.8
         version: link:../1-foundation/mongo-contract
+      '@internal/mongo-contract-psl':
+        specifier: workspace:8.0.0-rc.8
+        version: link:../2-authoring/contract-psl
       '@internal/mongo-emitter':
         specifier: workspace:8.0.0-rc.8
         version: link:../3-tooling/emitter
@@ -2250,6 +2253,9 @@ importers:
       '@internal/mongo-contract-ts':
         specifier: workspace:8.0.0-rc.8
         version: link:../2-authoring/contract-ts
+      '@internal/psl-parser':
+        specifier: workspace:8.0.0-rc.8
+        version: link:../../1-framework/2-authoring/psl-parser
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.8
         version: link:../../../test/utils

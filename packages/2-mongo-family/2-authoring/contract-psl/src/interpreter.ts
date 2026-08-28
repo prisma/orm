@@ -25,6 +25,7 @@ import {
   isAuthoringEntityTypeDescriptor,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
+import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   applyPolymorphicScopeToMongoIndex,
@@ -38,6 +39,7 @@ import {
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 import type { CollationOptions } from '@internal/mongo-value/mongodb-types';
 import type {
+  AttributeSpecContext,
   CompositeTypeSymbol,
   FieldSymbol,
   InferAttr,
@@ -56,16 +58,11 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { deriveJsonSchema, derivePolymorphicJsonSchema } from './derive-json-schema';
 import {
-  baseModelSpec,
-  buildIndexModelSpecs,
-  discriminatorModelSpec,
   findFieldAttributeNode,
   findModelAttributeNode,
   interpretFieldAttribute,
   interpretModelAttribute,
-  mapFieldSpec,
-  mapModelSpec,
-  relationFieldSpec,
+  mongoAttributeSpecs,
 } from './mongo-attribute-specs';
 import { getAttribute, lowerFirst } from './psl-helpers';
 
@@ -89,6 +86,7 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly sourceFile: SourceFile;
   readonly sourceId: string;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
+  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
   readonly codecLookup?: CodecLookup;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
   readonly authoringContributions?: AuthoringContributions;
@@ -116,6 +114,65 @@ function validateNamespaceBlocksForMongoTarget(input: {
   }
 }
 
+const UNLOWERED_FIELD_ATTRIBUTE_HINTS: ReadonlyMap<string, string> = new Map([
+  [
+    'default',
+    'Mongo has no default-value lowering; delete the attribute and apply the default in application code.',
+  ],
+  [
+    'updatedAt',
+    'Mongo has no default-value lowering; delete the attribute and set the timestamp in application code.',
+  ],
+]);
+
+const NATIVE_TYPE_ATTRIBUTE_HINT =
+  "Mongo has no native-type attributes; delete the attribute, the field's PSL type already selects its BSON codec.";
+
+function unsupportedFieldAttributeMessage(
+  ownerName: string,
+  fieldName: string,
+  attributeName: string,
+): string {
+  const base = `Field "${ownerName}.${fieldName}" uses unsupported attribute "@${attributeName}"`;
+  const hint = attributeName.startsWith('db.')
+    ? NATIVE_TYPE_ATTRIBUTE_HINT
+    : UNLOWERED_FIELD_ATTRIBUTE_HINTS.get(attributeName);
+  return hint === undefined ? base : `${base}. ${hint}`;
+}
+
+function reportUnknownAttributes(input: {
+  readonly models: readonly ModelSymbol[];
+  readonly compositeTypes: readonly CompositeTypeSymbol[];
+  readonly sourceId: string;
+  readonly diagnostics: ContractSourceDiagnostic[];
+}): void {
+  const { sourceId, diagnostics } = input;
+  for (const model of input.models) {
+    for (const attribute of model.attributes) {
+      if (Object.hasOwn(mongoAttributeSpecs.model, attribute.name)) continue;
+      diagnostics.push({
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: `Model "${model.name}" uses unsupported attribute "@@${attribute.name}"`,
+        sourceId,
+        span: attribute.span,
+      });
+    }
+  }
+  for (const owner of [...input.models, ...input.compositeTypes]) {
+    for (const field of Object.values(owner.fields)) {
+      for (const attribute of field.attributes) {
+        if (Object.hasOwn(mongoAttributeSpecs.field, attribute.name)) continue;
+        diagnostics.push({
+          code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+          message: unsupportedFieldAttributeMessage(owner.name, field.name, attribute.name),
+          sourceId,
+          span: attribute.span,
+        });
+      }
+    }
+  }
+}
+
 interface FieldMappings {
   readonly pslNameToMapped: Map<string, string>;
 }
@@ -140,11 +197,12 @@ function fkRelationPairKey(declaringModel: string, targetModel: string): string 
 
 function resolveFieldMappings(input: {
   readonly model: ModelSymbol;
+  readonly specContext: AttributeSpecContext;
   readonly sourceFile: SourceFile;
   readonly sourceId: string;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): FieldMappings {
-  const { model, sourceFile, sourceId, diagnostics } = input;
+  const { model, specContext, sourceFile, sourceId, diagnostics } = input;
   const pslNameToMapped = new Map<string, string>();
   for (const field of Object.values(model.fields)) {
     const mapNode = findFieldAttributeNode(field, 'map');
@@ -152,7 +210,7 @@ function resolveFieldMappings(input: {
       (mapNode
         ? interpretFieldAttribute({
             node: mapNode,
-            spec: mapFieldSpec,
+            spec: mongoAttributeSpecs.field.map({ ...specContext, field }),
             model,
             field,
             sourceFile,
@@ -167,16 +225,17 @@ function resolveFieldMappings(input: {
 
 function resolveCollectionName(input: {
   readonly model: ModelSymbol;
+  readonly specContext: AttributeSpecContext;
   readonly sourceFile: SourceFile;
   readonly sourceId: string;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): string {
-  const { model, sourceFile, sourceId, diagnostics } = input;
+  const { model, specContext, sourceFile, sourceId, diagnostics } = input;
   const mapNode = findModelAttributeNode(model, 'map');
   const name = mapNode
     ? interpretModelAttribute({
         node: mapNode,
-        spec: mapModelSpec,
+        spec: mongoAttributeSpecs.model.map(specContext),
         model,
         sourceFile,
         sourceId,
@@ -209,6 +268,7 @@ function mongoCrossRef(modelName: string): CrossReference {
 
 function collectPolymorphismDeclarations(
   models: readonly ModelSymbol[],
+  specContextFor: (model: ModelSymbol) => AttributeSpecContext,
   modelMetadataByName: ReadonlyMap<string, MongoModelMetadata>,
   sourceFile: SourceFile,
   sourceId: string,
@@ -221,11 +281,12 @@ function collectPolymorphismDeclarations(
   const baseDeclarations = new Map<string, BaseDeclaration>();
 
   for (const model of models) {
+    const specContext = specContextFor(model);
     const discNode = findModelAttributeNode(model, 'discriminator');
     if (discNode) {
       const parsed = interpretModelAttribute({
         node: discNode,
-        spec: discriminatorModelSpec,
+        spec: mongoAttributeSpecs.model.discriminator(specContext),
         model,
         sourceFile,
         sourceId,
@@ -254,7 +315,7 @@ function collectPolymorphismDeclarations(
     if (baseNode) {
       const parsed = interpretModelAttribute({
         node: baseNode,
-        spec: baseModelSpec,
+        spec: mongoAttributeSpecs.model.base(specContext),
         model,
         sourceFile,
         sourceId,
@@ -592,9 +653,8 @@ function buildCollationFromSpec(args: SpecCollationArgs): CollationOptions | nul
   return collation;
 }
 
-type IndexModelSpecs = ReturnType<typeof buildIndexModelSpecs>;
-type NormalIndexArgs = InferAttr<IndexModelSpecs['index']>;
-type TextIndexArgs = InferAttr<IndexModelSpecs['textIndex']>;
+type NormalIndexArgs = InferAttr<ReturnType<typeof mongoAttributeSpecs.model.index>>;
+type TextIndexArgs = InferAttr<ReturnType<typeof mongoAttributeSpecs.model.textIndex>>;
 
 interface IndexBuildContext {
   readonly pslModel: ModelSymbol;
@@ -807,6 +867,7 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoInd
 
 function collectIndexes(
   pslModel: ModelSymbol,
+  specContext: AttributeSpecContext,
   fieldMappings: FieldMappings,
   modelNames: ReadonlySet<string>,
   sourceId: string,
@@ -823,18 +884,27 @@ function collectIndexes(
 
   for (const field of Object.values(pslModel.fields)) {
     if (modelNames.has(field.typeName)) continue;
-    const uniqueAttr = getAttribute(field.attributes, 'unique');
-    if (!uniqueAttr) continue;
+    const uniqueNode = findFieldAttributeNode(field, 'unique');
+    if (!uniqueNode) continue;
+    const unique = interpretFieldAttribute({
+      node: uniqueNode,
+      spec: mongoAttributeSpecs.field.unique({ ...specContext, field }),
+      model: pslModel,
+      field,
+      sourceFile,
+      sourceId,
+      diagnostics,
+    });
+    if (unique === undefined) continue;
     const mappedName = fieldMappings.pslNameToMapped.get(field.name) ?? field.name;
     const fieldUniqueIndex = new MongoIndex({
       keys: [{ field: mappedName, direction: 1 }],
       unique: true,
     });
     indexes.push(fieldUniqueIndex);
-    indexSpans.set(fieldUniqueIndex, uniqueAttr.span);
+    indexSpans.set(fieldUniqueIndex, nodePslSpan(uniqueNode.syntax, sourceFile));
   }
 
-  const specs = buildIndexModelSpecs(Object.keys(pslModel.fields));
   const attributeNodes = Array.from(pslModel.node.attributes());
   for (const [attrIndex, attr] of pslModel.attributes.entries()) {
     if (attr.name !== 'index' && attr.name !== 'unique' && attr.name !== 'textIndex') continue;
@@ -853,7 +923,7 @@ function collectIndexes(
     if (attr.name === 'textIndex') {
       const parsed = interpretModelAttribute({
         node,
-        spec: specs.textIndex,
+        spec: mongoAttributeSpecs.model.textIndex(specContext),
         model: pslModel,
         sourceFile,
         sourceId,
@@ -875,7 +945,9 @@ function collectIndexes(
       const unique = attr.name === 'unique';
       const parsed = interpretModelAttribute({
         node,
-        spec: unique ? specs.unique : specs.index,
+        spec: unique
+          ? mongoAttributeSpecs.model.unique(specContext)
+          : mongoAttributeSpecs.model.index(specContext),
         model: pslModel,
         sourceFile,
         sourceId,
@@ -1034,11 +1106,35 @@ export function interpretPslDocumentToMongoContract(
   const allCompositeTypes: CompositeTypeSymbol[] = Object.values(topLevel.compositeTypes);
   const modelNames = new Set(allModels.map((m) => m.name));
   const compositeTypeNames = new Set(allCompositeTypes.map((ct) => ct.name));
+  reportUnknownAttributes({
+    models: allModels,
+    compositeTypes: allCompositeTypes,
+    sourceId,
+    diagnostics,
+  });
+  const specContextFor = (model: ModelSymbol): AttributeSpecContext => ({
+    symbols: symbolTable,
+    model,
+    controlMutationDefaults: input.controlMutationDefaults,
+  });
   const modelMetadataByName = new Map<string, MongoModelMetadata>();
   for (const model of allModels) {
+    const specContext = specContextFor(model);
     modelMetadataByName.set(model.name, {
-      collectionName: resolveCollectionName({ model, sourceFile, sourceId, diagnostics }),
-      fieldMappings: resolveFieldMappings({ model, sourceFile, sourceId, diagnostics }),
+      collectionName: resolveCollectionName({
+        model,
+        specContext,
+        sourceFile,
+        sourceId,
+        diagnostics,
+      }),
+      fieldMappings: resolveFieldMappings({
+        model,
+        specContext,
+        sourceFile,
+        sourceId,
+        diagnostics,
+      }),
     });
   }
 
@@ -1092,6 +1188,7 @@ export function interpretPslDocumentToMongoContract(
     const metadata = modelMetadataByName.get(pslModel.name);
     if (!metadata) continue;
     const { collectionName, fieldMappings } = metadata;
+    const specContext = specContextFor(pslModel);
 
     const fields: Record<string, ContractField> = {};
     const relations: Record<string, ContractReferenceRelation> = {};
@@ -1102,7 +1199,7 @@ export function interpretPslDocumentToMongoContract(
         const relation = relationNode
           ? interpretFieldAttribute({
               node: relationNode,
-              spec: relationFieldSpec,
+              spec: mongoAttributeSpecs.field.relation({ ...specContext, field }),
               model: pslModel,
               field,
               sourceFile,
@@ -1169,9 +1266,22 @@ export function interpretPslDocumentToMongoContract(
     }
 
     const isVariantModel = pslModel.attributes.some((attr) => attr.name === 'base');
-    const hasIdField = Object.values(pslModel.fields).some(
-      (f) => getAttribute(f.attributes, 'id') !== undefined,
-    );
+    const hasIdField =
+      Object.values(pslModel.fields).filter((field) => {
+        const idNode = findFieldAttributeNode(field, 'id');
+        if (!idNode) return false;
+        return (
+          interpretFieldAttribute({
+            node: idNode,
+            spec: mongoAttributeSpecs.field.id({ ...specContext, field }),
+            model: pslModel,
+            field,
+            sourceFile,
+            sourceId,
+            diagnostics,
+          }) !== undefined
+        );
+      }).length > 0;
     // Variant models inherit the base's identity and are validated through their base.
     if (!isVariantModel) {
       if (!hasIdField) {
@@ -1206,6 +1316,7 @@ export function interpretPslDocumentToMongoContract(
     models[pslModel.name] = { fields, relations, storage: { collection: collectionName } };
     const modelIndexes = collectIndexes(
       pslModel,
+      specContext,
       fieldMappings,
       modelNames,
       sourceId,
@@ -1296,6 +1407,7 @@ export function interpretPslDocumentToMongoContract(
 
   const { discriminatorDeclarations, baseDeclarations } = collectPolymorphismDeclarations(
     allModels,
+    specContextFor,
     modelMetadataByName,
     sourceFile,
     sourceId,

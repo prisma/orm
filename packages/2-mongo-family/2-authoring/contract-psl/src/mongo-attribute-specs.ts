@@ -2,6 +2,9 @@ import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ArgType,
   AttributeSpec,
+  AttributeSpecContext,
+  AttributeSpecNamespace,
+  FieldAttributeSpecContext,
   FieldSymbol,
   FuncCallSig,
   InferAttr,
@@ -140,6 +143,8 @@ export function interpretFieldAttribute<Out>(input: {
 
 export const mapModelSpec = modelAttribute('map', { positional: [{ key: 'name', type: str() }] });
 export const mapFieldSpec = fieldAttribute('map', { positional: [{ key: 'name', type: str() }] });
+export const idFieldSpec = fieldAttribute('id', {});
+export const uniqueFieldSpec = fieldAttribute('unique', {});
 
 export const relationFieldSpec = fieldAttribute('relation', {
   positional: [{ key: 'name', type: optional(str()) }],
@@ -221,11 +226,31 @@ function buildTextIndexModelSpec(fieldElement: ArgType<string | TypedFuncCall>) 
   });
 }
 
-export function buildIndexModelSpecs(fieldNames: readonly string[]) {
-  const fieldElement = indexFieldElement(fieldNames);
-  return {
-    index: buildIndexModelSpec('index', fieldElement),
-    unique: buildIndexModelSpec('unique', fieldElement),
-    textIndex: buildTextIndexModelSpec(fieldElement),
-  };
+function modelFieldElement(ctx: AttributeSpecContext): ArgType<string | TypedFuncCall> {
+  return indexFieldElement(Object.keys(ctx.model.fields));
 }
+
+function staticModelSpec<Spec>(spec: Spec): (ctx: AttributeSpecContext) => Spec {
+  return () => spec;
+}
+
+function staticFieldSpec<Spec>(spec: Spec): (ctx: FieldAttributeSpecContext) => Spec {
+  return () => spec;
+}
+
+export const mongoAttributeSpecs = {
+  model: {
+    map: staticModelSpec(mapModelSpec),
+    discriminator: staticModelSpec(discriminatorModelSpec),
+    base: staticModelSpec(baseModelSpec),
+    index: (ctx) => buildIndexModelSpec('index', modelFieldElement(ctx)),
+    unique: (ctx) => buildIndexModelSpec('unique', modelFieldElement(ctx)),
+    textIndex: (ctx) => buildTextIndexModelSpec(modelFieldElement(ctx)),
+  },
+  field: {
+    id: staticFieldSpec(idFieldSpec),
+    unique: staticFieldSpec(uniqueFieldSpec),
+    map: staticFieldSpec(mapFieldSpec),
+    relation: staticFieldSpec(relationFieldSpec),
+  },
+} as const satisfies AttributeSpecNamespace;

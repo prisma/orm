@@ -13,8 +13,8 @@ model User {
 
 model Post {
   id        ObjectId @id @map("_id")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime
+  updatedAt DateTime
   published Boolean
   title     String
   content   String?

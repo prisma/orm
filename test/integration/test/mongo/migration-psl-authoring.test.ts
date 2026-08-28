@@ -80,6 +80,7 @@ function pslToContract(schema: string): MongoContract {
     sourceFile,
     sourceId: 'test.prisma',
     scalarTypeCodecIds,
+    controlMutationDefaults: new Map(),
     codecLookup: mongoCodecLookup,
   });
   if (!result.ok) {

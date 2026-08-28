@@ -68,6 +68,7 @@ describe('mongoFamilyPack', () => {
     expect(mongoFamilyPack.version).toBe('0.0.1');
     expect(mongoFamilyPack.authoring?.entityTypes).toBeDefined();
     expect(mongoFamilyPack.authoring?.pslBlockDescriptors).toBeDefined();
+    expect(mongoFamilyPack.authoring?.attributeSpecs).toBeDefined();
   });
 });
 

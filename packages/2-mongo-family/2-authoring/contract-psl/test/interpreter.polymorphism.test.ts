@@ -73,6 +73,7 @@ function interpret(schema: string) {
   return interpretPslDocumentToMongoContract({
     ...buildSymbolTableInput(schema),
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
+    controlMutationDefaults: new Map(),
     codecLookup: mongoCodecLookup,
   });
 }
