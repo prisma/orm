@@ -145,11 +145,13 @@ it('emits contract and verifies it matches on-disk artifacts', async () => {
 
 ## Package coverage
 
-Package coverage policy lives in each Vitest project's adjacent `coverage.config.json`; `vitest.config.ts` contains only test-project configuration. `pnpm coverage:packages` first builds the same package-only prerequisites as `pnpm test:packages`, then runs all 70 package Vitest projects with coverage in exactly one root `vitest run --coverage` process. Ordinary `pnpm test` and `pnpm test:packages` remain the faster noncoverage paths.
+Package coverage policy lives in each Vitest project's adjacent `coverage.config.json`. `pnpm coverage:packages` first builds the same package-only prerequisites as `pnpm test:packages`, then runs every package Vitest project with coverage in one root process. Ordinary `pnpm test` and `pnpm test:packages` remain the faster noncoverage paths.
 
-Each entry in `coverage/coverage-final.json` is attributed to the package that owns the entry's source path, not to a test project. Examples are not coverage projects and remain separately exercised by `pnpm test:examples`.
+CI divides that same root project set into four Vitest shards. Each shard writes a native blob report with coverage thresholds disabled for the partial run. The stable `Test` fan-in job requires all four blobs, runs `pnpm coverage:packages:merge`, and only then applies the full coverage policy. Missing or failed shards therefore cannot produce a passing gate.
 
-`pnpm coverage:report` reads the root run's `coverage/coverage-final.json`, prints package-level threshold diagnostics, and exits nonzero when the policy fails. CI runs this report immediately after `pnpm coverage:packages`, even when the coverage run failed, so available diagnostics are still shown. Root `coverage.config.json` warning-only entries temporarily relax coverage thresholds only; they never suppress Vitest assertion failures, whose root process exit always blocks CI. Fix a threshold miss by covering genuinely untested branches, never by lowering the threshold.
+Each entry in the merged `coverage/coverage-final.json` is attributed to the package that owns the entry's source path, not to a test project. Examples are not coverage projects and remain separately exercised by `pnpm test:examples`.
+
+`pnpm coverage:report` reads `coverage/coverage-final.json`, prints package-level threshold diagnostics, and exits nonzero when the policy fails. CI runs this report after the native Vitest merge even when merged tests or coverage failed, so available diagnostics are still shown. Root `coverage.config.json` warning-only entries temporarily relax coverage thresholds only; they never suppress assertion failures, which block both their shard and the merged `Test` gate. Fix a threshold miss by covering genuinely untested branches, never by lowering the threshold.
 
 ---
 
@@ -1011,6 +1013,9 @@ pnpm coverage:packages
 
 # Alias for the same package-only coverage path
 pnpm test:coverage
+
+# CI fan-in only: merge native shard blobs and generate coverage-final.json
+pnpm coverage:packages:merge
 
 # Report policy results from coverage/coverage-final.json
 pnpm coverage:report

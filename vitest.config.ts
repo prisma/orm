@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 import { composeCoverageConfig } from './scripts/coverage-config';
 
 const coveragePolicy = composeCoverageConfig(import.meta.dirname);
+const coverageShard = process.env['VITEST_COVERAGE_SHARD'];
 
 export default defineConfig({
   test: {
@@ -27,9 +28,10 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reportsDirectory: resolve(import.meta.dirname, 'coverage'),
-      reporter: ['text', 'json'],
+      reporter: coverageShard ? [] : ['text', 'json'],
       reportOnFailure: true,
       ...coveragePolicy,
+      thresholds: coverageShard ? {} : coveragePolicy.thresholds,
     },
   },
 });

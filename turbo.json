@@ -21,7 +21,7 @@
     "test": {
       "dependsOn": ["^build"],
       "inputs": ["src/**", "test/**", "dist/**"],
-      "env": ["TEST_TIMEOUT_MULTIPLIER"],
+      "env": ["TEST_TIMEOUT_MULTIPLIER", "VITEST_COVERAGE_SHARD"],
       "passThroughEnv": [
         "WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE",
         "CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE"

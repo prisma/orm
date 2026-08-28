@@ -24,6 +24,7 @@
     "test:coverage": "pnpm coverage:packages",
     "coverage:report": "node scripts/coverage-report.mjs",
     "coverage:packages": "turbo run build --filter='!./examples/**' --filter='!./test/**' && vitest run --coverage",
+    "coverage:packages:merge": "vitest --merge-reports=.vitest/blob --coverage",
     "lint": "turbo run lint",
     "lint:agent": "node scripts/run-logged.mjs lint pnpm lint",
     "lint:fix": "pnpm biome check --write .",
