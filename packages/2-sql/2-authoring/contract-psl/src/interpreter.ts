@@ -43,12 +43,12 @@ import type {
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
-  type AttributeSpec,
   type BlockSymbol,
   type CompositeTypeSymbol,
   type FieldSymbol,
   findBlockDescriptor,
   keywordPslSpan,
+  type ModelAttributeSpecFactory,
   type ModelSymbol,
   type NamedTypeSymbol,
   type NamespaceSymbol,
@@ -1075,13 +1075,17 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       if (node === undefined) {
         continue;
       }
-      const spec = blindCast<
-        AttributeSpec<unknown>,
-        'contributed model-attribute descriptors carry an ADR-231 attribute-spec-kit spec by construction'
+      const specFactory = blindCast<
+        ModelAttributeSpecFactory,
+        'contributed model-attribute descriptors carry an ADR-231 attribute-spec factory by construction'
       >(contributedModelAttribute.spec);
       const parsed = interpretModelAttribute({
         node,
-        spec,
+        spec: specFactory({
+          symbols: input.symbolTable,
+          model,
+          controlMutationDefaults: input.defaultFunctionRegistry,
+        }),
         model,
         sourceFile: input.sourceFile,
         sourceId,

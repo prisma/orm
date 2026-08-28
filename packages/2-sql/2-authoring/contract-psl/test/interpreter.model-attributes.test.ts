@@ -1,4 +1,5 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
+import type { AttributeSpecContext, ModelAttributeSpecFactory } from '@internal/psl-parser';
 import { modelAttribute, str } from '@internal/psl-parser';
 import type { SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
@@ -14,12 +15,19 @@ const stampModelSpec = modelAttribute('stamp', {
   positional: [{ key: 'label', type: str() }],
 });
 
+const stampFactoryContexts: AttributeSpecContext[] = [];
+
+const stampSpecFactory: ModelAttributeSpecFactory = (ctx) => {
+  stampFactoryContexts.push(ctx);
+  return stampModelSpec;
+};
+
 const stampAuthoringContributions: AuthoringContributions = {
   modelAttributes: {
     stamp: {
       kind: 'modelAttribute',
       attribute: 'stamp',
-      spec: stampModelSpec,
+      spec: stampSpecFactory,
       lower: (parsed: { readonly label: string }, ctx) => ({
         key: ctx.storageName,
         entity: {
@@ -92,6 +100,24 @@ describe('contributed model attributes (AuthoringContributions.modelAttributes)'
         },
       },
     });
+  });
+
+  it('calls the descriptor spec factory with the declaring model and the composed stack facts', () => {
+    stampFactoryContexts.length = 0;
+    const { result } = interpretWith(
+      `model Widget {
+  id Int @id
+  @@stamp("v1")
+}`,
+      stampAuthoringContributions,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(stampFactoryContexts).toHaveLength(1);
+    const ctx = stampFactoryContexts[0];
+    expect(ctx?.model.name).toBe('Widget');
+    expect(Object.keys(ctx?.symbols.topLevel.models ?? {})).toContain('Widget');
+    expect(ctx?.controlMutationDefaults).toBeInstanceOf(Map);
   });
 
   it('threads the declaring namespace id into the lowering context', () => {
