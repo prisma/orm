@@ -38,6 +38,14 @@ Sequence: contribution surface (core) → plain-data assembly (psl-parser) → t
 - **Focus:** `@internal/language-server` `test/` only (near `config-resolution.test.ts` helpers). Test-dispatch overlay applies: the test proves registry assembly through LSP-process plumbing — it must fail if `attributeSpecs`/`modelAttributes` stop reaching the resolved stack.
 - **Model tier:** sonnet (single-package test with named target). **Gates:** `pnpm --filter @internal/language-server test` + lint/typecheck for the package; slice-close: `pnpm build` · `pnpm test:packages` · `pnpm lint:deps` · `pnpm fixtures:check`.
 
+### Dispatch 5: real-pack-consumability-proof (added mid-slice)
+
+- **Outcome:** the real postgres pack's `@@rls` is proven LSP-consumable: a test in the repo's integration-test home (already sanctioned to depend on Domain 3 packs) resolves a postgres config through `@internal/language-server`'s `resolveConfigInputs` and asserts `assembleAttributeSpecs` yields `rls` — red if `@internal/target-postgres` deletes its `@@rls` descriptor. Added because Domain 1 may not name Domain 3 (`lint-framework-target-imports` + depcruise), so D4's in-package test uses a synthetic pack; the real-pack ¬P lives here.
+- **Builds on:** Dispatch 4's in-package proof + Dispatch 3's flipped descriptor.
+- **Hands to:** RC-AC1 complete in substance (synthetic-pack machinery proof + real-pack integration proof); slice A extends the same integration surface for `@relation`.
+- **Focus:** integration-test package only (plus its devDependency on `@internal/language-server` if absent). No production changes anywhere.
+- **Model tier:** resumed implementer. **Gates:** integration package typecheck/lint + the new test + `pnpm lint:deps`.
+
 ## Handoff-contract checks
 
 - **Linearity:** strict chain 1→2→3→4; the one non-linear edge is dispatch 4 also consuming dispatch 2's registry surface directly (named above).
@@ -65,4 +73,5 @@ Grep-library ([`drive/calibration/grep-library.md`](../../../../drive/calibratio
 
 ## Open items
 
-None.
+- **For D4:** the LSP enumeration must go through `assembleAttributeSpecs` — `Object.keys(contributions.modelAttributes)` yields namespace path segments, not attribute names (D2 nested-fixture test is the discriminator). Pin in the D4 brief.
+- **For D3:** annotate `pgvectorAuthoringContributions` (`packages/2-sql/2-authoring/contract-psl/test/fixtures.ts:412`) with an explicit type when touching that fixture area — it is an unannotated literal consumed as both `AuthoringContributions` and the assembled shape, so required-key changes land on it silently (reviewer note, D1 R1).

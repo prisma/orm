@@ -23,8 +23,13 @@ export interface AttributeSpecContext {
 export interface FieldAttributeSpecContext extends AttributeSpecContext {
   readonly field: FieldSymbol;                                    // src/symbol-table.ts:102
 }
-export type ModelAttributeSpecFactory = (ctx: AttributeSpecContext) => AttributeSpec<unknown>;
-export type FieldAttributeSpecFactory = (ctx: FieldAttributeSpecContext) => AttributeSpec<unknown>;
+export type ModelAttributeSpecFactory = (ctx: AttributeSpecContext) => AttributeSpec<never>;
+export type FieldAttributeSpecFactory = (ctx: FieldAttributeSpecContext) => AttributeSpec<never>;
+// `never`, not `unknown`: AttributeSpec is contravariant in Out (refine), so
+// AttributeSpec<unknown> rejects every real spec — compiler-verified D2 R1.
+// Precedent: AuthoringModelAttributeDescriptor<Out = never> in framework-authoring.ts.
+// Note: a model factory IS assignable where a field factory is expected
+// (contravariant ctx widening) — intentional; only field→model is rejected.
 export interface AttributeSpecNamespace {
   readonly model: Readonly<Record<string, ModelAttributeSpecFactory>>;
   readonly field: Readonly<Record<string, FieldAttributeSpecFactory>>;
@@ -125,7 +130,7 @@ No contract entities, kinds, or emitted artifacts change (`contract.json` / `con
 
 ## Open Questions
 
-1. Contribution key + core type names (`attributeSpecs` / `AuthoringAttributeSpecContributions`). Working position: as written; implementer may adjust for collision/convention with reviewer sign-off recorded in `code-review.md`.
+1. **Resolved (D1 R1):** contribution key + core type names shipped as pinned (`attributeSpecs` / `AuthoringAttributeSpecContributions`) — no workspace collisions; reviewer sign-off recorded in `code-review.md`.
 2. Where family descriptors will later inject built-ins (slices A/B) — via the `authoring` slot on `framework-components.ts:63/:220` descriptors. Working position: yes, same channel as every other contribution; nothing to build here beyond the merge.
 
 ## References
