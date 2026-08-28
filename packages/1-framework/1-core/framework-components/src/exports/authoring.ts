@@ -63,4 +63,5 @@ export type {
   PslExtensionBlockParamRef,
   PslExtensionBlockParamScalarValue,
   PslExtensionBlockParamValue,
+  PslExtensionBlockParsedAttribute,
 } from '../shared/psl-extension-block';

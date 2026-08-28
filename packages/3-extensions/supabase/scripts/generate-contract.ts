@@ -238,6 +238,7 @@ function roleExtensionBlock(name: string): PslExtensionBlock {
     name,
     parameters: {},
     blockAttributes: [],
+    attributes: {},
     span: SYNTHETIC_SPAN,
   };
 }

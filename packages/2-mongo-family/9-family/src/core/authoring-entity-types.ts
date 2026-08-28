@@ -8,6 +8,7 @@ import {
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
 import { type EnumTypeHandle, enumType } from '@internal/mongo-contract-ts/contract-builder';
+import { blockAttribute, str } from '@internal/psl-parser';
 import { blindCast } from '@internal/utils/casts';
 
 export const mongoFamilyEnumEntityDescriptor = {
@@ -141,6 +142,10 @@ export const mongoFamilyEntityTypes: AuthoringEntityTypeNamespace = {
   enum: mongoFamilyEnumEntityDescriptor,
 };
 
+const enumTypeBlockAttribute = blockAttribute('type', {
+  positional: [{ key: 'codecId', type: str() }],
+});
+
 export const mongoFamilyPslBlockDescriptors = {
   enum: {
     kind: 'pslBlock',
@@ -149,5 +154,6 @@ export const mongoFamilyPslBlockDescriptors = {
     name: { required: true },
     parameters: {},
     variadicParameters: true,
+    attributes: { type: () => enumTypeBlockAttribute },
   },
 } as const satisfies AuthoringPslBlockDescriptorNamespace;

@@ -169,6 +169,7 @@ function enumBlock(name: string, members: Record<string, string>): PslExtensionB
         span: ZERO_SPAN,
       },
     ],
+    attributes: {},
     span: ZERO_SPAN,
   };
 }

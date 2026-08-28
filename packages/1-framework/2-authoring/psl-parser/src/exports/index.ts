@@ -38,6 +38,7 @@ export {
 export { getPositionalArgument, parseQuotedStringLiteral } from '../attribute-helpers';
 export type { AssembledAttributeSpecs } from '../attribute-spec/assemble';
 export { assembleAttributeSpecs } from '../attribute-spec/assemble';
+export { blockAttribute } from '../attribute-spec/block-attribute';
 export { bool } from '../attribute-spec/combinators/bool';
 export { leafDiagnostic } from '../attribute-spec/combinators/diagnostic';
 export { entityRef } from '../attribute-spec/combinators/entity-ref';
@@ -62,6 +63,7 @@ export { optional } from '../attribute-spec/optional';
 export type {
   AttributeSpecContext,
   AttributeSpecNamespace,
+  BlockAttributeSpecFactory,
   FieldAttributeSpecContext,
   FieldAttributeSpecFactory,
   ModelAttributeSpecFactory,
@@ -71,6 +73,7 @@ export type {
   AttributeLevel,
   AttributeOut,
   AttributeSpec,
+  BlockInterpretCtx,
   InferAttr,
   InterpretCtx,
   NamedOut,

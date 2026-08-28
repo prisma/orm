@@ -1,9 +1,18 @@
 import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import type { ArgType, OutOf } from '../types';
+import type { ArgType, BlockInterpretCtx, OutOf } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
+export function oneOf<
+  Alts extends readonly [
+    ArgType<unknown, BlockInterpretCtx>,
+    ...ArgType<unknown, BlockInterpretCtx>[],
+  ],
+>(...alts: Alts): ArgType<OutOf<Alts[number]>, BlockInterpretCtx>;
+export function oneOf<Alts extends readonly [ArgType<unknown>, ...ArgType<unknown>[]]>(
+  ...alts: Alts
+): ArgType<OutOf<Alts[number]>>;
 export function oneOf<Alts extends readonly [ArgType<unknown>, ...ArgType<unknown>[]]>(
   ...alts: Alts
 ): ArgType<OutOf<Alts[number]>> {

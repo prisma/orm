@@ -722,6 +722,48 @@ describe('assembleAuthoringContributions', () => {
     ).toThrow(/Malformed authoring pslBlock contribution at "broken"/);
   });
 
+  it('keeps a pslBlockDescriptors entry that declares block attributes', () => {
+    const mapFactory = () => ({ level: 'block', name: 'map' });
+    const result = assembleAuthoringContributions([
+      createDescriptor({
+        authoring: {
+          entityTypes: {
+            foo: { kind: 'entity', discriminator: 'fake-foo', output: { factory: () => ({}) } },
+          },
+          pslBlockDescriptors: {
+            fooBlock: {
+              ...makeDeclarativePslBlockDescriptor('fake-foo'),
+              attributes: { map: mapFactory },
+            },
+          },
+        },
+      }),
+    ]);
+    expect(result.pslBlockDescriptors['fooBlock']).toMatchObject({
+      attributes: { map: mapFactory },
+    });
+  });
+
+  it('rejects a pslBlockDescriptors entry whose attributes is not a record', () => {
+    expect(() =>
+      assembleAuthoringContributions([
+        createDescriptor({
+          authoring: {
+            entityTypes: {
+              foo: { kind: 'entity', discriminator: 'fake-foo', output: { factory: () => ({}) } },
+            },
+            pslBlockDescriptors: {
+              fooBlock: {
+                ...makeDeclarativePslBlockDescriptor('fake-foo'),
+                attributes: 'map',
+              } as unknown as never,
+            },
+          },
+        }),
+      ]),
+    ).toThrow(/Malformed authoring pslBlock contribution at "fooBlock"/);
+  });
+
   it('descends into a pslBlockDescriptors sub-namespace whose key is "kind" or "discriminator" without triggering malformed check', () => {
     // A sub-namespace keyed "kind" or "discriminator" that does not itself
     // look like a descriptor must descend normally.

@@ -1,12 +1,12 @@
 import type { PslDiagnostic, PslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { nodePslSpan } from '../../resolve';
 import type { AstNode } from '../../syntax/ast-helpers';
-import type { InterpretCtx } from '../types';
+import type { BlockInterpretCtx } from '../types';
 
 export const ATTRIBUTE_DIAGNOSTIC_CODE: PslDiagnosticCode = 'PSL_INVALID_ATTRIBUTE_SYNTAX';
 
 export function leafDiagnostic(
-  ctx: InterpretCtx,
+  ctx: BlockInterpretCtx,
   node: AstNode,
   message: string,
   code: PslDiagnostic['code'] = ATTRIBUTE_DIAGNOSTIC_CODE,

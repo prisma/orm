@@ -4,6 +4,9 @@ import type {
 } from '@internal/framework-components/authoring';
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
+import { blockAttribute } from '../src/attribute-spec/block-attribute';
+import { leafDiagnostic } from '../src/attribute-spec/combinators/diagnostic';
+import { str } from '../src/attribute-spec/combinators/str';
 import { validateExtensionBlockFromSymbol } from '../src/extension-block';
 import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
@@ -670,5 +673,118 @@ describe('buildSymbolTable() — N:1 keywords sharing one discriminator', () => 
     expect(boxy?.block.kind).toBe('shape');
     expect(round?.block.keyword).toBe('shape_circle');
     expect(boxy?.block.keyword).toBe('shape_square');
+  });
+});
+
+describe('buildSymbolTable() — block attributes parsed through the kit', () => {
+  const mapSpec = blockAttribute('map', {
+    positional: [{ key: 'name', type: str() }],
+    refine: (parsed, ctx, node) =>
+      parsed.name === '' ? [leafDiagnostic(ctx, node, 'empty', 'PSL_FIXTURE_EMPTY_MAP')] : [],
+  });
+  const WIDGET_DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
+    widget: {
+      kind: 'pslBlock',
+      keyword: 'widget',
+      discriminator: 'widget',
+      name: { required: true },
+      parameters: {},
+      variadicParameters: true,
+      attributes: { map: () => mapSpec },
+    },
+  };
+  const BARE_DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
+    widget: {
+      kind: 'pslBlock',
+      keyword: 'widget',
+      discriminator: 'widget',
+      name: { required: true },
+      parameters: {},
+    },
+  };
+
+  it('attaches the parsed arguments and the attribute span as plain data', () => {
+    const result = build(
+      ['widget Gear {', '  teeth = 12', '  @@map("gear_wheel")', '}'].join('\n'),
+      WIDGET_DESCRIPTORS,
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.table.topLevel.blocks['Gear']?.block.attributes).toEqual({
+      map: {
+        args: { name: 'gear_wheel' },
+        span: {
+          start: { offset: 29, line: 3, column: 3 },
+          end: { offset: 48, line: 3, column: 22 },
+        },
+      },
+    });
+  });
+
+  it('diagnoses an attribute the descriptor does not declare, anchored on the attribute', () => {
+    const result = build(['widget Gear {', '  @@schema("x")', '}'].join('\n'), WIDGET_DESCRIPTORS);
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
+        message: 'Unknown attribute "@@schema" in "widget" block "Gear"',
+        range: { start: { line: 1, character: 2 }, end: { line: 1, character: 15 } },
+      },
+    ]);
+    expect(result.table.topLevel.blocks['Gear']?.block.attributes).toEqual({});
+  });
+
+  it('treats every attribute as unknown when the descriptor declares none', () => {
+    const result = build(['widget Gear {', '  @@map("x")', '}'].join('\n'), BARE_DESCRIPTORS);
+
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
+    ]);
+  });
+
+  it('keeps the first occurrence of a duplicated attribute and diagnoses the rest', () => {
+    const result = build(
+      ['widget Gear {', '  @@map("first")', '  @@map("second")', '}'].join('\n'),
+      WIDGET_DESCRIPTORS,
+    );
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE',
+        message: 'Duplicate attribute "@@map" in "widget" block "Gear"; first occurrence wins',
+        range: { start: { line: 2, character: 2 }, end: { line: 2, character: 17 } },
+      }),
+    ]);
+    expect(result.table.topLevel.blocks['Gear']?.block.attributes['map']?.args).toEqual({
+      name: 'first',
+    });
+  });
+
+  it('surfaces a kit binding failure as a symbol-table diagnostic and omits the attribute', () => {
+    const result = build(['widget Gear {', '  @@map()', '}'].join('\n'), WIDGET_DESCRIPTORS);
+
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Attribute "map" is missing required argument "name"',
+        range: { start: { line: 1, character: 2 }, end: { line: 1, character: 9 } },
+      },
+    ]);
+    expect(result.table.topLevel.blocks['Gear']?.block.attributes).toEqual({});
+  });
+
+  it('carries a refine diagnostic code contributed by the spec', () => {
+    const result = build(['widget Gear {', '  @@map("")', '}'].join('\n'), WIDGET_DESCRIPTORS);
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({ code: 'PSL_FIXTURE_EMPTY_MAP', message: 'empty' }),
+    ]);
+  });
+
+  it('parses nothing for a block whose keyword has no descriptor', () => {
+    const result = build(['gizmo Gear {', '  @@map("x")', '}'].join('\n'), {});
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.table.topLevel.blocks['Gear']?.block.attributes).toEqual({});
   });
 });

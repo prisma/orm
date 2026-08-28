@@ -346,7 +346,7 @@ namespace auth {
     );
   });
 
-  it('an argument-less @@map() emits PSL_NATIVE_ENUM_INVALID_MAP', () => {
+  it('an argument-less @@map() is a symbol-table diagnostic from the kit', () => {
     const source = `
 namespace auth {
   native_enum AalLevel {
@@ -355,13 +355,14 @@ namespace auth {
   }
 }
 `;
-    const result = interpret(source);
+    const { diagnostics } = parsePsl(source);
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_NATIVE_ENUM_INVALID_MAP' })]),
-    );
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Attribute "map" is missing required argument "name"',
+      }),
+    ]);
   });
 
   it('a non-string member value emits PSL_EXTENSION_INVALID_VALUE', () => {

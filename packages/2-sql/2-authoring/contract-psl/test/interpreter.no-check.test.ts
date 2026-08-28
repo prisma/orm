@@ -17,6 +17,7 @@ import {
   postgresTargetRenderingChecks,
   symbolTableInputFromParseArgs,
   testEnumEntityContributions,
+  testEnumPslBlockDescriptor,
   testRenderCheckExpressions,
 } from './fixtures';
 
@@ -53,21 +54,12 @@ const testCodecLookup: CodecLookup = {
   renderOutputTypeFor: () => undefined,
 };
 
-const enumPslBlockDescriptor = {
-  kind: 'pslBlock' as const,
-  keyword: 'enum',
-  discriminator: 'enum',
-  name: { required: true },
-  parameters: {},
-  variadicParameters: true,
-};
-
 const authoringContributions = {
   entityTypes: testEnumEntityContributions,
   field: {},
   type: {},
   valueObjectStorageType: 'Jsonb',
-  pslBlockDescriptors: { enum: enumPslBlockDescriptor },
+  pslBlockDescriptors: { enum: testEnumPslBlockDescriptor },
 };
 
 const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();

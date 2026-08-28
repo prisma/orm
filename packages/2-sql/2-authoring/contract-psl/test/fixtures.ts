@@ -28,6 +28,7 @@ import type {
 } from '@internal/framework-components/control';
 import type { FuncCallSig, SymbolTable } from '@internal/psl-parser';
 import {
+  blockAttribute,
   buildSymbolTable,
   int,
   num,
@@ -161,6 +162,18 @@ function testEnumFactory(
     ...members.map((m) => ({ name: m.name, value: m.value })),
   );
 }
+
+export const testEnumPslBlockDescriptor = {
+  kind: 'pslBlock' as const,
+  keyword: 'enum',
+  discriminator: 'enum',
+  name: { required: true },
+  parameters: {},
+  variadicParameters: true,
+  attributes: {
+    type: () => blockAttribute('type', { positional: [{ key: 'codecId', type: str() }] }),
+  },
+};
 
 export const testEnumEntityContributions = {
   enum: {

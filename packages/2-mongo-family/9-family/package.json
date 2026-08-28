@@ -24,6 +24,7 @@
     "@internal/mongo-query-ast": "workspace:8.0.0-rc.8",
     "@internal/mongo-schema-ir": "workspace:8.0.0-rc.8",
     "@internal/mongo-value": "workspace:8.0.0-rc.8",
+    "@internal/psl-parser": "workspace:8.0.0-rc.8",
     "@internal/utils": "workspace:8.0.0-rc.8",
     "arktype": "catalog:",
     "mongodb": "catalog:",

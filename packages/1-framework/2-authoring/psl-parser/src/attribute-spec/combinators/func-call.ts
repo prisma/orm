@@ -47,10 +47,11 @@ function matchCallee(
   name: string,
   ctx: InterpretCtx,
 ): Result<FunctionCallAst, readonly PslDiagnostic[]> {
-  if (!(arg instanceof FunctionCallAst)) {
+  const call = FunctionCallAst.cast(arg.syntax);
+  if (call === undefined) {
     return notOk([leafDiagnostic(ctx, arg, 'Expected a function call')]);
   }
-  const qname = arg.name();
+  const qname = call.name();
   if (qname === undefined || qname.dot() !== undefined || qname.colon() !== undefined) {
     return notOk([leafDiagnostic(ctx, arg, 'Expected a function call')]);
   }
@@ -61,5 +62,5 @@ function matchCallee(
   if (calleeName !== name) {
     return notOk([leafDiagnostic(ctx, arg, `Expected ${name}()`)]);
   }
-  return ok(arg);
+  return ok(call);
 }

@@ -330,7 +330,7 @@ export function resolveEnumCodecId(
   ctx: AuthoringEntityContext,
 ): { readonly codecId: string; readonly codecSpan: PslSpan } | undefined {
   const sourceId = ctx.sourceId ?? 'unknown';
-  const typeAttr = block.blockAttributes.find((a) => a.name === 'type');
+  const typeAttr = block.attributes['type'];
 
   if (typeAttr === undefined) {
     const inferredKind = classifyEnumMemberType(block);
@@ -346,12 +346,8 @@ export function resolveEnumCodecId(
     return { codecId: ctx.enumInferenceCodecs[inferredKind], codecSpan: block.span };
   }
 
-  const rawCodecArg = typeAttr.args[0]?.value;
-  const codecId =
-    rawCodecArg?.startsWith('"') && rawCodecArg.endsWith('"') && rawCodecArg.length >= 2
-      ? rawCodecArg.slice(1, -1)
-      : undefined;
-  if (codecId === undefined) {
+  const codecId = typeAttr.args['codecId'];
+  if (typeof codecId !== 'string') {
     ctx.diagnostics?.push({
       code: 'PSL_ENUM_MISSING_TYPE',
       message: `enum "${block.name}" @@type attribute must have a quoted codec id argument`,
@@ -360,7 +356,7 @@ export function resolveEnumCodecId(
     });
     return undefined;
   }
-  return { codecId, codecSpan: typeAttr.args[0]?.span ?? typeAttr.span };
+  return { codecId, codecSpan: typeAttr.span };
 }
 
 export interface AuthoringEntityTypeTemplateOutput {
@@ -464,6 +460,7 @@ export interface AuthoringPslBlockDescriptor {
     readonly parameter: string;
     readonly attribute: string;
   };
+  readonly attributes?: Readonly<Record<string, unknown>>;
 }
 
 export type AuthoringPslBlockDescriptorNamespace = {
@@ -735,7 +732,12 @@ function isWellFormedDescriptor(value: unknown, descriptorKind: string): boolean
       if (!('required' in name) || typeof name.required !== 'boolean') return false;
       if (!('parameters' in value)) return false;
       const parameters = value.parameters;
-      return typeof parameters === 'object' && parameters !== null && !Array.isArray(parameters);
+      if (typeof parameters !== 'object' || parameters === null || Array.isArray(parameters)) {
+        return false;
+      }
+      if (!('attributes' in value) || value.attributes === undefined) return true;
+      const attributes = value.attributes;
+      return typeof attributes === 'object' && attributes !== null && !Array.isArray(attributes);
     }
     case 'modelAttribute': {
       if (

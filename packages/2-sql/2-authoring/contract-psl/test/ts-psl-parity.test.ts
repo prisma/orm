@@ -19,6 +19,7 @@ import {
   temporalCodecPresetMirrors,
   temporalConvenienceMirrors,
   testEnumEntityContributions,
+  testEnumPslBlockDescriptor,
 } from './fixtures';
 
 const sqlFamilyPack = {
@@ -61,6 +62,7 @@ const portablePostgresTargetPack = {
   defaultNamespaceId: 'public',
   authoring: {
     entityTypes: testEnumEntityContributions,
+    pslBlockDescriptors: { enum: testEnumPslBlockDescriptor },
     type: {},
   },
 } as const satisfies TargetPackRef<'sql', 'postgres'>;

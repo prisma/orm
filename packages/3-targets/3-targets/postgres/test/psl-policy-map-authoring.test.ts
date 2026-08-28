@@ -56,6 +56,15 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
   ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
 ]);
 
+function parsePsl(source: string) {
+  const { document, sourceFile } = parse(source);
+  return buildSymbolTable({
+    document,
+    sourceFile,
+    pslBlockDescriptors: assembled.pslBlockDescriptors,
+  });
+}
+
 function interpret(source: string) {
   const { document, sourceFile } = parse(source);
   const { table: symbolTable, diagnostics } = buildSymbolTable({
@@ -254,8 +263,8 @@ policy_select p_read {
     );
   });
 
-  it('an argument-less @@map() is PSL_POLICY_INVALID_MAP and the policy is skipped', () => {
-    const result = interpret(
+  it('an argument-less @@map() is a symbol-table diagnostic from the kit', () => {
+    const { diagnostics } = parsePsl(
       policyDoc(`
   policy_select p_read {
     target = profile
@@ -265,20 +274,16 @@ policy_select p_read {
   }
 `),
     );
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toContainEqual(
+    expect(diagnostics).toEqual([
       expect.objectContaining({
-        code: 'PSL_POLICY_INVALID_MAP',
-        message:
-          '`policy_select` policy "p_read" @@map attribute must have a quoted, non-empty policy-name argument',
-        span: expect.anything(),
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Attribute "map" is missing required argument "name"',
       }),
-    );
+    ]);
   });
 
-  it('an unquoted @@map(foo) argument is PSL_POLICY_INVALID_MAP and the policy is skipped', () => {
-    const result = interpret(
+  it('an unquoted @@map(foo) argument is a symbol-table diagnostic from the kit', () => {
+    const { diagnostics } = parsePsl(
       policyDoc(`
   policy_select p_read {
     target = profile
@@ -288,20 +293,16 @@ policy_select p_read {
   }
 `),
     );
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toContainEqual(
+    expect(diagnostics).toEqual([
       expect.objectContaining({
-        code: 'PSL_POLICY_INVALID_MAP',
-        message:
-          '`policy_select` policy "p_read" @@map attribute must have a quoted, non-empty policy-name argument',
-        span: expect.anything(),
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Expected a string literal',
       }),
-    );
+    ]);
   });
 
   it('an empty @@map("") argument is PSL_POLICY_INVALID_MAP — an empty string is not a legal physical name', () => {
-    const result = interpret(
+    const { diagnostics } = parsePsl(
       policyDoc(`
   policy_select p_read {
     target = profile
@@ -311,16 +312,12 @@ policy_select p_read {
   }
 `),
     );
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toContainEqual(
+    expect(diagnostics).toEqual([
       expect.objectContaining({
         code: 'PSL_POLICY_INVALID_MAP',
-        message:
-          '`policy_select` policy "p_read" @@map attribute must have a quoted, non-empty policy-name argument',
-        span: expect.anything(),
+        message: '@@map policy name must be a non-empty string',
       }),
-    );
+    ]);
   });
 
   it('without @@map the wire lowering is unchanged — head prefix, wire name', () => {

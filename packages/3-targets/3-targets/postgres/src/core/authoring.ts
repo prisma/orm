@@ -17,7 +17,7 @@ import type {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type { ModelAttributeSpecFactory } from '@internal/psl-parser';
-import { modelAttribute } from '@internal/psl-parser';
+import { blockAttribute, leafDiagnostic, modelAttribute, str } from '@internal/psl-parser';
 import type {
   EntityHandleLoweringInput,
   LoweredPackEntity,
@@ -27,7 +27,7 @@ import type {
 import { exactNameBodyWarning } from '@internal/sql-contract/index-naming';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { assertWireNamePrefixLength, normalizeSqlBody } from '@internal/sql-schema-ir/naming';
-import { assertDefined } from '@internal/utils/assertions';
+import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { PG_ENUM_CODEC_ID } from './codec-ids';
@@ -53,7 +53,6 @@ import { computeContentHash, POLICY_OPERATION_PREDICATES } from './rls/canonical
 const PSL_RLS_PREDICATE_NOT_FOR_OPERATION: ContributedPslDiagnosticCode =
   'PSL_RLS_PREDICATE_NOT_FOR_OPERATION';
 const PSL_POLICY_INVALID_MAP: ContributedPslDiagnosticCode = 'PSL_POLICY_INVALID_MAP';
-const PSL_NATIVE_ENUM_INVALID_MAP: ContributedPslDiagnosticCode = 'PSL_NATIVE_ENUM_INVALID_MAP';
 const PSL_NATIVE_ENUM_BARE_MEMBER: ContributedPslDiagnosticCode = 'PSL_NATIVE_ENUM_BARE_MEMBER';
 const PSL_EXTENSION_INVALID_VALUE: ContributedPslDiagnosticCode = 'PSL_EXTENSION_INVALID_VALUE';
 const PSL_NATIVE_ENUM_DUPLICATE_MEMBER_VALUE: ContributedPslDiagnosticCode =
@@ -270,22 +269,10 @@ function lowerRlsPolicyFromBlock(
   // and no wire-prefix length cap (exact names are verbatim physical names,
   // same stance as index `map:`). The block head stays the source-level
   // logical identifier, so head-keyed duplicate checking is unchanged.
-  const mapAttr = block.blockAttributes.find((a) => a.name === 'map');
-  if (mapAttr) {
-    const rawArg = mapAttr.args[0]?.value;
-    const exactName =
-      rawArg?.startsWith('"') && rawArg.endsWith('"') && rawArg.length >= 2
-        ? unwrapQuotedString(rawArg)
-        : undefined;
-    if (exactName === undefined || exactName === '') {
-      ctx.diagnostics?.push({
-        code: PSL_POLICY_INVALID_MAP,
-        message: `\`${block.keyword}\` policy "${block.name}" @@map attribute must have a quoted, non-empty policy-name argument`,
-        sourceId: ctx.sourceId ?? 'unknown',
-        span: mapAttr.span,
-      });
-      return undefined;
-    }
+  const mapAttr = block.attributes['map'];
+  if (mapAttr !== undefined) {
+    const exactName = mapAttr.args['name'];
+    invariant(typeof exactName === 'string', '@@map on a policy block parses one string argument');
     ctx.warnings?.push(exactNameBodyWarning('policy', exactName));
     return new PostgresRlsPolicy({
       naming: { kind: 'exact', name: exactName },
@@ -328,20 +315,14 @@ function lowerNativeEnumFromBlock(
   const sourceId = ctx.sourceId ?? 'unknown';
   const diagnostics = ctx.diagnostics;
 
-  const mapAttr = block.blockAttributes.find((a) => a.name === 'map');
+  const mapAttr = block.attributes['map'];
   let typeName = block.name;
-  if (mapAttr) {
-    const rawArg = mapAttr.args[0]?.value;
-    const mapped = rawArg !== undefined ? unwrapQuotedString(rawArg) : undefined;
-    if (mapped === undefined) {
-      diagnostics?.push({
-        code: PSL_NATIVE_ENUM_INVALID_MAP,
-        message: `native_enum "${block.name}" @@map attribute must have a quoted type-name argument`,
-        sourceId,
-        span: mapAttr.span,
-      });
-      return undefined;
-    }
+  if (mapAttr !== undefined) {
+    const mapped = mapAttr.args['name'];
+    invariant(
+      typeof mapped === 'string',
+      '@@map on a native_enum block parses one string argument',
+    );
     typeName = mapped;
   }
 
@@ -532,6 +513,27 @@ const policyPermissiveParam = { kind: 'value', codecId: 'pg/bool@1' } as const;
 // the model and the policy prefix.
 const policyRequiresRls = { parameter: 'target', attribute: 'rls' } as const;
 
+const policyMapAttribute = blockAttribute('map', {
+  positional: [{ key: 'name', type: str() }],
+  refine: (parsed, ctx, attributeNode) =>
+    parsed.name === ''
+      ? [
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '@@map policy name must be a non-empty string',
+            PSL_POLICY_INVALID_MAP,
+          ),
+        ]
+      : [],
+});
+
+const policyBlockAttributes = { map: () => policyMapAttribute };
+
+const nativeEnumMapAttribute = blockAttribute('map', {
+  positional: [{ key: 'name', type: str() }],
+});
+
 export const postgresAuthoringPslBlockDescriptors = {
   // The predicate param set per keyword mirrors Postgres: SELECT/DELETE take
   // USING only; INSERT takes WITH CHECK only; UPDATE/ALL take both. The
@@ -551,6 +553,7 @@ export const postgresAuthoringPslBlockDescriptors = {
       permissive: policyPermissiveParam,
     },
     requiresModelAttribute: policyRequiresRls,
+    attributes: policyBlockAttributes,
   },
   policy_delete: {
     kind: 'pslBlock',
@@ -564,6 +567,7 @@ export const postgresAuthoringPslBlockDescriptors = {
       permissive: policyPermissiveParam,
     },
     requiresModelAttribute: policyRequiresRls,
+    attributes: policyBlockAttributes,
   },
   policy_insert: {
     kind: 'pslBlock',
@@ -577,6 +581,7 @@ export const postgresAuthoringPslBlockDescriptors = {
       permissive: policyPermissiveParam,
     },
     requiresModelAttribute: policyRequiresRls,
+    attributes: policyBlockAttributes,
   },
   policy_update: {
     kind: 'pslBlock',
@@ -591,6 +596,7 @@ export const postgresAuthoringPslBlockDescriptors = {
       permissive: policyPermissiveParam,
     },
     requiresModelAttribute: policyRequiresRls,
+    attributes: policyBlockAttributes,
   },
   policy_all: {
     kind: 'pslBlock',
@@ -605,6 +611,7 @@ export const postgresAuthoringPslBlockDescriptors = {
       permissive: policyPermissiveParam,
     },
     requiresModelAttribute: policyRequiresRls,
+    attributes: policyBlockAttributes,
   },
   /**
    * PSL block descriptor for `native_enum`.
@@ -623,6 +630,7 @@ export const postgresAuthoringPslBlockDescriptors = {
     name: { required: true },
     parameters: {},
     variadicParameters: true,
+    attributes: { map: () => nativeEnumMapAttribute },
   },
   /**
    * PSL block descriptor for `role` (e.g. `role anon {}`). Name-only, no

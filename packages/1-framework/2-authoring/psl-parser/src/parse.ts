@@ -1,4 +1,4 @@
-import type { PslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import type { PslDiagnostic, PslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { UNSPECIFIED_PSL_NAMESPACE_ID } from '@internal/framework-components/psl-ast';
 import { type Range, SourceFile } from './source-file';
 import { DocumentAst } from './syntax/ast/declarations';
@@ -9,7 +9,7 @@ import type { SyntaxKind } from './syntax/syntax-kind';
 import { isTerminatedStringLiteral, type Token, Tokenizer, type TokenKind } from './tokenizer';
 
 export interface ParseDiagnostic {
-  readonly code: PslDiagnosticCode;
+  readonly code: PslDiagnostic['code'];
   readonly message: string;
   readonly range: Range;
 }

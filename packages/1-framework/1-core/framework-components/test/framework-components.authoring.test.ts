@@ -983,6 +983,7 @@ describe('classifyEnumMemberType', () => {
       name: 'TestEnum',
       parameters,
       blockAttributes: [],
+      attributes: {},
       span: testSpan,
     };
   }

@@ -8,75 +8,75 @@ import type { AstNode } from '../syntax/ast-helpers';
 
 export type AttributeLevel = 'field' | 'model' | 'block';
 
-export interface ArgType<T> {
-  readonly kind: string;
-  readonly label: string;
-  // phantom carrier for `T`; never read at runtime.
-  readonly _out?: T;
-  parse(arg: ExpressionAst, ctx: InterpretCtx): Result<T, readonly PslDiagnostic[]>;
-}
-
-export interface InterpretCtx {
+export interface BlockInterpretCtx {
   readonly level: AttributeLevel;
   readonly sourceId: string;
   readonly sourceFile: SourceFile;
+}
+
+export interface InterpretCtx extends BlockInterpretCtx {
   readonly selfModel: ModelSymbol;
   resolveReferencedModel(): ModelSymbol | undefined;
   readonly field?: FieldSymbol;
 }
 
-export interface OptionalArgType<T> extends ArgType<T> {
+export interface ArgType<T, Ctx extends BlockInterpretCtx = InterpretCtx> {
+  readonly kind: string;
+  readonly label: string;
+  // phantom carrier for `T`; never read at runtime.
+  readonly _out?: T;
+  readonly parse: (arg: ExpressionAst, ctx: Ctx) => Result<T, readonly PslDiagnostic[]>;
+}
+
+export interface OptionalArgType<T, Ctx extends BlockInterpretCtx = InterpretCtx>
+  extends ArgType<T, Ctx> {
   // the engine detects optionality by checking for this marker (`'optional' in param`).
   readonly optional: true;
   readonly hasDefault: boolean;
   readonly defaultValue?: T;
 }
 
-export type Param<T> = ArgType<T>;
+export type Param<T, Ctx extends BlockInterpretCtx = InterpretCtx> = ArgType<T, Ctx>;
 
-export interface PositionalParam<T = unknown> {
+export interface PositionalParam<T = unknown, Ctx extends BlockInterpretCtx = InterpretCtx> {
   readonly key: string;
-  readonly type: Param<T>;
+  readonly type: Param<T, Ctx>;
 }
 
-export interface AttributeSpec<Out> {
+export interface AttributeSpec<Out, Ctx extends BlockInterpretCtx = InterpretCtx> {
   readonly level: AttributeLevel;
   readonly name: string;
-  readonly positional: readonly PositionalParam[];
-  readonly named: Readonly<Record<string, Param<unknown>>>;
+  readonly positional: readonly PositionalParam<unknown, Ctx>[];
+  readonly named: Readonly<Record<string, Param<unknown, Ctx>>>;
   /**
    * Cross-argument validation after all arguments parse. `attributeNode` is
    * the attribute's own AST node so refines can span-anchor their
    * diagnostics at the attribute rather than the enclosing model.
    */
-  readonly refine?: (
-    parsed: Out,
-    ctx: InterpretCtx,
-    attributeNode: AstNode,
-  ) => readonly PslDiagnostic[];
+  readonly refine?: (parsed: Out, ctx: Ctx, attributeNode: AstNode) => readonly PslDiagnostic[];
 }
 
-export type OutOf<P> = P extends ArgType<infer T> ? T : never;
+export type OutOf<P> = P extends ArgType<infer T, never> ? T : never;
 
-export type NamedOut<N extends Record<string, Param<unknown>>> = Simplify<
-  { [K in keyof N as N[K] extends OptionalArgType<unknown> ? never : K]: OutOf<N[K]> } & {
-    [K in keyof N as N[K] extends OptionalArgType<unknown> ? K : never]?: OutOf<N[K]>;
+export type NamedOut<N extends Record<string, Param<unknown, never>>> = Simplify<
+  { [K in keyof N as N[K] extends OptionalArgType<unknown, never> ? never : K]: OutOf<N[K]> } & {
+    [K in keyof N as N[K] extends OptionalArgType<unknown, never> ? K : never]?: OutOf<N[K]>;
   }
 >;
 
-type PosEntryObject<E extends PositionalParam> =
-  E['type'] extends OptionalArgType<unknown>
+type PosEntryObject<E extends PositionalParam<unknown, never>> =
+  E['type'] extends OptionalArgType<unknown, never>
     ? { [K in E['key']]?: OutOf<E['type']> }
     : { [K in E['key']]: OutOf<E['type']> };
 
-export type PosOut<Pos extends readonly PositionalParam[]> = Simplify<
+export type PosOut<Pos extends readonly PositionalParam<unknown, never>[]> = Simplify<
   UnionToIntersection<{ [I in keyof Pos]: PosEntryObject<Pos[I]> }[number]>
 >;
 
 export type AttributeOut<
-  Pos extends readonly PositionalParam[],
-  Named extends Record<string, Param<unknown>>,
+  Pos extends readonly PositionalParam<unknown, never>[],
+  Named extends Record<string, Param<unknown, never>>,
 > = Simplify<PosOut<Pos> & NamedOut<Named>>;
 
 // `S` is unconstrained on purpose: `refine` makes `Out` contravariant, so a bound like `S extends AttributeSpec<unknown>` would reject every spec that uses `refine`.
-export type InferAttr<S> = S extends AttributeSpec<infer Out> ? Out : never;
+export type InferAttr<S> = S extends AttributeSpec<infer Out, never> ? Out : never;

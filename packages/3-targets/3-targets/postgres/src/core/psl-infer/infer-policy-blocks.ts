@@ -138,6 +138,7 @@ export function buildPolicyBlocks(
           span: SYNTHETIC_SPAN,
         },
       ],
+      attributes: { map: { args: { name: policy.name }, span: SYNTHETIC_SPAN } },
       span: SYNTHETIC_SPAN,
     });
   }

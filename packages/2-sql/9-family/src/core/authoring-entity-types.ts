@@ -7,6 +7,7 @@ import {
   type PslExtensionBlock,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
+import { blockAttribute, str } from '@internal/psl-parser';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 
@@ -141,6 +142,10 @@ export const sqlFamilyEntityTypes: AuthoringEntityTypeNamespace = {
   enum: sqlFamilyEnumEntityDescriptor,
 };
 
+const enumTypeBlockAttribute = blockAttribute('type', {
+  positional: [{ key: 'codecId', type: str() }],
+});
+
 export const sqlFamilyPslBlockDescriptors = {
   enum: {
     kind: 'pslBlock',
@@ -149,5 +154,6 @@ export const sqlFamilyPslBlockDescriptors = {
     name: { required: true },
     parameters: {},
     variadicParameters: true,
+    attributes: { type: () => enumTypeBlockAttribute },
   },
 } as const satisfies AuthoringPslBlockDescriptorNamespace;

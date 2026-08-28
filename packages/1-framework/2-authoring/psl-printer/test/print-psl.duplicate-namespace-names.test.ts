@@ -72,6 +72,7 @@ function widgetBlock(name: string, member: string): PslExtensionBlock {
     name,
     parameters: { [member]: { kind: 'value', raw: JSON.stringify(member), span: ZERO_SPAN } },
     blockAttributes: [],
+    attributes: {},
     span: ZERO_SPAN,
   };
 }

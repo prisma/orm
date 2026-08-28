@@ -111,6 +111,7 @@ export type PslDiagnosticCode =
    * A `@@`-prefixed block-attribute line inside an extension block has invalid syntax.
    */
   | 'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE'
+  | 'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE'
   /**
    * Duplicate scopes are top level, namespace body, or block fields; diagnostics
    * are first-wins and anchored on later name spans.
@@ -251,6 +252,11 @@ export interface PslExtensionBlockAttribute {
   readonly span: PslSpan;
 }
 
+export interface PslExtensionBlockParsedAttribute {
+  readonly args: Readonly<Record<string, unknown>>;
+  readonly span: PslSpan;
+}
+
 /**
  * Base shape for a uniform extension-contributed top-level PSL block
  * node, as produced by the generic framework parser and consumed by the
@@ -294,5 +300,6 @@ export interface PslExtensionBlock {
   readonly name: string;
   readonly parameters: Record<string, PslExtensionBlockParamValue>;
   readonly blockAttributes: readonly PslExtensionBlockAttribute[];
+  readonly attributes: Readonly<Record<string, PslExtensionBlockParsedAttribute>>;
   readonly span: PslSpan;
 }
