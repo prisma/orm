@@ -1,6 +1,6 @@
 import type { WhereFilter } from '@prisma/orm-postgres/builder/types';
 import { expectTypeOf, test } from 'vitest';
-import type { Contract } from '../src/prisma/contract.d';
+import type { Contract } from '../src/prisma/contract';
 import { db } from '../src/prisma/db';
 
 const userId = '00000000-0000-0000-0000-000000000001';

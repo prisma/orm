@@ -1,7 +1,7 @@
 import type { RelationPredicate, ShorthandWhereFilter } from '@prisma/orm-postgres/orm-client';
 import { expectTypeOf, test } from 'vitest';
 import { createOrmClient } from '../src/orm-client/client';
-import type { Contract } from '../src/prisma/contract.d';
+import type { Contract } from '../src/prisma/contract';
 
 const userId = '00000000-0000-0000-0000-000000000001';
 
