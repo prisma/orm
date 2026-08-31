@@ -83,7 +83,7 @@ gh pr list --state merged --base main --limit 200 \
   --json number,title,author,labels,mergeCommit,mergedAt
 
 # Or resolve a single PR by its merge commit:
-gh api "repos/prisma/prisma/commits/<sha>/pulls" \
+gh api "repos/prisma/orm/commits/<sha>/pulls" \
   --jq '.[] | {number, title, author: .user.login, labels: [.labels[].name]}'
 ```
 
@@ -121,16 +121,16 @@ Write the entries under the fixed section order from [`docs/releases/README.md`]
 3. **Fixes** — bug fixes.
 4. **New contributors** — first-time contributors, with the PR that welcomed them.
 
-Breaking changes lead because they are what a reader scanning the notes most needs to see. Every line links its PR as an **absolute markdown link** — `[#NNN](https://github.com/prisma/prisma/pull/NNN)`, never bare `#NNN`. Bare references only autolink inside the GitHub Release body; they render as plain text when the committed `docs/releases/v<version>.md` is read as a repo file or in PR review, so the explicit link form is what makes every reference work in every context.
+Breaking changes lead because they are what a reader scanning the notes most needs to see. Every line links its PR as an **absolute markdown link** — `[#NNN](https://github.com/prisma/orm/pull/NNN)`, never bare `#NNN`. Bare references only autolink inside the GitHub Release body; they render as plain text when the committed `docs/releases/v<version>.md` is read as a repo file or in PR review, so the explicit link form is what makes every reference work in every context.
 
 ### 6. Anchor breaking-change entries to their migration recipe
 
 A breaking change shipping in this release has a matching upgrade-instructions directory keyed to the minor transition, following the convention enforced by [`scripts/check-upgrade-coverage.mjs`](../../scripts/check-upgrade-coverage.mjs) and authored via [`record-upgrade-instructions`](../record-upgrade-instructions/SKILL.md). The transition label — written `<transition-label>` below — names both ends of the hop, each end rendered the way `versionSegment()` in [`scripts/check-upgrade-coverage.mjs`](../../scripts/check-upgrade-coverage.mjs) renders it: a stable version truncates to `major.minor` (`v0.11.0` → `0.12.0` gives `0.11-to-0.12`), and a prerelease keeps its full version string (`8.0.0-rc.1-to-8.0.0-rc.2`). Point the breaking note at the recipe directory rather than restating the migration.
 
-**Recipe links must be absolute, tag-pinned URLs** — `https://github.com/prisma/prisma/blob/v$NEXT/...`. The notes file becomes the GitHub Release body via `--notes-file`, and the Release page does **not** reliably resolve repo-relative links, so a relative recipe path would publish as a dead migration link. Pinning to the release tag (`/blob/v$NEXT/`) means the link always resolves and never rots as the recipe tree evolves on `main`:
+**Recipe links must be absolute, tag-pinned URLs** — `https://github.com/prisma/orm/blob/v$NEXT/...`. The notes file becomes the GitHub Release body via `--notes-file`, and the Release page does **not** reliably resolve repo-relative links, so a relative recipe path would publish as a dead migration link. Pinning to the release tag (`/blob/v$NEXT/`) means the link always resolves and never rots as the recipe tree evolves on `main`:
 
-- User-facing migrations: `https://github.com/prisma/prisma/blob/v$NEXT/skills/prisma-8/upgrading/app/upgrades/<transition-label>/`
-- Extension-author migrations: `https://github.com/prisma/prisma/blob/v$NEXT/skills/prisma-8/upgrading/extension/upgrades/<transition-label>/`
+- User-facing migrations: `https://github.com/prisma/orm/blob/v$NEXT/skills/prisma-8/upgrading/app/upgrades/<transition-label>/`
+- Extension-author migrations: `https://github.com/prisma/orm/blob/v$NEXT/skills/prisma-8/upgrading/extension/upgrades/<transition-label>/`
 
 A breaking change can affect one or both audiences — link whichever recipe directories exist.
 
@@ -151,7 +151,7 @@ Prose tells a reader *that* something changed; a short before/after snippet show
 The format is the prose bullet, then the nested example:
 
 ````md
-- **<title>** — <what changed and what the reader must do; recipe link>. ([#<pr>](https://github.com/prisma/prisma/pull/<pr>))
+- **<title>** — <what changed and what the reader must do; recipe link>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>))
 
   Before:
 
@@ -171,7 +171,7 @@ The format is the prose bullet, then the nested example:
 Preserve the "New contributors" credit that `--generate-notes` gave for free. Each first-time contributor gets a line naming the PR that welcomed them, with both the handle and the PR as absolute links:
 
 ```md
-- [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/prisma/pull/<pr>)
+- [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/orm/pull/<pr>)
 ```
 
 Resolve first-time status from PR author metadata (e.g. `gh api` `author_association` of `FIRST_TIME_CONTRIBUTOR` / `FIRST_TIMER`, or by checking whether the author appears in the range before this PR).
@@ -187,7 +187,7 @@ Fill the [`docs/releases/README.md`](../../docs/releases/README.md) template int
 
 ## Breaking changes
 
-- **<short title>** — <what changed and what the reader must do; link the upgrade recipe>. ([#<pr>](https://github.com/prisma/prisma/pull/<pr>))
+- **<short title>** — <what changed and what the reader must do; link the upgrade recipe>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>))
 
   Before:
 
@@ -203,15 +203,15 @@ Fill the [`docs/releases/README.md`](../../docs/releases/README.md) template int
 
 ## Features
 
-- <new capability>. ([#<pr>](https://github.com/prisma/prisma/pull/<pr>))
+- <new capability>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>))
 
 ## Fixes
 
-- <bug fix>. ([#<pr>](https://github.com/prisma/prisma/pull/<pr>))
+- <bug fix>. ([#<pr>](https://github.com/prisma/orm/pull/<pr>))
 
 ## New contributors
 
-- [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/prisma/pull/<pr>)
+- [@<handle>](https://github.com/<handle>) made their first contribution in [#<pr>](https://github.com/prisma/orm/pull/<pr>)
 ````
 
 Then **prepend** a `## v$NEXT` entry to [`CHANGELOG.md`](../../CHANGELOG.md), mirroring the notes-file body (newest-first). The CHANGELOG is a plain newest-first mirror — no second authoring format, no "Keep a Changelog" headers; copy the section bodies under the `## v$NEXT` header at the top of the entry list (below the file's intro and the `<!-- New release entries go here … -->` marker).
@@ -251,8 +251,8 @@ Cutting `v0.12.0` from `origin/main` (previous stable tag `v0.11.0`).
 3. PR #1240's title is `TML-2536: contract deserializer seam`. Read TML-2536 in Linear → the user-facing outcome is "contract deserialization now goes through an explicit adapter seam". Write that outcome in public words; cite #1240, not TML-2536.
 4. Triage: #1240 changes the contract format → **always-include, breaking**. A CI-cache tweak (#1237) and a test-only refactor (#1239) → **default-exclude**, dropped silently. A new `includeMany` capability (#1234) → feature. A null-handling bug fix (#1242) → fix. First-time contributor @somebody on #1238.
 5. Categorize: Breaking changes (#1240) → Features (#1234) → Fixes (#1242) → New contributors (@somebody, #1238).
-6. The breaking change's transition is `0.11-to-0.12`. The recipe dir `skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/` exists in the checkout → the breaking note links it as a tag-pinned URL, `https://github.com/prisma/prisma/blob/v0.12.0/skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/`. (If it were absent, the note would describe the required adapter migration inline instead.)
-7. #1240 is a code-visible contract-shape/runtime change, so it earns a before/after example — lifted from the `0.11-to-0.12` recipe (a TS runtime change, so a `ts` fence). @somebody's contributor line, with absolute links: `- [@somebody](https://github.com/somebody) made their first contribution in [#1238](https://github.com/prisma/prisma/pull/1238)`.
+6. The breaking change's transition is `0.11-to-0.12`. The recipe dir `skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/` exists in the checkout → the breaking note links it as a tag-pinned URL, `https://github.com/prisma/orm/blob/v0.12.0/skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/`. (If it were absent, the note would describe the required adapter migration inline instead.)
+7. #1240 is a code-visible contract-shape/runtime change, so it earns a before/after example — lifted from the `0.11-to-0.12` recipe (a TS runtime change, so a `ts` fence). @somebody's contributor line, with absolute links: `- [@somebody](https://github.com/somebody) made their first contribution in [#1238](https://github.com/prisma/orm/pull/1238)`.
 8. Write `docs/releases/v0.12.0.md` (every PR ref + handle an absolute link; the breaking entry carries a before/after):
 
 ````md
@@ -262,7 +262,7 @@ Contract deserialization gains an explicit adapter seam, and queries can now eag
 
 ## Breaking changes
 
-- **Contract deserialization requires an adapter seam** — deserialization now goes through an explicit seam adapter; existing code must register one. See the [0.11-to-0.12 upgrade recipe](https://github.com/prisma/prisma/blob/v0.12.0/skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/). ([#1240](https://github.com/prisma/prisma/pull/1240))
+- **Contract deserialization requires an adapter seam** — deserialization now goes through an explicit seam adapter; existing code must register one. See the [0.11-to-0.12 upgrade recipe](https://github.com/prisma/orm/blob/v0.12.0/skills/prisma-8/upgrading/app/upgrades/0.11-to-0.12/). ([#1240](https://github.com/prisma/orm/pull/1240))
 
   Before:
 
@@ -278,15 +278,15 @@ Contract deserialization gains an explicit adapter seam, and queries can now eag
 
 ## Features
 
-- `includeMany` eager-loads related records in a single query. ([#1234](https://github.com/prisma/prisma/pull/1234))
+- `includeMany` eager-loads related records in a single query. ([#1234](https://github.com/prisma/orm/pull/1234))
 
 ## Fixes
 
-- Null values in `returning()` projections no longer throw. ([#1242](https://github.com/prisma/prisma/pull/1242))
+- Null values in `returning()` projections no longer throw. ([#1242](https://github.com/prisma/orm/pull/1242))
 
 ## New contributors
 
-- [@somebody](https://github.com/somebody) made their first contribution in [#1238](https://github.com/prisma/prisma/pull/1238)
+- [@somebody](https://github.com/somebody) made their first contribution in [#1238](https://github.com/prisma/orm/pull/1238)
 ````
 
    Then prepend the same body under `## v0.12.0` to `CHANGELOG.md`.
