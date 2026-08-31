@@ -51,7 +51,7 @@ Before opening the PR, check:
 - **One logical change.** If the diff includes unrelated cleanup or "while I was here" fixes, ask the user whether to split them into separate PRs. Mixed-scope PRs almost always trigger a "please split this" review comment.
 - **Substantive change?** If the change is more than a typo / doc fix / obvious bug fix, ask the user whether they opened a tracking issue first per `CONTRIBUTING.md`. If not, recommend they do — maintainers will respond within 5 business days, and a half-day issue conversation can prevent a one-week PR rewrite when the design direction differs from what they expect.
 - **Tests updated.** If the change has any behavioural delta and there are no test changes in the diff, push back on the user before opening the PR. "Why aren't there tests?" is the most common reason a PR gets bounced.
-- **No backward-compat shims.** Prisma Next is pre-1.0; if the change renames or removes an API, the call sites should be updated, not aliased.
+- **No backward-compat shims.** Prisma 8 is RC; if the change renames or removes an API, the call sites should be updated, not aliased.
 
 ### Step 3 — Run the right test suites
 
