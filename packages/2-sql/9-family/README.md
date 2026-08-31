@@ -136,16 +136,6 @@ The runner returns structured errors with the following codes:
 - **`./runtime`**: Runtime plane identity exports only (family ID, types, descriptor identity). Does **not** export runtime creation helpers—use `instantiateExecutionStack` from `@internal/framework-components/execution` and `createExecutionContext`, `createRuntime`, `createSqlExecutionStack` from `@internal/sql-runtime`. See [ADR 152](../../../docs/architecture%20docs/adrs/ADR%20152%20-%20Execution%20Plane%20Descriptors%20and%20Instances.md).
 - **`./verify`**: Marker row parsing helper (`parseContractMarkerRow`). Marker reads are owned by each `SqlControlAdapter` (e.g. `PostgresControlAdapter.readMarker`) so dialect-specific SQL stays target-local.
 
-## Dependencies
-
-- **`@internal/framework-components`**: Control plane types via `./control` (`ControlFamilyDescriptor`, `ControlTargetDescriptor`, `ControlAdapterDescriptor`, `ControlDriverDescriptor`, `ControlExtensionDescriptor`, `ControlDriverInstance`, etc.)
-- **`@internal/sql-contract-emitter`**: SQL target family hook (`sqlEmission`)
-- **`@internal/sql-contract`**: SQL contract types plus validation primitives (`validateSqlContractFully`, consumed by the family serializer base)
-- **`@internal/sql-operations`**: SQL operation registry types (`SqlOperationEntry`, `SqlOperationRegistry`)
-
-**Dependents:**
-- CLI configuration files import this package to register the SQL family
-
 ## How to debug `db init`
 
 - **CLI orchestration**: `packages/1-framework/3-tooling/cli/src/commands/db-init.ts`

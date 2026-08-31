@@ -29,14 +29,17 @@ policy_select profile_owner_read {
 
 Neither the framework nor the SQL family knows what `@@rls` means. The Postgres target teaches the interpreter both facts about it declaratively.
 
-First, the attribute itself — a descriptor naming it, specifying its parameters (none), and lowering it to a pack entity:
+First, the attribute itself — a descriptor naming it, supplying a factory for its parameter spec (no parameters here), and lowering it to a pack entity:
 
 ```ts
+const postgresRlsSpec = modelAttribute('rls', {});
+const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
+
 export const postgresAuthoringModelAttributes = {
   rls: {
     kind: 'modelAttribute',
     attribute: 'rls',
-    spec: modelAttribute('rls', {}),
+    spec: postgresRlsSpecFactory,
     lower: (_parsed, ctx) => ({
       key: ctx.storageName,
       entity: new PostgresRlsEnablement({ tableName: ctx.storageName, namespaceId: ctx.namespaceId }),
@@ -66,10 +69,12 @@ Both live on the authoring contribution surface (`framework-components/src/share
 A registry of `AuthoringModelAttributeDescriptor`s. Each descriptor:
 
 - **claims a bare `@@` attribute name** (`attribute: 'rls'`);
-- **supplies the declarative parameter spec**, built with the same `modelAttribute(...)` spec constructors as every other declarative attribute ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)) — so parsing, validation, and printing come for free from the generic machinery;
+- **supplies a factory for the declarative parameter spec** — a `ModelAttributeSpecFactory`, called with the declaring model's context and returning a spec built with the same `modelAttribute(...)` constructors as every other declarative attribute ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)) — so parsing, validation, and printing come for free from the generic machinery. A spec that needs nothing from the context, like `@@rls`, returns a hoisted module constant so its identity is stable across calls;
 - **supplies a `lower` function** that turns the parsed attribute into a pack entity keyed into the namespace's `entries`.
 
-The family interpreter's model-attribute loop consults registered descriptors generically; a contribution supplies only the spec and the lowering.
+The factory indirection is uniform across every registered attribute spec, so one entry shape serves both this channel and the family built-ins that share the registry.
+
+The family interpreter's model-attribute loop consults registered descriptors generically: it invokes the factory with the symbol table, the declaring `ModelSymbol`, and the composed stack's mutation-default functions, then interprets the attribute's arguments against the returned spec. A contribution supplies only the spec factory and the lowering.
 
 ### `AuthoringPslBlockDescriptor.requiresModelAttribute`
 

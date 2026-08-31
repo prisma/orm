@@ -40,12 +40,13 @@ import type { CollationOptions } from '@internal/mongo-value/mongodb-types';
 import type {
   CompositeTypeSymbol,
   FieldSymbol,
+  InferAttr,
   ModelSymbol,
   NamespaceSymbol,
   PslExtensionBlock,
   PslSpan,
-  ResolvedAttribute,
   SymbolTable,
+  TypedFuncCall,
 } from '@internal/psl-parser';
 import { nodePslSpan } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
@@ -55,15 +56,18 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { deriveJsonSchema, derivePolymorphicJsonSchema } from './derive-json-schema';
 import {
-  getAttribute,
-  getMapName,
-  getNamedArgument,
-  getPositionalArgument,
-  lowerFirst,
-  parseIndexFieldList,
-  parseQuotedStringLiteral,
-  parseRelationAttribute,
-} from './psl-helpers';
+  baseModelSpec,
+  buildIndexModelSpecs,
+  discriminatorModelSpec,
+  findFieldAttributeNode,
+  findModelAttributeNode,
+  interpretFieldAttribute,
+  interpretModelAttribute,
+  mapFieldSpec,
+  mapModelSpec,
+  relationFieldSpec,
+} from './mongo-attribute-specs';
+import { getAttribute, lowerFirst } from './psl-helpers';
 
 /**
  * Encode an authored enum value to its codec-encoded JSON form via the codec resolved by id from the
@@ -116,6 +120,11 @@ interface FieldMappings {
   readonly pslNameToMapped: Map<string, string>;
 }
 
+interface MongoModelMetadata {
+  readonly collectionName: string;
+  readonly fieldMappings: FieldMappings;
+}
+
 interface FkRelation {
   readonly declaringModel: string;
   readonly fieldName: string;
@@ -129,17 +138,52 @@ function fkRelationPairKey(declaringModel: string, targetModel: string): string 
   return `${declaringModel}::${targetModel}`;
 }
 
-function resolveFieldMappings(model: ModelSymbol): FieldMappings {
+function resolveFieldMappings(input: {
+  readonly model: ModelSymbol;
+  readonly sourceFile: SourceFile;
+  readonly sourceId: string;
+  readonly diagnostics: ContractSourceDiagnostic[];
+}): FieldMappings {
+  const { model, sourceFile, sourceId, diagnostics } = input;
   const pslNameToMapped = new Map<string, string>();
   for (const field of Object.values(model.fields)) {
-    const mapped = getMapName(field.attributes) ?? field.name;
+    const mapNode = findFieldAttributeNode(field, 'map');
+    const mapped =
+      (mapNode
+        ? interpretFieldAttribute({
+            node: mapNode,
+            spec: mapFieldSpec,
+            model,
+            field,
+            sourceFile,
+            sourceId,
+            diagnostics,
+          })?.name
+        : undefined) ?? field.name;
     pslNameToMapped.set(field.name, mapped);
   }
   return { pslNameToMapped };
 }
 
-function resolveCollectionName(model: ModelSymbol): string {
-  return getMapName(model.attributes) ?? lowerFirst(model.name);
+function resolveCollectionName(input: {
+  readonly model: ModelSymbol;
+  readonly sourceFile: SourceFile;
+  readonly sourceId: string;
+  readonly diagnostics: ContractSourceDiagnostic[];
+}): string {
+  const { model, sourceFile, sourceId, diagnostics } = input;
+  const mapNode = findModelAttributeNode(model, 'map');
+  const name = mapNode
+    ? interpretModelAttribute({
+        node: mapNode,
+        spec: mapModelSpec,
+        model,
+        sourceFile,
+        sourceId,
+        diagnostics,
+      })?.name
+    : undefined;
+  return name ?? lowerFirst(model.name);
 }
 
 interface MongoModelEntry {
@@ -165,6 +209,8 @@ function mongoCrossRef(modelName: string): CrossReference {
 
 function collectPolymorphismDeclarations(
   models: readonly ModelSymbol[],
+  modelMetadataByName: ReadonlyMap<string, MongoModelMetadata>,
+  sourceFile: SourceFile,
   sourceId: string,
   diagnostics: ContractSourceDiagnostic[],
 ): {
@@ -175,54 +221,54 @@ function collectPolymorphismDeclarations(
   const baseDeclarations = new Map<string, BaseDeclaration>();
 
   for (const model of models) {
-    for (const attr of model.attributes) {
-      if (attr.name === 'discriminator') {
-        const fieldName = getPositionalArgument(attr);
-        if (!fieldName) {
-          diagnostics.push({
-            code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-            message: `Model "${model.name}" @@discriminator requires a field name argument`,
-            sourceId,
-            span: attr.span,
-          });
-          continue;
-        }
+    const discNode = findModelAttributeNode(model, 'discriminator');
+    if (discNode) {
+      const parsed = interpretModelAttribute({
+        node: discNode,
+        spec: discriminatorModelSpec,
+        model,
+        sourceFile,
+        sourceId,
+        diagnostics,
+      });
+      if (parsed) {
+        const fieldName = parsed.field;
         const discField = model.fields[fieldName];
+        // Semantic check — stays: the discriminator field must be a String.
         if (discField && discField.typeName !== 'String') {
           diagnostics.push({
             code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
             message: `Discriminator field "${fieldName}" on model "${model.name}" must be of type String, but is "${discField.typeName}"`,
             sourceId,
-            span: attr.span,
+            span: nodePslSpan(discNode.syntax, sourceFile),
           });
-          continue;
+        } else {
+          discriminatorDeclarations.set(model.name, {
+            fieldName,
+            span: nodePslSpan(discNode.syntax, sourceFile),
+          });
         }
-        discriminatorDeclarations.set(model.name, { fieldName, span: attr.span });
       }
-      if (attr.name === 'base') {
-        const baseName = getPositionalArgument(attr, 0);
-        const rawValue = getPositionalArgument(attr, 1);
-        if (!baseName || !rawValue) {
-          diagnostics.push({
-            code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-            message: `Model "${model.name}" @@base requires two arguments: base model name and discriminator value`,
-            sourceId,
-            span: attr.span,
-          });
-          continue;
-        }
-        const value = parseQuotedStringLiteral(rawValue);
-        if (value === undefined) {
-          diagnostics.push({
-            code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-            message: `Model "${model.name}" @@base discriminator value must be a quoted string literal`,
-            sourceId,
-            span: attr.span,
-          });
-          continue;
-        }
-        const collectionName = resolveCollectionName(model);
-        baseDeclarations.set(model.name, { baseName, value, collectionName, span: attr.span });
+    }
+    const baseNode = findModelAttributeNode(model, 'base');
+    if (baseNode) {
+      const parsed = interpretModelAttribute({
+        node: baseNode,
+        spec: baseModelSpec,
+        model,
+        sourceFile,
+        sourceId,
+        diagnostics,
+      });
+      if (parsed) {
+        const collectionName =
+          modelMetadataByName.get(model.name)?.collectionName ?? lowerFirst(model.name);
+        baseDeclarations.set(model.name, {
+          baseName: parsed.base,
+          value: parsed.value,
+          collectionName,
+          span: nodePslSpan(baseNode.syntax, sourceFile),
+        });
       }
     }
   }
@@ -240,6 +286,7 @@ function resolvePolymorphism(input: {
   modelNames: ReadonlySet<string>;
   indexSpans: Map<MongoIndex, PslSpan>;
   modelIndexesByName: Map<string, readonly MongoIndex[]>;
+  modelMetadataByName: ReadonlyMap<string, MongoModelMetadata>;
   sourceId: string;
 }): {
   models: Record<string, MongoModelEntry>;
@@ -251,6 +298,7 @@ function resolvePolymorphism(input: {
     discriminatorDeclarations,
     baseDeclarations,
     modelNames,
+    modelMetadataByName,
     sourceId,
     allModels: allModelViews,
     indexSpans,
@@ -275,10 +323,9 @@ function resolvePolymorphism(input: {
     const model = patched[modelName];
     if (!model) continue;
 
-    const modelView = allModelViews.find((m) => m.name === modelName);
-    const mappedDiscriminatorField = modelView
-      ? (resolveFieldMappings(modelView).pslNameToMapped.get(decl.fieldName) ?? decl.fieldName)
-      : decl.fieldName;
+    const mappedDiscriminatorField =
+      modelMetadataByName.get(modelName)?.fieldMappings.pslNameToMapped.get(decl.fieldName) ??
+      decl.fieldName;
 
     if (!Object.hasOwn(model.fields, mappedDiscriminatorField)) {
       diagnostics.push({
@@ -340,7 +387,7 @@ function resolvePolymorphism(input: {
     const baseModel = patched[baseDecl.baseName];
     const variantModelView = allModelViews.find((m) => m.name === variantName);
     if (!variantModelView) continue;
-    const hasExplicitMap = getMapName(variantModelView.attributes) !== undefined;
+    const hasExplicitMap = getAttribute(variantModelView.attributes, 'map') !== undefined;
 
     if (hasExplicitMap && baseModel && baseDecl.collectionName !== baseModel.storage.collection) {
       diagnostics.push({
@@ -365,7 +412,8 @@ function resolvePolymorphism(input: {
       };
     }
 
-    const variantCollectionName = resolveCollectionName(variantModelView);
+    const variantCollectionName =
+      modelMetadataByName.get(variantName)?.collectionName ?? lowerFirst(variantName);
     if (roots[variantCollectionName]?.model === variantName) {
       if (variantCollectionName === baseCollection && baseModel) {
         roots = { ...roots, [variantCollectionName]: mongoCrossRef(baseDecl.baseName) };
@@ -412,7 +460,7 @@ function resolvePolymorphism(input: {
         Object.entries(collections).filter(([key]) => key !== variantCollectionName),
       );
       if (scopedVariantIndexes.length > 0 && baseColl) {
-        const baseIndexes = (baseColl['indexes'] ?? []) as MongoIndex[];
+        const baseIndexes = collectionIndexes(baseColl);
         collections = {
           ...filtered,
           [baseCollection]: {
@@ -424,7 +472,7 @@ function resolvePolymorphism(input: {
         collections = filtered;
       }
     } else if (baseColl) {
-      const existingIndexes = (baseColl['indexes'] ?? []) as MongoIndex[];
+      const existingIndexes = collectionIndexes(baseColl);
       const variantIndexSet = new Set<MongoIndex>(variantOwnIndexes);
       const withoutUnscopedVariants = existingIndexes.filter((idx) => !variantIndexSet.has(idx));
       const mergedIndexes = [...withoutUnscopedVariants];
@@ -455,6 +503,13 @@ function resolvePolymorphism(input: {
   return { models: patched, roots, collections, diagnostics };
 }
 
+function collectionIndexes(collection: Record<string, unknown>): MongoIndex[] {
+  return blindCast<
+    MongoIndex[],
+    'Mongo collection indexes are constructed as MongoIndex arrays by this interpreter'
+  >(collection['indexes'] ?? []);
+}
+
 // Property-order-stable serialization for structural equality of plain
 // JSON-compatible values. Used for comparing MongoIndex shapes in
 // the variant-merge dedup path where a future change to the spread order
@@ -465,7 +520,7 @@ function canonicalJson(value: unknown): string {
     return `[${value.map(canonicalJson).join(',')}]`;
   }
   if (value && typeof value === 'object') {
-    return `{${Object.entries(value as Record<string, unknown>)
+    return `{${Object.entries(value)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
       .join(',')}}`;
@@ -473,99 +528,281 @@ function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function parseIndexDirection(raw: string | undefined): MongoIndexKeyDirection {
-  if (!raw) return 1;
-  const stripped = raw.replace(/^["']/, '').replace(/["']$/, '');
-  const num = Number(stripped);
-  if (num === 1 || num === -1) return num;
-  if (['text', '2dsphere', '2d', 'hashed'].includes(stripped))
-    return stripped as MongoIndexKeyDirection;
-  return 1;
-}
-
-function parseNumericArg(raw: string | undefined): number | undefined {
-  if (!raw) return undefined;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : undefined;
-}
-
-function parseBooleanArg(raw: string | undefined): boolean | undefined {
-  if (raw === 'true') return true;
-  if (raw === 'false') return false;
-  return undefined;
-}
-
-function parseJsonArg(raw: string | undefined): Record<string, unknown> | undefined {
-  if (!raw) return undefined;
-  const stripped = raw.replace(/^["']/, '').replace(/["']$/, '').replace(/\\"/g, '"');
-  try {
-    const parsed = JSON.parse(stripped);
-    if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
+type ParsedIndexField =
+  | {
+      readonly kind: 'field';
+      readonly name: string;
+      readonly direction?: 1 | -1;
     }
-  } catch {
-    // not valid JSON
+  | {
+      readonly kind: 'wildcard';
+      readonly scope?: string;
+    };
+
+function normalizeIndexField(element: string | TypedFuncCall): ParsedIndexField {
+  if (typeof element === 'string') {
+    return { kind: 'field', name: element };
   }
-  return undefined;
+  if (element.fn === 'wildcard' && element.args['sort'] === undefined) {
+    const scope = element.args['scope'];
+    return typeof scope === 'string' ? { kind: 'wildcard', scope } : { kind: 'wildcard' };
+  }
+  const sort = element.args['sort'];
+  return { kind: 'field', name: element.fn, direction: sort === 'Desc' ? -1 : 1 };
 }
 
-function parseCollation(attr: ResolvedAttribute): CollationOptions | null | undefined {
-  const locale = stripQuotesHelper(getNamedArgument(attr, 'collationLocale'));
-  if (!locale) {
+interface SpecCollationArgs {
+  readonly collationLocale?: string;
+  readonly collationStrength?: number;
+  readonly collationCaseLevel?: boolean;
+  readonly collationCaseFirst?: string;
+  readonly collationNumericOrdering?: boolean;
+  readonly collationAlternate?: string;
+  readonly collationMaxVariable?: string;
+  readonly collationBackwards?: boolean;
+  readonly collationNormalization?: boolean;
+}
+
+function buildCollationFromSpec(args: SpecCollationArgs): CollationOptions | null | undefined {
+  const locale = args.collationLocale;
+  if (locale === undefined) {
     const hasAnyCollationArg =
-      getNamedArgument(attr, 'collationStrength') != null ||
-      getNamedArgument(attr, 'collationCaseLevel') != null ||
-      getNamedArgument(attr, 'collationCaseFirst') != null ||
-      getNamedArgument(attr, 'collationNumericOrdering') != null ||
-      getNamedArgument(attr, 'collationAlternate') != null ||
-      getNamedArgument(attr, 'collationMaxVariable') != null ||
-      getNamedArgument(attr, 'collationBackwards') != null ||
-      getNamedArgument(attr, 'collationNormalization') != null;
+      args.collationStrength !== undefined ||
+      args.collationCaseLevel !== undefined ||
+      args.collationCaseFirst !== undefined ||
+      args.collationNumericOrdering !== undefined ||
+      args.collationAlternate !== undefined ||
+      args.collationMaxVariable !== undefined ||
+      args.collationBackwards !== undefined ||
+      args.collationNormalization !== undefined;
     return hasAnyCollationArg ? null : undefined;
   }
 
   const collation: CollationOptions = { locale };
-  const strength = parseNumericArg(getNamedArgument(attr, 'collationStrength'));
-  if (strength != null) collation.strength = strength;
-  const caseLevel = parseBooleanArg(getNamedArgument(attr, 'collationCaseLevel'));
-  if (caseLevel != null) collation.caseLevel = caseLevel;
-  const caseFirst = stripQuotesHelper(getNamedArgument(attr, 'collationCaseFirst'));
-  if (caseFirst != null) collation.caseFirst = caseFirst;
-  const numericOrdering = parseBooleanArg(getNamedArgument(attr, 'collationNumericOrdering'));
-  if (numericOrdering != null) collation.numericOrdering = numericOrdering;
-  const alternate = stripQuotesHelper(getNamedArgument(attr, 'collationAlternate'));
-  if (alternate != null) collation.alternate = alternate;
-  const maxVariable = stripQuotesHelper(getNamedArgument(attr, 'collationMaxVariable'));
-  if (maxVariable != null) collation.maxVariable = maxVariable;
-  const backwards = parseBooleanArg(getNamedArgument(attr, 'collationBackwards'));
-  if (backwards != null) collation.backwards = backwards;
-  const normalization = parseBooleanArg(getNamedArgument(attr, 'collationNormalization'));
-  if (normalization != null) collation.normalization = normalization;
+  if (args.collationStrength !== undefined) collation.strength = args.collationStrength;
+  if (args.collationCaseLevel !== undefined) collation.caseLevel = args.collationCaseLevel;
+  if (args.collationCaseFirst !== undefined) collation.caseFirst = args.collationCaseFirst;
+  if (args.collationNumericOrdering !== undefined)
+    collation.numericOrdering = args.collationNumericOrdering;
+  if (args.collationAlternate !== undefined) collation.alternate = args.collationAlternate;
+  if (args.collationMaxVariable !== undefined) collation.maxVariable = args.collationMaxVariable;
+  if (args.collationBackwards !== undefined) collation.backwards = args.collationBackwards;
+  if (args.collationNormalization !== undefined)
+    collation.normalization = args.collationNormalization;
   return collation;
 }
 
-function stripQuotesHelper(raw: string | undefined): string | undefined {
-  if (!raw) return undefined;
-  return raw.replace(/^["']/, '').replace(/["']$/, '');
+type IndexModelSpecs = ReturnType<typeof buildIndexModelSpecs>;
+type NormalIndexArgs = InferAttr<IndexModelSpecs['index']>;
+type TextIndexArgs = InferAttr<IndexModelSpecs['textIndex']>;
+
+interface IndexBuildContext {
+  readonly pslModel: ModelSymbol;
+  readonly fieldMappings: FieldMappings;
+  readonly indexableFieldNames: ReadonlySet<string>;
+  readonly sourceId: string;
+  readonly span: PslSpan;
+  readonly diagnostics: ContractSourceDiagnostic[];
 }
 
-function parseProjectionList(
-  raw: string | undefined,
-  value: 0 | 1,
-): Record<string, 0 | 1> | undefined {
-  if (!raw) return undefined;
-  const stripped = raw.replace(/^["']/, '').replace(/["']$/, '');
-  const inner = stripped.replace(/^\[/, '').replace(/\]$/, '').trim();
-  if (inner.length === 0) return undefined;
-  const fields = inner
-    .split(',')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  const result: Record<string, 0 | 1> = {};
-  for (const f of fields) {
-    result[f] = value;
+interface ResolvedIndexKeys {
+  readonly keys: readonly { readonly field: string; readonly direction: MongoIndexKeyDirection }[];
+  readonly hasWildcard: boolean;
+}
+
+function resolveIndexKeys(
+  parsedFields: readonly ParsedIndexField[],
+  defaultDirection: MongoIndexKeyDirection,
+  ctx: IndexBuildContext,
+): ResolvedIndexKeys | undefined {
+  const wildcardCount = parsedFields.filter((field) => field.kind === 'wildcard').length;
+  if (wildcardCount > 1) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message: 'An index can contain at most one wildcard() field',
+      sourceId: ctx.sourceId,
+      span: ctx.span,
+    });
+    return undefined;
   }
-  return result;
+
+  for (const field of parsedFields) {
+    const fieldName = field.kind === 'wildcard' ? field.scope : field.name;
+    if (fieldName !== undefined && !ctx.indexableFieldNames.has(fieldName)) {
+      ctx.diagnostics.push({
+        code: 'PSL_INDEX_FIELD_NOT_FOUND',
+        message: `Index on model "${ctx.pslModel.name}" references unknown field "${fieldName}"`,
+        sourceId: ctx.sourceId,
+        span: ctx.span,
+      });
+      return undefined;
+    }
+  }
+
+  const keys = parsedFields.map((field) => {
+    if (field.kind === 'wildcard') {
+      if (field.scope === undefined) return { field: '$**', direction: defaultDirection };
+      const mappedScope = ctx.fieldMappings.pslNameToMapped.get(field.scope) ?? field.scope;
+      return { field: `${mappedScope}.$**`, direction: defaultDirection };
+    }
+    const mappedName = ctx.fieldMappings.pslNameToMapped.get(field.name) ?? field.name;
+    return { field: mappedName, direction: field.direction ?? defaultDirection };
+  });
+  return { keys, hasWildcard: wildcardCount === 1 };
+}
+
+function buildProjection(
+  include: readonly string[] | undefined,
+  exclude: readonly string[] | undefined,
+  hasWildcard: boolean,
+  ctx: IndexBuildContext,
+): Record<string, 0 | 1> | null | undefined {
+  if (include !== undefined && exclude !== undefined) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message: 'Cannot specify both include and exclude on the same index',
+      sourceId: ctx.sourceId,
+      span: ctx.span,
+    });
+    return null;
+  }
+  const fields = include ?? exclude;
+  if (fields === undefined) return undefined;
+  if (!hasWildcard) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message: 'include/exclude options are only valid when the index contains a wildcard() field',
+      sourceId: ctx.sourceId,
+      span: ctx.span,
+    });
+    return null;
+  }
+  if (fields.length === 0) return undefined;
+  const value = include === undefined ? 0 : 1;
+  const projection: Record<string, 0 | 1> = {};
+  for (const field of fields) projection[field] = value;
+  return projection;
+}
+
+function buildNormalIndex(
+  parsed: NormalIndexArgs,
+  unique: boolean,
+  ctx: IndexBuildContext,
+): MongoIndex | undefined {
+  const parsedFields = parsed.fields.map(normalizeIndexField);
+  if (parsedFields.length === 0) return undefined;
+  const defaultDirection = parsed.type ?? 1;
+  const resolved = resolveIndexKeys(parsedFields, defaultDirection, ctx);
+  if (!resolved) return undefined;
+
+  if (unique && resolved.hasWildcard) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message: 'Unique indexes cannot use wildcard() fields',
+      sourceId: ctx.sourceId,
+      span: ctx.span,
+    });
+    return undefined;
+  }
+  if (
+    resolved.hasWildcard &&
+    typeof defaultDirection === 'string' &&
+    ['hashed', '2dsphere', '2d'].includes(defaultDirection)
+  ) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message: `wildcard() fields cannot be combined with type: ${defaultDirection}`,
+      sourceId: ctx.sourceId,
+      span: ctx.span,
+    });
+    return undefined;
+  }
+  if (defaultDirection === 'hashed' && parsedFields.length > 1) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message: 'Hashed indexes must have exactly one field',
+      sourceId: ctx.sourceId,
+      span: ctx.span,
+    });
+    return undefined;
+  }
+  if (resolved.hasWildcard && parsed.expireAfterSeconds !== undefined) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message: 'expireAfterSeconds cannot be combined with wildcard() fields',
+      sourceId: ctx.sourceId,
+      span: ctx.span,
+    });
+    return undefined;
+  }
+
+  const wildcardProjection = buildProjection(
+    parsed.include,
+    parsed.exclude,
+    resolved.hasWildcard,
+    ctx,
+  );
+  if (wildcardProjection === null) return undefined;
+  const collation = buildCollationFromSpec(parsed);
+  if (collation === null) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message: 'collationLocale is required when using collation options',
+      sourceId: ctx.sourceId,
+      span: ctx.span,
+    });
+    return undefined;
+  }
+
+  return new MongoIndex({
+    keys: resolved.keys,
+    ...(unique && { unique: true }),
+    ...(parsed.sparse !== undefined && { sparse: parsed.sparse }),
+    ...(parsed.expireAfterSeconds !== undefined && {
+      expireAfterSeconds: parsed.expireAfterSeconds,
+    }),
+    ...(parsed.filter !== undefined && { partialFilterExpression: parsed.filter }),
+    ...(wildcardProjection !== undefined && { wildcardProjection }),
+    ...(collation !== undefined && { collation }),
+    ...(parsed.default_language !== undefined && { default_language: parsed.default_language }),
+    ...(parsed.languageOverride !== undefined && { language_override: parsed.languageOverride }),
+  });
+}
+
+function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoIndex | undefined {
+  const parsedFields = parsed.fields.map(normalizeIndexField);
+  if (parsedFields.length === 0) return undefined;
+  const resolved = resolveIndexKeys(parsedFields, 'text', ctx);
+  if (!resolved) return undefined;
+  if (resolved.hasWildcard) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message: 'wildcard() fields cannot be combined with type: hashed/2dsphere/2d or @@textIndex',
+      sourceId: ctx.sourceId,
+      span: ctx.span,
+    });
+    return undefined;
+  }
+
+  const collation = buildCollationFromSpec(parsed);
+  if (collation === null) {
+    ctx.diagnostics.push({
+      code: 'PSL_INVALID_INDEX',
+      message: 'collationLocale is required when using collation options',
+      sourceId: ctx.sourceId,
+      span: ctx.span,
+    });
+    return undefined;
+  }
+
+  return new MongoIndex({
+    keys: resolved.keys,
+    ...(parsed.filter !== undefined && { partialFilterExpression: parsed.filter }),
+    ...(collation !== undefined && { collation }),
+    ...ifDefined('weights', parsed.weights),
+    ...(parsed.language !== undefined && { default_language: parsed.language }),
+    ...(parsed.languageOverride !== undefined && { language_override: parsed.languageOverride }),
+  });
 }
 
 function collectIndexes(
@@ -573,21 +810,15 @@ function collectIndexes(
   fieldMappings: FieldMappings,
   modelNames: ReadonlySet<string>,
   sourceId: string,
+  sourceFile: SourceFile,
   diagnostics: ContractSourceDiagnostic[],
   indexSpans: Map<MongoIndex, PslSpan>,
 ): MongoIndex[] {
   const indexes: MongoIndex[] = [];
   let textIndexCount = 0;
-
-  // Storage-indexable PSL field names — i.e. all declared fields except
-  // relation fields (which don't materialize a column on this model). The
-  // index field-existence check (PSL_INDEX_FIELD_NOT_FOUND) consults this
-  // rather than fieldMappings.pslNameToMapped because the latter contains
-  // every PSL field including relation fields.
   const indexableFieldNames = new Set<string>();
-  for (const f of Object.values(pslModel.fields)) {
-    if (modelNames.has(f.typeName)) continue;
-    indexableFieldNames.add(f.name);
+  for (const field of Object.values(pslModel.fields)) {
+    if (!modelNames.has(field.typeName)) indexableFieldNames.add(field.name);
   }
 
   for (const field of Object.values(pslModel.fields)) {
@@ -603,41 +834,32 @@ function collectIndexes(
     indexSpans.set(fieldUniqueIndex, uniqueAttr.span);
   }
 
-  for (const attr of pslModel.attributes) {
-    const isIndex = attr.name === 'index';
-    const isUnique = attr.name === 'unique';
-    const isTextIndex = attr.name === 'textIndex';
-    if (!isIndex && !isUnique && !isTextIndex) continue;
+  const specs = buildIndexModelSpecs(Object.keys(pslModel.fields));
+  const attributeNodes = Array.from(pslModel.node.attributes());
+  for (const [attrIndex, attr] of pslModel.attributes.entries()) {
+    if (attr.name !== 'index' && attr.name !== 'unique' && attr.name !== 'textIndex') continue;
+    const node = attributeNodes[attrIndex];
+    if (!node) continue;
+    const ctx: IndexBuildContext = {
+      pslModel,
+      fieldMappings,
+      indexableFieldNames,
+      sourceId,
+      span: attr.span,
+      diagnostics,
+    };
 
-    const fieldsArg = getPositionalArgument(attr, 0);
-    if (!fieldsArg) continue;
-    const parsedFields = parseIndexFieldList(fieldsArg);
-    if (parsedFields.length === 0) continue;
-
-    const hasWildcard = parsedFields.some((f) => f.isWildcard);
-    const wildcardCount = parsedFields.filter((f) => f.isWildcard).length;
-
-    if (wildcardCount > 1) {
-      diagnostics.push({
-        code: 'PSL_INVALID_INDEX',
-        message: 'An index can contain at most one wildcard() field',
+    let index: MongoIndex | undefined;
+    if (attr.name === 'textIndex') {
+      const parsed = interpretModelAttribute({
+        node,
+        spec: specs.textIndex,
+        model: pslModel,
+        sourceFile,
         sourceId,
-        span: attr.span,
+        diagnostics,
       });
-      continue;
-    }
-
-    if (isUnique && hasWildcard) {
-      diagnostics.push({
-        code: 'PSL_INVALID_INDEX',
-        message: 'Unique indexes cannot use wildcard() fields',
-        sourceId,
-        span: attr.span,
-      });
-      continue;
-    }
-
-    if (isTextIndex) {
+      if (!parsed || parsed.fields.length === 0) continue;
       textIndexCount++;
       if (textIndexCount > 1) {
         diagnostics.push({
@@ -648,179 +870,25 @@ function collectIndexes(
         });
         continue;
       }
-
-      if (hasWildcard) {
-        diagnostics.push({
-          code: 'PSL_INVALID_INDEX',
-          message:
-            'wildcard() fields cannot be combined with type: hashed/2dsphere/2d or @@textIndex',
-          sourceId,
-          span: attr.span,
-        });
-        continue;
-      }
-    }
-
-    const typeArg = getNamedArgument(attr, 'type');
-    const defaultDirection: MongoIndexKeyDirection = isTextIndex
-      ? 'text'
-      : parseIndexDirection(typeArg);
-
-    if (
-      hasWildcard &&
-      typeof defaultDirection === 'string' &&
-      ['hashed', '2dsphere', '2d'].includes(defaultDirection)
-    ) {
-      diagnostics.push({
-        code: 'PSL_INVALID_INDEX',
-        message: `wildcard() fields cannot be combined with type: ${defaultDirection}`,
+      index = buildTextIndex(parsed, ctx);
+    } else {
+      const unique = attr.name === 'unique';
+      const parsed = interpretModelAttribute({
+        node,
+        spec: unique ? specs.unique : specs.index,
+        model: pslModel,
+        sourceFile,
         sourceId,
-        span: attr.span,
+        diagnostics,
       });
-      continue;
+      if (!parsed) continue;
+      index = buildNormalIndex(parsed, unique, ctx);
     }
 
-    if (defaultDirection === 'hashed' && parsedFields.length > 1) {
-      diagnostics.push({
-        code: 'PSL_INVALID_INDEX',
-        message: 'Hashed indexes must have exactly one field',
-        sourceId,
-        span: attr.span,
-      });
-      continue;
-    }
-
-    let missingField: string | undefined;
-    for (const pf of parsedFields) {
-      let fieldNameForLookup: string | undefined;
-      if (pf.isWildcard) {
-        const wildcardMatch = pf.name.match(/^(.+)\.\$\*\*$/);
-        fieldNameForLookup = wildcardMatch ? wildcardMatch[1] : undefined;
-      } else {
-        fieldNameForLookup = pf.name;
-      }
-      if (fieldNameForLookup === undefined || fieldNameForLookup.length === 0) continue;
-      if (!indexableFieldNames.has(fieldNameForLookup)) {
-        missingField = fieldNameForLookup;
-        break;
-      }
-    }
-    if (missingField !== undefined) {
-      diagnostics.push({
-        code: 'PSL_INDEX_FIELD_NOT_FOUND',
-        message: `Index on model "${pslModel.name}" references unknown field "${missingField}"`,
-        sourceId,
-        span: attr.span,
-      });
-      continue;
-    }
-
-    const keys = parsedFields.map((pf) => {
-      const mappedName = pf.isWildcard
-        ? pf.name.replace(/^(.+)\.\$\*\*$/, (_, prefix: string) => {
-            const mapped = fieldMappings.pslNameToMapped.get(prefix);
-            return mapped ? `${mapped}.$**` : `${prefix}.$**`;
-          })
-        : (fieldMappings.pslNameToMapped.get(pf.name) ?? pf.name);
-      const direction: MongoIndexKeyDirection =
-        pf.direction != null ? (pf.direction as MongoIndexKeyDirection) : defaultDirection;
-      return { field: mappedName, direction };
-    });
-
-    const unique = isUnique ? true : undefined;
-    const sparse = isTextIndex ? undefined : parseBooleanArg(getNamedArgument(attr, 'sparse'));
-    const expireAfterSeconds = isTextIndex
-      ? undefined
-      : parseNumericArg(getNamedArgument(attr, 'expireAfterSeconds'));
-
-    if (hasWildcard && expireAfterSeconds != null) {
-      diagnostics.push({
-        code: 'PSL_INVALID_INDEX',
-        message: 'expireAfterSeconds cannot be combined with wildcard() fields',
-        sourceId,
-        span: attr.span,
-      });
-      continue;
-    }
-
-    const partialFilterExpression = parseJsonArg(getNamedArgument(attr, 'filter'));
-
-    const includeArg = getNamedArgument(attr, 'include');
-    const excludeArg = getNamedArgument(attr, 'exclude');
-
-    if (includeArg != null && excludeArg != null) {
-      diagnostics.push({
-        code: 'PSL_INVALID_INDEX',
-        message: 'Cannot specify both include and exclude on the same index',
-        sourceId,
-        span: attr.span,
-      });
-      continue;
-    }
-
-    if ((includeArg != null || excludeArg != null) && !hasWildcard) {
-      diagnostics.push({
-        code: 'PSL_INVALID_INDEX',
-        message:
-          'include/exclude options are only valid when the index contains a wildcard() field',
-        sourceId,
-        span: attr.span,
-      });
-      continue;
-    }
-
-    const wildcardProjection =
-      includeArg != null
-        ? parseProjectionList(includeArg, 1)
-        : excludeArg != null
-          ? parseProjectionList(excludeArg, 0)
-          : undefined;
-
-    const collation = parseCollation(attr);
-    if (collation === null) {
-      diagnostics.push({
-        code: 'PSL_INVALID_INDEX',
-        message: 'collationLocale is required when using collation options',
-        sourceId,
-        span: attr.span,
-      });
-      continue;
-    }
-
-    const rawWeights = parseJsonArg(getNamedArgument(attr, 'weights'));
-    let weights: Record<string, number> | undefined;
-    if (rawWeights) {
-      weights = {};
-      for (const [k, v] of Object.entries(rawWeights)) {
-        if (typeof v === 'number') weights[k] = v;
-      }
-    }
-
-    const rawDefaultLang = isTextIndex
-      ? getNamedArgument(attr, 'language')
-      : getNamedArgument(attr, 'default_language');
-    const default_language = stripQuotesHelper(rawDefaultLang);
-
-    const rawLangOverride = getNamedArgument(attr, 'languageOverride');
-    const language_override = stripQuotesHelper(rawLangOverride);
-
-    const index = new MongoIndex({
-      keys,
-      ...(unique != null && { unique }),
-      ...(sparse != null && { sparse }),
-      ...(expireAfterSeconds != null && { expireAfterSeconds }),
-      ...(partialFilterExpression != null && { partialFilterExpression }),
-      ...(wildcardProjection != null && { wildcardProjection }),
-      ...(collation != null && { collation }),
-      ...(weights != null && { weights }),
-      ...(default_language != null && { default_language }),
-      ...(language_override != null && { language_override }),
-    });
-
+    if (!index) continue;
     indexes.push(index);
     indexSpans.set(index, attr.span);
   }
-
   return indexes;
 }
 
@@ -966,6 +1034,13 @@ export function interpretPslDocumentToMongoContract(
   const allCompositeTypes: CompositeTypeSymbol[] = Object.values(topLevel.compositeTypes);
   const modelNames = new Set(allModels.map((m) => m.name));
   const compositeTypeNames = new Set(allCompositeTypes.map((ct) => ct.name));
+  const modelMetadataByName = new Map<string, MongoModelMetadata>();
+  for (const model of allModels) {
+    modelMetadataByName.set(model.name, {
+      collectionName: resolveCollectionName({ model, sourceFile, sourceId, diagnostics }),
+      fieldMappings: resolveFieldMappings({ model, sourceFile, sourceId, diagnostics }),
+    });
+  }
 
   const topLevelEnumBlocks = Object.values(topLevel.blocks)
     .filter((b) => b.keyword === 'enum')
@@ -1014,22 +1089,35 @@ export function interpretPslDocumentToMongoContract(
   const backrelationCandidates: BackrelationCandidate[] = [];
 
   for (const pslModel of allModels) {
-    const collectionName = resolveCollectionName(pslModel);
-    const fieldMappings = resolveFieldMappings(pslModel);
+    const metadata = modelMetadataByName.get(pslModel.name);
+    if (!metadata) continue;
+    const { collectionName, fieldMappings } = metadata;
 
     const fields: Record<string, ContractField> = {};
     const relations: Record<string, ContractReferenceRelation> = {};
 
     for (const field of Object.values(pslModel.fields)) {
       if (isRelationField(field, modelNames)) {
-        const relation = parseRelationAttribute(field.attributes);
+        const relationNode = findFieldAttributeNode(field, 'relation');
+        const relation = relationNode
+          ? interpretFieldAttribute({
+              node: relationNode,
+              spec: relationFieldSpec,
+              model: pslModel,
+              field,
+              sourceFile,
+              sourceId,
+              diagnostics,
+              resolveReferencedModel: () => allModels.find((m) => m.name === field.typeName),
+            })
+          : undefined;
 
         if (field.list || !(relation?.fields && relation?.references)) {
           backrelationCandidates.push({
             modelName: pslModel.name,
             fieldName: field.name,
             targetModelName: field.typeName,
-            ...ifDefined('relationName', relation?.relationName),
+            ...ifDefined('relationName', relation?.name),
             cardinality: field.list ? '1:N' : '1:1',
             field,
           });
@@ -1039,8 +1127,7 @@ export function interpretPslDocumentToMongoContract(
         if (relation?.fields && relation?.references) {
           const localMapped = relation.fields.map((f) => fieldMappings.pslNameToMapped.get(f) ?? f);
 
-          const targetModel = allModels.find((m) => m.name === field.typeName);
-          const targetFieldMappings = targetModel ? resolveFieldMappings(targetModel) : undefined;
+          const targetFieldMappings = modelMetadataByName.get(field.typeName)?.fieldMappings;
           const targetMapped = relation.references.map(
             (f) => targetFieldMappings?.pslNameToMapped.get(f) ?? f,
           );
@@ -1058,7 +1145,7 @@ export function interpretPslDocumentToMongoContract(
             declaringModel: pslModel.name,
             fieldName: field.name,
             targetModel: field.typeName,
-            ...ifDefined('relationName', relation.relationName),
+            ...ifDefined('relationName', relation.name),
             localFields: localMapped,
             targetFields: targetMapped,
           });
@@ -1122,13 +1209,14 @@ export function interpretPslDocumentToMongoContract(
       fieldMappings,
       modelNames,
       sourceId,
+      sourceFile,
       diagnostics,
       indexSpans,
     );
     modelIndexesByName.set(pslModel.name, modelIndexes);
     const existingColl = collections[collectionName];
     if (existingColl && modelIndexes.length > 0) {
-      const existingIndexes = (existingColl['indexes'] ?? []) as MongoIndex[];
+      const existingIndexes = collectionIndexes(existingColl);
       collections[collectionName] = { indexes: [...existingIndexes, ...modelIndexes] };
     } else if (!existingColl) {
       collections[collectionName] = modelIndexes.length > 0 ? { indexes: modelIndexes } : {};
@@ -1208,6 +1296,8 @@ export function interpretPslDocumentToMongoContract(
 
   const { discriminatorDeclarations, baseDeclarations } = collectPolymorphismDeclarations(
     allModels,
+    modelMetadataByName,
+    sourceFile,
     sourceId,
     diagnostics,
   );
@@ -1221,6 +1311,7 @@ export function interpretPslDocumentToMongoContract(
     modelNames,
     indexSpans,
     modelIndexesByName,
+    modelMetadataByName,
     sourceId,
   });
 
@@ -1331,12 +1422,17 @@ export function interpretPslDocumentToMongoContract(
     storage: storageWithoutHash,
     ...mongoContractCanonicalizationHooks,
   });
-  const storage = new MongoStorage({
-    storageHash,
-    namespaces: {
-      [UNBOUND_NAMESPACE_ID]: unboundNamespace,
-    },
-  }) as Contract['storage'];
+  const storage = blindCast<
+    Contract['storage'],
+    'MongoStorage is the Mongo family concrete storage class constructed here; it structurally satisfies the Contract storage slot.'
+  >(
+    new MongoStorage({
+      storageHash,
+      namespaces: {
+        [UNBOUND_NAMESPACE_ID]: unboundNamespace,
+      },
+    }),
+  );
   const capabilities: Record<string, Record<string, boolean>> = {};
 
   const hasEnums = Object.keys(builtEnums).length > 0;

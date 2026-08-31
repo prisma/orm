@@ -17,7 +17,3 @@ A bare namespace import (e.g. `@prisma/orm-target-postgres/adapter`) aggregates 
 ## Responsibilities
 
 Everything Postgres-specific: native type normalization, DDL generation, schema diffing, RLS canonicalization, and the wire connection. Shared SQL semantics live in `@prisma/orm-family-sql`.
-
-## Dependencies
-
-`@prisma/orm-framework`, `@prisma/orm-family-sql`, and `@prisma/orm-toolchain` (exact lockstep pins), plus `pg`/`pg-cursor` and small third-party runtime libraries.

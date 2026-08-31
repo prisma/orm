@@ -17,7 +17,3 @@ import { cache, cacheAnnotation, type CacheStore } from '@prisma/orm-extension-m
 A runtime middleware that short-circuits repeated reads: on a hit it returns cached rows and never invokes the driver; on a miss it buffers the driver's rows and commits them to the store only when the execution completes successfully. Cache keys come from the family runtime's content hash of the execution, or from a per-query `cacheAnnotation({ key })` override; `ttl` and `skip` are per-query too. Connection- and transaction-scoped executions bypass the cache.
 
 It ships an in-memory LRU-with-TTL store and exposes the `CacheStore` interface so Redis, Memcached, or any other backend can be dropped in.
-
-## Dependencies
-
-`@prisma/orm-framework` at an exact lockstep version, and nothing else. It depends on no family runtime and no target, which is why one middleware serves every database.

@@ -26,7 +26,3 @@ Emission itself does **not** read it. The contract emitters, the targets' migrat
 ## Why the name is declared, not read from disk
 
 `ShellPackageMapping` carries both `dir` and `name`. The build reads package manifests off disk anyway, but emission runs inside a published bundle where the workspace does not exist — so the name has to be data. `test/shells.test.ts` asserts each declared name matches the manifest at `dir`, so the two cannot drift.
-
-## Dependencies
-
-None at run time. The table is plain data and the resolver is pure.

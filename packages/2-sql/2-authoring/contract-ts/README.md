@@ -328,13 +328,6 @@ typescriptContract(contract, 'src/prisma/contract.json', {
 
 The specifier value applies only when the loaded contract omits `defaultControlPolicy` (a value authored on the contract module wins).
 
-## Dependencies
-
-- **`@internal/config`** - `ContractConfig` types used by `typescriptContract(...)`
-- **`@internal/contract-authoring`** - Shared descriptor types
-- **`@internal/framework-components`** - Pack refs, authoring contributions, and codec lookup types
-- **`@internal/sql-contract`** - SQL contract types and validation target
-
 ## Editor JSON schema
 
 `schemas/data-contract-sql-v1.json` is an editor-facing JSON schema for emitted SQL `contract.json` files (reference it via a `$schema` key or an IDE schema mapping). It is generated from the authoritative arktype schemas in `@internal/sql-contract` — never edit it by hand. Regenerate with `pnpm schemas:generate` in this package; a drift test (`test/data-contract-json-schema.test.ts`) fails when the checked-in file and the generator output diverge. Constraints JSON schema cannot express (narrow predicates, pack-contributed namespace entry kinds) are rendered permissively; arktype validation stays authoritative.

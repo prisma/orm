@@ -16,15 +16,6 @@ This package provides a generic, target-neutral operation registry. It's part of
   - `OperationDescriptors<T>`: `Readonly<Record<string, OperationDescriptor<T>>>` — the natural shape contributors return, where the record key IS the method name
   - `ParamSpec`: Describes an operation parameter (`codecId`, `nullable`), used for both arguments and return values
 
-## Dependencies
-
-
-- **Depends on**: Nothing (leaf package)
-- **Depended on by**:
-  - `@internal/sql-operations` (extends with SQL-specific lowering specs)
-  - `@internal/sql-relational-core` (imports `ParamSpec` for AST and type definitions)
-  - `@internal/sql-runtime`, `@internal/framework-components`, and other packages that build on the operation registry
-
 ## Architecture
 
 ```mermaid

@@ -24,9 +24,3 @@ Model points, lines, and polygons as first-class columns, query them with a type
 Geometry storage and query semantics: the `geometry` column type and its SRID parameter, GeoJSON-shaped runtime values, seven query operations (`distance`, `distanceSphere`, `dwithin`, `contains`, `within`, `intersects`, `intersectsBbox`), and the database-dependency declaration that makes `prisma db init` enable PostGIS before the first migration runs. Works with both PSL and TypeScript contract authoring.
 
 The PostGIS server extension must be installable on your PostgreSQL server. Most managed providers include it; locally, the `postgis/postgis` Docker image is the shortest route.
-
-## Dependencies
-
-`@prisma/orm-framework`, `@prisma/orm-family-sql`, and `@prisma/orm-toolchain` at exact lockstep versions, plus `arktype` and `@standard-schema/spec`.
-
-`@prisma/orm-target-postgres` is an exact-pinned **peer** dependency: the application supplies it, directly or through a facade, and everyone shares that one copy. A hard dependency would let an application upgrade the facade without upgrading this pack and end up with two target copies whose codec and operation registries have quietly diverged; as a peer that combination fails to install instead.

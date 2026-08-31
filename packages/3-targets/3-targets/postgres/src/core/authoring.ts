@@ -16,6 +16,7 @@ import type {
 } from '@internal/framework-components/authoring';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import type { ModelAttributeSpecFactory } from '@internal/psl-parser';
 import { modelAttribute } from '@internal/psl-parser';
 import type {
   EntityHandleLoweringInput,
@@ -638,6 +639,10 @@ export const postgresAuthoringPslBlockDescriptors = {
   },
 } as const satisfies AuthoringPslBlockDescriptorNamespace;
 
+const postgresRlsSpec = modelAttribute('rls', {});
+
+const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
+
 /**
  * `@@` model attributes contributed by the Postgres target pack.
  *
@@ -651,7 +656,7 @@ export const postgresAuthoringModelAttributes = {
   rls: {
     kind: 'modelAttribute',
     attribute: 'rls',
-    spec: modelAttribute('rls', {}),
+    spec: postgresRlsSpecFactory,
     lower: (_parsed: Record<never, never>, ctx: AuthoringModelAttributeContext) => ({
       key: ctx.storageName,
       entity: new PostgresRlsEnablement({

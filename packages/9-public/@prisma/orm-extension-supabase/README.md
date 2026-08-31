@@ -21,9 +21,3 @@ Ships a faithful contract of everything Supabase owns in the database — every 
 The runtime binds a Postgres role and JWT claims to each session, and `asServiceRole().supabase.{sql,orm}` exposes the pack's own `auth` and `storage` tables as a `service_role`-only secondary root.
 
 The contract is introspected from a checked-in reference capture rather than hand-authored, so it can be regenerated against a newer Supabase platform version.
-
-## Dependencies
-
-`@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-toolchain`, and `@prisma/orm-postgres` at exact lockstep versions, plus `jose`, `pg`, `arktype`, and `@standard-schema/spec`.
-
-`@prisma/orm-target-postgres` is an exact-pinned **peer** dependency: the application supplies it, directly or through a facade, and everyone shares that one copy. A hard dependency would let an application upgrade the facade without upgrading this pack and end up with two target copies whose codec and operation registries have quietly diverged; as a peer that combination fails to install instead.

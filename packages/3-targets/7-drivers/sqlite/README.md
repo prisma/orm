@@ -79,12 +79,6 @@ flowchart TD
 - Maps SQLite extended `errcode` to structured `SqlQueryError` / `SqlConnectionError`
 - Handles constraint types individually (UNIQUE, FK, NOT NULL, CHECK)
 
-## Dependencies
-
-- **`@internal/sql-relational-core`**: SQL contract types (`SqlDriver`, `SqlConnection`, `SqlTransaction`)
-- **`@internal/framework-components`**: Descriptor types (`RuntimeDriverDescriptor`, `ControlDriverDescriptor`)
-- **`@internal/errors`**: Structured error factories
-
 ## Related Subsystems
 
 - **[Adapters & Targets](../../../../docs/architecture%20docs/subsystems/5.%20Adapters%20&%20Targets.md)**: Driver specification

@@ -1,6 +1,7 @@
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { expectTypeOf, test } from 'vitest';
 import { orm } from '../src/orm';
+import type { RelationPredicate, ShorthandWhereFilter } from '../src/types';
 import { createMockRuntime, type TestContract } from './helpers';
 
 /**
@@ -225,6 +226,35 @@ interface WriteCollisionContract extends Omit<TestContract, 'domain' | 'storage'
 
 declare const writeContext: ExecutionContext<WriteCollisionContract>;
 const writeDb = orm({ runtime: createMockRuntime(), context: writeContext });
+
+test('standalone filters require and honor the namespace before the model name', () => {
+  const publicFilter: ShorthandWhereFilter<WriteCollisionContract, 'public', 'User'> = {
+    email: 'a@example.com',
+  };
+  const authPredicate: RelationPredicate<WriteCollisionContract, 'auth', 'User'> = (user) =>
+    user.token.eq('tok');
+
+  writeDb.public.User.where(publicFilter);
+  writeDb.auth.User.where(authPredicate);
+
+  // @ts-expect-error namespace coordinate is required
+  const missingNamespace: ShorthandWhereFilter<WriteCollisionContract, 'User'> = {};
+  // @ts-expect-error namespace coordinate is required
+  const missingPredicateNamespace: RelationPredicate<WriteCollisionContract, 'User'> =
+    authPredicate;
+  // @ts-expect-error namespace must exist in the contract
+  const unknownNamespace: ShorthandWhereFilter<WriteCollisionContract, 'missing', 'User'> = {};
+  void missingNamespace;
+  void missingPredicateNamespace;
+  void unknownNamespace;
+
+  const wrongPublicFilter: ShorthandWhereFilter<WriteCollisionContract, 'public', 'User'> = {
+    // @ts-expect-error token belongs to auth.User, not public.User
+    token: 'tok',
+  };
+
+  writeDb.public.User.where(wrongPublicFilter);
+});
 
 test('the auth-namespace User facet resolves create/where inputs to its own field `token`', async () => {
   await writeDb.auth.User.create({ token: 'tok' });

@@ -4,20 +4,20 @@ import { NumberLiteralExprAst } from '../../syntax/ast/expressions';
 import type { ArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
-// A general number literal — any number, including floats — reduced to its numeric value.
-// Passing `value` pins the combinator to that single literal (`num(4)` matches only `4`),
-// mirroring how `identifier(name)` pins a bare identifier. Use `int()` when only integer
-// literals are allowed.
+/** The pinned form retains its value as the output literal type. */
 export function num(): ArgType<number>;
-export function num(value: number): ArgType<number>;
-export function num(value?: number): ArgType<number> {
+export function num<const T extends number>(value: T): ArgType<T>;
+export function num<const T extends number>(value?: T): ArgType<number | T> {
   return {
     kind: 'num',
     label: value === undefined ? 'number' : String(value),
-    parse: (arg, ctx): Result<number, readonly PslDiagnostic[]> => {
+    parse: (arg, ctx): Result<number | T, readonly PslDiagnostic[]> => {
       if (arg instanceof NumberLiteralExprAst) {
         const parsed = arg.value();
-        if (parsed !== undefined && (value === undefined || parsed === value)) return ok(parsed);
+        if (parsed !== undefined) {
+          if (value === undefined) return ok(parsed);
+          if (parsed === value) return ok(value);
+        }
       }
       const message = value === undefined ? 'Expected a number literal' : `Expected ${value}`;
       return notOk([leafDiagnostic(ctx, arg, message)]);

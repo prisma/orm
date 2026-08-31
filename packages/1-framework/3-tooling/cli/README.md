@@ -1271,16 +1271,6 @@ export default defineConfig({
 });
 ```
 
-## Dependencies
-
-- **`@prisma/cli-engine`**: Command tree, argument parsing, help, settlement, telemetry hooks
-- **`clipanion`**: Flag parsing for the per-migration `MigrationCLI.run` entrypoint only
-- **`esbuild`**: Bundling TypeScript contract files with import allowlisting
-- **`@internal/emitter`**: Contract emission engine (returns strings)
-- **`@internal/migration-tools`**: On-disk migration I/O, hash verification, and history reconstruction
-- **`@internal/framework-components`**: Control plane types, migration operation types, control stack (via `./control`)
-- **`@internal/errors`**: Error types and factories (via `./control`)
-
 ## Design Decisions
 
 1. **Import Allowlist**: Only `@internal/*` packages allowed (MVP). Expand later if needed.

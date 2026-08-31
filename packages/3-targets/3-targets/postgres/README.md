@@ -137,16 +137,6 @@ Runner error codes include: `EXECUTION_FAILED`, `PRECHECK_FAILED`, `POSTCHECK_FA
 
 See `@internal/family-sql/control` README for full error code documentation.
 
-## Dependencies
-
-- **`@internal/family-sql`**: SQL family types (`SqlControlTargetDescriptor`, `SqlControlFamilyInstance`)
-- **`@internal/framework-components`**: Control plane types via `./control` (`ControlTargetInstance`)
-- **`@internal/sql-contract`**: Pack types (`TargetPackRef`)
-- **`arktype`**: Runtime validation
-
-**Dependents:**
-- CLI configuration files import this package to register the Postgres target
-
 ## Exports
 
 - `./control`: Control plane entry point for `SqlControlTargetDescriptor`

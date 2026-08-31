@@ -111,10 +111,6 @@ flowchart TD
 
 **Note**: Extension pack descriptor wiring happens in the CLI/family layer. The emitter only sees the resulting type import arrays.
 
-## Dependencies
-
-- **`arktype`**: Runtime type validation for manifests
-
 ## Package Location
 
 This package is part of the **framework domain**, **tooling layer**, **migration plane**:

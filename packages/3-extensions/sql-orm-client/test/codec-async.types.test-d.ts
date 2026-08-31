@@ -38,7 +38,7 @@ type UserRow = DefaultModelRow<Contract, 'User'>;
 type UserCreate = CreateInput<Contract, 'User'>;
 type UserUpdate = MutationUpdateInput<Contract, 'User'>;
 type UserUnique = UniqueConstraintCriterion<Contract, 'User'>;
-type UserWhere = ShorthandWhereFilter<Contract, 'User'>;
+type UserWhere = ShorthandWhereFilter<Contract, 'public', 'User'>;
 type UserInferRoot = InferRootRow<Contract, 'User'>;
 
 test('DefaultModelRow exposes plain `string` for pg/text@1 columns', () => {

@@ -31,6 +31,7 @@ const stubContext: ContractSourceContext = {
     entityTypes: {},
     pslBlockDescriptors: {},
     modelAttributes: {},
+    attributeSpecs: { model: {}, field: {} },
   },
   codecLookup: {
     get: () => undefined,

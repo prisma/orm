@@ -254,6 +254,10 @@ describe('coverage config', () => {
       "turbo run build --filter='!./examples/**' --filter='!./test/**' && vitest run --coverage",
     );
     assert.equal(rootManifest.scripts['test:coverage'], 'pnpm coverage:packages');
+    assert.equal(
+      rootManifest.scripts['coverage:packages:merge'],
+      'vitest --merge-reports=.vitest/blob --coverage',
+    );
     assert.equal(rootManifest.scripts['coverage:report'], 'node scripts/coverage-report.mjs');
 
     for await (const path of glob('packages/**/package.json', { cwd: repositoryRoot })) {
@@ -269,27 +273,86 @@ describe('coverage config', () => {
     assert.match(rootVitestConfig, /from ['"]\.\/scripts\/coverage-config['"]/);
     assert.doesNotMatch(rootVitestConfig, /from ['"]\.\/scripts\/coverage-config\.[^'"]+['"]/);
     assert.match(rootVitestConfig, /provider:\s*['"]v8['"]/);
+    assert.match(rootVitestConfig, /process\.env\[['"]VITEST_COVERAGE_SHARD['"]\]/);
+    assert.match(
+      rootVitestConfig,
+      /thresholds:\s*coverageShard\s*\?\s*\{\}\s*:\s*coveragePolicy\.thresholds/,
+    );
     assert.match(rootVitestConfig, /reportOnFailure:\s*true/);
   });
 
-  it('combines package tests and coverage in one CI job', async () => {
+  it('fans sharded coverage artifacts into one stable Test gate', async () => {
     const repositoryRoot = join(import.meta.dirname, '..');
     const workflow = await readFile(join(repositoryRoot, '.github/workflows/ci.yml'), 'utf8');
+    const shardJob = workflow.match(
+      /\n {2}test-packages:\n(?<body>[\s\S]*?)(?=\n {2}test-examples:\n)/,
+    )?.groups?.body;
+    const examplesJob = workflow.match(
+      /\n {2}test-examples:\n(?<body>[\s\S]*?)(?=\n {2}coverage:\n)/,
+    )?.groups?.body;
+    const coverageJob = workflow.match(/\n {2}coverage:\n(?<body>[\s\S]*?)(?=\n {2}test:\n)/)
+      ?.groups?.body;
     const testJob = workflow.match(/\n {2}test:\n(?<body>[\s\S]*?)(?=\n {2}test-e2e:\n)/)?.groups
       ?.body;
+
+    assert.ok(shardJob);
+    assert.match(shardJob, /^ {4}name: Package Tests \(\$\{\{ matrix\.index \}\}\/4\)$/m);
+    assert.match(shardJob, /^ {4}if: needs\.changes\.outputs\.inert != 'true'$/m);
+    assert.match(shardJob, /index: \[1, 2, 3, 4\]/);
+    assert.match(shardJob, /VITEST_COVERAGE_SHARD: \$\{\{ matrix\.index \}\}/);
+    assert.match(
+      shardJob,
+      /run: pnpm coverage:packages --reporter=default --reporter=github-actions --reporter=blob --shard=\$\{\{ matrix\.index \}\}\/4/,
+    );
+    assert.match(
+      shardJob,
+      /uses: actions\/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a/,
+    );
+    assert.match(shardJob, /name: package-coverage-\$\{\{ matrix\.index \}\}/);
+    assert.match(shardJob, /path: \.vitest\/blob\/blob-\$\{\{ matrix\.index \}\}-4\.json/);
+    assert.match(shardJob, /if-no-files-found: error/);
+    assert.match(shardJob, /include-hidden-files: true/);
+    assert.match(
+      shardJob,
+      /continue-on-error: true[\s\S]*if: steps\.package-tests\.outcome == 'failure'\n {8}run: exit 1/,
+    );
+
+    assert.ok(examplesJob);
+    assert.match(examplesJob, /^ {4}name: Test Examples$/m);
+    assert.match(examplesJob, /^ {4}needs: \[build, changes\]$/m);
+    assert.match(examplesJob, /run: pnpm test:examples/);
+
+    assert.ok(coverageJob);
+    assert.match(coverageJob, /^ {4}name: Coverage$/m);
+    assert.match(coverageJob, /^ {4}needs: \[build, changes, test-packages\]$/m);
+    assert.doesNotMatch(coverageJob, /^ {4}services:/m);
+    assert.match(
+      coverageJob,
+      /uses: actions\/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c/,
+    );
+    assert.match(coverageJob, /pattern: package-coverage-\*/);
+    assert.match(coverageJob, /path: \.vitest\/blob/);
+    assert.match(coverageJob, /merge-multiple: true/);
+    assert.equal(coverageJob.match(/test -f \.vitest\/blob\/blob-[1-4]-4\.json/g)?.length, 4);
+    assert.match(
+      coverageJob,
+      /run: pnpm coverage:packages:merge\n {6}- name: Report package coverage\n {8}if: \$\{\{ !cancelled\(\) \}\}\n {8}run: pnpm coverage:report/,
+    );
 
     assert.ok(testJob);
     assert.match(testJob, /^ {4}name: Test$/m);
     assert.match(
       testJob,
-      /run: pnpm coverage:packages\n {6}- name: Report package coverage\n {8}if: \$\{\{ !cancelled\(\) && needs\.changes\.outputs\.inert != 'true' \}\}\n {8}run: pnpm coverage:report/,
+      /^ {4}needs: \[build, changes, test-packages, test-examples, coverage\]$/m,
     );
-    assert.match(
-      testJob,
-      /- name: Test examples\n {8}if: \$\{\{ !cancelled\(\) && needs\.changes\.outputs\.inert != 'true' \}\}\n {8}run: pnpm test:examples/,
-    );
-    assert.doesNotMatch(workflow, /\n {2}coverage:\n/);
-    assert.equal(workflow.match(/run: pnpm coverage:packages/g)?.length, 1);
+    assert.match(testJob, /needs\.test-packages\.result != 'success'/);
+    assert.match(testJob, /needs\.test-examples\.result != 'success'/);
+    assert.match(testJob, /needs\.coverage\.result != 'success'/);
+    assert.match(testJob, /run: exit 1/);
+
+    assert.doesNotMatch(workflow, /actions\/cache\/(?:save|restore)@/);
+    assert.equal(workflow.match(/run: pnpm coverage:packages:merge/g)?.length, 1);
+    assert.equal(workflow.match(/run: pnpm coverage:report/g)?.length, 1);
     assert.equal(workflow.match(/run: pnpm test:examples/g)?.length, 1);
   });
 });

@@ -31,14 +31,6 @@ flowchart TD
     G -->|Assert| H[Runtime Values + Types]
 ```
 
-## Dependencies
-
-- `@repo/test-utils`: Shared test utilities (database, runtime, contract helpers)
-- `@internal/sql-query`: SQL query DSL and contract validation
-- `@internal/runtime`: Runtime execution engine
-- `@internal/adapter-postgres`: Postgres adapter
-- `@internal/driver-postgres`: Postgres driver
-
 ## Test Patterns
 
 Tests use shared utilities from `@repo/test-utils` via a wrapper file that injects dependencies:

@@ -105,14 +105,6 @@ Re-exports the MongoDB family pack (only needed when using the low-level API; `d
 
 Re-exports the MongoDB target pack (only needed when using the low-level API; `defineContract` pre-binds this for you).
 
-## Dependencies
-
-This package bundles all the transitive dependencies needed for a MongoDB Prisma Next project, including those referenced in the emitted `contract.d.ts`:
-
-- `@internal/mongo-contract` (contract type definitions)
-- `@internal/adapter-mongo` (adapter + codec types)
-- `@internal/contract` (shared contract types)
-
 ## Related Docs
 
 - Architecture: `docs/Architecture Overview.md`

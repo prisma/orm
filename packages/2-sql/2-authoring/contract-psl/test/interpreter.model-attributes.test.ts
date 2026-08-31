@@ -1,26 +1,38 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
-import { modelAttribute, str } from '@internal/psl-parser';
+import type { ModelAttributeSpecFactory } from '@internal/psl-parser';
+import { modelAttribute, optional, str } from '@internal/psl-parser';
 import type { SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import {
+  createBuiltinLikeControlMutationDefaults,
   postgresScalarTypeDescriptors,
   postgresTarget,
   symbolTableInputFromParseArgs,
 } from './fixtures';
 
-const stampModelSpec = modelAttribute('stamp', {
-  positional: [{ key: 'label', type: str() }],
-});
+const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
+
+function stampScopeFrom(ctx: Parameters<ModelAttributeSpecFactory>[0]): string {
+  const declaredModels = Object.keys(ctx.symbols.topLevel.models).sort().join('+');
+  const defaultFunctions = [...ctx.controlMutationDefaults.keys()].sort().join('+');
+  return `${ctx.model.name}|${declaredModels}|${defaultFunctions}`;
+}
+
+const stampSpecFactory: ModelAttributeSpecFactory = (ctx) =>
+  modelAttribute('stamp', {
+    positional: [{ key: 'label', type: str() }],
+    named: { scope: optional(str(), stampScopeFrom(ctx)) },
+  });
 
 const stampAuthoringContributions: AuthoringContributions = {
   modelAttributes: {
     stamp: {
       kind: 'modelAttribute',
       attribute: 'stamp',
-      spec: stampModelSpec,
-      lower: (parsed: { readonly label: string }, ctx) => ({
+      spec: stampSpecFactory,
+      lower: (parsed: { readonly label: string; readonly scope?: string }, ctx) => ({
         key: ctx.storageName,
         entity: {
           kind: 'stamp',
@@ -28,6 +40,7 @@ const stampAuthoringContributions: AuthoringContributions = {
           modelName: ctx.modelName,
           namespaceId: ctx.namespaceId,
           label: parsed.label,
+          scope: parsed.scope,
         },
       }),
     },
@@ -53,6 +66,7 @@ function interpretWith(
     ...document,
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
+    controlMutationDefaults: builtinControlMutationDefaults,
     composedExtensionContracts: new Map(),
     createNamespace,
     capabilities: { sql: { scalarList: true } },
@@ -91,6 +105,31 @@ describe('contributed model attributes (AuthoringContributions.modelAttributes)'
           widget: { kind: 'stamp', tableName: 'widget', modelName: 'Widget', label: 'v1' },
         },
       },
+    });
+  });
+
+  it('lowers a spec the factory built from the declaring model and the composed stack facts', () => {
+    const { result, capturedEntries } = interpretWith(
+      `model Widget {
+  id Int @id
+  @@stamp("v1")
+}
+
+model Gadget {
+  id Int @id
+}`,
+      stampAuthoringContributions,
+    );
+
+    const expectedDefaultFunctions = [
+      ...builtinControlMutationDefaults.defaultFunctionRegistry.keys(),
+    ]
+      .sort()
+      .join('+');
+
+    expect(result.ok).toBe(true);
+    expect(capturedEntries['public']?.['stamp']?.['widget']).toMatchObject({
+      scope: `Widget|Gadget+Widget|${expectedDefaultFunctions}`,
     });
   });
 

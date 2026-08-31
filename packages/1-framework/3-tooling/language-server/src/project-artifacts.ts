@@ -135,7 +135,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       // once its last open input closes. Throwing loudly beats serving a
       // fabricated empty symbolTable that would mask the broken invariant.
       throw new InternalError(
-        'invariant violated: project has no open configured input — the server must drop such projects',
+        'invariant violated: project has no readable configured input — callers must check document artifacts first',
       );
     },
     documentChanged: drop,

@@ -122,6 +122,7 @@ import {
   type RelatedModelName,
   type RelationTargetNamespace,
   type ResolvedCreateInput,
+  type ResolvedScalarCreateInput,
   type RuntimeQueryable,
   type ShorthandWhereFilter,
   type UniqueConstraintCriterion,
@@ -334,7 +335,7 @@ class CollectionImpl<
     ) => WhereArg,
   ): Collection<TContract, ModelName, Row, WithWhereState<State>>;
   where(
-    filters: ShorthandWhereFilter<TContract, ModelName, State['nsId']>,
+    filters: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Collection<TContract, ModelName, Row, WithWhereState<State>>;
   where(
     input:
@@ -355,12 +356,12 @@ class CollectionImpl<
             State['nsId']
           >,
         ) => WhereArg)
-      | ShorthandWhereFilter<TContract, ModelName, State['nsId']>,
+      | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Collection<TContract, ModelName, Row, WithWhereState<State>> {
     const whereArg =
       typeof input === 'function'
         ? input(
-            createModelAccessor<TContract, ModelName, State['variantName']>(
+            createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
               this.ctx.context,
               this.namespaceId,
               this.modelName,
@@ -716,15 +717,25 @@ class CollectionImpl<
   orderBy(
     selection:
       | ((
-          model: VariantAwareModelAccessor<TContract, ModelName, State['variantName']>,
+          model: VariantAwareModelAccessor<
+            TContract,
+            ModelName,
+            State['variantName'],
+            State['nsId']
+          >,
         ) => OrderByItem)
       | ReadonlyArray<
           (
-            model: VariantAwareModelAccessor<TContract, ModelName, State['variantName']>,
+            model: VariantAwareModelAccessor<
+              TContract,
+              ModelName,
+              State['variantName'],
+              State['nsId']
+            >,
           ) => OrderByItem
         >,
   ): Collection<TContract, ModelName, Row, WithOrderByState<State>> {
-    const accessor = createModelAccessor<TContract, ModelName, State['variantName']>(
+    const accessor = createModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>(
       this.ctx.context,
       this.namespaceId,
       this.modelName,
@@ -1064,7 +1075,7 @@ class CollectionImpl<
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null>;
   async first(
-    filter: ShorthandWhereFilter<TContract, ModelName, State['nsId']>,
+    filter: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null>;
   async first(
@@ -1077,7 +1088,7 @@ class CollectionImpl<
             State['nsId']
           >,
         ) => WhereArg)
-      | ShorthandWhereFilter<TContract, ModelName, State['nsId']>,
+      | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null> {
     const scoped =
@@ -1280,7 +1291,7 @@ class CollectionImpl<
     const rows = await this.#createAllWithAnnotations(
       [
         blindCast<
-          ResolvedCreateInput<TContract, ModelName, State['variantName'], State['nsId']>,
+          ResolvedScalarCreateInput<TContract, ModelName, State['variantName'], State['nsId']>,
           'absence of nested callbacks selects the scalar create overload input'
         >(data),
       ],
@@ -1326,7 +1337,12 @@ class CollectionImpl<
    * compiled insert plan.
    */
   createAll(
-    data: readonly ResolvedCreateInput<TContract, ModelName, State['variantName'], State['nsId']>[],
+    data: readonly ResolvedScalarCreateInput<
+      TContract,
+      ModelName,
+      State['variantName'],
+      State['nsId']
+    >[],
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): AsyncIterableResult<Row> {
     return this.#createAllWithAnnotations(
@@ -1336,7 +1352,12 @@ class CollectionImpl<
   }
 
   #createAllWithAnnotations(
-    data: readonly ResolvedCreateInput<TContract, ModelName, State['variantName'], State['nsId']>[],
+    data: readonly ResolvedScalarCreateInput<
+      TContract,
+      ModelName,
+      State['variantName'],
+      State['nsId']
+    >[],
     annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
   ): AsyncIterableResult<Row> {
     if (data.length === 0) {
@@ -1633,7 +1654,12 @@ class CollectionImpl<
    * Not supported on MTI variants — use `createAll(...)` instead.
    */
   async createAndCount(
-    data: readonly ResolvedCreateInput<TContract, ModelName, State['variantName']>[],
+    data: readonly ResolvedScalarCreateInput<
+      TContract,
+      ModelName,
+      State['variantName'],
+      State['nsId']
+    >[],
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<number> {
     if (data.length === 0) {
@@ -1705,7 +1731,7 @@ class CollectionImpl<
    */
   async upsert(
     input: {
-      create: ResolvedCreateInput<TContract, ModelName, State['variantName']>;
+      create: ResolvedScalarCreateInput<TContract, ModelName, State['variantName'], State['nsId']>;
       update: Partial<DefaultModelRow<TContract, ModelName>>;
       conflictOn?: UniqueConstraintCriterion<TContract, ModelName>;
     },
@@ -2323,7 +2349,7 @@ class CollectionImpl<
         this.namespaceId,
         this.modelName,
         blindCast<
-          ShorthandWhereFilter<TContract, ModelName>,
+          ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
           'identity columns were resolved from this model before building the shorthand filter'
         >(criterion),
       ) ?? null
@@ -2343,7 +2369,7 @@ class CollectionImpl<
       this.namespaceId,
       this.modelName,
       blindCast<
-        ShorthandWhereFilter<TContract, ModelName>,
+        ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
         'mutation reload criterion contains resolved fields for this model'
       >(criterion),
     );

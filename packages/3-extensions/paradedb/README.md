@@ -14,12 +14,6 @@ The v1 surface covers the `key_field` storage parameter only. Per-field tokenize
 - **Extension descriptor**: declares the `paradedb/bm25` capability for contract-level feature detection
 - **Pack ref export**: ships a pure `/pack` entrypoint for TypeScript contract authoring
 
-## Dependencies
-
-- **`@internal/sql-contract`**: index-type registry primitive
-- **`@internal/contract`** / **`@internal/contract-authoring`**: core contract types
-- **`arktype`**: option-shape validation
-
 ## Installation
 
 ```bash

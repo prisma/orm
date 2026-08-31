@@ -1,6 +1,6 @@
 {
   "name": "@prisma/orm-target-postgres",
-  "version": "8.0.0-rc.7",
+  "version": "8.0.0-rc.8",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
@@ -15,9 +15,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.7",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.7",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.7",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.8",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.8",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.8",
     "@standard-schema/spec": "^1.1.0",
     "@types/pg": "catalog:",
     "arktype": "^2.2.2",
@@ -26,11 +26,11 @@
     "pg-cursor": "^2.21.0"
   },
   "devDependencies": {
-    "@internal/adapter-postgres": "workspace:8.0.0-rc.7",
-    "@internal/driver-postgres": "workspace:8.0.0-rc.7",
-    "@internal/target-postgres": "workspace:8.0.0-rc.7",
-    "@repo/tsconfig": "workspace:8.0.0-rc.7",
-    "@repo/tsdown": "workspace:8.0.0-rc.7",
+    "@internal/adapter-postgres": "workspace:8.0.0-rc.8",
+    "@internal/driver-postgres": "workspace:8.0.0-rc.8",
+    "@internal/target-postgres": "workspace:8.0.0-rc.8",
+    "@repo/tsconfig": "workspace:8.0.0-rc.8",
+    "@repo/tsdown": "workspace:8.0.0-rc.8",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -91,7 +91,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/9-public/@prisma/orm-target-postgres"
   }
 }

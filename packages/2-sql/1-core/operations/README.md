@@ -24,15 +24,6 @@ This package provides SQL-specific operation types that extend the generic `Oper
 - **Registry Factory**: Typed factory for creating SQL operation registries
   - `createSqlOperationRegistry()`: Creates a typed `SqlOperationRegistry`
 
-## Dependencies
-
-- **Depends on**:
-  - `@internal/operations` (core operation registry types)
-- **Depended on by**:
-  - `@internal/sql-relational-core` (uses for operation execution)
-  - `@internal/sql-runtime` (uses for operation signature types)
-  - `@internal/cli` (uses types when assembling registries from packs)
-
 ## Architecture
 
 ```mermaid

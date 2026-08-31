@@ -17,7 +17,3 @@ A bare namespace import (e.g. `@prisma/orm-target-mongo/adapter`) aggregates tha
 ## Responsibilities
 
 Everything MongoDB-target-specific: adapter wiring, codec registration, and the wire connection. Shared Mongo semantics live in `@prisma/orm-family-mongo`.
-
-## Dependencies
-
-`@prisma/orm-framework`, `@prisma/orm-family-mongo`, and `@prisma/orm-toolchain` (exact lockstep pins), `bson`, small third-party runtime libraries, and a `mongodb` peer dependency satisfied by the application or the facade.

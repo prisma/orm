@@ -13,7 +13,8 @@ export function record<T>(of: ArgType<T>): ArgType<Record<string, T>> {
         return notOk([leafDiagnostic(ctx, arg, 'Expected an object literal')]);
       }
       const diagnostics: PslDiagnostic[] = [];
-      const result: Record<string, T> = {};
+      const entries: [string, T][] = [];
+      const keys = new Set<string>();
       for (const field of arg.fields()) {
         const key = field.keyName();
         if (key === undefined) {
@@ -30,14 +31,15 @@ export function record<T>(of: ArgType<T>): ArgType<Record<string, T>> {
           diagnostics.push(...parsed.failure);
           continue;
         }
-        if (Object.hasOwn(result, key)) {
+        if (keys.has(key)) {
           diagnostics.push(leafDiagnostic(ctx, field, `Duplicate key "${key}"`));
           continue;
         }
-        result[key] = parsed.value;
+        keys.add(key);
+        entries.push([key, parsed.value]);
       }
       if (diagnostics.length > 0) return notOk(diagnostics);
-      return ok(result);
+      return ok(Object.fromEntries(entries));
     },
   };
 }

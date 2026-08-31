@@ -58,7 +58,7 @@ model Product {
   price          Price
   image          Image
   @@map("products")
-  @@textIndex([name, description], weights: "{\"name\": 10, \"description\": 1}")
+  @@textIndex([name, description], weights: { name: 10, description: 1 })
   @@index([brand, subCategory])
   @@index([code], type: "hashed")
 }

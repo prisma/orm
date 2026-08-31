@@ -36,8 +36,10 @@ const controlStack: PipelineInputs = {
   pslBlockDescriptors: {},
 };
 
-const cleanSource = 'model User {\n  id Int @id\n}\n';
-const twoModelSource = 'model User {\n  id Int @id\n}\n\nmodel Post {\n  id Int @id\n}\n';
+const directive = '// use prisma-next\n';
+const cleanSource = `${directive}model User {\n  id Int @id\n}\n`;
+const twoModelSource = `${directive}model User {\n  id Int @id\n}\n\nmodel Post {\n  id Int @id\n}\n`;
+const unmarkedSource = 'model Stray {\n  id Int @id\n}\n';
 
 function projectWithMirror(interpretation?: ProjectInterpretation): {
   readonly texts: Map<string, string>;
@@ -119,6 +121,47 @@ describe('createProjectArtifacts', () => {
     expect(pipelineMock.runPipeline).not.toHaveBeenCalled();
   });
 
+  it('returns undefined for a configured input without the prisma-next directive', () => {
+    const { texts, store } = projectWithMirror();
+    texts.set(schemaUri, unmarkedSource);
+
+    expect(store.document(schemaUri)).toBeUndefined();
+    expect(pipelineMock.runPipeline).not.toHaveBeenCalled();
+  });
+
+  it('serves a configured input again once an edit adds the directive', () => {
+    const { texts, store } = projectWithMirror();
+    texts.set(schemaUri, unmarkedSource);
+    expect(store.document(schemaUri)).toBeUndefined();
+
+    texts.set(schemaUri, `${directive}${unmarkedSource}`);
+    store.documentChanged(schemaUri);
+
+    expect(store.document(schemaUri)?.document).toBeDefined();
+  });
+
+  it('excludes an unmarked sibling input from the symbol table', () => {
+    const schema2Uri = pathToFileURL('/abs/schema2.psl').toString();
+    const twoInputs = resolveSchemaInputs({
+      contract: {
+        source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/schema2.psl'] },
+      },
+    });
+    const texts = new Map<string, string>();
+    const store = createProjectArtifacts({
+      inputs: twoInputs,
+      controlStack,
+      getText: (uri) => texts.get(uri),
+    });
+    texts.set(schemaUri, unmarkedSource);
+    texts.set(schema2Uri, cleanSource);
+
+    expect(store.document(schemaUri)).toBeUndefined();
+    const models = Object.keys(store.symbolTable().topLevel.models);
+    expect(models).toContain('User');
+    expect(models).not.toContain('Stray');
+  });
+
   it('reading the symbol table on a fresh store parses the open configured input once', () => {
     const { texts, store } = projectWithMirror();
     texts.set(schemaUri, cleanSource);
@@ -163,7 +206,9 @@ describe('createProjectArtifacts', () => {
   it('throws when no configured input is open instead of fabricating a table', () => {
     const { store } = projectWithMirror();
 
-    expect(() => store.symbolTable()).toThrowError(/invariant violated.*no open configured input/i);
+    expect(() => store.symbolTable()).toThrowError(
+      /invariant violated.*no readable configured input/i,
+    );
     expect(pipelineMock.runPipeline).not.toHaveBeenCalled();
   });
 
@@ -180,7 +225,7 @@ describe('createProjectArtifacts', () => {
 
   it('returns diagnostics with parity to parse + buildSymbolTable for the same inputs', () => {
     const { texts, store } = projectWithMirror();
-    const source = ['model Profile {', '  user a.b.c', '}'].join('\n');
+    const source = [`${directive}model Profile {`, '  user a.b.c', '}'].join('\n');
     texts.set(schemaUri, source);
     const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
     const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
@@ -196,7 +241,7 @@ describe('createProjectArtifacts', () => {
 
   it('does not throw on a malformed, half-typed buffer', () => {
     const { texts, store } = projectWithMirror();
-    texts.set(schemaUri, 'model User {\n  id ');
+    texts.set(schemaUri, `${directive}model User {\n  id `);
     expect(() => store.document(schemaUri)).not.toThrow();
   });
 });
@@ -205,7 +250,7 @@ describe('interpret slot', () => {
   const spanned = {
     code: 'PSL_UNRESOLVED_RELATION',
     message: 'relation target not found',
-    span: { start: { offset: 15, line: 2, column: 3 }, end: { offset: 21, line: 2, column: 9 } },
+    span: { start: { offset: 34, line: 3, column: 3 }, end: { offset: 40, line: 3, column: 9 } },
   };
 
   it('does not interpret on document reads, only when the slot is pulled', () => {
@@ -245,7 +290,7 @@ describe('interpret slot', () => {
 
     expect(store.document(schemaUri)?.interpretDiagnostics()).toEqual([
       {
-        range: { start: { line: 1, character: 2 }, end: { line: 1, character: 8 } },
+        range: { start: { line: 2, character: 2 }, end: { line: 2, character: 8 } },
         message: 'relation target not found',
         code: 'PSL_UNRESOLVED_RELATION',
         severity: 1,

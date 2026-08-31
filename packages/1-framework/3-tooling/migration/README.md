@@ -67,21 +67,6 @@ graph TD
     GRAPH --> ABS["@internal/migration-tools/constants<br/>EMPTY_CONTRACT_HASH"]
 ```
 
-## Dependencies
-
-| Package | Why |
-|---|---|
-| `@internal/contract` | `Contract` type for embedded contracts in metadata |
-| `@internal/framework-components` | `MigrationPlanOperation` types (via `./control`) |
-| `@internal/emitter` | `canonicalizeContract` |
-| `arktype` | Runtime shape validation for `migration.json` and `ops.json` |
-| `@internal/utils` | Workspace utility dependency (currently no direct runtime imports in this package) |
-| `pathe` | Cross-platform path manipulation |
-
-### Dependents
-
-- `@internal/cli` (M3) — CLI commands consume these functions
-
 ## Export Subpaths
 
 | Subpath | Contents |

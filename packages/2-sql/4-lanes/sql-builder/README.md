@@ -52,11 +52,6 @@ const counts = await db.posts
   .all();
 ```
 
-## Dependencies
-
-- `@internal/sql-relational-core` — AST nodes, execution context, query operation registry
-- `@internal/sql-runtime` — Runtime type for query execution
-
 ## Architecture
 
 - **Domain:** SQL

@@ -64,10 +64,6 @@ For SQL contracts, use `@internal/sql-contract-ts/schema-sql` instead.
 - Keep `nullable: false` explicit for columns with defaults in emitted contracts.
 - Add the corresponding `defaults.*` capability when using function defaults like `autoincrement()` or `now()`.
 
-## Dependencies
-
-- **`@internal/utils`**: Shared utility functions
-
 ## Related Subsystems
 
 - [Data Contract](../../../../../docs/architecture%20docs/subsystems/1.%20Data%20Contract.md)

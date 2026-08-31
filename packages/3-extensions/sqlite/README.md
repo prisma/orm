@@ -82,16 +82,6 @@ Re-exports all migration operation helpers from `@internal/target-sqlite/migrati
 
 Composes the SQLite execution stack and returns typed query roots (`db.sql`, `db.orm`, `db.context`, `db.stack`).
 
-## Dependencies
-
-This package bundles all the transitive dependencies needed for a SQLite Prisma Next project:
-
-- `@internal/target-sqlite` (target descriptor + migration surface)
-- `@internal/adapter-sqlite` (adapter descriptor)
-- `@internal/driver-sqlite` (driver descriptor)
-- `@internal/sql-contract-ts` (TypeScript contract authoring)
-- `@internal/sql-contract` (contract type definitions)
-
 ## Related Docs
 
 - Architecture: `docs/Architecture Overview.md`

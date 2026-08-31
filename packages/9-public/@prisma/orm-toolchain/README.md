@@ -22,7 +22,3 @@ Applications get it as an exact-pinned dependency of their database facade (`@pr
 ## Responsibilities
 
 Everything that runs at development or build time: emitting contracts, loading config, planning and packaging migrations, editor support, and the CLI itself. Nothing here is needed by a deployed application at runtime.
-
-## Dependencies
-
-`@prisma/orm-framework` (exact lockstep pin) plus the tooling's third-party dependencies (esbuild, prettier, clipanion, vscode-languageserver, and friends) — the deliberate reason this package is not part of `orm-framework`.

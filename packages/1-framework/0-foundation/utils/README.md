@@ -82,8 +82,3 @@ This package is part of the **framework domain**, **foundation layer**:
 - **Domain**: framework (target-agnostic)
 - **Layer**: foundation
 - **Path**: `packages/1-framework/0-foundation/utils`
-
-## Dependencies
-
-This package has **no dependencies** - it's part of the innermost core ring and provides foundational utilities.
-

@@ -11,12 +11,3 @@ Typed AST for MongoDB filters, pipeline stages, and command variants, plus the u
 - **Visitors**: `MongoFilterVisitor`, `MongoFilterRewriter`, `MongoStageVisitor` interfaces for traversing and transforming AST nodes
 
 Lowering typed nodes to wire BSON is performed by `@internal/adapter-mongo` via `lower(plan)` on `MongoQueryPlan`, which dispatches on `command.kind` and uses internal helpers for filters and pipelines.
-
-## Dependencies
-
-- **Depends on**:
-  - `@internal/contract` (plan metadata types)
-  - `@internal/mongo-value` (document types, param resolution)
-- **Depended on by**:
-  - `@internal/mongo-orm` (compiles ORM queries into `MongoQueryPlan`)
-  - `@internal/adapter-mongo` (`lower(plan)` from `MongoQueryPlan` to wire commands)

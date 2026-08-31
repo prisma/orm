@@ -73,7 +73,7 @@ model Product {
   embedding      Float[]?
   status         ProductStatus @default(Active)
   @@map("products")
-  @@textIndex([name, description], weights: "{\"name\": 10, \"description\": 1}")
+  @@textIndex([name, description], weights: { name: 10, description: 1 })
   @@index([brand, subCategory])
   @@index([primaryCategory, articleType])
   @@index([code], type: "hashed")

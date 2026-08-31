@@ -50,7 +50,3 @@ An application that outgrows the default wiring installs the four platform packa
 ## Responsibilities
 
 Composition only. Every behavior it exposes lives in the platform packages; this package chooses the default combination of them and gives it one name.
-
-## Dependencies
-
-`@prisma/orm-framework`, `@prisma/orm-family-sql`, `@prisma/orm-target-postgres`, and `@prisma/orm-toolchain` at exact lockstep versions, plus `pg` and `pathe`.

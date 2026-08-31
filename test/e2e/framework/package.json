@@ -1,6 +1,6 @@
 {
   "name": "e2e-tests",
-  "version": "8.0.0-rc.7",
+  "version": "8.0.0-rc.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,7 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.7",
+    "@repo/tsconfig": "workspace:8.0.0-rc.8",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "pg": "catalog:",
@@ -23,11 +23,11 @@
     "vitest": "catalog:"
   },
   "dependencies": {
-    "@prisma/orm-extension-arktype-json": "workspace:8.0.0-rc.7",
-    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.7",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.7",
-    "@prisma/orm-sqlite": "workspace:8.0.0-rc.7",
-    "@repo/test-utils": "workspace:8.0.0-rc.7",
+    "@prisma/orm-extension-arktype-json": "workspace:8.0.0-rc.8",
+    "@prisma/orm-extension-pgvector": "workspace:8.0.0-rc.8",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.8",
+    "@prisma/orm-sqlite": "workspace:8.0.0-rc.8",
+    "@repo/test-utils": "workspace:8.0.0-rc.8",
     "arktype": "catalog:"
   }
 }

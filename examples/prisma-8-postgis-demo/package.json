@@ -21,8 +21,8 @@
     "lint": "biome check . --error-on-warnings"
   },
   "dependencies": {
-    "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.7",
-    "@prisma/orm-postgres": "workspace:8.0.0-rc.7",
+    "@prisma/orm-extension-postgis": "workspace:8.0.0-rc.8",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.8",
     "arktype": "^2.2.2",
     "dotenv": "^17.4.2",
     "leaflet": "^1.9.4",
@@ -33,9 +33,9 @@
     "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
-    "@prisma/cli-engine": "0.2.3",
-    "@repo/test-utils": "workspace:8.0.0-rc.7",
-    "@repo/tsconfig": "workspace:8.0.0-rc.7",
+    "@prisma/cli-engine": "0.3.0",
+    "@repo/test-utils": "workspace:8.0.0-rc.8",
+    "@repo/tsconfig": "workspace:8.0.0-rc.8",
     "@types/leaflet": "^1.9.22",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
@@ -45,5 +45,5 @@
     "typescript": "catalog:",
     "vitest": "catalog:"
   },
-  "version": "8.0.0-rc.7"
+  "version": "8.0.0-rc.8"
 }

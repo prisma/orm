@@ -10,6 +10,7 @@ import {
   identifier,
   int,
   interpretAttribute,
+  json,
   list,
   modelAttribute,
   nodePslSpan,
@@ -75,6 +76,51 @@ describe('str', () => {
     const { expr, ctx } = argOf('42');
 
     const result = str().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
+  });
+
+  it('matches only the pinned string literal', () => {
+    const { expr, ctx } = argOf('"hashed"');
+
+    const result = str('hashed').parse(expr, ctx);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toBe('hashed');
+  });
+
+  it('rejects a string literal other than the pinned value', () => {
+    const { expr, ctx } = argOf('"2dsphere"');
+
+    const result = str('hashed').parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
+  });
+
+  it('rejects a bare identifier carrying the pinned characters', () => {
+    const { expr, ctx } = argOf('hashed');
+
+    const result = str('hashed').parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
+  });
+
+  it('rejects a number literal against the pinned value', () => {
+    const { expr, ctx } = argOf('2');
+
+    const result = str('hashed').parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -156,13 +202,17 @@ describe('int', () => {
     if (!result.ok) expect(result.failure).toHaveLength(1);
   });
 
-  it('accepts an integer within the declared bounds', () => {
-    const { expr, ctx } = argOf('16');
+  it('accepts integers at both inclusive bounds', () => {
+    const minimum = argOf('2');
+    const maximum = argOf('255');
 
-    const result = int({ min: 2, max: 255 }).parse(expr, ctx);
+    const minimumResult = int({ min: 2, max: 255 }).parse(minimum.expr, minimum.ctx);
+    const maximumResult = int({ min: 2, max: 255 }).parse(maximum.expr, maximum.ctx);
 
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe(16);
+    expect(minimumResult.ok).toBe(true);
+    if (minimumResult.ok) expect(minimumResult.value).toBe(2);
+    expect(maximumResult.ok).toBe(true);
+    if (maximumResult.ok) expect(maximumResult.value).toBe(255);
   });
 
   it('rejects an integer below the minimum with a range message', () => {
@@ -276,6 +326,77 @@ describe('num', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
+  });
+});
+
+describe('json', () => {
+  it('parses a quoted JSON object string into a record', () => {
+    const { expr, ctx } = argOf('"{\\"a\\": 1}"');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual({ a: 1 });
+  });
+
+  it('rejects a JSON array string', () => {
+    const { expr, ctx } = argOf('"[1,2]"');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
+  });
+
+  it('rejects a JSON scalar string', () => {
+    const { expr, ctx } = argOf('"5"');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
+  });
+
+  it('rejects an invalid-JSON string', () => {
+    const { expr, ctx } = argOf('"{not json}"');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
+  });
+
+  it('rejects a bare identifier', () => {
+    const { expr, ctx } = argOf('Cascade');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
+  });
+
+  it('rejects a number literal', () => {
+    const { expr, ctx } = argOf('5');
+
+    const result = json().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+    }
   });
 });
 
@@ -559,6 +680,24 @@ describe('record', () => {
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toEqual({});
+  });
+
+  it('preserves __proto__ as an own data property', () => {
+    const { expr, ctx } = argOf('{ __proto__: "value" }');
+
+    const result = record(str()).parse(expr, ctx);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(Object.hasOwn(result.value, '__proto__')).toBe(true);
+      expect(Object.getOwnPropertyDescriptor(result.value, '__proto__')).toEqual({
+        value: 'value',
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      expect(Object.getPrototypeOf(result.value)).toBe(Object.prototype);
+    }
   });
 
   it('rejects a duplicate key', () => {

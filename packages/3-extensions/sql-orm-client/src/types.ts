@@ -299,10 +299,11 @@ type OpMatchesField<Op, CodecId extends string, CT extends Record<string, unknow
 
 type FieldOperations<
   TContract extends Contract<SqlStorage>,
+  NsId extends string,
   ModelName extends string,
   FieldName extends string,
 > =
-  FieldCodecId<TContract, ModelName, FieldName> extends infer CodecId extends string
+  FieldCodecId<TContract, ModelName, FieldName, NsId> extends infer CodecId extends string
     ? ExtractQueryOperationTypes<TContract> extends infer AllOps
       ? {
           [OpName in keyof AllOps & string as OpMatchesField<
@@ -413,22 +414,29 @@ export const COMPARISON_METHODS_META = {
 
 type ComparisonMethodsMeta = typeof COMPARISON_METHODS_META;
 
-export type RelationPredicate<TContract extends Contract<SqlStorage>, ModelName extends string> = (
-  model: ModelAccessor<TContract, ModelName>,
-) => AnyExpression;
+type DomainNamespaceId<TContract extends Contract<SqlStorage>> =
+  keyof TContract['domain']['namespaces'] & string;
+
+export type RelationPredicate<
+  TContract extends Contract<SqlStorage>,
+  NsId extends DomainNamespaceId<TContract>,
+  ModelName extends string,
+> = (model: ModelAccessor<TContract, ModelName, NsId>) => AnyExpression;
 
 export type RelationPredicateInput<
   TContract extends Contract<SqlStorage>,
+  NsId extends DomainNamespaceId<TContract>,
   ModelName extends string,
-> = RelationPredicate<TContract, ModelName> | Record<string, unknown>;
+> = RelationPredicate<TContract, NsId, ModelName> | Record<string, unknown>;
 
 export type RelationFilterAccessor<
   TContract extends Contract<SqlStorage>,
+  RelatedNsId extends DomainNamespaceId<TContract>,
   RelatedModelName extends string,
 > = {
-  some(predicate?: RelationPredicateInput<TContract, RelatedModelName>): AnyExpression;
-  every(predicate: RelationPredicateInput<TContract, RelatedModelName>): AnyExpression;
-  none(predicate?: RelationPredicateInput<TContract, RelatedModelName>): AnyExpression;
+  some(predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>): AnyExpression;
+  every(predicate: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>): AnyExpression;
+  none(predicate?: RelationPredicateInput<TContract, RelatedNsId, RelatedModelName>): AnyExpression;
 };
 
 type ScalarModelAccessor<
@@ -444,13 +452,18 @@ type ScalarModelAccessor<
       FieldJsType<TContract, ModelName, K, NsId>,
       FieldTraits<TContract, ModelName, K, NsId>
     > &
-    FieldOperations<TContract, ModelName, K>;
+    FieldOperations<TContract, NsId, ModelName, K>;
 };
 
-type RelationModelAccessor<TContract extends Contract<SqlStorage>, ModelName extends string> = {
-  [K in RelationNames<TContract, ModelName>]: RelationFilterAccessor<
+type RelationModelAccessor<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = {
+  [K in RelationNames<TContract, ModelName, NsId>]: RelationFilterAccessor<
     TContract,
-    RelatedModelName<TContract, ModelName, K> & string
+    RelationTargetNamespace<TContract, ModelName, K, NsId>,
+    RelatedModelName<TContract, ModelName, K, NsId> & string
   >;
 };
 
@@ -458,7 +471,8 @@ export type ModelAccessor<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
-> = ScalarModelAccessor<TContract, ModelName, NsId> & RelationModelAccessor<TContract, ModelName>;
+> = ScalarModelAccessor<TContract, ModelName, NsId> &
+  RelationModelAccessor<TContract, ModelName, NsId>;
 
 /**
  * The predicate accessor for a collection narrowed to a variant. When a real
@@ -476,8 +490,8 @@ export type VariantAwareModelAccessor<
   ? VariantName extends VariantNames<TContract, ModelName, NsId>
     ? ScalarModelAccessor<TContract, ModelName, NsId> &
         ScalarModelAccessor<TContract, VariantName, NsId> &
-        RelationModelAccessor<TContract, ModelName> &
-        RelationModelAccessor<TContract, VariantName>
+        RelationModelAccessor<TContract, ModelName, NsId> &
+        RelationModelAccessor<TContract, VariantName, NsId>
     : ModelAccessor<TContract, ModelName, NsId>
   : ModelAccessor<TContract, ModelName, NsId>;
 
@@ -896,8 +910,8 @@ export type HavingBuilder<
 
 export type ShorthandWhereFilter<
   TContract extends Contract<SqlStorage>,
+  NsId extends DomainNamespaceId<TContract>,
   ModelName extends string,
-  NsId extends string = never,
 > = Partial<{
   [K in keyof DefaultModelRow<TContract, ModelName, NsId> & string]:
     | DefaultModelRow<TContract, ModelName, NsId>[K]
@@ -1291,7 +1305,7 @@ type OptionalCreateFieldNames<
     : never;
 }[CreateFieldNames<TContract, ModelName, NsId>];
 
-export type CreateInput<
+type ScalarCreateInput<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   NsId extends string = never,
@@ -1304,7 +1318,13 @@ export type CreateInput<
       DefaultModelRow<TContract, ModelName, NsId>,
       OptionalCreateFieldNames<TContract, ModelName, NsId>
     >
-  > &
+  >;
+
+export type CreateInput<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  NsId extends string = never,
+> = ScalarCreateInput<TContract, ModelName, NsId> &
   RelationMutationFields<TContract, ModelName, 'create'>;
 
 type IsPolymorphicBase<
@@ -1352,6 +1372,22 @@ export type ResolvedCreateInput<
       ? VariantCreateInput<TContract, ModelName, VName, NsId>
       : never
     : CreateInput<TContract, ModelName, NsId>;
+
+export type ResolvedScalarCreateInput<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  VName extends string | undefined,
+  NsId extends string = never,
+> =
+  IsPolymorphicBase<TContract, ModelName, NsId> extends true
+    ? VName extends string
+      ? Omit<
+          ScalarCreateInput<TContract, ModelName, NsId>,
+          DiscriminatorFieldName<TContract, ModelName, NsId>
+        > &
+          ScalarCreateInput<TContract, VName, NsId>
+      : never
+    : ScalarCreateInput<TContract, ModelName, NsId>;
 
 type ModelStorageTableDef<TContract extends Contract<SqlStorage>, ModelName extends string> =
   ModelTableName<TContract, ModelName> extends infer TableName extends string
@@ -1883,6 +1919,10 @@ export type RelatedModelName<
       : never
     : never;
 
+type ContractNamespaceKey<TContract extends Contract<SqlStorage>, NsId extends string> = {
+  [K in keyof TContract['domain']['namespaces'] & string]: NsId extends K ? K : never;
+}[keyof TContract['domain']['namespaces'] & string];
+
 // The namespace coordinate the relation's target model lives in, read from the
 // relation's `to.namespace`. Lets a relation reached through an explicit
 // namespace facet resolve its included row at the target namespace rather than
@@ -1900,7 +1940,7 @@ export type RelationTargetNamespace<
     ? Rels extends Record<string, unknown>
       ? RelName extends keyof Rels
         ? Rels[RelName] extends { readonly to: { readonly namespace: infer N extends string } }
-          ? N
+          ? ContractNamespaceKey<TContract, N>
           : never
         : never
       : never

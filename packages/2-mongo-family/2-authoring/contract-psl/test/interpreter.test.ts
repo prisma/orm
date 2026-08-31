@@ -23,6 +23,7 @@ import {
   type InterpretPslDocumentToMongoContractInput,
   interpretPslDocumentToMongoContract,
 } from '../src/interpreter';
+import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
 
 function buildSymbolTableInput(
   schema: string,
@@ -396,6 +397,23 @@ describe('interpretPslDocumentToMongoContract', () => {
       });
     });
 
+    it('emits one syntax diagnostic for a malformed target field @map', () => {
+      const result = interpret(`
+        model Parent {
+          id       ObjectId @id @map(42)
+          children Child[]
+        }
+
+        model Child {
+          id       ObjectId @id @map("_id")
+          parentId ObjectId
+          parent   Parent @relation(fields: [parentId], references: [id])
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /Expected a string literal/);
+    });
+
     it('uses mapped field names in relation on-clauses', () => {
       const ir = interpretOk(`
         model Parent {
@@ -549,6 +567,21 @@ describe('interpretPslDocumentToMongoContract', () => {
           }),
         ]),
       );
+    });
+
+    it('rejects @relation naming a field that does not exist on the model', () => {
+      const result = interpret(`
+        model User {
+          id ObjectId @id @map("_id")
+        }
+
+        model Post {
+          id       ObjectId @id @map("_id")
+          authorId ObjectId
+          author   User @relation(fields: [missing], references: [id])
+        }
+      `);
+      expectInvalidAttributeSyntax(result, /missing.*does not exist/i);
     });
   });
 
@@ -1020,7 +1053,7 @@ describe('interpretPslDocumentToMongoContract', () => {
   });
 
   describe('index authoring', () => {
-    it('creates ascending index from @@index', () => {
+    it('defaults index direction to the ascending literal', () => {
       const ir = interpretOk(`
         model User {
           id    ObjectId @id @map("_id")
@@ -1033,6 +1066,17 @@ describe('interpretPslDocumentToMongoContract', () => {
         | undefined;
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([{ field: 'email', direction: 1 }]);
+    });
+
+    it('uses the exact descending index type literal', () => {
+      const ir = interpretOk(`
+        model User {
+          id    ObjectId @id @map("_id")
+          email String
+          @@index([email], type: -1)
+        }
+      `);
+      expect(getIndexes(ir, 'user')?.[0]?.['keys']).toEqual([{ field: 'email', direction: -1 }]);
     });
 
     it('creates unique index from @@unique', () => {
@@ -1179,6 +1223,18 @@ describe('interpretPslDocumentToMongoContract', () => {
       expect(indexes![0]!['keys']).toEqual([{ field: 'metadata.$**', direction: 1 }]);
     });
 
+    it('treats a declared wildcard field with sort as a normal field', () => {
+      const ir = interpretOk(`
+        model Events {
+          id       ObjectId @id @map("_id")
+          wildcard String
+          @@index([wildcard(sort: Desc)])
+        }
+      `);
+      const indexes = getIndexes(ir, 'events');
+      expect(indexes![0]!['keys']).toEqual([{ field: 'wildcard', direction: -1 }]);
+    });
+
     it('creates descending index from sort: Desc', () => {
       const ir = interpretOk(`
         model Events {
@@ -1277,25 +1333,100 @@ describe('interpretPslDocumentToMongoContract', () => {
       });
     });
 
-    it('parses include as wildcardProjection with 1 values', () => {
+    it.each(['index', 'textIndex'])('accepts every finite collation value for @@%s', (kind) => {
+      const options = [
+        'collationStrength: 1',
+        'collationStrength: 5',
+        'collationCaseFirst: "upper"',
+        'collationCaseFirst: "lower"',
+        'collationCaseFirst: "off"',
+        'collationAlternate: "non-ignorable"',
+        'collationAlternate: "shifted"',
+        'collationMaxVariable: "punct"',
+        'collationMaxVariable: "space"',
+      ];
+      const models = options
+        .map(
+          (option, index) => `
+            model Item${index} {
+              id    ObjectId @id @map("_id")
+              value String
+              @@${kind}([value], collationLocale: "en", ${option})
+            }
+          `,
+        )
+        .join('\n');
+
+      expect(interpret(models).ok).toBe(true);
+    });
+
+    it.each(['index', 'textIndex'])('rejects invalid finite collation values for @@%s', (kind) => {
+      const invalidOptions = [
+        'collationStrength: 0',
+        'collationStrength: 6',
+        'collationCaseFirst: "invalid"',
+        'collationAlternate: "invalid"',
+        'collationMaxVariable: "invalid"',
+      ];
+
+      for (const option of invalidOptions) {
+        const result = interpret(`
+          model Item {
+            id    ObjectId @id @map("_id")
+            value String
+            @@${kind}([value], collationLocale: "en", ${option})
+          }
+        `);
+
+        expectInvalidAttributeSyntax(result, /Expected one of/);
+      }
+    });
+
+    it('parses native include paths as wildcardProjection with 1 values', () => {
       const ir = interpretOk(`
         model Events {
           id       ObjectId @id @map("_id")
           metadata String
-          tags     String
-          @@index([wildcard()], include: "[metadata, tags]")
+          @@index([wildcard()], include: ["metadata", "nested.path"])
         }
       `);
       const indexes = getIndexes(ir, 'events');
-      expect(indexes![0]!['wildcardProjection']).toEqual({ metadata: 1, tags: 1 });
+      expect(indexes![0]!['wildcardProjection']).toEqual({ metadata: 1, 'nested.path': 1 });
     });
 
-    it('parses exclude as wildcardProjection with 0 values', () => {
+    it('rejects a non-list projection at the attribute boundary', () => {
+      const result = interpret(`
+        model Events {
+          id       ObjectId @id @map("_id")
+          metadata String
+          @@index([wildcard()], include: "metadata")
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /Expected a list/);
+    });
+
+    it.each(['include', 'exclude'])(
+      'rejects @@textIndex %s at the attribute boundary',
+      (option) => {
+        const result = interpret(`
+          model Article {
+            id    ObjectId @id @map("_id")
+            title String
+            @@textIndex([title], ${option}: ["title"])
+          }
+        `);
+
+        expectInvalidAttributeSyntax(result, /received unknown argument/i);
+      },
+    );
+
+    it('parses native exclude paths as wildcardProjection with 0 values', () => {
       const ir = interpretOk(`
         model Events {
           id       ObjectId @id @map("_id")
           internal String
-          @@index([wildcard()], exclude: "[internal, _class]")
+          @@index([wildcard()], exclude: ["internal", "_class"])
         }
       `);
       const indexes = getIndexes(ir, 'events');
@@ -1325,13 +1456,48 @@ describe('interpretPslDocumentToMongoContract', () => {
           id    ObjectId @id @map("_id")
           title String
           body  String
-          @@textIndex([title, body], weights: "{\\"title\\": 10, \\"body\\": 5}", language: "english", languageOverride: "idioma")
+          @@textIndex([title, body], weights: { title: 1, body: 99999 }, language: "english", languageOverride: "idioma")
         }
       `);
       const indexes = getIndexes(ir, 'article');
-      expect(indexes![0]!['weights']).toEqual({ title: 10, body: 5 });
+      expect(indexes![0]!['weights']).toEqual({ title: 1, body: 99999 });
       expect(indexes![0]!['default_language']).toBe('english');
       expect(indexes![0]!['language_override']).toBe('idioma');
+    });
+
+    it('preserves an own __proto__ text-index weight', () => {
+      const ir = interpretOk(`
+        model Article {
+          id    ObjectId @id @map("_id")
+          title String
+          @@textIndex([title], weights: { "__proto__": 10 })
+        }
+      `);
+      const weights = getIndexes(ir, 'article')?.[0]?.['weights'];
+
+      expect(weights).not.toBeNull();
+      expect(typeof weights).toBe('object');
+      if (typeof weights !== 'object' || weights === null)
+        throw new Error('Expected weights object');
+      expect(Object.hasOwn(weights, '__proto__')).toBe(true);
+      expect(Object.getOwnPropertyDescriptor(weights, '__proto__')?.value).toBe(10);
+    });
+
+    it.each([
+      ['nonnumeric', '{ title: "high" }'],
+      ['below range', '{ title: 0 }'],
+      ['above range', '{ title: 100000 }'],
+      ['non-integer', '{ title: 1.5 }'],
+    ])('rejects %s native text-index weights at the attribute boundary', (_label, weights) => {
+      const result = interpret(`
+        model Article {
+          id    ObjectId @id @map("_id")
+          title String
+          @@textIndex([title], weights: ${weights})
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /integer|between|99,?999/i);
     });
 
     it('creates @@unique with collation', () => {
@@ -1358,6 +1524,22 @@ describe('interpretPslDocumentToMongoContract', () => {
       const indexes = getIndexes(ir, 'user');
       expect(indexes![0]!['unique']).toBe(true);
       expect(indexes![0]!['partialFilterExpression']).toEqual({ active: true });
+    });
+
+    it('creates a distinct index per @@index on the same model', () => {
+      const ir = interpretOk(`
+        model User {
+          id    ObjectId @id @map("_id")
+          email String
+          name  String
+          @@index([email])
+          @@index([name])
+        }
+      `);
+      const indexes = getIndexes(ir, 'user');
+      expect(indexes).toHaveLength(2);
+      expect(indexes![0]!['keys']).toEqual([{ field: 'email', direction: 1 }]);
+      expect(indexes![1]!['keys']).toEqual([{ field: 'name', direction: 1 }]);
     });
   });
 
@@ -1402,7 +1584,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Events {
           id       ObjectId @id @map("_id")
           metadata String
-          @@index([wildcard()], include: "[metadata]", exclude: "[_class]")
+          @@index([wildcard()], include: ["metadata"], exclude: ["_class"])
         }
       `);
       expect(result.ok).toBe(false);
@@ -1420,7 +1602,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Events {
           id     ObjectId @id @map("_id")
           status String
-          @@index([status], include: "[status]")
+          @@index([status], include: ["status"])
         }
       `);
       expect(result.ok).toBe(false);
@@ -1532,14 +1714,9 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([nonexistent])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
-      expect(diag?.message).toMatch(/User/);
-      expect(diag?.span?.start.offset).toBeGreaterThan(0);
-      expect(diag?.span?.end.offset).toBeGreaterThan(diag?.span?.start.offset ?? 0);
+      const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
+      expect(diag.span?.start.offset).toBeGreaterThan(0);
+      expect(diag.span?.end.offset).toBeGreaterThan(diag.span?.start.offset ?? 0);
     });
 
     it('rejects @@unique that references an undeclared field', () => {
@@ -1550,11 +1727,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([nonexistent])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
+      expectInvalidAttributeSyntax(result, /Expected one of/);
     });
 
     it('rejects @@textIndex that references an undeclared field', () => {
@@ -1565,11 +1738,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@textIndex([nonexistent])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
+      expectInvalidAttributeSyntax(result, /Expected one of/);
     });
 
     it('rejects @@index wildcard scope referencing an undeclared field', () => {
@@ -1582,12 +1751,15 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_INDEX_FIELD_NOT_FOUND',
+          message: expect.stringMatching(/nonexistent/),
+        }),
+      ]);
     });
 
-    it('emits one diagnostic naming the missing field when one of multiple keys is undeclared', () => {
+    it('emits one diagnostic when one of multiple keys is undeclared', () => {
       const result = interpret(`
         model User {
           id    ObjectId @id @map("_id")
@@ -1598,10 +1770,9 @@ describe('interpretPslDocumentToMongoContract', () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       const diags = result.failure.diagnostics.filter(
-        (d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND',
+        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
       );
       expect(diags).toHaveLength(1);
-      expect(diags[0]?.message).toMatch(/nonexistent/);
       expect(diags[0]?.message).not.toMatch(/email/);
     });
 

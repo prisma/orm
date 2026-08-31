@@ -21,7 +21,3 @@ Applications receive it as an exact-pinned dependency of the Mongo facade (`@pri
 ## Responsibilities
 
 Everything Mongo-shaped that is independent of the concrete target wiring: contract semantics, query representation, and the family-level control/migration surface. The target descriptor, adapter, and driver live in `@prisma/orm-target-mongo`.
-
-## Dependencies
-
-`@prisma/orm-framework` and `@prisma/orm-toolchain` (exact lockstep pins), the `mongodb` driver library, and small third-party runtime libraries.

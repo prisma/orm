@@ -20,17 +20,6 @@ The contract is **introspected, not hand-authored**: `pnpm contract:generate` re
 - **`/contract` subpath**: branded model handles for the commonly-referenced models (`AuthUser`, `AuthIdentity`, `AuthSession`, `StorageBucket`, `StorageObject`) used for cross-space FK references from app contracts. The handle set is deliberately curated, not one-per-table.
 - **Internal test substrate** (not published): `test/fixtures/supabase-reference/set-up-mock-schema.ts` exports `setUpSupabaseMockSchema(client)`, restoring the reference fixture (all Supabase schemas, tables, roles, and the platform's real default privileges) into a test database. Used only by this package's tests — including the hermetic PGlite coverage of the example app's flows (`test/fixtures/example-app/`); `examples/supabase` itself ships only the real-Supabase acceptance suite.
 
-## Dependencies
-
-- **`@internal/contract`**: contract types the `/pack` descriptor and emitted artefacts depend on.
-- **`@internal/family-sql`**: SQL family pack ref + `SqlControlExtensionDescriptor` type the `/pack` descriptor satisfies.
-- **`@internal/framework-components`**: shared component / pack-ref type shapes the descriptor consumes.
-- **`@internal/sql-runtime`**: `SqlRuntimeExtensionDescriptor` the `/runtime` minimal descriptor satisfies.
-- **`@internal/sql-contract-psl`**: `prismaContract` provider used by `prisma.config.ts` to emit the PSL-authored contract.
-- **`@internal/utils`**: `blindCast` helper for narrowing the imported `contract.json` to the emitted `Contract` type.
-
-The `/runtime` subpath additionally pulls in the Postgres runtime stack (`@internal/postgres`, `@internal/sql-runtime`, `@internal/sql-builder`, `@internal/sql-orm-client`) plus `jose` (JWT verification) and `pg` (Postgres client/pool). It does **not** depend on `@supabase/supabase-js` — the framework speaks Postgres directly.
-
 ## Installation
 
 ```bash

@@ -47,20 +47,6 @@ The `*.e2e.test.ts` files in this directory are **in-process CLI tests** that:
 
 **Note**: These are named "e2e" for historical reasons but are really integration tests. True subprocess E2E tests (which spawn the CLI as a separate process) should use the pattern in `cli.emit-cli-process.e2e.test.ts` and ideally live in `test/e2e/framework/`.
 
-## Dependencies
-
-This package depends on all packages under test via workspace protocol:
-- `@internal/adapter-postgres` - Postgres adapter
-- `@internal/cli` - CLI for contract emission
-- `@internal/contract` - Contract types
-- `@internal/driver-postgres` - Postgres driver
-- `@internal/emitter` - Contract emission
-- `@internal/runtime` - Execution runtime
-- `@internal/sql-contract-ts` - SQL contract authoring (for integration tests)
-- `@internal/sql-builder` - SQL builder lane
-- `@internal/sql-relational-core` - Shared relational lane helpers
-- `@internal/sql-contract` - SQL contract types (canonical source: `@internal/sql-contract/types`)
-
 ## Location
 
 This package is located at `test/integration/` (not in `packages/`) as it is a test suite, not a source package.

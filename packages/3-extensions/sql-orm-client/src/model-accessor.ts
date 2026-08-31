@@ -47,9 +47,11 @@ function hasThrough(relation: ResolvedModelRelation): relation is ResolvedModelR
   return relation.through !== undefined;
 }
 
-type RelationPredicateInput<TContract extends Contract<SqlStorage>, ModelName extends string> =
-  | ((model: ModelAccessor<TContract, ModelName>) => AnyExpression)
-  | Record<string, unknown>;
+type RelationPredicateInput<
+  TContract extends Contract<SqlStorage>,
+  NsId extends string,
+  ModelName extends string,
+> = ((model: ModelAccessor<TContract, ModelName, NsId>) => AnyExpression) | Record<string, unknown>;
 
 type RelationFilterMode = 'some' | 'every' | 'none';
 type RelationFilterPlan =
@@ -188,12 +190,13 @@ export function createModelAccessor<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
   VariantName extends string | undefined = undefined,
+  NsId extends string = string,
 >(
   context: ExecutionContext<TContract>,
-  namespaceId: string,
+  namespaceId: NsId,
   modelName: ModelName,
   variantName?: VariantName,
-): VariantAwareModelAccessor<TContract, ModelName, VariantName> {
+): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const tableName = resolveModelTableName(context.contract, namespaceId, modelName);
   return createModelAccessorInScope(
     context,
@@ -206,15 +209,16 @@ export function createModelAccessor<
 
 function createModelAccessorInScope<
   TContract extends Contract<SqlStorage>,
+  NsId extends string,
   ModelName extends string,
   VariantName extends string | undefined = undefined,
 >(
   context: ExecutionContext<TContract>,
-  namespaceId: string,
+  namespaceId: NsId,
   modelName: ModelName,
   variantName: VariantName | undefined,
   scope: ModelAccessorScope,
-): VariantAwareModelAccessor<TContract, ModelName, VariantName> {
+): VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId> {
   const contract = context.contract;
   const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
   const tableName = resolveModelTableName(contract, namespaceId, modelName);
@@ -436,14 +440,14 @@ function createRelationFilterAccessor<
   parentModelName: ParentModelName,
   parentScope: ModelAccessorScope,
   relation: ResolvedModelRelation,
-): RelationFilterAccessor<TContract, string> {
+): RelationFilterAccessor<TContract, string, string> {
   const relatedTableName = resolveModelTableName(
     context.contract,
     relation.toNamespace,
     relation.to,
   );
 
-  const relationAccessor: RelationFilterAccessor<TContract, string> = {
+  const relationAccessor: RelationFilterAccessor<TContract, string, string> = {
     some: (predicate) =>
       buildExistsExpr(
         context,
@@ -488,7 +492,7 @@ function buildExistsExpr<TContract extends Contract<SqlStorage>>(
   relation: ResolvedModelRelation,
   options: {
     readonly mode: RelationFilterMode;
-    readonly predicate: RelationPredicateInput<TContract, string> | undefined;
+    readonly predicate: RelationPredicateInput<TContract, string, string> | undefined;
   },
 ): AnyExpression {
   if (hasThrough(relation)) {
@@ -544,7 +548,7 @@ function buildManyToManyExistsExpr<TContract extends Contract<SqlStorage>>(
   relation: ResolvedModelRelationWithThrough,
   options: {
     readonly mode: RelationFilterMode;
-    readonly predicate: RelationPredicateInput<TContract, string> | undefined;
+    readonly predicate: RelationPredicateInput<TContract, string, string> | undefined;
   },
 ): AnyExpression {
   const { through } = relation;
@@ -662,7 +666,7 @@ function toRelationWhereExpr<TContract extends Contract<SqlStorage>>(
   context: ExecutionContext<TContract>,
   relatedNamespaceId: string,
   relatedModelName: string,
-  predicate: RelationPredicateInput<TContract, string> | undefined,
+  predicate: RelationPredicateInput<TContract, string, string> | undefined,
   scope: ModelAccessorScope,
 ): AnyExpression | undefined {
   if (!predicate) {

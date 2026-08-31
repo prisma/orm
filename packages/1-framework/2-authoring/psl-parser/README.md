@@ -56,14 +56,6 @@ Interpretation/validation (for example `@internal/sql-contract-psl`) is responsi
   - `@internal/psl-parser/syntax`
   - `@internal/psl-parser/tokenizer`
 
-## Dependencies
-
-- **Depends on**
-  - No cross-domain runtime dependencies.
-- **Used by**
-  - PSL normalization/emission tooling (next milestone)
-  - Potential language tooling and external parsers that need spans + diagnostics
-
 ## Architecture
 
 ```mermaid

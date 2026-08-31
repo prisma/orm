@@ -61,6 +61,7 @@ function stubStackWithContext(): ControlStack {
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
+      attributeSpecs: { model: {}, field: {} },
     },
     codecLookup: { get: () => undefined },
     controlMutationDefaults: {
