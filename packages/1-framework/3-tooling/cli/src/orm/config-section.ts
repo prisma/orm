@@ -1,12 +1,13 @@
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { ConfigValidationIssue } from '@internal/config/config-validation';
 import { collectConfigIssues } from '@internal/config/config-validation';
+import { finalizeContractConfig, finalizeMigrationsConfig } from '@internal/config-loader';
 import { getEmittedArtifactPaths } from '@internal/emitter';
 import { blindCast } from '@internal/utils/casts';
-import type { SectionValidation } from '@prisma/cli-engine';
+import type { SectionProvenance, SectionValidation } from '@prisma/cli-engine';
 import { defineConfigSection } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
-import { normalize } from 'pathe';
+import { dirname, normalize } from 'pathe';
 
 /**
  * The single config section the `orm` command family owns. The whole Prisma
@@ -128,7 +129,40 @@ function collectArtifactCollisionIssues(
   ];
 }
 
-function validate(raw: unknown): SectionValidation<PrismaNextConfig> {
+function declaringDir(provenance: SectionProvenance, key: string): string | undefined {
+  const file = provenance.keys[key] ?? provenance.files[0];
+  return file === undefined ? undefined : dirname(file);
+}
+
+/**
+ * Resolves the section's path-valued keys against the config file that
+ * declared each key — never against the invocation directory. Config files
+ * chain from cwd to the repo root and merge per key, so `contract` and
+ * `migrations` can come from different files; each resolves against its own.
+ * Absent `migrations` defaults to `migrations/` beside the nearest declaring
+ * file. Absolute paths pass through unchanged.
+ */
+function resolveAgainstDeclaringFiles(
+  config: PrismaNextConfig,
+  provenance: SectionProvenance,
+): PrismaNextConfig {
+  const contractDir = declaringDir(provenance, 'contract');
+  const migrationsDir = declaringDir(provenance, 'migrations');
+  return {
+    ...config,
+    ...(config.contract !== undefined && contractDir !== undefined
+      ? { contract: finalizeContractConfig(config.contract, contractDir) }
+      : undefined),
+    ...(migrationsDir !== undefined
+      ? { migrations: finalizeMigrationsConfig(config.migrations, migrationsDir) }
+      : undefined),
+  };
+}
+
+function validate(
+  raw: unknown,
+  provenance: SectionProvenance,
+): SectionValidation<PrismaNextConfig> {
   if (raw === undefined) {
     return { ok: false as const, diagnostics: [sectionAbsentDiagnostic()] };
   }
@@ -147,14 +181,20 @@ function validate(raw: unknown): SectionValidation<PrismaNextConfig> {
     return { ok: false as const, diagnostics: issues.map(issueDiagnostic) };
   }
 
-  return {
-    ok: true as const,
-    value: blindCast<
-      PrismaNextConfig,
-      'collectConfigIssues found no structural problem, so every required section is present and well-typed'
-    >(raw),
-    diagnostics: [],
-  };
+  const config = blindCast<
+    PrismaNextConfig,
+    'collectConfigIssues found no structural problem, so every required section is present and well-typed'
+  >(raw);
+  try {
+    return {
+      ok: true as const,
+      value: resolveAgainstDeclaringFiles(config, provenance),
+      diagnostics: [],
+    };
+  } catch (error) {
+    // Resolution spreads the config, so a throwing getter surfaces here.
+    return { ok: false as const, diagnostics: [unreadableDiagnostic(error)] };
+  }
 }
 
 export const ormConfigSection = defineConfigSection<PrismaNextConfig>({

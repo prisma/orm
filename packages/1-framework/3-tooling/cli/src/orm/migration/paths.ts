@@ -4,9 +4,10 @@ import { spaceMigrationDirectory } from '@internal/migration-tools/spaces';
 import { relative, resolve } from 'pathe';
 
 /**
- * Where migrations live for this project. Resolved against the invocation
- * directory, which is also the config file's directory for every default
- * invocation.
+ * Where migrations live for this project. The config section validator and
+ * loader hand `migrations.dir` through as an absolute path resolved against
+ * its declaring config file, so `cwd` only anchors a config handed in raw, as
+ * tests do.
  */
 export function migrationsDirFor(config: PrismaNextConfig, cwd: string): string {
   return resolve(cwd, config.migrations?.dir ?? 'migrations');
@@ -37,9 +38,9 @@ export function appRefsDirFor(config: PrismaNextConfig, cwd: string): string {
 }
 
 /**
- * The emitted contract. The config loader has already resolved
- * `contract.output` against the config file's directory, so this only has an
- * effect for a config handed in raw, as tests do.
+ * The emitted contract. The config loader and the section validator have
+ * already resolved `contract.output` against the config file's directory, so
+ * this only has an effect for a config handed in raw, as tests do.
  */
 export function contractPathFor(config: PrismaNextConfig, cwd: string): string | undefined {
   const output = config.contract?.output;

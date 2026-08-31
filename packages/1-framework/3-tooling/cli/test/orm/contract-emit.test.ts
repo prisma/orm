@@ -101,8 +101,7 @@ function countingLoader(config: Record<string, unknown> = ormConfig()): {
     loadConfig: (configPath) => {
       calls.push(configPath ?? '(none)');
       return Promise.resolve({
-        path: join(PROJECT_DIR, 'prisma.config.ts'),
-        sections: { orm: config },
+        files: [{ path: join(PROJECT_DIR, 'prisma.config.ts'), sections: { orm: config } }],
         diagnostics: [],
       });
     },

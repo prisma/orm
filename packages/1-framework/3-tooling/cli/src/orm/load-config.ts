@@ -20,8 +20,12 @@ export interface LoadOrmConfigOptions {
  * The engine ships its own synchronous loader, but the bin owns the load: the
  * ORM's c12 loader evaluates the module asynchronously and finalizes paths
  * against the config file's own directory. It reads the same shape the engine
- * does — defineConfig from `@prisma/cli-engine` with the whole Prisma Next
- * configuration nested as the single `orm` section.
+ * does — definePrismaConfig from `@prisma/cli-engine` with the whole Prisma
+ * Next configuration nested as the single `orm` section.
+ *
+ * The engine's config is a chain of files; this loader reads one file, so the
+ * chain it hands back is that one file, and the section's provenance names it
+ * as the declaring file for every key.
  *
  * Only failures that prevent evaluation entirely are diagnostics here, and
  * they carry `section: null` so they fail exactly the commands that read
@@ -32,14 +36,12 @@ export async function loadOrmConfig(options: LoadOrmConfigOptions): Promise<Load
   const loaded = await loadConfig(options.configPath, { cwd: options.cwd });
   if (!loaded.ok) {
     return {
-      path,
-      sections: {},
+      files: [],
       diagnostics: [{ section: null, diagnostic: toEngineDiagnostic(loaded.failure) }],
     };
   }
   return {
-    path,
-    sections: { [ORM_CONFIG_SECTION_NAME]: loaded.value.config },
+    files: [{ path, sections: { [ORM_CONFIG_SECTION_NAME]: loaded.value.config } }],
     diagnostics: [],
   };
 }

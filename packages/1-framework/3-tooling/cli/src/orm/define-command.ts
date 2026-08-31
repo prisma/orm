@@ -1,6 +1,3 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
-import { finalizeConfig } from '@internal/config-loader';
-import { blindCast } from '@internal/utils/casts';
 import { isInternalError } from '@internal/utils/internal-error';
 import type {
   ArgsSpec,
@@ -30,39 +27,6 @@ import { normalizeError } from './normalize-error';
  * Prisma Next rather than something the user did. Re-throwing lets the engine settle it as a bug
  * at exit 1, where converting it would report the same number as a bad connection string.
  */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/**
- * Hands the handler a config whose paths are absolute. The engine's own
- * loader evaluates `prisma.config.ts` without touching the paths inside it, so
- * a command mounted in the unified host receives `contract.output` and
- * `migrations.dir` exactly as authored — usually relative — while this repo's
- * bin finalizes them in its loader. Anchoring here, on the section every ORM
- * command reads, makes both hosts hand handlers the same absolute paths.
- *
- * The anchor is the working directory: the engine discovers the config in the
- * working directory only, so that is the file's own directory. (A `--config`
- * pointing into another directory is not visible from a command context; a
- * relative path inside such a file resolves against the invocation directory,
- * which is also what the file's author sees the command run from.)
- * Finalization is idempotent — an already-absolute path resolves to itself —
- * so a config that arrived finalized passes through unchanged.
- */
-function finalizedConfigContext<TCtx extends { readonly cwd: string; readonly config: unknown }>(
-  ctx: TCtx,
-): TCtx {
-  if (!isRecord(ctx.config)) {
-    return ctx;
-  }
-  const config = blindCast<
-    PrismaNextConfig,
-    'every ORM command that declares needs.config reads the orm section, whose validated value is PrismaNextConfig'
-  >(ctx.config);
-  return { ...ctx, config: finalizeConfig(config, ctx.cwd) };
-}
-
 export function defineOrmCommand<
   TFlags extends Record<string, FlagSpec<unknown>> = Record<never, FlagSpec<unknown>>,
   TPositionals extends Record<string, PositionalSpec<unknown>> = Record<
@@ -86,7 +50,7 @@ export function defineOrmCommand<
     ...def,
     handler: async (args, ctx) => {
       try {
-        return await def.handler(args, finalizedConfigContext(ctx));
+        return await def.handler(args, ctx);
       } catch (error) {
         if (isInternalError(error)) {
           throw error;

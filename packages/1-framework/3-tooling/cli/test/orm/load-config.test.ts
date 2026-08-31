@@ -1,4 +1,5 @@
 import { realpathSync, rmSync, writeFileSync } from 'node:fs';
+import type { LoadedConfig } from '@prisma/cli-engine';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -13,11 +14,15 @@ function projectDir(): string {
   return dir;
 }
 
+function ormSection(loaded: LoadedConfig): unknown {
+  return loaded.files[0]?.sections['orm'];
+}
+
 /**
  * Written without importing the workspace, so what the loader reads is exactly
  * what these tests write and nothing resolves out of the fixture package. The
  * version marker is the same enumerable `$prismaConfig` key the engine's
- * defineConfig stamps, with the whole config nested as the orm section.
+ * definePrismaConfig stamps, with the whole config nested as the orm section.
  */
 function configModule(body: string): string {
   return [`const config = ${body};`, 'export default { $prismaConfig: 1, orm: config };'].join(
@@ -54,7 +59,7 @@ describe('loadOrmConfig', () => {
       const loaded = await loadOrmConfig({ cwd: dir });
 
       expect(loaded.diagnostics).toEqual([]);
-      expect(Object.keys(loaded.sections)).toEqual(['orm']);
+      expect(loaded.files.map((file) => Object.keys(file.sections))).toEqual([['orm']]);
     },
     // The first load pays jiti's cold transform for the config module.
     timeouts.coldTransformImport,
@@ -65,7 +70,7 @@ describe('loadOrmConfig', () => {
     writeConfig(dir, VALID_BODY);
 
     const loaded = await loadOrmConfig({ cwd: dir });
-    const orm = loaded.sections['orm'] as {
+    const orm = ormSection(loaded) as {
       contract?: { output?: string; source?: { inputs?: readonly string[] } };
     };
 
@@ -78,7 +83,7 @@ describe('loadOrmConfig', () => {
     writeConfig(dir, VALID_BODY);
 
     expect(dir).not.toBe(process.cwd());
-    expect((await loadOrmConfig({ cwd: dir })).sections['orm']).toBeDefined();
+    expect(ormSection(await loadOrmConfig({ cwd: dir }))).toBeDefined();
   });
 
   it('reads an explicit config path relative to the cwd', async () => {
@@ -88,14 +93,14 @@ describe('loadOrmConfig', () => {
     const loaded = await loadOrmConfig({ cwd: dir, configPath: 'custom.config.ts' });
 
     expect(loaded.diagnostics).toEqual([]);
-    expect(loaded.sections['orm']).toBeDefined();
+    expect(ormSection(loaded)).toBeDefined();
   });
 
   describe('a config that cannot be evaluated', () => {
-    it('reports a file-level diagnostic and no sections', async () => {
+    it('reports a file-level diagnostic and an empty chain', async () => {
       const loaded = await loadOrmConfig({ cwd: projectDir() });
 
-      expect(loaded.sections).toEqual({});
+      expect(loaded.files).toEqual([]);
       expect(loaded.diagnostics).toHaveLength(1);
       expect(loaded.diagnostics[0]?.section).toBeNull();
       expect(loaded.diagnostics[0]?.diagnostic).toMatchObject({
@@ -122,7 +127,7 @@ describe('loadOrmConfig', () => {
 
       const loaded = await loadOrmConfig({ cwd: dir });
 
-      expect(loaded.sections).toEqual({});
+      expect(loaded.files).toEqual([]);
       expect(loaded.diagnostics).toHaveLength(1);
       expect(loaded.diagnostics[0]).toMatchObject({ section: null });
       expect(loaded.diagnostics[0]?.diagnostic.code).toMatch(/^[A-Z][A-Z0-9]*\.[A-Z][A-Z0-9_]*$/);
@@ -134,7 +139,7 @@ describe('loadOrmConfig', () => {
 
       const loaded = await loadOrmConfig({ cwd: dir });
 
-      expect(loaded.sections).toEqual({});
+      expect(loaded.files).toEqual([]);
       expect(loaded.diagnostics[0]).toMatchObject({
         section: null,
         diagnostic: { code: 'CONFIG.VERSION_MARKER_MISSING' },
@@ -150,7 +155,7 @@ describe('loadOrmConfig', () => {
       const loaded = await loadOrmConfig({ cwd: dir });
 
       expect(loaded.diagnostics).toEqual([]);
-      expect(loaded.sections['orm']).toMatchObject({ migrations: { dir: 42 } });
+      expect(ormSection(loaded)).toMatchObject({ migrations: { dir: 42 } });
     });
   });
 });
