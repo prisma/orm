@@ -31,9 +31,10 @@ If output directory is omitted, derive:
 
 System dependencies required on PATH:
 
+- `node` (Node.js)
 - `gh` (GitHub CLI)
 
-If `gh` is missing, halt immediately and ask the user to install it. The implement-phase scripts require only `gh`.
+If either is missing, halt immediately and ask the user to install it. The implement-phase scripts require only `node` and `gh`.
 
 GitHub admin capability must be available before starting implementation:
 
