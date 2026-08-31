@@ -201,8 +201,7 @@ function renderLimitOffset(
 }
 
 function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamIndexMap): string {
-  const sourcesByRef = collectTableSources(ast);
-  const selectClause = `SELECT ${renderDistinctPrefix(ast.distinct, ast.distinctOn, sourcesByRef, contract, pim)}${renderProjection(
+  const selectClause = `SELECT ${renderDistinctPrefix(ast.distinct, ast.distinctOn, ast, contract, pim)}${renderProjection(
     ast.projection,
     contract,
     pim,
@@ -221,7 +220,7 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
   const orderClause = ast.orderBy?.length
     ? `ORDER BY ${ast.orderBy
         .map((order) => {
-          const expr = renderOrderByExpr(order.expr, sourcesByRef, contract, pim);
+          const expr = renderOrderByExpr(order.expr, ast, contract, pim);
           return `${expr} ${order.dir.toUpperCase()}`;
         })
         .join(', ')}`
@@ -246,59 +245,103 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
 }
 
 /**
- * Storage coordinate a query-level table reference (alias or bare name) resolves to. The ORDER BY enum hook uses this to look a column-ref's storage column up and read its value-set.
+ * The FROM/JOIN source a query-level table reference (alias or bare name)
+ * resolves to. The ORDER BY enum hook uses this to look a column-ref's
+ * storage column up and read its value-set.
  */
-interface TableSourceCoordinate {
-  readonly name: string;
-  readonly namespaceId: string | undefined;
-}
-
-/**
- * Map a SELECT's table references (the FROM source and any JOIN sources) to their storage coordinate, keyed by the name a `ColumnRef.table` would carry (the alias when present, otherwise the table name). Derived-table sources are skipped — their columns are projected through a sub-select, not a base storage column, so the enum hook does not apply.
- */
-function collectTableSources(ast: SelectAst): ReadonlyMap<string, TableSourceCoordinate> {
-  const sources = new Map<string, TableSourceCoordinate>();
-  const add = (source: AnyFromSource): void => {
-    if (source.kind !== 'table-source') {
-      return;
-    }
-    const ref = source.alias ?? source.name;
-    sources.set(ref, { name: source.name, namespaceId: source.namespaceId });
-  };
-  if (ast.from !== undefined) add(ast.from);
-  for (const join of ast.joins ?? []) {
-    add(join.source);
+function findFromSource(ast: SelectAst, ref: string): AnyFromSource | undefined {
+  const refOf = (source: AnyFromSource): string | undefined =>
+    source.kind === 'table-source' ? (source.alias ?? source.name) : source.alias;
+  if (ast.from !== undefined && refOf(ast.from) === ref) {
+    return ast.from;
   }
-  return sources;
+  for (const join of ast.joins ?? []) {
+    if (refOf(join.source) === ref) {
+      return join.source;
+    }
+  }
+  return undefined;
 }
 
 /**
- * Ordered, codec-encoded values of the value-set a storage column restricts to, or `undefined` when the referenced column carries no value-set (the common, non-enum case). Resolves the column's storage coordinate from the SELECT's table sources, then the column's `valueSet` ref to the value-set's `values`.
+ * Whether a FROM/JOIN source carries a column of the given name, and the
+ * ordered value-set it resolves to (`undefined` when the column carries no
+ * value-set — the common, non-enum case). `found: false` distinguishes "no
+ * such column" from "column exists, not enum-backed", which the unqualified
+ * identifier resolver needs for its ambiguity check.
+ *
+ * A `table-source` resolves the column directly against the contract's
+ * storage. A `derived-table-source` has no storage column of its own — its
+ * columns are projected through a sub-select — so this looks up the
+ * matching `ProjectionItem` by output alias and, when the projected
+ * expression is itself a plain `ColumnRef`, recurses into the derived
+ * table's own query to resolve *that* reference, so nested wraps resolve
+ * too. A projected expression that isn't a plain column reference (a
+ * function call, a literal, …) has no storage column to trace back to;
+ * this reports `found: true` with no value-set, which correctly falls
+ * through to plain-column rendering rather than guessing at an order.
+ */
+function resolveColumnValueSetFromSource(
+  source: AnyFromSource,
+  column: string,
+  contract: PostgresContract,
+): { readonly found: boolean; readonly values: readonly JsonValue[] | undefined } {
+  if (source.kind === 'table-source') {
+    if (source.namespaceId === undefined) {
+      return { found: false, values: undefined };
+    }
+    const ns = contract.storage.namespaces[source.namespaceId];
+    const storageColumn = ns?.entries.table?.[source.name]?.columns[column];
+    if (storageColumn === undefined) {
+      return { found: false, values: undefined };
+    }
+    const valueSet = storageColumn.valueSet;
+    if (valueSet === undefined) {
+      return { found: true, values: undefined };
+    }
+    const valueSetNs = contract.storage.namespaces[valueSet.namespaceId];
+    return { found: true, values: valueSetNs?.entries.valueSet?.[valueSet.entityName]?.values };
+  }
+  if (source.kind === 'derived-table-source') {
+    const projected = source.query.projection.find((item) => item.alias === column);
+    if (projected === undefined) {
+      return { found: false, values: undefined };
+    }
+    if (projected.expr.kind !== 'column-ref') {
+      return { found: true, values: undefined };
+    }
+    return resolveColumnValueSet(source.query, projected.expr, contract);
+  }
+  return { found: false, values: undefined };
+}
+
+/**
+ * Ordered, codec-encoded values of the value-set a storage column restricts
+ * to, or `undefined` when the reference doesn't resolve to one (no matching
+ * source, no such column, or a column that isn't enum-backed).
  */
 function allStrings(values: readonly JsonValue[]): values is readonly string[] {
   return values.every((value) => typeof value === 'string');
 }
 
+function resolveColumnValueSet(
+  ast: SelectAst,
+  ref: ColumnRef,
+  contract: PostgresContract,
+): { readonly found: boolean; readonly values: readonly JsonValue[] | undefined } {
+  const source = findFromSource(ast, ref.table);
+  if (source === undefined) {
+    return { found: false, values: undefined };
+  }
+  return resolveColumnValueSetFromSource(source, ref.column, contract);
+}
+
 function resolveEnumOrderValues(
   ref: ColumnRef,
-  sourcesByRef: ReadonlyMap<string, TableSourceCoordinate>,
+  ast: SelectAst,
   contract: PostgresContract,
 ): readonly JsonValue[] | undefined {
-  const source = sourcesByRef.get(ref.table);
-  if (source === undefined || source.namespaceId === undefined) {
-    return undefined;
-  }
-  const sourceNs = contract.storage.namespaces[source.namespaceId];
-  const column =
-    sourceNs !== undefined ? sourceNs.entries.table?.[source.name]?.columns[ref.column] : undefined;
-  const valueSet = column?.valueSet;
-  if (valueSet === undefined) {
-    return undefined;
-  }
-  const valueSetNs = contract.storage.namespaces[valueSet.namespaceId];
-  return valueSetNs !== undefined
-    ? valueSetNs.entries.valueSet?.[valueSet.entityName]?.values
-    : undefined;
+  return resolveColumnValueSet(ast, ref, contract).values;
 }
 
 /**
@@ -306,34 +349,24 @@ function resolveEnumOrderValues(
  */
 function resolveEnumOrderValuesForIdentifier(
   name: string,
-  sourcesByRef: ReadonlyMap<string, TableSourceCoordinate>,
+  ast: SelectAst,
   contract: PostgresContract,
 ): readonly JsonValue[] | undefined {
+  const candidates = [ast.from, ...(ast.joins ?? []).map((join) => join.source)].filter(
+    (source): source is AnyFromSource => source !== undefined,
+  );
   let matchedColumns = 0;
   let resolved: readonly JsonValue[] | undefined;
-  for (const source of sourcesByRef.values()) {
-    if (source.namespaceId === undefined) {
-      continue;
-    }
-    const identNs = contract.storage.namespaces[source.namespaceId];
-    const column =
-      identNs !== undefined ? identNs.entries.table?.[source.name]?.columns[name] : undefined;
-    if (column === undefined) {
+  for (const source of candidates) {
+    const { found, values } = resolveColumnValueSetFromSource(source, name, contract);
+    if (!found) {
       continue;
     }
     matchedColumns += 1;
     if (matchedColumns > 1) {
       return undefined;
     }
-    const valueSet = column.valueSet;
-    if (valueSet === undefined) {
-      return undefined;
-    }
-    const valueSetNs = contract.storage.namespaces[valueSet.namespaceId];
-    resolved =
-      valueSetNs !== undefined
-        ? valueSetNs.entries.valueSet?.[valueSet.entityName]?.values
-        : undefined;
+    resolved = values;
   }
   return resolved;
 }
@@ -343,7 +376,7 @@ function resolveEnumOrderValuesForIdentifier(
  */
 function renderOrderByExpr(
   expr: AnyExpression,
-  sourcesByRef: ReadonlyMap<string, TableSourceCoordinate>,
+  ast: SelectAst,
   contract: PostgresContract,
   pim: ParamIndexMap,
 ): string {
@@ -352,14 +385,14 @@ function renderOrderByExpr(
   // value-set falls through to plain column rendering rather than emitting a
   // wrong numeric-as-text ARRAY.
   if (expr.kind === 'column-ref') {
-    const orderValues = resolveEnumOrderValues(expr, sourcesByRef, contract);
+    const orderValues = resolveEnumOrderValues(expr, ast, contract);
     if (orderValues !== undefined && allStrings(orderValues)) {
       const array = orderValues.map((value) => `'${escapeLiteral(value)}'`).join(', ');
       return `array_position(ARRAY[${array}]::text[], ${renderColumn(expr)})`;
     }
   }
   if (expr.kind === 'identifier-ref') {
-    const orderValues = resolveEnumOrderValuesForIdentifier(expr.name, sourcesByRef, contract);
+    const orderValues = resolveEnumOrderValuesForIdentifier(expr.name, ast, contract);
     if (orderValues !== undefined && allStrings(orderValues)) {
       const array = orderValues.map((value) => `'${escapeLiteral(value)}'`).join(', ');
       return `array_position(ARRAY[${array}]::text[], ${quoteIdentifier(expr.name)})`;
@@ -408,13 +441,13 @@ function renderReturning(
 function renderDistinctPrefix(
   distinct: true | undefined,
   distinctOn: ReadonlyArray<AnyExpression> | undefined,
-  sourcesByRef: ReadonlyMap<string, TableSourceCoordinate>,
+  ast: SelectAst,
   contract: PostgresContract,
   pim: ParamIndexMap,
 ): string {
   if (distinctOn && distinctOn.length > 0) {
     const rendered = distinctOn
-      .map((expr) => renderOrderByExpr(expr, sourcesByRef, contract, pim))
+      .map((expr) => renderOrderByExpr(expr, ast, contract, pim))
       .join(', ');
     return `DISTINCT ON (${rendered}) `;
   }

@@ -5,7 +5,9 @@ import { APP_SPACE_ID } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { buildBoundContract, enumType, member } from '@internal/sql-contract-ts/contract-builder';
 import {
+  AggregateExpr,
   ColumnRef,
+  DerivedTableSource,
   EqColJoinOn,
   IdentifierRef,
   JoinAst,
@@ -316,5 +318,122 @@ describe('ORDER BY on an enum column — declaration order, PGlite', { concurren
     const lowered = createPostgresAdapter().lower(ast, { contract });
     expect(lowered.sql).toContain('DISTINCT ON ("id")');
     expect(lowered.sql).not.toContain('array_position');
+  });
+});
+
+// `collectTableSources` (sql-renderer.ts) only recognises `table-source` FROM
+// entries, so the enum hook resolves nothing once the FROM is a derived
+// table — even though the ORM aliases that derived table back to the base
+// table name specifically so outer references keep resolving. This is not
+// specific to a grouped aggregate: any derived-table wrap loses declaration
+// order the same way, wherever it comes from — `distinct()`'s ROW_NUMBER
+// dedup wrap on the plain-select path (case 1/1b), a grouped aggregate's
+// pre-group scoping wrap (case 2), or DISTINCT ON sharing renderOrderByExpr
+// with ORDER BY (case 3). Case 0 is the unwrapped control: it already works
+// and must keep working once the wrap-aware fix lands.
+describe('ORDER BY on an enum column behind a derived table', () => {
+  const contract = makeTaskContract();
+
+  it('case 0 (control): unwrapped ORDER BY on the enum column uses array_position', () => {
+    const ast = SelectAst.from(TableSource.named('Task', undefined, 'public'))
+      .withProjection([
+        ProjectionItem.of('id', ColumnRef.of('Task', 'id')),
+        ProjectionItem.of('priority', ColumnRef.of('Task', 'priority')),
+      ])
+      .withOrderBy([OrderByItem.asc(ColumnRef.of('Task', 'priority'))]);
+
+    const lowered = createPostgresAdapter().lower(ast, { contract });
+    expect(lowered.sql).toContain(
+      `array_position(ARRAY['low', 'high', 'medium']::text[], "Task"."priority")`,
+    );
+  });
+
+  it('case 1: derived-table wrap, column-ref ORDER BY on the enum column', () => {
+    const inner = SelectAst.from(TableSource.named('Task', undefined, 'public')).withProjection([
+      ProjectionItem.of('id', ColumnRef.of('Task', 'id')),
+      ProjectionItem.of('priority', ColumnRef.of('Task', 'priority')),
+    ]);
+    const ast = SelectAst.from(DerivedTableSource.as('Task', inner))
+      .withProjection([
+        ProjectionItem.of('id', ColumnRef.of('Task', 'id')),
+        ProjectionItem.of('priority', ColumnRef.of('Task', 'priority')),
+      ])
+      .withOrderBy([OrderByItem.asc(ColumnRef.of('Task', 'priority'))]);
+
+    const lowered = createPostgresAdapter().lower(ast, { contract });
+    expect(lowered.sql).toContain(
+      `array_position(ARRAY['low', 'high', 'medium']::text[], "Task"."priority")`,
+    );
+  });
+
+  it('case 1b: derived-table wrap, identifier-ref ORDER BY on the enum column', () => {
+    const inner = SelectAst.from(TableSource.named('Task', undefined, 'public')).withProjection([
+      ProjectionItem.of('id', ColumnRef.of('Task', 'id')),
+      ProjectionItem.of('priority', ColumnRef.of('Task', 'priority')),
+    ]);
+    const ast = SelectAst.from(DerivedTableSource.as('Task', inner))
+      .withProjection([
+        ProjectionItem.of('id', ColumnRef.of('Task', 'id')),
+        ProjectionItem.of('priority', ColumnRef.of('Task', 'priority')),
+      ])
+      .withOrderBy([OrderByItem.asc(IdentifierRef.of('priority'))]);
+
+    const lowered = createPostgresAdapter().lower(ast, { contract });
+    expect(lowered.sql).toContain(
+      `array_position(ARRAY['low', 'high', 'medium']::text[], "priority")`,
+    );
+  });
+
+  it('case 2: derived-table wrap + GROUP BY + post-group ORDER BY on the group key', () => {
+    const inner = SelectAst.from(TableSource.named('Task', undefined, 'public')).withProjection([
+      ProjectionItem.of('priority', ColumnRef.of('Task', 'priority')),
+    ]);
+    const ast = SelectAst.from(DerivedTableSource.as('Task', inner))
+      .withProjection([
+        ProjectionItem.of('priority', ColumnRef.of('Task', 'priority')),
+        ProjectionItem.of('total', AggregateExpr.count()),
+      ])
+      .withGroupBy([ColumnRef.of('Task', 'priority')])
+      .withOrderBy([OrderByItem.asc(ColumnRef.of('Task', 'priority'))])
+      .withLimit(1);
+
+    const lowered = createPostgresAdapter().lower(ast, { contract });
+    expect(lowered.sql).toContain(
+      `array_position(ARRAY['low', 'high', 'medium']::text[], "Task"."priority")`,
+    );
+  });
+
+  it('case 3: derived-table wrap, DISTINCT ON the enum column', () => {
+    const inner = SelectAst.from(TableSource.named('Task', undefined, 'public')).withProjection([
+      ProjectionItem.of('id', ColumnRef.of('Task', 'id')),
+      ProjectionItem.of('priority', ColumnRef.of('Task', 'priority')),
+    ]);
+    const ast = SelectAst.from(DerivedTableSource.as('Task', inner))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('Task', 'id'))])
+      .withDistinctOn([IdentifierRef.of('priority')])
+      .withOrderBy([OrderByItem.asc(IdentifierRef.of('priority'))]);
+
+    const lowered = createPostgresAdapter().lower(ast, { contract });
+    const arrayPositionExpr = `array_position(ARRAY['low', 'high', 'medium']::text[], "priority")`;
+    expect(lowered.sql).toContain(`DISTINCT ON (${arrayPositionExpr})`);
+    expect(lowered.sql).toContain(`ORDER BY ${arrayPositionExpr}`);
+  });
+
+  // A projected expression that isn't a plain column reference (an alias
+  // over a function call, say) has no storage column to look up — falling
+  // back to a bare sort here is the status quo, not a new gap, and a wrong
+  // enum order would be worse than the bug this file exists to close.
+  it('falls back to plain column rendering when the derived table cannot resolve a storage column', () => {
+    const inner = SelectAst.from(TableSource.named('Task', undefined, 'public')).withProjection([
+      ProjectionItem.of('id', ColumnRef.of('Task', 'id')),
+      ProjectionItem.of('priority_label', IdentifierRef.of('priority')),
+    ]);
+    const ast = SelectAst.from(DerivedTableSource.as('Task', inner))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('Task', 'id'))])
+      .withOrderBy([OrderByItem.asc(ColumnRef.of('Task', 'priority_label'))]);
+
+    const lowered = createPostgresAdapter().lower(ast, { contract });
+    expect(lowered.sql).not.toContain('array_position');
+    expect(lowered.sql).toContain('ORDER BY "Task"."priority_label" ASC');
   });
 });
