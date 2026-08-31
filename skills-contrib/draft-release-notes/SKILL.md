@@ -295,10 +295,10 @@ Contract deserialization gains an explicit adapter seam, and queries can now eag
 
 ## Reference
 
-- [`docs/releases/README.md`](../../docs/releases/README.md) — the committed-notes-file convention, the no-fallback design, the section order, and the template this skill fills.
+- [`docs/releases/README.md`](../../docs/releases/README.md) — the committed-notes-file convention (no auto-generated notes file: a stable release without one fails to publish), the section order, and the template this skill fills.
 - [`CHANGELOG.md`](../../CHANGELOG.md) — the rolling newest-first mirror this skill prepends.
 - [`publish-npm-version`](../publish-npm-version/SKILL.md) — the release-cut skill that invokes this one from the `release/<version>` worktree.
 - [`record-upgrade-instructions`](../record-upgrade-instructions/SKILL.md) — the breaking-change upgrade-recipe authoring flow whose `upgrades/<transition-label>/` directories the breaking-change section anchors to.
-- [`scripts/check-upgrade-coverage.mjs`](../../scripts/check-upgrade-coverage.mjs) — the transition-label convention (`<major>.<minor>-to-<major>.<minor>`) and skipped-publish chain handling.
+- [`scripts/check-upgrade-coverage.mjs`](../../scripts/check-upgrade-coverage.mjs) — the transition-label convention (a stable version truncates to `<major>.<minor>`; a prerelease keeps its full version string, e.g. `8.0.0-rc.1-to-8.0.0-rc.2`) and skipped-publish chain handling.
 - [`docs/oss/versioning.md`](../../docs/oss/versioning.md) — the version contract and release procedure these notes are part of.
 - Linear ticket: [TML-2758](https://linear.app/prisma-company/issue/TML-2758).
