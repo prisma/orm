@@ -1,7 +1,7 @@
 ---
 name: publish-npm-version
 description: >-
-  Cuts the next release of Prisma Next: bumps the root package.json
+  Cuts the next release of Prisma 8: bumps the root package.json
   version (on the v8 RC line: 8.0.0-rc.N → rc.N+1), propagates it to every
   workspace package, and opens a PR titled "chore(release): bump to
   <next-version>". When the maintainer merges the PR, the `Publish to npm`
@@ -16,7 +16,7 @@ description: >-
 
 ## Audience
 
-Maintainers of Prisma Next who have permission to push branches and open PRs in the repository. The skill is invoked locally by the maintainer; it does **not** run as a GitHub Action. Running locally is what makes the resulting PR trigger CI normally — PRs opened by a workflow's `GITHUB_TOKEN` do not, which defeats the point of cutting a reviewable release.
+Maintainers of Prisma 8 who have permission to push branches and open PRs in the repository. The skill is invoked locally by the maintainer; it does **not** run as a GitHub Action. Running locally is what makes the resulting PR trigger CI normally — PRs opened by a workflow's `GITHUB_TOKEN` do not, which defeats the point of cutting a reviewable release.
 
 ## Background reading
 

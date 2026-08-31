@@ -1,7 +1,7 @@
 ---
 name: draft-release-notes
 description: >-
-  Author the committed release-notes file for a Prisma Next release
+  Author the committed release-notes file for a Prisma 8 release
   (stable or `8.0.0-rc.N`) by enumerating the merged PRs since the previous
   release `v*` tag (stable or `-rc.N`), resolving opaque `TML-NNNN:` titles via Linear context
   (never copied verbatim), triaging public-worthiness, and writing categorized

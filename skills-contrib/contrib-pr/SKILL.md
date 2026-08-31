@@ -15,7 +15,7 @@ Trigger this skill when the user says any of:
 
 - "Open a PR for this contribution"
 - "Submit this as a PR to prisma/prisma"
-- "I'm contributing to Prisma Next, finalize my change"
+- "I'm contributing to Prisma 8, finalize my change"
 - "Help me get this PR ready for review"
 
 If the user has clearly already followed the contribution flow and just needs the `gh pr create` invocation, you may skip directly to step 5.
