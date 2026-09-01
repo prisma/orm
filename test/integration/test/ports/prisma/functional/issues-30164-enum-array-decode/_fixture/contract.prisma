@@ -1,0 +1,11 @@
+native_enum Mood {
+  URGENT = "URGENT"
+  NORMAL = "NORMAL"
+  LOW    = "LOW"
+}
+
+model Probe {
+  id    String            @id
+  moods pg.enum(Mood)[]
+  note  String
+}

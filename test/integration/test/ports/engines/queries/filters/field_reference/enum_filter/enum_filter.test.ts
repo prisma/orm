@@ -20,7 +20,7 @@ function withEnumFieldReference(fn: Parameters<typeof withPostgresPort<Contract>
 }
 
 describe('ports/engines/queries/filters/field-reference/enum-filter', () => {
-  it.fails(
+  it(
     'inclusion_filter',
     () =>
       withEnumFieldReference(async ({ db }) => {
@@ -33,9 +33,6 @@ describe('ports/engines/queries/filters/field-reference/enum-filter', () => {
             .all();
 
         expect(await ids(referencedScalarInList(scalar, list, true)), 'notIn').toEqual([{ id: 2 }]);
-        expect(await ids(referencedScalarInList(scalar, list, true)), 'not: { in }').toEqual([
-          { id: 2 },
-        ]);
         expect(
           await db.public.TestModel.where(referencedScalarInList(scalar, list))
             .orderBy((row) => row.id.asc())
