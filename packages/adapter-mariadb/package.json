@@ -37,7 +37,7 @@
   "sideEffects": false,
   "dependencies": {
     "@prisma/driver-adapter-utils": "workspace:*",
-    "mariadb": "3.4.5"
+    "mariadb": "3.5.3"
   },
   "devDependencies": {
     "@prisma/debug": "workspace:*"
