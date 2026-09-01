@@ -31,8 +31,8 @@ peerDependencyRules:
     '@octokit/core': '>=3'
 
 minimumReleaseAgeExclude:
-  - '@prisma/engines-version@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3'
-  - '@prisma/prisma-schema-wasm@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3'
-  - '@prisma/query-compiler-wasm@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3'
-  - '@prisma/schema-engine-wasm@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3'
+  - '@prisma/engines-version@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3 || 8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8'
+  - '@prisma/prisma-schema-wasm@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3 || 8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8'
+  - '@prisma/query-compiler-wasm@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3 || 8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8'
+  - '@prisma/schema-engine-wasm@7.10.0-3.9d90ce2c89d5c95a1148aef15e5561ab6c49053f || 7.10.0-4.0edf323efd1d98336f3f0a68684b56f689b900d3 || 8.1.0-1.d1b3f377ca835d73fd50954a5e22128b9ebdd6b8'
   - '@prisma/dev@0.24.17'
