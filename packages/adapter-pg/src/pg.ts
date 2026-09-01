@@ -169,7 +169,13 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
 }
 
 export type PrismaPgOptions = {
-  /** The name of the schema to use in generated queries */
+  /**
+   * The name of the schema to use in generated queries. When the adapter creates the pool itself
+   * (i.e. it is given a config object or a connection string), it also sets the `search_path` of
+   * every connection to this schema, so that raw queries resolve unqualified table names in this
+   * schema. Externally provided pools are left untouched; configure the search path on the pool
+   * itself in that case, e.g. via `options: '-c search_path="mySchema"'`.
+   */
   schema?: string
   /**
    * Whether to call `pool.end()` on an externally provided pool when the adapter is disposed.
@@ -298,7 +304,14 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
   }
 
   async connect(): Promise<PrismaPgAdapter> {
-    const client = this.externalPool ?? new pg.Pool(this.config)
+    const client = this.externalPool ?? new pg.Pool(withSearchPath(this.config, this.options?.schema))
+
+    if (this.externalPool !== null && this.options?.schema !== undefined) {
+      debug(
+        `The search path is not set on externally provided pools, schema "${this.options.schema}" is only used ` +
+          `for generated queries. Set the search path on the pool itself if raw queries need it.`,
+      )
+    }
 
     const onIdleClientError = (err: Error) => {
       debug(`Error from idle pool client: ${err.message} %O`, err)
@@ -331,4 +344,44 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
       await client.end()
     })
   }
+}
+
+/**
+ * Extends a pool config with an `options` startup parameter that sets the `search_path` to the
+ * given schema, so that raw queries resolve unqualified table names in that schema, consistently
+ * with generated queries which qualify table names explicitly. Setting the search path at
+ * connection startup saves a round trip per connection and guarantees that no query can run
+ * before the search path is in effect.
+ * See https://github.com/prisma/prisma/issues/24660.
+ */
+function withSearchPath(config: pg.PoolConfig, schema: string | undefined): pg.PoolConfig {
+  if (schema === undefined) {
+    return config
+  }
+  const searchPath = `-c search_path=${escapeOptionValue(quoteIdentifierIfNeeded(schema))}`
+  return {
+    ...config,
+    options: config.options ? `${config.options} ${searchPath}` : searchPath,
+  }
+}
+
+/**
+ * Quotes a PostgreSQL identifier, doubling any embedded double quotes. Identifiers that don't
+ * require quoting are left as is, because CockroachDB (which is also served by this adapter)
+ * treats quotes in the `search_path` startup parameter literally instead of stripping them
+ * (https://github.com/cockroachdb/cockroach/issues/101328).
+ */
+function quoteIdentifierIfNeeded(name: string): string {
+  if (/^[a-z_][a-z0-9_$]*$/.test(name)) {
+    return name
+  }
+  return `"${name.replaceAll('"', '""')}"`
+}
+
+/**
+ * Escapes a value for use in the `options` startup parameter, which the server splits on
+ * whitespace, treating a backslash as an escape character.
+ */
+function escapeOptionValue(value: string): string {
+  return value.replace(/[\\\s]/g, (char) => `\\${char}`)
 }
