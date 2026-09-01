@@ -13,7 +13,7 @@
   "author": "Alberto Schiabel <schiabel@prisma.io>",
   "dependencies": {
     "c12": "3.3.4",
-    "deepmerge-ts": "7.1.5",
+    "deepmerge-ts": "8.0.1",
     "effect": "3.20.0",
     "empathic": "2.0.0"
   },
