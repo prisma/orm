@@ -134,6 +134,64 @@ describe('PrismaPgAdapterFactory', () => {
     await adapter.dispose()
   })
 
+  it('should serialize concurrent queries within a transaction', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    let inFlight = 0
+    let maxInFlight = 0
+    const mockConnection = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      query: vi.fn(async () => {
+        inFlight++
+        maxInFlight = Math.max(maxInFlight, inFlight)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        inFlight--
+        return { rows: [], fields: [], rowCount: 0 }
+      }),
+      release: vi.fn(),
+      listenerCount: vi.fn().mockReturnValue(0),
+    }
+    adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+    const transaction = await adapter.startTransaction()
+    const query: SqlQuery = { sql: 'SELECT 1', args: [], argTypes: [] }
+    await Promise.all([transaction.queryRaw(query), transaction.queryRaw(query), transaction.queryRaw(query)])
+
+    expect(maxInFlight).toBe(1)
+    expect(mockConnection.query).toHaveBeenCalledTimes(4) // BEGIN + 3 queries
+
+    await transaction.commit()
+    await adapter.dispose()
+  })
+
+  it('should release the transaction mutex when a query fails', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    const mockConnection = {
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      query: vi.fn().mockResolvedValue({ rows: [], fields: [], rowCount: 0 }),
+      release: vi.fn(),
+      listenerCount: vi.fn().mockReturnValue(0),
+    }
+    adapter['client'].connect = vi.fn().mockResolvedValue(mockConnection)
+
+    const transaction = await adapter.startTransaction()
+    mockConnection.query.mockRejectedValueOnce(new Error('boom'))
+
+    const query: SqlQuery = { sql: 'SELECT 1', args: [], argTypes: [] }
+    await expect(transaction.queryRaw(query)).rejects.toThrow()
+    await expect(transaction.queryRaw(query)).resolves.toBeDefined()
+
+    await transaction.rollback()
+    await adapter.dispose()
+  })
+
   it('should not pass name when statement name generator is not provided', async () => {
     const factory = new PrismaPgAdapterFactory('postgresql://test:test@localhost/test')
     const adapter = await factory.connect()
