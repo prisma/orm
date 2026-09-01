@@ -1,0 +1,51 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  firstName      String
+  lastName       String
+  countryCode    String
+  phone          String
+  email          String   @unique
+  createdAt      DateTime @default(now())
+  
+  // Generated/Computed columns - automatically created as GENERATED ALWAYS AS
+  /// @generatedColumn firstName || ' ' || lastName
+  fullName       String   @default(dbgenerated())
+  
+  /// @generatedColumn countryCode || ' ' || phone
+  formattedPhone String   @default(dbgenerated())
+  
+  /// @generatedColumn substr(email, instr(email, '@') + 1)
+  emailDomain    String   @default(dbgenerated())
+  
+  posts          Post[]
+}
+
+model Post {
+  id          String   @id @default(cuid())
+  title       String
+  content     String?
+  published   Boolean  @default(false)
+  authorId    String
+  author      User     @relation(fields: [authorId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  basePrice   Decimal
+  taxRate     Decimal  @default(0.0825) // 8.25% default tax
+  
+  /// @generatedColumn basePrice * (1 + taxRate)
+  totalPrice  Decimal  @default(dbgenerated())
+}
