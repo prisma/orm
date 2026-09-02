@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -7,7 +7,7 @@ function withEnumArrayDecode(fn: Parameters<typeof withPostgresPort<Contract>>[1
   return withPostgresPort<Contract>({ contractJson }, fn);
 }
 
-describe('ports/prisma/functional/issues-30164-enum-array-decode', () => {
+describe('decoding a native-enum array column', () => {
   it(
     'reads a row with a native-enum array column',
     () =>
