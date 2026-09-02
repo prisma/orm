@@ -25,6 +25,7 @@ import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
 import type { ImportSpecifierResolver } from '@internal/publish-surface/import-roots';
 import { castAs } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join, relative } from 'pathe';
 import {
@@ -44,6 +45,7 @@ import {
 import { toExtensionInputs } from '../../utils/extension-pack-inputs';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import {
   buildContractSpaceAggregate,
   loadContractSpaceAggregateForCli,
@@ -329,12 +331,14 @@ async function executeMigrationPlanCommandInner(
   } | null = null;
   let isAutoBaseline = false;
 
+  const verifySnapshotContent = snapshotVerifierFor(config);
   const tolerantAggregateResult = await loadContractSpaceAggregateForCli({
     targetId: config.target.targetId,
     migrationsDir,
     appContract: toContract,
     extensions: config.extensions ?? [],
     deserializeContract: (json: unknown) => familyInstance.deserializeContract(json),
+    ...ifDefined('verifySnapshotContent', verifySnapshotContent),
   });
   if (!tolerantAggregateResult.ok) {
     return notOk(tolerantAggregateResult.failure);
@@ -459,6 +463,7 @@ async function executeMigrationPlanCommandInner(
     appContract: toContract,
     extensions: config.extensions ?? [],
     deserializeContract: (json: unknown) => familyInstance.deserializeContract(json),
+    ...ifDefined('verifySnapshotContent', verifySnapshotContent),
   });
   if (!aggregateResult.ok) {
     return notOk(aggregateResult.failure);

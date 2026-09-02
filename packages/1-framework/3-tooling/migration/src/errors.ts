@@ -597,6 +597,23 @@ export function errorContractSnapshotHashMismatch(
   );
 }
 
+export function errorContractSnapshotContentMismatch(args: {
+  readonly storageHash: string;
+  readonly computedHash: string;
+  readonly jsonPath: string;
+}): MigrationToolsError {
+  const { storageHash, computedHash, jsonPath } = args;
+  return new MigrationToolsError(
+    'MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH',
+    'Contract snapshot content does not match its hash',
+    {
+      why: `The contract snapshot at "${jsonPath}" is addressed by storage hash ${storageHash}, but its content recomputes to ${computedHash}. The file has been edited (or corrupted) since it was written.`,
+      fix: 'Restore migrations/snapshots/ from version control, or re-run the command that authored the migration referencing this hash to regenerate the snapshot.',
+      meta: { storageHash, computedHash, jsonPath },
+    },
+  );
+}
+
 export function errorMigrationContractViewMissing(
   className: string,
   accessor: 'endContract' | 'startContract',

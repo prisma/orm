@@ -18,6 +18,7 @@ import { formatMigrationDirName, writeMigrationPackage } from '@internal/migrati
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { findLatestMigration } from '@internal/migration-tools/migration-graph';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { join, relative } from 'pathe';
 import {
@@ -33,6 +34,7 @@ import {
 } from '../../utils/command-helpers';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { refusePackageCorruptionOnAggregate } from './contract-space-aggregate-loader';
 
 export interface MigrationNewOptions {
@@ -112,10 +114,12 @@ export async function executeMigrationNewCommand(
     );
   }
 
+  const verifySnapshotContent = snapshotVerifierFor(config);
   const aggregate = await loadContractSpaceAggregate({
     migrationsDir,
     deserializeContract: (json) => familyInstance.deserializeContract(json),
     appContract: toContract,
+    ...ifDefined('verifySnapshotContent', verifySnapshotContent),
   });
   const packageCorruptionFailure = refusePackageCorruptionOnAggregate(aggregate, migrationsDir);
   if (packageCorruptionFailure) {

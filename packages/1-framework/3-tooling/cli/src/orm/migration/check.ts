@@ -16,6 +16,7 @@ import {
 } from '../../control-api/operations/migration-check';
 import { errorMigrationPackageNotFound } from '../../utils/cli-errors';
 import { integrityViolationToCheckFailure } from '../../utils/integrity-violation-to-check-failure';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
@@ -129,11 +130,20 @@ export const migrationCheckCommand = defineOrmCommand({
     const appMigrationsDir = appMigrationsDirFor(ctx.config, ctx.cwd);
     const appMigrationsRelative = displayPath(appMigrationsDir, ctx.cwd);
 
-    const loaded = await buildReadAggregate(ctx.config, { migrationsDir });
+    const verifySnapshotContent = snapshotVerifierFor(ctx.config);
+    const loaded = await buildReadAggregate(ctx.config, {
+      migrationsDir,
+      ...ifDefined('verifySnapshotContent', verifySnapshotContent),
+    });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));
     }
-    const spaces = await enumerateCheckSpaces(loaded.value.aggregate, migrationsDir, ctx.cwd);
+    const spaces = await enumerateCheckSpaces(
+      loaded.value.aggregate,
+      migrationsDir,
+      ctx.cwd,
+      verifySnapshotContent,
+    );
 
     let document: MigrationCheckResult;
     let resolvedSpaceId: string | undefined;
@@ -169,7 +179,11 @@ export const migrationCheckCommand = defineOrmCommand({
       if (!checked.ok) {
         return notOk(normalizeError(checked.failure));
       }
-      const violations = await loadAggregateIntegrityViolations(ctx.config, migrationsDir);
+      const violations = await loadAggregateIntegrityViolations(
+        ctx.config,
+        migrationsDir,
+        verifySnapshotContent,
+      );
       const scoped =
         spaceFilter === undefined
           ? violations

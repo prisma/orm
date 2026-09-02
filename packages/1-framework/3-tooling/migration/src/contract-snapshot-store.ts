@@ -5,10 +5,16 @@ import { canonicalizeJson } from '@internal/framework-components/utils';
 import { blindCast } from '@internal/utils/casts';
 import { join, relative } from 'pathe';
 import {
+  errorContractSnapshotContentMismatch,
   errorContractSnapshotHashMismatch,
   errorContractSnapshotMissing,
   errorInvalidJson,
+  MigrationToolsError,
 } from './errors';
+import type { SnapshotCanonicalizationHooks } from './hash';
+import { recomputePublishedStorageHash } from './hash';
+
+export type { SnapshotCanonicalizationHooks } from './hash';
 
 const CONTRACT_JSON_FILE = 'contract.json';
 const CONTRACT_DTS_FILE = 'contract.d.ts';
@@ -34,6 +40,54 @@ async function directoryExists(p: string): Promise<boolean> {
 
 export function contractSnapshotDir(migrationsDir: string, storageHash: string): string {
   return join(migrationsDir, CONTRACT_SNAPSHOTS_DIRNAME, storageHashHex(storageHash));
+}
+
+/**
+ * Recompute-and-compare integrity check for loaded contract snapshots,
+ * mirroring `verifyMigrationHash` for migration packages and
+ * `assertDescriptorSelfConsistency` for extension descriptors: the store is
+ * content-addressed, so the JSON read back for a hash must reproduce that
+ * hash. Verified hashes are memoised per instance, so a snapshot resolved
+ * repeatedly in one command run is hashed once. The recompute is coupled to
+ * the emit-time canonicalization: a release that changes the family hooks
+ * or hash canonicalization rules must regenerate (or migrate) existing
+ * snapshot stores, or every pre-existing snapshot reads as tampered.
+ */
+export interface SnapshotContentVerifier {
+  /**
+   * Throws `MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH` when
+   * `contractJson`'s content does not recompute to `storageHash` — the hash
+   * the snapshot at `jsonPath` was addressed by.
+   */
+  assertSnapshotContentMatches(contractJson: unknown, storageHash: string, jsonPath: string): void;
+}
+
+export function createSnapshotContentVerifier(
+  hooks?: SnapshotCanonicalizationHooks,
+): SnapshotContentVerifier {
+  const verified = new Set<string>();
+
+  return {
+    assertSnapshotContentMatches(contractJson, storageHash, jsonPath) {
+      if (verified.has(storageHash)) {
+        return;
+      }
+      const record = blindCast<
+        { target?: unknown; targetFamily?: unknown; storage?: unknown },
+        'contractJson is unknown JSON; only the identity fields the hash covers are read here'
+      >(contractJson ?? {});
+      const computedHash = recomputePublishedStorageHash({
+        target: record.target,
+        targetFamily: record.targetFamily,
+        storage: record.storage,
+        hooks,
+      });
+      if (computedHash !== storageHash) {
+        throw errorContractSnapshotContentMismatch({ storageHash, computedHash, jsonPath });
+      }
+      verified.add(storageHash);
+    },
+  };
 }
 
 export interface ContractSnapshotInput {
@@ -94,9 +148,16 @@ export async function writeContractSnapshot(
   return { written: true, dir };
 }
 
+/**
+ * When `verifyContent` is supplied, the parsed snapshot's content is checked
+ * against the hash it was addressed by before being returned — the store is
+ * content-addressed, and a snapshot edited in place under an unchanged hash
+ * would otherwise flow into planning as if it were the recorded contract.
+ */
 export async function readContractSnapshotJson(
   migrationsDir: string,
   storageHash: string,
+  verifyContent?: SnapshotContentVerifier,
 ): Promise<unknown> {
   const jsonPath = join(contractSnapshotDir(migrationsDir, storageHash), CONTRACT_JSON_FILE);
 
@@ -110,11 +171,14 @@ export async function readContractSnapshotJson(
     throw error;
   }
 
+  let parsed: unknown;
   try {
-    return JSON.parse(raw);
+    parsed = JSON.parse(raw);
   } catch (e) {
     throw errorInvalidJson(jsonPath, e instanceof Error ? e.message : String(e));
   }
+  verifyContent?.assertSnapshotContentMatches(parsed, storageHash, jsonPath);
+  return parsed;
 }
 
 /**
@@ -125,11 +189,15 @@ export async function readContractSnapshotJson(
  * `readEndContractJson` (`io.ts`), which never validated the hash it was
  * keyed by either. Any other fs error (e.g. `EACCES` on a present-but-
  * unreadable file) propagates rather than silently loading a contract-less
- * package.
+ * package. When `verifyContent` is supplied, an entry whose content does not
+ * recompute to its address also resolves to `undefined` — tampered content
+ * must not flow onward, and the strict store reads report the same file
+ * loudly as `MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`.
  */
 export async function readContractSnapshotJsonTolerant(
   migrationsDir: string,
   storageHash: string,
+  verifyContent?: SnapshotContentVerifier,
 ): Promise<unknown | undefined> {
   let jsonPath: string;
   try {
@@ -148,12 +216,27 @@ export async function readContractSnapshotJsonTolerant(
     throw error;
   }
 
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(raw);
-    return parsed === null ? undefined : parsed;
+    parsed = JSON.parse(raw);
   } catch {
     return undefined;
   }
+  if (parsed === null) {
+    return undefined;
+  }
+  try {
+    verifyContent?.assertSnapshotContentMatches(parsed, storageHash, jsonPath);
+  } catch (error) {
+    if (
+      MigrationToolsError.is(error) &&
+      error.code === 'MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH'
+    ) {
+      return undefined;
+    }
+    throw error;
+  }
+  return parsed;
 }
 
 export async function readContractSnapshotDts(

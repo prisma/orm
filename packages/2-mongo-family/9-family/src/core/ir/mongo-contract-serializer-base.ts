@@ -76,6 +76,8 @@ export abstract class MongoContractSerializerBase<TContract>
    */
   shouldPreserveEmpty = mongoContractCanonicalizationHooks.shouldPreserveEmpty;
 
+  hashCanonicalizationHooks = mongoContractCanonicalizationHooks;
+
   /**
    * Family-shared structural validation: parse against the Mongo
    * contract arktype schema, then run framework-shared domain + Mongo

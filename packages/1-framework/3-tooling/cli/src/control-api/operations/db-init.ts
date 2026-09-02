@@ -7,6 +7,7 @@ import type {
   ControlFamilyInstance,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { ifDefined } from '@internal/utils/defined';
 import type { DbInitResult, OnControlProgress } from '../types';
 import { executeRun } from './db-run';
@@ -56,6 +57,8 @@ export interface ExecuteDbInitOptions<TFamilyId extends string, TTargetId extend
    * extension spaces in the aggregate.
    */
   readonly extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
+  /** Content check for contract snapshots the aggregate loader resolves. */
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
   /** Optional progress callback for observing operation progress */
   readonly onProgress?: OnControlProgress;
 }
@@ -83,6 +86,7 @@ export async function executeDbInit<TFamilyId extends string, TTargetId extends 
     extensions: options.extensions ?? [],
     policy: { allowedOperationClasses: ['additive'] },
     action: 'dbInit',
+    ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onProgress', options.onProgress),
   });
   return result as DbInitResult;

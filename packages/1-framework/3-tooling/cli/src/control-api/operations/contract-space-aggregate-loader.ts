@@ -11,12 +11,15 @@ import type {
 } from '@internal/migration-tools/aggregate';
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { CliStructuredError, errorUnexpected } from '../../utils/cli-errors';
 import { readContractEnvelope, resolveContractPath } from '../../utils/command-helpers';
 import { toDeclaredExtensionsFromRaw } from '../../utils/extension-pack-inputs';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 
 const CONTRACT_SPACES_DOCS_URL = 'https://pris.ly/contract-spaces';
 
@@ -180,6 +183,12 @@ export interface BuildAggregateInputs<TFamilyId extends string, TTargetId extend
   readonly appContract: Contract;
   readonly extensions: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
   readonly deserializeContract: (contractJson: unknown) => Contract;
+  /**
+   * Content check for contract snapshots resolved through the aggregate;
+   * build it with `snapshotVerifierFor(config)` so the recompute uses the
+   * target's canonicalization hooks.
+   */
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
 }
 
 function declaredExtensionsFromInputs(
@@ -225,6 +234,7 @@ export async function loadContractSpaceAggregateForCli<
     migrationsDir: inputs.migrationsDir,
     deserializeContract: inputs.deserializeContract,
     appContract: inputs.appContract,
+    ...ifDefined('verifySnapshotContent', inputs.verifySnapshotContent),
   });
   return ok(aggregate);
 }
@@ -344,7 +354,11 @@ export async function loadContractRawSafely(config: {
  */
 export async function buildReadAggregate(
   config: PrismaNextConfig,
-  options: { readonly migrationsDir: string },
+  options: {
+    readonly migrationsDir: string;
+    /** Command-scoped verifier to share the verified-hash memo; defaults to one built from `config`. */
+    readonly verifySnapshotContent?: SnapshotContentVerifier;
+  },
 ): Promise<
   Result<
     { readonly aggregate: ContractSpaceAggregate; readonly contractHash: string },
@@ -384,6 +398,10 @@ export async function buildReadAggregate(
       appContract: appContractForLoad,
       extensions: config.extensions ?? [],
       deserializeContract,
+      ...ifDefined(
+        'verifySnapshotContent',
+        options.verifySnapshotContent ?? snapshotVerifierFor(config),
+      ),
     });
     if (!loaded.ok) {
       return loaded;

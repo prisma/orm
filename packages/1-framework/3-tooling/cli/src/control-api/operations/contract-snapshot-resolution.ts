@@ -23,6 +23,7 @@ import {
   errorUnexpected,
   mapRefResolutionError,
 } from '../../utils/cli-errors';
+import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import { buildReadAggregate } from './contract-space-aggregate-loader';
 
 function isEnoent(error: unknown): boolean {
@@ -83,7 +84,13 @@ export async function resolveContractRefToSnapshot(
       const contractJson = blindCast<
         Record<string, unknown>,
         'contract snapshot store entries are JSON objects written by writeContractSnapshot'
-      >(await readContractSnapshotJson(options.migrationsDir, targetHash));
+      >(
+        await readContractSnapshotJson(
+          options.migrationsDir,
+          targetHash,
+          snapshotVerifierFor(options.config),
+        ),
+      );
       return ok({
         hash: targetHash,
         contractJson,

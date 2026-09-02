@@ -59,4 +59,20 @@ export interface ContractSerializer<TContract> {
    * arrays (e.g. SQL `indexes`/`uniques`) supply this hook.
    */
   readonly sortStorage?: StorageSort;
+
+  /**
+   * The canonicalization hooks the family's emit pipeline computes storage
+   * hashes with. Distinct from {@link shouldPreserveEmpty} /
+   * {@link sortStorage}: those govern on-disk serialization and may be
+   * broader per target (Postgres preserves required entity-kind fields at
+   * default values so the persisted contract re-deserializes), while a hash
+   * recompute must reproduce the exact canonical form the published
+   * `storageHash` was derived from. Integrity checks that recompute storage
+   * hashes (snapshot content verification, descriptor self-consistency)
+   * must use these hooks, never the serialization pair.
+   */
+  readonly hashCanonicalizationHooks?: {
+    readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
+    readonly sortStorage?: StorageSort;
+  };
 }

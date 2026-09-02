@@ -92,6 +92,8 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
 
   sortStorage = sqlContractCanonicalizationHooks.sortStorage;
 
+  hashCanonicalizationHooks = sqlContractCanonicalizationHooks;
+
   protected parseSqlContractStructure(json: unknown): Contract<SqlStorage> {
     return validateSqlContractFully<Contract<SqlStorage>>(
       json,

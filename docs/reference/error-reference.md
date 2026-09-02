@@ -854,6 +854,10 @@ A `migration check` finding, carried as an `error` diagnostic on a completed run
 
 A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a ref file in a space's `refs/` directory cannot be read or parsed. Repair or remove the corrupt ref file.
 
+### MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH
+
+A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a contract snapshot's declared `storage.storageHash` agrees with the migration's `to` hash, but the snapshot's content recomputes to a different storage hash — the file under `migrations/snapshots/<hash>/` has been edited (or corrupted) since it was written. Restore `migrations/snapshots/` from version control, or re-run the command that produced the migration to regenerate its snapshot.
+
 ### MIGRATION.CHECK_SNAPSHOT_HASH_MISMATCH
 
 A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a migration declares a destination hash `to` but the contract snapshot stored for that hash has a different inner `storage.storageHash`. Re-emit the package so `migration.json` and its snapshot agree.
@@ -881,6 +885,10 @@ An apply carrying consent was refused because the plan recomputed for it is not 
 ### MIGRATION.CONTRACT_DESERIALIZATION_FAILED
 
 A contract JSON on disk failed to deserialize into a valid contract: either a snapshot-store entry read while migration tooling resolved a contract at a ref or hash, or the emitted `contract.json` read as the fallback source by `db sign` / `db update --to` (invalid JSON, or a value that is not a JSON object). Re-emit the owning migration package (or re-run `prisma contract emit` for the emitted contract), or restore the file from version control. Payload: `filePath`, `message`. Also raised by `migration new` when the emitted `contract.json` fails to deserialize; that site has no meta and attaches the deserialization failure as `cause`.
+
+### MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH
+
+A contract snapshot loaded from `migrations/snapshots/<hash>/contract.json` does not reproduce the storage hash it is addressed by: the store is content-addressed, and the file has been edited (or corrupted) since it was written. Raised at the snapshot-store load seam, so every command that resolves a contract from the store (`migration plan`, `ref set`, `db sign` / `db update --to`, aggregate contract resolution) refuses instead of treating the edited content as the recorded contract. The envelope names the file and both hashes (meta: `storageHash`, `computedHash`, `jsonPath`). Restore `migrations/snapshots/` from version control, or re-run the command that authored the referencing migration to regenerate the snapshot.
 
 ### MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH
 

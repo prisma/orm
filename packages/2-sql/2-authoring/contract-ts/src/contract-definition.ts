@@ -223,6 +223,13 @@ export interface ContractDefinition {
   readonly target: TargetPackRef<'sql', string>;
   readonly defaultControlPolicy?: ControlPolicy;
   readonly extensions?: Record<string, ExtensionPackRef<'sql', string>>;
+  /**
+   * Test-fixture escape hatch: pins the emitted `storage.storageHash`
+   * instead of computing it from content. A pinned hash is not
+   * content-derived, so snapshot content verification
+   * (`MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`) rejects any migration
+   * snapshot addressed by it — never set this in a real project.
+   */
   readonly storageHash?: string;
   readonly foreignKeyDefaults?: ForeignKeyDefaultsState;
   readonly storageTypes?: Record<string, StorageTypeInstance>;

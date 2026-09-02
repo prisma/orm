@@ -22,6 +22,7 @@ import {
   type PlannerError,
   planMigration,
 } from '@internal/migration-tools/aggregate';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -93,6 +94,8 @@ export interface ExecuteRunOptions<TFamilyId extends string, TTargetId extends s
    * general.
    */
   readonly consentedPlanHash?: string;
+  /** Content check for contract snapshots the aggregate loader resolves. */
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -142,6 +145,7 @@ export async function executeRun<TFamilyId extends string, TTargetId extends str
     appContract: contract,
     extensions,
     deserializeContract: (json) => familyInstance.deserializeContract(json),
+    ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
   };
   const loaded = await buildContractSpaceAggregate(loadInputs);
   if (!loaded.ok) {

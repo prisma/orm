@@ -12,6 +12,7 @@ import type {
 } from '@internal/migration-tools/aggregate';
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import {
   contractSnapshotDir,
   readContractSnapshotJson,
@@ -87,7 +88,9 @@ function checkFileExists(
  * package dir with only `migration.json` + `ops.json` is legitimate); a
  * present entry whose inner `storage.storageHash` disagrees with
  * `pkg.metadata.to` is `MIGRATION.CHECK_SNAPSHOT_HASH_MISMATCH`; an unparseable store
- * entry (or a malformed `to`) is `MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE`.
+ * entry (or a malformed `to`) is `MIGRATION.CHECK_SNAPSHOT_UNPARSEABLE`; a parseable
+ * entry whose declared hash agrees but whose content recomputes to a different
+ * storage hash is `MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH`.
  */
 async function checkSnapshotConsistency(
   space: CheckSpace,
@@ -148,6 +151,31 @@ async function checkSnapshotConsistency(
       ],
     };
   }
+  if (space.verifySnapshotContent !== undefined) {
+    const jsonPath = join(snapshotDir, 'contract.json');
+    try {
+      space.verifySnapshotContent.assertSnapshotContentMatches(raw, pkg.metadata.to, jsonPath);
+    } catch (error) {
+      if (
+        !MigrationToolsError.is(error) ||
+        error.code !== 'MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH'
+      ) {
+        throw error;
+      }
+      return {
+        space: spaceId,
+        code: 'MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH',
+        where: migrationPathRelative(space.cwd, jsonPath),
+        why: `Migration "${pkg.dirName}": ${error.why}`,
+        nextActions: [
+          chooseAction('Restore migrations/snapshots/ from version control'),
+          chooseAction(
+            'Or re-run the command that produced this migration to regenerate its snapshot',
+          ),
+        ],
+      };
+    }
+  }
   return null;
 }
 
@@ -169,6 +197,12 @@ export interface CheckSpace {
   readonly projectMigrationsDir: string;
   /** Directory the command was invoked from; every `where` path is relative to it. */
   readonly cwd: string;
+  /**
+   * Content check for snapshot-store entries; when present,
+   * `checkSnapshotConsistency` recomputes each snapshot's storage hash and
+   * reports `MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH` on disagreement.
+   */
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
 }
 
 /**
@@ -183,6 +217,7 @@ export async function enumerateCheckSpaces(
   aggregate: ContractSpaceAggregate,
   projectMigrationsDir: string,
   cwd: string,
+  verifySnapshotContent?: SnapshotContentVerifier,
 ): Promise<readonly CheckSpace[]> {
   const candidateDirs = await listContractSpaceDirectories(projectMigrationsDir);
   const onDiskSpaceIds = new Set(candidateDirs.filter(isValidSpaceId));
@@ -201,6 +236,7 @@ export async function enumerateCheckSpaces(
       refsDir: spaceRefsDirectory(migrationsDir),
       projectMigrationsDir,
       cwd,
+      ...ifDefined('verifySnapshotContent', verifySnapshotContent),
     });
   }
   return spaces;
@@ -340,6 +376,7 @@ export async function runMigrationCheck(
 export async function loadAggregateIntegrityViolations(
   config: PrismaNextConfig,
   migrationsDir: string,
+  verifySnapshotContent?: SnapshotContentVerifier,
 ): Promise<readonly IntegrityViolation[]> {
   try {
     const contractJsonContent = await readFile(resolveContractPath(config), 'utf-8');
@@ -351,6 +388,7 @@ export async function loadAggregateIntegrityViolations(
       migrationsDir,
       deserializeContract: (json: unknown) => familyInstance.deserializeContract(json),
       appContract: familyInstance.deserializeContract(parsedAppContract),
+      ...ifDefined('verifySnapshotContent', verifySnapshotContent),
     });
     return aggregate.checkIntegrity({ declaredExtensions, checkContracts: true });
   } catch {

@@ -15,6 +15,7 @@ import {
   type VerifierOutput,
   verifyMigration,
 } from '@internal/migration-tools/aggregate';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -55,6 +56,8 @@ export interface ExecuteDbVerifyOptions<TFamilyId extends string, TTargetId exte
   readonly mode: 'strict' | 'lenient';
   readonly skipSchema: boolean;
   readonly skipMarker: boolean;
+  /** Content check for contract snapshots the aggregate loader resolves. */
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -165,6 +168,7 @@ function buildLoadInputs<TFamilyId extends string, TTargetId extends string>(
     appContract: options.contract,
     extensions: options.extensions,
     deserializeContract: (json) => options.familyInstance.deserializeContract(json),
+    ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
   };
 }
 

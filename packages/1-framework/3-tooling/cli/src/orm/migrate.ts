@@ -40,6 +40,7 @@ import { createToneMigrationListStyler } from '../utils/formatters/migration-lis
 import { toneDrawing } from '../utils/formatters/tone-markup';
 import { mapMigrateFailure } from '../utils/migrate-failure';
 import { runCommandAction } from '../utils/next-actions';
+import { snapshotVerifierFor } from '../utils/snapshot-content-verification';
 import { ormConfigSection } from './config-section';
 import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
@@ -319,6 +320,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         appContract,
         extensions: ctx.config.extensions ?? [],
         deserializeContract: (json) => familyInstance.deserializeContract(json),
+        ...ifDefined('verifySnapshotContent', snapshotVerifierFor(ctx.config)),
       });
       if (!loaded.ok) {
         return notOk(normalizeError(loaded.failure));
