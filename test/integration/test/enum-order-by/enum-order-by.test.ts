@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../ports/_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
-function withIssue30163(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
+function withEnumOrderBy(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
   return withPostgresPort<Contract>({ contractJson }, fn);
 }
 
@@ -14,11 +14,11 @@ const tickets = [
   { id: 4, status: 'open' },
 ] as const;
 
-describe('ports/prisma/functional/issues-30163-enum-order-by', () => {
+describe('ordering by a native enum column', () => {
   it(
-    'orders ascending by a native enum column in declaration order',
+    'sorts ascending in declaration order',
     () =>
-      withIssue30163(async ({ db }) => {
+      withEnumOrderBy(async ({ db }) => {
         await db.public.Ticket.createAndCount([...tickets]);
 
         const rows = await db.public.Ticket.orderBy([
@@ -39,9 +39,9 @@ describe('ports/prisma/functional/issues-30163-enum-order-by', () => {
   );
 
   it(
-    'orders descending by a native enum column in reverse declaration order',
+    'sorts descending in reverse declaration order',
     () =>
-      withIssue30163(async ({ db }) => {
+      withEnumOrderBy(async ({ db }) => {
         await db.public.Ticket.createAndCount([...tickets]);
 
         const rows = await db.public.Ticket.orderBy([
@@ -56,6 +56,25 @@ describe('ports/prisma/functional/issues-30163-enum-order-by', () => {
           { id: 3, status: 'closed' },
           { id: 2, status: 'open' },
           { id: 4, status: 'open' },
+        ]);
+      }),
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'distinctOn keeps one row per enum value',
+    () =>
+      withEnumOrderBy(async ({ db }) => {
+        await db.public.Ticket.createAndCount([...tickets]);
+
+        const rows = await db.public.Ticket.select('id', 'status')
+          .orderBy([(ticket) => ticket.status.asc(), (ticket) => ticket.id.asc()])
+          .distinctOn('status')
+          .all();
+
+        expect(rows).toEqual([
+          { id: 2, status: 'open' },
+          { id: 1, status: 'closed' },
         ]);
       }),
     timeouts.spinUpPpgDev,
