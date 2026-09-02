@@ -1,6 +1,6 @@
 # Journey 02e — Recover from `MIGRATION.HASH_MISMATCH`
 
-**Skills under test:** `prisma-next-debug`, `prisma-next-migrations`.
+**Skills under test:** `prisma-orm-core-concepts` (failure-modes), `prisma-orm-migrations` (migrations).
 
 **Acceptance criterion:** AC5e.
 

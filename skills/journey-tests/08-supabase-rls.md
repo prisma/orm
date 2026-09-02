@@ -1,8 +1,8 @@
 # Journey 08 — Supabase: RLS-scoped profile listing
 
-**Skills under test:** `prisma-next-supabase`, `prisma-next-contract`, `prisma-next-queries`.
+**Skills under test:** `prisma-orm-core-concepts` (supabase), `prisma-orm-core-concepts` (contract), `prisma-orm-core-concepts` (queries).
 
-**Example app:** `examples/supabase` (the canonical Supabase walking skeleton), or a fresh project wired per the `prisma-next-supabase` config workflow against a disposable Supabase project.
+**Example app:** `examples/supabase` (the canonical Supabase walking skeleton), or a fresh project wired per the `prisma-orm-core-concepts` (supabase) config workflow against a disposable Supabase project.
 
 ## Prompt
 

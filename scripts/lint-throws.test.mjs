@@ -89,7 +89,9 @@ describe('filterNoBareThrowDiags', () => {
       {
         category: 'plugin',
         message: msg,
-        location: { path: 'skills/prisma-8/upgrading/app/upgrades/0.9-to-0.10/codemod.ts' },
+        location: {
+          path: 'skills/prisma-orm-core-concepts/upgrading/app/upgrades/0.9-to-0.10/codemod.ts',
+        },
       },
       { category: 'plugin', message: msg, location: { path: 'packages/x/src/scripts.ts' } },
       { category: 'plugin', message: msg, location: { path: 'packages/x/src/thing.ts' } },

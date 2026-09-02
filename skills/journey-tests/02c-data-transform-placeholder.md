@@ -1,6 +1,6 @@
 # Journey 02c — Fill a placeholder data transform
 
-**Skills under test:** `prisma-next-migrations`.
+**Skills under test:** `prisma-orm-migrations` (migrations).
 
 **Acceptance criterion:** AC5c.
 

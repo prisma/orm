@@ -1,6 +1,6 @@
 # Journey 02a — Add a relation, apply, query
 
-**Skills under test:** `prisma-next-contract`, `prisma-next-migrations`, `prisma-next-queries`.
+**Skills under test:** `prisma-orm-core-concepts` (contract), `prisma-orm-migrations` (migrations), `prisma-orm-core-concepts` (queries).
 
 **Example app:** A project that already has a `User` model.
 

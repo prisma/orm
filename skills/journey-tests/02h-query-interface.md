@@ -1,6 +1,6 @@
 # Journey 02h — Pick the right query interface
 
-**Skills under test:** `prisma-next-queries`.
+**Skills under test:** `prisma-orm-core-concepts` (queries).
 
 **Acceptance criterion:** AC5h.
 

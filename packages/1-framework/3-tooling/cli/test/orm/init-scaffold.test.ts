@@ -162,7 +162,7 @@ describe('init scaffold', () => {
 
         expect(run.exitCode).toBe(0);
         expect(manifest.scripts?.postinstall).toBeUndefined();
-        expect(gitignore).not.toContain('skills/prisma-8/');
+        expect(gitignore).not.toContain('skills/prisma-');
       },
       timeouts.coldTransformImport,
     );
@@ -175,7 +175,7 @@ describe('init scaffold', () => {
         const retired = join(projectDir, '.claude/skills/prisma-next-queries');
         mkdirSync(retired, { recursive: true });
         writeFileSync(join(retired, 'SKILL.md'), '# stale\n', 'utf-8');
-        const installed = join(projectDir, '.agents/skills/prisma-8');
+        const installed = join(projectDir, '.agents/skills/prisma-orm-core-concepts');
         mkdirSync(installed, { recursive: true });
         writeFileSync(join(installed, 'SKILL.md'), '# installed\n', 'utf-8');
 

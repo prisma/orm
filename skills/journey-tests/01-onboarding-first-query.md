@@ -1,6 +1,6 @@
 # Journey 01 — Onboarding to first query
 
-**Skills under test:** `prisma-next-quickstart`, `prisma-next-contract`, `prisma-next-migrations`, `prisma-next-queries`.
+**Skills under test:** `prisma-orm-core-concepts` (quickstart, contract, queries), `prisma-orm-migrations` (migrations).
 
 **Example app:** A fresh directory scaffolded with `pnpm dlx @prisma/cli orm init` (run inside the new directory — `init` operates in `cwd` and does not take a project-name argument), or `examples/prisma-8-demo` with the User model deleted.
 
@@ -17,7 +17,7 @@
 - [ ] Adds a `User` model with `id` (auto-increment PK) and `email` (string, unique).
 - [ ] Runs `pnpm prisma contract emit` (or the project-pm equivalent).
 - [ ] Plans + applies a migration (or uses `db update` for dev).
-- [ ] Writes a query handler that calls `db.orm.User.select(...).all()` (the ORM lane is the default; the SQL builder and raw lanes are alternatives the `prisma-next-queries` skill covers).
+- [ ] Writes a query handler that calls `db.orm.User.select(...).all()` (the ORM lane is the default; the SQL builder and raw lanes are alternatives the `prisma-orm-core-concepts` (queries) skill covers).
 - [ ] Runs the handler and observes the empty array (or rows if seeded).
 
 ## Success criteria

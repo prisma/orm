@@ -1,6 +1,6 @@
 # Journey 02d — Capability-gated `returning()`
 
-**Skills under test:** `prisma-next-queries`, `prisma-next-contract`.
+**Skills under test:** `prisma-orm-core-concepts` (queries, contract).
 
 **Acceptance criterion:** AC5d.
 

@@ -104,16 +104,20 @@ describe('init skill distribution (offline integration, real CLI)', () => {
     testDirs.add(testDir);
 
     expect(manifestOf(testDir).scripts?.['postinstall']).toBeUndefined();
-    expect(gitignoreOf(testDir)).not.toContain('skills/prisma-8/');
+    expect(gitignoreOf(testDir)).not.toContain('skills/prisma-');
   });
 
-  it('removes skill directories the router replaced', { timeout: 60_000 }, async () => {
+  it('removes retired skill directories', { timeout: 60_000 }, async () => {
     const testDir = createIntegrationTestDir();
     testDirs.add(testDir);
     writeFileSync(join(testDir, 'pnpm-lock.yaml'), '', 'utf8');
-    const retired = join(testDir, '.agents', 'skills', 'prisma-next-upgrade');
-    mkdirSync(retired, { recursive: true });
-    writeFileSync(join(retired, 'SKILL.md'), '---\nname: prisma-next-upgrade\n---\n', 'utf8');
+    const retiredNames = ['prisma-next-upgrade', 'prisma-8'];
+    const retiredDirs = retiredNames.map((name) => {
+      const dir = join(testDir, '.agents', 'skills', name);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, 'SKILL.md'), `---\nname: ${name}\n---\n`, 'utf8');
+      return dir;
+    });
 
     const { fakeBinDir, logPath } = createFakeManagerHarness(testDir);
     const { exitCode, stderr } = runEngineInit(testDir, {
@@ -122,7 +126,9 @@ describe('init skill distribution (offline integration, real CLI)', () => {
     });
 
     expect(exitCode, stderr).toBe(0);
-    expect(existsSync(retired)).toBe(false);
+    for (const dir of retiredDirs) {
+      expect(existsSync(dir)).toBe(false);
+    }
   });
 });
 

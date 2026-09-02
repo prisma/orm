@@ -1,6 +1,6 @@
 # Journey 05 — Vite plugin happy path
 
-**Skill under test:** `prisma-next-build`.
+**Skill under test:** `prisma-orm-core-concepts` (build).
 
 **Acceptance criterion:** The build workflow routes to the Vite plugin path and avoids unsupported package names.
 
@@ -22,7 +22,7 @@ The agent runtime has Prisma Next skills registered (project level, as `init` in
 
 ## Expected agent behaviour
 
-- [ ] Skill matcher fires on `prisma-next-build` (description contains "vite plugin", "vite.config.ts", "contract emit on save").
+- [ ] Skill matcher fires on `prisma-orm-core-concepts` (build) (description contains "vite plugin", "vite.config.ts", "contract emit on save").
 - [ ] Agent installs `@internal/vite-plugin-contract-emit` as a devDependency via the project's package manager.
 - [ ] Agent edits `vite.config.ts` to register `prismaVitePlugin('prisma.config.ts')` (note: the argument is the *config path*, not the schema path).
 - [ ] Agent starts `vite dev` (or instructs the user to) and waits for the initial emit log line.

@@ -1,6 +1,6 @@
-// The agent skills ship inside the packages they describe — the `prisma-8`
-// skill travels in the `@prisma/orm-*` tarball a project installs — so init
-// no longer fetches or installs them from anywhere. Skills setup belongs to
+// The agent skills ship inside the packages they describe — the
+// `prisma-orm-*` skills travel in the `@prisma/orm-*` tarball a project
+// installs — so init no longer fetches or installs them from anywhere. Skills setup belongs to
 // the family-level `prisma init` command; the only skill work left in
 // `orm init` is deleting the retired directories below.
 
@@ -9,17 +9,19 @@
 // -------------------------------------------------------------------
 
 /**
- * Skill directories that predate the consolidated `prisma-8` skill: the
- * per-workflow usage cluster (including the renamed
- * `prisma-8-migration-review` spelling it briefly shipped under), the
- * pre-rename spellings of the consolidated skill and the extension-author
- * upgrade skill, any hand-rolled `prisma-next` stub, and the two standalone
- * upgrade skills that folded into the `prisma-8` router. Projects initialised
- * before those changes carry these as sibling directories in each agent's
- * install root; left in place they compete with the current skill for
- * activation, so init removes them on every run.
+ * Skill directories that predate the current `prisma-orm-*` skill set: the
+ * consolidated `prisma-8` router it replaced, the per-workflow usage cluster
+ * that preceded the router (including the renamed `prisma-8-migration-review`
+ * spelling it briefly shipped under), the pre-rename spellings of the
+ * consolidated skill and the extension-author upgrade skill, any hand-rolled
+ * `prisma-next` stub, and the two standalone upgrade skills that folded into
+ * the `prisma-8` router. Projects initialised before those changes carry
+ * these as sibling directories in each agent's install root; left in place
+ * they compete with the current skills for activation, so init removes them
+ * on every run.
  */
 export const RETIRED_SKILL_NAMES = [
+  'prisma-8',
   'prisma-next',
   'prisma-next-quickstart',
   'prisma-next-contract',

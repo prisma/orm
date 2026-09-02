@@ -62,13 +62,13 @@ Just describe what you want. For example:
 
 > *"Add a `posts` model with a relation to `users`, then write a query that loads each user's three most recent posts."*
 
-The agent loads the `prisma-8` skill, opens its contract and queries references, then drives the change end-to-end.
+The agent loads the `prisma-orm-core-concepts` skill, opens its contract and queries references, then drives the change end-to-end.
 
 For the full catalogue and what each skill covers, see [`skills/README.md`](./skills/README.md).
 
 ## Found a bug, missing a feature, or have a question for the team?
 
-Ask your agent. The `prisma-8` skill's feedback flow drafts a structured GitHub issue or hands you a Prisma Discord link for live Q&A. You can review and confirm before anything is submitted.
+Ask your agent. The `prisma-orm-core-concepts` skill's feedback flow drafts a structured GitHub issue or hands you a Prisma Discord link for live Q&A. You can review and confirm before anything is submitted.
 
 ## For extension authors
 

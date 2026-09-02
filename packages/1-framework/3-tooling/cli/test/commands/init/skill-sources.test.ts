@@ -20,10 +20,14 @@ describe('legacy skill cleanup', () => {
     expect(RETIRED_SKILL_NAMES).toContain('prisma-8-extension-upgrade');
   });
 
+  it('retires the consolidated router the prisma-orm-* skills replaced', () => {
+    expect(RETIRED_SKILL_NAMES).toContain('prisma-8');
+  });
+
   it('names one directory per harness root and retired skill', () => {
     const dirs = legacySkillDirs();
     expect(dirs).toHaveLength(AGENT_SKILL_ROOTS.length * RETIRED_SKILL_NAMES.length);
     expect(dirs).toContain('.cursor/skills/prisma-next-upgrade');
-    expect(dirs).not.toContain('.claude/skills/prisma-8');
+    expect(dirs).toContain('.claude/skills/prisma-8');
   });
 });

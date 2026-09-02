@@ -127,8 +127,8 @@ export function parseChangesFrontmatter(src) {
   return { ok: false, reason: 'changes key absent' };
 }
 
-const USER_SKILL_PKG = 'skills/prisma-8/upgrading/app';
-const EXT_SKILL_PKG = 'skills/prisma-8/upgrading/extension';
+const USER_SKILL_PKG = 'skills/prisma-orm-core-concepts/upgrading/app';
+const EXT_SKILL_PKG = 'skills/prisma-orm-core-concepts/upgrading/extension';
 
 /**
  * Substrates covered by the gate. Each entry pairs a diff pathspec
@@ -284,7 +284,7 @@ const TRANSITION_PATH = new RegExp(
  * Parse a path under `<skill-pkg>/upgrades/<transition>/...` and return
  * the transition segment, or null if the path does not match.
  *
- * Example: `skills/prisma-8/upgrading/app/upgrades/0.7-to-0.8/foo.ts`
+ * Example: `skills/prisma-orm-core-concepts/upgrading/app/upgrades/0.7-to-0.8/foo.ts`
  *  → `'0.7-to-0.8'`
  */
 export function parseTransitionFromPath(path) {

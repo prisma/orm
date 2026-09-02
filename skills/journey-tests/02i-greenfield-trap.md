@@ -1,6 +1,6 @@
 # Journey 02i — Second plan in a project with no `db` ref
 
-**Skills under test:** `prisma-8` (migration-model, migrations).
+**Skills under test:** `prisma-orm-migrations` (migration-model, migrations).
 
 **Acceptance criterion:** — (added with the migration mental-model rework).
 

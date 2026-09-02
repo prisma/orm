@@ -1,6 +1,6 @@
 # Journey 02g — Resolve a diamond-convergence conflict
 
-**Skills under test:** `prisma-8-migration-review`, `prisma-next-migrations`.
+**Skills under test:** `prisma-orm-migrations` (migration-review), `prisma-orm-migrations` (migrations).
 
 **Acceptance criterion:** AC5g.
 

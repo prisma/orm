@@ -1,6 +1,7 @@
 /**
- * The `prisma-8` agent skill ships inside the tarball of every package an
- * application depends on directly, so the skill a user has always describes
+ * The Prisma Next agent skills (`prisma-orm-core-concepts`,
+ * `prisma-orm-migrations`) ship inside the tarball of every package an
+ * application depends on directly, so the skills a user has always describe
  * the version they installed.
  *
  * That claim is only worth as much as the artifact that proves it, and every
@@ -26,7 +27,7 @@ import { publicShells, type ShellName } from '../src/shells';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const facades: ShellName[] = ['@prisma/orm-postgres', '@prisma/orm-sqlite', '@prisma/orm-mongo'];
-const SKILL_NAME = 'prisma-8';
+const SKILL_NAMES = ['prisma-orm-core-concepts', 'prisma-orm-migrations'] as const;
 
 interface Manifest {
   readonly version: string;
@@ -93,10 +94,10 @@ function packAndUnpack(facade: ShellName): string {
   return join(work, 'package');
 }
 
-describe('the skill source in the repository', () => {
-  it('carries the stamp the version sweep maintains', () => {
+describe('the skill sources in the repository', () => {
+  it.each(SKILL_NAMES)('%s carries the stamp the version sweep maintains', (skillName) => {
     const rootVersion = manifestAt(repoRoot).version;
-    const source = readFileSync(join(repoRoot, 'skills', SKILL_NAME, 'SKILL.md'), 'utf8');
+    const source = readFileSync(join(repoRoot, 'skills', skillName, 'SKILL.md'), 'utf8');
     expect(metadataValue(source, 'library_version')).toBe(rootVersion);
   });
 });
@@ -112,30 +113,32 @@ describe.each(facades)('%s', (facade) => {
     );
   });
 
-  it('carries the whole skill tree in its tarball, stamped with what shipped it', () => {
+  it('carries every skill tree in its tarball, stamped with what shipped it', () => {
     const packedRoot = packAndUnpack(facade);
-    const packedSkillDir = join(packedRoot, 'skills', SKILL_NAME);
+    for (const skillName of SKILL_NAMES) {
+      const packedSkillDir = join(packedRoot, 'skills', skillName);
 
-    expect(
-      existsSync(join(packedSkillDir, 'SKILL.md')),
-      `the ${facade} tarball has no skills/${SKILL_NAME}/SKILL.md`,
-    ).toBe(true);
+      expect(
+        existsSync(join(packedSkillDir, 'SKILL.md')),
+        `the ${facade} tarball has no skills/${skillName}/SKILL.md`,
+      ).toBe(true);
 
-    const packedSkill = readFileSync(join(packedSkillDir, 'SKILL.md'), 'utf8');
-    expect(metadataValue(packedSkill, 'library')).toBe(facade);
-    expect(metadataValue(packedSkill, 'library_version')).toBe(manifestAt(packedRoot).version);
+      const packedSkill = readFileSync(join(packedSkillDir, 'SKILL.md'), 'utf8');
+      expect(metadataValue(packedSkill, 'library')).toBe(facade);
+      expect(metadataValue(packedSkill, 'library_version')).toBe(manifestAt(packedRoot).version);
 
-    // The tarball and the repository's tracked tree must serve the same
-    // instructions: the only difference is the package each copy names.
-    const sourceDir = join(repoRoot, 'skills', SKILL_NAME);
-    expect(filesUnder(packedSkillDir)).toEqual(filesUnder(sourceDir));
-    for (const file of filesUnder(sourceDir)) {
-      if (file === 'SKILL.md') continue;
-      expect(readFileSync(join(packedSkillDir, file), 'utf8')).toBe(
-        readFileSync(join(sourceDir, file), 'utf8'),
-      );
+      // The tarball and the repository's tracked tree must serve the same
+      // instructions: the only difference is the package each copy names.
+      const sourceDir = join(repoRoot, 'skills', skillName);
+      expect(filesUnder(packedSkillDir)).toEqual(filesUnder(sourceDir));
+      for (const file of filesUnder(sourceDir)) {
+        if (file === 'SKILL.md') continue;
+        expect(readFileSync(join(packedSkillDir, file), 'utf8')).toBe(
+          readFileSync(join(sourceDir, file), 'utf8'),
+        );
+      }
+      const sourceSkill = readFileSync(join(sourceDir, 'SKILL.md'), 'utf8');
+      expect(packedSkill).toBe(sourceSkill.replace(/^(\s+)library:.*$/m, `$1library: '${facade}'`));
     }
-    const sourceSkill = readFileSync(join(sourceDir, 'SKILL.md'), 'utf8');
-    expect(packedSkill).toBe(sourceSkill.replace(/^(\s+)library:.*$/m, `$1library: '${facade}'`));
   }, 60_000);
 });
