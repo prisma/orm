@@ -9,6 +9,9 @@ import type { AnyJsonValueProjection } from './json-value-projection';
 
 export type Direction = 'asc' | 'desc';
 
+/** Where NULLs sort relative to non-NULL values in an ORDER BY item. Undefined leaves placement to the target's default, and those defaults disagree: PostgreSQL ranks NULLs highest (last under ASC), SQLite ranks them lowest (first under ASC). State it explicitly to sort the same way on both. */
+export type NullsPlacement = 'first' | 'last';
+
 export type BinaryOp = 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'like' | 'in' | 'notIn';
 
 export type AggregateCountFn = 'count';
@@ -1081,33 +1084,42 @@ export class OrderByItem extends AstNode {
   readonly kind = 'order-by-item' as const;
   readonly expr: AnyExpression;
   readonly dir: Direction;
+  readonly nulls: NullsPlacement | undefined;
 
-  constructor(expr: AnyExpression, dir: Direction) {
+  constructor(expr: AnyExpression, dir: Direction, nulls?: NullsPlacement) {
     super();
     this.expr = expr;
     this.dir = dir;
+    this.nulls = nulls;
     this.freeze();
   }
 
-  static asc(expr: AnyExpression): OrderByItem {
-    return new OrderByItem(expr, 'asc');
+  static asc(expr: AnyExpression, nulls?: NullsPlacement): OrderByItem {
+    return new OrderByItem(expr, 'asc', nulls);
   }
 
-  static desc(expr: AnyExpression): OrderByItem {
-    return new OrderByItem(expr, 'desc');
+  static desc(expr: AnyExpression, nulls?: NullsPlacement): OrderByItem {
+    return new OrderByItem(expr, 'desc', nulls);
   }
 
   rewrite(rewriter: ExpressionRewriter): OrderByItem {
-    return new OrderByItem(this.expr.rewrite(rewriter), this.dir);
+    return new OrderByItem(this.expr.rewrite(rewriter), this.dir, this.nulls);
   }
 
   /**
-   * A new frozen item with the sort direction flipped and `expr` unchanged.
+   * A new frozen item with the sort order inverted and `expr` unchanged.
    * Integrations that own pagination (e.g. backward cursor pagination) use
    * this to reverse a user's sort order without reaching into the AST.
+   *
+   * An explicit NULL placement flips with the direction: inverting a total
+   * order has to move NULLs to the opposite end, or reversing a page would
+   * not read back as the mirror of the forward page. An absent placement
+   * stays absent, since each target's default already flips with `dir`.
    */
   reverse(): OrderByItem {
-    return new OrderByItem(this.expr, this.dir === 'asc' ? 'desc' : 'asc');
+    const dir = this.dir === 'asc' ? 'desc' : 'asc';
+    if (this.nulls === undefined) return new OrderByItem(this.expr, dir);
+    return new OrderByItem(this.expr, dir, this.nulls === 'first' ? 'last' : 'first');
   }
 }
 

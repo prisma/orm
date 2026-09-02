@@ -339,6 +339,8 @@ db.sql.post
   .build();
 ```
 
+`.orderBy(...)` takes `nulls: 'first' | 'last'` alongside `direction`, rendering `NULLS FIRST` / `NULLS LAST`. Omit it and each target applies its own default, and those defaults disagree — PostgreSQL ranks NULLs highest (last under `asc`), SQLite ranks them lowest (first under `asc`). State `nulls` explicitly when a nullable sort column has to order the same way on both.
+
 ## Workflow — Transactions
 
 The concept: `db.transaction(fn)` opens a transaction and passes a `tx` context to the callback. `tx.orm` and `tx.sql` mirror `db.orm` / `db.sql` but ride the same transaction; `tx.execute(plan)` executes a SQL-builder plan within it. The transaction commits on the callback's successful return and rolls back on any thrown error.

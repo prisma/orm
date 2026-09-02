@@ -375,6 +375,54 @@ describe('Postgres adapter', () => {
     );
   });
 
+  it('renders NULLS LAST for an ORDER BY item carrying a nulls placement', () => {
+    const ast = SelectAst.from(TableSource.named('post'))
+      .withProjection([ProjectionItem.of('title', ColumnRef.of('post', 'title'))])
+      .withOrderBy([new OrderByItem(ColumnRef.of('post', 'title'), 'desc', 'last')]);
+
+    const sql = adapter.lower(ast, { contract, params: [] }).sql;
+    expect(sql).toBe(
+      'SELECT "post"."title" AS "title" FROM "post" ORDER BY "post"."title" DESC NULLS LAST',
+    );
+  });
+
+  it('renders NULLS FIRST for an ORDER BY item carrying a nulls placement', () => {
+    const ast = SelectAst.from(TableSource.named('post'))
+      .withProjection([ProjectionItem.of('title', ColumnRef.of('post', 'title'))])
+      .withOrderBy([new OrderByItem(ColumnRef.of('post', 'title'), 'asc', 'first')]);
+
+    const sql = adapter.lower(ast, { contract, params: [] }).sql;
+    expect(sql).toBe(
+      'SELECT "post"."title" AS "title" FROM "post" ORDER BY "post"."title" ASC NULLS FIRST',
+    );
+  });
+
+  it('omits the NULLS clause when an ORDER BY item carries no placement', () => {
+    const ast = SelectAst.from(TableSource.named('post'))
+      .withProjection([ProjectionItem.of('title', ColumnRef.of('post', 'title'))])
+      .withOrderBy([new OrderByItem(ColumnRef.of('post', 'title'), 'desc')]);
+
+    const sql = adapter.lower(ast, { contract, params: [] }).sql;
+    expect(sql).toBe('SELECT "post"."title" AS "title" FROM "post" ORDER BY "post"."title" DESC');
+  });
+
+  it('renders a nulls placement inside a window function ORDER BY', () => {
+    const ast = SelectAst.from(TableSource.named('post')).withProjection([
+      ProjectionItem.of(
+        'rn',
+        WindowFuncExpr.rowNumber({
+          partitionBy: [ColumnRef.of('post', 'title')],
+          orderBy: [new OrderByItem(ColumnRef.of('post', 'views'), 'desc', 'last')],
+        }),
+      ),
+    ]);
+
+    const sql = adapter.lower(ast, { contract, params: [] }).sql;
+    expect(sql).toBe(
+      'SELECT ROW_NUMBER() OVER (PARTITION BY "post"."title" ORDER BY "post"."views" DESC NULLS LAST) AS "rn" FROM "post"',
+    );
+  });
+
   it('renders ROW_NUMBER() OVER (PARTITION BY … ORDER BY …)', () => {
     const ast = SelectAst.from(TableSource.named('post')).withProjection([
       ProjectionItem.of('title', ColumnRef.of('post', 'title')),

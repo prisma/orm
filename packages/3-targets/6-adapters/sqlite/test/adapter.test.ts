@@ -143,6 +143,37 @@ describe('SQLite adapter', () => {
       );
     });
 
+    it('renders NULLS LAST for an ORDER BY item carrying a nulls placement', () => {
+      const ast = SelectAst.from(TableSource.named('user'))
+        .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'desc', 'last')]);
+
+      const { sql } = adapter.lower(ast, { contract });
+      expect(sql).toBe(
+        'SELECT "user"."id" AS "id" FROM "user" ORDER BY "user"."id" DESC NULLS LAST',
+      );
+    });
+
+    it('renders NULLS FIRST for an ORDER BY item carrying a nulls placement', () => {
+      const ast = SelectAst.from(TableSource.named('user'))
+        .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'asc', 'first')]);
+
+      const { sql } = adapter.lower(ast, { contract });
+      expect(sql).toBe(
+        'SELECT "user"."id" AS "id" FROM "user" ORDER BY "user"."id" ASC NULLS FIRST',
+      );
+    });
+
+    it('omits the NULLS clause when an ORDER BY item carries no placement', () => {
+      const ast = SelectAst.from(TableSource.named('user'))
+        .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+        .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'desc')]);
+
+      const { sql } = adapter.lower(ast, { contract });
+      expect(sql).toBe('SELECT "user"."id" AS "id" FROM "user" ORDER BY "user"."id" DESC');
+    });
+
     it('renders ORDER BY, LIMIT, OFFSET unchanged when both are set', () => {
       const ast = SelectAst.from(TableSource.named('user'))
         .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])

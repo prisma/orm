@@ -223,7 +223,7 @@ function renderSelect(ast: SelectAst, contract: PostgresContract, pim: ParamInde
     ? `ORDER BY ${ast.orderBy
         .map((order) => {
           const expr = renderOrderByExpr(order.expr, sourcesByRef, contract, pim);
-          return `${expr} ${order.dir.toUpperCase()}`;
+          return `${expr} ${order.dir.toUpperCase()}${renderNullsPlacement(order)}`;
         })
         .join(', ')}`
     : '';
@@ -761,13 +761,21 @@ function renderJsonObjectExpr(
   return `json_build_object(${args})`;
 }
 
+/** The `NULLS FIRST` / `NULLS LAST` suffix for an ORDER BY item, or empty when the item leaves NULL placement to PostgreSQL's default for the sort direction. */
+function renderNullsPlacement(item: OrderByItem): string {
+  return item.nulls === undefined ? '' : ` NULLS ${item.nulls.toUpperCase()}`;
+}
+
 function renderOrderByItems(
   items: ReadonlyArray<OrderByItem>,
   contract: PostgresContract,
   pim: ParamIndexMap,
 ): string {
   return items
-    .map((item) => `${renderExpr(item.expr, contract, pim)} ${item.dir.toUpperCase()}`)
+    .map(
+      (item) =>
+        `${renderExpr(item.expr, contract, pim)} ${item.dir.toUpperCase()}${renderNullsPlacement(item)}`,
+    )
     .join(', ');
 }
 

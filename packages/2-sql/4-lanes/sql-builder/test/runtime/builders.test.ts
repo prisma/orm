@@ -297,6 +297,29 @@ describe('orderBy', () => {
     );
     expect(ast.orderBy).toHaveLength(2);
   });
+
+  it('nulls option reaches the AST for the string overload', () => {
+    const ast = getAst(
+      db().public.users.select('id', 'name').orderBy('name', { direction: 'desc', nulls: 'last' }),
+    );
+    expect(ast.orderBy![0]!.dir).toBe('desc');
+    expect(ast.orderBy![0]!.nulls).toBe('last');
+  });
+
+  it('nulls option reaches the AST for the expression-callback overload', () => {
+    const ast = getAst(
+      db()
+        .public.users.select('id')
+        .orderBy((f) => f.id, { nulls: 'first' }),
+    );
+    expect(ast.orderBy![0]!.dir).toBe('asc');
+    expect(ast.orderBy![0]!.nulls).toBe('first');
+  });
+
+  it('omitting nulls leaves placement to the target default', () => {
+    const ast = getAst(db().public.users.select('id').orderBy('id', { direction: 'desc' }));
+    expect(ast.orderBy![0]!.nulls).toBeUndefined();
+  });
 });
 
 describe('groupBy and having', () => {
