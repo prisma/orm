@@ -1,10 +1,3 @@
-/**
- * Issue #30165: an array `ParamRef` always cast, even for an inferrable
- * element type, so it could not resolve against a native enum-array column.
- * Verified via a raw-client `::text[]` readback, not the ORM decode path —
- * decoding a native enum array is issue #30164, tracked separately.
- */
-
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
 import postgresRuntimeDriverDescriptor from '@internal/driver-postgres/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
