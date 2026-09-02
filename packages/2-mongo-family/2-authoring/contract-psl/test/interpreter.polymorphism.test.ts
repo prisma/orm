@@ -1,7 +1,10 @@
+import { canonicalizeContractToObject } from '@internal/contract/hashing';
 import type { Contract } from '@internal/contract/types';
 import { crossRef } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { MongoContractSchema } from '@internal/mongo-contract';
+import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
 
 function modelsOf(ir: Contract): Record<string, unknown> {
   return ir.domain.namespaces[UNBOUND_NAMESPACE_ID]!.models;
@@ -10,6 +13,7 @@ function modelsOf(ir: Contract): Record<string, unknown> {
 import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
+import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
 import { interpretPslDocumentToMongoContract } from '../src/interpreter';
 import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
@@ -129,6 +133,38 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       `);
 
       expect(modelsOf(ir)['Bug']).toMatchObject({ base: crossRef('Task') });
+    });
+
+    it('preserves empty fields on a field-less variant through canonicalization', () => {
+      const ir = interpretOk(`
+        model Post {
+          id    ObjectId @id @map("_id")
+          title String
+          kind  String
+
+          @@discriminator(kind)
+          @@map("posts")
+        }
+
+        model Note {
+          @@base(Post, "note")
+        }
+      `);
+
+      expect(modelsOf(ir)['Note']).toHaveProperty('fields', {});
+
+      const canonical = canonicalizeContractToObject(ir, {
+        serializeContract: (contract) => JSON.parse(JSON.stringify(contract)) as JsonObject,
+        shouldPreserveEmpty: mongoContractCanonicalizationHooks.shouldPreserveEmpty,
+      });
+      const note = (
+        canonical['domain'] as {
+          namespaces: Record<string, { models: Record<string, unknown> }>;
+        }
+      ).namespaces[UNBOUND_NAMESPACE_ID]!.models['Note'];
+
+      expect(note).toHaveProperty('fields', {});
+      expect(() => MongoContractSchema.assert(canonical)).not.toThrow();
     });
 
     it('variant inherits base collection (single-collection)', () => {
