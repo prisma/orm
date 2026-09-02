@@ -273,56 +273,17 @@ function collectTableSources(ast: SelectAst): ReadonlyMap<string, TableSourceCoo
   return sources;
 }
 
+/**
+ * Ordered, codec-encoded values of the value-set a storage column restricts to, or `undefined` when the referenced column carries no value-set (the common, non-enum case). Resolves the column's storage coordinate from the SELECT's table sources, then the column's `valueSet` ref to the value-set's `values`.
+ */
 function allStrings(values: readonly JsonValue[]): values is readonly string[] {
   return values.every((value) => typeof value === 'string');
 }
 
-/**
- * True for a column backed by a real `CREATE TYPE … AS ENUM` (codec `pg/enum@1`, see
- * `PgEnumDescriptor`), as opposed to a value-set on a plain `text`/`varchar` column enforced by a
- * generated CHECK constraint. Gates the `array_position` declaration-order rewrite below off for
- * native-enum columns: https://github.com/prisma/orm/issues/30163 — Postgres sorts a native enum
- * by `pg_enum.enumsortorder` under a plain `ORDER BY`/`DISTINCT ON` already, and the rewrite's
- * `ARRAY[...]::text[]` has no `array_position` overload against the enum's own type, which is a
- * 42883 at runtime, not merely redundant SQL.
- *
- * This is safe only because the migration planner keeps contract declaration order and
- * `pg_enum.enumsortorder` identical: it can only append a value (`ALTER TYPE … ADD VALUE`, no
- * `BEFORE`/`AFTER`, in `op-factory-call.ts`'s native-enum add-value op) and refuses to plan any
- * other member change — rename, removal, or reorder — via
- * `issue-planner.ts`'s `nativeEnumMemberChangeRefusal`. If that refusal is ever relaxed to allow
- * reordering, this gate must be revisited: it would then be possible for the contract's declared
- * order to diverge from the database's actual enum sort order with no signal here.
- *
- * Codec-keyed, not `nativeType`-keyed: a hand-authored contract could in principle carry a plain
- * text codec (`pg/text@1`) over a column whose adopted/unmanaged physical type happens to be a
- * native enum, which this predicate would not catch — reachable only by hand-adopting an existing
- * enum type as `text`, not by anything `pg.enum(...)` authoring produces.
- *
- * MERGE NOTE (PR #30099, "enum ORDER BY / DISTINCT ON loses declaration order behind a derived
- * table", open as of this writing): that PR deletes `TableSourceCoordinate` /
- * `collectTableSources` and the two resolver functions below, replacing them with
- * `resolveColumnValueSetFromSource(source, column, contract)` returning `{ found, values }`. On
- * rebase, drop both call sites of this predicate in `resolveEnumOrderValues` /
- * `resolveEnumOrderValuesForIdentifier` and instead call it once, in that PR's `table-source`
- * branch of `resolveColumnValueSetFromSource`, immediately after `storageColumn` is resolved:
- * `if (sortsByDeclarationOrderNatively(storageColumn)) return { found: true, values: undefined };`
- * — `found: true`, not `false`: the column exists, it is simply not rewritten, and the identifier
- * resolver's ambiguity counter depends on that distinction. That single site also covers
- * #30099's new derived-table recursion, which this PR's two call sites do not reach.
- */
 function sortsByDeclarationOrderNatively(column: StorageColumn): boolean {
   return column.codecId === PG_ENUM_CODEC_ID;
 }
 
-/**
- * Ordered, codec-encoded values of the value-set a storage column restricts to, or `undefined`
- * when the referenced column carries no value-set, or is itself a native enum (see
- * `sortsByDeclarationOrderNatively` — the common non-rewrite cases are "no value-set" and
- * "value-set backed by the database's own enum ordering"). Resolves the column's storage
- * coordinate from the SELECT's table sources, then the column's `valueSet` ref to the value-set's
- * `values`.
- */
 function resolveEnumOrderValues(
   ref: ColumnRef,
   sourcesByRef: ReadonlyMap<string, TableSourceCoordinate>,
@@ -349,7 +310,7 @@ function resolveEnumOrderValues(
 }
 
 /**
- * Ordered values for an unqualified ORDER BY column (an `identifier-ref`, the shape the sql-builder emits for `.orderBy('col')`). Scans every FROM/JOIN source for a column of that name. Resolves only when exactly one source has a column of that name, it carries a value-set, and it is not a native enum (see `sortsByDeclarationOrderNatively`); if more than one source has a column of that name the bare identifier is ambiguous (regardless of which are enum-backed), so it falls through to the plain column rendering.
+ * Ordered values for an unqualified ORDER BY column (an `identifier-ref`, the shape the sql-builder emits for `.orderBy('col')`). Scans every FROM/JOIN source for a column of that name. Resolves only when exactly one source has a column of that name and it carries a value-set; if more than one source has such a column the bare identifier is ambiguous (regardless of which are enum-backed), so it falls through to the plain column rendering.
  */
 function resolveEnumOrderValuesForIdentifier(
   name: string,
@@ -389,15 +350,7 @@ function resolveEnumOrderValuesForIdentifier(
 }
 
 /**
- * Render an ORDER BY expression. A column reference onto a value-set-restricted column that is
- * NOT a native enum sorts by declaration order via `array_position(ARRAY[…]::text[], <col>)` over
- * the value-set's ordered values (NULLs return `NULL` from `array_position`, sorting per the
- * clause's default NULL handling). Both qualified `column-ref`s and the unqualified
- * `identifier-ref`s the sql-builder emits for `.orderBy('col')` are candidates for this rewrite.
- * A native-enum column (see `sortsByDeclarationOrderNatively`) already sorts by declaration order
- * under a plain column reference — Postgres orders enum values by `pg_enum.enumsortorder` — so it
- * is excluded from the rewrite and renders as a plain column instead. Every other expression
- * renders unchanged.
+ * Render an ORDER BY expression. A column reference onto an enum-restricted column sorts by declaration order via `array_position(ARRAY[…]::text[], <col>)` over the value-set's ordered values (NULLs return `NULL` from `array_position`, sorting per the clause's default NULL handling). Both qualified `column-ref`s and the unqualified `identifier-ref`s the sql-builder emits for `.orderBy('col')` are intercepted. Every other expression renders unchanged.
  */
 function renderOrderByExpr(
   expr: AnyExpression,
