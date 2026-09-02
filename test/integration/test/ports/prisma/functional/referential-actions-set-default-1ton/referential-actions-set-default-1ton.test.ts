@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type PortContext, timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { type PortContext, timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 

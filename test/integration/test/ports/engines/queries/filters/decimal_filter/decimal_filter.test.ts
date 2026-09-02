@@ -1,7 +1,7 @@
 import { and, not } from '@internal/sql-orm-client';
 import type { Numeric } from '@internal/target-postgres/codec-types';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 

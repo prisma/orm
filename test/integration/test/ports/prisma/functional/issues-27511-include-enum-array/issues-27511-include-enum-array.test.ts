@@ -1,7 +1,7 @@
 import type { Varchar } from '@internal/target-postgres/codec-types';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 

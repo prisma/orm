@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -35,7 +35,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //     criterion accepts a single unique key, not a compound { id, referralId }
 //     (see non-ported.md).
 
-type DbHandle = import('../../../_harness/postgres').PortContext<Contract>['db'];
+type DbHandle = import('../../../../_harness/postgres').PortContext<Contract>['db'];
 
 async function createTestData(db: DbHandle) {
   const userId = randomBytes(12).toString('hex');

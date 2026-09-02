@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withMongoPort } from '../../../_harness/mongo';
+import { timeouts, withMongoPort } from '../../../../_harness/mongo';
 import type { Contract } from './_fixture/mongo/generated/contract';
 import contractJson from './_fixture/mongo/generated/contract.json' with { type: 'json' };
 

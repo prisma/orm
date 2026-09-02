@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import cascadeNoMapJson from './_fixture/cascade-nomap/generated/contract.json' with {
   type: 'json',
 };
