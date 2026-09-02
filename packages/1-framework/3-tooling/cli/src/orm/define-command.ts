@@ -27,7 +27,7 @@ import { normalizeError } from './normalize-error';
  *
  * An `InternalError` is the one thing this boundary does not convert. Its own contract says never
  * to catch it outside the outermost boundary: it means an invariant broke, which is a bug in
- * Prisma Next rather than something the user did. Re-throwing lets the engine settle it as a bug
+ * Prisma ORM rather than something the user did. Re-throwing lets the engine settle it as a bug
  * at exit 1, where converting it would report the same number as a bad connection string.
  */
 function isRecord(value: unknown): value is Record<string, unknown> {

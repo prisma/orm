@@ -40,7 +40,7 @@ function sectionAbsentDiagnostic(): Diagnostic {
   return {
     code: 'CONFIG.FILE_NOT_FOUND',
     severity: 'error',
-    summary: 'No Prisma 8 configuration was loaded',
+    summary: 'No Prisma ORM configuration was loaded',
     why: `The ${ORM_CONFIG_SECTION_NAME} config section is absent, so prisma.config.ts was never evaluated.`,
     nextActions: [MISSING_CONFIG_ACTION],
   };
@@ -50,7 +50,7 @@ function notAnObjectDiagnostic(): Diagnostic {
   return {
     code: 'CONFIG.VALIDATION_FAILED',
     severity: 'error',
-    summary: 'Prisma 8 configuration must be an object',
+    summary: 'Prisma ORM configuration must be an object',
     why: `The ${ORM_CONFIG_SECTION_NAME} config section is not an object, so no section can be read from it.`,
     nextActions: [
       { kind: 'edit-file', label: 'Export a configuration object from prisma.config.ts' },
@@ -62,7 +62,7 @@ function unreadableDiagnostic(error: unknown): Diagnostic {
   return {
     code: 'CONFIG.VALIDATION_FAILED',
     severity: 'error',
-    summary: 'Prisma 8 configuration could not be inspected',
+    summary: 'Prisma ORM configuration could not be inspected',
     why: error instanceof Error ? error.message : String(error),
     nextActions: [
       {

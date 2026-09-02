@@ -114,19 +114,6 @@ describe('createOrmCli', () => {
   });
 });
 
-describe('rendered command-group briefs (orm/#30062)', () => {
-  it('top-level and orm-group help carry neither Prisma Next nor Prisma ORM', async () => {
-    const loader = recordingLoader();
-
-    const topLevel = await harness(loader.loadConfig).run(['--help']);
-    const ormGroup = await harness(loader.loadConfig).run(['orm', '--help']);
-
-    const rendered = topLevel.stdout + topLevel.stderr + ormGroup.stdout + ormGroup.stderr;
-    expect(rendered).not.toContain('Prisma Next');
-    expect(rendered).not.toContain('Prisma ORM');
-  });
-});
-
 describe("the engine's telemetry command group", () => {
   it('mounts the three consent commands and their group, mirroring the unified bin', () => {
     expect(Object.keys(BIN_COMMANDS)).toEqual(

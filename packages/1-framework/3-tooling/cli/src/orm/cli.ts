@@ -55,7 +55,7 @@ const telemetry = telemetryCommandGroup({ docsUrl: TELEMETRY_DOCS_URL });
 
 export const BIN_GROUPS = {
   orm: {
-    brief: 'Initialize a Prisma 8 project',
+    brief: 'Initialize a Prisma ORM project',
     description:
       'Project initialization for the ORM. The other ORM commands mount under\n' +
       'their workflow groups (contract, db, migration); only init lives here.',

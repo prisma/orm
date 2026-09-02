@@ -1,5 +1,5 @@
 /**
- * Programmatic Control API for Prisma Next.
+ * Programmatic Control API for Prisma ORM.
  *
  * This module exports the control client factory and types for programmatic
  * access to control-plane operations without using the CLI.

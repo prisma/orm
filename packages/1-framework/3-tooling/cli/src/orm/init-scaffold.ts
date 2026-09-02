@@ -51,7 +51,7 @@ const ENV_EXAMPLE_FILE = '.env.example';
  * one of these is the destructive act consent is asked for.
  *
  * `.env.example` is written the same way but deliberately left out: it is a
- * conventional filename in projects that have never seen Prisma Next, and a
+ * conventional filename in projects that have never seen Prisma ORM, and a
  * consent token demanded for it would fire on first runs. The scaffold warns
  * when it replaces one instead.
  */
@@ -201,7 +201,7 @@ function planScaffold(ctx: {
 
   if (existsSync(join(cwd, ENV_EXAMPLE_FILE))) {
     warnings.push(
-      `${ENV_EXAMPLE_FILE} already existed and was replaced with the Prisma 8 template.`,
+      `${ENV_EXAMPLE_FILE} already existed and was replaced with the Prisma ORM template.`,
     );
   }
 

@@ -66,7 +66,7 @@ describe('ormConfigSection', () => {
           {
             code: 'CONFIG.FILE_NOT_FOUND',
             severity: 'error',
-            summary: 'No Prisma 8 configuration was loaded',
+            summary: 'No Prisma ORM configuration was loaded',
             why: 'The orm config section is absent, so prisma.config.ts was never evaluated.',
             nextActions: [
               {
@@ -175,7 +175,7 @@ describe('ormConfigSection', () => {
         {
           code: 'CONFIG.VALIDATION_FAILED',
           severity: 'error',
-          summary: 'Prisma 8 configuration must be an object',
+          summary: 'Prisma ORM configuration must be an object',
           why: 'The orm config section is not an object, so no section can be read from it.',
           nextActions: [
             {

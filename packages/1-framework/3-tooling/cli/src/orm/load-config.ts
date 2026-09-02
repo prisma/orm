@@ -20,7 +20,7 @@ export interface LoadOrmConfigOptions {
  * The engine ships its own synchronous loader, but the bin owns the load: the
  * ORM's c12 loader evaluates the module asynchronously and finalizes paths
  * against the config file's own directory. It reads the same shape the engine
- * does — defineConfig from `@prisma/cli-engine` with the whole Prisma Next
+ * does — defineConfig from `@prisma/cli-engine` with the whole Prisma ORM
  * configuration nested as the single `orm` section.
  *
  * Only failures that prevent evaluation entirely are diagnostics here, and

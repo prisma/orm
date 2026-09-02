@@ -16,11 +16,11 @@ function signalExitCode(reason: unknown): number {
 
 export const lspCommand = defineServerCommand({
   help: {
-    summary: 'Start the Prisma 8 language server',
+    summary: 'Start the Prisma ORM language server',
     description:
       'Launches a Language Server Protocol server that publishes PSL parse diagnostics\n' +
       'and handles whole-document PSL formatting for the schema inputs declared in\n' +
-      'your config (contract.source.inputs). Formatting uses the Prisma 8 PSL\n' +
+      'your config (contract.source.inputs). Formatting uses the Prisma ORM PSL\n' +
       'formatter and the formatter block from the project config.\n' +
       'Communicates over stdio; intended to be spawned by an\n' +
       'editor, not run interactively. The server keeps running until the editor client\n' +

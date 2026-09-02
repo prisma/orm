@@ -1,5 +1,5 @@
 /**
- * The minimal `.gitignore` lines a Prisma Next scaffold needs (FR3.3).
+ * The minimal `.gitignore` lines a Prisma ORM scaffold needs (FR3.3).
  * Order matches what Node tooling typically writes today.
  *
  * `node_modules/` first because it's the byte-largest miss; `dist/`
