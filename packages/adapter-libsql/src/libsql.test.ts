@@ -208,6 +208,39 @@ describe.each([
     await expect(tx.rollback()).resolves.toBeUndefined()
     expect(factory.transaction.rollback).toHaveBeenCalledTimes(1)
   })
+
+  // https://github.com/prisma/prisma/issues/30028: a failed COMMIT must not leave the
+  // underlying connection inside an open write transaction, since the transaction manager
+  // never sends a real ROLLBACK for phantom-query adapters after a failed commit.
+  test('attempts a rollback and rethrows the original error when commit fails', async () => {
+    const factory = new PrismaLibSqlAdapterFactoryMock({ url: ':memory:' })
+    const conn = await connect(factory)
+    const tx = await conn.startTransaction('SERIALIZABLE')
+
+    const commitError = new Error('commit boom')
+    factory.transaction.commit.mockRejectedValueOnce(commitError)
+
+    await expect(tx.commit()).rejects.toBe(commitError)
+    expect(factory.transaction.rollback).toHaveBeenCalledTimes(1)
+    expect(factory.transaction.close).not.toHaveBeenCalled()
+  })
+
+  test('closes the transaction and preserves the commit error when cleanup rollback fails', async () => {
+    const factory = new PrismaLibSqlAdapterFactoryMock({ url: ':memory:' })
+    const conn = await connect(factory)
+    const tx = await conn.startTransaction('SERIALIZABLE')
+
+    const commitError = new Error('commit boom')
+    factory.transaction.commit.mockRejectedValueOnce(commitError)
+    factory.transaction.rollback.mockRejectedValueOnce(new Error('cleanup boom'))
+    factory.transaction.close.mockImplementationOnce(() => {
+      throw new Error('close boom')
+    })
+
+    await expect(tx.commit()).rejects.toBe(commitError)
+    expect(factory.transaction.rollback).toHaveBeenCalledTimes(1)
+    expect(factory.transaction.close).toHaveBeenCalledTimes(1)
+  })
 })
 
 class PrismaLibSqlAdapterFactoryMock extends PrismaLibSqlAdapterFactoryBase {
