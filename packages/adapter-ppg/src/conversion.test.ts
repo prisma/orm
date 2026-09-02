@@ -87,22 +87,22 @@ describe('conversion', () => {
   describe('normalize_timestamptz', () => {
     const parse = getParser(ScalarColumnType.TIMESTAMPTZ)
 
-    test('normalizes positive offset to UTC', () => {
-      expect(parse('1996-12-19 16:39:57+05:30')).toBe('1996-12-19T16:39:57+00:00')
+    test('preserves positive offset', () => {
+      expect(parse('1996-12-19 16:39:57+05:30')).toBe('1996-12-19T16:39:57+05:30')
     })
 
-    test('normalizes negative offset to UTC', () => {
-      expect(parse('2024-01-15 08:30:00-08:00')).toBe('2024-01-15T08:30:00+00:00')
+    test('preserves negative offset', () => {
+      expect(parse('2024-01-15 08:30:00-08:00')).toBe('2024-01-15T08:30:00-08:00')
     })
 
-    test('normalizes short offset format', () => {
-      expect(parse('2024-01-15 08:30:00+05')).toBe('2024-01-15T08:30:00+00:00')
+    test('preserves short offset format', () => {
+      expect(parse('2024-01-15 08:30:00+05')).toBe('2024-01-15T08:30:00+05')
     })
 
     test('supports arrays of timestamptz', () => {
       expect(
         getParser(ArrayColumnType.TIMESTAMPTZ_ARRAY)('{1996-12-19 16:39:57+05:30,2024-01-15 08:30:00-08:00}'),
-      ).toEqual(['1996-12-19T16:39:57+00:00', '2024-01-15T08:30:00+00:00'])
+      ).toEqual(['1996-12-19T16:39:57+05:30', '2024-01-15T08:30:00-08:00'])
     })
   })
 

@@ -1,11 +1,20 @@
-import { ArgType, type ColumnType, ColumnTypeEnum } from '@prisma/driver-adapter-utils'
+import {
+  ArgType,
+  type ColumnType,
+  ColumnTypeEnum,
+  normalizeTimestamp,
+  normalizeTimestamptz,
+} from '@prisma/driver-adapter-utils'
 import pg from 'pg'
 import { parse as parseArray } from 'postgres-array'
 
 import { FIRST_NORMAL_OBJECT_ID } from './constants'
 
 const { types } = pg
-const { builtins: ScalarColumnType, getTypeParser } = types
+const {
+  builtins: ScalarColumnType,
+  getTypeParser,
+}: { builtins: Record<string, number>; getTypeParser: (id: number, format?: 'text' | 'binary') => any } = types
 
 /**
  * Additional scalar column types not defined in `pg` types builtins.
@@ -303,15 +312,9 @@ function normalize_date(date: string): string {
 /*
  * TIMESTAMP, TIMESTAMP_ARRAY - converts value (or value elements) to a string in the rfc3339 format
  * ex: 1996-12-19T16:39:57-08:00
+ *
+ * normalizeTimestamp and normalizeTimestamptz are imported from @prisma/driver-adapter-utils.
  */
-
-function normalize_timestamp(time: string): string {
-  return `${time.replace(' ', 'T')}+00:00`
-}
-
-function normalize_timestamptz(time: string): string {
-  return time.replace(' ', 'T').replace(/[+-]\d{2}(:\d{2})?$/, '+00:00')
-}
 
 /*
  * TIME, TIMETZ, TIME_ARRAY - converts value (or value elements) to a string in the format HH:mm:ss.f
@@ -389,10 +392,10 @@ export const customParsers = {
   [ScalarColumnType.TIMETZ]: normalize_timez,
   [ScalarColumnType.DATE]: normalize_date,
   [ArrayColumnType.DATE_ARRAY]: normalize_array(normalize_date),
-  [ScalarColumnType.TIMESTAMP]: normalize_timestamp,
-  [ArrayColumnType.TIMESTAMP_ARRAY]: normalize_array(normalize_timestamp),
-  [ScalarColumnType.TIMESTAMPTZ]: normalize_timestamptz,
-  [ArrayColumnType.TIMESTAMPTZ_ARRAY]: normalize_array(normalize_timestamptz),
+  [ScalarColumnType.TIMESTAMP]: normalizeTimestamp,
+  [ArrayColumnType.TIMESTAMP_ARRAY]: normalize_array(normalizeTimestamp),
+  [ScalarColumnType.TIMESTAMPTZ]: normalizeTimestamptz,
+  [ArrayColumnType.TIMESTAMPTZ_ARRAY]: normalize_array(normalizeTimestamptz),
   [ScalarColumnType.MONEY]: normalize_money,
   [ArrayColumnType.MONEY_ARRAY]: normalize_array(normalize_money),
   [ScalarColumnType.JSON]: toJson,
@@ -426,6 +429,8 @@ export function mapArg<A>(arg: A | Date, argType: ArgType): null | unknown[] | s
         return formatTime(arg)
       case 'DATE':
         return formatDate(arg)
+      case 'TIMESTAMPTZ':
+        return formatDateTimeTz(arg)
       default:
         return formatDateTime(arg)
     }
@@ -462,6 +467,12 @@ function formatDateTime(date: Date): string {
   )
 }
 
+/*
+ * TIMESTAMPTZ - formats a Date to 'YYYY-MM-DD HH:mm:ss[.mmm]+00:00'
+ */
+function formatDateTimeTz(date: Date): string {
+  return formatDateTime(date) + '+00:00'
+}
 function formatDate(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
   return pad(date.getUTCFullYear(), 4) + '-' + pad(date.getUTCMonth() + 1) + '-' + pad(date.getUTCDate())
