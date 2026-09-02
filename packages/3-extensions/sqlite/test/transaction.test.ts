@@ -81,4 +81,38 @@ describe('sqlite transaction()', () => {
 
     await expect(db.transaction(async () => 'value')).rejects.toThrow('SQLite client is closed');
   });
+
+  it('concurrent transaction() calls are serialised and all succeed (#29870)', async () => {
+    // Regression test: before the fix, launching more concurrent transactions
+    // than libuv worker threads caused SQLITE_BUSY to propagate as a P1008
+    // socket-timeout error because the busy-handler blocked worker threads
+    // while the lock holder's COMMIT had no thread to run on.
+    //
+    // With the async semaphore in place, each transaction waits its turn in
+    // the Node.js event loop instead of inside the synchronous busy-handler,
+    // so all of them complete successfully regardless of concurrency.
+    const db = sqlite({ contract, path: ':memory:' });
+    await db.connect({ path: ':memory:' });
+
+    const N = 20; // well above typical libuv thread-pool size (4 by default)
+    const order: number[] = [];
+
+    const results = await Promise.allSettled(
+      Array.from({ length: N }, (_, i) =>
+        db.transaction(async () => {
+          order.push(i);
+          return i * 2;
+        }),
+      ),
+    );
+
+    // All transactions must have resolved (none rejected).
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    expect(fulfilled).toHaveLength(N);
+
+    // The serialisation guarantee: every transaction ran exactly once.
+    expect(order).toHaveLength(N);
+
+    await db.close();
+  });
 });

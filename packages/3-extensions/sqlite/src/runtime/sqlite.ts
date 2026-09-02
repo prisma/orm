@@ -163,6 +163,20 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
   let closed = false;
   let ownedDispose: (() => Promise<void>) | undefined;
 
+  /**
+   * SQLite allows only one writer at a time. If more concurrent transactions
+   * than available event-loop threads are started, the synchronous busy-handler
+   * inside the driver occupies all threads waiting for the write lock while the
+   * lock holder's COMMIT task has no thread available to run — causing every
+   * transaction to time out with SQLITE_BUSY.
+   *
+   * We prevent the starvation by serialising the BEGIN…COMMIT section so that
+   * at most one transaction is in-flight at a time. The overhead is negligible
+   * because SQLite itself is single-writer; the serialisation just moves the
+   * queue from the driver's busy-handler into async/await.
+   */
+  let transactionQueueTail: Promise<unknown> = Promise.resolve();
+
   const connectDriver = async (resolvedBinding: SqliteBinding): Promise<void> => {
     if (driverConnected) return;
     if (!runtimeDriver) throw new InternalError('SQLite runtime driver missing');
@@ -300,45 +314,67 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
       } catch (err) {
         return Promise.reject(err);
       }
-      return withTransaction(runtime, (txCtx) => {
-        const rawCodecInferer = stack.adapter.rawCodecInferer;
-        const txSqlNamespace = sqlBuilder<TContract>({ context, rawCodecInferer })[
-          UNBOUND_NAMESPACE_ID
-        ];
-        assertDefined(
-          txSqlNamespace,
-          'the unbound namespace always exists on a sqlite builder output',
-        );
-        const txSql: UnboundSql<TContract> = blindCast<
-          UnboundSql<TContract>,
-          'Db<TContract> indexed by a literal key widens NsId to string; TableProxy is invariant in NsId via insert()/update() parameter positions, so the indexed-access type cannot be proven to match the literal-keyed Namespace without this cast'
-        >(txSqlNamespace);
 
-        const txOrm: UnboundOrm<TContract> = unboundOrm(
-          ormBuilder({
-            runtime: {
-              query(plan) {
-                return txCtx.query(plan);
+      // Serialise all transaction() calls so that at most one BEGIN…COMMIT
+      // section is in-flight at a time.  SQLite only allows one writer
+      // regardless, so this moves the queue from the driver's synchronous
+      // busy-handler (which blocks a libuv worker thread) into the Node.js
+      // event loop, preventing the thread-pool starvation described in #29870.
+      const runTx = (): Promise<R> =>
+        withTransaction(runtime, (txCtx) => {
+          const rawCodecInferer = stack.adapter.rawCodecInferer;
+          const txSqlNamespace = sqlBuilder<TContract>({ context, rawCodecInferer })[
+            UNBOUND_NAMESPACE_ID
+          ];
+          assertDefined(
+            txSqlNamespace,
+            'the unbound namespace always exists on a sqlite builder output',
+          );
+          const txSql: UnboundSql<TContract> = blindCast<
+            UnboundSql<TContract>,
+            'Db<TContract> indexed by a literal key widens NsId to string; TableProxy is invariant in NsId via insert()/update() parameter positions, so the indexed-access type cannot be proven to match the literal-keyed Namespace without this cast'
+          >(txSqlNamespace);
+
+          const txOrm: UnboundOrm<TContract> = unboundOrm(
+            ormBuilder({
+              runtime: {
+                query(plan) {
+                  return txCtx.query(plan);
+                },
+                execute(plan) {
+                  return txCtx.execute(plan);
+                },
               },
-              execute(plan) {
-                return txCtx.execute(plan);
-              },
-            },
-            context,
-          }),
-        );
+              context,
+            }),
+          );
 
-        // Use `txCtx` as the prototype instead of spreading it so that live
-        // accessors (notably the `invalidated` getter, which reads a closure
-        // variable in `withTransaction`) remain wired to the original object.
-        // Spreading would evaluate the getter once and freeze its value.
-        const tx: SqliteTransactionContext<TContract> = Object.assign(
-          castAs<TransactionContext>(Object.create(txCtx)),
-          { sql: txSql, orm: txOrm, enums },
-        );
+          // Use `txCtx` as the prototype instead of spreading it so that live
+          // accessors (notably the `invalidated` getter, which reads a closure
+          // variable in `withTransaction`) remain wired to the original object.
+          // Spreading would evaluate the getter once and freeze its value.
+          const tx: SqliteTransactionContext<TContract> = Object.assign(
+            castAs<TransactionContext>(Object.create(txCtx)),
+            { sql: txSql, orm: txOrm, enums },
+          );
 
-        return fn(tx);
-      });
+          return fn(tx);
+        });
+
+      // Append to the tail of the serialisation chain.  Each call waits for
+      // its predecessor to settle (resolve *or* reject) before it begins, so
+      // failures never block subsequent transactions.
+      const txPromise = transactionQueueTail.then(
+        () => runTx(),
+        () => runTx(),
+      );
+      // Update the tail without propagating the rejection upward from the chain
+      // itself (the caller already holds a reference to `txPromise`).
+      transactionQueueTail = txPromise.then(
+        () => undefined,
+        () => undefined,
+      );
+      return txPromise;
     },
 
     close(): Promise<void> {
