@@ -393,6 +393,35 @@ describe('Postgres adapter', () => {
     );
   });
 
+  it('renders ORDER BY without nulls placement unchanged', () => {
+    const ast = SelectAst.from(TableSource.named('user'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+      .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'desc')]);
+
+    const sql = adapter.lower(ast, { contract, params: [] }).sql;
+    expect(sql).toBe('SELECT "user"."id" AS "id" FROM "user" ORDER BY "user"."id" DESC');
+  });
+
+  it('renders ORDER BY with NULLS LAST placement', () => {
+    const ast = SelectAst.from(TableSource.named('user'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+      .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'asc', 'last')]);
+
+    const sql = adapter.lower(ast, { contract, params: [] }).sql;
+    expect(sql).toBe('SELECT "user"."id" AS "id" FROM "user" ORDER BY "user"."id" ASC NULLS LAST');
+  });
+
+  it('renders ORDER BY with DESC NULLS FIRST placement', () => {
+    const ast = SelectAst.from(TableSource.named('user'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+      .withOrderBy([new OrderByItem(ColumnRef.of('user', 'id'), 'desc', 'first')]);
+
+    const sql = adapter.lower(ast, { contract, params: [] }).sql;
+    expect(sql).toBe(
+      'SELECT "user"."id" AS "id" FROM "user" ORDER BY "user"."id" DESC NULLS FIRST',
+    );
+  });
+
   it('renders DISTINCT, GROUP BY, HAVING, and OR clauses', () => {
     const ast = SelectAst.from(TableSource.named('user'))
       .withProjection([

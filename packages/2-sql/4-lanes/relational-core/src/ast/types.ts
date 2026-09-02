@@ -8,6 +8,7 @@ import { type CodecRef, frozenCodecRef } from './codec-types';
 import type { AnyJsonValueProjection } from './json-value-projection';
 
 export type Direction = 'asc' | 'desc';
+export type OrderByNulls = 'first' | 'last';
 
 export type BinaryOp = 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'like' | 'in' | 'notIn';
 
@@ -1081,24 +1082,26 @@ export class OrderByItem extends AstNode {
   readonly kind = 'order-by-item' as const;
   readonly expr: AnyExpression;
   readonly dir: Direction;
+  readonly nulls: OrderByNulls | undefined;
 
-  constructor(expr: AnyExpression, dir: Direction) {
+  constructor(expr: AnyExpression, dir: Direction, nulls?: OrderByNulls) {
     super();
     this.expr = expr;
     this.dir = dir;
+    this.nulls = nulls;
     this.freeze();
   }
 
-  static asc(expr: AnyExpression): OrderByItem {
-    return new OrderByItem(expr, 'asc');
+  static asc(expr: AnyExpression, nulls?: OrderByNulls): OrderByItem {
+    return new OrderByItem(expr, 'asc', nulls);
   }
 
-  static desc(expr: AnyExpression): OrderByItem {
-    return new OrderByItem(expr, 'desc');
+  static desc(expr: AnyExpression, nulls?: OrderByNulls): OrderByItem {
+    return new OrderByItem(expr, 'desc', nulls);
   }
 
   rewrite(rewriter: ExpressionRewriter): OrderByItem {
-    return new OrderByItem(this.expr.rewrite(rewriter), this.dir);
+    return new OrderByItem(this.expr.rewrite(rewriter), this.dir, this.nulls);
   }
 
   /**
@@ -1107,7 +1110,7 @@ export class OrderByItem extends AstNode {
    * this to reverse a user's sort order without reaching into the AST.
    */
   reverse(): OrderByItem {
-    return new OrderByItem(this.expr, this.dir === 'asc' ? 'desc' : 'asc');
+    return new OrderByItem(this.expr, this.dir === 'asc' ? 'desc' : 'asc', this.nulls);
   }
 }
 

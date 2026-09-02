@@ -281,6 +281,31 @@ describe('orderBy', () => {
     expect(ast.orderBy![0]!.dir).toBe('asc');
   });
 
+  it('orderBy string with nulls placement', () => {
+    const ast = getAst(
+      db().public.users.select('id', 'name').orderBy('name', { direction: 'desc', nulls: 'last' }),
+    );
+    expect(ast.orderBy).toHaveLength(1);
+    expect(ast.orderBy![0]!.dir).toBe('desc');
+    expect(ast.orderBy![0]!.nulls).toBe('last');
+  });
+
+  it('orderBy direction-only leaves nulls undefined', () => {
+    const ast = getAst(db().public.users.select('id').orderBy('id', { direction: 'asc' }));
+    expect(ast.orderBy![0]!.nulls).toBeUndefined();
+  });
+
+  it('orderBy with expression callback and nulls placement', () => {
+    const ast = getAst(
+      db()
+        .public.users.select('id')
+        .orderBy((f) => f.id, { nulls: 'first' }),
+    );
+    expect(ast.orderBy).toHaveLength(1);
+    expect(ast.orderBy![0]!.expr).toBeInstanceOf(IdentifierRef);
+    expect(ast.orderBy![0]!.nulls).toBe('first');
+  });
+
   it('orderBy with expression callback', () => {
     const ast = getAst(
       db()
@@ -326,6 +351,18 @@ describe('groupBy and having', () => {
         .groupBy((f) => f.user_id),
     );
     expect(ast.groupBy).toHaveLength(1);
+  });
+
+  it('grouped orderBy string with nulls placement', () => {
+    const ast = getAst(
+      db()
+        .public.users.select('id')
+        .groupBy('id')
+        .orderBy('id', { direction: 'desc', nulls: 'last' }),
+    );
+    expect(ast.orderBy).toHaveLength(1);
+    expect(ast.orderBy![0]!.dir).toBe('desc');
+    expect(ast.orderBy![0]!.nulls).toBe('last');
   });
 });
 
