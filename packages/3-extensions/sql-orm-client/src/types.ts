@@ -72,8 +72,10 @@ export interface IncludeExpr {
   readonly relatedNamespaceId: string;
   readonly relatedTableName: string;
   readonly localTableName: string;
-  readonly targetColumn: string;
-  readonly localColumn: string;
+  /** Target-side join columns, positionally paired with `localColumns`. */
+  readonly targetColumns: readonly string[];
+  /** Local-side join columns, positionally paired with `targetColumns`. */
+  readonly localColumns: readonly string[];
   readonly cardinality: RelationCardinalityTag | undefined;
   readonly through?: IncludeThroughDescriptor;
   readonly nested: CollectionState;

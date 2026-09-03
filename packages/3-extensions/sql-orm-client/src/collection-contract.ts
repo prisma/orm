@@ -300,8 +300,10 @@ export interface ResolvedIncludeRelation {
   readonly relatedNamespaceId: string;
   readonly relatedTableName: string;
   readonly localTableName: string;
-  readonly targetColumn: string;
-  readonly localColumn: string;
+  /** Target-side join columns, positionally paired with `localColumns`. */
+  readonly targetColumns: readonly string[];
+  /** Local-side join columns, positionally paired with `targetColumns`. */
+  readonly localColumns: readonly string[];
   readonly cardinality: RelationCardinalityTag | undefined;
   readonly through?: IncludeThroughDescriptor;
 }
@@ -336,22 +338,38 @@ export function resolveIncludeRelation(
       { meta: { model: baseModelName, relation: relationName } },
     );
   }
-  const localField = relation.on.localFields[0];
-  const targetField = relation.on.targetFields[0];
-  if (!localField || !targetField) {
+  const localFields = relation.on.localFields;
+  const targetFields = relation.on.targetFields;
+  const localColumns: string[] = [];
+  const targetColumns: string[] = [];
+
+  if (localFields.length !== targetFields.length) {
+    throw new InternalError(
+      `Relation '${relationName}' on model '${declaringModelName}' has incomplete join metadata (missing localFields or targetFields)`,
+    );
+  }
+
+  for (let i = 0; i < localFields.length; i++) {
+    const localField = localFields[i];
+    const targetField = targetFields[i];
+    if (!localField || !targetField) {
+      throw new InternalError(
+        `Relation '${relationName}' on model '${declaringModelName}' has incomplete join metadata (missing localFields or targetFields)`,
+      );
+    }
+    localColumns.push(resolveFieldToColumn(contract, namespaceId, declaringModelName, localField));
+    targetColumns.push(
+      resolveFieldToColumn(contract, relation.toNamespace, relation.to, targetField),
+    );
+  }
+
+  if (localColumns.length === 0) {
     throw new InternalError(
       `Relation '${relationName}' on model '${declaringModelName}' has incomplete join metadata (missing localFields or targetFields)`,
     );
   }
 
   const relatedTableName = resolveModelTableName(contract, relation.toNamespace, relation.to);
-  const localColumn = resolveFieldToColumn(contract, namespaceId, declaringModelName, localField);
-  const targetColumn = resolveFieldToColumn(
-    contract,
-    relation.toNamespace,
-    relation.to,
-    targetField,
-  );
 
   let through: IncludeThroughDescriptor | undefined;
   if (relation.through !== undefined) {
@@ -373,8 +391,8 @@ export function resolveIncludeRelation(
     relatedNamespaceId: relation.toNamespace,
     relatedTableName,
     localTableName,
-    targetColumn,
-    localColumn,
+    targetColumns,
+    localColumns,
     cardinality: relation.cardinality,
     ...ifDefined('through', through),
   };
