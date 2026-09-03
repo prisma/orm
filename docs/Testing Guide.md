@@ -53,7 +53,7 @@ it('creates runtime with contract and adapter', () => {
 // test/integration/test/contract-emission.test.ts
 it('emits contract and executes query', async () => {
   const { contractJson, contractDts } = await emit(ir, options, sqlEmission);
-  const contract = validateContract<Contract>(JSON.parse(contractJson));
+  const contract = validateSqlContractFully<Contract>(JSON.parse(contractJson));
   const runtime = createRuntime({ contract, adapter });
   const plan = sql({ contract, adapter }).from(tables.user).select({ id: t.user.id }).build();
   const results = await collectAsync(runtime.execute(plan));
@@ -407,14 +407,15 @@ it('should throw error when contract is invalid');
 
 **Location:** `test/fixtures/contract.json` + `contract.d.ts`
 
-**Pattern:** Use fully qualified type IDs, validate with `validateContract`
+**Pattern:** Use fully qualified type IDs, validate with `validateSqlContractFully`
 
 ```typescript
 // ✅ CORRECT: Load and validate contract
+import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import contractJson from './fixtures/contract.json' assert { type: 'json' };
 import type { Contract } from './fixtures/contract.d';
 
-const contract = validateContract<Contract>(contractJson);
+const contract = validateSqlContractFully<Contract>(contractJson);
 ```
 
 **Why?** Contracts must have fully qualified type IDs (`pg/int4@1`, not `int4`). Validation ensures structure is correct.

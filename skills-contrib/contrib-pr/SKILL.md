@@ -1,11 +1,11 @@
 ---
 name: contrib-pr
-description: Open a high-quality external contributor PR against prisma-next. Use when the user is an outside contributor (not a Prisma maintainer) and wants to submit a change as a pull request from a fork. Encodes the contribution flow from CONTRIBUTING.md so the resulting PR passes review on the first round.
+description: Open a high-quality external contributor PR against prisma/orm. Use when the user is an outside contributor (not a Prisma maintainer) and wants to submit a change as a pull request from a fork. Encodes the contribution flow from CONTRIBUTING.md so the resulting PR passes review on the first round.
 ---
 
 # Contributor PR skill (external)
 
-This skill is for **external contributors** to `prisma/prisma` who are using an LLM-based agent to author or finalize a PR. It is intentionally separate from the maintainer-facing `create-pr` skill: it does not depend on Linear access, internal plan/spec documents, or any private context. It encodes the expectations laid out in [`CONTRIBUTING.md`](../../../CONTRIBUTING.md) as a runnable workflow, so the PR you produce matches the shape maintainers expect on the first review round.
+This skill is for **external contributors** to `prisma/orm` who are using an LLM-based agent to author or finalize a PR. It is intentionally separate from the maintainer-facing `create-pr` skill: it does not depend on Linear access, internal plan/spec documents, or any private context. It encodes the expectations laid out in [`CONTRIBUTING.md`](../../CONTRIBUTING.md) as a runnable workflow, so the PR you produce matches the shape maintainers expect on the first review round.
 
 If the user is a maintainer with access to internal Linear tickets, use `create-pr` instead.
 
@@ -14,8 +14,8 @@ If the user is a maintainer with access to internal Linear tickets, use `create-
 Trigger this skill when the user says any of:
 
 - "Open a PR for this contribution"
-- "Submit this as a PR to prisma-next"
-- "I'm contributing to prisma-next, finalize my change"
+- "Submit this as a PR to prisma/orm"
+- "I'm contributing to Prisma 8, finalize my change"
 - "Help me get this PR ready for review"
 
 If the user has clearly already followed the contribution flow and just needs the `gh pr create` invocation, you may skip directly to step 5.
@@ -38,9 +38,9 @@ This skill is a pit of success — there is no CI gate that checks you used it. 
 
 Before doing anything else, read the project's contribution docs:
 
-1. Read [`CONTRIBUTING.md`](../../../CONTRIBUTING.md). This is the source of truth for setup, the test command set, DCO signoff, and PR expectations.
-2. Read [`CODE_OF_CONDUCT.md`](../../../CODE_OF_CONDUCT.md) so you understand what's expected in your interactions on the PR thread.
-3. Skim [`SECURITY.md`](../../../SECURITY.md). If your change is fixing a security issue, **stop and use the Private Vulnerability Reporting flow instead** — do not open a public PR.
+1. Read [`CONTRIBUTING.md`](../../CONTRIBUTING.md). This is the source of truth for setup, the test command set, DCO signoff, and PR expectations.
+2. Read [`CODE_OF_CONDUCT.md`](../../CODE_OF_CONDUCT.md) so you understand what's expected in your interactions on the PR thread.
+3. Skim [`SECURITY.md`](../../SECURITY.md). If your change is fixing a security issue, **stop and use the Private Vulnerability Reporting flow instead** — do not open a public PR.
 
 If anything in `CONTRIBUTING.md` contradicts what this skill says, `CONTRIBUTING.md` wins.
 
@@ -51,7 +51,7 @@ Before opening the PR, check:
 - **One logical change.** If the diff includes unrelated cleanup or "while I was here" fixes, ask the user whether to split them into separate PRs. Mixed-scope PRs almost always trigger a "please split this" review comment.
 - **Substantive change?** If the change is more than a typo / doc fix / obvious bug fix, ask the user whether they opened a tracking issue first per `CONTRIBUTING.md`. If not, recommend they do — maintainers will respond within 5 business days, and a half-day issue conversation can prevent a one-week PR rewrite when the design direction differs from what they expect.
 - **Tests updated.** If the change has any behavioural delta and there are no test changes in the diff, push back on the user before opening the PR. "Why aren't there tests?" is the most common reason a PR gets bounced.
-- **No backward-compat shims.** prisma-next is pre-1.0; if the change renames or removes an API, the call sites should be updated, not aliased.
+- **No backward-compat shims.** Prisma 8 is RC; if the change renames or removes an API, the call sites should be updated, not aliased.
 
 ### Step 3 — Run the right test suites
 
@@ -114,15 +114,16 @@ Examples:
 - `fix(postgres-adapter): handle null in jsonb columns`
 - `docs(contributing): clarify pnpm install steps`
 
-The PR title flows directly into the auto-generated GitHub Release notes when the version that contains it is published — pick a title a downstream user would understand.
+PR titles are the raw material the release-notes author triages when a version ships, so pick a title a downstream user would understand.
 
 #### Body
 
-Fill in the [pull request template](../../../.github/PULL_REQUEST_TEMPLATE.md) sections in order:
+Fill in the [pull request template](../../.github/PULL_REQUEST_TEMPLATE.md) sections in order:
 
 - **Linked issue**: `Fixes #N` / `Refs #N`. If no issue exists because the change is small, write `n/a — small change`.
 - **Summary**: one or two sentences focused on *why*, not file-by-file *what*. "Adds X because Y was broken" rather than "Adds X function in foo.ts and modifies bar.ts".
 - **Testing performed**: list the actual `pnpm test:*` commands you ran. If you ran a manual repro (e.g. against the demo), say so.
+- **Skill update**: say which agent skill the change teaches. Write `n/a — internal only` only when the change is purely internal or a refactor with no user-visible delta. A user-facing change that teaches no existing skill still needs a sentence saying why no skill update is required. The checklist below asks you to confirm this section.
 - **Checklist**: confirm DCO signoff, scope, tests, conventional title.
 - **Notes for the reviewer** (optional): alternative approaches you considered, follow-ups intentionally deferred, anything you want the reviewer to focus on.
 
@@ -141,7 +142,7 @@ EOF
 )"
 ```
 
-   The `gh` CLI must be authenticated against the contributor's GitHub account, not against `prisma/prisma` directly. The PR will open against `prisma:main` from the contributor's fork.
+   The `gh` CLI must be authenticated against the contributor's GitHub account, not against `prisma/orm` directly. The PR will open against `prisma:main` from the contributor's fork.
 
 4. Return the PR URL.
 

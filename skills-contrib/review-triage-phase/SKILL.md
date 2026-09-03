@@ -37,7 +37,7 @@ If `review-state.json` is missing, instruct user to run:
 - `/review-fetch-phase <PR_URL> [output-dir]`
 
 Note:
-- `review-actions.json` scaffolding is generated from `review-state.targets`, which now includes unresolved review threads, review bodies, and issue comments.
+- `review-actions.json` scaffolding is generated from `review-state.targets`, taking the thread and review-body targets. Issue-comment targets are captured in `review-state.json` but get no scaffolded action.
 - **Compound review bodies**: A single `pull_request_review` target may contain multiple distinct findings (e.g., CodeRabbit bundles "outside diff range" comments, actionable comments, and nitpicks into one review body). The triager must decompose these into individual action items during triage — never blanket-dismiss a review body without reading its content.
 
 ## Behavior
@@ -46,7 +46,7 @@ Note:
    - `<output-dir>/review-state.json`
    - `<output-dir>/review-actions.json`
    - `<output-dir>/review-actions.md`
-2. Enforce artifact safety before generation (must be ignored by git):
+2. Enforce artifact safety before generation (the artifacts must stay untracked). In a git checkout the guard asks git directly; in a Jujutsu workspace with no git directory it accepts a directory under the workspace root's ignored `wip/` tree:
 
 ```bash
 node ../review-fetch-phase/scripts/guard-review-artifacts-ignored.mjs --dir <output-dir>

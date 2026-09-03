@@ -18,7 +18,7 @@ The PSL parser (`packages/1-framework/2-authoring/psl-parser`) produces a three-
 | Red tree | `SyntaxNode`, `SyntaxToken` (`syntax/red.ts`, `syntax/navigation.ts`) | Navigation with offsets and parents: `findAncestor()`, `tokenAtOffset()`, `nextToken`/`prevToken`, `nonTriviaSibling()` | Navigation *outside* the current node |
 | Typed AST | `ModelDeclarationAst`, `FieldDeclarationAst`, … (`syntax/ast/`) | Structural information about a *known* node via getters (`name()`, `fields()`, `lbrace()`, `value()`) | **Default choice** |
 
-Everything is exported from `@internal/psl-parser/syntax` (and re-exported from the package root). `parse(source)` returns `{ document: DocumentAst, diagnostics, sourceFile }` — you start in the typed layer.
+Everything is exported from `@internal/psl-parser/syntax`. `parse(source)` returns `{ document: DocumentAst, diagnostics, sourceFile }` — you start in the typed layer.
 
 ## Choosing a layer
 

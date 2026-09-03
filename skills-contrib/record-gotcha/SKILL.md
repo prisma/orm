@@ -49,7 +49,7 @@ This skill **requires** the Linear MCP plugin to be installed and authenticated.
 
 **If the Linear MCP plugin is not available or not authenticated, halt and tell the operator** something like:
 
-> I just hit a gotcha I'd like to record, but the Linear MCP plugin isn't available. Please install and authenticate `plugin-linear-linear` (the [Linear plugin for Cursor](https://cursor.com/plugins/linear)), then re-run the request. The skill needs to file a Triage-state ticket in the matching Prisma gotchas project.
+> I just hit a gotcha I'd like to record, but the Linear MCP plugin isn't available. Please install and authenticate the Linear MCP plugin (`plugin:linear:linear` in Claude Code; the [Linear plugin for Cursor](https://cursor.com/plugins/linear)), then re-run the request. The skill needs to file a Triage-state ticket in the matching Prisma gotchas project.
 
 Do not proceed. Do not write the file entry without the ticket. The two halves are intentionally coupled — the file is the local record; the ticket is the team's signal. Both must exist for the pipeline to work.
 
@@ -120,7 +120,7 @@ Numbered, in order. Don't skip steps; the value comes from doing all of them.
 
 ### 1. Verify Linear MCP is available
 
-If the `plugin-linear-linear` MCP isn't installed or isn't authenticated, halt per § Hard prerequisite.
+If the Linear MCP plugin isn't installed or isn't authenticated, halt per § Hard prerequisite.
 
 ### 2. Identify the product
 
@@ -281,7 +281,7 @@ Each entry is also filed as a Triage-state Linear ticket in the matching gotchas
 - Prisma Compute → [`compute-gotchas`](https://linear.app/prisma-company/project/compute-gotchas-dd3ac34b5ad4/overview)
 - Prisma Postgres → [`ppg-gotchas`](https://linear.app/prisma-company/project/ppg-gotchas-afe77336f696/overview)
 
-The capture workflow is documented in [`.agents/skills/record-gotcha/SKILL.md`](.agents/skills/record-gotcha/SKILL.md).
+The capture workflow is documented in [`.agents/skills/record-gotchas/SKILL.md`](.agents/skills/record-gotchas/SKILL.md).
 
 ---
 

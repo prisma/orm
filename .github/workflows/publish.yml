@@ -304,4 +304,4 @@ jobs:
             -H "Authorization: Bearer $DISPATCH_PAT" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/prisma/prisma-cli/dispatches \
-            -d "{\"event_type\":\"family-published\",\"client_payload\":{\"repo\":\"prisma/prisma\",\"version\":\"$VERSION\"}}"
+            -d "{\"event_type\":\"product-published\",\"client_payload\":{\"repo\":\"prisma/orm\",\"version\":\"$VERSION\"}}"

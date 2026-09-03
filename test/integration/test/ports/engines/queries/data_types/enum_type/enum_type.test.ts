@@ -1,8 +1,8 @@
 import { defineContract, enumType, field, member, model } from '@internal/mongo/contract-builder';
 import { MongoFieldFilter } from '@internal/mongo-query-ast/execution';
 import { describe, expect, it } from 'vitest';
-import { timeouts as mongoTimeouts, withMongoPort } from '../../../../_harness/mongo';
-import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
+import { timeouts as mongoTimeouts, withMongoPort } from '../../../../../_harness/mongo';
+import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
 import type { Contract as PostgresContract } from './_fixture/postgres/generated/contract';
 import postgresContractJson from './_fixture/postgres/generated/contract.json' with {
   type: 'json',

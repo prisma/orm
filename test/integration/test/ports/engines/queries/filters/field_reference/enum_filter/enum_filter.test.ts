@@ -1,7 +1,7 @@
 import type { AnyExpression } from '@internal/sql-relational-core/ast';
 import { ColumnRef } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../../../_harness/postgres';
 import type { Contract } from '../_fixture/enum/generated/contract';
 import contractJson from '../_fixture/enum/generated/contract.json' with { type: 'json' };
 import { referencedScalarInList } from '../postgres-list-field-reference';

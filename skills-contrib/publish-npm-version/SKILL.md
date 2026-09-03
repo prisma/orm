@@ -1,7 +1,7 @@
 ---
 name: publish-npm-version
 description: >-
-  Cuts the next release of Prisma Next: bumps the root package.json
+  Cuts the next release of Prisma 8: bumps the root package.json
   version (on the v8 RC line: 8.0.0-rc.N → rc.N+1), propagates it to every
   workspace package, and opens a PR titled "chore(release): bump to
   <next-version>". When the maintainer merges the PR, the `Publish to npm`
@@ -16,7 +16,7 @@ description: >-
 
 ## Audience
 
-Maintainers of Prisma Next who have permission to push branches and open PRs in the repository. The skill is invoked locally by the maintainer; it does **not** run as a GitHub Action. Running locally is what makes the resulting PR trigger CI normally — PRs opened by a workflow's `GITHUB_TOKEN` do not, which defeats the point of cutting a reviewable release.
+Maintainers of Prisma 8 who have permission to push branches and open PRs in the repository. The skill is invoked locally by the maintainer; it does **not** run as a GitHub Action. Running locally is what makes the resulting PR trigger CI normally — PRs opened by a workflow's `GITHUB_TOKEN` do not, which defeats the point of cutting a reviewable release.
 
 ## Background reading
 
@@ -26,10 +26,10 @@ Read [`docs/oss/versioning.md`](../../docs/oss/versioning.md) before running thi
 - The lockstep guarantee (every workspace package matches the root).
 - The v8 RC line (`8.0.0-rc.N`, `latest` frozen until `8.0.0` final).
 - The dist-tag convention (`latest` / `dev` / `beta`).
-- The full release procedure (this skill is step 2 of 3; merging the PR is the publish trigger — there is no separate dispatch step).
+- The full release procedure (this skill covers steps 1-2 of 3; merging the PR is the publish trigger — there is no separate dispatch step).
 - The emergency-patch path (this skill does **not** handle patches).
 
-This SKILL.md covers only the mechanics of step 2 — opening the bump PR.
+This SKILL.md covers steps 1-2 — opening the bump PR and driving the release notes. Merging (step 3) stays the human gate.
 
 ## Pre-flight
 
@@ -99,7 +99,7 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
 9. **Open the PR** with `gh pr create`. Use the title:
 
    ```text
-   Bump to version <version>
+   chore(release): bump to <version>
    ```
 
    The body should:

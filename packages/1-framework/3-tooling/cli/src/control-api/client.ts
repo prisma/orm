@@ -57,7 +57,7 @@ import type {
 } from './types';
 
 /**
- * Creates a programmatic control client for Prisma Next operations.
+ * Creates a programmatic control client for Prisma ORM operations.
  *
  * The client accepts framework component descriptors at creation time,
  * manages driver lifecycle via connect()/close(), and exposes domain

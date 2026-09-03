@@ -1,6 +1,6 @@
 import type { Numeric } from '@internal/target-postgres/codec-types';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
 import type { Contract as DecimalContract } from './_fixture/decimal/generated/contract';
 import decimalContractJson from './_fixture/decimal/generated/contract.json' with { type: 'json' };
 import type { Contract as NumericContract } from './_fixture/numeric/generated/contract';

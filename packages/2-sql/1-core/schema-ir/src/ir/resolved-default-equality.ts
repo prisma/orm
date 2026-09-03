@@ -5,12 +5,13 @@ import { canonicalStringify } from '@internal/utils/canonical-stringify';
  * Structural equality for two resolved column defaults, ported from the
  * relational walk's `columnDefaultsEqual` normalized branch: kinds must
  * match; literal values are normalized (Date and temporal-typed strings to
- * ISO instants) then compared canonically (JSON objects match their
- * canonical string form); function expressions compare case- and
+ * ISO instants, and a 64-bit-integer native type's safe-integer number to
+ * its decimal-text spelling) then compared canonically (JSON objects match
+ * their canonical string form); function expressions compare case- and
  * whitespace-insensitively.
  *
- * `nativeType` provides the temporal-normalization context (the actual
- * side's resolved native type in a diff comparison).
+ * `nativeType` provides the temporal- and int64-normalization context (the
+ * actual side's resolved native type in a diff comparison).
  */
 export function resolvedDefaultsEqual(
   expected: ColumnDefault,
@@ -43,6 +44,12 @@ function isTemporalNativeType(nativeType?: string): boolean {
   return normalized.includes('timestamp') || normalized === 'date';
 }
 
+function isInt64NativeType(nativeType?: string): boolean {
+  if (!nativeType) return false;
+  const normalized = nativeType.toLowerCase();
+  return normalized === 'int8' || normalized === 'bigint';
+}
+
 function normalizeLiteralValue(value: unknown, nativeType?: string): unknown {
   if (value instanceof Date) {
     return value.toISOString();
@@ -52,6 +59,9 @@ function normalizeLiteralValue(value: unknown, nativeType?: string): unknown {
     if (!Number.isNaN(parsed.getTime())) {
       return parsed.toISOString();
     }
+  }
+  if (typeof value === 'number' && Number.isSafeInteger(value) && isInt64NativeType(nativeType)) {
+    return String(value);
   }
   return value;
 }

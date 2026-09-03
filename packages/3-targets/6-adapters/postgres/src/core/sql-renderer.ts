@@ -39,6 +39,7 @@ import {
   type WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
 import type { PostgresCodecDescriptorRegistry } from '@internal/target-postgres/codec-descriptor';
+import { PG_ENUM_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import { isPgEnumParams } from '@internal/target-postgres/codecs';
 import {
   escapeLiteral,
@@ -48,7 +49,7 @@ import {
 import { ifDefined } from '@internal/utils/defined';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { adapterError } from './adapter-errors';
-import type { PostgresContract } from './types';
+import type { PostgresContract, StorageColumn } from './types';
 
 /**
  * Postgres native types whose unknown-OID parameter inference is reliable in arbitrary expression positions. Parameters bound to a descriptor whose `nativeTypeFor` result falls in this set are emitted as plain `$N`; everything else (including `json`, `jsonb`, extension types like `vector`, and unknown user types) is emitted as `$N::<nativeType>` so the planner picks an unambiguous overload.
@@ -279,6 +280,10 @@ function allStrings(values: readonly JsonValue[]): values is readonly string[] {
   return values.every((value) => typeof value === 'string');
 }
 
+function sortsByDeclarationOrderNatively(column: StorageColumn): boolean {
+  return column.codecId === PG_ENUM_CODEC_ID;
+}
+
 function resolveEnumOrderValues(
   ref: ColumnRef,
   sourcesByRef: ReadonlyMap<string, TableSourceCoordinate>,
@@ -291,7 +296,10 @@ function resolveEnumOrderValues(
   const sourceNs = contract.storage.namespaces[source.namespaceId];
   const column =
     sourceNs !== undefined ? sourceNs.entries.table?.[source.name]?.columns[ref.column] : undefined;
-  const valueSet = column?.valueSet;
+  if (column === undefined || sortsByDeclarationOrderNatively(column)) {
+    return undefined;
+  }
+  const valueSet = column.valueSet;
   if (valueSet === undefined) {
     return undefined;
   }
@@ -323,6 +331,9 @@ function resolveEnumOrderValuesForIdentifier(
     }
     matchedColumns += 1;
     if (matchedColumns > 1) {
+      return undefined;
+    }
+    if (sortsByDeclarationOrderNatively(column)) {
       return undefined;
     }
     const valueSet = column.valueSet;

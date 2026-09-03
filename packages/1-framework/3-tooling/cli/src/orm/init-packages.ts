@@ -44,7 +44,7 @@ function pnpmLeakedASpecifier(failure: CliStructuredError): boolean {
 function fallbackWarning(failure: CliStructuredError): string {
   const firstLine = redactSecrets(metaString(failure, 'stderrTail')).trim().split('\n')[0] ?? '';
   return [
-    'pnpm could not install: a published Prisma Next dependency leaked a `workspace:*` or `catalog:` specifier.',
+    'pnpm could not install: a published Prisma ORM dependency leaked a `workspace:*` or `catalog:` specifier.',
     'Falling back to npm so init can complete.',
     firstLine === '' ? '' : `  pnpm error: ${firstLine}`,
     'Both installs ran under npm, which writes a package-lock.json beside the pnpm lockfile — delete whichever of the two you do not want to keep.',

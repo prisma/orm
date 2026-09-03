@@ -1,8 +1,8 @@
-# Welcome to Prisma Next!
+# Welcome to Prisma ORM!
 
-Prisma Next lets you query your database in simple, easy-to-read TypeScript. Define what your data looks like, and Prisma Next gives you a fully typed client — with autocomplete for every collection, field, and relation.
+Prisma ORM lets you query your database in simple, easy-to-read TypeScript. Define what your data looks like, and Prisma ORM gives you a fully typed client — with autocomplete for every collection, field, and relation.
 
-This project is set up for MongoDB. Prisma Next also supports other databases.
+This project is set up for MongoDB. Prisma ORM also supports other databases.
 
 {{requirements}}
 
@@ -34,7 +34,7 @@ Your contract has two companion files in the same directory:
 
 Commit both files to git. When you change your contract, run `{{pkgRun}} contract emit` to update them.
 
-If you use a framework like Next.js or Vite, the Prisma Next plugin will do this for you automatically.
+If you use a framework like Next.js or Vite, the Prisma ORM plugin will do this for you automatically.
 
 ## Configuration
 
@@ -97,14 +97,14 @@ Multi-document transactions and change streams require MongoDB to run as a **rep
 - **`mongodb-memory-server`:** use `MongoMemoryReplSet` instead of `MongoMemoryServer` in tests.
 - **MongoDB Atlas:** every Atlas cluster is already a replica set.
 
-The transaction API (`db.transaction(...)`) is on the roadmap and tracked under [TML-2313](https://linear.app/prisma-company/issue/TML-2313/mongo-dev-replica-set-story-is-missing-transactions-change-streams). Prisma Next's Mongo facade does not expose it yet — until that ticket lands, drive transactions yourself with a raw `MongoClient` using the escape hatch in the next section.
+The transaction API (`db.transaction(...)`) is on the roadmap and tracked under [TML-2313](https://linear.app/prisma-company/issue/TML-2313/mongo-dev-replica-set-story-is-missing-transactions-change-streams). Prisma ORM's Mongo facade does not expose it yet — until that ticket lands, drive transactions yourself with a raw `MongoClient` using the escape hatch in the next section.
 
 ## Escape hatches
 
 The ORM covers the common cases. For the rest, two escape hatches are designed in:
 
 - **Typed raw aggregations — `db.query`.** The facade exposes `db.query`, a typed builder for aggregation pipelines that runs through the same runtime + middleware + codec stack as `db.orm`. Reach for it when the ORM can't express a `$lookup`/`$facet`/`$graphLookup`/window-function pipeline.
-- **Direct `mongodb` driver control — `mongoClient` binding.** Construct your own `MongoClient` and pass it to `mongo({ mongoClient, dbName, contractJson })`. Your code keeps the `MongoClient` reference and uses it directly (transactions, change streams, sessions, anything Prisma Next doesn't surface yet); the same `db` object continues to give you the typed ORM.
+- **Direct `mongodb` driver control — `mongoClient` binding.** Construct your own `MongoClient` and pass it to `mongo({ mongoClient, dbName, contractJson })`. Your code keeps the `MongoClient` reference and uses it directly (transactions, change streams, sessions, anything Prisma ORM doesn't surface yet); the same `db` object continues to give you the typed ORM.
 
 `db.runtime()` is **not** the escape hatch — it returns the internal executor (`MongoRuntime`), not a `mongodb` `MongoClient` or `Db`. Use `db.query` for raw aggregations and the `mongoClient` binding for direct driver control.
 
@@ -113,5 +113,5 @@ The ORM covers the common cases. For the rest, two escape hatches are designed i
 If this project lives inside a pnpm workspace, a few things are worth knowing:
 
 - **Catalogs.** When the workspace's `pnpm-workspace.yaml` defines a `catalogs` entry for `prisma` or `{{pkg}}`, pnpm uses the catalog version everywhere — `init` does too. If you wanted the published `latest` instead, update or remove the catalog entry, then re-run `pnpm install`.
-- **`pnpm dlx`.** `pnpm dlx prisma@next orm init …` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma Next packages to reflect the workspace's catalog rather than `latest`.
-- **`pnpm` → `npm` fallback.** If `pnpm` ever fails to install Prisma Next with a `workspace:*` or `catalog:` resolution error (a leak in a published artefact), `init` falls back to `npm install` and surfaces a warning. Once the offending package republishes a clean version you can switch back with `pnpm install`.
+- **`pnpm dlx`.** `pnpm dlx prisma@next orm init …` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than `latest`.
+- **`pnpm` → `npm` fallback.** If `pnpm` ever fails to install Prisma ORM with a `workspace:*` or `catalog:` resolution error (a leak in a published artefact), `init` falls back to `npm install` and surfaces a warning. Once the offending package republishes a clean version you can switch back with `pnpm install`.

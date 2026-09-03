@@ -25,7 +25,7 @@ function senderPath(): string {
 
 function firstRunNotice(configPath: string): string {
   return [
-    'Prisma Next collects anonymous CLI usage data, enabled by default.',
+    'Prisma ORM collects anonymous CLI usage data, enabled by default.',
     "What's collected and why: https://prisma-next.dev/docs/cli/telemetry.",
     'Opt out: run "prisma telemetry disable", set DO_NOT_TRACK=1 or',
     `PRISMA_NEXT_DISABLE_TELEMETRY=1, or set "enableTelemetry": false in ${configPath}.`,

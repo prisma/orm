@@ -841,7 +841,7 @@ export interface ContractEmitResult {
 // ============================================================================
 
 /**
- * Programmatic control client for Prisma Next operations.
+ * Programmatic control client for Prisma ORM operations.
  *
  * Lifecycle: `connect(connection)` before operations, `close()` when done.
  * Both `init()` and `connect()` are auto-called by operations if needed,

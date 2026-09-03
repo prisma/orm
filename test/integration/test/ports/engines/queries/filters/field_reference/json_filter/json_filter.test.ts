@@ -1,7 +1,7 @@
 import type { AnyExpression } from '@internal/sql-relational-core/ast';
 import { BinaryExpr, ColumnRef, NotExpr } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../../../_harness/postgres';
 import {
   referencedListHasEvery,
   referencedListHasScalar,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { type PortContext, timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { type PortContext, timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import cascadeMapJson from './_fixture/cascade-map/generated/contract.json' with { type: 'json' };
 // All variants share the same logical Contract shape (they differ only in the
 // storage-hash brand and the FK referential actions carried by the runtime
