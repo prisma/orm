@@ -144,6 +144,66 @@ describe('compileSelectWithIncludes', () => {
     );
   });
 
+  it('correlates a composite foreign key on every column pair', () => {
+    const include: IncludeExpr = {
+      relationName: 'posts',
+      relatedModelName: 'Post',
+      relatedNamespaceId: 'public',
+      relatedTableName: 'posts',
+      localTableName: 'users',
+      targetColumns: ['user_id', 'title'],
+      localColumns: ['id', 'email'],
+      cardinality: '1:N',
+      nested: emptyState(),
+      scalar: undefined,
+      combine: undefined,
+    };
+
+    const plan = compileSelectWithIncludes(baseContract, getTestAggregates(), 'public', 'users', {
+      ...emptyState(),
+      includes: [include],
+    });
+
+    expectSelectAst(plan.ast);
+    const postsProjection = plan.ast.projection.find((item) => item.alias === 'posts');
+    expectSubqueryExpr(postsProjection?.expr);
+
+    const childRowsSource = postsProjection.expr.query.from;
+    expectDerivedTableSource(childRowsSource);
+
+    // Correlating on `user_id` alone would match every post sharing it,
+    // so both pairs of the key have to appear.
+    expect(childRowsSource.query.where).toEqual(
+      AndExpr.of([
+        BinaryExpr.eq(ColumnRef.of('posts', 'user_id'), ColumnRef.of('users', 'id')),
+        BinaryExpr.eq(ColumnRef.of('posts', 'title'), ColumnRef.of('users', 'email')),
+      ]),
+    );
+  });
+
+  it('throws when an include correlating a composite key has unequal column lists', () => {
+    const include: IncludeExpr = {
+      relationName: 'posts',
+      relatedModelName: 'Post',
+      relatedNamespaceId: 'public',
+      relatedTableName: 'posts',
+      localTableName: 'users',
+      targetColumns: ['user_id'],
+      localColumns: ['id', 'email'],
+      cardinality: '1:N',
+      nested: emptyState(),
+      scalar: undefined,
+      combine: undefined,
+    };
+
+    expect(() =>
+      compileSelectWithIncludes(baseContract, getTestAggregates(), 'public', 'users', {
+        ...emptyState(),
+        includes: [include],
+      }),
+    ).toThrow(/incomplete join metadata/);
+  });
+
   it('builds lexicographic cursor filters with distinctOn, limit, and offset', () => {
     const { collection } = createCollection();
     const state = collection
@@ -1400,8 +1460,8 @@ describe('compileSelectWithIncludes polymorphic targets', () => {
       relatedTableName: relation.relatedTableName,
       relatedNamespaceId: relation.relatedNamespaceId,
       localTableName: relation.localTableName,
-      targetColumn: relation.targetColumn,
-      localColumn: relation.localColumn,
+      targetColumns: relation.targetColumns,
+      localColumns: relation.localColumns,
       cardinality: relation.cardinality,
       nested,
       scalar: undefined,

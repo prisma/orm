@@ -102,8 +102,38 @@ describe('collection-contract capability detection', () => {
       relatedNamespaceId: 'public',
       relatedTableName: 'posts',
       localTableName: 'users',
-      targetColumn: 'user_id',
-      localColumn: 'id',
+      targetColumns: ['user_id'],
+      localColumns: ['id'],
+      cardinality: '1:N',
+    });
+  });
+
+  it('resolveIncludeRelation() resolves every column of a composite foreign key', () => {
+    const composite = withPatchedDomainModels(getTestContract(), (models) => {
+      const user = models['User'] as Record<string, unknown>;
+      return {
+        ...models,
+        User: {
+          ...user,
+          relations: {
+            ...(user['relations'] as Record<string, unknown>),
+            posts: {
+              to: { model: 'Post', namespace: 'public' },
+              cardinality: '1:N',
+              on: { localFields: ['id', 'email'], targetFields: ['userId', 'title'] },
+            },
+          },
+        },
+      };
+    });
+
+    expect(resolveIncludeRelation(composite, 'public', 'User', 'posts')).toEqual({
+      relatedModelName: 'Post',
+      relatedNamespaceId: 'public',
+      relatedTableName: 'posts',
+      localTableName: 'users',
+      targetColumns: ['user_id', 'title'],
+      localColumns: ['id', 'email'],
       cardinality: '1:N',
     });
   });
@@ -160,6 +190,46 @@ describe('collection-contract capability detection', () => {
     }));
 
     expect(() => resolveIncludeRelation(incompleteRelation, 'public', 'User', 'posts')).toThrow(
+      /incomplete join metadata/,
+    );
+  });
+
+  it('resolveIncludeRelation() throws when composite key arrays have unequal length', () => {
+    const unequal = withPatchedDomainModels(getTestContract(), (models) => ({
+      ...models,
+      User: {
+        ...(models['User'] as Record<string, unknown>),
+        relations: {
+          posts: {
+            to: { model: 'Post', namespace: 'public' },
+            cardinality: '1:N',
+            on: { localFields: ['id', 'email'], targetFields: ['userId'] },
+          },
+        },
+      },
+    }));
+
+    expect(() => resolveIncludeRelation(unequal, 'public', 'User', 'posts')).toThrow(
+      /incomplete join metadata/,
+    );
+  });
+
+  it('resolveIncludeRelation() throws when a later composite key pair is empty', () => {
+    const emptyLater = withPatchedDomainModels(getTestContract(), (models) => ({
+      ...models,
+      User: {
+        ...(models['User'] as Record<string, unknown>),
+        relations: {
+          posts: {
+            to: { model: 'Post', namespace: 'public' },
+            cardinality: '1:N',
+            on: { localFields: ['id', 'email'], targetFields: ['userId', ''] },
+          },
+        },
+      },
+    }));
+
+    expect(() => resolveIncludeRelation(emptyLater, 'public', 'User', 'posts')).toThrow(
       /incomplete join metadata/,
     );
   });
