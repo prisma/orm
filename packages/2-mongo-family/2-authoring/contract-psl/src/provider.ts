@@ -63,9 +63,10 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
       }
       let schema: string;
       try {
-        schema = await readFile(absoluteSchemaPath, 'utf-8');
+        const rawBuffer = await readFile(absoluteSchemaPath);
+        schema = new TextDecoder('utf-8', { fatal: true }).decode(rawBuffer);
       } catch (error) {
-        const message = String(error);
+        const message = error instanceof Error ? error.message : String(error);
         return notOk({
           summary: `Failed to read Prisma schema at "${schemaPath}"`,
           diagnostics: [
