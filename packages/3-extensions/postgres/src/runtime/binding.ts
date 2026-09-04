@@ -1,6 +1,7 @@
 import { InternalError } from '@internal/utils/internal-error';
 import type { Client, Pool } from 'pg';
 import { postgresError } from '../errors';
+import { userInfo } from 'node:os';
 
 export const isPgPool = (pg: Pool | Client): pg is Pool =>
   'totalCount' in pg && 'idleCount' in pg && 'waitingCount' in pg;
@@ -36,6 +37,43 @@ type PostgresBindingFields = {
   readonly pg?: Pool | Client;
 };
 
+function normalizePostgresUrlIfNeeded(trimmed: string): string {
+  // Fast-path: nothing to do if nothing missing
+  try {
+    const parsed = new URL(trimmed);
+    let changed = false;
+
+    // If username is not present in the URL *and* the original string did not
+    // include an explicit userinfo (`@`), default to the OS username. This
+    // mirrors libpq/psql behaviour where an omitted user falls back to the
+    // current user. We avoid overriding an explicitly empty user (`postgresql://@host/...`).
+    if (!parsed.username && !trimmed.includes('@')) {
+      try {
+        const defaultUser = userInfo().username;
+        if (defaultUser) {
+          parsed.username = defaultUser;
+          changed = true;
+        }
+      } catch {
+        // If userInfo fails for any reason, skip defaulting the username.
+      }
+    }
+
+    // If no hostname is provided, fall back to localhost so node-postgres
+    // connects over TCP to the local server (common local-dev setup).
+    // This also prevents printing `undefined` for the host in diagnostics.
+    if (!parsed.hostname) {
+      parsed.hostname = 'localhost';
+      changed = true;
+    }
+
+    return changed ? parsed.toString() : trimmed;
+  } catch {
+    // If parsing fails here, let the caller handle the parse error path.
+    return trimmed;
+  }
+}
+
 function validatePostgresUrl(url: string): string {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
@@ -61,7 +99,9 @@ function validatePostgresUrl(url: string): string {
     );
   }
 
-  return trimmed;
+  // Normalize missing user/host to sensible defaults so `postgresql:///db`
+  // and `postgresql://localhost/db` behave like libpq/psql on local dev.
+  return normalizePostgresUrlIfNeeded(trimmed);
 }
 
 export function resolvePostgresBinding(options: PostgresBindingInput): PostgresBinding {
