@@ -47,7 +47,13 @@ function normalizePostgresUrlIfNeeded(trimmed: string): string {
     // include an explicit userinfo (`@`), default to the OS username. This
     // mirrors libpq/psql behaviour where an omitted user falls back to the
     // current user. We avoid overriding an explicitly empty user (`postgresql://@host/...`).
-    if (!parsed.username && !trimmed.includes('@')) {
+    const authorityStart = trimmed.indexOf('//') + 2;
+    const authorityTail = trimmed.slice(authorityStart);
+    const authorityEnd = authorityTail.search(/[/?#]/);
+    const authority =
+      authorityEnd === -1 ? authorityTail : authorityTail.slice(0, authorityEnd);
+
+    if (!parsed.username && !authority.includes('@')) {
       try {
         const defaultUser = userInfo().username;
         if (defaultUser) {
