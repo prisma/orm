@@ -1,16 +1,19 @@
 import { toEnumMemberName, toEnumName } from '@internal/family-sql/psl-infer';
+import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import type {
   PslExtensionBlock,
   PslExtensionBlockParamValue,
 } from '@internal/framework-components/psl-ast';
+import { postgresAuthoringTypes } from '../authoring';
 import {
   buildTopLevelNameMap,
   createUniqueFieldName,
   type TopLevelNameResult,
 } from './infer-names';
+import { POSTGRES_PSL_TYPE_NAMES } from './postgres-type-map';
 import { escapePslString, SYNTHETIC_SPAN } from './psl-literals';
 
-export const PSL_SCALAR_TYPE_NAMES = new Set([
+const FRAMEWORK_SCALAR_TYPE_NAMES = [
   'String',
   'Boolean',
   'Int',
@@ -20,6 +23,20 @@ export const PSL_SCALAR_TYPE_NAMES = new Set([
   'DateTime',
   'Json',
   'Bytes',
+] as const;
+
+/**
+ * Every name that resolves as a type in column position of inferred output:
+ * the framework scalars, every PSL name the Postgres type map can emit
+ * (`Uuid`, `VarChar`, `Timestamptz`, …), and the target pack's own zero-arg
+ * type constructors (`BigIntNumber`, `UnboundedInt`). An inferred enum block
+ * claiming one of these names would silently retype every column of that
+ * type, so enum naming treats the whole set as reserved.
+ */
+export const PSL_SCALAR_TYPE_NAMES: ReadonlySet<string> = new Set([
+  ...FRAMEWORK_SCALAR_TYPE_NAMES,
+  ...POSTGRES_PSL_TYPE_NAMES,
+  ...collectScalarTypeConstructors(postgresAuthoringTypes).keys(),
 ]);
 
 type NativeEnumBlockResult = {
@@ -64,6 +81,48 @@ export function buildNativeEnumBlocks(
   }
 
   return { enumNameMap, enumBlocks };
+}
+
+/**
+ * Builds the family `enum` extension-block AST node for a recovered domain
+ * enum. Members print as `<sanitizedName> = "<value>"` pairs (names
+ * deduplicated within the block, values JSON-encoded verbatim) and the block
+ * carries `@@type("<codecId>")`. The caller owns name allocation — recovered
+ * names uniquify against the whole top-level scope before this is called.
+ */
+export function buildRecoveredEnumBlock(
+  name: string,
+  memberValues: readonly string[],
+  codecId: string,
+): PslExtensionBlock {
+  const usedMemberNames = new Set<string>();
+  const parameters: Record<string, PslExtensionBlockParamValue> = {};
+  for (const value of memberValues) {
+    const memberName = createUniqueFieldName(toEnumMemberName(value), usedMemberNames);
+    usedMemberNames.add(memberName);
+    parameters[memberName] = { kind: 'value', raw: JSON.stringify(value), span: SYNTHETIC_SPAN };
+  }
+
+  return {
+    kind: 'enum',
+    keyword: 'enum',
+    name,
+    parameters,
+    blockAttributes: [
+      {
+        name: 'type',
+        args: [
+          {
+            kind: 'positional',
+            value: `"${escapePslString(codecId)}"`,
+            span: SYNTHETIC_SPAN,
+          },
+        ],
+        span: SYNTHETIC_SPAN,
+      },
+    ],
+    span: SYNTHETIC_SPAN,
+  };
 }
 
 function buildNativeEnumBlock(

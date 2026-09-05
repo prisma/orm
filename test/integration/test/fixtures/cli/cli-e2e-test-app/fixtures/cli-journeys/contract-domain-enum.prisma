@@ -1,0 +1,25 @@
+// use prisma-next
+
+// Member order is deliberately non-alphabetical: the round-trip must return
+// the authored order, not a sorted one.
+enum AccountsRole {
+  user  = "user"
+  admin = "admin"
+
+  @@type("pg/text@1")
+}
+
+namespace public {
+  native_enum AalLevel {
+    aal1 = "aal1"
+    aal2 = "aal2"
+  }
+
+  model Accounts {
+    id   Int @id
+    role AccountsRole
+    aal  pg.enum(AalLevel)?
+
+    @@map("accounts")
+  }
+}

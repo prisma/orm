@@ -45,6 +45,19 @@ import {
   SYNTHETIC_SPAN,
 } from './psl-literals';
 
+/**
+ * A recovered domain enum, keyed by column name per table: the allocated
+ * top-level PSL block name the column's field is typed by, and the proven
+ * member values `computeDerivedCheckNames` re-renders the membership check
+ * from.
+ */
+export interface RecoveredEnumField {
+  readonly pslName: string;
+  readonly memberValues: readonly string[];
+}
+
+const NO_RECOVERED_ENUMS: ReadonlyMap<string, RecoveredEnumField> = new Map();
+
 export function buildModel(
   table: SqlTableIR,
   typeMap: PslTypeMap,
@@ -56,6 +69,7 @@ export function buildModel(
   danglingForeignKeys: readonly DanglingForeignKeyInfo[],
   rlsEnabled = false,
   policySkipNotes: readonly string[] = [],
+  recoveredEnums: ReadonlyMap<string, RecoveredEnumField> = NO_RECOVERED_ENUMS,
 ): PslModel {
   const { name: modelName, map: mapName } = toModelName(table.name);
   const fieldNameMap = fieldNamesByTable.get(table.name);
@@ -75,7 +89,7 @@ export function buildModel(
     }
   }
 
-  const derivedCheckNames = computeDerivedCheckNames(table);
+  const derivedCheckNames = computeDerivedCheckNames(table, recoveredEnums);
 
   const fields: PslField[] = [];
   for (const column of Object.values(table.columns)) {
@@ -93,6 +107,7 @@ export function buildModel(
         singlePkConstraintName,
         uniqueColumns,
         derivedCheckNames,
+        recoveredEnums.get(column.name),
       ),
     );
   }
@@ -184,12 +199,17 @@ export function buildModel(
  * the `@noCheck` waiver below and `@@check` exclusion in `buildModel`, so the
  * two decisions cannot drift apart.
  *
- * `membership` is unreachable here today: infer never emits domain enums
- * (`enumType()` is not inferred), so no inferred column has member values and
- * no membership check is ever derived. The day domain-enum inference exists,
- * its slice extends this by threading the column's member values through.
+ * A `membership` check is derived only for a column Path A recovery proved:
+ * `recoveredEnums` carries its member values, so the re-render below produces
+ * the exact authored predicate and the live check's wire name lands in the
+ * derived set — which is what suppresses its `@@check` and its `@noCheck`
+ * waiver with no recovery-specific exclusion code. A column with no
+ * recovered enum renders no membership candidate at all.
  */
-function computeDerivedCheckNames(table: SqlTableIR): ReadonlySet<string> {
+function computeDerivedCheckNames(
+  table: SqlTableIR,
+  recoveredEnums: ReadonlyMap<string, RecoveredEnumField>,
+): ReadonlySet<string> {
   const liveCheckNames = new Set((table.checks ?? []).map((check) => check.name));
   const derivedCheckNames = new Set<string>();
   for (const column of Object.values(table.columns)) {
@@ -197,7 +217,7 @@ function computeDerivedCheckNames(table: SqlTableIR): ReadonlySet<string> {
       tableName: table.name,
       columnName: column.name,
       many: column.many === true,
-      memberValues: undefined,
+      memberValues: recoveredEnums.get(column.name)?.memberValues,
     })) {
       const derivedName = formatWireName(
         composeCheckWirePrefix(table.name, column.name, candidate.kind),
@@ -224,6 +244,7 @@ function buildScalarField(
   singlePkConstraintName: string | undefined,
   uniqueColumns: ReadonlyMap<string, string | undefined>,
   derivedCheckNames: ReadonlySet<string>,
+  recoveredEnum: RecoveredEnumField | undefined,
 ): PslField {
   const resolvedField = fieldNameMap?.get(column.name);
   const fieldName = resolvedField?.fieldName ?? toFieldName(column.name).name;
@@ -269,6 +290,14 @@ function buildScalarField(
       args: [positionalArg(enumPslName)],
       span: SYNTHETIC_SPAN,
     };
+  }
+
+  // A recovered domain-enum column takes the authored form: the enum's bare
+  // top-level name, no type constructor — the storage type comes from the
+  // enum block's `@@type`, not from the scalar resolution above.
+  if (recoveredEnum !== undefined) {
+    typeName = recoveredEnum.pslName;
+    typeConstructor = undefined;
   }
 
   const attributes: PslFieldAttribute[] = [];
@@ -329,7 +358,7 @@ function buildScalarField(
       tableName: table.name,
       columnName: column.name,
       many: true,
-      memberValues: undefined,
+      memberValues: recoveredEnum?.memberValues,
     })
       .filter(
         (candidate) =>

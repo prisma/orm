@@ -52,6 +52,17 @@ const PARAMETERIZED_NATIVE_TYPES: Record<string, string> = {
   timetz: 'Timetz',
 };
 
+/**
+ * Every PSL type name this map can put in column position. Derived from the
+ * mapping tables themselves so the reserved-name set used by enum naming can
+ * never drift from what inference actually emits.
+ */
+export const POSTGRES_PSL_TYPE_NAMES: ReadonlySet<string> = new Set([
+  ...Object.values(POSTGRES_TO_PSL),
+  ...Object.values(PRESERVED_NATIVE_TYPES),
+  ...Object.values(PARAMETERIZED_NATIVE_TYPES),
+]);
+
 const PARAMETERIZED_TYPE_PATTERN = /^(.+?)\((.+)\)$/;
 
 function getOwnMappingValue(map: Record<string, string>, key: string): string | undefined {

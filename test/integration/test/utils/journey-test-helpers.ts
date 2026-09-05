@@ -218,6 +218,7 @@ export const pslContractFixtures = {
   ),
   'contract-rls-adopted': join(JOURNEY_FIXTURES_DIR, 'contract-rls-adopted.prisma'),
   'contract-rls-wire': join(JOURNEY_FIXTURES_DIR, 'contract-rls-wire.prisma'),
+  'contract-domain-enum': join(JOURNEY_FIXTURES_DIR, 'contract-domain-enum.prisma'),
 } as const;
 
 export type PslContractVariant = keyof typeof pslContractFixtures;
