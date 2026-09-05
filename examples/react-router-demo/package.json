@@ -38,7 +38,7 @@
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react-dom": "^19.2.5",
     "pathe": "^2.0.3",
     "temporal-polyfill": "^1.0.4",
     "typescript": "catalog:",

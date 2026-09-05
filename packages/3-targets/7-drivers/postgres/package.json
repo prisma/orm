@@ -29,8 +29,8 @@
     "pg-cursor": "^2.21.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.4",
-    "@electric-sql/pglite-socket": "0.2.7",
+    "@electric-sql/pglite": "0.5.7",
+    "@electric-sql/pglite-socket": "0.2.10",
     "@repo/test-utils": "workspace:8.0.0-rc.8",
     "@repo/tsconfig": "workspace:8.0.0-rc.8",
     "@repo/tsdown": "workspace:8.0.0-rc.8",

@@ -29,7 +29,7 @@
     "@repo/tsconfig": "workspace:8.0.0-rc.8",
     "@types/node": "catalog:",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react-dom": "^19.2.5",
     "@vitejs/plugin-react-swc": "^4.3.2",
     "mongodb-memory-server": "catalog:",
     "pathe": "^2.0.3",

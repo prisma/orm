@@ -40,7 +40,7 @@
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
+    "@types/react-dom": "^19.2.5",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
