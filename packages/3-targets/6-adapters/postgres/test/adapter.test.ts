@@ -393,6 +393,37 @@ describe('Postgres adapter', () => {
     );
   });
 
+  it('renders NULLS FIRST/LAST when order items carry nulls placement', () => {
+    const ast = SelectAst.from(TableSource.named('user'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+      .withOrderBy([
+        OrderByItem.asc(ColumnRef.of('user', 'id'), 'last'),
+        OrderByItem.desc(ColumnRef.of('user', 'email'), 'first'),
+      ]);
+
+    const sql = adapter.lower(ast, { contract, params: [] }).sql;
+    expect(sql).toBe(
+      'SELECT "user"."id" AS "id" FROM "user" ORDER BY "user"."id" ASC NULLS LAST, "user"."email" DESC NULLS FIRST',
+    );
+  });
+
+  it('renders NULLS placement inside window ORDER BY', () => {
+    const ast = SelectAst.from(TableSource.named('post')).withProjection([
+      ProjectionItem.of(
+        'rn',
+        WindowFuncExpr.rowNumber({
+          partitionBy: [ColumnRef.of('post', 'title')],
+          orderBy: [OrderByItem.desc(ColumnRef.of('post', 'views'), 'last')],
+        }),
+      ),
+    ]);
+
+    const sql = adapter.lower(ast, { contract, params: [] }).sql;
+    expect(sql).toBe(
+      'SELECT ROW_NUMBER() OVER (PARTITION BY "post"."title" ORDER BY "post"."views" DESC NULLS LAST) AS "rn" FROM "post"',
+    );
+  });
+
   it('renders DISTINCT, GROUP BY, HAVING, and OR clauses', () => {
     const ast = SelectAst.from(TableSource.named('user'))
       .withProjection([

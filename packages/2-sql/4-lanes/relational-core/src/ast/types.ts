@@ -1077,37 +1077,47 @@ export class JsonObjectExpr extends Expression {
   }
 }
 
+export type OrderByNulls = 'first' | 'last';
+
+function flipNulls(nulls: OrderByNulls | undefined): OrderByNulls | undefined {
+  if (nulls === undefined) return undefined;
+  return nulls === 'first' ? 'last' : 'first';
+}
+
 export class OrderByItem extends AstNode {
   readonly kind = 'order-by-item' as const;
   readonly expr: AnyExpression;
   readonly dir: Direction;
+  readonly nulls: OrderByNulls | undefined;
 
-  constructor(expr: AnyExpression, dir: Direction) {
+  constructor(expr: AnyExpression, dir: Direction, nulls?: OrderByNulls) {
     super();
     this.expr = expr;
     this.dir = dir;
+    this.nulls = nulls;
     this.freeze();
   }
 
-  static asc(expr: AnyExpression): OrderByItem {
-    return new OrderByItem(expr, 'asc');
+  static asc(expr: AnyExpression, nulls?: OrderByNulls): OrderByItem {
+    return new OrderByItem(expr, 'asc', nulls);
   }
 
-  static desc(expr: AnyExpression): OrderByItem {
-    return new OrderByItem(expr, 'desc');
+  static desc(expr: AnyExpression, nulls?: OrderByNulls): OrderByItem {
+    return new OrderByItem(expr, 'desc', nulls);
   }
 
   rewrite(rewriter: ExpressionRewriter): OrderByItem {
-    return new OrderByItem(this.expr.rewrite(rewriter), this.dir);
+    return new OrderByItem(this.expr.rewrite(rewriter), this.dir, this.nulls);
   }
 
   /**
-   * A new frozen item with the sort direction flipped and `expr` unchanged.
-   * Integrations that own pagination (e.g. backward cursor pagination) use
-   * this to reverse a user's sort order without reaching into the AST.
+   * A new frozen item with the sort direction flipped and `expr` unchanged. An explicit nulls
+   * placement flips with it — reversing a scan reverses where its NULLs sit. Integrations that own
+   * pagination (e.g. backward cursor pagination) use this to reverse a user's sort order without
+   * reaching into the AST.
    */
   reverse(): OrderByItem {
-    return new OrderByItem(this.expr, this.dir === 'asc' ? 'desc' : 'asc');
+    return new OrderByItem(this.expr, this.dir === 'asc' ? 'desc' : 'asc', flipNulls(this.nulls));
   }
 }
 

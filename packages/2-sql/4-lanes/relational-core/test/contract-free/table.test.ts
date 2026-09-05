@@ -345,6 +345,14 @@ describe('table().select()', () => {
     ]);
   });
 
+  it('.orderBy() carries an explicit nulls placement', () => {
+    const ast = tbl.select(tbl.id).orderBy(tbl.name, 'desc', 'last').build();
+
+    expect(ast.orderBy?.map((item) => ({ dir: item.dir, nulls: item.nulls }))).toEqual([
+      { dir: 'desc', nulls: 'last' },
+    ]);
+  });
+
   it('.orderBy() composes with .where()', () => {
     const ast = tbl.select(tbl.id).where(tbl.id.eq(5)).orderBy(tbl.id, 'desc').build();
 

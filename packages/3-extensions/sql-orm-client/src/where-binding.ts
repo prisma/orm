@@ -195,7 +195,7 @@ function bindProjectionExpr(contract: Contract<SqlStorage>, expr: ProjectionExpr
 }
 
 function bindOrderByItem(contract: Contract<SqlStorage>, orderItem: OrderByItem): OrderByItem {
-  return new OrderByItem(bindExpression(contract, orderItem.expr), orderItem.dir);
+  return new OrderByItem(bindExpression(contract, orderItem.expr), orderItem.dir, orderItem.nulls);
 }
 
 function bindJoin(contract: Contract<SqlStorage>, join: JoinAst): JoinAst {

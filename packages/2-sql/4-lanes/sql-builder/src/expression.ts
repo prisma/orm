@@ -1,4 +1,5 @@
 import type { QueryOperationTypesBase } from '@internal/sql-contract/types';
+import type { Direction, OrderByNulls } from '@internal/sql-relational-core/ast';
 import type {
   CodecExpression,
   Expression,
@@ -40,8 +41,7 @@ export type ExpressionBuilder<AvailableScope extends Scope, QC extends QueryCont
   fns: Functions<QC>,
 ) => Expression<BooleanCodecType>;
 
-export type OrderByDirection = 'asc' | 'desc';
-export type OrderByNulls = 'first' | 'last';
+export type OrderByDirection = Direction;
 
 export type OrderByOptions = {
   direction?: OrderByDirection;

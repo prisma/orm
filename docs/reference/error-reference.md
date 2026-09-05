@@ -469,6 +469,10 @@ The requested operation requires a contract capability the contract does not dec
 
 A mutation payload or where-expression references a column that does not exist on the resolved table. Thrown while compiling the query plan or binding the where clause — by the ORM client and by the `sql()` builder DSL. Payload: `namespaceId`, `tableName`, `column`.
 
+### ORM.CURSOR_ORDER_NULLS_UNSUPPORTED
+
+Cursor pagination was requested on an `orderBy` that carries an explicit nulls placement (`asc('first')`, `desc('last')`, …). Keyset boundary predicates compare with `>`/`<`, which never match NULL sort keys, so the placement cannot be honored — remove the nulls option or paginate with `limit`/`offset`. Meta: `column`, `nulls`.
+
 ### ORM.CURSOR_VALUE_MISSING
 
 Cursor pagination was requested but the cursor object lacks a value for one of the `orderBy` columns, so the position cannot be anchored. Payload: `column`.

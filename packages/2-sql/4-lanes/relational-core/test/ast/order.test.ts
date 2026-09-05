@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { OrderByItem } from '../../src/ast/types';
+import { renderOrderBySuffix } from '../../src/ast/util';
 import { col, lowerExpr } from './test-helpers';
 
 describe('ast/order', () => {
@@ -40,5 +41,41 @@ describe('ast/order', () => {
 
     expect(roundTrip.dir).toBe('desc');
     expect(roundTrip.expr).toBe(desc.expr);
+  });
+
+  it('carries nulls placement through the constructor and factories', () => {
+    const asc = OrderByItem.asc(col('user', 'id'), 'first');
+    const desc = OrderByItem.desc(col('user', 'id'), 'last');
+
+    expect(asc).toEqual(new OrderByItem(col('user', 'id'), 'asc', 'first'));
+    expect(desc).toEqual(new OrderByItem(col('user', 'id'), 'desc', 'last'));
+    expect(OrderByItem.asc(col('user', 'id')).nulls).toBeUndefined();
+  });
+
+  it('preserves nulls placement across rewrite', () => {
+    const item = new OrderByItem(col('post', 'title'), 'asc', 'last');
+    const rewritten = item.rewrite({
+      columnRef: (expr) => (expr.table === 'post' ? col('article', expr.column) : expr),
+    });
+
+    expect(rewritten.expr).toEqual(col('article', 'title'));
+    expect(rewritten.nulls).toBe('last');
+  });
+
+  it('renders the shared direction-plus-nulls suffix', () => {
+    expect(renderOrderBySuffix(OrderByItem.asc(col('user', 'id')))).toBe(' ASC');
+    expect(renderOrderBySuffix(new OrderByItem(col('user', 'id'), 'desc', 'first'))).toBe(
+      ' DESC NULLS FIRST',
+    );
+    expect(renderOrderBySuffix(new OrderByItem(col('user', 'id'), 'asc', 'last'))).toBe(
+      ' ASC NULLS LAST',
+    );
+  });
+
+  it('flips nulls placement along with direction on reverse', () => {
+    const reversed = new OrderByItem(col('user', 'id'), 'asc', 'last').reverse();
+
+    expect(reversed).toMatchObject({ dir: 'desc', nulls: 'first' });
+    expect(OrderByItem.asc(col('user', 'id')).reverse().nulls).toBeUndefined();
   });
 });
