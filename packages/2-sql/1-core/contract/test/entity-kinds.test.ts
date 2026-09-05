@@ -1,8 +1,13 @@
 import { hydrateNamespaceEntities, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { parseNaming } from '@internal/sql-schema-ir/naming';
 import { describe, expect, it } from 'vitest';
 import { composeSqlEntityKinds, tableEntityKind, valueSetEntityKind } from '../src/entity-kinds';
+import { CheckConstraint } from '../src/ir/check-constraint';
+import { Index } from '../src/ir/sql-index';
 import { StorageTable } from '../src/ir/storage-table';
 import { StorageValueSet } from '../src/ir/storage-value-set';
+import type { SerializedCheckConstraint } from '../src/serialized-check-constraint';
+import type { SerializedIndex } from '../src/serialized-index';
 
 const emptyTableInput = {
   columns: {},
@@ -100,5 +105,67 @@ describe('hydrateNamespaceEntities with SQL kinds (carry)', () => {
       'carry',
     );
     expect(result[UNBOUND_NAMESPACE_ID]).toBeDefined();
+  });
+});
+
+describe('tableEntityKind — construct index/check hydration', () => {
+  it('passes through indexes that are already Index instances unchanged', () => {
+    const idx = new Index({
+      naming: parseNaming('idx_users_email', undefined),
+      columns: ['email'],
+      where: undefined,
+      unique: true,
+      type: undefined,
+      options: undefined,
+    });
+    const result = tableEntityKind.construct({
+      ...emptyTableInput,
+      indexes: [idx],
+    });
+    expect(result.indexes).toEqual([idx]);
+  });
+
+  it('hydrates serialized indexes via indexInputFromSerialized', () => {
+    const serialized: SerializedIndex = {
+      name: 'idx_users_name',
+      unique: false,
+      columns: ['name'],
+    };
+    const result = tableEntityKind.construct({
+      ...emptyTableInput,
+      indexes: [serialized],
+    });
+    expect(result.indexes[0]).toBeInstanceOf(Index);
+    expect(result.indexes[0]?.name).toBe('idx_users_name');
+  });
+
+  it('passes through checks that are already CheckConstraint instances unchanged', () => {
+    const check = new CheckConstraint({
+      naming: parseNaming('chk_users_age', undefined),
+      expression: 'age >= 0',
+    });
+    const result = tableEntityKind.construct({
+      ...emptyTableInput,
+      checks: [check],
+    });
+    expect(result.checks).toEqual([check]);
+  });
+
+  it('hydrates serialized checks via checkConstraintInputFromSerialized', () => {
+    const serialized: SerializedCheckConstraint = {
+      name: 'chk_users_email',
+      expression: "email <> ''",
+    };
+    const result = tableEntityKind.construct({
+      ...emptyTableInput,
+      checks: [serialized],
+    });
+    expect(result.checks?.[0]).toBeInstanceOf(CheckConstraint);
+    expect(result.checks?.[0]?.name).toBe('chk_users_email');
+  });
+
+  it('omits checks entirely when the input has none', () => {
+    const result = tableEntityKind.construct(emptyTableInput);
+    expect(result.checks).toBeUndefined();
   });
 });
