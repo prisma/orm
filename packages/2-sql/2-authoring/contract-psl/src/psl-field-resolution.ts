@@ -11,9 +11,15 @@ import type {
   ControlMutationDefaultRegistry,
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
-import type { FieldSymbol, ModelSymbol, ResolvedAttribute } from '@internal/psl-parser';
+import type {
+  FieldSymbol,
+  ModelSymbol,
+  ResolvedAttribute,
+  SymbolTable,
+} from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import type { EnumTypeHandle } from '@internal/sql-contract-ts/contract-builder';
+import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -30,16 +36,12 @@ import {
   resolveFieldTypeDescriptor,
 } from './psl-column-resolution';
 import {
-  buildEnumDefaultSpec,
+  fieldSpecContext,
   findFieldAttributeNode,
   findModelAttributeNode,
-  idFieldSpec,
   interpretFieldAttribute,
   interpretModelAttribute,
-  mapFieldSpec,
-  mapModelSpec,
-  noCheckFieldSpec,
-  uniqueFieldSpec,
+  sqlAttributeSpecs,
 } from './sql-attribute-specs';
 
 type LoweredFieldDefault = {
@@ -52,19 +54,25 @@ function lowerEnumDefaultForField(input: {
   readonly fieldName: string;
   readonly field: FieldSymbol;
   readonly model: ModelSymbol;
+  readonly symbolTable: SymbolTable;
   readonly sourceFile: SourceFile;
   readonly enumHandle: EnumTypeHandle;
   readonly sourceId: string;
+  readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): LoweredFieldDefault {
   const { field, model, sourceFile, enumHandle, sourceId, diagnostics } = input;
   const node = findFieldAttributeNode(field, 'default');
   if (node === undefined) return {};
-  const [firstMember, ...restMembers] = enumHandle.enumMembers.map((m) => m.name);
-  // A memberless enum is already a contract error at its declaration; there is no member a
-  // `@default` could name, so skip lowering rather than invent a grammar for it.
-  if (firstMember === undefined) return {};
-  const spec = buildEnumDefaultSpec([firstMember, ...restMembers]);
+  if (enumHandle.enumMembers.length === 0) return {};
+  const spec = sqlAttributeSpecs.field.default(
+    fieldSpecContext({
+      symbols: input.symbolTable,
+      model,
+      field,
+      controlMutationDefaults: input.defaultFunctionRegistry,
+    }),
+  );
   const interpreted = interpretFieldAttribute({
     node,
     spec,
@@ -75,9 +83,11 @@ function lowerEnumDefaultForField(input: {
     diagnostics,
   });
   if (interpreted === undefined) return {};
-  const member = interpreted.member;
-  // The grammar (one `identifier(member)` arm per enum member) guarantees a match; the guard
-  // keeps the narrowing total without a diagnostic — an unknown member already failed as syntax.
+  const member = interpreted.value;
+  invariant(
+    typeof member === 'string',
+    'the enum @default grammar admits only member identifiers, so the parsed value is a string',
+  );
   const match = enumHandle.enumMembers.find((m) => m.name === member);
   if (!match) return {};
 
@@ -138,6 +148,7 @@ export function modelCoordinateKey(namespaceId: string, modelName: string): stri
 
 export interface CollectResolvedFieldsInput {
   readonly model: ModelSymbol;
+  readonly symbolTable: SymbolTable;
   readonly mapping: ModelNameMapping;
   readonly enumTypeDescriptors: Map<string, ColumnDescriptor>;
   readonly namedTypeDescriptors: Map<string, ColumnDescriptor>;
@@ -162,15 +173,6 @@ export interface CollectResolvedFieldsInput {
   /** Codec-id-keyed descriptor lookup — forwarded to `resolveFieldTypeDescriptor` for entity-ref type-constructor resolution (e.g. `pg.enum(Ref)`). */
   readonly codecLookup?: CodecLookup;
 }
-
-const BUILTIN_FIELD_ATTRIBUTE_NAMES: ReadonlySet<string> = new Set([
-  'id',
-  'unique',
-  'default',
-  'relation',
-  'map',
-  'noCheck',
-]);
 
 /**
  * Per-attribute migration rule for attributes that have been removed
@@ -199,18 +201,13 @@ const REMOVED_ATTRIBUTE_RULES: ReadonlyMap<string, RemovedAttributeRule> = new M
   ],
 ]);
 
-// `validateFieldAttributes` short-circuits on `BUILTIN_FIELD_ATTRIBUTE_NAMES`
-// before consulting `REMOVED_ATTRIBUTE_RULES`. A name appearing in both sets
-// would silently suppress its migration hint, defeating the purpose of the
-// hint table. Fail at module load with a clear message — the table is
-// designed to grow and this is the cheap insurance against future drift.
 {
   const overlap = [...REMOVED_ATTRIBUTE_RULES.keys()].filter((name) =>
-    BUILTIN_FIELD_ATTRIBUTE_NAMES.has(name),
+    Object.hasOwn(sqlAttributeSpecs.field, name),
   );
   if (overlap.length > 0) {
     throw new InternalError(
-      `BUILTIN_FIELD_ATTRIBUTE_NAMES and REMOVED_ATTRIBUTE_RULES must not overlap. Names in both: ${overlap.join(', ')}`,
+      `Registered SQL field attributes and REMOVED_ATTRIBUTE_RULES must not overlap. Names in both: ${overlap.join(', ')}`,
     );
   }
 }
@@ -226,7 +223,7 @@ function validateFieldAttributes(input: {
   readonly targetId: string;
 }): void {
   for (const attribute of input.field.attributes) {
-    if (BUILTIN_FIELD_ATTRIBUTE_NAMES.has(attribute.name)) {
+    if (Object.hasOwn(sqlAttributeSpecs.field, attribute.name)) {
       continue;
     }
 
@@ -292,7 +289,7 @@ function extractFieldConstraintNames(input: {
       ? undefined
       : interpretFieldAttribute({
           node: idNode,
-          spec: idFieldSpec,
+          spec: sqlAttributeSpecs.field.id(),
           model: input.model,
           field: input.field,
           sourceFile: input.sourceFile,
@@ -305,7 +302,7 @@ function extractFieldConstraintNames(input: {
       ? undefined
       : interpretFieldAttribute({
           node: uniqueNode,
-          spec: uniqueFieldSpec,
+          spec: sqlAttributeSpecs.field.unique(),
           model: input.model,
           field: input.field,
           sourceFile: input.sourceFile,
@@ -339,7 +336,7 @@ function lowerNoCheckForField(input: {
   if (node === undefined) return undefined;
   const interpreted = interpretFieldAttribute({
     node,
-    spec: noCheckFieldSpec,
+    spec: sqlAttributeSpecs.field.noCheck(),
     model: input.model,
     field: input.field,
     sourceFile: input.sourceFile,
@@ -390,6 +387,7 @@ function lowerNoCheckForField(input: {
 export function collectResolvedFields(input: CollectResolvedFieldsInput): ResolvedField[] {
   const {
     model,
+    symbolTable,
     mapping,
     enumTypeDescriptors,
     namedTypeDescriptors,
@@ -583,9 +581,11 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             fieldName: field.name,
             field,
             model,
+            symbolTable,
             sourceFile: input.sourceFile,
             enumHandle,
             sourceId,
+            defaultFunctionRegistry,
             diagnostics,
           })
         : lowerDefaultForField({
@@ -593,13 +593,13 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             fieldName: field.name,
             field,
             model,
+            symbolTable,
             sourceFile: input.sourceFile,
             columnDescriptor: descriptor,
             generatorDescriptorById,
             sourceId,
             defaultFunctionRegistry,
             diagnostics,
-            isList: isListField,
           })
       : {};
     const loweredOnCreate = loweredDefault.executionDefaults?.onCreate;
@@ -727,7 +727,7 @@ export function buildModelMappings(
         ? lowerFirst(model.name)
         : (interpretModelAttribute({
             node: mapNode,
-            spec: mapModelSpec,
+            spec: sqlAttributeSpecs.model.map(),
             model,
             sourceFile,
             sourceId,
@@ -741,7 +741,7 @@ export function buildModelMappings(
           ? field.name
           : (interpretFieldAttribute({
               node: fieldMapNode,
-              spec: mapFieldSpec,
+              spec: sqlAttributeSpecs.field.map(),
               model,
               field,
               sourceFile,

@@ -32,6 +32,7 @@ import type {
   ModelSymbol,
   PslSpan,
   ResolvedTypeConstructorCall,
+  SymbolTable,
 } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 
@@ -41,9 +42,10 @@ import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
 
 import { mapPslHelperArgs } from './psl-authoring-arguments';
 import {
-  buildDefaultSpec,
+  fieldSpecContext,
   findFieldAttributeNode,
   interpretFieldAttribute,
+  sqlAttributeSpecs,
 } from './sql-attribute-specs';
 
 export type ColumnDescriptor = {
@@ -696,23 +698,27 @@ export function lowerDefaultForField(input: {
   readonly fieldName: string;
   readonly field: FieldSymbol;
   readonly model: ModelSymbol;
+  readonly symbolTable: SymbolTable;
   readonly sourceFile: SourceFile;
   readonly columnDescriptor: ColumnDescriptor;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly diagnostics: ContractSourceDiagnostic[];
-  readonly isList?: boolean;
 }): {
   readonly defaultValue?: ColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
 } {
   const node = findFieldAttributeNode(input.field, 'default');
   if (node === undefined) return {};
-  const spec = buildDefaultSpec({
-    isList: input.isList ?? false,
-    registry: input.defaultFunctionRegistry,
-  });
+  const spec = sqlAttributeSpecs.field.default(
+    fieldSpecContext({
+      symbols: input.symbolTable,
+      model: input.model,
+      field: input.field,
+      controlMutationDefaults: input.defaultFunctionRegistry,
+    }),
+  );
   const interpreted = interpretFieldAttribute({
     node,
     spec,

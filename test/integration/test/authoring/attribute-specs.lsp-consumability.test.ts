@@ -50,4 +50,66 @@ describe('postgres attribute specs are consumable from a resolved language-serve
     expect(spec?.name).toBe('rls');
     expect(spec?.level).toBe('model');
   });
+
+  it("enumerates the SQL family's built-in attribute surface", async () => {
+    const resolution = await resolveConfigInputs(configPath);
+    const contributions = resolution.interpretation?.context.authoringContributions;
+    expect(contributions).toBeDefined();
+    if (contributions === undefined) return;
+
+    const specs = assembleAttributeSpecs(contributions);
+
+    expect(Object.keys(specs.model).sort()).toEqual([
+      'base',
+      'check',
+      'control',
+      'discriminator',
+      'id',
+      'index',
+      'map',
+      'rls',
+      'unique',
+    ]);
+    expect(Object.keys(specs.field).sort()).toEqual([
+      'default',
+      'id',
+      'map',
+      'noCheck',
+      'relation',
+      'unique',
+    ]);
+  });
+
+  it("invokes the SQL family's @relation factory and enumerates its named arguments", async () => {
+    const resolution = await resolveConfigInputs(configPath);
+    const interpretation = resolution.interpretation;
+    expect(interpretation).toBeDefined();
+    if (interpretation === undefined) return;
+
+    const { table, model } = modelSymbolFor('model Widget {\n  id Int @id\n}\n');
+    const field = model?.fields['id'];
+    expect(field).toBeDefined();
+    if (model === undefined || field === undefined) return;
+
+    const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).field[
+      'relation'
+    ]?.({
+      symbols: table,
+      model,
+      field,
+      controlMutationDefaults:
+        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+    });
+
+    expect(spec).toMatchObject({ name: 'relation', level: 'field' });
+    expect(Object.keys(spec?.named ?? {}).sort()).toEqual([
+      'fields',
+      'index',
+      'map',
+      'name',
+      'onDelete',
+      'onUpdate',
+      'references',
+    ]);
+  });
 });

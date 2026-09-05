@@ -71,6 +71,7 @@
     "./contract/value-set-derivation-hook": "./dist/contract__value-set-derivation-hook.mjs",
     "./contract-emitter": "./dist/contract-emitter.mjs",
     "./contract-psl": "./dist/contract-psl.mjs",
+    "./contract-psl/attribute-specs": "./dist/contract-psl__attribute-specs.mjs",
     "./contract-psl/provider": "./dist/contract-psl__provider.mjs",
     "./contract-ts": "./dist/contract-ts.mjs",
     "./contract-ts/config-types": "./dist/contract-ts__config-types.mjs",

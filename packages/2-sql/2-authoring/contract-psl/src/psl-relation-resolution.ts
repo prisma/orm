@@ -1,25 +1,6 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
-import type {
-  FieldSymbol,
-  InferAttr,
-  InterpretCtx,
-  ModelSymbol,
-  PslDiagnostic,
-  PslSpan,
-  SymbolTable,
-} from '@internal/psl-parser';
-import {
-  bool,
-  fieldAttribute,
-  fieldRef,
-  identifier,
-  list,
-  nodePslSpan,
-  oneOf,
-  optional,
-  str,
-} from '@internal/psl-parser';
+import type { FieldSymbol, ModelSymbol, SymbolTable } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
 import type { ReferentialAction } from '@internal/sql-contract/types';
 import type { RelationNode } from '@internal/sql-contract-ts/contract-builder';
@@ -27,7 +8,12 @@ import { assertDefined, invariant } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 
 import { checkUncomposedNamespace, reportUncomposedNamespace } from './psl-column-resolution';
-import { findFieldAttributeNode, interpretFieldAttribute } from './sql-attribute-specs';
+import {
+  findFieldAttributeNode,
+  interpretFieldAttribute,
+  type SqlRelationOutput,
+  sqlAttributeSpecs,
+} from './sql-attribute-specs';
 
 export const REFERENTIAL_ACTION_MAP: Record<string, ReferentialAction | undefined> = {
   NoAction: 'noAction',
@@ -79,76 +65,6 @@ export function normalizeReferentialAction(actionToken: string): ReferentialActi
   return REFERENTIAL_ACTION_MAP[actionToken];
 }
 
-function relationInvariants(
-  parsed: { readonly fields?: readonly string[]; readonly references?: readonly string[] },
-  ctx: InterpretCtx,
-): readonly PslDiagnostic[] {
-  const hasFields = parsed.fields !== undefined;
-  const hasReferences = parsed.references !== undefined;
-  // `fields` and `references` must be both set or both absent — a cross-argument rule that per-argument parsing can't enforce.
-  if (hasFields !== hasReferences) {
-    return [
-      {
-        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-        message: `Relation field "${ctx.selfModel.name}.${ctx.field?.name ?? ''}" requires fields and references arguments`,
-        sourceId: ctx.sourceId,
-        span: relationAttributeSpan(ctx),
-      },
-    ];
-  }
-  return [];
-}
-
-const sqlRelation = fieldAttribute('relation', {
-  positional: [{ key: 'name', type: optional(str()) }],
-  named: {
-    name: optional(str()),
-    fields: optional(list(fieldRef('self'), { nonEmpty: true, unique: true })),
-    references: optional(list(fieldRef('referenced'), { nonEmpty: true, unique: true })),
-    map: optional(str()),
-    onDelete: optional(
-      oneOf(
-        identifier('NoAction'),
-        identifier('Restrict'),
-        identifier('Cascade'),
-        identifier('SetNull'),
-        identifier('SetDefault'),
-      ),
-    ),
-    onUpdate: optional(
-      oneOf(
-        identifier('NoAction'),
-        identifier('Restrict'),
-        identifier('Cascade'),
-        identifier('SetNull'),
-        identifier('SetDefault'),
-      ),
-    ),
-    /**
-     * Opts a foreign key out of its default backing index
-     * (`index: false`). Omitted (the default) keeps the FK's derived
-     * backing-index expectation; only `false` is meaningful — there is no
-     * `index: true` spelling since that is already the default.
-     */
-    index: optional(bool()),
-  },
-  refine: relationInvariants,
-});
-
-export type SqlRelationOutput = InferAttr<typeof sqlRelation>;
-
-function relationAttributeSpan(ctx: InterpretCtx): PslSpan {
-  const field = ctx.field;
-  if (field !== undefined) {
-    const node = findFieldAttributeNode(field, 'relation');
-    if (node !== undefined) {
-      return nodePslSpan(node.syntax, ctx.sourceFile);
-    }
-    return field.span;
-  }
-  return ctx.selfModel.span;
-}
-
 function resolveReferencedModel(symbols: SymbolTable, field: FieldSymbol): ModelSymbol | undefined {
   const topLevel = symbols.topLevel.models[field.typeName];
   if (topLevel !== undefined) {
@@ -175,7 +91,7 @@ export function interpretRelationAttribute(input: {
   if (node === undefined) return undefined;
   return interpretFieldAttribute({
     node,
-    spec: sqlRelation,
+    spec: sqlAttributeSpecs.field.relation(),
     model: input.selfModel,
     field: input.field,
     sourceFile: input.sourceFile,

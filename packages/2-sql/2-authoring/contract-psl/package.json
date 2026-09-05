@@ -50,6 +50,7 @@
   "types": "./dist/index.d.mts",
   "exports": {
     ".": "./dist/index.mjs",
+    "./attribute-specs": "./dist/attribute-specs.mjs",
     "./provider": "./dist/provider.mjs",
     "./package.json": "./package.json"
   },

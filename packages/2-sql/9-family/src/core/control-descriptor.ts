@@ -1,6 +1,7 @@
 import type { ControlFamilyDescriptor, ControlStack } from '@internal/framework-components/control';
 import type { EmissionSpi } from '@internal/framework-components/emission';
 import { sqlEmission } from '@internal/sql-contract-emitter';
+import { sqlAttributeSpecs } from '@internal/sql-contract-psl/attribute-specs';
 import { sqlFamilyEntityTypes, sqlFamilyPslBlockDescriptors } from './authoring-entity-types';
 import { sqlFamilyAuthoringFieldPresets } from './authoring-field-presets';
 import { sqlFamilyAuthoringTypes } from './authoring-type-constructors';
@@ -19,6 +20,7 @@ export class SqlFamilyDescriptor
     type: sqlFamilyAuthoringTypes,
     entityTypes: sqlFamilyEntityTypes,
     pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
+    attributeSpecs: sqlAttributeSpecs,
   } as const;
 
   create<TTargetId extends string>(

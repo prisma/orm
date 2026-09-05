@@ -2730,6 +2730,9 @@ importers:
       '@internal/sql-contract-emitter':
         specifier: workspace:8.0.0-rc.8
         version: link:../3-tooling/emitter
+      '@internal/sql-contract-psl':
+        specifier: workspace:8.0.0-rc.8
+        version: link:../2-authoring/contract-psl
       '@internal/sql-contract-ts':
         specifier: workspace:8.0.0-rc.8
         version: link:../2-authoring/contract-ts
@@ -2764,9 +2767,6 @@ importers:
       '@internal/psl-printer':
         specifier: workspace:8.0.0-rc.8
         version: link:../../1-framework/2-authoring/psl-printer
-      '@internal/sql-contract-psl':
-        specifier: workspace:8.0.0-rc.8
-        version: link:../2-authoring/contract-psl
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.8
         version: link:../../../test/utils

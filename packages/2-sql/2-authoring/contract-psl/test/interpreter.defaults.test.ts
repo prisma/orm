@@ -536,7 +536,7 @@ model UuidNativeBad {
 
   it('suppresses the @updatedAt migration hint when the field already declares a temporal preset', () => {
     // `temporal.updatedAt() @updatedAt` is a half-migrated field. The
-    // attribute is unsupported (no longer in BUILTIN_FIELD_ATTRIBUTE_NAMES),
+    // attribute is unsupported (not registered in `sqlAttributeSpecs.field`),
     // so the diagnostic still fires — but we don't tell users to do what
     // they already did. The migration hint is suppressed; only the bare
     // unsupported-attribute message is emitted.
