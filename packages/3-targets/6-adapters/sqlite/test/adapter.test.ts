@@ -156,6 +156,21 @@ describe('SQLite adapter', () => {
       );
     });
 
+    it('throws RUNTIME.AST_INVALID for non-finite LIMIT / OFFSET', () => {
+      const base = () =>
+        SelectAst.from(TableSource.named('user')).withProjection([
+          ProjectionItem.of('id', ColumnRef.of('user', 'id')),
+        ]);
+      for (const ast of [
+        base().withLimit(Number.NaN),
+        base().withLimit(Number.POSITIVE_INFINITY),
+        base().withOffset(Number.NaN),
+        base().withLimit(1).withOffset(Number.NEGATIVE_INFINITY),
+      ]) {
+        expect(() => adapter.lower(ast, { contract })).toThrow(/requires a finite number/);
+      }
+    });
+
     it('renders DISTINCT', () => {
       const ast = SelectAst.from(TableSource.named('user'))
         .withProjection([ProjectionItem.of('email', ColumnRef.of('user', 'email'))])

@@ -99,6 +99,22 @@ describe('structured error codes', () => {
     });
   });
 
+  it('RUNTIME.AST_INVALID on a non-finite LIMIT', () => {
+    const err = catchError(() =>
+      runtimeAdapter.lower(
+        SelectAst.from(TableSource.named('user'))
+          .withProjection([ProjectionItem.of('id', LiteralExpr.of(1))])
+          .withLimit(Number.NaN),
+        { contract },
+      ),
+    );
+    expect(isStructuredError(err)).toBe(true);
+    expect(err).toMatchObject({
+      code: 'RUNTIME.AST_INVALID',
+      meta: { node: 'select', clause: 'LIMIT' },
+    });
+  });
+
   it('RUNTIME.AST_UNSUPPORTED on DEFAULT as an INSERT value', () => {
     const ast = InsertAst.into(TableSource.named('user')).withRows([
       { email: new DefaultValueExpr() },
