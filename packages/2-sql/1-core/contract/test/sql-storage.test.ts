@@ -1,7 +1,12 @@
 import { coreHash } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { describe, expect, it } from 'vitest';
-import { SqlStorage, type SqlStorageTypeEntry } from '../src/ir/sql-storage';
+import {
+  isMaterializedSqlNamespace,
+  isSqlAuthoringContributions,
+  SqlStorage,
+  type SqlStorageTypeEntry,
+} from '../src/ir/sql-storage';
 import { StorageTable } from '../src/ir/storage-table';
 import { createTestSqlNamespace } from './test-support';
 
@@ -144,5 +149,46 @@ describe('SqlStorage — polymorphic storage.types normalisation', () => {
           types: { user_type: rawPostgresEnum },
         }),
     ).toThrow(/postgres-enum/);
+  });
+});
+
+describe('isSqlAuthoringContributions', () => {
+  it('returns false when authoring is undefined', () => {
+    expect(isSqlAuthoringContributions(undefined)).toBe(false);
+  });
+
+  it('returns false when authoring lacks a createNamespace property', () => {
+    expect(isSqlAuthoringContributions({} as never)).toBe(false);
+  });
+
+  it('returns false when createNamespace is present but not a function', () => {
+    expect(isSqlAuthoringContributions({ createNamespace: 'not-a-function' } as never)).toBe(false);
+  });
+
+  it('returns true when createNamespace is a function', () => {
+    const authoring = { createNamespace: () => ({}) as never };
+    expect(isSqlAuthoringContributions(authoring as never)).toBe(true);
+  });
+});
+
+describe('isMaterializedSqlNamespace', () => {
+  it('returns false for null', () => {
+    expect(isMaterializedSqlNamespace(null)).toBe(false);
+  });
+
+  it('returns false for a non-object primitive', () => {
+    expect(isMaterializedSqlNamespace('not-an-object')).toBe(false);
+  });
+
+  it('returns false when qualifyTable is missing', () => {
+    expect(isMaterializedSqlNamespace({ id: 'ns' })).toBe(false);
+  });
+
+  it('returns false when qualifyTable is present but not a function', () => {
+    expect(isMaterializedSqlNamespace({ qualifyTable: 'nope' })).toBe(false);
+  });
+
+  it('returns true when qualifyTable is a function', () => {
+    expect(isMaterializedSqlNamespace({ qualifyTable: () => 'x' })).toBe(true);
   });
 });
