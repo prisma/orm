@@ -26,7 +26,7 @@
     "@types/pg": "catalog:",
     "arktype": "^2.2.2",
     "pg": "catalog:",
-    "pg-cursor": "^2.21.0"
+    "pg-cursor": "^2.22.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.4",

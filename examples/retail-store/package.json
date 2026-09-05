@@ -31,7 +31,7 @@
     "clsx": "^2.1.1",
     "lucide-react": "^1.28.0",
     "mongodb": "catalog:",
-    "next": "^16.3.0",
+    "next": "^16.3.2",
     "postcss": "^8.5.25",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

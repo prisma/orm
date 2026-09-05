@@ -28,9 +28,9 @@ catalog:
   tsx: ^4.23.5
   typescript: 5.9.3
   vite: 8.1.4
-  vitest: 5.0.0-rc.2
+  vitest: 4.1.11
   vscode-languageserver: 10.1.0
-  vscode-languageserver-textdocument: 1.0.12
+  vscode-languageserver-textdocument: 1.0.13
 
 cleanupUnusedCatalogs: true
 

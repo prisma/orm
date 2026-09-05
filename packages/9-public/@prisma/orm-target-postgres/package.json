@@ -23,7 +23,7 @@
     "arktype": "^2.2.2",
     "pathe": "^2.0.3",
     "pg": "catalog:",
-    "pg-cursor": "^2.21.0"
+    "pg-cursor": "^2.22.0"
   },
   "devDependencies": {
     "@internal/adapter-postgres": "workspace:8.0.0-rc.8",
