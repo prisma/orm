@@ -6,7 +6,11 @@ describe('pgvector codec renderOutputType', () => {
     | ((typeParams: Record<string, unknown>) => string | undefined)
     | undefined;
 
-  // The descriptor's `renderOutputType` runs *after* `paramsSchema` validation so it can assume a well-formed `length`. Negative-shape inputs (missing / NaN / non-integer) are rejected upstream by `paramsSchema` and never reach this renderer.
+  // The descriptor's `renderOutputType` runs *after* `paramsSchema` validation so it can assume either a well-formed `length` or none at all. Negative-shape inputs (missing / NaN / non-integer) are rejected upstream by `paramsSchema` and never reach this renderer.
+
+  it('renders Vector when when length is not present', () => {
+    expect(renderOutputType?.({})).toBe('Vector');
+  });
 
   it('renders Vector<length> when length is present', () => {
     expect(renderOutputType?.({ length: 1536 })).toBe('Vector<1536>');
