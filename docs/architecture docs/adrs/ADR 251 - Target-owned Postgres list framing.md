@@ -29,7 +29,7 @@ ADR 155 standardizes the driver/codec boundary so codecs do not depend on arbitr
 
 Inbound Postgres list framing is target-owned. A list-valued column reaches the SQL runtime as raw Postgres array text, and the Postgres target parses that text before mapping the context-bound element decoder over each non-null element.
 
-The SQL runtime exposes an optional `ListDecoder` hook beside row decoding. The hook receives the wire value and an element decoder that already carries the resolved codec and per-column context. The runtime keeps null short-circuiting, column-aware error wrapping, abort handling, and scalar decoding; the target owns only the list frame and traversal.
+The SQL runtime selects a concrete `ListDecoder` strategy before row decoding. A target may optionally contribute that strategy; otherwise the SQL family selects its explicit native-array default for non-Postgres paths. The selected decoder receives the wire value and an element decoder that already carries the resolved codec and per-column context. The runtime keeps null short-circuiting, column-aware error wrapping, abort handling, and scalar decoding; the target owns only the list frame and traversal.
 
 The Postgres target implements list framing with `postgres-array`. `parsePostgresListText` accepts raw text only, and `decodePostgresListText` maps the supplied element decoder over parsed elements while preserving SQL null elements as `null`. Parsed non-null elements are strings, so builtin numeric and boolean codecs accept those raw spellings as well as their existing native scalar wire values. Framing alone does not convert `'{1,2}'` to application numbers.
 
@@ -53,7 +53,7 @@ Builtin and enum list columns decode through one raw-text target path. A `text[]
 
 The Postgres driver becomes less semantically ambitious. It still owns transport, connection lifecycle, and the underlying library configuration, but it no longer decides which inbound list values become JavaScript arrays. Its registered-array branch returns server text; temporal scalar raw-text behavior remains unchanged.
 
-The SQL runtime remains family-local. It defines the structural hook at the decode call site and can run without a target-provided hook, but Postgres supplies one through its target-aware runtime rather than importing SQL runtime types into the target package.
+The SQL runtime remains family-local. It defines the structural hook at the decode call site and always calls a selected list-decoder strategy, while the target contribution remains optional. Postgres supplies a target-owned strategy through its target-aware runtime rather than importing SQL runtime types into the target package.
 
 The Postgres adapter has a narrow control-plane responsibility for marker reads and other raw control fields that do not flow through SQL runtime decoding. It invokes target parsing before shared validation and keeps the validators target-agnostic.
 
@@ -68,7 +68,7 @@ The design does not add multidimensional array semantics. Postgres does not enco
 ## Implementation anchors
 
 - `CodecRef.many` is the family-agnostic contract bit that marks scalar-array columns: [`codec-types.ts`](../../../packages/1-framework/1-core/framework-components/src/shared/codec-types.ts).
-- SQL row decoding records `many` aliases and invokes the optional target list decoder before falling back to driver-native arrays for targets that do not provide one: [`decoding.ts`](../../../packages/2-sql/5-runtime/src/codecs/decoding.ts).
+- SQL row decoding records `many` aliases and invokes the selected list decoder; `SqlRuntimeBase` selects the native-array default and Postgres overrides it with the target-owned text decoder: [`decoding.ts`](../../../packages/2-sql/5-runtime/src/codecs/decoding.ts) and [`sql-runtime.ts`](../../../packages/2-sql/5-runtime/src/sql-runtime.ts).
 - The Postgres runtime supplies `decodePostgresListText` as its list decoder: [`postgres-runtime.ts`](../../../packages/3-extensions/postgres/src/runtime/postgres-runtime.ts) and [`list-decoder.ts`](../../../packages/3-targets/3-targets/postgres/src/core/list-decoder.ts).
 - The Postgres driver parser policy is `PG_TYPES_ARRAY_OIDS`, `controlTextTypes`, and `temporalTextTypes`: [`temporal-text-parsers.ts`](../../../packages/3-targets/7-drivers/postgres/src/temporal-text-parsers.ts).
 - Control-plane marker rows are normalized through `parsePostgresListText` before shared marker validation: [`control-adapter.ts`](../../../packages/3-targets/6-adapters/postgres/src/core/control-adapter.ts).

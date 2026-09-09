@@ -46,7 +46,7 @@ const contract: Contract<SqlStorage> = createTestContract({
   models: {},
 });
 
-function createDriver(): {
+function createDriver(tagsWire: unknown = '{a,b}'): {
   driver: SqlDriver;
   queryCalls: Array<{ sql: string; params: readonly unknown[] }>;
 } {
@@ -58,7 +58,7 @@ function createDriver(): {
     execute: vi.fn(),
     query: vi.fn().mockImplementation(async function* (request) {
       queryCalls.push(request);
-      yield { tags: '{a,b}' };
+      yield { tags: tagsWire };
     }),
   };
 
@@ -66,6 +66,33 @@ function createDriver(): {
 }
 
 describe('createTestRuntime target list decoding', () => {
+  it('uses the SQL native-array decoder when the target has no list decoder', async () => {
+    const stubAdapter = createStubAdapter();
+    const { driver } = createDriver(['a', 'b']);
+    const runtime = createTestRuntime({
+      stackInstance: { adapter: stubAdapter, stack: { target: {} } },
+      context: createTestContext(contract, stubAdapter),
+      driver,
+      verifyMarker: false,
+    });
+
+    const plan = planFromAst(
+      SelectAst.from(TableSource.named('Thing')).withProjection([
+        ProjectionItem.of('tags', ColumnRef.of('Thing', 'tags'), {
+          codecId: 'pg/text@1',
+          many: true,
+        }),
+      ]),
+      contract,
+    );
+
+    const rows = await runtime.query(plan).toArray();
+
+    expect(rows).toEqual([{ tags: ['a', 'b'] }]);
+
+    await runtime.close();
+  });
+
   it('delegates many decoding to the target list decoder with raw text', async () => {
     const stubAdapter = createStubAdapter();
 

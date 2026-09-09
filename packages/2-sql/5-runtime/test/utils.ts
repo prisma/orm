@@ -33,8 +33,10 @@ import type {
 } from '@internal/sql-relational-core/ast';
 import { SelectAst as SelectAstCtor, TableSource } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { createTestSqlNamespace } from '../../1-core/contract/test/test-support';
+import { type ListDecoder, sqlNativeArrayListDecoder } from '../src/codecs/decoding';
 import { createExecutionContext, createSqlExecutionStack } from '../src/exports';
 import type {
   ExecutionContext,
@@ -94,20 +96,17 @@ function applicationDomainOf(params: {
   };
 }
 
-type ListDecoder = (
-  wireValue: unknown,
-  decodeElement: (value: unknown) => Promise<unknown>,
-) => Promise<readonly unknown[]> | readonly unknown[];
+type TargetListDecoderContribution = { readonly listDecoder?: () => ListDecoder };
 
 class TestSqlRuntime extends SqlRuntimeBase {
   constructor(
     options: RuntimeOptions,
-    private readonly listDecoder?: ListDecoder,
+    private readonly listDecoder: ListDecoder = sqlNativeArrayListDecoder,
   ) {
     super(options);
   }
 
-  protected override getListDecoder(): ListDecoder | undefined {
+  protected override getListDecoder(): ListDecoder {
     return this.listDecoder;
   }
 }
@@ -133,7 +132,10 @@ export function createTestRuntime<TContract extends Contract<SqlStorage>>(
   options: CreateTestRuntimeOptions<TContract>,
 ): Runtime {
   const { stackInstance, context, driver, verifyMarker, middleware, mode, log } = options;
-  const target = stackInstance.stack.target as { readonly listDecoder?: () => ListDecoder };
+  const target = blindCast<
+    TargetListDecoderContribution,
+    'test stack target may contribute the runtime list-decoder hook structurally'
+  >(stackInstance.stack.target);
   return new TestSqlRuntime(
     {
       context,
@@ -144,7 +146,7 @@ export function createTestRuntime<TContract extends Contract<SqlStorage>>(
       ...ifDefined('mode', mode),
       ...ifDefined('log', log),
     },
-    target.listDecoder?.(),
+    target.listDecoder?.() ?? sqlNativeArrayListDecoder,
   );
 }
 
@@ -557,4 +559,4 @@ export function stubAst(): AnyQueryAst {
 // Re-export decode helpers so cross-package tests can exercise the row-decode
 // path (e.g. RUNTIME.DECODE_FAILED for a malformed many-element) without going
 // through the full query round-trip.
-export { buildDecodeContext, decodeRow } from '../src/codecs/decoding';
+export { buildDecodeContext, decodeRow, sqlNativeArrayListDecoder } from '../src/codecs/decoding';

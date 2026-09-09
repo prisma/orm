@@ -22,6 +22,19 @@ export type ListDecoder = (
   decodeElement: (value: unknown) => Promise<unknown>,
 ) => Promise<readonly unknown[]> | readonly unknown[];
 
+export const sqlNativeArrayListDecoder: ListDecoder = async (wireValue, decodeElement) => {
+  if (!Array.isArray(wireValue)) {
+    throw new TypeError(
+      `expected an array from the driver for many-typed column, got ${typeof wireValue}`,
+    );
+  }
+  const decoded: unknown[] = [];
+  for (const elem of wireValue) {
+    decoded.push(await decodeElement(elem));
+  }
+  return decoded;
+};
+
 export interface DecodeContext {
   readonly aliases: ReadonlyArray<string> | undefined;
   readonly codecs: ReadonlyMap<string, Codec>;
@@ -231,14 +244,14 @@ function decodeIncludeAggregate(alias: string, wireValue: unknown): IncludeAggre
  * The row-level `rowCtx` is repackaged into a per-cell `SqlCodecCallContext` whose `column = { table, name }` is a structural projection of the per-cell `ColumnRef = { table, column }` resolved from the AST-backed `DecodeContext` (the same resolution `wrapDecodeFailure` uses for envelope construction — one resolution per cell, two consumers). Cells the runtime cannot resolve to a single underlying column (aggregate
  * aliases, computed projections without a simple ref) get `column: undefined`, matching the spec contract that the runtime never silently defaults this field.
  *
- * For `many`-flagged aliases this function delegates frame traversal to the target when a `ListDecoder` is supplied, passing `null` elements through unchanged and mapping the same element codec over every non-null element. Targets without a list decoder retain the legacy driver-native array fallback. Element-level failures surface through the existing `RUNTIME.DECODE_FAILED` envelope with the column/codec context from the parent cell.
+ * For `many`-flagged aliases this function delegates frame traversal to the selected `ListDecoder`, passing `null` elements through unchanged and mapping the same element codec over every non-null element. SQL runtimes without a target-owned contribution select `sqlNativeArrayListDecoder` explicitly before row decoding. Element-level failures surface through the existing `RUNTIME.DECODE_FAILED` envelope with the column/codec context from the parent cell.
  */
 async function decodeField(
   alias: string,
   wireValue: unknown,
   decodeCtx: DecodeContext,
   rowCtx: SqlCodecCallContext,
-  listDecoder?: ListDecoder,
+  listDecoder: ListDecoder,
 ): Promise<unknown> {
   if (wireValue === null) {
     return null;
@@ -273,31 +286,12 @@ async function decodeField(
   };
 
   if (decodeCtx.manyAliases.has(alias)) {
-    if (listDecoder) {
-      try {
-        return await listDecoder(wireValue, decodeElement);
-      } catch (error) {
-        if (isStructuredError(error)) throw error;
-        wrapDecodeFailure(error, alias, ref, codec, wireValue);
-      }
+    try {
+      return await listDecoder(wireValue, decodeElement);
+    } catch (error) {
+      if (isStructuredError(error)) throw error;
+      wrapDecodeFailure(error, alias, ref, codec, wireValue);
     }
-
-    if (!Array.isArray(wireValue)) {
-      wrapDecodeFailure(
-        new TypeError(
-          `expected an array from the driver for many-typed column, got ${typeof wireValue}`,
-        ),
-        alias,
-        ref,
-        codec,
-        wireValue,
-      );
-    }
-    const decoded: unknown[] = [];
-    for (const elem of wireValue) {
-      decoded.push(await decodeElement(elem));
-    }
-    return decoded;
   }
 
   try {
@@ -329,7 +323,7 @@ export async function decodeRow(
   row: Record<string, unknown>,
   decodeCtx: DecodeContext,
   rowCtx: SqlCodecCallContext,
-  listDecoder?: ListDecoder,
+  listDecoder: ListDecoder,
 ): Promise<Record<string, unknown>> {
   checkAborted(rowCtx, 'decode');
   const signal = rowCtx.signal;

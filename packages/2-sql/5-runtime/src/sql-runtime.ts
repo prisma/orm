@@ -44,6 +44,7 @@ import {
   type DecodeContext,
   decodeRow,
   type ListDecoder,
+  sqlNativeArrayListDecoder,
 } from './codecs/decoding';
 import { deriveParamMetadata, encodeParams, encodeParamsWithMetadata } from './codecs/encoding';
 import { validateCodecRegistryCompleteness } from './codecs/validation';
@@ -376,8 +377,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     await this.verifyMarkerPromise;
   }
 
-  protected getListDecoder(): ListDecoder | undefined {
-    return undefined;
+  protected getListDecoder(): ListDecoder {
+    return sqlNativeArrayListDecoder;
   }
 
   private async *streamRows<Row>(

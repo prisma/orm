@@ -6,6 +6,7 @@ import { ColumnRef } from '@internal/sql-relational-core/ast';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 // pi-lens-ignore: 2307
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import { blindCast } from '@internal/utils/casts';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { timeouts, withPostgresPort } from '../../../../../../_harness/postgres';
 import { withPushedContractRuntime } from '../../../../../../sql-orm-client/integration-helpers';
@@ -17,7 +18,10 @@ import { referencedScalarInList } from '../postgres-list-field-reference';
 const column = (name: string) => ColumnRef.of('testModel', name);
 
 const serializer = new PostgresContractSerializer();
-const baseContract = serializer.deserializeContract(contractJson) as Contract;
+const baseContract = blindCast<
+  Contract,
+  'enum filter fixture JSON is deserialized at the generated-contract boundary'
+>(serializer.deserializeContract(contractJson));
 const returningContract: Contract & {
   readonly capabilities: Contract['capabilities'] & {
     readonly returning: { readonly enabled: true };

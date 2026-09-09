@@ -121,7 +121,7 @@ PostgreSQL-bound codecs use the public `PostgresCodecDescriptor` protocol, `post
 
 ## List framing
 
-Inbound Postgres list framing is target-owned; see [ADR 249](../../../../docs/architecture%20docs/adrs/ADR%20249%20-%20Target-owned%20Postgres%20list%20framing.md). The runtime supplies raw array text to the target list decoder, which parses the frame and invokes the same scalar element codec for each non-null element. Element codecs that can be used in list columns must accept the raw text spellings Postgres emits for their scalar values; the built-in numeric, boolean, integer, and float codecs also retain their scalar native-wire compatibility. Outbound array parameters are intentionally asymmetric: `pg` still serializes JavaScript arrays under the SQL type context emitted by the adapter.
+Inbound Postgres list framing is target-owned; see [ADR 249](../../../../docs/architecture%20docs/adrs/ADR%20249%20-%20Target-owned%20Postgres%20list%20framing.md). The Postgres runtime contributes the selected list-decoder strategy, which receives raw array text, parses the frame, and invokes the same scalar element codec for each non-null element. The contribution is optional at the SQL-family boundary, but row decoding always runs with an explicit selected strategy; non-Postgres paths use the SQL native-array default. Element codecs that can be used in list columns must accept the raw text spellings Postgres emits for their scalar values; the built-in numeric, boolean, integer, and float codecs also retain their scalar native-wire compatibility. Outbound array parameters are intentionally asymmetric: `pg` still serializes JavaScript arrays under the SQL type context emitted by the adapter.
 
 ## Architecture
 

@@ -48,6 +48,18 @@ import { defineTestCodec } from './test-codec';
 const { queryOperations: _stripOps, ...postgresRuntimeAdapterDescriptor } =
   postgresRuntimeAdapterDescriptorFull;
 
+const nativeArrayListDecoder = async (
+  wireValue: unknown,
+  decodeElement: (value: unknown) => Promise<unknown>,
+): Promise<readonly unknown[]> => {
+  if (!Array.isArray(wireValue)) {
+    throw new TypeError(
+      `expected an array from the driver for many-typed column, got ${typeof wireValue}`,
+    );
+  }
+  return Promise.all(wireValue.map(decodeElement));
+};
+
 // ---------------------------------------------------------------------------
 // Typed contract with many:true columns for all four element types under test
 // ---------------------------------------------------------------------------
@@ -501,7 +513,9 @@ describe('scalar-list decode — malformed element surfaces RUNTIME.DECODE_FAILE
     const ctx = buildDecodeContext(ast, registry);
 
     // Third element is a number — should trigger the element-level decode failure path.
-    await expect(decodeRow({ tags: ['ok', 'also-ok', 42] }, ctx, {})).rejects.toMatchObject({
+    await expect(
+      decodeRow({ tags: ['ok', 'also-ok', 42] }, ctx, {}, nativeArrayListDecoder),
+    ).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
       details: expect.objectContaining({
         table: 'ListTest',
