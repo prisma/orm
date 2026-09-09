@@ -172,6 +172,12 @@ describe('pg/bytea@1 codec runtime (direct instantiation)', () => {
     expect(Array.from(decoded)).toEqual([0x09, 0x08, 0x07]);
   });
 
+  it('decodes raw bytea hex text', async () => {
+    const decoded = await codec.decode('\\x010203', callCtx);
+    expect(decoded).toBeInstanceOf(Uint8Array);
+    expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
+  });
+
   it('round-trips a payload through encodeJson / decodeJson', () => {
     const input = new Uint8Array([0xca, 0xfe]);
     const json = codec.encodeJson(input);

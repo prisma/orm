@@ -94,13 +94,34 @@ function applicationDomainOf(params: {
   };
 }
 
-class TestSqlRuntime extends SqlRuntimeBase {}
+type ListDecoder = (
+  wireValue: unknown,
+  decodeElement: (value: unknown) => Promise<unknown>,
+) => Promise<readonly unknown[]> | readonly unknown[];
+
+class TestSqlRuntime extends SqlRuntimeBase {
+  constructor(
+    options: RuntimeOptions,
+    private readonly listDecoder?: ListDecoder,
+  ) {
+    super(options);
+  }
+
+  protected override getListDecoder(): ListDecoder | undefined {
+    return this.listDecoder;
+  }
+}
 
 type CreateTestRuntimeOptions<TContract extends Contract<SqlStorage>> = Omit<
   RuntimeOptions<TContract>,
   'adapter'
 > & {
-  readonly stackInstance: { readonly adapter: RuntimeOptions<TContract>['adapter'] };
+  readonly stackInstance: {
+    readonly adapter: RuntimeOptions<TContract>['adapter'];
+    readonly stack: {
+      readonly target: unknown;
+    };
+  };
 };
 
 /**
@@ -112,15 +133,19 @@ export function createTestRuntime<TContract extends Contract<SqlStorage>>(
   options: CreateTestRuntimeOptions<TContract>,
 ): Runtime {
   const { stackInstance, context, driver, verifyMarker, middleware, mode, log } = options;
-  return new TestSqlRuntime({
-    context,
-    adapter: stackInstance.adapter,
-    driver,
-    ...ifDefined('verifyMarker', verifyMarker),
-    ...ifDefined('middleware', middleware),
-    ...ifDefined('mode', mode),
-    ...ifDefined('log', log),
-  });
+  const target = stackInstance.stack.target as { readonly listDecoder?: () => ListDecoder };
+  return new TestSqlRuntime(
+    {
+      context,
+      adapter: stackInstance.adapter,
+      driver,
+      ...ifDefined('verifyMarker', verifyMarker),
+      ...ifDefined('middleware', middleware),
+      ...ifDefined('mode', mode),
+      ...ifDefined('log', log),
+    },
+    target.listDecoder?.(),
+  );
 }
 
 /**

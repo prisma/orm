@@ -1,16 +1,12 @@
 /**
  * Integration test: element-wise encode/decode round-trip for many (scalar-list) columns.
  *
- * Verifies that the runtime codec path correctly maps the element codec over a JS
- * array when the column's CodecRef carries `many: true`. Four element types are
- * covered: DateTime (pg/timestamptz-temporal@1), Bytes (pg/bytea@1), Decimal (pg/numeric@1),
- * and BigInt (pg/int8@1) — the types the previous JSON fallback path broke because
- * their per-element wire representation differs from their JSON form.
- *
- * The driver owns the `{…}` array wire framing in both directions (confirmed by the
- * wire/parity spikes). The runtime passes a JS array of element wire values to the
- * driver on encode, and receives a JS array of parsed element values on decode; it
- * then maps the element codec over each.
+ * Verifies that the runtime codec path correctly maps the element codec over
+ * target-parsed list elements when the column's CodecRef carries `many: true`.
+ * It covers DateTime (pg/timestamptz-temporal@1), Bytes (pg/bytea@1), Decimal
+ * (pg/numeric@1), BigInt (pg/int8@1), and parser-normalized builtin scalar
+ * types whose raw Postgres array element text must still reach the application
+ * as booleans or numbers.
  */
 
 import { type Contract, coreHash, profileHash } from '@internal/contract/types';
@@ -96,6 +92,36 @@ function buildListContract(): Contract<SqlStorage> {
                     nullable: true,
                     many: true,
                   },
+                  bools: {
+                    nativeType: 'bool',
+                    codecId: 'pg/bool@1',
+                    nullable: true,
+                    many: true,
+                  },
+                  shorts: {
+                    nativeType: 'int2',
+                    codecId: 'pg/int2@1',
+                    nullable: true,
+                    many: true,
+                  },
+                  ints: {
+                    nativeType: 'int4',
+                    codecId: 'pg/int4@1',
+                    nullable: true,
+                    many: true,
+                  },
+                  singles: {
+                    nativeType: 'float4',
+                    codecId: 'pg/float4@1',
+                    nullable: true,
+                    many: true,
+                  },
+                  doubles: {
+                    nativeType: 'float8',
+                    codecId: 'pg/float8@1',
+                    nullable: true,
+                    many: true,
+                  },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -123,22 +149,36 @@ const TABLE = TableSource.named('ListTest');
 
 function buildInsertAst(row: {
   id: number;
-  dates: Temporal.Instant[] | null;
-  bytes: Uint8Array[] | null;
-  decimals: string[] | null;
-  bigints: bigint[] | null;
+  dates?: Temporal.Instant[] | null;
+  bytes?: Uint8Array[] | null;
+  decimals?: string[] | null;
+  bigints?: bigint[] | null;
+  bools?: boolean[] | null;
+  shorts?: number[] | null;
+  ints?: number[] | null;
+  singles?: number[] | null;
+  doubles?: number[] | null;
 }): InsertAst {
   return InsertAst.into(TABLE).withRows([
     {
       id: ParamRef.of(row.id, { codec: { codecId: 'pg/int4@1' } }),
-      dates: ParamRef.of(row.dates, {
+      dates: ParamRef.of(row.dates ?? null, {
         codec: { codecId: 'pg/timestamptz-temporal@1', many: true },
       }),
-      bytes: ParamRef.of(row.bytes, { codec: { codecId: 'pg/bytea@1', many: true } }),
-      decimals: ParamRef.of(row.decimals, {
+      bytes: ParamRef.of(row.bytes ?? null, { codec: { codecId: 'pg/bytea@1', many: true } }),
+      decimals: ParamRef.of(row.decimals ?? null, {
         codec: { codecId: 'pg/numeric@1', typeParams: { precision: 30, scale: 10 }, many: true },
       }),
-      bigints: ParamRef.of(row.bigints, { codec: { codecId: 'pg/int8@1', many: true } }),
+      bigints: ParamRef.of(row.bigints ?? null, { codec: { codecId: 'pg/int8@1', many: true } }),
+      bools: ParamRef.of(row.bools ?? null, { codec: { codecId: 'pg/bool@1', many: true } }),
+      shorts: ParamRef.of(row.shorts ?? null, { codec: { codecId: 'pg/int2@1', many: true } }),
+      ints: ParamRef.of(row.ints ?? null, { codec: { codecId: 'pg/int4@1', many: true } }),
+      singles: ParamRef.of(row.singles ?? null, {
+        codec: { codecId: 'pg/float4@1', many: true },
+      }),
+      doubles: ParamRef.of(row.doubles ?? null, {
+        codec: { codecId: 'pg/float8@1', many: true },
+      }),
     },
   ]);
 }
@@ -162,6 +202,26 @@ function buildSelectByIdAst(id: number): SelectAst {
       }),
       ProjectionItem.of('bigints', ColumnRef.of('ListTest', 'bigints'), {
         codecId: 'pg/int8@1',
+        many: true,
+      }),
+      ProjectionItem.of('bools', ColumnRef.of('ListTest', 'bools'), {
+        codecId: 'pg/bool@1',
+        many: true,
+      }),
+      ProjectionItem.of('shorts', ColumnRef.of('ListTest', 'shorts'), {
+        codecId: 'pg/int2@1',
+        many: true,
+      }),
+      ProjectionItem.of('ints', ColumnRef.of('ListTest', 'ints'), {
+        codecId: 'pg/int4@1',
+        many: true,
+      }),
+      ProjectionItem.of('singles', ColumnRef.of('ListTest', 'singles'), {
+        codecId: 'pg/float4@1',
+        many: true,
+      }),
+      ProjectionItem.of('doubles', ColumnRef.of('ListTest', 'doubles'), {
+        codecId: 'pg/float8@1',
         many: true,
       }),
     ])
@@ -191,7 +251,12 @@ describe('scalar-list codec round-trip (element-wise encode/decode)', { concurre
           dates    timestamptz[],
           bytes    bytea[],
           decimals numeric[],
-          bigints  int8[]
+          bigints  int8[],
+          bools    bool[],
+          shorts   int2[],
+          ints     int4[],
+          singles  float4[],
+          doubles  float8[]
         )
       `);
     });
@@ -282,9 +347,9 @@ describe('scalar-list codec round-trip (element-wise encode/decode)', { concurre
   }, async () => {
     const contract = getContract();
 
-    // pg parses numeric[] elements as JavaScript numbers (not strings as for scalar numeric).
-    // PgNumericCodec.decode converts them back to strings via String(number).
-    // Trailing zeros after the decimal point are not preserved by the float representation.
+    // The Postgres driver returns numeric[] as raw array text; target framing
+    // hands each element's raw text to PgNumericCodec.decode. This fixture uses
+    // bare numeric storage, so Postgres does not scale-pad the decimal text.
     const decimals = ['1.5', '999999999999.99', '-0.001'];
 
     await runtime!
@@ -332,6 +397,32 @@ describe('scalar-list codec round-trip (element-wise encode/decode)', { concurre
     expect(row.bigints).toHaveLength(2);
     expect(row.bigints[0]).toBe(12345678n);
     expect(row.bigints[1]).toBe(9876543n);
+  });
+
+  it('round-trips bool/int2/int4/float list values through raw array text decoding', {
+    timeout: timeouts.spinUpPpgDev,
+  }, async () => {
+    const contract = getContract();
+
+    const expected = {
+      id: 450,
+      dates: null,
+      bytes: null,
+      decimals: null,
+      bigints: null,
+      bools: [true, false, true],
+      shorts: [-32768, 0, 32767],
+      ints: [-2147483648, 0, 2147483647],
+      singles: [1.25, -2.5],
+      doubles: [3.5, -4.75],
+    };
+
+    await runtime!.query(planFromAst(buildInsertAst(expected), contract)).toArray();
+
+    const rows = await runtime!.query(planFromAst(buildSelectByIdAst(450), contract)).toArray();
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toEqual(expected);
   });
 
   it('passes NULL elements through the decode loop unchanged', {

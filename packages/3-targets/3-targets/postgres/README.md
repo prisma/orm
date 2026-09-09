@@ -25,10 +25,12 @@ Provides the Postgres target descriptor (`SqlControlTargetDescriptor`) for CLI c
 - **Generated Defaults Policy**: Treats client-generated defaults as non-DB defaults when emitting DDL
 - **Database Dependency Consumption**: The planner extracts database dependencies from the configured framework components (passed as `frameworkComponents`), verifies each dependency against the live schema, and only emits install operations when required. The runner reuses the same metadata for post-apply verification, so there are no hardcoded extension mappings—database dependencies stay component-owned.
 - **Storage Type Planning**: The planner dispatches storage type hooks for `storage.types` and emits type operations before table creation when supported by the policy
+- **Runtime List Framing**: Parses inbound Postgres array text for contract-declared list columns before applying the scalar element codec. Builtin arrays and enum arrays therefore share one target-owned decode path; fixed-scale `numeric(30,10)[]` reads database-normalized text such as `"1.5000000000"`, matching scalar numeric decoding rather than the previous driver numeric-array float spelling `"1.5"`.
 
 This package spans multiple planes:
+
 - **Migration plane** (`src/exports/control.ts`): Control plane entry point that exports `SqlControlTargetDescriptor` for config files
-- **Runtime plane** (`src/exports/runtime.ts`): Runtime entry point for target-specific runtime code (future)
+- **Runtime plane** (`src/exports/runtime.ts`): Runtime entry point for target-specific runtime code, including list decoding
 - **Authoring pack ref** (`src/exports/pack.ts`): Pure data surface for contract builder workflows
 
 ## `db init`
@@ -117,19 +119,25 @@ Pack refs are pure JSON-friendly objects that make TypeScript contract authoring
 
 PostgreSQL-bound codecs use the public `PostgresCodecDescriptor` protocol, `postgresCodec(...)` adapter, and `definePostgresCodecs(...)` tuple helper exported from `@internal/target-postgres/codec-descriptor`. See the [codec authoring guide](../../../../docs/reference/codec-authoring-guide.md#target-owned-sql-codec-descriptors) for subclassing, generic adaptation, stack contribution, validation, array projection, and the current renderer transition.
 
+## List framing
+
+Inbound Postgres list framing is target-owned; see [ADR 249](../../../../docs/architecture%20docs/adrs/ADR%20249%20-%20Target-owned%20Postgres%20list%20framing.md). The runtime supplies raw array text to the target list decoder, which parses the frame and invokes the same scalar element codec for each non-null element. Element codecs that can be used in list columns must accept the raw text spellings Postgres emits for their scalar values; the built-in numeric, boolean, integer, and float codecs also retain their scalar native-wire compatibility. Outbound array parameters are intentionally asymmetric: `pg` still serializes JavaScript arrays under the SQL type context emitted by the adapter.
+
 ## Architecture
 
-This package provides both control and runtime entry points for the Postgres target. All declarative fields (version, capabilities, types, operations) are defined directly on the descriptor, so the published entry points never touch the filesystem. The `./pack` entry point provides a pure pack ref for contract authoring. The runtime entry point will provide target-specific runtime functionality in the future.
+This package provides both control and runtime entry points for the Postgres target. All declarative fields (version, capabilities, types, operations) are defined directly on the descriptor, so the published entry points never touch the filesystem. The `./pack` entry point provides a pure pack ref for contract authoring. The runtime entry point provides target-specific runtime behavior such as Postgres list decoding.
 
 ## Error Handling
 
 Both the planner and runner return structured results instead of throwing:
 
 **Planner** returns `PlannerResult` with either:
+
 - `kind: 'success'` with a `MigrationPlan`
 - `kind: 'failure'` with a list of `PlannerConflict` objects (e.g., `unsupportedOperation`, `policyViolation`)
 
 **Runner** returns `MigrationRunnerResult` (`Result<MigrationRunnerSuccessValue, MigrationRunnerFailure>`) with either:
+
 - `ok: true` with operation counts
 - `ok: false` with a `MigrationRunnerFailure` containing error code, summary, and metadata
 
@@ -140,7 +148,7 @@ See `@internal/family-sql/control` README for full error code documentation.
 ## Exports
 
 - `./control`: Control plane entry point for `SqlControlTargetDescriptor`
-- `./runtime`: Runtime entry point for target-specific runtime code (future)
+- `./runtime`: Runtime entry point for target-specific runtime code
 - `./pack`: Pure pack ref for `defineContract({ family, target: postgresPack, ... })`
 
 ## Tests

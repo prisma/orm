@@ -28,10 +28,12 @@ Provide PostgreSQL-specific adapter implementation, codecs, and capabilities. En
   - Wire format to JavaScript type decoding
   - JavaScript type to wire format encoding
 - **Storage Type Control Hooks**: Provide control-plane hooks for contract-defined storage types (e.g., enums)
+- **Control-plane Array Reads**: Parse raw Postgres array text for marker invariants, enum-member aggregation, policy roles, and index reloptions before shared validation or IR construction; native JS arrays are not accepted as a second framing representation.
 - **Codec Types**: Export TypeScript types for PostgreSQL codecs
 - **Descriptors**: Provide adapter descriptors declaring capabilities and codec type imports
 
 **Non-goals:**
+
 - Transport/pooling management (drivers)
 - Query compilation (sql-query)
 - Runtime execution (runtime)
@@ -87,6 +89,7 @@ flowchart TD
 ### Core (`src/core/`)
 
 **Adapter (`adapter.ts`)**
+
 - Main adapter implementation
 - Lowers SQL ASTs to PostgreSQL SQL
 - Renders joins (INNER, LEFT, RIGHT, FULL, LATERAL) with ON conditions
@@ -96,6 +99,7 @@ flowchart TD
 - Maps PostgreSQL errors to `RuntimeError`
 
 **Codecs (`codecs.ts`)**
+
 - PostgreSQL codec definitions
 - Type conversion between wire format and JavaScript
 - SQL base codecs: `sql/char`, `sql/varchar`, `sql/int`, `sql/float`
@@ -105,29 +109,36 @@ flowchart TD
 - Parameterized types: `character(n)`, `character varying(n)`, `numeric(p,s)`, `bit(n)`, `bit varying(n)`, `timestamp(p)`, `timestamptz(p)`, `time(p)`, `timetz(p)`, `interval(p)`
 
 **Types (`types.ts`)**
+
 - PostgreSQL-specific types and utilities
 - Re-exports SQL contract types
 
 ### Exports (`src/exports/`)
 
 **Control Entry Point (`control.ts`)**
+
 - Exports the control-plane adapter descriptor for CLI config
 - Used by `prisma.config.ts` to declare the adapter
 
 **Runtime Entry Point (`runtime.ts`)**
+
 - Exports the runtime-plane adapter descriptor
 
 **Adapter Export (`adapter.ts`)**
+
 - Re-exports `createPostgresAdapter` from core
 
 **Codec Types Export (`codec-types.ts`)**
+
 - Exports TypeScript type definitions for PostgreSQL codecs
 - Used in `contract.d.ts` generation
 
 **Types Export (`types.ts`)**
+
 - Re-exports PostgreSQL-specific types
 
 **Column Types Export (`column-types.ts`)**
+
 - Exports column descriptors for built-in types and enum helpers (`enumType`, `enumColumn(typeRef, nativeType)`)
 - Parameterized helpers: `charColumn(length)`, `varcharColumn(length)`, `numericColumn(precision, scale?)`, `bitColumn(length)`, `varbitColumn(length)`, `timeColumn(precision?)`, `timetzColumn(precision?)`, `intervalColumn(precision?)`
 
@@ -150,12 +161,17 @@ flowchart TD
 - [ADR 112 - Target Extension Packs](../../../../docs/architecture%20docs/adrs/ADR%20112%20-%20Target%20Extension%20Packs.md)
 - [ADR 114 - Extension codecs & branded types](../../../../docs/architecture%20docs/adrs/ADR%20114%20-%20Extension%20codecs%20&%20branded%20types.md)
 - [ADR 168 - Postgres JSON and JSONB typed columns](../../../../docs/architecture%20docs/adrs/ADR%20168%20-%20Postgres%20JSON%20and%20JSONB%20typed%20columns.md). Schema-typed JSON columns now ship from per-library extension packages (`@internal/extension-arktype-json` for arktype); see [ADR 208 - Higher-order codecs for parameterized types](../../../../docs/architecture%20docs/adrs/ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md).
+- [ADR 249 - Target-owned Postgres list framing](../../../../docs/architecture%20docs/adrs/ADR%20249%20-%20Target-owned%20Postgres%20list%20framing.md)
 
 ## Usage
 
 ### Custom codec descriptors
 
 `createPostgresAdapter({ codecDescriptors })` accepts PostgreSQL-target descriptors and appends them to the built-ins before constructing one structurally validated registry. Stack-based runtime and control construction consume the same descriptors from `types.codecTypes.codecDescriptors`. See the [target-owned SQL codec descriptor guide](../../../../docs/reference/codec-authoring-guide.md#target-owned-sql-codec-descriptors); do not inject separate generic and PostgreSQL lookups.
+
+### Control-plane array framing
+
+The runtime list decoder handles ordinary query rows, but control-plane reads such as marker verification and introspection bypass SQL runtime row decoding. The adapter therefore normalizes array-valued control fields by calling the Postgres target's raw array-text parser before handing semantic values to shared validators. This keeps marker `invariants`, enum labels, policy roles, and index reloptions on the same target-owned framing rule without teaching the shared SQL validators about Postgres array syntax.
 
 ### Runtime
 
@@ -212,6 +228,7 @@ The renderer lowers JSON-aggregation AST nodes to PostgreSQL's `json_agg`:
 - When the subquery carries an inner `ORDER BY` and `LIMIT`, its rows are wrapped in an inner SELECT, then aggregated with `json_agg(row_to_json(sub.*))`
 
 **Example SQL Output:**
+
 ```sql
 SELECT "user"."id" AS "id", (
   SELECT json_agg(json_build_object('id', "post"."id", 'title', "post"."title")) AS "posts"
@@ -226,14 +243,17 @@ FROM "user"
 The adapter supports RETURNING clauses for DML operations (INSERT, UPDATE, DELETE), allowing you to return affected rows:
 
 **Lowering Strategy:**
+
 - Renders `RETURNING` clause after INSERT, UPDATE, or DELETE statements
 - Returns specified columns from affected rows
 - Supports returning multiple columns
 
 **Capability Required:**
+
 - `returning: true` - Enables RETURNING clause support
 
 **Example SQL Output:**
+
 ```sql
 -- INSERT with RETURNING
 INSERT INTO "user" ("email", "createdAt") VALUES ($1, $2) RETURNING "user"."id", "user"."email"
@@ -299,4 +319,3 @@ table('event', (t) =>
 - `./types`: PostgreSQL-specific types
 - `./control`: Control-plane entry point (adapter descriptor)
 - `./runtime`: Runtime-plane entry point (runtime adapter descriptor)
-

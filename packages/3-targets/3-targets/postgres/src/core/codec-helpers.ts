@@ -425,10 +425,30 @@ export const pgByteaDecodeJson = (value: JsonValue): Uint8Array => {
   return new Uint8Array(Buffer.from(value, 'base64'));
 };
 
+const BYTEA_TEXT = /^\\x(?:[0-9A-Fa-f]{2})*$/;
+
+export const pgByteaDecodeWire = (wire: Uint8Array | string): Uint8Array => {
+  if (wire instanceof Uint8Array) {
+    return wire.constructor === Uint8Array
+      ? wire
+      : new Uint8Array(wire.buffer, wire.byteOffset, wire.byteLength);
+  }
+  if (!BYTEA_TEXT.test(wire)) {
+    throw postgresError(
+      'RUNTIME.DECODE_FAILED',
+      'pg/bytea@1 wire value must be a bytea hex string or Uint8Array',
+      { meta: { codecId: 'pg/bytea@1', received: wire } },
+    );
+  }
+  return new Uint8Array(Buffer.from(wire.slice(2), 'hex'));
+};
+
+const parseJsonWire: (text: string) => JsonValue = JSON.parse;
+
 export const pgJsonEncode = (value: string | JsonValue): string => JSON.stringify(value);
 export const pgJsonDecode = (wire: string | JsonValue): JsonValue =>
-  typeof wire === 'string' ? JSON.parse(wire) : wire;
+  typeof wire === 'string' ? parseJsonWire(wire) : wire;
 
 export const pgJsonbEncode = (value: string | JsonValue): string => JSON.stringify(value);
 export const pgJsonbDecode = (wire: string | JsonValue): JsonValue =>
-  typeof wire === 'string' ? JSON.parse(wire) : wire;
+  typeof wire === 'string' ? parseJsonWire(wire) : wire;

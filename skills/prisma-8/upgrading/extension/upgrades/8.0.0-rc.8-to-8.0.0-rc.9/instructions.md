@@ -8,6 +8,9 @@ changes:
   - id: namespace-qualify-sql-orm-filter-types
     summary: |
       SQL ORM reusable filter types now require the domain namespace before the model name: `<Contract, Namespace, Model>`.
+  - id: postgres-list-element-codecs-receive-raw-strings
+    summary: |
+      PostgreSQL list decoding now parses array frames in the target and passes raw string elements to the scalar element codec; custom PostgreSQL codecs used in lists must accept those raw element spellings.
   - id: add-attributes-to-psl-extension-block-literals
     summary: |
       `PslExtensionBlock` gained a required `attributes` record (attribute name → `{ args, span }`, the kit-parsed values of the block's `@@` attributes). Every hand-built block node — synthesised blocks in scripts, inference builders, and test fixtures — must set `attributes` next to `blockAttributes` (`{}` when the block carries no attributes).
@@ -58,6 +61,10 @@ Find SQL ORM calls to `upsert()`, `createAll()`, and `createAndCount()` whose cr
 ## `namespace-qualify-sql-orm-filter-types`
 
 Find TypeScript references to `ShorthandWhereFilter`, `RelationPredicate`, `RelationPredicateInput`, and `RelationFilterAccessor`. Add the model's domain namespace as the second generic argument and place the model name third. Rewrite `ShorthandWhereFilter<Contract, Model>` as `ShorthandWhereFilter<Contract, Namespace, Model>` and `ShorthandWhereFilter<Contract, Model, Namespace>` as `ShorthandWhereFilter<Contract, Namespace, Model>`. Rewrite the relation types from `<Contract, Model>` to `<Contract, Namespace, Model>`. For predicates targeting a relation, use the namespace declared by that relation's `to.namespace` coordinate.
+
+## `postgres-list-element-codecs-receive-raw-strings`
+
+Review PostgreSQL extension codecs whose descriptors can be used by `CodecRef.many` list columns. Inbound list framing is now target-owned: the target parses the Postgres array literal and invokes the scalar element codec for each non-null raw string element. Keep scalar direct-query compatibility as needed, but make the element `decode(wire, ctx)` accept the raw text spelling Postgres emits for that scalar value; the built-in numeric, boolean, integer, and float codecs accept both raw strings and native scalar wire values for this reason. Do not add a native-array fallback at the list-frame boundary, and do not add compatibility exports or codec-id aliases. `codecId`, `typeParams`, and emitted `CodecRef.many` shapes are unchanged.
 
 ## `add-attributes-to-psl-extension-block-literals`
 
