@@ -250,7 +250,7 @@ describe('adapter-postgres codecs', () => {
   describe('bytea codec', () => {
     const byteaCodec = codecForScalar('bytea') as {
       encode: (value: Uint8Array, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
-      decode: (wire: Uint8Array, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
+      decode: (wire: Uint8Array | string, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
       encodeJson: (value: Uint8Array) => unknown;
       decodeJson: (json: unknown) => Uint8Array;
     };
@@ -276,6 +276,17 @@ describe('adapter-postgres codecs', () => {
       expect(decoded).toBeInstanceOf(Uint8Array);
       expect(decoded.constructor).toBe(Uint8Array);
       expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
+    });
+
+    it('decodes target-parsed list element hex text', async () => {
+      const decoded = await byteaCodec.decode('\\x010203', {});
+      expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
+    });
+
+    it('rejects non-hex bytea text', async () => {
+      await expect(byteaCodec.decode('not-bytea-hex', {})).rejects.toThrow(
+        'pg/bytea@1 wire value must be a bytea hex string or Uint8Array',
+      );
     });
 
     it('uses base64 for JSON in both directions', () => {

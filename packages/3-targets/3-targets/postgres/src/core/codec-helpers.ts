@@ -427,6 +427,9 @@ export const pgByteaDecodeJson = (value: JsonValue): Uint8Array => {
 
 const BYTEA_TEXT = /^\\x(?:[0-9A-Fa-f]{2})*$/;
 
+/**
+ * Scalar pg bytea values arrive as Uint8Array/Buffer; target-parsed bytea list elements arrive as PostgreSQL hex text.
+ */
 export const pgByteaDecodeWire = (wire: Uint8Array | string): Uint8Array => {
   if (wire instanceof Uint8Array) {
     return wire.constructor === Uint8Array
