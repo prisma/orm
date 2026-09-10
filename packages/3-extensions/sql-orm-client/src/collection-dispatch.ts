@@ -30,6 +30,7 @@ import {
   LiteralExpr,
   OrExpr,
 } from '@internal/sql-relational-core/ast';
+import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { resolveAggregate } from './aggregate-codecs';
@@ -62,25 +63,28 @@ import { bindWhereExpr } from './where-binding';
 
 type CodecExecutionContext = CollectionContext<Contract<SqlStorage>>['context'];
 
-interface DispatchCollectionRowsOptions {
+export interface RowQuery<DbRow, Result> {
+  readonly plan: SqlQueryPlan<DbRow>;
+  readonly consume: (rows: AsyncIterableResult<DbRow>) => Result;
+}
+
+interface DescribeCollectionRowsOptions {
   context: CodecExecutionContext;
-  runtime: CollectionContext<Contract<SqlStorage>>['runtime'];
   state: CollectionState;
   tableName: string;
   modelName: string;
   namespaceId: string;
 }
 
-export function dispatchCollectionRows<Row>(
-  options: DispatchCollectionRowsOptions,
-): AsyncIterableResult<Row> {
-  const { context, runtime, state, tableName, modelName, namespaceId } = options;
+export function describeCollectionRows<Row>(
+  options: DescribeCollectionRowsOptions,
+): RowQuery<Record<string, unknown>, AsyncIterableResult<Row>> {
+  const { context, state, tableName, modelName, namespaceId } = options;
   const { contract } = context;
   const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
 
   if (state.includes.length === 0) {
     const compiled = compileSelect(contract, namespaceId, tableName, state, modelName);
-    const source = queryPlanRows<Record<string, unknown>>(runtime, compiled);
     const mapper = polyInfo
       ? (rawRow: Record<string, unknown>) =>
           blindCast<
@@ -101,31 +105,53 @@ export function dispatchCollectionRows<Row>(
             Row,
             'collection row generic is supplied by the caller and matched to the selected model shape'
           >(mapStorageRowToModelFields(contract, namespaceId, modelName, rawRow));
-    return mapResultRows(source, mapper);
+    return { plan: compiled, consume: (rows) => mapResultRows(rows, mapper) };
   }
 
-  return dispatchWithIncludes<Row>(options);
+  const plan = compileSelectWithIncludes(
+    contract,
+    context.aggregateDescriptors,
+    namespaceId,
+    tableName,
+    state,
+    modelName,
+  );
+  return {
+    plan,
+    consume: (rows) => consumeIncludeRows<Row>(context, state, namespaceId, modelName, rows),
+  };
 }
 
-// The correlated-subquery include builder lowers every include
-// descriptor shape (row, scalar reducers, and combine()) at any depth
-// into a single query; the read path has no multi-query fallback.
-function dispatchWithIncludes<Row>(
-  options: DispatchCollectionRowsOptions,
+export function dispatchCollectionRows<Row>(
+  options: DescribeCollectionRowsOptions & {
+    runtime: CollectionContext<Contract<SqlStorage>>['runtime'];
+  },
 ): AsyncIterableResult<Row> {
   const { context, runtime, state, tableName, modelName, namespaceId } = options;
+  const descriptionOptions = { context, state, tableName, modelName, namespaceId };
+  if (state.includes.length === 0) {
+    const query = describeCollectionRows<Row>(descriptionOptions);
+    return query.consume(queryPlanRows(runtime, query.plan));
+  }
+
+  resolvePolymorphismInfo(context.contract, namespaceId, modelName);
+  const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+    const query = describeCollectionRows<Row>(descriptionOptions);
+    yield* query.consume(queryPlanRows(runtime, query.plan));
+  };
+  return new AsyncIterableResult(generator());
+}
+
+function consumeIncludeRows<Row>(
+  context: CodecExecutionContext,
+  state: CollectionState,
+  namespaceId: string,
+  modelName: string,
+  rows: AsyncIterableResult<Record<string, unknown>>,
+): AsyncIterableResult<Row> {
   const { contract } = context;
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
-    const compiled = compileSelectWithIncludes(
-      contract,
-      context.aggregateDescriptors,
-      namespaceId,
-      tableName,
-      state,
-      modelName,
-    );
-
-    const parentRowsRaw = await queryPlanRows<Record<string, unknown>>(runtime, compiled).toArray();
+    const parentRowsRaw = await rows.toArray();
     if (parentRowsRaw.length === 0) {
       return;
     }
