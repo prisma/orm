@@ -122,6 +122,21 @@ export function describeCollectionRows<Row>(
   };
 }
 
+export async function consumeFirstRow<Row>(rows: AsyncIterableResult<Row>): Promise<Row | null> {
+  const result = await rows.toArray();
+  return result[0] ?? null;
+}
+
+export function describeCollectionFirst<Row>(
+  options: DescribeCollectionRowsOptions,
+): RowQuery<Record<string, unknown>, Promise<Row | null>> {
+  const rows = describeCollectionRows<Row>(options);
+  return {
+    plan: rows.plan,
+    consume: (source) => consumeFirstRow(rows.consume(source)),
+  };
+}
+
 export function dispatchCollectionRows<Row>(
   options: DescribeCollectionRowsOptions & {
     runtime: CollectionContext<Contract<SqlStorage>>['runtime'];

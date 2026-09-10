@@ -59,6 +59,28 @@ const posts = await db.Post
   .all();
 ```
 
+## Prepared row descriptions
+
+Built-in collection chains expose terminal-only `.prepared.all(configure?)` and `.prepared.first(filter?, configure?)` views. They synchronously return a `RowQuery<DbRow, Result>` without executing it. Filters, projection, includes, variants, first-row limit replacement and read annotations use the ordinary row pipeline.
+
+`createPreparedRowQuery(description, statement)` is the composition seam for client integrations: prepare `description.plan` through SQL runtime, then wrap that SQL row statement with the description. SQL runtime remains plan-only; the ORM consumer owns model mapping and include decoding.
+
+```ts
+import { createPreparedRowQuery } from '@internal/sql-orm-client';
+
+const description = posts.select('title').prepared.all();
+const statement = await runtime.prepare({}, () => description.plan);
+const prepared = createPreparedRowQuery(description, statement);
+const rows = prepared.query(runtime, {});
+for await (const row of rows) {
+  console.log(row.title);
+}
+```
+
+`query(target, params, options?)` requires an explicit compatible runtime, connection or transaction, independent of the authoring collection. It returns the terminal result directly: a thenable `AsyncIterableResult<Row>` for `all`, or `Promise<Row | null>` for `first`. Each call creates independent consumption state. Include paths retain their existing buffering; database value decoding and execution lifecycle remain SQL runtime responsibilities.
+
+This composition surface does not add facade overloads, aggregate or mutation terminals, custom helper preparation, placeholder-aware ORM filters, or expression-valued pagination.
+
 ## Pagination
 
 `.orderBy(...)` accepts model-accessor callbacks that return `OrderByItem`s via the column's `.asc()` / `.desc()` helpers:

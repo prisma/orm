@@ -43,7 +43,12 @@ import {
   resolveRowIdentityColumns,
   resolveUpsertConflictColumns,
 } from './collection-contract';
-import { dispatchCollectionRows } from './collection-dispatch';
+import {
+  consumeFirstRow,
+  describeCollectionFirst,
+  describeCollectionRows,
+  dispatchCollectionRows,
+} from './collection-dispatch';
 import type {
   CollectionConstructor,
   CollectionInit,
@@ -83,6 +88,7 @@ import {
   withMutationScope,
 } from './mutation-executor';
 import { ormError } from './orm-errors';
+import type { FirstFilter, PreparedCollection } from './prepared-collection';
 import {
   compileAggregate,
   compileDeleteCount,
@@ -1139,6 +1145,45 @@ class CollectionImpl<
     return this.#withAnnotationsFromMeta(configure, 'all').#dispatch();
   }
 
+  get prepared(): PreparedCollection<TContract, ModelName, Row, State> {
+    return {
+      all: (configure) => {
+        const selected = this.#withAnnotationsFromMeta(configure, 'all');
+        return describeCollectionRows<Row>(selected.#descriptionOptions());
+      },
+      first: (
+        filter?: FirstFilter<TContract, ModelName, State>,
+        configure?: (meta: MetaBuilder<'read'>) => void,
+      ) => {
+        const selected = this.#forFirst(filter, configure);
+        return describeCollectionFirst<Row>(selected.#descriptionOptions());
+      },
+    };
+  }
+
+  #descriptionOptions() {
+    return {
+      context: this.ctx.context,
+      state: this.state,
+      tableName: this.tableName,
+      modelName: this.modelName,
+      namespaceId: this.namespaceId,
+    };
+  }
+
+  #forFirst(
+    filter: FirstFilter<TContract, ModelName, State> | undefined,
+    configure: ((meta: MetaBuilder<'read'>) => void) | undefined,
+  ) {
+    const scoped =
+      filter === undefined
+        ? this
+        : typeof filter === 'function'
+          ? this.where(filter)
+          : this.where(filter);
+    return scoped.limit(1).#withAnnotationsFromMeta(configure, 'first');
+  }
+
   /**
    * Read terminal: return the first matching row, or `null` if none
    * match. Optionally accepts a filter (callback or shorthand object)
@@ -1191,15 +1236,7 @@ class CollectionImpl<
       | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null> {
-    const scoped =
-      filter === undefined
-        ? this
-        : typeof filter === 'function'
-          ? this.where(filter)
-          : this.where(filter);
-    const limited = scoped.limit(1).#withAnnotationsFromMeta(configure, 'first');
-    const rows = await limited.#dispatch().toArray();
-    return rows[0] ?? null;
+    return consumeFirstRow(this.#forFirst(filter, configure).#dispatch());
   }
 
   /**

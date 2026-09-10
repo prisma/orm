@@ -1,4 +1,5 @@
 import type { Contract, NamespaceId } from '@internal/contract/types';
+import type { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { expectTypeOf, test } from 'vitest';
@@ -572,6 +573,35 @@ test('where without a variant does not expose the variant-declared relation', ()
 
 declare const tasks: Collection<PolyContract, 'Task'>;
 declare const executionContext: ExecutionContext<PolyContract>;
+
+test('prepared terminals retain variant unions, narrowing and nested projections', () => {
+  const all = tasks.prepared.all();
+  expectTypeOf(all.consume).returns.toEqualTypeOf<
+    AsyncIterableResult<InferRootRow<PolyContract, 'Task'>>
+  >();
+  const selected = tasks.variant('Bug');
+  const first = selected.prepared.first((task) => {
+    expectTypeOf(task.severity).not.toBeNever();
+    // @ts-expect-error priority belongs to the other variant
+    task.priority;
+    return task.severity.eq('high');
+  });
+  expectTypeOf(first.consume).returns.toEqualTypeOf<
+    Promise<RowOfCollection<typeof selected> | null>
+  >();
+  type Selected = RowOfCollection<typeof selected>;
+  expectTypeOf<Selected['type']>().toEqualTypeOf<'bug'>();
+  expectTypeOf<Selected>().toHaveProperty('severity');
+  expectTypeOf<Selected>().not.toHaveProperty('priority');
+  const nested = projects.select('name').include('tasks', (tasks) => tasks.variant('Feature'));
+  const nestedAll = nested.prepared.all();
+  expectTypeOf(nestedAll.consume).returns.toEqualTypeOf<
+    AsyncIterableResult<RowOfCollection<typeof nested>>
+  >();
+  expectTypeOf<
+    RowOfCollection<typeof nested>['tasks'][number]['type']
+  >().toEqualTypeOf<'feature'>();
+});
 
 test('first after variant("Feature") exposes the MTI variant field on the predicate model', () => {
   tasks.variant('Feature').first((task) => {
