@@ -42,7 +42,7 @@ await withTransaction(runtime, async (tx) => {
 
 A few things to notice:
 
-- **`runtime.prepare(...)` is the underlying primitive.** Each DB-specific facade re-exposes it as a top-level convenience (`db.prepare(...)` on facades that surface one). The two surfaces have identical signatures and return the same object; the facade method exists so that simple call sites don't have to reach for the runtime explicitly.
+- **`runtime.prepare(...)` is the underlying primitive.** Each DB-specific facade re-exposes it as a top-level convenience (`db.prepare(...)` on facades that surface one). SQL-plan callbacks return the same SQL handle. Postgres and SQLite facades additionally accept ORM row descriptions and compose their complete terminal results without teaching runtime about ORM.
 - **The first argument declares the parameter shape.** Names mapped to codec ids drawn from the codec registry. The editor autocompletes the codec id strings; the type system rejects unknown ones.
 - **The callback receives a `params` object whose values are bind-site references.** It is the *only* callback argument; the DSL root (`db`) is captured from the enclosing scope. `params.userId` flowing into `fns.eq(f.id, …)` slots in like any other expression — the type at that position is the same arm of `CodecExpression` that the DSL accepts wherever a literal would normally go (`eq`, `update`, `where` predicates, and so on). Slot reuse is implicit by reference equality: referring to `params.userId` twice is one slot used twice.
 - **`.query(target, params, options?)` is typed end to end.** `Params` comes from the declaration via each codec's `TInput` mapping; `Row` comes from the plan returned by the callback.
@@ -69,7 +69,9 @@ The rest of the document elaborates each principle.
 
 The primitive is `runtime.prepare(declaration, callback)`. It lives on the runtime because that is where the `beforeCompile` middleware chain is owned and run. `prepare` has to invoke that chain so any AST rewrites a middleware applies are baked into the lowered SQL — placing `prepare` anywhere else would mean either splitting the middleware chain across two homes or punting middleware work into the I/O path on the first query.
 
-Each DB-specific facade re-exposes `prepare(declaration, callback)` as a top-level method that delegates to `this.runtime().prepare(...)`. The two surfaces have identical signatures and return the same object; the facade method exists so that everyday call sites can write `db.prepare(...)` without reaching for the runtime explicitly.
+Postgres and SQLite facades expose `prepare(declaration, params => ...)`, capturing `db.sql` or `db.orm` lexically. SQL-plan callbacks delegate to runtime and retain `PreparedFor` row/statistics semantics. ORM callbacks return a synchronous `.prepared.all()` or `.prepared.first()` description. The facade invokes the callback once, passes only its SQL plan to runtime for one lowering, and composes the prepared statement with the ORM-owned consumer. Runtime continues accepting SQL plans only.
+
+The ORM handle's `query(target, params, options?)` returns the complete terminal result directly: a thenable async row stream for `all`, or a row-or-null promise for `first`. An async wrapper around `query` would assimilate the thenable and erase streaming, so only preparation itself is async. Each invocation owns its result-processing state and uses the explicit compatible runtime, connection or transaction, never the authoring collection's runtime.
 
 The `db` proxy returned by `sql({ context })` is unchanged. It still maps top-level keys to user-defined tables and exposes nothing else; there is no `db.prepare` on the proxy itself. Anchoring `prepare` to the facade rather than the proxy keeps the proxy's namespace pristine for user-defined names.
 
@@ -81,7 +83,7 @@ The `db` proxy returned by `sql({ context })` is unchanged. It still maps top-le
 
 The callback receives `(params)` — a single argument. The DSL root (`db`) is captured from the enclosing scope rather than passed in, so the callback's only obligation is to turn declared params into a plan. Each `params.<name>` is a bind-site reference whose static type is `Expression<{ codecId; nullable }>` — the same arm of `CodecExpression` that the DSL accepts wherever a literal would go. Slot reuse is implicit by reference equality: if the callback refers to `params.userId` twice, that's one slot used twice. Literals not threaded through `params` get baked into the lowered SQL at lower time.
 
-The callback MUST end with `.build()`, returning a plan. `Row` is derived from that plan's row type.
+A SQL-builder callback ends with `.build()`, returning a plan; raw SQL callbacks also return plans. `Row` is derived from that plan's row type. An ORM facade callback ends with `.prepared.all()` or `.prepared.first()`, returning a description rather than executing an ordinary terminal. ORM aggregate/mutation preparation, placeholder-aware ORM predicates and expression-valued ORM pagination are not part of this row-terminal surface.
 
 If a name in `declaration` isn't referenced by the callback's plan, `prepare` throws a stable error code under the `RUNTIME` namespace. (Type-level detection of unused declared params isn't achievable across the chained-builder type machinery; runtime detection is the contract.)
 

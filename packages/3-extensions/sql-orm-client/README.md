@@ -79,7 +79,7 @@ for await (const row of rows) {
 
 `query(target, params, options?)` requires an explicit compatible runtime, connection or transaction, independent of the authoring collection. It returns the terminal result directly: a thenable `AsyncIterableResult<Row>` for `all`, or `Promise<Row | null>` for `first`. Each call creates independent consumption state. Include paths retain their existing buffering; database value decoding and execution lifecycle remain SQL runtime responsibilities.
 
-This composition surface does not add facade overloads, aggregate or mutation terminals, custom helper preparation, placeholder-aware ORM filters, or expression-valued pagination.
+The [Postgres](../postgres/README.md#prepared-sql-and-orm-rows) and [SQLite](../sqlite/README.md#prepared-sql-and-orm-rows) facades compose this surface through `db.prepare({}, () => db.orm.public.Post.select('title').prepared.all())` (SQLite uses `db.orm.Post`). SQL callbacks capture `db.sql` and receive only params. Aggregate or mutation terminals, custom helper preparation, placeholder-aware ORM filters, and expression-valued ORM pagination are not supported.
 
 ## Pagination
 

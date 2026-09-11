@@ -7,7 +7,12 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { sql as sqlBuilder } from '@internal/sql-builder/runtime';
 import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
-import { orm as ormBuilder } from '@internal/sql-orm-client';
+import {
+  createPreparedRowQuery,
+  orm as ormBuilder,
+  type PreparedRowQuery,
+  type RowQuery,
+} from '@internal/sql-orm-client';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
@@ -16,6 +21,7 @@ import type {
   ExecutionContext,
   ParamsFromDeclaration,
   PreparedFor,
+  PreparedStatement,
   Runtime,
   SqlExecutionStackWithDriver,
   SqlMiddleware,
@@ -76,9 +82,18 @@ export interface SqliteClient<TContract extends Contract<SqlStorage>> {
   readonly stack: SqlExecutionStackWithDriver<SqliteTargetId>;
   connect(bindingInput?: { readonly path: string }): Promise<Runtime>;
   runtime(): Runtime;
+  prepare<
+    D extends Declaration<CT>,
+    Row,
+    Result,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => RowQuery<Row, Result>,
+  ): Promise<PreparedRowQuery<ParamsFromDeclaration<D, CT>, Result>>;
   prepare<D extends Declaration<CT>, Row, CT extends CodecTypesBase = ExtractCodecTypes<TContract>>(
     declaration: D,
-    callback: (sql: UnboundSql<TContract>, params: BindSiteParams<D>) => SqlQueryPlan<Row>,
+    callback: (params: BindSiteParams<D>) => SqlQueryPlan<Row>,
   ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>>;
   transaction<R>(fn: (tx: SqliteTransactionContext<TContract>) => PromiseLike<R>): Promise<R>;
   close(): Promise<void>;
@@ -115,10 +130,17 @@ function resolveContract<TContract extends Contract<SqlStorage>>(
 ): TContract {
   const serializer = new SqlContractSerializer();
   if ('contractJson' in options && options.contractJson !== undefined) {
-    return serializer.deserializeContract(options.contractJson) as TContract;
+    return blindCast<
+      TContract,
+      'validated contract JSON corresponds to the caller supplied contract type'
+    >(serializer.deserializeContract(options.contractJson));
   }
-  const contract = (options as SqliteOptionsWithContract<TContract>).contract;
-  return serializer.deserializeContract(serializer.serializeContract(contract)) as TContract;
+  const contract = options.contract;
+  assertDefined(contract, 'a contract or contractJson is required');
+  return blindCast<
+    TContract,
+    'serialized and validated contract retains the authored contract type'
+  >(serializer.deserializeContract(serializer.serializeContract(contract)));
 }
 
 export default function sqlite<TContract extends Contract<SqlStorage>>(
@@ -236,6 +258,56 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
     }),
   );
 
+  function prepare<
+    D extends Declaration<CT>,
+    Row,
+    Result,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => RowQuery<Row, Result>,
+  ): Promise<PreparedRowQuery<ParamsFromDeclaration<D, CT>, Result>>;
+  function prepare<
+    D extends Declaration<CT>,
+    Row,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => SqlQueryPlan<Row>,
+  ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>>;
+  async function prepare<
+    D extends Declaration<CT>,
+    Row,
+    Result,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => SqlQueryPlan<Row> | RowQuery<Row, Result>,
+  ): Promise<
+    | PreparedFor<ParamsFromDeclaration<D, CT>, Row>
+    | PreparedRowQuery<ParamsFromDeclaration<D, CT>, Result>
+  > {
+    let description: RowQuery<Row, Result> | undefined;
+    const statement = await getRuntime().prepare<D, Row, CT>(declaration, (params) => {
+      const authored = callback(params);
+      if ('consume' in authored) {
+        description = authored;
+        return authored.plan;
+      }
+      return authored;
+    });
+    if (description) {
+      return createPreparedRowQuery(
+        description,
+        blindCast<
+          PreparedStatement<ParamsFromDeclaration<D, CT>, Row>,
+          'ORM row descriptions always prepare row-returning SQL plans'
+        >(statement),
+      );
+    }
+    return statement;
+  }
+
   return {
     sql,
     orm,
@@ -282,16 +354,7 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
     runtime() {
       return getRuntime();
     },
-    prepare<
-      D extends Declaration<CT>,
-      Row,
-      CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
-    >(
-      declaration: D,
-      callback: (sql: UnboundSql<TContract>, params: BindSiteParams<D>) => SqlQueryPlan<Row>,
-    ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>> {
-      return getRuntime().prepare<D, Row, CT>(declaration, (params) => callback(sql, params));
-    },
+    prepare,
 
     transaction<R>(fn: (tx: SqliteTransactionContext<TContract>) => PromiseLike<R>): Promise<R> {
       let runtime: ReturnType<typeof getRuntime>;

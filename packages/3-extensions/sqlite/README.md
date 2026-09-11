@@ -82,6 +82,26 @@ Re-exports all migration operation helpers from `@internal/target-sqlite/migrati
 
 Composes the SQLite execution stack and returns typed query roots (`db.sql`, `db.orm`, `db.context`, `db.stack`).
 
+### Prepared SQL and ORM rows
+
+`db.prepare(declaration, params => ...)` captures `db.sql` or `db.orm` lexically. The callback receives only declared placeholder expressions, runs once, and lowers SQL once without executing an ORM terminal.
+
+```ts
+const byId = await db.prepare({ id: 'sqlite/integer@1' }, (params) =>
+  db.sql.users.select('id').where((f, fns) => fns.eq(f.id, params.id)).build(),
+);
+const all = await db.prepare({}, () => db.orm.User.select('id').prepared.all());
+const first = await db.prepare({}, () => db.orm.User.select('id').prepared.first());
+
+for await (const row of all.query(db.runtime(), {})) console.log(row.id);
+const rowOrNull = await first.query(db.runtime(), {});
+const sqlRows = await byId.query(db.runtime(), { id: 1 });
+```
+
+`query(target, params, options?)` names a compatible runtime, connection or transaction explicitly. ORM `all` returns a thenable async row stream directly; `first` returns a row-or-null promise. SQL plans preserve `PreparedFor`: raw affected-count plans expose `execute(target, params, options?)`, while a row field named `affectedRows` still produces a row-query handle. Declarations retain the contract's codec input types; runtime rejects unused names.
+
+ORM row preparation supports literal filters and empty declarations, not placeholder-aware ORM predicates, expression-valued ORM pagination, aggregate/mutation terminals or custom helper preparation. Projection, includes and model mapping use ordinary ORM processing, including existing include buffering. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions). Native SQLite database `prepare(sql)` is a separate API.
+
 ## Related Docs
 
 - Architecture: `docs/Architecture Overview.md`

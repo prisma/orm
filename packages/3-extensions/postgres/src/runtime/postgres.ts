@@ -6,7 +6,12 @@ import { instantiateExecutionStack } from '@internal/framework-components/execut
 import { sql as sqlBuilder } from '@internal/sql-builder/runtime';
 import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
-import { orm as ormBuilder } from '@internal/sql-orm-client';
+import {
+  createPreparedRowQuery,
+  orm as ormBuilder,
+  type PreparedRowQuery,
+  type RowQuery,
+} from '@internal/sql-orm-client';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
@@ -15,6 +20,7 @@ import type {
   ExecutionContext,
   ParamsFromDeclaration,
   PreparedFor,
+  PreparedStatement,
   Runtime,
   SqlExecutionStackWithDriver,
   SqlMiddleware,
@@ -28,6 +34,7 @@ import {
   withTransaction,
 } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { type Client, Pool } from 'pg';
@@ -65,9 +72,18 @@ export interface PostgresClient<TContract extends Contract<SqlStorage>> {
   connect(bindingInput?: PostgresBindingInput): Promise<Runtime>;
   runtime(): Runtime;
   transaction<R>(fn: (tx: PostgresTransactionContext<TContract>) => PromiseLike<R>): Promise<R>;
+  prepare<
+    D extends Declaration<CT>,
+    Row,
+    Result,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => RowQuery<Row, Result>,
+  ): Promise<PreparedRowQuery<ParamsFromDeclaration<D, CT>, Result>>;
   prepare<D extends Declaration<CT>, Row, CT extends CodecTypesBase = ExtractCodecTypes<TContract>>(
     declaration: D,
-    callback: (sql: Db<TContract>, params: BindSiteParams<D>) => SqlQueryPlan<Row>,
+    callback: (params: BindSiteParams<D>) => SqlQueryPlan<Row>,
   ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>>;
   close(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
@@ -122,7 +138,10 @@ function resolveContract<TContract extends Contract<SqlStorage>>(
   const contractJson = hasContractJson(options)
     ? options.contractJson
     : contractSerializer.serializeContract(options.contract);
-  return contractSerializer.deserializeContract(contractJson) as TContract;
+  return blindCast<
+    TContract,
+    'validated contract JSON corresponds to the caller supplied contract type'
+  >(contractSerializer.deserializeContract(contractJson));
 }
 
 function toRuntimeBinding<TContract extends Contract<SqlStorage>>(
@@ -276,6 +295,56 @@ export default function postgres<TContract extends Contract<SqlStorage>>(
     context,
   });
 
+  function prepare<
+    D extends Declaration<CT>,
+    Row,
+    Result,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => RowQuery<Row, Result>,
+  ): Promise<PreparedRowQuery<ParamsFromDeclaration<D, CT>, Result>>;
+  function prepare<
+    D extends Declaration<CT>,
+    Row,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => SqlQueryPlan<Row>,
+  ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>>;
+  async function prepare<
+    D extends Declaration<CT>,
+    Row,
+    Result,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => SqlQueryPlan<Row> | RowQuery<Row, Result>,
+  ): Promise<
+    | PreparedFor<ParamsFromDeclaration<D, CT>, Row>
+    | PreparedRowQuery<ParamsFromDeclaration<D, CT>, Result>
+  > {
+    let description: RowQuery<Row, Result> | undefined;
+    const statement = await getRuntime().prepare<D, Row, CT>(declaration, (params) => {
+      const authored = callback(params);
+      if ('consume' in authored) {
+        description = authored;
+        return authored.plan;
+      }
+      return authored;
+    });
+    if (description) {
+      return createPreparedRowQuery(
+        description,
+        blindCast<
+          PreparedStatement<ParamsFromDeclaration<D, CT>, Row>,
+          'ORM row descriptions always prepare row-returning SQL plans'
+        >(statement),
+      );
+    }
+    return statement;
+  }
+
   return {
     sql,
     orm,
@@ -327,16 +396,7 @@ export default function postgres<TContract extends Contract<SqlStorage>>(
       return getRuntime();
     },
 
-    prepare<
-      D extends Declaration<CT>,
-      Row,
-      CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
-    >(
-      declaration: D,
-      callback: (sql: Db<TContract>, params: BindSiteParams<D>) => SqlQueryPlan<Row>,
-    ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>> {
-      return getRuntime().prepare<D, Row, CT>(declaration, (params) => callback(sql, params));
-    },
+    prepare,
 
     transaction<R>(fn: (tx: PostgresTransactionContext<TContract>) => PromiseLike<R>): Promise<R> {
       return withTransaction(getRuntime(), (txCtx) => {
@@ -363,7 +423,7 @@ export default function postgres<TContract extends Contract<SqlStorage>>(
         // variable in `withTransaction`) remain wired to the original object.
         // Spreading would evaluate the getter once and freeze its value.
         const tx: PostgresTransactionContext<TContract> = Object.assign(
-          Object.create(txCtx) as TransactionContext,
+          castAs<TransactionContext>(Object.create(txCtx)),
           { sql: txSql, orm: txOrm, enums, nativeEnums },
         );
 
