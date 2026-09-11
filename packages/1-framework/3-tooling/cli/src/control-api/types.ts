@@ -293,7 +293,8 @@ export interface DbVerifyOptions {
  */
 export interface IntrospectOptions {
   /**
-   * Optional schema name to introspect.
+   * Schema to introspect. Postgres reads this schema instead of its `public`
+   * default; targets without a schema namespace (SQLite, Mongo) ignore it.
    */
   readonly schema?: string;
   /**

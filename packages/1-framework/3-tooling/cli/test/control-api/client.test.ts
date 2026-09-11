@@ -56,8 +56,12 @@ function createMockComponents() {
     close: async () => {},
   } as unknown as ControlDriverInstance<string, string>;
 
+  const mockIntrospect = vi.fn(
+    async (_options: { driver: unknown; contract?: unknown; schema?: string }) => ({ tables: [] }),
+  );
+
   const mockFamilyInstance = {
-    introspect: async () => ({ tables: [] }),
+    introspect: mockIntrospect,
     deserializeContract: (ir: unknown) => ir as Contract,
     readMarker: async () => null,
     readLedger: async () => [],
@@ -138,6 +142,7 @@ function createMockComponents() {
   return {
     mockDriver,
     mockFamilyInstance,
+    mockIntrospect,
     mockFamily,
     mockTarget,
     mockAdapter,
@@ -412,6 +417,52 @@ describe('ControlClient progress emission', () => {
         (e) => e.kind === 'spanStart' && e.spanId === 'introspect',
       );
       expect(introspectStart).toBeDefined();
+    });
+
+    it('forwards the schema option to the family instance', async () => {
+      const {
+        mockFamily,
+        mockTarget,
+        mockAdapter,
+        mockDriverDescriptor,
+        mockIntrospect,
+        mockDriver,
+      } = createMockComponents();
+
+      const client = createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+        driver: mockDriverDescriptor,
+      });
+
+      await client.introspect({ connection: 'postgres://test', schema: 'sales' });
+      await client.close();
+
+      expect(mockIntrospect).toHaveBeenCalledWith({ driver: mockDriver, schema: 'sales' });
+    });
+
+    it('omits schema when the caller did not request one', async () => {
+      const {
+        mockFamily,
+        mockTarget,
+        mockAdapter,
+        mockDriverDescriptor,
+        mockIntrospect,
+        mockDriver,
+      } = createMockComponents();
+
+      const client = createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+        driver: mockDriverDescriptor,
+      });
+
+      await client.introspect({ connection: 'postgres://test' });
+      await client.close();
+
+      expect(mockIntrospect).toHaveBeenCalledWith({ driver: mockDriver });
     });
   });
 

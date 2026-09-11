@@ -100,9 +100,16 @@ export interface ControlFamilyInstance<TFamilyId extends string, TSchemaIR>
     readonly space?: string;
   }): Promise<readonly LedgerEntryRecord[]>;
 
+  /**
+   * Reads the live database schema. `schema` selects the single schema to
+   * read and only applies when no `contract` is given — a contract carries
+   * its own declared namespaces, which the target walks instead. Targets
+   * without a schema namespace (SQLite, Mongo) ignore it.
+   */
   introspect(options: {
     readonly driver: ControlDriverInstance<TFamilyId, string>;
     readonly contract?: unknown;
+    readonly schema?: string;
   }): Promise<TSchemaIR>;
 }
 

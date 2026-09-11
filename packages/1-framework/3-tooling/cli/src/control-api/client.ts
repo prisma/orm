@@ -538,10 +538,6 @@ class ControlClientImpl implements ControlClient {
     await this.connectWithProgress(options?.connection, 'introspect', onProgress);
     const { driver, familyInstance } = await this.ensureConnected();
 
-    // TODO: Pass schema option to familyInstance.introspect when schema filtering is implemented
-    const _schema = options?.schema;
-    void _schema;
-
     // Emit introspect span
     onProgress?.({
       action: 'introspect',
@@ -551,7 +547,10 @@ class ControlClientImpl implements ControlClient {
     });
 
     try {
-      const result = await familyInstance.introspect({ driver });
+      const result = await familyInstance.introspect({
+        driver,
+        ...ifDefined('schema', options?.schema),
+      });
 
       onProgress?.({
         action: 'introspect',
