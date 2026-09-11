@@ -5,7 +5,7 @@ import type {
   OperationKind,
 } from '@internal/framework-components/runtime';
 import { AsyncIterableResult, createMetaBuilder } from '@internal/framework-components/runtime';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   BinaryExpr,
@@ -16,6 +16,7 @@ import {
   type ToWhereExpr,
   type WhereArg,
 } from '@internal/sql-relational-core/ast';
+import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -1087,8 +1088,10 @@ class CollectionImpl<
    * const firstTen = await db.orm.User.orderBy((u) => u.id.asc()).limit(10).all();
    * ```
    */
-  limit(n: number): Collection<TContract, ModelName, Row, State> {
-    return this.#clone({ limit: n });
+  limit(
+    n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#clone({ limit: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**
@@ -1102,8 +1105,10 @@ class CollectionImpl<
    *   .all();
    * ```
    */
-  offset(n: number): Collection<TContract, ModelName, Row, State> {
-    return this.#clone({ offset: n });
+  offset(
+    n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#clone({ offset: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**

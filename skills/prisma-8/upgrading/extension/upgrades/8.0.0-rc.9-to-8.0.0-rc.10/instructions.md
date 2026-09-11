@@ -8,6 +8,8 @@ changes:
     summary: Replace injected SQL-builder preparation callbacks with params-only callbacks and lexical facade SQL access.
   - id: preserve-prepared-reference-nullability
     summary: Preserve declaration nullability when constructing or cloning PreparedParamRef AST nodes.
+  - id: preserve-orm-pagination-expressions
+    summary: Preserve expression-valued limit and offset when consuming ORM CollectionState.
   - id: schema-header-use-prisma-8
     summary: |
       The schema header that marks a Prisma 8 schema is now `// use prisma-8`. The language server
@@ -49,6 +51,10 @@ changes:
       matches:
         - '"cardinality":\s*"(?:N:1|1:1)",\s*"on":'
 ---
+
+## `preserve-orm-pagination-expressions`
+
+Update extension code that reads or mirrors ORM `CollectionState.limit` and `offset`: these fields now contain relational-core `LimitOffsetValue | undefined` (`number | AnyExpression | undefined`), not just numbers. Forward them unchanged to the existing `SelectAst.withLimit` and `withOffset` methods. If processing numeric literals separately, narrow with `typeof value === 'number'`; preserve expression nodes rather than coercing, serializing or boxing them as literal parameters. Test presence against `undefined`, not truthiness, so zero limits and offsets survive. Keep grouped post-aggregation paging's separate numeric state unchanged.
 
 ## `preserve-prepared-reference-nullability`
 

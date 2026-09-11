@@ -23,12 +23,12 @@ import contractJson from './fixtures/generated/contract.json' with { type: 'json
 
 const lower = vi.fn<(statement: LoweredStatement) => void>();
 
-it('prepares ORM predicates through the public SQLite facade with fixed bindings and opaque raw SQL', async () => {
+it('prepares ORM predicates and pagination through the public SQLite facade with fixed bindings and opaque raw SQL', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'prepared-orm-predicates-'));
   const path = join(directory, 'test.db');
   const database = new DatabaseSync(path);
   database.exec(
-    "create table users (id integer primary key, invited_by_id integer); create table posts (id integer primary key, user_id integer, title text, views integer); insert into users values (1, 9), (2, 9), (3, null); insert into posts values (11, 1, 'Match', 5), (12, 1, 'Other', 1), (21, 2, 'Match', 6), (31, 3, 'Match', 5)",
+    "create table users (id integer primary key, invited_by_id integer, name text, email text); create table posts (id integer primary key, user_id integer, title text, views integer); insert into users (id, invited_by_id) values (1, 9), (2, 9), (3, null); insert into posts values (11, 1, 'Match', 5), (12, 1, 'Other', 1), (21, 2, 'Match', 6), (31, 3, 'Match', 5)",
   );
   const beforeCompile = vi.fn<NonNullable<SqlMiddleware['beforeCompile']>>(async () => undefined);
   const executions: Array<{ sql: string; params: readonly unknown[] }> = [];
@@ -159,6 +159,69 @@ it('prepares ORM predicates through the public SQLite facade with fixed bindings
         .build(),
     );
     expect(await sql.query(runtime, { value: null })).toEqual([]);
+    const paginationStart = executions.length;
+    const lowerCount = lower.mock.calls.length;
+    const paginationCallback = vi.fn();
+    const paginated = await db.prepare(
+      { take: 'sqlite/integer@1', skip: 'sqlite/integer@1' },
+      (p) => {
+        paginationCallback();
+        return db.orm.User.distinct('id')
+          .orderBy((user) => user.id.asc())
+          .limit(p.take)
+          .offset(p.skip)
+          .include('posts', (posts) => {
+            const page = posts
+              .distinct('id')
+              .orderBy((post) => post.id.asc())
+              .limit(p.take)
+              .offset(p.skip);
+            return posts.combine({
+              rows: page.select('id'),
+              count: posts.limit(2).offset(p.skip).count(),
+              sum: page.sum('views'),
+            });
+          })
+          .select('id')
+          .prepared.all();
+      },
+    );
+    expect(executions).toHaveLength(paginationStart);
+    expect(lower.mock.calls.length).toBe(lowerCount + 1);
+    expectTypeOf(paginated.query(runtime, { take: 2, skip: 0 })).toEqualTypeOf<
+      AsyncIterableResult<{
+        id: number;
+        posts: { rows: { id: number }[]; count: number; sum: number | null };
+      }>
+    >();
+    expect(await paginated.query(runtime, { take: 2, skip: 0 })).toEqual([
+      { id: 1, posts: { rows: [{ id: 11 }, { id: 12 }], count: 2, sum: 6 } },
+      { id: 2, posts: { rows: [{ id: 21 }], count: 1, sum: 6 } },
+    ]);
+    expect(await paginated.query(runtime, { take: 1, skip: 0 })).toEqual([
+      { id: 1, posts: { rows: [{ id: 11 }], count: 2, sum: 5 } },
+    ]);
+    expect(await paginated.query(runtime, { take: 1, skip: 1 })).toEqual([
+      { id: 2, posts: { rows: [], count: 0, sum: null } },
+    ]);
+    expect(await paginated.query(runtime, { take: 0, skip: 0 })).toEqual([]);
+    expect(await paginated.query(runtime, { take: 2, skip: 9 })).toEqual([]);
+    const paginationExecutions = executions.slice(paginationStart);
+    expect(new Set(paginationExecutions.map((execution) => execution.sql)).size).toBe(1);
+    expect(paginationExecutions.map((execution) => execution.params)).toEqual([
+      [2, 0, 0, 2, 0, 2, 0],
+      [1, 0, 0, 1, 0, 1, 0],
+      [1, 1, 1, 1, 1, 1, 1],
+      [0, 0, 0, 0, 0, 0, 0],
+      [2, 9, 9, 2, 9, 2, 9],
+    ]);
+    expect(paginationCallback).toHaveBeenCalledOnce();
+    expect(lower.mock.calls.length).toBe(lowerCount + 1);
+    await expect(
+      db.prepare({ take: 'sqlite/integer@1' }, (p) =>
+        db.orm.User.limit(p.take).select('id').prepared.first(),
+      ),
+    ).rejects.toThrow(/parameter not referenced.*take/i);
   } finally {
     createSpy.mockRestore();
     await db.close();

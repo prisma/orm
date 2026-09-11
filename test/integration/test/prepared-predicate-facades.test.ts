@@ -41,7 +41,7 @@ vi.mock('@internal/adapter-postgres/runtime', async (importOriginal) => {
 });
 
 it(
-  'prepares ORM predicates through the Postgres facade with fixed bindings and opaque raw SQL',
+  'prepares ORM predicates and pagination through the Postgres facade with fixed bindings and opaque raw SQL',
   async () => {
     const database = await createDevDatabase({ databaseIdleTimeoutMillis: timeouts.spinUpPpgDev });
     const client = new Client({ connectionString: database.connectionString });
@@ -172,6 +172,66 @@ it(
           .build(),
       );
       expect(await sql.query(runtime, { value: null })).toEqual([]);
+      const paginationStart = executions.length;
+      const lowerCount = lower.mock.calls.length;
+      const paginationCallback = vi.fn();
+      const paginated = await db.prepare({ take: 'pg/int4@1', skip: 'pg/int4@1' }, (p) => {
+        paginationCallback();
+        return db.orm.public.User.distinct('id')
+          .orderBy((user) => user.id.asc())
+          .limit(p.take)
+          .offset(p.skip)
+          .include('posts', (posts) => {
+            const page = posts
+              .distinct('id')
+              .orderBy((post) => post.id.asc())
+              .limit(p.take)
+              .offset(p.skip);
+            return posts.combine({
+              rows: page.select('id'),
+              count: posts.limit(2).offset(p.skip).count(),
+              sum: page.sum('views'),
+            });
+          })
+          .select('id')
+          .prepared.all();
+      });
+      expect(executions).toHaveLength(paginationStart);
+      expect(lower.mock.calls.length).toBe(lowerCount + 1);
+      expectTypeOf(paginated.query(runtime, { take: 2, skip: 0 })).toEqualTypeOf<
+        AsyncIterableResult<{
+          id: number;
+          posts: { rows: { id: number }[]; count: number; sum: number | null };
+        }>
+      >();
+      expect(await paginated.query(runtime, { take: 2, skip: 0 })).toEqual([
+        { id: 1, posts: { rows: [{ id: 11 }, { id: 12 }], count: 2, sum: 6 } },
+        { id: 2, posts: { rows: [{ id: 21 }], count: 1, sum: 6 } },
+      ]);
+      expect(await paginated.query(runtime, { take: 1, skip: 0 })).toEqual([
+        { id: 1, posts: { rows: [{ id: 11 }], count: 2, sum: 5 } },
+      ]);
+      expect(await paginated.query(runtime, { take: 1, skip: 1 })).toEqual([
+        { id: 2, posts: { rows: [], count: 0, sum: null } },
+      ]);
+      expect(await paginated.query(runtime, { take: 0, skip: 0 })).toEqual([]);
+      expect(await paginated.query(runtime, { take: 2, skip: 9 })).toEqual([]);
+      const paginationExecutions = executions.slice(paginationStart);
+      expect(new Set(paginationExecutions.map((execution) => execution.sql)).size).toBe(1);
+      expect(paginationExecutions.map((execution) => execution.params)).toEqual([
+        [2, 0],
+        [1, 0],
+        [1, 1],
+        [0, 0],
+        [2, 9],
+      ]);
+      expect(paginationCallback).toHaveBeenCalledOnce();
+      expect(lower.mock.calls.length).toBe(lowerCount + 1);
+      await expect(
+        db.prepare({ take: 'pg/int4@1' }, (p) =>
+          db.orm.public.User.limit(p.take).select('id').prepared.first(),
+        ),
+      ).rejects.toThrow(/parameter not referenced.*take/i);
     } finally {
       await db.close();
       await client.end();

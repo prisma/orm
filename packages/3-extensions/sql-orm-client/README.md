@@ -83,7 +83,9 @@ The [Postgres](../postgres/README.md#prepared-sql-and-orm-rows) and [SQLite](../
 
 Structured ORM comparisons reject nullable prepared parameters with `ORM.FILTER_UNSUPPORTED`, including structured interoperability inputs and comparisons nested in expression wrappers or SELECTs. A nullable column can still be compared to a non-nullable parameter; literal-null filters retain their existing null checks. Raw SQL remains opaque, including its interpolations: ORM does not parse, rewrite or reject raw SQL based on parameter nullability. SQL-builder comparison semantics are unchanged.
 
-Aggregate or mutation terminals, custom helper preparation, dynamic parameter lists and expression-valued ORM pagination are not supported.
+Root and nested `.limit(params.take).offset(params.skip)` accept SQL's non-nullable numeric expression operands, including paginated row/scalar/combine include refinements and distinct wrappers. Prepared executions keep SQL and binding slots fixed while pagination values change. `prepared.first()` replaces an earlier limit with `1`; a placeholder used only by that replaced limit remains subject to unused-declaration validation.
+
+Aggregate or mutation terminals, custom helper preparation and dynamic parameter lists are not supported.
 
 ## Pagination
 
