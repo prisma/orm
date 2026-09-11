@@ -2,7 +2,7 @@
 
 ORM client for Prisma 8 — fluent, type-safe model collections.
 
-This package provides a high-level ORM client surface on top of the runtime. Reads with includes compile to a single correlated-subquery plan and use the supplied runtime without acquiring an additional connection scope. Caller-owned connections and transactions remain caller-owned; nested mutations orchestrate several statements inside one scope.
+This package provides a high-level ORM client surface on top of the runtime. Ordinary and prepared SELECT reads with includes compile to a single correlated-subquery plan and use the supplied runtime without acquiring an additional connection scope. Caller-owned connections and transactions remain caller-owned; nested mutations orchestrate several statements inside one scope.
 
 ## Responsibilities
 
@@ -10,7 +10,8 @@ This package provides a high-level ORM client surface on top of the runtime. Rea
 - Build filter/order/include state from fluent APIs (`where`, `include`, `orderBy`, `limit`, `offset`)
 - Accept lane-agnostic `WhereArg` filter inputs (`WhereExpr` or `ToWhereExpr`) and normalize bound payloads inside ORM while preserving bound params/descriptors for runtime encoding and adapter lowering
 - Compile collection state into SQL AST query plans (`SqlQueryPlan`) without rendering SQL in ORM
-- Decode single-query include payloads into nested relation values
+- Buffer SELECT include results and decode embedded include payloads in the ORM consumer
+- Orchestrate multi-statement mutations, such as nested creates
 - Map storage-column rows back to model-field row shapes
 - Expose an `orm()` client with typed collection keys (for example `db.Post`)
 
