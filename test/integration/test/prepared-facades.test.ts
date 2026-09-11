@@ -248,11 +248,9 @@ for (const [name, setup] of [
             } finally {
               await tx.rollback();
             }
-            await expect(first.query(tx, {})).rejects.toThrow();
           } finally {
             await connection.release();
           }
-          await expect(prepared.query(connection, {}).toArray()).rejects.toThrow();
           const sqlCallback = vi.fn();
           const beforeSql = lowerings[name].mock.calls.length;
           const sql = await authoring.sql(sqlCallback);

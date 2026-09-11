@@ -44,7 +44,6 @@ import { deriveParamMetadata, encodeParams, encodeParamsWithMetadata } from './c
 import { validateCodecRegistryCompleteness } from './codecs/validation';
 import { computeSqlContentHash } from './content-hash';
 import { computeSqlFingerprint } from './fingerprint';
-import { guardQueryable } from './guard-queryable';
 import { lowerSqlPlan } from './lower-sql-plan';
 import { runBeforeCompileChain } from './middleware/before-compile-chain';
 import type { SqlMiddleware, SqlMiddlewareContext } from './middleware/sql-middleware';
@@ -378,10 +377,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     driverCall: () => AsyncIterable<Record<string, unknown>>,
     codecCtx: SqlCodecCallContext,
     execMiddlewareCtx: RuntimeMiddlewareContext,
-    assertOpen?: () => void,
   ): AsyncGenerator<Row, void, unknown> {
     await this.setupDriverExecution(exec);
-    assertOpen?.();
 
     const startedAt = Date.now();
     let outcome: TelemetryOutcome | null = null;
@@ -402,15 +399,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       const iterator = stream[Symbol.asyncIterator]();
       try {
         while (true) {
-          assertOpen?.();
           checkAborted(codecCtx, 'stream');
           const next = await iterator.next();
-          assertOpen?.();
           if (next.done) {
             break;
           }
           const decodedRow = await decodeRow(next.value, decodeContext, codecCtx);
-          assertOpen?.();
           yield blindCast<Row, 'decoded SQL rows match the query plan result type'>(decodedRow);
         }
       } finally {
@@ -505,14 +499,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
     queryable: SqlQueryable,
     options?: RuntimeExecuteOptions,
-    assertOpen?: () => void,
   ): AsyncIterableResult<Row> {
     this.ensureCodecRegistryValidated();
 
     const self = this;
     const { codecCtx, middlewareCtx } = this.createQueryContexts(options);
     const generator = async function* (): AsyncGenerator<Row, void, unknown> {
-      assertOpen?.();
       const exec = await self.prepareQueryExecution(plan, codecCtx, middlewareCtx);
       const decodeContext = buildDecodeContext(exec.ast, self.contractCodecs);
       yield* self.streamRows<Row>(
@@ -521,7 +513,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         () => queryable.query<Record<string, unknown>>({ sql: exec.sql, params: exec.params }),
         codecCtx,
         middlewareCtx,
-        assertOpen,
       );
     };
 
@@ -533,25 +524,20 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
     queryable: SqlQueryable,
     options?: RuntimeExecuteOptions,
-    assertOpen?: () => void,
   ): Promise<SqlStatementStats> {
-    assertOpen?.();
     this.ensureCodecRegistryValidated();
 
     const { codecCtx, middlewareCtx } = this.createQueryContexts(options);
     const exec = await this.prepareExecuteExecution(plan, codecCtx, middlewareCtx);
     await this.setupDriverExecution(exec);
-    assertOpen?.();
     checkAborted(codecCtx, 'stream');
 
     const startedAt = Date.now();
     let outcome: TelemetryOutcome = 'success';
     try {
-      const stats = await runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
+      return await runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
         queryable.execute({ sql: exec.sql, params: exec.params }),
       );
-      assertOpen?.();
-      return stats;
     } catch (error) {
       outcome = 'runtime-error';
       throw error;
@@ -625,7 +611,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     userParams: unknown,
     queryable: SqlQueryable,
     options?: RuntimeExecuteOptions,
-    assertOpen?: () => void,
   ): AsyncIterableResult<Row> {
     this.ensureCodecRegistryValidated();
 
@@ -633,7 +618,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const { codecCtx, middlewareCtx: execMiddlewareCtx } = this.createQueryContexts(options);
 
     const generator = async function* (): AsyncGenerator<Row, void, unknown> {
-      assertOpen?.();
       checkAborted(codecCtx, 'stream');
 
       // Resolve slot order to unencoded values so `beforeExecute`'s
@@ -686,7 +670,6 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
         () => queryable.query<Record<string, unknown>>(request),
         codecCtx,
         execMiddlewareCtx,
-        assertOpen,
       );
     };
 
@@ -699,9 +682,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     userParams: unknown,
     queryable: SqlQueryable,
     options?: RuntimeExecuteOptions,
-    assertOpen?: () => void,
   ): Promise<SqlStatementStats> {
-    assertOpen?.();
     this.ensureCodecRegistryValidated();
 
     const { codecCtx, middlewareCtx } = this.createQueryContexts(options);
@@ -752,15 +733,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
       },
     };
 
-    assertOpen?.();
     const startedAt = Date.now();
     let outcome: TelemetryOutcome = 'success';
     try {
-      const stats = await runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
+      return await runExecuteWithMiddleware(exec, this.middleware, middlewareCtx, () =>
         queryable.execute(request),
       );
-      assertOpen?.();
-      return stats;
     } catch (error) {
       outcome = 'runtime-error';
       throw error;
@@ -771,58 +749,38 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
 
   async connection(): Promise<RuntimeConnection> {
     const driverConn = await this.driver.acquireConnection();
-    let released = false;
-    const assertOpen = () => {
-      if (released) {
-        throw runtimeError('RUNTIME.CONNECTION_CLOSED', 'Cannot use a released connection.', {});
-      }
-    };
-    const queryable = guardQueryable(driverConn, assertOpen);
     const self = this;
 
     const wrappedConnection: RuntimeConnection &
       PreparedStatementQueryTarget &
       PreparedStatementExecuteTarget = {
       async transaction(): Promise<RuntimeTransaction> {
-        assertOpen();
         const driverTx = await driverConn.beginTransaction();
-        return self.wrapTransaction(driverTx, assertOpen);
+        return self.wrapTransaction(driverTx);
       },
       async release(): Promise<void> {
-        released = true;
         await driverConn.release();
       },
       async destroy(reason?: unknown): Promise<void> {
-        released = true;
         await driverConn.destroy(reason);
       },
       query<Row>(
         plan: (SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>) & { readonly _row?: Row },
         options?: RuntimeExecuteOptions,
       ): AsyncIterableResult<Row> {
-        return self.queryAgainstQueryable<Row>(
-          plan,
-          queryable,
-          {
-            ...options,
-            scope: 'connection',
-          },
-          assertOpen,
-        );
+        return self.queryAgainstQueryable<Row>(plan, driverConn, {
+          ...options,
+          scope: 'connection',
+        });
       },
       execute(
         plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
-        return self.executeStatisticsAgainstQueryable(
-          plan,
-          queryable,
-          {
-            ...options,
-            scope: 'connection',
-          },
-          assertOpen,
-        );
+        return self.executeStatisticsAgainstQueryable(plan, driverConn, {
+          ...options,
+          scope: 'connection',
+        });
       },
       [preparedStatementQuery]<Params, Row>(
         ps: PreparedStatement<Params, Row>,
@@ -835,9 +793,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
             'prepared statements are created by this runtime implementation'
           >(ps),
           params,
-          queryable,
+          driverConn,
           { ...options, scope: 'connection' },
-          assertOpen,
         );
       },
       [preparedStatementExecute]<Params>(
@@ -851,9 +808,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
             'prepared statements are created by this runtime implementation'
           >(ps),
           params,
-          queryable,
+          driverConn,
           { ...options, scope: 'connection' },
-          assertOpen,
         );
       },
     };
@@ -861,57 +817,34 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     return wrappedConnection;
   }
 
-  private wrapTransaction(
-    driverTx: SqlTransaction,
-    assertConnectionOpen: () => void,
-  ): RuntimeTransaction {
-    let invalidated = false;
-    const assertOpen = () => {
-      assertConnectionOpen();
-      if (invalidated) {
-        throw transactionClosedError();
-      }
-    };
-    const queryable = guardQueryable(driverTx, assertOpen);
+  private wrapTransaction(driverTx: SqlTransaction): RuntimeTransaction {
     const self = this;
     const wrappedTransaction: RuntimeTransaction &
       PreparedStatementQueryTarget &
       PreparedStatementExecuteTarget = {
       async commit(): Promise<void> {
-        invalidated = true;
         await driverTx.commit();
       },
       async rollback(): Promise<void> {
-        invalidated = true;
         await driverTx.rollback();
       },
       query<Row>(
         plan: (SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>) & { readonly _row?: Row },
         options?: RuntimeExecuteOptions,
       ): AsyncIterableResult<Row> {
-        return self.queryAgainstQueryable<Row>(
-          plan,
-          queryable,
-          {
-            ...options,
-            scope: 'transaction',
-          },
-          assertOpen,
-        );
+        return self.queryAgainstQueryable<Row>(plan, driverTx, {
+          ...options,
+          scope: 'transaction',
+        });
       },
       execute(
         plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,
         options?: RuntimeExecuteOptions,
       ): Promise<SqlStatementStats> {
-        return self.executeStatisticsAgainstQueryable(
-          plan,
-          queryable,
-          {
-            ...options,
-            scope: 'transaction',
-          },
-          assertOpen,
-        );
+        return self.executeStatisticsAgainstQueryable(plan, driverTx, {
+          ...options,
+          scope: 'transaction',
+        });
       },
       [preparedStatementQuery]<Params, Row>(
         ps: PreparedStatement<Params, Row>,
@@ -924,9 +857,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
             'prepared statements are created by this runtime implementation'
           >(ps),
           params,
-          queryable,
+          driverTx,
           { ...options, scope: 'transaction' },
-          assertOpen,
         );
       },
       [preparedStatementExecute]<Params>(
@@ -940,9 +872,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
             'prepared statements are created by this runtime implementation'
           >(ps),
           params,
-          queryable,
+          driverTx,
           { ...options, scope: 'transaction' },
-          assertOpen,
         );
       },
     };

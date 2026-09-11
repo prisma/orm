@@ -179,7 +179,7 @@ for (const [name, setup] of [
 ] as const) {
   describe(`prepared ORM rows on ${name}`, () => {
     it(
-      'prepares once, queries the explicit target and respects transaction and connection lifetimes',
+      'prepares once and queries explicit runtime, transaction and connection targets',
       async () => {
         const authoring = await setup('Authoring');
         let target: Environment | undefined;
@@ -229,13 +229,10 @@ for (const [name, setup] of [
             } finally {
               await transaction.rollback();
             }
-            await expect(firstSql.query(transaction, {}).toArray()).rejects.toThrow();
-            await expect(first.query(transaction, {})).rejects.toThrow();
             expect(await first.query(connection, {})).toBeNull();
           } finally {
             await connection.release();
           }
-          await expect(first.query(connection, {})).rejects.toThrow();
           expect(authoring.loweringCount()).toBe(2);
         } finally {
           await target?.close();
