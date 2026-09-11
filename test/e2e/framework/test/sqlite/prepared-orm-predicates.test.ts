@@ -2,8 +2,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import type { JsonValue } from '@prisma/orm-sqlite/adapter/codec-types';
 import sqliteAdapter from '@prisma/orm-sqlite/adapter/runtime';
-import type { AsyncIterableResult } from '@prisma/orm-sqlite/components/runtime';
+import { type AsyncIterableResult, defineAnnotation } from '@prisma/orm-sqlite/components/runtime';
 import type { SqlMiddleware } from '@prisma/orm-sqlite/family-runtime';
 import {
   BinaryExpr,
@@ -21,6 +22,10 @@ import { expect, expectTypeOf, it, vi } from 'vitest';
 import type { Contract } from './fixtures/generated/contract.d';
 import contractJson from './fixtures/generated/contract.json' with { type: 'json' };
 
+const annotation = defineAnnotation<{ label: string }>()({
+  namespace: 'prepared-boundary',
+  applicableTo: ['read'],
+});
 const lower = vi.fn<(statement: LoweredStatement) => void>();
 
 it('prepares ORM predicates and pagination through the public SQLite facade with fixed bindings and opaque raw SQL', async () => {
@@ -32,6 +37,7 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
   );
   const beforeCompile = vi.fn<NonNullable<SqlMiddleware['beforeCompile']>>(async () => undefined);
   const executions: Array<{ sql: string; params: readonly unknown[] }> = [];
+  const labels: Array<{ label: string } | undefined> = [];
   const create = sqliteAdapter.create;
   const createSpy = vi.spyOn(sqliteAdapter, 'create').mockImplementation((...args) => {
     const adapter = create(...args);
@@ -54,6 +60,7 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
         beforeCompile,
         beforeQuery(plan) {
           executions.push({ sql: plan.sql, params: plan.params });
+          labels.push(annotation.read(plan));
         },
       },
     ],
@@ -217,6 +224,45 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
     ]);
     expect(paginationCallback).toHaveBeenCalledOnce();
     expect(lower.mock.calls.length).toBe(lowerCount + 1);
+    const left = paginated.query(runtime, { take: 2, skip: 0 })[Symbol.asyncIterator]();
+    const right = paginated.query(runtime, { take: 1, skip: 1 })[Symbol.asyncIterator]();
+    expect(await left.next()).toEqual({
+      done: false,
+      value: { id: 1, posts: { rows: [{ id: 11 }, { id: 12 }], count: 2, sum: 6 } },
+    });
+    expect(await right.next()).toEqual({
+      done: false,
+      value: { id: 2, posts: { rows: [], count: 0, sum: null } },
+    });
+    expect(await left.next()).toEqual({
+      done: false,
+      value: { id: 2, posts: { rows: [{ id: 21 }], count: 1, sum: 6 } },
+    });
+    expect(await left.next()).toEqual({ done: true, value: undefined });
+    expect(await right.next()).toEqual({ done: true, value: undefined });
+    expect(lower.mock.calls.length).toBe(lowerCount + 1);
+    const annotated = await db.prepare({ id: 'sqlite/integer@1' }, (p) =>
+      db.orm.User.where({ id: p.id })
+        .select('id')
+        .prepared.all((meta) => meta.annotate(annotation({ label: 'all' }))),
+    );
+    expect(await annotated.query(runtime, { id: 1 })).toEqual([{ id: 1 }]);
+    expect(labels.at(-1)).toEqual({ label: 'all' });
+    database.exec(
+      "create table typed_rows (id integer primary key, active integer, created_at text, metadata text, label text); insert into typed_rows values (1, 1, '2024-03-15T10:30:00.000Z', '{\"count\":42}', 'typed')",
+    );
+    const decoded = await db.prepare({ id: 'sqlite/integer@1' }, (p) =>
+      db.orm.TypedRow.select('id', 'createdAt', 'metadata').prepared.first({ id: p.id }),
+    );
+    expectTypeOf(decoded.query(runtime, { id: 1 })).toEqualTypeOf<
+      Promise<{ id: number; createdAt: Date; metadata: JsonValue | null } | null>
+    >();
+    expect(await decoded.query(runtime, { id: 1 })).toEqual({
+      id: 1,
+      createdAt: new Date('2024-03-15T10:30:00.000Z'),
+      metadata: { count: 42 },
+    });
+    expect(await decoded.query(runtime, { id: 99 })).toBeNull();
     await expect(
       db.prepare({ take: 'sqlite/integer@1' }, (p) =>
         db.orm.User.limit(p.take).select('id').prepared.first(),

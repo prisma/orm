@@ -1,5 +1,5 @@
 import pgvector from '@internal/extension-pgvector/runtime';
-import type { AsyncIterableResult } from '@internal/framework-components/runtime';
+import { type AsyncIterableResult, defineAnnotation } from '@internal/framework-components/runtime';
 import postgres from '@internal/postgres/runtime';
 import {
   BinaryExpr,
@@ -18,6 +18,10 @@ import { Client } from 'pg';
 import { expect, expectTypeOf, it, vi } from 'vitest';
 import { getTestContract } from './sql-orm-client/helpers';
 
+const annotation = defineAnnotation<{ label: string }>()({
+  namespace: 'prepared-boundary',
+  applicableTo: ['read'],
+});
 const lower = vi.hoisted(() => vi.fn<(statement: LoweredStatement) => void>());
 vi.mock('@internal/adapter-postgres/runtime', async (importOriginal) => {
   const original = await importOriginal<typeof import('@internal/adapter-postgres/runtime')>();
@@ -54,6 +58,7 @@ it(
     );
     const beforeCompile = vi.fn<NonNullable<SqlMiddleware['beforeCompile']>>(async () => undefined);
     const executions: Array<{ sql: string; params: readonly unknown[] }> = [];
+    const labels: Array<{ label: string } | undefined> = [];
     const db = postgres({
       contract: getTestContract(),
       pg: client,
@@ -65,6 +70,7 @@ it(
           beforeCompile,
           beforeQuery(plan) {
             executions.push({ sql: plan.sql, params: plan.params });
+            labels.push(annotation.read(plan));
           },
         },
       ],
@@ -227,6 +233,61 @@ it(
       ]);
       expect(paginationCallback).toHaveBeenCalledOnce();
       expect(lower.mock.calls.length).toBe(lowerCount + 1);
+      const left = paginated.query(runtime, { take: 2, skip: 0 })[Symbol.asyncIterator]();
+      const right = paginated.query(runtime, { take: 1, skip: 1 })[Symbol.asyncIterator]();
+      expect(await left.next()).toEqual({
+        done: false,
+        value: { id: 1, posts: { rows: [{ id: 11 }, { id: 12 }], count: 2, sum: 6 } },
+      });
+      expect(await right.next()).toEqual({
+        done: false,
+        value: { id: 2, posts: { rows: [], count: 0, sum: null } },
+      });
+      expect(await left.next()).toEqual({
+        done: false,
+        value: { id: 2, posts: { rows: [{ id: 21 }], count: 1, sum: 6 } },
+      });
+      expect(await left.next()).toEqual({ done: true, value: undefined });
+      expect(await right.next()).toEqual({ done: true, value: undefined });
+      expect(lower.mock.calls.length).toBe(lowerCount + 1);
+      const annotated = await db.prepare({ id: 'pg/int4@1' }, (p) =>
+        db.orm.public.User.where({ id: p.id })
+          .select('id')
+          .prepared.first(undefined, (meta) => meta.annotate(annotation({ label: 'first' }))),
+      );
+      expect(await annotated.query(runtime, { id: 1 })).toEqual({ id: 1 });
+      expect(labels.at(-1)).toEqual({ label: 'first' });
+      await client.query('create extension if not exists vector');
+      await client.query('alter table posts add column embedding vector(3)');
+      await client.query("update posts set embedding = '[1,2,3]' where id = 11");
+      const decoded = await db.prepare({ id: 'pg/int4@1' }, (p) =>
+        db.orm.public.User.where({ id: p.id })
+          .select('id')
+          .include('posts', (posts) =>
+            posts.orderBy((post) => post.id.asc()).select('id', 'embedding'),
+          )
+          .prepared.all(),
+      );
+      expect(await decoded.query(runtime, { id: 1 })).toEqual([
+        {
+          id: 1,
+          posts: [
+            { id: 11, embedding: [1, 2, 3] },
+            { id: 12, embedding: null },
+          ],
+        },
+      ]);
+      const decodedFirst = await db.prepare({ id: 'pg/int4@1' }, (p) =>
+        db.orm.public.Post.select('id', 'embedding').prepared.first({ id: p.id }),
+      );
+      expectTypeOf(decodedFirst.query(runtime, { id: 11 })).toEqualTypeOf<
+        Promise<{ id: number; embedding: number[] | null } | null>
+      >();
+      expect(await decodedFirst.query(runtime, { id: 11 })).toEqual({
+        id: 11,
+        embedding: [1, 2, 3],
+      });
+      expect(await decodedFirst.query(runtime, { id: 999 })).toBeNull();
       await expect(
         db.prepare({ take: 'pg/int4@1' }, (p) =>
           db.orm.public.User.limit(p.take).select('id').prepared.first(),
