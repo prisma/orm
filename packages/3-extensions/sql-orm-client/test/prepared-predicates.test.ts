@@ -174,6 +174,93 @@ const wrappers: ReadonlyArray<readonly [string, (expr: AnyExpression) => AnyExpr
   ],
 ];
 
+const scalarSelect = (expr: AnyExpression) =>
+  select(AndExpr.true())
+    .withProjection([ProjectionItem.of('value', expr)])
+    .withLimit(1);
+const scalar = (expr: AnyExpression) => SubqueryExpr.of(scalarSelect(expr));
+
+const scalarOperands: ReadonlyArray<readonly [string, AnyExpression]> = [
+  ['right operand', BinaryExpr.eq(column, scalar(optional.buildAst()))],
+  ['left operand', BinaryExpr.eq(scalar(optional.buildAst()), column)],
+  [
+    'fixed list',
+    BinaryExpr.in(column, ListExpression.of([id.buildAst(), scalar(optional.buildAst())])),
+  ],
+  [
+    'nested result wrappers',
+    BinaryExpr.eq(
+      column,
+      scalar(
+        CastExpr.as(
+          FunctionCallExpr.of('coalesce', [scalar(optional.buildAst()), id.buildAst()]),
+          'int4',
+        ),
+      ),
+    ),
+  ],
+];
+
+const unrelatedSelect = scalarSelect(id.buildAst())
+  .withWhere(NullCheckExpr.isNull(optional.buildAst()))
+  .withHaving(NullCheckExpr.isNull(optional.buildAst()))
+  .withOrderBy([OrderByItem.asc(optional.buildAst())])
+  .withGroupBy([optional.buildAst()])
+  .withDistinctOn([optional.buildAst()]);
+const unrelatedProjection = ExistsExpr.exists(scalarSelect(optional.buildAst()));
+const independentContexts: ReadonlyArray<readonly [string, AnyExpression]> = [
+  ['required scalar result', BinaryExpr.eq(column, scalar(id.buildAst()))],
+  ['unrelated scalar projection', NullCheckExpr.isNull(scalar(optional.buildAst()))],
+  ['EXISTS result', unrelatedProjection],
+  ['unrelated SELECT clauses', BinaryExpr.eq(column, SubqueryExpr.of(unrelatedSelect))],
+  [
+    'source projection',
+    BinaryExpr.eq(
+      column,
+      SubqueryExpr.of(
+        scalarSelect(id.buildAst()).withFrom(
+          DerivedTableSource.as('nested', scalarSelect(optional.buildAst())),
+        ),
+      ),
+    ),
+  ],
+  [
+    'function source argument',
+    BinaryExpr.eq(
+      column,
+      SubqueryExpr.of(
+        scalarSelect(id.buildAst()).withFrom(FunctionSource.of('unnest', [optional.buildAst()])),
+      ),
+    ),
+  ],
+  [
+    'following sibling',
+    AndExpr.of([BinaryExpr.eq(column, scalar(id.buildAst())), unrelatedProjection]),
+  ],
+  [
+    'preceding sibling',
+    AndExpr.of([unrelatedProjection, BinaryExpr.eq(column, scalar(id.buildAst()))]),
+  ],
+  ['EXISTS inside operand', BinaryExpr.eq(unrelatedProjection, LiteralExpr.of(true))],
+  ['raw result payload', BinaryExpr.eq(column, scalar(raw(invalid())))],
+  ['raw enclosing scalar', raw(BinaryExpr.eq(column, scalar(optional.buildAst())))],
+];
+
+describe('scalar-subquery comparison context at compilation', () => {
+  it.each(scalarOperands)('rejects nullable %s before execution', (_name, expr) => {
+    const { collection, runtime } = createCollectionFor('User');
+    const query = collection.where({ toWhereExpr: () => expr }).select('id');
+    expect(() => query.prepared.all()).toThrow(/nullable prepared parameter/i);
+    expect(runtime.executions).toEqual([]);
+  });
+  it.each(independentContexts)('preserves %s', (_name, expr) => {
+    const { collection, runtime } = createCollectionFor('User');
+    const query = collection.where({ toWhereExpr: () => expr }).select('id');
+    expect(query.prepared.all().plan.ast).toBeDefined();
+    expect(runtime.executions).toEqual([]);
+  });
+});
+
 describe('structured nullable prepared comparisons', () => {
   it.each(wrappers)('rejects inside %s', (_name, wrap) => {
     expect(() => bindWhereExpr(contract, wrap(invalid()))).toThrow(/nullable prepared parameter/i);

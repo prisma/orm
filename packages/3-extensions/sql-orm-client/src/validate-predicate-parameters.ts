@@ -66,7 +66,7 @@ function visitor(comparison: boolean): ExprVisitor<void> {
       child(expr.expr.value);
       for (const item of expr.orderBy ?? []) child(item.expr);
     },
-    subquery: (expr) => visitSelect(expr.query),
+    subquery: (expr) => visitSelect(expr.query, comparison),
     exists: (expr) => visitSelect(expr.subquery),
   };
 }
@@ -76,13 +76,13 @@ function visitSource(source: AnyFromSource | undefined): void {
   if (source?.kind === 'function-source') source.args.forEach(validatePredicateParameters);
 }
 
-function visitSelect(ast: SelectAst): void {
+function visitSelect(ast: SelectAst, comparison = false): void {
   visitSource(ast.from);
   for (const join of ast.joins ?? []) {
     visitSource(join.source);
     if (join.on.kind !== 'eq-col-join-on') validatePredicateParameters(join.on);
   }
-  for (const item of ast.projection) validatePredicateParameters(item.expr);
+  for (const item of ast.projection) visit(item.expr, comparison);
   visit(ast.where, false);
   visit(ast.having, false);
   for (const item of ast.orderBy ?? []) validatePredicateParameters(item.expr);
