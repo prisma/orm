@@ -12,7 +12,7 @@ import {
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { getFieldToColumnMap, modelOf, resolveModelTableName } from './collection-contract';
 import { ormError } from './orm-errors';
-import type { ShorthandWhereFilter } from './types';
+import { predicateExpression } from './predicate-expression';
 
 export function and(...exprs: AnyExpression[]): AndExpr {
   return AndExpr.of(exprs);
@@ -38,7 +38,7 @@ export function shorthandToWhereExpr<
   context: ExecutionContext<TContract>,
   namespaceId: NsId,
   modelName: ModelName,
-  filters: ShorthandWhereFilter<TContract, NsId, ModelName>,
+  filters: Readonly<Record<string, unknown>>,
 ): AnyExpression | undefined {
   const contract = context.contract;
   const tableName = resolveModelTableName(contract, namespaceId, modelName);
@@ -59,7 +59,7 @@ export function shorthandToWhereExpr<
     }
 
     assertFieldHasEqualityTrait(context, namespaceId, modelName, fieldName);
-    exprs.push(BinaryExpr.eq(left, LiteralExpr.of(value)));
+    exprs.push(BinaryExpr.eq(left, predicateExpression(value) ?? LiteralExpr.of(value)));
   }
 
   if (exprs.length === 0) {

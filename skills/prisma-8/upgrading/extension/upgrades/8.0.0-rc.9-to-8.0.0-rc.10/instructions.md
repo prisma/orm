@@ -6,6 +6,8 @@ to: "8.0.0-rc.10"
 changes:
   - id: params-only-sql-facade-prepare
     summary: Replace injected SQL-builder preparation callbacks with params-only callbacks and lexical facade SQL access.
+  - id: preserve-prepared-reference-nullability
+    summary: Preserve declaration nullability when constructing or cloning PreparedParamRef AST nodes.
   - id: schema-header-use-prisma-8
     summary: |
       The schema header that marks a Prisma 8 schema is now `// use prisma-8`. The language server
@@ -47,6 +49,10 @@ changes:
       matches:
         - '"cardinality":\s*"(?:N:1|1:1)",\s*"on":'
 ---
+
+## `preserve-prepared-reference-nullability`
+
+Find code that constructs or clones `PreparedParamRef` from SQL relational-core's AST exports. When constructing a reference from a nullable declaration, pass its declared boolean nullability as the third argument to `PreparedParamRef.of(name, codec, nullable)` or `new PreparedParamRef(name, codec, nullable)`. When cloning an existing reference, preserve `ref.nullable`: `PreparedParamRef.of(ref.name, ref.codec, ref.nullable)`. Keep the name and complete codec reference unchanged, and keep constructing frozen class instances rather than spreading nodes into plain objects. Do not derive this flag from a column's nullability or an invocation's bound value.
 
 ## `params-only-sql-facade-prepare`
 

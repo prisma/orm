@@ -79,7 +79,11 @@ for await (const row of rows) {
 
 `query(target, params, options?)` requires an explicit compatible runtime, connection or transaction, independent of the authoring collection. It returns the terminal result directly: a thenable `AsyncIterableResult<Row>` for `all`, or `Promise<Row | null>` for `first`. Each call creates independent consumption state. Include paths retain their existing buffering; database value decoding and execution lifecycle remain SQL runtime responsibilities.
 
-The [Postgres](../postgres/README.md#prepared-sql-and-orm-rows) and [SQLite](../sqlite/README.md#prepared-sql-and-orm-rows) facades compose this surface through `db.prepare({}, () => db.orm.public.Post.select('title').prepared.all())` (SQLite uses `db.orm.Post`). SQL callbacks capture `db.sql` and receive only params. Aggregate or mutation terminals, custom helper preparation, placeholder-aware ORM filters, and expression-valued ORM pagination are not supported.
+The [Postgres](../postgres/README.md#prepared-sql-and-orm-rows) and [SQLite](../sqlite/README.md#prepared-sql-and-orm-rows) facades compose this surface through `db.prepare({}, () => db.orm.public.Post.select('title').prepared.all())` (SQLite uses `db.orm.Post`). SQL callbacks capture `db.sql` and receive only params. Non-nullable scalar placeholders work in shorthand filters, callback comparisons, relation/include predicates, `prepared.first` filters and fixed lists such as `user.id.in([params.first, 42, params.second])`. Repeated placeholders retain their bind identity; each target keeps its stable slot layout across invocations. Comparisons retain codec identity, input typing and field trait requirements.
+
+Structured ORM comparisons reject nullable prepared parameters with `ORM.FILTER_UNSUPPORTED`, including structured interoperability inputs and comparisons nested in expression wrappers or SELECTs. A nullable column can still be compared to a non-nullable parameter; literal-null filters retain their existing null checks. Raw SQL remains opaque, including its interpolations: ORM does not parse, rewrite or reject raw SQL based on parameter nullability. SQL-builder comparison semantics are unchanged.
+
+Aggregate or mutation terminals, custom helper preparation, dynamic parameter lists and expression-valued ORM pagination are not supported.
 
 ## Pagination
 

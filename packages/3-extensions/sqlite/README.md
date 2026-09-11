@@ -100,7 +100,9 @@ const sqlRows = await byId.query(db.runtime(), { id: 1 });
 
 `query(target, params, options?)` names a compatible runtime, connection or transaction explicitly. ORM `all` returns a thenable async row stream directly; `first` returns a row-or-null promise. SQL plans preserve `PreparedFor`: raw affected-count plans expose `execute(target, params, options?)`, while a row field named `affectedRows` still produces a row-query handle. Declarations retain the contract's codec input types; runtime rejects unused names.
 
-ORM row preparation supports literal filters and empty declarations, not placeholder-aware ORM predicates, expression-valued ORM pagination, aggregate/mutation terminals or custom helper preparation. Projection, includes and model mapping use ordinary ORM processing, including existing include buffering. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions). Native SQLite database `prepare(sql)` is a separate API.
+ORM predicates accept non-nullable scalar placeholders: `db.prepare({ id: 'sqlite/integer@1' }, p => db.orm.User.where({ id: p.id }).select('id').prepared.all())`. Callback comparisons, relation/include predicates, `prepared.first` filters and fixed lists of individual placeholders are also supported. Nullable prepared parameters in structured ORM comparisons reject before execution; literal-null filters and nullable columns compared with non-nullable parameters remain supported. Raw SQL is opaque, including nullable interpolations, and retains SQL semantics.
+
+Expression-valued ORM pagination, dynamic parameter lists, aggregate/mutation terminals and custom helper preparation are not supported. Projection, includes and model mapping use ordinary ORM processing, including existing include buffering. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions). Native SQLite database `prepare(sql)` is a separate API.
 
 ## Related Docs
 

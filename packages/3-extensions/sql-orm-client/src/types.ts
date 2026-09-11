@@ -3,6 +3,7 @@ import type { AnnotationValue, OperationKind } from '@internal/framework-compone
 import type {
   ExtractAggregateTypes,
   ExtractCodecTypes,
+  ExtractFieldInputTypes,
   ExtractFieldOutputTypes,
   ExtractQueryOperationTypes,
   SqlStorage,
@@ -24,6 +25,7 @@ import type { Expression } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { ComputeColumnJsType, RuntimeScope } from '@internal/sql-relational-core/types';
 import type { RowSelection } from './collection-internal-types';
+import { predicateExpression } from './predicate-expression';
 
 export interface IncludeScalar<Result> extends RowSelection<Result> {
   readonly kind: 'includeScalar';
@@ -186,14 +188,18 @@ export interface CollectionContext<TContract extends Contract<SqlStorage>> {
   readonly context: ExecutionContext<TContract>;
 }
 
-export type ComparisonMethodFns<T> = {
+type PredicateOperand<T, CodecId extends string> =
+  | T
+  | Expression<{ codecId: CodecId; nullable: false; many?: never }>;
+
+export type ComparisonMethodFns<T, CodecId extends string = never> = {
   eq(value: T): AnyExpression;
   neq(value: T): AnyExpression;
   gt(value: T): AnyExpression;
   lt(value: T): AnyExpression;
   gte(value: T): AnyExpression;
   lte(value: T): AnyExpression;
-  like(pattern: string): AnyExpression;
+  like(pattern: PredicateOperand<string, CodecId>): AnyExpression;
   in(values: readonly T[]): AnyExpression;
   notIn(values: readonly T[]): AnyExpression;
   isNull(): AnyExpression;
@@ -207,10 +213,10 @@ export type ComparisonMethodFns<T> = {
  *
  * - `traits: []` → always available (isNull, isNotNull)
  */
-export type ComparisonMethods<T, Traits> = {
+export type ComparisonMethods<T, Traits, CodecId extends string = never> = {
   [K in keyof ComparisonMethodsMeta as [ComparisonMethodsMeta[K]['traits'][number]] extends [Traits]
     ? K
-    : never]: ComparisonMethodFns<T>[K];
+    : never]: ComparisonMethodFns<PredicateOperand<T, CodecId>, CodecId>[K];
 };
 
 type QueryOperationReturnTraits<
@@ -318,7 +324,9 @@ type FieldOperations<
       : unknown
     : unknown;
 
-function param(codec: CodecRef | undefined, value: unknown): ParamRef {
+function param(codec: CodecRef | undefined, value: unknown): AnyExpression {
+  const expression = predicateExpression(value);
+  if (expression !== undefined) return expression;
   if (codec === undefined) return ParamRef.of(value);
   return ParamRef.of(value, { codec });
 }
@@ -450,8 +458,9 @@ type ScalarModelAccessor<
     nullable: FieldNullable<TContract, ModelName, K, NsId>;
   }> &
     ComparisonMethods<
-      FieldJsType<TContract, ModelName, K, NsId>,
-      FieldTraits<TContract, ModelName, K, NsId>
+      FieldPredicateInput<TContract, ModelName, K, NsId>,
+      FieldTraits<TContract, ModelName, K, NsId>,
+      FieldCodecId<TContract, ModelName, K, NsId>
     > &
     FieldOperations<TContract, NsId, ModelName, K>;
 };
@@ -915,7 +924,14 @@ export type ShorthandWhereFilter<
   ModelName extends string,
 > = Partial<{
   [K in keyof DefaultModelRow<TContract, ModelName, NsId> & string]:
-    | DefaultModelRow<TContract, ModelName, NsId>[K]
+    | FieldPredicateInput<TContract, ModelName, K, NsId>
+    | ('equality' extends FieldTraits<TContract, ModelName, K, NsId>
+        ? Expression<{
+            codecId: FieldCodecId<TContract, ModelName, K, NsId>;
+            nullable: false;
+            many?: never;
+          }>
+        : never)
     | null
     | undefined;
 }>;
@@ -1176,6 +1192,51 @@ type FieldCodecId<
   }
     ? Id
     : never;
+
+type NamespaceFieldInputType<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  FieldName extends string,
+  NsId extends string = never,
+> =
+  ResolvedNsId<TContract, ModelName, NsId> extends infer Ns extends string
+    ? ExtractFieldInputTypes<TContract> extends infer Inputs
+      ? Ns extends keyof Inputs
+        ? ModelName extends keyof Inputs[Ns]
+          ? FieldName extends keyof Inputs[Ns][ModelName]
+            ? Inputs[Ns][ModelName][FieldName]
+            : never
+          : never
+        : never
+      : never
+    : never;
+
+type FieldPredicateInput<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  FieldName extends string,
+  NsId extends string = never,
+> = [NamespaceFieldInputType<TContract, ModelName, FieldName, NsId>] extends [never]
+  ? FieldCodecInput<TContract, ModelName, FieldName, NsId>
+  : NamespaceFieldInputType<TContract, ModelName, FieldName, NsId>;
+
+type FieldCodecInput<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+  FieldName extends string,
+  NsId extends string = never,
+> =
+  NonNullable<FieldJsType<TContract, ModelName, FieldName, NsId>> extends readonly unknown[]
+    ? FieldJsType<TContract, ModelName, FieldName, NsId>
+    : FieldCodecId<TContract, ModelName, FieldName, NsId> extends infer Id extends string
+      ? Id extends keyof ExtractCodecTypes<TContract>
+        ? ExtractCodecTypes<TContract>[Id] extends { readonly input: infer Input }
+          ?
+              | Input
+              | (FieldNullable<TContract, ModelName, FieldName, NsId> extends true ? null : never)
+          : FieldJsType<TContract, ModelName, FieldName, NsId>
+        : FieldJsType<TContract, ModelName, FieldName, NsId>
+      : FieldJsType<TContract, ModelName, FieldName, NsId>;
 
 type FieldNullable<
   TContract extends Contract<SqlStorage>,

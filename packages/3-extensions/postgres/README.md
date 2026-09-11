@@ -102,7 +102,9 @@ const sqlRows = await byId.query(db.runtime(), { id: 1 });
 
 `query(target, params, options?)` requires an explicit compatible runtime, connection or transaction. ORM `all` returns its thenable async row stream directly; `first` returns a row-or-null promise. Projection, includes and model mapping retain ordinary ORM behavior. SQL plans retain their row/statistics distinction: a raw affected-count plan prepares an `execute(target, params, options?)` handle, while a row named `affectedRows` remains a row query. Codec declarations retain contract codec input typing and unused declarations are rejected by runtime.
 
-Use literal filters or empty declarations for ORM row preparation. Placeholder-aware ORM predicates, expression-valued ORM pagination, aggregate/mutation terminals and custom helper preparation are not supported by this surface. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for ownership and buffering details.
+ORM predicates accept non-nullable scalar placeholders: `db.prepare({ id: 'pg/int4@1' }, p => db.orm.public.User.where({ id: p.id }).select('id').prepared.all())`. Callback comparisons, relation/include predicates, `prepared.first` filters and fixed lists of individual placeholders are also supported. Nullable prepared parameters in structured ORM comparisons reject before execution; literal-null filters and nullable columns compared with non-nullable parameters remain supported. Raw SQL is opaque, including nullable interpolations, and retains SQL semantics.
+
+Expression-valued ORM pagination, dynamic parameter lists, aggregate/mutation terminals and custom helper preparation are not supported by this surface. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for ownership and buffering details.
 
 ### `@internal/postgres/contract-builder`
 

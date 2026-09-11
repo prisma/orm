@@ -23,6 +23,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
 import { ormError } from './orm-errors';
+import { validatePredicateParameters } from './validate-predicate-parameters';
 
 function namespaceCoordinateForSource(source: AnyFromSource): string | undefined {
   return source.kind === 'table-source' ? source.namespaceId : undefined;
@@ -33,6 +34,7 @@ export function bindWhereExpr(
   expr: AnyExpression,
   namespaceId?: string,
 ): AnyExpression {
+  validatePredicateParameters(expr);
   return bindWhereExprNode(contract, expr, namespaceId);
 }
 
