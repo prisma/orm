@@ -1,7 +1,15 @@
 import type { Namespace, TableProxy } from '@internal/sql-builder/types';
+import type { ContractWithTypeMaps, TypeMapsPhantomKey } from '@internal/sql-contract/types';
+import type { PreparedStatement } from '@internal/sql-runtime';
+import type { CodecTypes } from '@internal/target-postgres/codec-types';
 import { expectTypeOf, test } from 'vitest';
 import type { PostgresClient, PostgresTransactionContext } from '../src/runtime/postgres';
-import type { Contract } from './fixtures/namespaced-contract';
+import type { Contract as FixtureContract } from './fixtures/namespaced-contract';
+
+type Contract = ContractWithTypeMaps<
+  Omit<FixtureContract, TypeMapsPhantomKey>,
+  { codecTypes: CodecTypes }
+>;
 
 declare const db: PostgresClient<Contract>;
 
@@ -33,8 +41,9 @@ test('transaction re-types sql/orm with the same qualified surface', () => {
 });
 
 test('prepare callback captures the qualified sql surface', async () => {
-  await db.prepare({}, (params) => {
+  const prepared = await db.prepare({}, (params) => {
     expectTypeOf(params).toEqualTypeOf<Record<never, never>>();
     return db.sql.public.users.select('id').build();
   });
+  expectTypeOf(prepared).toEqualTypeOf<PreparedStatement<Record<never, never>, { id: number }>>();
 });

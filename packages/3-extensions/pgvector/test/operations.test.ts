@@ -1,12 +1,18 @@
 import type { CodecRef } from '@internal/framework-components/codec';
 import { createSqlOperationRegistry } from '@internal/sql-operations';
 import { OperationExpr, ParamRef } from '@internal/sql-relational-core/ast';
+import { expressionMarker } from '@internal/sql-relational-core/expression';
 import { describe, expect, it } from 'vitest';
 import pgvectorDescriptor from '../src/exports/runtime';
 
 function vectorExpr(value: number[], codec: CodecRef) {
   const ref = ParamRef.of(value, { codec });
-  return { returnType: { codecId: codec.codecId, nullable: false }, buildAst: () => ref, codec };
+  return {
+    [expressionMarker]: true,
+    returnType: { codecId: codec.codecId, nullable: false },
+    buildAst: () => ref,
+    codec,
+  };
 }
 
 describe('pgvector operations', () => {

@@ -25,8 +25,8 @@ function prepareRows<Result>(
 ) {
   const statement: PreparedStatement<{ id: number }, Record<string, unknown>> = {
     sql: 'select rows',
-    ast: description.plan.ast,
-    meta: description.plan.meta,
+    ast: description.ast,
+    meta: description.meta,
     slots: [],
     query: (_target, params) => source(rows(params.id)),
   };
@@ -46,9 +46,9 @@ describe('prepared collection', () => {
       meta.annotate(annotation({ label: 'prepared' }));
     const all = selected.prepared.all(configure);
     const first = selected.prepared.first(undefined, configure);
-    expect(annotation.read(all.plan)).toEqual({ label: 'prepared' });
-    expect(annotation.read(first.plan)).toEqual({ label: 'prepared' });
-    expect(annotation.read(selected.prepared.all().plan)).toBeUndefined();
+    expect(annotation.read(all)).toEqual({ label: 'prepared' });
+    expect(annotation.read(first)).toEqual({ label: 'prepared' });
+    expect(annotation.read(selected.prepared.all())).toBeUndefined();
     runtime.setNextResults([[{ user_id: 2 }], [{ user_id: 3 }]]);
     expect(await selected.all(configure)).toEqual([{ userId: 2 }]);
     expect(await selected.first(undefined, configure)).toEqual({ userId: 3 });
@@ -56,10 +56,7 @@ describe('prepared collection', () => {
       { label: 'prepared' },
       { label: 'prepared' },
     ]);
-    expect(runtime.executions.map(({ plan }) => plan.params)).toEqual([
-      all.plan.params,
-      first.plan.params,
-    ]);
+    expect(runtime.executions.map(({ plan }) => plan.params)).toEqual([all.params, first.params]);
     expect(selected.state.limit).toBe(99);
   });
 
@@ -132,10 +129,10 @@ describe('prepared collection', () => {
     const shorthand = selected.prepared.first({ id: 7 });
     const callback = selected.prepared.first((post) => post.id.eq(7));
     for (const description of [shorthand, callback]) {
-      expect(isSelectAst(description.plan.ast)).toBe(true);
-      if (!isSelectAst(description.plan.ast)) throw new Error('expected select');
-      expect(description.plan.ast.limit).toBe(1);
-      expect(description.plan.params).toEqual([7]);
+      expect(isSelectAst(description.ast)).toBe(true);
+      if (!isSelectAst(description.ast)) throw new Error('expected select');
+      expect(description.ast.limit).toBe(1);
+      expect(description.params).toEqual([7]);
     }
     const configure = vi.fn();
     selected.prepared.first(undefined, configure);
@@ -164,8 +161,8 @@ describe('prepared collection', () => {
     );
     const statement: PreparedStatement<{ id: number }, Record<string, unknown>> = {
       sql: 'select user_id from posts',
-      ast: description.plan.ast,
-      meta: description.plan.meta,
+      ast: description.ast,
+      meta: description.meta,
       slots: [],
       query,
     };

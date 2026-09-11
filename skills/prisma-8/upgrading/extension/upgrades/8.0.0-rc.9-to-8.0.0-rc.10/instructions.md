@@ -4,6 +4,10 @@ to: "8.0.0-rc.10"
 # sql-orm-client doc-comment sweep: reviewed, no entry required
 # postgres shell dependency ownership: reviewed, no extension-author action required; bundled packages now declare the catalog Node/pg type dependencies that public shell manifests mirror
 changes:
+  - id: nominal-sql-expression-wrappers
+    summary: Mark custom scalar Expression wrappers with the shared expressionMarker and recognize wrappers with isExpression.
+  - id: shared-preparable-envelope
+    summary: Return the shared Preparable SQL envelope directly from custom ORM preparation descriptions rather than nesting it under plan.
   - id: params-only-sql-facade-prepare
     summary: Replace injected SQL-builder preparation callbacks with params-only callbacks and lexical facade SQL access.
   - id: preserve-prepared-reference-nullability
@@ -51,6 +55,16 @@ changes:
       matches:
         - '"cardinality":\s*"(?:N:1|1:1)",\s*"on":'
 ---
+
+## `nominal-sql-expression-wrappers`
+
+Find custom scalar wrappers implementing `Expression<ScopeField>` from `@internal/sql-relational-core/expression`. Import `expressionMarker` from that entrypoint and add `readonly [expressionMarker] = true` on implementing classes, or `[expressionMarker]: true` on contextually typed expression object literals (`true as const` when inference would widen it). Keep the existing `returnType`, `codec` and `buildAst()` behavior unchanged. `buildOperation()` and raw scalar `.returns()` already supply the marker. Use the exported `isExpression(value)` guard instead of testing for a callable `buildAst` before converting unknown codec inputs. Import the shared marker rather than allocating a local symbol; its global identity supports separately bundled producers.
+
+Do not mark AST nodes, table/query builders, raw-row builders or arbitrary codec input objects merely because they have a `buildAst` method. A codec input with such a method remains a bound value, and its method must not be invoked by operand conversion.
+
+## `shared-preparable-envelope`
+
+For custom ORM row descriptions, replace `{ plan, consume }` with `{ ...plan, consume }`; read `description.ast`, `description.params` and `description.meta` instead of `description.plan.*`. Preserve the required consumer's full return type. The common `Preparable<Row, Result>` lives in relational-core's plan entrypoint; plain `SqlQueryPlan` producers do not need a consumer. Integrations composing SQL and ORM can use SQL ORM client's `prepareQuery` and `PreparedFrom<Params, Q>` with a concrete callback-return `Q extends Preparable`, retaining normal SQL `PreparedFor` row/statistics semantics when no required consumer exists.
 
 ## `preserve-orm-pagination-expressions`
 

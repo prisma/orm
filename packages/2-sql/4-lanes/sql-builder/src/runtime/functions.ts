@@ -15,9 +15,15 @@ import {
   SubqueryExpr,
 } from '@internal/sql-relational-core/ast';
 import type { RawCodecInferer } from '@internal/sql-relational-core/expression';
-import { codecOf, createRawSql, toExpr } from '@internal/sql-relational-core/expression';
+import {
+  codecOf,
+  createRawSql,
+  isExpression,
+  toExpr,
+} from '@internal/sql-relational-core/expression';
 import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
 import { assertDefined } from '@internal/utils/assertions';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { structuredError } from '@internal/utils/structured-error';
 import type {
@@ -49,19 +55,8 @@ const resolve = toExpr;
  * For `fns.eq(f.email, 'alice@example.com')`, `f.email` is the column-bound expression carrying a `ColumnRef` AST and a `CodecRef` derived from contract storage; the raw string operand has no codec context. By deriving the codec context from the column-bound side and forwarding it via `toExpr(value, codec)`, the resulting `ParamRef` carries the `CodecRef` that encode-side dispatch needs to materialise the per-instance codec for parameterized codec ids (`vector(1024)` vs. `vector(1536)`).
  */
 function resolveOperand(operand: ExprOrVal, otherCodec?: CodecRef): AstExpression {
-  if (isExpressionLike(operand)) return operand.buildAst();
+  if (isExpression(operand)) return operand.buildAst();
   return toExpr(operand, otherCodec);
-}
-
-function isExpressionLike(
-  value: unknown,
-): value is { buildAst: () => AstExpression; returnType?: { codecId: string } } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'buildAst' in value &&
-    typeof (value as { buildAst: unknown }).buildAst === 'function'
-  );
 }
 
 /**
@@ -70,13 +65,8 @@ function isExpressionLike(
  * Used for `and` / `or` operands. The usual operand is an `Expression<bool>` (e.g. the result of `fns.eq`), which this function passes through by calling `buildAst()`. The only time the raw-value branch fires is when the caller writes `fns.and(true, x)` or similar — inlining `TRUE`/`FALSE` literals lets the SQL planner statically simplify `TRUE AND x` to `x`, which it cannot do for an opaque `ParamRef`.
  */
 function toLiteralExpr(value: unknown): AstExpression {
-  if (
-    typeof value === 'object' &&
-    value !== null &&
-    'buildAst' in value &&
-    typeof (value as { buildAst: unknown }).buildAst === 'function'
-  ) {
-    return (value as { buildAst(): AstExpression }).buildAst();
+  if (isExpression(value)) {
+    return value.buildAst();
   }
   return new LiteralExpr(value);
 }
@@ -258,17 +248,23 @@ export function createFunctions<QC extends QueryContext>(
 ): Functions<QC> {
   const builtins = createBuiltinFunctions(rawCodecInferer);
 
-  return new Proxy({} as Functions<QC>, {
-    get(_target, prop: string) {
-      if (Object.hasOwn(builtins, prop)) {
-        return (builtins as Record<string, unknown>)[prop];
-      }
+  return new Proxy(
+    blindCast<Functions<QC>, 'proxy exposes built-in and registered SQL functions dynamically'>({}),
+    {
+      get(_target, prop: string) {
+        if (Object.hasOwn(builtins, prop)) {
+          return blindCast<
+            Record<string, unknown>,
+            'built-in function names are checked as own properties'
+          >(builtins)[prop];
+        }
 
-      const op = operations[prop];
-      if (op) return op.impl;
-      return undefined;
+        const op = operations[prop];
+        if (op) return op.impl;
+        return undefined;
+      },
     },
-  });
+  );
 }
 
 export function createAggregateFunctions<QC extends QueryContext>(
@@ -279,13 +275,22 @@ export function createAggregateFunctions<QC extends QueryContext>(
   const baseFns = createFunctions<QC>(operations, rawCodecInferer);
   const aggregates = createAggregateOnlyFunctions(aggregateRegistry);
 
-  return new Proxy({} as AggregateFunctions<QC>, {
-    get(_target, prop: string) {
-      if (Object.hasOwn(aggregates, prop)) {
-        return aggregates[prop];
-      }
+  return new Proxy(
+    blindCast<
+      AggregateFunctions<QC>,
+      'proxy composes SQL functions with registered aggregate methods'
+    >({}),
+    {
+      get(_target, prop: string) {
+        if (Object.hasOwn(aggregates, prop)) {
+          return aggregates[prop];
+        }
 
-      return (baseFns as Record<string, unknown>)[prop];
+        return blindCast<
+          Record<string, unknown>,
+          'base function proxy resolves dynamic method names'
+        >(baseFns)[prop];
+      },
     },
-  });
+  );
 }

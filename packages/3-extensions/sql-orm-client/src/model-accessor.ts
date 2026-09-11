@@ -14,7 +14,11 @@ import {
   type TableSource,
 } from '@internal/sql-relational-core/ast';
 import { codecRefForStorageColumn } from '@internal/sql-relational-core/codec-descriptor-registry';
-import type { Expression, ScopeField } from '@internal/sql-relational-core/expression';
+import {
+  type Expression,
+  expressionMarker,
+  type ScopeField,
+} from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
@@ -380,6 +384,7 @@ function createScalarFieldAccessor(
     Expression<ScopeField> & Record<string, unknown>,
     'scalar field accessor combines the expression protocol with generated comparison methods'
   >({
+    [expressionMarker]: true,
     returnType: { codecId, nullable, codec },
     codec,
     buildAst: () => column,

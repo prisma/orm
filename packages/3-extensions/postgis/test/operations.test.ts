@@ -1,6 +1,7 @@
 import type { CodecRef } from '@internal/framework-components/codec';
 import { createSqlOperationRegistry } from '@internal/sql-operations';
 import { ColumnRef, OperationExpr, ParamRef } from '@internal/sql-relational-core/ast';
+import { expressionMarker } from '@internal/sql-relational-core/expression';
 import { describe, expect, it } from 'vitest';
 import postgisDescriptor from '../src/exports/runtime';
 
@@ -9,7 +10,12 @@ const float8Codec: CodecRef = { codecId: 'pg/float8@1' };
 
 function geometryExpr(value: unknown, codec: CodecRef = geometryCodec) {
   const ref = ParamRef.of(value, { codec });
-  return { returnType: { codecId: codec.codecId, nullable: false }, buildAst: () => ref, codec };
+  return {
+    [expressionMarker]: true,
+    returnType: { codecId: codec.codecId, nullable: false },
+    buildAst: () => ref,
+    codec,
+  };
 }
 
 describe('postgis operations', () => {
@@ -90,6 +96,7 @@ describe('postgis operations', () => {
   it('binary impls thread the column codec from self onto the user-value ParamRef', () => {
     const operations = postgisDescriptor.queryOperations!();
     const columnSelf = {
+      [expressionMarker]: true,
       codec: geometryCodec,
       returnType: { codecId: 'pg/geometry@1', nullable: false, codec: geometryCodec },
       buildAst: () => ColumnRef.of('cafe', 'location'),
@@ -120,6 +127,7 @@ describe('postgis operations', () => {
     const op = postgisDescriptor.queryOperations!()['dwithin'];
     expect(op).toBeDefined();
     const columnSelf = {
+      [expressionMarker]: true,
       codec: geometryCodec,
       returnType: { codecId: 'pg/geometry@1', nullable: false, codec: geometryCodec },
       buildAst: () => ColumnRef.of('cafe', 'location'),

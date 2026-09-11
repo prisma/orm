@@ -1,6 +1,10 @@
 import type { AnyExpression as AstExpression, CodecRef } from '@internal/sql-relational-core/ast';
 import { PreparedParamRef } from '@internal/sql-relational-core/ast';
-import type { Expression, ScopeField } from '@internal/sql-relational-core/expression';
+import {
+  type Expression,
+  expressionMarker,
+  type ScopeField,
+} from '@internal/sql-relational-core/expression';
 import { blindCast } from '@internal/utils/casts';
 import type { BindSiteParams, Declaration, ParamSpec } from './types';
 
@@ -14,6 +18,7 @@ function normalizeSpec(spec: ParamSpec): { codec: CodecRef; nullable: boolean } 
 }
 
 class BindSiteExpression implements Expression<ScopeField> {
+  readonly [expressionMarker] = true;
   readonly returnType: ScopeField;
   readonly #ast: AstExpression;
   constructor(ref: PreparedParamRef, returnType: ScopeField) {

@@ -994,7 +994,7 @@ export async function withTransaction<R>(
       if (invalidated) {
         throw transactionClosedError();
       }
-      return new AsyncIterableResult(guardedStream(transaction.query(plan, options)));
+      return new AsyncIterableResult(guardedStream(transaction.query<Row>(plan, options)));
     },
     async execute(
       plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,

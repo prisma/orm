@@ -7,21 +7,14 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { sql as sqlBuilder } from '@internal/sql-builder/runtime';
 import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
-import {
-  createPreparedRowQuery,
-  orm as ormBuilder,
-  type PreparedRowQuery,
-  type RowQuery,
-} from '@internal/sql-orm-client';
+import { orm as ormBuilder, type PreparedFrom, prepareQuery } from '@internal/sql-orm-client';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
-import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import type {
   BindSiteParams,
   Declaration,
   ExecutionContext,
   ParamsFromDeclaration,
-  PreparedFor,
-  PreparedStatement,
   Runtime,
   SqlExecutionStackWithDriver,
   SqlMiddleware,
@@ -84,17 +77,12 @@ export interface SqliteClient<TContract extends Contract<SqlStorage>> {
   runtime(): Runtime;
   prepare<
     D extends Declaration<CT>,
-    Row,
-    Result,
+    Q extends Preparable,
     CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
   >(
     declaration: D,
-    callback: (params: BindSiteParams<D>) => RowQuery<Row, Result>,
-  ): Promise<PreparedRowQuery<ParamsFromDeclaration<D, CT>, Result>>;
-  prepare<D extends Declaration<CT>, Row, CT extends CodecTypesBase = ExtractCodecTypes<TContract>>(
-    declaration: D,
-    callback: (params: BindSiteParams<D>) => SqlQueryPlan<Row>,
-  ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>>;
+    callback: (params: BindSiteParams<D>) => Q,
+  ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>>;
   transaction<R>(fn: (tx: SqliteTransactionContext<TContract>) => PromiseLike<R>): Promise<R>;
   close(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
@@ -260,52 +248,13 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
 
   function prepare<
     D extends Declaration<CT>,
-    Row,
-    Result,
+    Q extends Preparable,
     CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
   >(
     declaration: D,
-    callback: (params: BindSiteParams<D>) => RowQuery<Row, Result>,
-  ): Promise<PreparedRowQuery<ParamsFromDeclaration<D, CT>, Result>>;
-  function prepare<
-    D extends Declaration<CT>,
-    Row,
-    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
-  >(
-    declaration: D,
-    callback: (params: BindSiteParams<D>) => SqlQueryPlan<Row>,
-  ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>>;
-  async function prepare<
-    D extends Declaration<CT>,
-    Row,
-    Result,
-    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
-  >(
-    declaration: D,
-    callback: (params: BindSiteParams<D>) => SqlQueryPlan<Row> | RowQuery<Row, Result>,
-  ): Promise<
-    | PreparedFor<ParamsFromDeclaration<D, CT>, Row>
-    | PreparedRowQuery<ParamsFromDeclaration<D, CT>, Result>
-  > {
-    let description: RowQuery<Row, Result> | undefined;
-    const statement = await getRuntime().prepare<D, Row, CT>(declaration, (params) => {
-      const authored = callback(params);
-      if ('consume' in authored) {
-        description = authored;
-        return authored.plan;
-      }
-      return authored;
-    });
-    if (description) {
-      return createPreparedRowQuery(
-        description,
-        blindCast<
-          PreparedStatement<ParamsFromDeclaration<D, CT>, Row>,
-          'ORM row descriptions always prepare row-returning SQL plans'
-        >(statement),
-      );
-    }
-    return statement;
+    callback: (params: BindSiteParams<D>) => Q,
+  ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>> {
+    return prepareQuery<D, Q, CT>(getRuntime(), declaration, callback);
   }
 
   return {

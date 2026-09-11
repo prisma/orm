@@ -1,10 +1,11 @@
 import { collectOrderedParamRefs, PreparedParamRef } from '@internal/sql-relational-core/ast';
-import type { Expression } from '@internal/sql-relational-core/expression';
+import { type Expression, expressionMarker } from '@internal/sql-relational-core/expression';
 import { expect, it } from 'vitest';
 import { createCollectionFor } from './collection-fixtures';
 
 const ref = PreparedParamRef.of('page', { codecId: 'pg/int4@1' });
 const page: Expression<{ codecId: 'pg/int4@1'; nullable: false }> = {
+  [expressionMarker]: true,
   returnType: { codecId: 'pg/int4@1', nullable: false },
   buildAst: () => ref,
 };
@@ -37,16 +38,16 @@ it('retains pagination AST through root, distinct, nested rows, scalar and combi
       .prepared.all(),
   ];
   for (const description of descriptions) {
-    expect(collectOrderedParamRefs(description.plan.ast)).toEqual([ref]);
-    expect(collectOrderedParamRefs(description.plan.ast)[0]).toBe(ref);
+    expect(collectOrderedParamRefs(description.ast)).toEqual([ref]);
+    expect(collectOrderedParamRefs(description.ast)[0]).toBe(ref);
   }
-  expect(descriptions[0]?.plan.ast).toMatchObject({ limit: ref, offset: ref });
+  expect(descriptions[0]?.ast).toMatchObject({ limit: ref, offset: ref });
   expect(runtime.executions).toEqual([]);
 });
 
 it('first replaces the prior limit without retaining its parameter', () => {
   const { collection } = createCollectionFor('User');
   const description = collection.limit(page).offset(0).select('id').prepared.first();
-  expect(description.plan.ast).toMatchObject({ limit: 1, offset: 0 });
-  expect(collectOrderedParamRefs(description.plan.ast)).toEqual([]);
+  expect(description.ast).toMatchObject({ limit: 1, offset: 0 });
+  expect(collectOrderedParamRefs(description.ast)).toEqual([]);
 });

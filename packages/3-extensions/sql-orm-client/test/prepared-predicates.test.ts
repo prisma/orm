@@ -30,8 +30,8 @@ import {
   TableSource,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
-import type { Expression } from '@internal/sql-relational-core/expression';
-import { describe, expect, it } from 'vitest';
+import { type Expression, expressionMarker } from '@internal/sql-relational-core/expression';
+import { describe, expect, it, vi } from 'vitest';
 import { bindWhereExpr } from '../src/where-binding';
 import { createCollectionFor } from './collection-fixtures';
 import { getTestContract } from './helpers';
@@ -42,7 +42,7 @@ function parameter<C extends string, N extends boolean>(
   nullable: N,
 ): Expression<{ codecId: C; nullable: N }> {
   const ast = PreparedParamRef.of(name, { codecId }, nullable);
-  return { returnType: { codecId, nullable }, buildAst: () => ast };
+  return { [expressionMarker]: true, returnType: { codecId, nullable }, buildAst: () => ast };
 }
 
 const id = parameter('id', 'pg/int4@1', false);
@@ -82,7 +82,7 @@ it('preserves prepared refs and stable slots in shorthand, callback, relations, 
       .prepared.all(),
   ];
   for (const description of descriptions) {
-    const refs = collectOrderedParamRefs(description.plan.ast);
+    const refs = collectOrderedParamRefs(description.ast);
     expect(refs).toEqual([id.buildAst()]);
     expect(refs[0]).toBe(id.buildAst());
   }
@@ -98,7 +98,7 @@ it('preserves prepared refs and stable slots in shorthand, callback, relations, 
     .select('id')
     .prepared.all();
   expect(
-    collectOrderedParamRefs(mixed.plan.ast).map((ref) =>
+    collectOrderedParamRefs(mixed.ast).map((ref) =>
       ref.kind === 'prepared-param-ref' ? ['prepared', ref.name] : ['literal', ref.value],
     ),
   ).toEqual([
@@ -107,6 +107,18 @@ it('preserves prepared refs and stable slots in shorthand, callback, relations, 
     ['literal', 3],
     ['prepared', 'email'],
   ]);
+});
+
+it('binds codec input objects without invoking their buildAst method', () => {
+  const { collection } = createCollectionFor('Post');
+  const buildAst = vi.fn(() => {
+    throw new Error('not a SQL expression');
+  });
+  const value = Object.assign([1, 2, 3], { buildAst });
+  const query = collection.where({ embedding: value }).select('id').prepared.all();
+  expect(query.params).toEqual([value]);
+  expect(query.params[0]).toBe(value);
+  expect(buildAst).not.toHaveBeenCalled();
 });
 
 const wrappers: ReadonlyArray<readonly [string, (expr: AnyExpression) => AnyExpression]> = [
@@ -256,7 +268,7 @@ describe('scalar-subquery comparison context at compilation', () => {
   it.each(independentContexts)('preserves %s', (_name, expr) => {
     const { collection, runtime } = createCollectionFor('User');
     const query = collection.where({ toWhereExpr: () => expr }).select('id');
-    expect(query.prepared.all().plan.ast).toBeDefined();
+    expect(query.prepared.all().ast).toBeDefined();
     expect(runtime.executions).toEqual([]);
   });
 });
@@ -339,8 +351,8 @@ describe('structured nullable prepared comparisons', () => {
       .where((user) => user.invitedById.eq(id))
       .select('id')
       .prepared.all();
-    expect(collectOrderedParamRefs(description.plan.ast)).toEqual([id.buildAst()]);
-    expect(description.plan.ast).toMatchObject({
+    expect(collectOrderedParamRefs(description.ast)).toEqual([id.buildAst()]);
+    expect(description.ast).toMatchObject({
       where: {
         kind: 'and',
         exprs: [

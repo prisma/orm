@@ -62,15 +62,15 @@ const posts = await db.Post
 
 ## Prepared row descriptions
 
-Built-in collection chains expose terminal-only `.prepared.all(configure?)` and `.prepared.first(filter?, configure?)` views. They synchronously return a `RowQuery<DbRow, Result>` without executing it. Filters, projection, includes, variants, first-row limit replacement and read annotations use the ordinary row pipeline.
+Built-in collection chains expose terminal-only `.prepared.all(configure?)` and `.prepared.first(filter?, configure?)` views. They synchronously return a `RowQuery<DbRow, Result>` without executing it: the shared relational-core `Preparable` SQL envelope (`ast`, `params`, `meta`, `_row`) with a required ORM consumer. Ordinary `SqlQueryPlan` values use the same envelope without requiring a consumer. Filters, projection, includes, variants, first-row limit replacement and read annotations use the ordinary row pipeline.
 
-`createPreparedRowQuery(description, statement)` is the composition seam for client integrations: prepare `description.plan` through SQL runtime, then wrap that SQL row statement with the description. SQL runtime remains plan-only; the ORM consumer owns model mapping and include decoding.
+`createPreparedRowQuery(description, statement)` is the composition seam for client integrations: prepare the description's SQL envelope through SQL runtime, then wrap that SQL row statement with the description. SQL runtime remains plan-only; the ORM consumer owns model mapping and include decoding.
 
 ```ts
 import { createPreparedRowQuery } from '@internal/sql-orm-client';
 
 const description = posts.select('title').prepared.all();
-const statement = await runtime.prepare({}, () => description.plan);
+const statement = await runtime.prepare({}, () => description);
 const prepared = createPreparedRowQuery(description, statement);
 const rows = prepared.query(runtime, {});
 for await (const row of rows) {

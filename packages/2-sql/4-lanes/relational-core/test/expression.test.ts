@@ -1,6 +1,13 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { ColumnRef, IdentifierRef, LiteralExpr, OperationExpr, ParamRef } from '../src/ast/types';
-import { buildOperation, codecOf, type Expression, toExpr } from '../src/expression';
+import {
+  buildOperation,
+  codecOf,
+  type Expression,
+  expressionMarker,
+  isExpression,
+  toExpr,
+} from '../src/expression';
 
 const infixLowering = {
   targetFamily: 'sql',
@@ -23,10 +30,27 @@ describe('toExpr', () => {
   it('unwraps an Expression by calling its buildAst()', () => {
     const column = ColumnRef.of('users', 'email');
     const expression: Expression<{ codecId: 'pg/text@1'; nullable: false }> = {
+      [expressionMarker]: true,
       returnType: { codecId: 'pg/text@1', nullable: false },
       buildAst: () => column,
     };
     expect(toExpr(expression)).toBe(column);
+  });
+
+  it('keeps callable buildAst inputs as parameters rather than expressions', () => {
+    const buildAst = vi.fn(() => LiteralExpr.of('wrong'));
+    const value = { buildAst, returnType: { codecId: 'pg/text@1', nullable: false } };
+    expect(toExpr(value, { codecId: 'pg/jsonb@1' })).toEqual(
+      ParamRef.of(value, { codec: { codecId: 'pg/jsonb@1' } }),
+    );
+    expect(codecOf(value)).toBeUndefined();
+    expect(isExpression(value)).toBe(false);
+    expect(buildAst).not.toHaveBeenCalled();
+  });
+
+  it('uses a global marker shared by separately bundled expression producers', () => {
+    expect(expressionMarker).toBe(Symbol.for('prisma.sql.expression'));
+    expect(isExpression({ [Symbol.for('prisma.sql.expression')]: true })).toBe(true);
   });
 
   it('throws for null and undefined without codec', () => {
@@ -72,6 +96,7 @@ describe('codecOf', () => {
     const expr: Expression<{ codecId: 'pg/text@1'; nullable: false }> & {
       codec: typeof codec;
     } = {
+      [expressionMarker]: true,
       returnType: { codecId: 'pg/text@1', nullable: false },
       buildAst: () => IdentifierRef.of('email'),
       codec,
@@ -81,6 +106,7 @@ describe('codecOf', () => {
 
   it('derives CodecRef from returnType.codecId when no explicit codec metadata', () => {
     const expr: Expression<{ codecId: 'pg/text@1'; nullable: false }> = {
+      [expressionMarker]: true,
       returnType: { codecId: 'pg/text@1', nullable: false },
       buildAst: () => ColumnRef.of('user', 'email'),
     };
@@ -89,6 +115,7 @@ describe('codecOf', () => {
 
   it('derives CodecRef from returnType.codecId for non-column AST expressions', () => {
     const expr: Expression<{ codecId: 'pg/text@1'; nullable: false }> = {
+      [expressionMarker]: true,
       returnType: { codecId: 'pg/text@1', nullable: false },
       buildAst: () => LiteralExpr.of('foo'),
     };

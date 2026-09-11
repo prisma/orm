@@ -9,6 +9,7 @@ import type { Contract } from './fixtures/generated/contract';
 declare const db: PostgresClient<Contract>;
 declare const statsPlan: SqlQueryPlan<AffectedCount>;
 declare const shapedRows: SqlQueryPlan<{ affectedRows: number }>;
+declare const noRows: SqlQueryPlan<never>;
 
 test('ORM preparation preserves complete all and first results', async () => {
   const all = await db.prepare({}, () => db.orm.public.User.select('id').prepared.all());
@@ -22,6 +23,9 @@ test('ORM preparation preserves complete all and first results', async () => {
 });
 
 test('SQL plans retain branded statistics and stats-shaped rows', async () => {
+  expectTypeOf(await db.prepare({}, () => noRows)).toEqualTypeOf<
+    PreparedStatement<Record<never, never>, never>
+  >();
   const stats = await db.prepare({}, () => statsPlan);
   const rows = await db.prepare({}, () => shapedRows);
   expectTypeOf(stats).toEqualTypeOf<PreparedExecution<Record<never, never>>>();

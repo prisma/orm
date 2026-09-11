@@ -32,8 +32,12 @@ export type CodecTypesBase = Record<string, { readonly input: unknown; readonly 
 /**
  * A typed SQL expression. Identity is carried by the `returnType` descriptor (inherited from `QueryOperationReturn` and narrowed to `T`) — distinct `T` makes distinct Expression types structurally. `buildAst()` materialises the underlying AST node.
  */
+export const expressionMarker: unique symbol = Symbol.for('prisma.sql.expression');
+
 export type Expression<T extends ScopeField> = QueryOperationReturn & {
+  readonly [expressionMarker]: true;
   readonly returnType: T;
+  readonly codec?: CodecRef | undefined;
   buildAst(): AstExpression;
 };
 
@@ -108,12 +112,12 @@ export type TraitExpression<
 /**
  * Resolve a raw value or an Expression into an AST expression node.
  *
- * When `value` is an Expression (duck-typed by its `buildAst` method), the AST it wraps is returned. Otherwise the value is embedded as a ParamRef tagged with the caller-supplied {@link CodecRef} (when known). The runtime resolves the ref via `contractCodecs.forCodecRef(codec)`; content-keyed memoisation collapses repeated lookups for the same logical column onto one shared codec.
+ * When `value` carries the shared Expression marker, the AST it wraps is returned. Otherwise the value is embedded as a ParamRef tagged with the caller-supplied {@link CodecRef} (when known). The runtime resolves the ref via `contractCodecs.forCodecRef(codec)`; content-keyed memoisation collapses repeated lookups for the same logical column onto one shared codec.
  *
  * Operation implementations that compare a column-bound expression to a user value derive the column's {@link CodecRef} from the column-bound side (via {@link codecOf}) and forward it here so encode-side dispatch resolves to the per-instance codec for parameterized codec ids (`vector(1024)` vs. `vector(1536)`).
  */
 export function toExpr(value: unknown, codec?: CodecRef): AstExpression {
-  if (isExpressionLike(value)) {
+  if (isExpression(value)) {
     return value.buildAst();
   }
   if (codec === undefined) {
@@ -144,23 +148,16 @@ export function param<T>(value: T, opts: { codecId: string }): ParamRef {
  * Returns `undefined` for raw scalar values (non-expression-like).
  */
 export function codecOf(value: unknown): CodecRef | undefined {
-  if (!isExpressionLike(value)) return undefined;
-  const wrapper = value as {
-    codec?: CodecRef;
-    returnType?: { codec?: CodecRef; codecId?: string };
-  };
-  if (wrapper.codec) return wrapper.codec;
-  if (wrapper.returnType?.codec) return wrapper.returnType.codec;
-  if (wrapper.returnType?.codecId) return { codecId: wrapper.returnType.codecId };
-  return undefined;
+  if (!isExpression(value)) return undefined;
+  return value.codec ?? value.returnType.codec ?? { codecId: value.returnType.codecId };
 }
 
-function isExpressionLike(value: unknown): value is Expression<ScopeField> {
+export function isExpression(value: unknown): value is Expression<ScopeField> {
   return (
     typeof value === 'object' &&
     value !== null &&
-    'buildAst' in value &&
-    typeof (value as { buildAst: unknown }).buildAst === 'function'
+    expressionMarker in value &&
+    value[expressionMarker] === true
   );
 }
 
@@ -187,6 +184,7 @@ export function buildOperation<R extends ScopeField>(spec: BuildOperationSpec<R>
     lowering: spec.lowering,
   });
   return {
+    [expressionMarker]: true,
     returnType: spec.returns,
     buildAst: () => op,
   };
@@ -337,7 +335,7 @@ function resolveInterpolation(
   adapter: RawCodecInferer,
   value: RawExprInterpolation,
 ): AstExpression | ParamRef {
-  if (isExpressionLike(value)) {
+  if (isExpression(value)) {
     return value.buildAst();
   }
   if (value instanceof ParamRef) {
@@ -443,6 +441,7 @@ class RawSqlBuilderImpl implements RawSqlBuilder {
     const paramSpec: ParamSpec = { codecId, nullable };
     const node = new RawExpr({ parts: this.parts, returns: paramSpec });
     return {
+      [expressionMarker]: true,
       returnType: { codecId, nullable },
       buildAst: () => node,
     };

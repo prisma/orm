@@ -187,7 +187,7 @@ for (const [name, setup] of [
           target = await setup('Target');
           const description = authoring.all();
           const query = vi.spyOn(authoring.runtime, 'query');
-          const callback = vi.fn(() => description.plan);
+          const callback = vi.fn(() => description);
           const sql = await authoring.runtime.prepare({}, callback);
           const prepared = createPreparedRowQuery(description, sql);
           expect(callback).toHaveBeenCalledOnce();
@@ -213,7 +213,7 @@ for (const [name, setup] of [
           expect(target.queryCount()).toBe(priorQueries);
 
           const firstDescription = authoring.first();
-          const firstSql = await authoring.runtime.prepare({}, () => firstDescription.plan);
+          const firstSql = await authoring.runtime.prepare({}, () => firstDescription);
           const first = createPreparedRowQuery(firstDescription, firstSql);
           expect(await first.query(authoring.runtime, {})).toBeNull();
           const connection = await target.runtime.connection();

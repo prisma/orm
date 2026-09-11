@@ -15,6 +15,7 @@ type Contract = ContractWithTypeMaps<
 declare const db: SqliteClient<Contract>;
 declare const statsPlan: SqlQueryPlan<AffectedCount>;
 declare const shapedRows: SqlQueryPlan<{ affectedRows: number }>;
+declare const noRows: SqlQueryPlan<never>;
 
 test('ORM preparation preserves complete all and first results', async () => {
   const all = await db.prepare({}, () => db.orm.User.select('id').prepared.all());
@@ -28,6 +29,9 @@ test('ORM preparation preserves complete all and first results', async () => {
 });
 
 test('SQL plans retain branded statistics and stats-shaped rows', async () => {
+  expectTypeOf(await db.prepare({}, () => noRows)).toEqualTypeOf<
+    PreparedStatement<Record<never, never>, never>
+  >();
   expectTypeOf(await db.prepare({}, () => statsPlan)).toEqualTypeOf<
     PreparedExecution<Record<never, never>>
   >();
