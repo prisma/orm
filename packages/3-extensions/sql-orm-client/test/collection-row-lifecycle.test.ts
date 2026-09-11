@@ -24,18 +24,6 @@ function setup(rows: Record<string, unknown>[], failure?: Error) {
       })(),
     );
   };
-  Object.assign(runtime, {
-    async connection() {
-      events.push('acquire');
-      return {
-        query: runtime.query.bind(runtime),
-        execute: runtime.execute.bind(runtime),
-        async release() {
-          events.push('release');
-        },
-      };
-    },
-  });
   return { collection, runtime, events };
 }
 
@@ -54,7 +42,7 @@ describe('ordinary row lifecycle', () => {
     expect(events).toEqual(['query', 'row', 'source closed']);
   });
 
-  it('acquires lazily, buffers includes and releases on cancellation', async () => {
+  it('buffers includes lazily and closes the source before cancellation', async () => {
     const { collection, events } = setup([
       { user_id: 1, author: [{ name: 'Alice' }] },
       { user_id: 2, author: [] },
@@ -66,14 +54,17 @@ describe('ordinary row lifecycle', () => {
     expect(events).toEqual([]);
     for await (const row of result) {
       expect(row).toEqual({ userId: 1, author: { name: 'Alice' } });
-      expect(events).toEqual(['acquire', 'query', 'row', 'row', 'source closed']);
+      expect(events).toEqual(['query', 'row', 'row', 'source closed']);
       break;
     }
-    expect(events).toEqual(['acquire', 'query', 'row', 'row', 'source closed', 'release']);
+    expect(events).toEqual(['query', 'row', 'row', 'source closed']);
   });
 
-  it('first drains the ordinary result and releases its include scope', async () => {
-    const { collection, events } = setup([{ user_id: 1, author: [] }]);
+  it('first drains the ordinary include result before closing the source', async () => {
+    const { collection, events } = setup([
+      { user_id: 1, author: [] },
+      { user_id: 2, author: [] },
+    ]);
     expect(
       await collection
         .select('userId')
@@ -83,10 +74,10 @@ describe('ordinary row lifecycle', () => {
       userId: 1,
       author: null,
     });
-    expect(events).toEqual(['acquire', 'query', 'row', 'source closed', 'release']);
+    expect(events).toEqual(['query', 'row', 'row', 'source closed']);
   });
 
-  it('releases after include source failure without yielding buffered parents', async () => {
+  it('closes after include source failure without yielding buffered parents', async () => {
     const failure = new Error('source failed');
     const { collection, events } = setup([{ user_id: 1, author: [] }], failure);
     const observed: unknown[] = [];
@@ -100,10 +91,10 @@ describe('ordinary row lifecycle', () => {
       })(),
     ).rejects.toBe(failure);
     expect(observed).toEqual([]);
-    expect(events).toEqual(['acquire', 'query', 'row', 'source closed', 'release']);
+    expect(events).toEqual(['query', 'row', 'source closed']);
   });
 
-  it('releases after include decoding failure without yielding buffered parents', async () => {
+  it('closes after include decoding failure without yielding buffered parents', async () => {
     const { collection, events } = setup([
       { user_id: 1, author: [] },
       { user_id: 2, author: [42] },
@@ -119,10 +110,10 @@ describe('ordinary row lifecycle', () => {
       })(),
     ).rejects.toThrow('Include row envelope');
     expect(observed).toEqual([]);
-    expect(events).toEqual(['acquire', 'query', 'row', 'row', 'source closed', 'release']);
+    expect(events).toEqual(['query', 'row', 'row', 'source closed']);
   });
 
-  it('compiles includes only after acquisition and releases on compilation failure', async () => {
+  it('compiles includes lazily without querying on compilation failure', async () => {
     const { collection, events } = setup([]);
     const failure = new Error('compile failed');
     vi.spyOn(queryPlan, 'compileSelectWithIncludes').mockImplementationOnce(() => {
@@ -134,10 +125,10 @@ describe('ordinary row lifecycle', () => {
       .all();
     expect(events).toEqual([]);
     await expect(result.toArray()).rejects.toBe(failure);
-    expect(events).toEqual(['acquire', 'release']);
+    expect(events).toEqual([]);
   });
 
-  it('mutation read-back preserves projection and releases when taking its first row', async () => {
+  it('mutation read-back preserves projection and closes when taking its first row', async () => {
     const { collection, runtime, events } = setup([{ user_id: 1, author: [{ name: 'Alice' }] }]);
     const scopeQuery = runtime.query;
     runtime.query = <Row>(_plan: (SqlExecutionPlan | SqlQueryPlan) & { readonly _row?: Row }) => {
@@ -159,6 +150,6 @@ describe('ordinary row lifecycle', () => {
         views: 0,
       });
     expect(result).toEqual({ userId: 1, author: { name: 'Alice' } });
-    expect(events).toEqual(['mutation', 'acquire', 'query', 'row', 'source closed', 'release']);
+    expect(events).toEqual(['mutation', 'query', 'row', 'source closed']);
   });
 });
