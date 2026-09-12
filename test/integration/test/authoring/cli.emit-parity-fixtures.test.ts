@@ -286,7 +286,10 @@ describe('emit parity fixture diagnostics', () => {
         expect(run.exitCode).toBe(2);
         expect(envelope).toMatchObject({
           ok: false,
-          error: { code: 'CONTRACT.SOURCE_LOAD_FAILED', why: expectedFixture.failureSummary },
+          error: {
+            code: 'CONTRACT.SOURCE_LOAD_FAILED',
+            why: expect.stringContaining(expectedFixture.failureSummary),
+          },
         });
         const reported = JSON.stringify(envelope);
         for (const diagnostic of expectedFixture.diagnostics) {

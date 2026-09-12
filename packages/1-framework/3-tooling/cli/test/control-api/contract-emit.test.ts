@@ -162,7 +162,26 @@ describe('executeContractEmit', () => {
         },
       })),
       expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
-      expectedSubstring: 'Provider parse failed',
+      expectedSubstring: 'Provider parse failed\n  - Unexpected token',
+    },
+    {
+      label: 'includes the diagnostic position when the provider reports a span',
+      source: createSourceProvider(async () => ({
+        ok: false,
+        failure: {
+          summary: 'Provider parse failed',
+          diagnostics: [
+            {
+              code: 'PSL_PARSE_ERROR',
+              message: 'Unexpected token',
+              sourceId: 'schema.prisma',
+              span: { start: { offset: 24, line: 3, column: 8 } },
+            },
+          ],
+        },
+      })),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'Unexpected token (schema.prisma:3:8)',
     },
     {
       label: 'rejects malformed failure result',

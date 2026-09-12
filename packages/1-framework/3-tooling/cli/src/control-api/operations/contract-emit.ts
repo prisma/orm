@@ -128,14 +128,17 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
       ),
     };
   }
+  const issues = mapDiagnosticsToIssues(failure['diagnostics']);
+  const summary = String(failure['summary']);
+  const why = [summary, ...issues.map((issue) => `  - ${issue.message}`)].join('\n');
   return {
     ok: false,
     error: failedToResolveContractSource(
-      String(failure['summary']),
+      why,
       'Fix contract source diagnostics and return ok(Contract).',
       {
         diagnostics: failure['diagnostics'],
-        issues: mapDiagnosticsToIssues(failure['diagnostics']),
+        issues,
         ...ifDefined('providerMeta', failure['meta']),
       },
     ),
