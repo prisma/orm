@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import type { MountedTree, PackageManagerId, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
@@ -26,6 +26,7 @@ interface RunnerCall {
 interface ScriptedResult {
   readonly exitCode: number;
   readonly stderr: string;
+  readonly addsToManifest?: boolean;
 }
 
 let projectDir: string;
@@ -34,6 +35,17 @@ let script: ScriptedResult[];
 
 const PNPM_WORKSPACE_LEAK =
   'ERR_PNPM_WORKSPACE_PKG_NOT_FOUND  In : "@prisma/orm-postgres@workspace:*" is in the dependencies but no package named "@prisma/orm-postgres" is present in the workspace';
+
+/** What pnpm 12 writes to stderr when strictDepBuilds (on by default) stops an add. */
+const PNPM_12_IGNORED_BUILDS = [
+  'Error: ERR_PNPM_IGNORED_BUILDS',
+  '',
+  '  × adding a new package',
+  '  ╰─▶ Ignored build scripts: esbuild@0.28.2, msgpackr-extract@3.0.4,',
+  '      workerd@1.20260704.1',
+  '  help: Run "pnpm approve-builds" to pick which dependencies should be allowed',
+  '        to run scripts.',
+].join('\n');
 
 beforeEach(() => {
   projectDir = createTestProjectDir('orm-init-install');
@@ -46,9 +58,27 @@ afterEach(() => {
   rmSync(projectDir, { recursive: true, force: true });
 });
 
+/** What pnpm has already written by the time it fails an add over ignored build scripts. */
+function addToManifest(cwd: string, args: readonly string[]): void {
+  const manifestPath = join(cwd, 'package.json');
+  const manifest: Record<string, unknown> = existsSync(manifestPath)
+    ? JSON.parse(readFileSync(manifestPath, 'utf-8'))
+    : {};
+  const field = args.includes('-D') ? 'devDependencies' : 'dependencies';
+  const added = args.filter((arg) => arg !== 'add' && arg !== '-D');
+  writeFileSync(
+    manifestPath,
+    JSON.stringify({ ...manifest, [field]: Object.fromEntries(added.map((spec) => [spec, '*'])) }),
+  );
+}
+
 const runner: PackageManagerRunner = async (request) => {
   calls.push({ file: request.file, args: [...request.args], cwd: request.cwd });
-  return script.shift() ?? { exitCode: 0, stderr: '' };
+  const result = script.shift() ?? { exitCode: 0, stderr: '' };
+  if (result.addsToManifest === true) {
+    addToManifest(request.cwd, request.args);
+  }
+  return { exitCode: result.exitCode, stderr: result.stderr };
 };
 
 function harness(packageManager?: PackageManagerId) {
@@ -77,28 +107,34 @@ function skillCalls(): readonly RunnerCall[] {
 
 describe('init installs', () => {
   it(
-    'pins the engine to the exact version the installed prisma package declares',
+    'installs the engine in the same add as prisma, pinned to the version the runtime toolchain peers on',
     async () => {
-      const cliManifestDir = join(projectDir, 'node_modules', 'prisma');
-      mkdirSync(cliManifestDir, { recursive: true });
+      const store = join(projectDir, 'node_modules', '.pnpm', 'runtime', 'node_modules', '@prisma');
+      mkdirSync(join(store, 'orm-postgres'), { recursive: true });
+      mkdirSync(join(store, 'orm-toolchain'), { recursive: true });
       writeFileSync(
-        join(cliManifestDir, 'package.json'),
+        join(store, 'orm-toolchain', 'package.json'),
         JSON.stringify({
-          name: 'prisma',
+          name: '@prisma/orm-toolchain',
           version: '8.0.0-rc.4',
-          dependencies: { '@prisma/cli-engine': '0.1.1' },
+          peerDependencies: { '@prisma/cli-engine': '0.1.1' },
         }),
         'utf-8',
+      );
+      mkdirSync(join(projectDir, 'node_modules', '@prisma'), { recursive: true });
+      symlinkSync(
+        join(store, 'orm-postgres'),
+        join(projectDir, 'node_modules', '@prisma', 'orm-postgres'),
+        'junction',
       );
 
       const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
       expect(run.exitCode).toBe(0);
-      expect(calls[2]).toEqual({
-        file: expect.any(String),
-        args: ['add', '-D', '@prisma/cli-engine@0.1.1'],
-        cwd: projectDir,
-      });
+      expect(calls.map((call) => call.args)).toEqual([
+        ['add', '@prisma/orm-postgres', 'dotenv'],
+        ['add', '-D', 'prisma@latest', '@types/node', '@prisma/cli-engine@0.1.1'],
+      ]);
     },
     timeouts.coldTransformImport,
   );
@@ -109,7 +145,7 @@ describe('init installs', () => {
       const run = await harness().run(scaffoldArgv(), { cwd: projectDir });
 
       expect(run.exitCode).toBe(0);
-      expect(calls.slice(0, 3)).toEqual([
+      expect(calls).toEqual([
         {
           file: expect.any(String),
           args: ['add', '@prisma/orm-postgres', 'dotenv'],
@@ -117,12 +153,7 @@ describe('init installs', () => {
         },
         {
           file: expect.any(String),
-          args: ['add', '-D', 'prisma@latest', '@types/node'],
-          cwd: projectDir,
-        },
-        {
-          file: expect.any(String),
-          args: ['add', '-D', '@prisma/cli-engine@latest'],
+          args: ['add', '-D', 'prisma@latest', '@types/node', '@prisma/cli-engine@latest'],
           cwd: projectDir,
         },
       ]);
@@ -221,7 +252,7 @@ describe('init installs', () => {
 
       expect(run.exitCode).toBe(0);
       expect(skillCalls()).toEqual([]);
-      expect(calls).toHaveLength(3);
+      expect(calls).toHaveLength(2);
       expect(JSON.stringify(run.presented?.data)).not.toContain('skills sync');
     },
     timeouts.coldTransformImport,
@@ -239,8 +270,7 @@ describe('init installs', () => {
         expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
           'pnpm add @prisma/orm-postgres dotenv',
           'npm add @prisma/orm-postgres dotenv',
-          'npm add -D prisma@latest @types/node',
-          'npm add -D @prisma/cli-engine@latest',
+          'npm add -D prisma@latest @types/node @prisma/cli-engine@latest',
         ]);
         expect(run.events).toContainEqual(
           expect.objectContaining({
@@ -320,6 +350,85 @@ describe('init installs', () => {
 
         expect(run.exitCode).toBe(4);
         expect(calls).toHaveLength(1);
+      },
+      timeouts.coldTransformImport,
+    );
+  });
+
+  describe('build scripts pnpm has not been told to trust', () => {
+    it(
+      'completes when pnpm 12 fails the adds only over ignored build scripts',
+      async () => {
+        script = [
+          { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS },
+          { exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS },
+        ];
+
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(calls).toHaveLength(2);
+        expect(emit).toHaveBeenCalledWith({ cwd: projectDir });
+        expect(run.presented?.data).toMatchObject({
+          packagesInstalled: { status: 'installed' },
+          contractEmitted: true,
+          warnings: expect.arrayContaining([expect.stringContaining('pnpm approve-builds')]),
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'completes when pnpm 11 exits non-zero after adding the packages',
+      async () => {
+        script = [
+          {
+            exitCode: 1,
+            stderr: 'Command failed with exit code 1: pnpm add @prisma/orm-postgres dotenv',
+            addsToManifest: true,
+          },
+          {
+            exitCode: 1,
+            stderr:
+              'Command failed with exit code 1: pnpm add -D prisma@latest @types/node @prisma/cli-engine@latest',
+            addsToManifest: true,
+          },
+        ];
+
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(0);
+        expect(emit).toHaveBeenCalledWith({ cwd: projectDir });
+        expect(run.presented?.data).toMatchObject({
+          packagesInstalled: { status: 'installed' },
+          warnings: expect.arrayContaining([expect.stringContaining('pnpm approve-builds')]),
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'still fails a pnpm add that exits non-zero without touching package.json',
+      async () => {
+        script = [{ exitCode: 1, stderr: '' }];
+
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(4);
+        expect(emit).not.toHaveBeenCalled();
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'still fails another manager that exits non-zero the same way',
+      async () => {
+        script = [{ exitCode: 1, stderr: PNPM_12_IGNORED_BUILDS, addsToManifest: true }];
+
+        const run = await harness('npm').run(scaffoldArgv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(4);
+        expect(emit).not.toHaveBeenCalled();
       },
       timeouts.coldTransformImport,
     );

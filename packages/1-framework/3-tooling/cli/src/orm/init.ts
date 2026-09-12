@@ -1,4 +1,3 @@
-import { ifDefined } from '@internal/utils/defined';
 import { docsUrlFor } from '@internal/utils/structured-error';
 import { flag } from '@prisma/cli-engine';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
@@ -21,7 +20,7 @@ import { buildInitNextActions, initPresentations } from './init-blocks';
 import { EMIT_COMMAND, emitFailedFinding, installFailedFinding } from './init-diagnostics';
 import { emitScaffoldedContract } from './init-emit';
 import { resolveInitInputs } from './init-inputs';
-import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
+import { installProjectDependencies } from './init-packages';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
 import { normalizeError } from './normalize-error';
 
@@ -135,20 +134,21 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         ctx.report({ kind: 'message', severity: 'info', text: note });
       }
 
-      const deps = [targetPackageName(inputs.target, scaffold.resolveImportSpecifier), 'dotenv'];
+      const runtimePackage = targetPackageName(inputs.target, scaffold.resolveImportSpecifier);
+      const deps = [runtimePackage, 'dotenv'];
       // The CLI the scaffolded scripts run is `prisma`, the unified CLI's
       // published name, whose v8 line publishes under the `latest` dist-tag (the
       // standalone shim is no longer published). It is the package that
       // carries the `prisma` binary, which is what the scaffolded scripts
       // invoke. `@prisma/cli-engine` — the config file's
-      // defineConfig import — is deliberately absent here: the CLI declares it
-      // as an exact peer, so it installs in a second step at the version the
-      // just-installed CLI names. Under moduleResolution 'bundler' the
+      // definePrismaConfig import — is added by the install itself, in the
+      // same `add` as `prisma`, at the exact version the just-installed
+      // runtime's toolchain peers on. Under moduleResolution 'bundler' the
       // scaffolded files reference process.env, which only typechecks with
       // Node's ambient types present; a project that already pins @types/node
       // keeps its own major.
       const cliDevDeps = ['prisma@latest'];
-      const devDeps: string[] = scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node'];
+      let devDeps: string[] = scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node'];
 
       const findings: Diagnostic[] = [];
       const extraActions: NextAction[] = [];
@@ -218,6 +218,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           packages: ctx.packages,
           cwd: ctx.cwd,
           deps,
+          runtimePackage,
           devDeps,
           catalogWarnings:
             packageManager === 'pnpm' ? buildCatalogWarnings(ctx.cwd, [...deps, ...devDeps]) : [],
@@ -230,19 +231,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           findings.push(installFailedFinding(outcome.failure, scaffold.filesWritten));
           return settle(4);
         }
-        const engineSpec = engineDevDependencySpec(ctx.cwd);
-        const engineInstall = await ctx.packages.install({
-          packages: [engineSpec],
-          dev: true,
-          cwd: ctx.cwd,
-          ...ifDefined('manager', outcome.manager),
-        });
-        if (!engineInstall.ok) {
-          packagesInstalled = 'failed';
-          findings.push(installFailedFinding(engineInstall.failure, scaffold.filesWritten));
-          return settle(4);
-        }
-        devDeps.push(engineSpec);
+        devDeps = [...outcome.devDeps];
         packagesInstalled = 'installed';
 
         const emitStep = 'Emit the contract';
@@ -259,7 +248,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       } else {
         extraActions.push(
           chooseAction(
-            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version prisma declares as its dependency, as development dependencies)`,
+            `Install the project dependencies with your package manager: ${deps.join(', ')} (and ${devDeps.join(', ')} plus @prisma/cli-engine at the version prisma declares as its dependency, as development dependencies in a single install)`,
           ),
         );
       }
