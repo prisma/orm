@@ -6,7 +6,14 @@ export const pgvectorAuthoringTypes = {
     Vector: {
       kind: 'typeConstructor',
       args: [
-        { kind: 'number', name: 'length', integer: true, minimum: 1, maximum: VECTOR_MAX_DIM },
+        {
+          kind: 'number',
+          name: 'length',
+          optional: true,
+          integer: true,
+          minimum: 1,
+          maximum: VECTOR_MAX_DIM,
+        },
       ],
       output: {
         codecId: 'pg/vector@1',

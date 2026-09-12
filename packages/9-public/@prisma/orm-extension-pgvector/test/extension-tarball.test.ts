@@ -81,6 +81,26 @@ describe('an extension pack installed next to the facade it extends', () => {
     expect(runInScratch(scratch, script)).toContain(`resolved ${subpaths.length}`);
   });
 
+  it('supports variable dimensions from the installed package', () => {
+    expect(
+      runInScratch(
+        scratch,
+        `
+      import { strict as assert } from 'node:assert';
+      import { vector } from '${extension}/column-types';
+      import runtime from '${extension}/runtime';
+      assert.deepEqual(vector().typeParams, {});
+      const descriptor = runtime.codecs().find(codec => codec.codecId === 'pg/vector@1');
+      const codec = descriptor.factory({})({ name: 'embedding' });
+      for (const value of [[1], [1, 2, 3]]) {
+        assert.deepEqual(await codec.decode(await codec.encode(value, {}), {}), value);
+      }
+      console.log('variable dimensions ok');
+    `,
+      ),
+    ).toContain('variable dimensions ok');
+  });
+
   it('requires its target shell as an exact-pinned peer, not a dependency', () => {
     const manifest: unknown = JSON.parse(readFileSync(join(installedDir, 'package.json'), 'utf8'));
     const { dependencies, peerDependencies } = Object(manifest) as {
