@@ -8,8 +8,8 @@ Three slices. Slice 1 is a prerequisite the other two both need; slices 2 and 3 
 
 | # | Slice | Delivers | Status |
 | --- | --- | --- | --- |
-| 1 | `top-level-blocks-in-inferred-psl` | `contract infer` can emit top-level PSL blocks alongside a namespace-wrapped one, and the reprint corpus is captured against a real database. | ⬜ to spec |
-| 2 | `recover-enums-from-derived-checks` | A database Prisma Next migrated round-trips its domain enums: the harvest is hash-verified, and the enum alone re-derives the live check. | ⬜ to spec |
+| 1 | `top-level-blocks-in-inferred-psl` | `contract infer` can emit top-level PSL blocks alongside a namespace-wrapped one, and the reprint corpus is captured against a real database. | ✅ merged ([#30012](https://github.com/prisma/prisma/pull/30012)) |
+| 2 | `recover-enums-from-derived-checks` | A database Prisma Next migrated round-trips its domain enums: the harvest is hash-verified, and the enum alone re-derives the live check. | 🔨 in progress ([spec](./slices/recover-enums-from-derived-checks/spec.md)) |
 | 3 | `recover-enums-from-adopted-checks` | A never-migrated database pulls its value sets into enums, with the live constraint still declared verbatim and no duplicate derived. | ⬜ to spec |
 
 ## Sequencing
