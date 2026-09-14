@@ -84,7 +84,7 @@ Composes the SQLite execution stack and returns typed query roots (`db.sql`, `db
 
 ### Prepared SQL and ORM rows
 
-`db.prepare(declaration, params => ...)` captures `db.sql` or `db.orm` lexically. The callback receives only declared placeholder expressions, runs once, and lowers SQL once without executing an ORM terminal.
+Use `db.prepare(declaration, params => ...)` to prepare SQL queries or ORM row reads once and execute them with different parameter values.
 
 ```ts
 const byId = await db.prepare({ id: 'sqlite/integer@1' }, (params) =>
@@ -98,11 +98,7 @@ const rowOrNull = await first.query(db.runtime(), {});
 const sqlRows = await byId.query(db.runtime(), { id: 1 });
 ```
 
-`query(target, params, options?)` names a compatible runtime, connection or transaction explicitly. ORM `all` returns a thenable async row stream directly; `first` returns a row-or-null promise. SQL plans preserve `PreparedFor`: raw affected-count plans expose `execute(target, params, options?)`, while a row field named `affectedRows` still produces a row-query handle. Declarations retain the contract's codec input types; runtime rejects unused names.
-
-ORM predicates accept non-nullable scalar placeholders: `db.prepare({ id: 'sqlite/integer@1' }, p => db.orm.User.where({ id: p.id }).select('id').prepared.all())`. Callback comparisons, relation/include predicates, `prepared.first` filters and fixed lists of individual placeholders are also supported. Nullable prepared parameters in structured ORM comparisons reject before execution; literal-null filters and nullable columns compared with non-nullable parameters remain supported. Raw SQL is opaque, including nullable interpolations, and retains SQL semantics.
-
-Root and nested ORM `limit`/`offset` accept non-nullable numeric placeholders, including distinct and scalar/combine include refinements. `prepared.first()` replaces an earlier limit with `1`; declarations used only by that limit are rejected as unreferenced. Dynamic parameter lists, aggregate/mutation terminals and custom helper preparation are not supported. Projection, includes and model mapping use ordinary ORM processing, including existing include buffering. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions). Native SQLite database `prepare(sql)` is a separate API.
+Pass a compatible runtime, connection or transaction explicitly to `query(target, params, options?)`. ORM `all` returns a thenable async row stream; `first` returns a row-or-null promise. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for supported predicates, includes and pagination. Native SQLite database `prepare(sql)` is a separate API.
 
 ## Related Docs
 

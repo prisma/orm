@@ -85,7 +85,7 @@ When URL binding is used, pool timeouts are configurable via `poolOptions`:
 
 ### Prepared SQL and ORM rows
 
-The Node facade accepts `db.prepare(declaration, params => ...)`. Capture `db.sql` or `db.orm` lexically; the callback receives only declared placeholder expressions and runs once. SQL lowering also runs once, without executing the query.
+Use `db.prepare(declaration, params => ...)` to prepare SQL queries or ORM row reads once and execute them with different parameter values.
 
 ```ts
 const byId = await db.prepare({ id: 'pg/int4@1' }, (params) =>
@@ -100,11 +100,7 @@ const rowOrNull = await first.query(db.runtime(), {});
 const sqlRows = await byId.query(db.runtime(), { id: 1 });
 ```
 
-`query(target, params, options?)` requires an explicit compatible runtime, connection or transaction. ORM `all` returns its thenable async row stream directly; `first` returns a row-or-null promise. Projection, includes and model mapping retain ordinary ORM behavior. SQL plans retain their row/statistics distinction: a raw affected-count plan prepares an `execute(target, params, options?)` handle, while a row named `affectedRows` remains a row query. Codec declarations retain contract codec input typing and unused declarations are rejected by runtime.
-
-ORM predicates accept non-nullable scalar placeholders: `db.prepare({ id: 'pg/int4@1' }, p => db.orm.public.User.where({ id: p.id }).select('id').prepared.all())`. Callback comparisons, relation/include predicates, `prepared.first` filters and fixed lists of individual placeholders are also supported. Nullable prepared parameters in structured ORM comparisons reject before execution; literal-null filters and nullable columns compared with non-nullable parameters remain supported. Raw SQL is opaque, including nullable interpolations, and retains SQL semantics.
-
-Root and nested ORM `limit`/`offset` accept non-nullable numeric placeholders, including distinct and scalar/combine include refinements. `prepared.first()` replaces an earlier limit with `1`; declarations used only by that limit are rejected as unreferenced. Dynamic parameter lists, aggregate/mutation terminals and custom helper preparation are not supported by this surface. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for ownership and buffering details.
+Pass a compatible runtime, connection or transaction explicitly to `query(target, params, options?)`. ORM `all` returns a thenable async row stream; `first` returns a row-or-null promise. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for supported predicates, includes and pagination.
 
 ### `@internal/postgres/contract-builder`
 
