@@ -14,7 +14,7 @@ import {
   preflightRefAdvancement,
 } from '../../src/control-api/operations/ref-advancement';
 import type { RenderContractDtsResult } from '../../src/control-api/types';
-import { createTestProjectDir } from '../utils/test-project-dir';
+import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const HASH_A = `${'a'.repeat(64)}`;
 const PROFILE_HASH = `${'c'.repeat(64)}`;
@@ -144,8 +144,20 @@ describe('executeRefAdvancement', () => {
 
 describe('preflightRefAdvancement', () => {
   const contractJson = sampleContractIR().contract as Record<string, unknown>;
-  const contractJsonPath = '/project/output/contract.json';
-  const configPath = '/project/prisma.config.ts';
+  let projectDir: string;
+  let contractJsonPath: string;
+  let configPath: string;
+
+  beforeEach(() => {
+    projectDir = createTestProjectDir('preflight-ref-advancement');
+    writeProjectManifest(projectDir);
+    contractJsonPath = join(projectDir, 'output', 'contract.json');
+    configPath = join(projectDir, 'prisma.config.ts');
+  });
+
+  afterEach(async () => {
+    await rm(projectDir, { recursive: true, force: true });
+  });
   const RENDERED = '// rendered\nexport type Contract = { rendered: true };\n';
 
   function fakeClient(result: RenderContractDtsResult) {

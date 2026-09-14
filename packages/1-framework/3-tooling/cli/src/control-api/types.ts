@@ -615,7 +615,7 @@ export interface RenderContractDtsOptions {
 }
 
 export interface RenderContractDtsSuccess {
-  /** The rendered declarations, byte-identical to what `emit` writes for the same contract. */
+  /** The declarations, rendered through the same emitter as `emit`, with the import specifiers the caller asked for. */
   readonly contractDts: string;
 }
 

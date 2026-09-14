@@ -437,6 +437,10 @@ A field references a storage type that cannot be resolved: a storage type instan
 
 The emitted contract file could not be read or parsed while computing `migration status`; reported as a warn-severity diagnostic on the status result rather than a thrown error, with the hint to re-run `prisma contract emit`. Payload: none (diagnostic carries `message` and `hints`).
 
+### CONTRACT.TYPES_RENDER_FAILED
+
+A command advancing a ref (`db sign`, `db init`, `db update`, `migrate --advance-ref`) could not render the `contract.d.ts` of the contract it is about to snapshot: the family accepted the JSON but the emitter refused it (for example a to-one relation with no declared nullability). Raised before the command touches the database, so nothing is migrated and no ref or snapshot is written; run `prisma contract emit` to see the emitter's own diagnosis. The emitter's error is attached as `cause`. Payload: none (`where.path` names the contract JSON).
+
 ### CONTRACT.VALIDATION_FAILED
 
 Aggregate contract validation failed: structural validation of the contract JSON (`ContractValidationError` with a `phase` of structural/domain/storage), semantic validation during `buildContract`, or storage/model validators rejecting the built contract. Raised at emit/authoring time and whenever a contract is loaded and validated. Also raised by `migration new` when the emitted contract has no `storageHash`; that site has no meta. Payload: `errors` (aggregate site); the error class also carries `phase`.
