@@ -1103,4 +1103,102 @@ describe('ControlClient progress emission', () => {
       timeouts.databaseOperation,
     );
   });
+
+  describe('renderContractDts()', () => {
+    it(
+      'renders the same declarations emit() produces for the contract',
+      async () => {
+        const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
+        const client = createControlClient({
+          family: mockFamily,
+          target: mockTarget,
+          adapter: mockAdapter,
+        });
+
+        const emitted = await client.emit({
+          contractConfig: { source: createSourceProvider(), output: '/tmp/contract.json' },
+        });
+        const rendered = await client.renderContractDts({
+          contract: emittableContract(),
+          resolveImportSpecifier: (specifier) => specifier,
+        });
+        await client.close();
+
+        expect(emitted.ok).toBe(true);
+        expect(rendered.ok).toBe(true);
+        if (emitted.ok && rendered.ok) {
+          expect(rendered.value.contractDts).toContain('export type Contract');
+          expect(rendered.value.contractDts).toBe(emitted.value.contractDts);
+        }
+      },
+      timeouts.databaseOperation,
+    );
+
+    it(
+      'rewrites the import specifiers through the resolver it is given',
+      async () => {
+        const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
+        const client = createControlClient({
+          family: mockFamily,
+          target: mockTarget,
+          adapter: mockAdapter,
+        });
+
+        const rendered = await client.renderContractDts({
+          contract: emittableContract(),
+          resolveImportSpecifier: (specifier) => specifier.replace(/^@internal\//, '@published/'),
+        });
+        await client.close();
+
+        expect(rendered.ok).toBe(true);
+        if (rendered.ok) {
+          expect(rendered.value.contractDts).toContain("from '@published/contract/types'");
+        }
+      },
+      timeouts.databaseOperation,
+    );
+
+    it('reports a contract the family rejects as CONTRACT_VALIDATION_FAILED', async () => {
+      const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
+      mockFamilyInstance.deserializeContract = () => {
+        throw new Error('storage.storageHash must be a string');
+      };
+      const client = createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+      });
+
+      const rendered = await client.renderContractDts({ contract: { storage: {} } });
+      await client.close();
+
+      expect(rendered.ok).toBe(false);
+      if (!rendered.ok) {
+        expect(rendered.failure).toMatchObject({
+          code: 'CONTRACT_VALIDATION_FAILED',
+          why: 'storage.storageHash must be a string',
+        });
+      }
+    });
+
+    it('reports a contract the emitter refuses as RENDER_FAILED', async () => {
+      const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
+      mockFamilyInstance.deserializeContract = () =>
+        ({ ...emittableContract(), storage: undefined }) as unknown as Contract;
+      const client = createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+      });
+
+      const rendered = await client.renderContractDts({ contract: emittableContract() });
+      await client.close();
+
+      expect(rendered.ok).toBe(false);
+      if (!rendered.ok) {
+        expect(rendered.failure.code).toBe('RENDER_FAILED');
+        expect(rendered.failure.why).toEqual(expect.any(String));
+      }
+    });
+  });
 });

@@ -19,6 +19,7 @@ import type {
   VerifyDatabaseResult,
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
+import type { ImportSpecifierResolver } from '@internal/framework-components/emission';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { ExecuteDbVerifyResult } from './operations/db-verify';
@@ -598,6 +599,38 @@ export interface EmitFailure {
  */
 export type EmitResult = Result<EmitSuccess, EmitFailure>;
 
+/**
+ * Options for rendering the `contract.d.ts` text of an already-emitted
+ * contract, as read from `contract.json`.
+ */
+export interface RenderContractDtsOptions {
+  /** The parsed `contract.json` to render types for. */
+  readonly contract: unknown;
+  /**
+   * Rewrites the package names the declarations import from, for the import
+   * root of the project that keeps them. Defaults to leaving every specifier
+   * as authored.
+   */
+  readonly resolveImportSpecifier?: ImportSpecifierResolver;
+}
+
+export interface RenderContractDtsSuccess {
+  /** The rendered declarations, byte-identical to what `emit` writes for the same contract. */
+  readonly contractDts: string;
+}
+
+export type RenderContractDtsFailureCode = 'CONTRACT_VALIDATION_FAILED' | 'RENDER_FAILED';
+
+export interface RenderContractDtsFailure {
+  readonly code: RenderContractDtsFailureCode;
+  readonly summary: string;
+  readonly why: string | undefined;
+  /** Underlying error for diagnostics; never serialized into envelopes. */
+  readonly cause?: unknown;
+}
+
+export type RenderContractDtsResult = Result<RenderContractDtsSuccess, RenderContractDtsFailure>;
+
 // ============================================================================
 // Migration Apply Types
 // ============================================================================
@@ -1034,4 +1067,13 @@ export interface ControlClient {
    * @returns Result pattern: Ok with emit details, NotOk with failure details
    */
   emit(options: EmitOptions): Promise<EmitResult>;
+
+  /**
+   * Renders the `contract.d.ts` text for a `contract.json` that was already
+   * emitted. A snapshot of a contract is that JSON plus these declarations, so
+   * whoever writes a snapshot renders them from the JSON it is storing rather
+   * than reading a sibling file that may have drifted or gone missing.
+   * Offline: uses `init()` but never `connect()`.
+   */
+  renderContractDts(options: RenderContractDtsOptions): Promise<RenderContractDtsResult>;
 }
