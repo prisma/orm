@@ -88,7 +88,7 @@ Move on to the next step. Repeat.
 
 ## Exact-pin rule
 
-Prisma 8 extensions pin every `@prisma/orm-*` SPI dependency to a single **exact** version (no `^`, no `~`, no range, no wildcard, no `workspace:` specifier in the published `package.json`). All `@prisma/orm-*` entries share the same version. The pin advances only after a successful upgrade run against the new minor.
+Prisma 8 extensions pin every `@prisma/orm-*` SPI dependency (everything except `@prisma/orm-extension-*`) to a single **exact** version (no `^`, no `~`, no range, no wildcard, no `workspace:` specifier in the published `package.json`). All of those entries share the same version. The pin advances after each successful upgrade step, release-candidate steps included.
 
 The one-line check in step 3 of the per-step flow enforces the rule; the `prisma-8-check-pins` guard the monorepo uses for its own extensions is not published. Wire the check into the extension's CI alongside the build/test step so an accidental range pin fails the PR before it lands.
 
