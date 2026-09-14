@@ -9,7 +9,18 @@ import type { AnyJsonValueProjection } from './json-value-projection';
 
 export type Direction = 'asc' | 'desc';
 
-export type BinaryOp = 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'like' | 'in' | 'notIn';
+export type BinaryOp =
+  | 'eq'
+  | 'neq'
+  | 'isNotDistinctFrom'
+  | 'isDistinctFrom'
+  | 'gt'
+  | 'lt'
+  | 'gte'
+  | 'lte'
+  | 'like'
+  | 'in'
+  | 'notIn';
 
 export type AggregateCountFn = 'count';
 export type AggregateOpFn = 'sum' | 'avg' | 'min' | 'max';
@@ -48,6 +59,7 @@ export interface ExpressionSource {
 }
 
 export interface ExpressionRewriter {
+  binary?(expr: BinaryExpr): AnyExpression;
   columnRef?(expr: ColumnRef): AnyExpression;
   identifierRef?(expr: IdentifierRef): AnyExpression;
   paramRef?(expr: ParamRef): ParamRef | LiteralExpr;
@@ -1255,11 +1267,12 @@ export class BinaryExpr extends Expression {
   }
 
   override rewrite(rewriter: ExpressionRewriter): AnyExpression {
-    return new BinaryExpr(
+    const rewritten = new BinaryExpr(
       this.op,
       rewriteComparable(this.left, rewriter),
       rewriteComparable(this.right, rewriter),
     );
+    return rewriter.binary?.(rewritten) ?? rewritten;
   }
 
   override fold<T>(folder: ExpressionFolder<T>): T {

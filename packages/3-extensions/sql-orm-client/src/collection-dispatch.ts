@@ -63,10 +63,6 @@ import { bindWhereExpr } from './where-binding';
 
 type CodecExecutionContext = CollectionContext<Contract<SqlStorage>>['context'];
 
-export interface RowQuery<DbRow, Result> extends Preparable<DbRow, Result> {
-  readonly consume: (rows: AsyncIterableResult<DbRow>) => Result;
-}
-
 interface DescribeCollectionRowsOptions {
   context: CodecExecutionContext;
   state: CollectionState;
@@ -77,14 +73,14 @@ interface DescribeCollectionRowsOptions {
 
 export function describeCollectionRows<Row>(
   options: DescribeCollectionRowsOptions,
-): RowQuery<Record<string, unknown>, AsyncIterableResult<Row>> {
+): Preparable<Record<string, unknown>, AsyncIterableResult<Row>> {
   const query = describeExecutionRows<Row>(options);
   return { ...query, consume: createPreparedRowsConsumer<Row>(options) };
 }
 
 function describeExecutionRows<Row>(
   options: DescribeCollectionRowsOptions,
-): RowQuery<Record<string, unknown>, AsyncIterableResult<Row>> {
+): Preparable<Record<string, unknown>, AsyncIterableResult<Row>> {
   const { context, state, tableName, modelName, namespaceId } = options;
   const { contract } = context;
   const polyInfo = resolvePolymorphismInfo(contract, namespaceId, modelName);
@@ -111,7 +107,7 @@ function describeExecutionRows<Row>(
             Row,
             'collection row generic is supplied by the caller and matched to the selected model shape'
           >(mapStorageRowToModelFields(contract, namespaceId, modelName, rawRow));
-    return { ...compiled, consume: (rows) => mapResultRows(rows, mapper) };
+    return { plan: compiled, consume: (rows) => mapResultRows(rows, mapper) };
   }
 
   const plan = compileSelectWithIncludes(
@@ -123,7 +119,7 @@ function describeExecutionRows<Row>(
     modelName,
   );
   return {
-    ...plan,
+    plan,
     consume: (rows) => consumeIncludeRows<Row>(context, state, namespaceId, modelName, rows),
   };
 }
@@ -156,7 +152,7 @@ function createPreparedMapper(
 
 function createPreparedRowsConsumer<Row>(
   options: DescribeCollectionRowsOptions,
-): RowQuery<Record<string, unknown>, AsyncIterableResult<Row>>['consume'] {
+): Preparable<Record<string, unknown>, AsyncIterableResult<Row>>['consume'] {
   const { context, state, namespaceId, modelName } = options;
   const mapRow = createPreparedMapper(context.contract, namespaceId, modelName, state.variantName);
   const includes = state.includes.map((include) => createPreparedIncludeConsumer(context, include));
@@ -271,7 +267,7 @@ export async function consumeFirstRow<Row>(rows: AsyncIterableResult<Row>): Prom
 
 export function describeCollectionFirst<Row>(
   options: DescribeCollectionRowsOptions,
-): RowQuery<Record<string, unknown>, Promise<Row | null>> {
+): Preparable<Record<string, unknown>, Promise<Row | null>> {
   const rows = describeCollectionRows<Row>(options);
   return {
     ...rows,
@@ -288,13 +284,13 @@ export function dispatchCollectionRows<Row>(
   const descriptionOptions = { context, state, tableName, modelName, namespaceId };
   if (state.includes.length === 0) {
     const query = describeExecutionRows<Row>(descriptionOptions);
-    return query.consume(queryPlanRows(runtime, query));
+    return query.consume(queryPlanRows(runtime, query.plan));
   }
 
   resolvePolymorphismInfo(context.contract, namespaceId, modelName);
   const generator = async function* (): AsyncGenerator<Row, void, unknown> {
     const query = describeExecutionRows<Row>(descriptionOptions);
-    yield* query.consume(queryPlanRows(runtime, query));
+    yield* query.consume(queryPlanRows(runtime, query.plan));
   };
   return new AsyncIterableResult(generator());
 }

@@ -1,5 +1,4 @@
 export { Collection } from '../collection';
-export type { RowQuery } from '../collection-dispatch';
 export { all, and, not, or } from '../filters';
 export { GroupedCollection } from '../grouped-collection';
 export { createModelAccessor } from '../model-accessor';

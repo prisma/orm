@@ -11,7 +11,8 @@ import pgvector from '@internal/extension-pgvector/runtime';
 import { instantiateExecutionStack } from '@internal/framework-components/execution';
 import type { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { PostgresRuntimeImpl } from '@internal/postgres/runtime';
-import { Collection, createPreparedRowQuery, type RowQuery } from '@internal/sql-orm-client';
+import { Collection, createPreparedRowQuery } from '@internal/sql-orm-client';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import {
   createExecutionContext,
   createSqlExecutionStack,
@@ -31,8 +32,8 @@ import { getTestContract } from './helpers';
 type Row = { name: string; posts: { title: unknown }[] };
 interface Environment {
   runtime: Runtime;
-  all(): RowQuery<Record<string, unknown>, AsyncIterableResult<Row>>;
-  first(): RowQuery<Record<string, unknown>, Promise<Row | null>>;
+  all(): Preparable<Record<string, unknown>, AsyncIterableResult<Row>>;
+  first(): Preparable<Record<string, unknown>, Promise<Row | null>>;
   insert(transaction: RuntimeTransaction): Promise<void>;
   bindingCount(): number;
   loweringCount(): number;
@@ -201,7 +202,7 @@ for (const [name, setup] of [
           const description = authoring.all();
           expect(authoring.bindingCount()).toBeGreaterThan(beforeDescription);
           const query = vi.spyOn(authoring.runtime, 'query');
-          const callback = vi.fn(() => description);
+          const callback = vi.fn(() => description.plan);
           const sql = await authoring.runtime.prepare({}, callback);
           const prepared = createPreparedRowQuery(description, sql);
           expect(callback).toHaveBeenCalledOnce();
@@ -229,7 +230,7 @@ for (const [name, setup] of [
           expect(target.queryCount()).toBe(priorQueries);
 
           const firstDescription = authoring.first();
-          const firstSql = await authoring.runtime.prepare({}, () => firstDescription);
+          const firstSql = await authoring.runtime.prepare({}, () => firstDescription.plan);
           const first = createPreparedRowQuery(firstDescription, firstSql);
           const firstBindings = authoring.bindingCount();
           expect(await first.query(authoring.runtime, {})).toBeNull();

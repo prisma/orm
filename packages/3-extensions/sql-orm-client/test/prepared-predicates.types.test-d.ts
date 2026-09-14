@@ -35,10 +35,11 @@ test('prepared predicate positions preserve codec identity, scalar shape, nullab
   collection.where({ id: params.email });
   // @ts-expect-error different codec identity
   collection.where((user) => user.id.eq(params.email));
-  // @ts-expect-error nullable prepared comparisons are not supported
-  collection.where({ invitedById: params.optional });
-  // @ts-expect-error column nullability does not admit nullable parameters
+  collection.where({ invitedById: params.optional, id: params.optional });
   collection.where((user) => user.invitedById.eq(params.optional));
+  collection.where((user) => user.id.neq(params.optional));
+  // @ts-expect-error nullable ordering operands remain unsupported
+  collection.where((user) => user.id.gt(params.optional));
   // @ts-expect-error nullable list member
   collection.where((user) => user.id.in([params.id, params.optional]));
   // @ts-expect-error wrong codec in a fixed list
@@ -98,22 +99,15 @@ type RefinedInputContract = ContractWithTypeMaps<
   }
 >;
 
-test('predicate literals honor emitted field input refinements', () => {
-  expectTypeOf<'42'>().toExtend<
-    Parameters<ModelAccessor<RefinedInputContract, 'User'>['id']['eq']>[0]
-  >();
-  expectTypeOf<{ id: '42' }>().toExtend<
-    ShorthandWhereFilter<RefinedInputContract, 'public', 'User'>
-  >();
-  expectTypeOf<number>().not.toExtend<
-    Parameters<ModelAccessor<RefinedInputContract, 'User'>['id']['eq']>[0]
-  >();
-});
-
-test('predicate literals use codec inputs instead of decoded output types', () => {
-  expectTypeOf<'42'>().toExtend<Parameters<ModelAccessor<InputContract, 'User'>['id']['eq']>[0]>();
-  expectTypeOf<{ id: '42' }>().toExtend<ShorthandWhereFilter<InputContract, 'public', 'User'>>();
-  expectTypeOf<boolean>().not.toExtend<
-    Parameters<ModelAccessor<InputContract, 'User'>['id']['eq']>[0]
-  >();
+test('ordinary predicate literals retain their existing field value types', () => {
+  type Contracts = InputContract | RefinedInputContract;
+  type Operand = Parameters<ModelAccessor<Contracts, 'User'>['id']['eq']>[0];
+  type Filter = ShorthandWhereFilter<Contracts, 'public', 'User'>;
+  expectTypeOf<number>().toExtend<Operand>();
+  expectTypeOf<'42'>().not.toExtend<Operand>();
+  expectTypeOf<{ id: number }>().toExtend<Filter>();
+  expectTypeOf<{ id: '42' }>().not.toExtend<Filter>();
+  expectTypeOf<typeof params.id>().toExtend<Operand>();
+  expectTypeOf<{ id: typeof params.optional }>().toExtend<Filter>();
+  expectTypeOf<typeof params.email>().not.toExtend<Operand>();
 });

@@ -4,8 +4,7 @@ import type { SqlStorage } from '@internal/sql-contract/types';
 import type { AnyQueryAst } from './ast/types';
 
 /**
- * Shared SQL preparation envelope produced by lanes before lowering.
- * Consumer metadata is optional; ordinary SQL plans need no identity consumer.
+ * A SQL query plan produced by a lane before lowering.
  *
  * Lanes build ASTs and metadata but do not perform SQL lowering. The `sql`
  * field is absent — `RuntimeCore` (the runtime base class in
@@ -17,13 +16,15 @@ import type { AnyQueryAst } from './ast/types';
  * (inherited from `QueryPlan`) is what `ResultType<P>` inspects to recover
  * the row type.
  */
-export interface Preparable<Row, Result> extends QueryPlan<Row> {
+export interface SqlQueryPlan<Row = unknown> extends QueryPlan<Row> {
   readonly ast: AnyQueryAst;
   readonly params: readonly unknown[];
-  consume?(rows: AsyncIterableResult<Row>): Result;
 }
 
-export interface SqlQueryPlan<Row = unknown> extends Preparable<Row, unknown> {}
+export interface Preparable<DbRow, Result> {
+  readonly plan: SqlQueryPlan<DbRow>;
+  consume(rows: AsyncIterableResult<DbRow>): Result;
+}
 
 /**
  * Wraps an `AnyQueryAst` (typically a `RawQueryAst`, minted by a raw statement

@@ -1,6 +1,7 @@
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
-import { describeCollectionRows, type RowQuery } from '../src/collection-dispatch';
+import { describeCollectionRows } from '../src/collection-dispatch';
 import * as collectionRuntime from '../src/collection-runtime';
 import { createCollectionFor } from './collection-fixtures';
 
@@ -207,7 +208,7 @@ describe('collection row query', () => {
       namespaceId: 'public',
     });
     expectTypeOf(query).toEqualTypeOf<
-      RowQuery<Record<string, unknown>, AsyncIterableResult<{ userId: number }>>
+      Preparable<Record<string, unknown>, AsyncIterableResult<{ userId: number }>>
     >();
     expect(mapper).toHaveBeenCalledTimes(1);
     const result = query.consume(source([{ user_id: 42 }]));

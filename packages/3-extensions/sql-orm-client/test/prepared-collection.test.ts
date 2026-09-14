@@ -3,10 +3,10 @@ import {
   defineAnnotation,
   type MetaBuilder,
 } from '@internal/framework-components/runtime';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import type { PreparedStatement } from '@internal/sql-runtime';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { Collection } from '../src/collection';
-import type { RowQuery } from '../src/collection-dispatch';
 import { createPreparedRowQuery } from '../src/prepared-row-query';
 import { createCollectionFor } from './collection-fixtures';
 import { buildStiPolyContract, createMockRuntime, getTestContext, isSelectAst } from './helpers';
@@ -20,13 +20,13 @@ function source<Row>(rows: Row[]) {
 }
 
 function prepareRows<Result>(
-  description: RowQuery<Record<string, unknown>, Result>,
+  description: Preparable<Record<string, unknown>, Result>,
   rows: (id: number) => Record<string, unknown>[],
 ) {
   const statement: PreparedStatement<{ id: number }, Record<string, unknown>> = {
     sql: 'select rows',
-    ast: description.ast,
-    meta: description.meta,
+    ast: description.plan.ast,
+    meta: description.plan.meta,
     slots: [],
     query: (_target, params) => source(rows(params.id)),
   };
@@ -46,9 +46,9 @@ describe('prepared collection', () => {
       meta.annotate(annotation({ label: 'prepared' }));
     const all = selected.prepared.all(configure);
     const first = selected.prepared.first(undefined, configure);
-    expect(annotation.read(all)).toEqual({ label: 'prepared' });
-    expect(annotation.read(first)).toEqual({ label: 'prepared' });
-    expect(annotation.read(selected.prepared.all())).toBeUndefined();
+    expect(annotation.read(all.plan)).toEqual({ label: 'prepared' });
+    expect(annotation.read(first.plan)).toEqual({ label: 'prepared' });
+    expect(annotation.read(selected.prepared.all().plan)).toBeUndefined();
     runtime.setNextResults([[{ user_id: 2 }], [{ user_id: 3 }]]);
     expect(await selected.all(configure)).toEqual([{ userId: 2 }]);
     expect(await selected.first(undefined, configure)).toEqual({ userId: 3 });
@@ -56,7 +56,10 @@ describe('prepared collection', () => {
       { label: 'prepared' },
       { label: 'prepared' },
     ]);
-    expect(runtime.executions.map(({ plan }) => plan.params)).toEqual([all.params, first.params]);
+    expect(runtime.executions.map(({ plan }) => plan.params)).toEqual([
+      all.plan.params,
+      first.plan.params,
+    ]);
     expect(selected.state.limit).toBe(99);
   });
 
@@ -113,6 +116,8 @@ describe('prepared collection', () => {
     expect(Object.keys(view)).toEqual(['all', 'first']);
     const all = view.all();
     const first = view.first();
+    expect(Object.keys(all).sort()).toEqual(['consume', 'plan']);
+    expect(Object.keys(first).sort()).toEqual(['consume', 'plan']);
     expect(all).not.toBeInstanceOf(Promise);
     expect(first).not.toBeInstanceOf(Promise);
     expectTypeOf(all.consume).returns.toEqualTypeOf<AsyncIterableResult<{ userId: number }>>();
@@ -129,10 +134,10 @@ describe('prepared collection', () => {
     const shorthand = selected.prepared.first({ id: 7 });
     const callback = selected.prepared.first((post) => post.id.eq(7));
     for (const description of [shorthand, callback]) {
-      expect(isSelectAst(description.ast)).toBe(true);
-      if (!isSelectAst(description.ast)) throw new Error('expected select');
-      expect(description.ast.limit).toBe(1);
-      expect(description.params).toEqual([7]);
+      expect(isSelectAst(description.plan.ast)).toBe(true);
+      if (!isSelectAst(description.plan.ast)) throw new Error('expected select');
+      expect(description.plan.ast.limit).toBe(1);
+      expect(description.plan.params).toEqual([7]);
     }
     const configure = vi.fn();
     selected.prepared.first(undefined, configure);
@@ -161,8 +166,8 @@ describe('prepared collection', () => {
     );
     const statement: PreparedStatement<{ id: number }, Record<string, unknown>> = {
       sql: 'select user_id from posts',
-      ast: description.ast,
-      meta: description.meta,
+      ast: description.plan.ast,
+      meta: description.plan.meta,
       slots: [],
       query,
     };

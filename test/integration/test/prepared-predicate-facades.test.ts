@@ -10,6 +10,7 @@ import {
   ProjectionItem,
   RawExpr,
   SelectAst,
+  SubqueryExpr,
   TableSource,
 } from '@internal/sql-relational-core/ast';
 import type { SqlMiddleware } from '@internal/sql-runtime';
@@ -139,7 +140,7 @@ it(
                   .withProjection([ProjectionItem.of('id', ColumnRef.of('users', 'id'))])
                   .withWhere(
                     CastExpr.as(
-                      BinaryExpr.eq(ColumnRef.of('users', 'invited_by_id'), p.value.buildAst()),
+                      BinaryExpr.gt(ColumnRef.of('users', 'invited_by_id'), p.value.buildAst()),
                       'boolean',
                     ),
                   ),
@@ -151,6 +152,88 @@ it(
       ).rejects.toThrow(/nullable prepared parameter/i);
       expect(executions).toHaveLength(count);
       expect(beforeCompile.mock.calls.length).toBe(compileCount);
+      const nullableStart = executions.length;
+      const nullableLowerCount = lower.mock.calls.length;
+      const nullableCallback = vi.fn();
+      const equal = await db.prepare({ value: { codecId: 'pg/int4@1', nullable: true } }, (p) => {
+        nullableCallback();
+        return db.orm.public.User.where({ invitedById: p.value })
+          .orderBy((user) => user.id.asc())
+          .select('id')
+          .prepared.all();
+      });
+      expect(await equal.query(runtime, { value: null })).toEqual([{ id: 3 }]);
+      expect(await equal.query(runtime, { value: 9 })).toEqual([{ id: 1 }, { id: 2 }]);
+      expect(await equal.query(runtime, { value: 7 })).toEqual([]);
+      const nullRows = equal.query(runtime, { value: null })[Symbol.asyncIterator]();
+      const valueRows = equal.query(runtime, { value: 9 })[Symbol.asyncIterator]();
+      expect(await nullRows.next()).toEqual({ done: false, value: { id: 3 } });
+      expect(await valueRows.next()).toEqual({ done: false, value: { id: 1 } });
+      expect(await nullRows.next()).toEqual({ done: true, value: undefined });
+      expect(await valueRows.next()).toEqual({ done: false, value: { id: 2 } });
+      expect(await valueRows.next()).toEqual({ done: true, value: undefined });
+      expect(nullableCallback).toHaveBeenCalledOnce();
+      expect(lower.mock.calls.length).toBe(nullableLowerCount + 1);
+      const nullableSql = executions.slice(nullableStart).map((execution) => execution.sql);
+      expect(new Set(nullableSql).size).toBe(1);
+      expect(nullableSql[0]).toContain('IS NOT DISTINCT FROM');
+      const different = await db.prepare({ value: { codecId: 'pg/int4@1', nullable: true } }, (p) =>
+        db.orm.public.User.where((user) => user.invitedById.neq(p.value))
+          .orderBy((user) => user.id.asc())
+          .select('id')
+          .prepared.all(),
+      );
+      expect(await different.query(runtime, { value: null })).toEqual([{ id: 1 }, { id: 2 }]);
+      expect(await different.query(runtime, { value: 9 })).toEqual([{ id: 3 }]);
+      expect(await different.query(runtime, { value: 7 })).toEqual([
+        { id: 1 },
+        { id: 2 },
+        { id: 3 },
+      ]);
+      const nested = await db.prepare(
+        {
+          value: { codecId: 'pg/int4@1', nullable: true },
+          owner: { codecId: 'pg/int4@1', nullable: true },
+        },
+        (p) =>
+          db.orm.public.User.where((user) => user.invitedById.eq(p.value))
+            .include('posts', (posts) =>
+              posts
+                .where((post) => post.userId.eq(p.owner))
+                .orderBy((post) => post.id.asc())
+                .select('id'),
+            )
+            .orderBy((user) => user.id.asc())
+            .select('id')
+            .prepared.first(),
+      );
+      expect(await nested.query(runtime, { value: 9, owner: 1 })).toEqual({
+        id: 1,
+        posts: [{ id: 11 }, { id: 12 }],
+      });
+      expect(await nested.query(runtime, { value: null, owner: null })).toEqual({
+        id: 3,
+        posts: [],
+      });
+      expect(await nested.query(runtime, { value: 7, owner: null })).toBeNull();
+      const scalar = await db.prepare({ value: { codecId: 'pg/int4@1', nullable: true } }, (p) =>
+        db.orm.public.User.where({
+          toWhereExpr: () =>
+            BinaryExpr.eq(
+              ColumnRef.of('users', 'invited_by_id'),
+              SubqueryExpr.of(
+                SelectAst.from(TableSource.named('users'))
+                  .withProjection([ProjectionItem.of('value', p.value.buildAst())])
+                  .withLimit(1),
+              ),
+            ),
+        })
+          .orderBy((user) => user.id.asc())
+          .select('id')
+          .prepared.all(),
+      );
+      expect(await scalar.query(runtime, { value: null })).toEqual([{ id: 3 }]);
+      expect(await scalar.query(runtime, { value: 9 })).toEqual([{ id: 1 }, { id: 2 }]);
       const raw = await db.prepare({ value: { codecId: 'pg/int4@1', nullable: true } }, (p) =>
         db.orm.public.User.where({
           toWhereExpr: () =>

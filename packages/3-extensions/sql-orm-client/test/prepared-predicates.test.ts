@@ -82,7 +82,7 @@ it('preserves prepared refs and stable slots in shorthand, callback, relations, 
       .prepared.all(),
   ];
   for (const description of descriptions) {
-    const refs = collectOrderedParamRefs(description.ast);
+    const refs = collectOrderedParamRefs(description.plan.ast);
     expect(refs).toEqual([id.buildAst()]);
     expect(refs[0]).toBe(id.buildAst());
   }
@@ -98,7 +98,7 @@ it('preserves prepared refs and stable slots in shorthand, callback, relations, 
     .select('id')
     .prepared.all();
   expect(
-    collectOrderedParamRefs(mixed.ast).map((ref) =>
+    collectOrderedParamRefs(mixed.plan.ast).map((ref) =>
       ref.kind === 'prepared-param-ref' ? ['prepared', ref.name] : ['literal', ref.value],
     ),
   ).toEqual([
@@ -247,25 +247,46 @@ const independentContexts: ReadonlyArray<readonly [string, AnyExpression]> = [
 ];
 
 describe('scalar-subquery comparison context at compilation', () => {
-  it.each(scalarOperands)('rejects nullable %s before execution', (_name, expr) => {
+  it.each(scalarOperands)('prepares nullable %s before execution', (_name, expr) => {
     const { collection, runtime } = createCollectionFor('User');
     const query = collection.where({ toWhereExpr: () => expr }).select('id');
-    expect(() => query.prepared.all()).toThrow(/nullable prepared parameter/i);
+    if (expr.kind === 'binary' && expr.op === 'in') {
+      expect(() => query.prepared.all()).toThrow(/nullable prepared parameter/i);
+    } else {
+      expect(query.prepared.all().plan.ast).toMatchObject({
+        where: { op: 'isNotDistinctFrom' },
+      });
+    }
     expect(runtime.executions).toEqual([]);
   });
   it.each(independentContexts)('preserves %s', (_name, expr) => {
     const { collection, runtime } = createCollectionFor('User');
     const query = collection.where({ toWhereExpr: () => expr }).select('id');
-    expect(query.prepared.all().ast).toBeDefined();
+    const plan = query.prepared.all().plan;
+    expect(plan.ast).toBeDefined();
+    if (expr.kind === 'binary') expect(plan.ast).toMatchObject({ where: { op: 'eq' } });
     expect(runtime.executions).toEqual([]);
   });
 });
 
 describe('structured nullable prepared comparisons', () => {
-  it.each(wrappers)('rejects inside %s', (_name, wrap) => {
-    expect(() => bindWhereExpr(contract, wrap(invalid()))).toThrow(/nullable prepared parameter/i);
+  it.each([
+    ['eq', 'isNotDistinctFrom'],
+    ['neq', 'isDistinctFrom'],
+  ] as const)('normalizes nullable operands on either side of %s', (op, normalized) => {
+    for (const [left, right] of [
+      [column, optional.buildAst()],
+      [optional.buildAst(), column],
+    ] as const) {
+      const result = bindWhereExpr(contract, new BinaryExpr(op, left, right));
+      expect(result).toEqual(new BinaryExpr(normalized, left, right));
+      expect(bindWhereExpr(contract, result)).toEqual(result);
+    }
   });
-  it.each(['eq', 'neq', 'gt', 'lt', 'gte', 'lte', 'like', 'in', 'notIn'] as const)(
+  it.each(wrappers)('normalizes equality inside %s', (_name, wrap) => {
+    expect(bindWhereExpr(contract, wrap(invalid()))).toBeDefined();
+  });
+  it.each(['gt', 'lt', 'gte', 'lte', 'like', 'in', 'notIn'] as const)(
     'rejects both operands of %s',
     (op) => {
       expect(() =>
@@ -279,31 +300,33 @@ describe('structured nullable prepared comparisons', () => {
       ).toThrow(/nullable prepared parameter/i);
     },
   );
-  it('rejects nullable refs nested in structured operands but not raw payloads', () => {
-    expect(() =>
+  it('normalizes nullable structured operands but leaves raw payloads opaque', () => {
+    expect(
       bindWhereExpr(contract, BinaryExpr.eq(column, CastExpr.as(optional.buildAst(), 'int4'))),
-    ).toThrow(/nullable prepared parameter/i);
+    ).toMatchObject({ op: 'isNotDistinctFrom' });
     const opaque = raw(invalid());
     expect(bindWhereExpr(contract, opaque)).toBe(opaque);
     expect(
       bindWhereExpr(contract, BinaryExpr.eq(raw(optional.buildAst()), id.buildAst())),
     ).toBeDefined();
-    expect(() =>
+    expect(
       bindWhereExpr(contract, BinaryExpr.eq(raw(optional.buildAst()), optional.buildAst())),
-    ).toThrow(/nullable prepared parameter/i);
+    ).toMatchObject({ op: 'isNotDistinctFrom' });
     expect(bindWhereExpr(contract, NullCheckExpr.isNull(optional.buildAst()))).toBeDefined();
   });
-  it('rejects structured ToWhereExpr during compilation before runtime query', () => {
+  it('normalizes structured ToWhereExpr during compilation before runtime query', () => {
     const { collection, runtime } = createCollectionFor('User');
     const query = collection
       .where({ toWhereExpr: () => CastExpr.as(invalid(), 'boolean') })
       .select('id');
-    expect(() => query.prepared.all()).toThrow(/nullable prepared parameter/i);
+    expect(query.prepared.all().plan.ast).toMatchObject({
+      where: { kind: 'cast', expr: { op: 'isNotDistinctFrom' } },
+    });
     expect(runtime.executions).toEqual([]);
   });
-  it('rejects nullable operands through shorthand, callbacks, first and relation/include paths', () => {
+  it('accepts nullable equality through shorthand, callbacks, first and relation/include paths', () => {
     const { collection, runtime } = createCollectionFor('User');
-    const unchecked = optional as unknown as number;
+    const unchecked = optional;
     const attempts = [
       () => collection.where({ invitedById: unchecked }).select('id').prepared.all(),
       () =>
@@ -315,11 +338,6 @@ describe('structured nullable prepared comparisons', () => {
       () => collection.select('id').prepared.first((user) => user.id.eq(unchecked)),
       () =>
         collection
-          .where((user) => user.id.in([1, unchecked]))
-          .select('id')
-          .prepared.all(),
-      () =>
-        collection
           .where((user) => user.posts.some({ id: unchecked }))
           .select('id')
           .prepared.all(),
@@ -329,7 +347,7 @@ describe('structured nullable prepared comparisons', () => {
           .select('id')
           .prepared.all(),
     ];
-    for (const attempt of attempts) expect(attempt).toThrow(/nullable prepared parameter/i);
+    for (const attempt of attempts) expect(attempt().plan.ast).toBeDefined();
     expect(runtime.executions).toEqual([]);
   });
   it('retains literal null semantics and nullable columns with required refs', () => {
@@ -339,8 +357,8 @@ describe('structured nullable prepared comparisons', () => {
       .where((user) => user.invitedById.eq(id))
       .select('id')
       .prepared.all();
-    expect(collectOrderedParamRefs(description.ast)).toEqual([id.buildAst()]);
-    expect(description.ast).toMatchObject({
+    expect(collectOrderedParamRefs(description.plan.ast)).toEqual([id.buildAst()]);
+    expect(description.plan.ast).toMatchObject({
       where: {
         kind: 'and',
         exprs: [

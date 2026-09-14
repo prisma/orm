@@ -9,7 +9,7 @@ import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import { orm as ormBuilder, type PreparedFrom, prepareQuery } from '@internal/sql-orm-client';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
-import type { Preparable } from '@internal/sql-relational-core/plan';
+import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
   BindSiteParams,
   Declaration,
@@ -77,7 +77,7 @@ export interface SqliteClient<TContract extends Contract<SqlStorage>> {
   runtime(): Runtime;
   prepare<
     D extends Declaration<CT>,
-    Q extends Preparable<unknown, unknown>,
+    Q extends SqlQueryPlan | Preparable<unknown, unknown>,
     CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
   >(
     declaration: D,
@@ -248,7 +248,7 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
 
   function prepare<
     D extends Declaration<CT>,
-    Q extends Preparable<unknown, unknown>,
+    Q extends SqlQueryPlan | Preparable<unknown, unknown>,
     CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
   >(
     declaration: D,

@@ -3,7 +3,7 @@ from: 8.0.0-rc.11
 to: 8.0.0-rc.12
 changes:
   - id: shared-preparable-envelope
-    summary: Return the shared Preparable SQL envelope directly from custom ORM preparation descriptions rather than nesting it under plan.
+    summary: Type ORM preparation descriptions with the shared compositional Preparable protocol and pass their contained plan to SQL runtime.
   - id: params-only-sql-facade-prepare
     summary: Replace injected SQL-builder preparation callbacks with params-only callbacks and lexical facade SQL access.
   - id: preserve-prepared-reference-nullability
@@ -14,7 +14,9 @@ changes:
 
 ## `shared-preparable-envelope`
 
-For custom ORM row descriptions, replace `{ plan, consume }` with `{ ...plan, consume }`; read `description.ast`, `description.params` and `description.meta` instead of `description.plan.*`. Preserve the required consumer's full return type. The common `Preparable<Row, Result>` lives in relational-core's plan entrypoint; plain `SqlQueryPlan` producers do not need a consumer. Supply both type arguments to `Preparable<Row, Result>`; use `Preparable<unknown, unknown>` for erased constraints and indexed accesses such as `Preparable<unknown, unknown>['consume']`. Integrations composing SQL and ORM can use SQL ORM client's `prepareQuery` and `PreparedFrom<Params, Q>` with a concrete callback-return `Q extends Preparable<unknown, unknown>`, retaining normal SQL `PreparedFor` row/statistics semantics when no required consumer exists.
+Replace imports of SQL ORM client's `RowQuery` with `Preparable` from `@internal/sql-relational-core/plan`. Supply both type arguments as `Preparable<DbRow, Result>` and return `{ plan, consume }`, where `plan` is a `SqlQueryPlan<DbRow>` and `consume` returns the complete ORM result. Read AST, parameters and metadata through `description.plan`; pass `description.plan` rather than the description to SQL runtime preparation. Keep the consumer's mapping setup outside invocation-time code.
+
+For integrations accepting both SQL and ORM callbacks, constrain the callback result with `Q extends SqlQueryPlan | Preparable<unknown, unknown>` and use SQL ORM client's `prepareQuery` and `PreparedFrom<Params, Q>`. Preserve the concrete `Q` so SQL row/statistics types and ORM all/first result types remain distinct. Do not add identity consumers to plain SQL plans.
 
 ## `preserve-orm-pagination-expressions`
 

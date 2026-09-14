@@ -1,10 +1,6 @@
-import type {
-  AsyncIterableResult,
-  ResultType,
-  RuntimeExecuteOptions,
-} from '@internal/framework-components/runtime';
+import type { ResultType, RuntimeExecuteOptions } from '@internal/framework-components/runtime';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
-import type { Preparable } from '@internal/sql-relational-core/plan';
+import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
   BindSiteParams,
   Declaration,
@@ -15,50 +11,43 @@ import type {
   RuntimeQueryable,
 } from '@internal/sql-runtime';
 import { blindCast } from '@internal/utils/casts';
-import type { RowQuery } from './collection-dispatch';
 
 export interface PreparedRowQuery<Params, Result> {
   query(target: RuntimeQueryable, params: Params, options?: RuntimeExecuteOptions): Result;
 }
 
-export type PreparedFrom<Params, Q extends Preparable<unknown, unknown>> = Q extends {
-  consume(rows: AsyncIterableResult<never>): infer Result;
-}
-  ? PreparedRowQuery<Params, Result>
-  : PreparedFor<Params, ResultType<Q>>;
+export type PreparedFrom<Params, Q extends SqlQueryPlan | Preparable<unknown, unknown>> =
+  Q extends Preparable<unknown, infer Result>
+    ? PreparedRowQuery<Params, Result>
+    : PreparedFor<Params, ResultType<Q>>;
 
 export async function prepareQuery<
   D extends Declaration<CT>,
-  Q extends Preparable<unknown, unknown>,
+  Q extends SqlQueryPlan | Preparable<unknown, unknown>,
   CT extends CodecTypesBase,
 >(
   runtime: Runtime,
   declaration: D,
   callback: (params: BindSiteParams<D>) => Q,
 ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>> {
-  let consume: Preparable<unknown, unknown>['consume'];
-  const statement = await runtime.prepare<D, ResultType<Q>, CT>(declaration, (params) => {
+  let description: Preparable<unknown, unknown> | undefined;
+  const statement = await runtime.prepare<D, unknown, CT>(declaration, (params) => {
     const authored = callback(params);
-    consume = authored.consume;
-    return { ast: authored.ast, params: authored.params, meta: authored.meta };
+    if ('plan' in authored) {
+      description = authored;
+      return authored.plan;
+    }
+    return authored;
   });
-  const prepared = consume
-    ? createPreparedRowQuery(
-        { consume },
-        blindCast<
-          PreparedStatement<ParamsFromDeclaration<D, CT>, ResultType<Q>>,
-          'custom consumers describe row-returning SQL plans'
-        >(statement),
-      )
-    : statement;
+  const prepared = description ? createPreparedRowQuery(description, statement) : statement;
   return blindCast<
     PreparedFrom<ParamsFromDeclaration<D, CT>, Q>,
-    'required consumer selects custom consumption; otherwise the SQL runtime preserves the declared result kind'
+    'compositional description selects custom consumption; plain SQL preserves the declared result kind'
   >(prepared);
 }
 
 export function createPreparedRowQuery<Params, DbRow, Result>(
-  description: Pick<RowQuery<DbRow, Result>, 'consume'>,
+  description: Preparable<DbRow, Result>,
   statement: PreparedStatement<Params, DbRow>,
 ): PreparedRowQuery<Params, Result> {
   return Object.freeze({
