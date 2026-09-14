@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { integerColumn, textColumn } from '@internal/adapter-sqlite/column-types';
+import { soleDomainNamespaceId } from '@internal/contract/types';
 import pgvector from '@internal/extension-pgvector/runtime';
 import type { AsyncIterableResult } from '@internal/framework-components/runtime';
 import postgres from '@internal/postgres/runtime';
@@ -15,7 +16,7 @@ import type {
   Runtime,
   RuntimeQueryable,
 } from '@internal/sql-runtime';
-import { defineContract, field, model } from '@internal/sqlite/contract-builder';
+import { defineContract, field, model, rel } from '@internal/sqlite/contract-builder';
 import sqlite from '@internal/sqlite/runtime';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
@@ -200,6 +201,58 @@ async function sqliteEnvironment(name: string): Promise<Environment> {
     },
   };
 }
+
+it('binds included columns inside the db.prepare callback and retains them across executions', async () => {
+  const User = model('User', { fields: { id: field.column(integerColumn).id() } });
+  const Post = model('Post', {
+    fields: {
+      id: field.column(integerColumn).id(),
+      userId: field.column(integerColumn).column('user_id'),
+    },
+    relations: { author: rel.belongsTo(User, { from: 'userId', to: 'id' }) },
+  });
+  const contract = defineContract({
+    models: { User: User.relations({ posts: rel.hasMany(() => Post, { by: 'userId' }) }), Post },
+  });
+  const directory = mkdtempSync(join(tmpdir(), 'prepared-include-bindings-'));
+  const path = join(directory, 'test.db');
+  const database = new DatabaseSync(path);
+  database.exec(
+    'create table User (id integer primary key); create table Post (id integer primary key, user_id integer); insert into User values (1); insert into Post values (2, 1)',
+  );
+  const db = sqlite({ contract, path, verifyMarker: false });
+  try {
+    const runtime = await db.connect();
+    const users = db.orm.User;
+    const lookup = vi.spyOn(users.ctx.context.contractCodecs, 'forColumn');
+    const prepared = await db.prepare({}, () => {
+      const before = lookup.mock.calls.length;
+      const query = users
+        .select('id')
+        .include('posts', (posts) => posts.select('userId'))
+        .prepared.all();
+      expect(lookup.mock.calls.length).toBeGreaterThan(before);
+      expect(lookup).toHaveBeenCalledWith(
+        soleDomainNamespaceId(contract.domain),
+        'Post',
+        'user_id',
+      );
+      return query;
+    });
+    const count = lookup.mock.calls.length;
+    const first = await prepared.query(runtime, {});
+    const second = await prepared.query(runtime, {});
+    expect(first).toEqual([{ id: 1, posts: [{ userId: 1 }] }]);
+    expect(second).toEqual(first);
+    expect(second[0]?.posts).not.toBe(first[0]?.posts);
+    expect(second[0]?.posts[0]).not.toBe(first[0]?.posts[0]);
+    expect(lookup).toHaveBeenCalledTimes(count);
+  } finally {
+    await db.close();
+    database.close();
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 for (const [name, setup] of [
   ['postgres', postgresEnvironment],

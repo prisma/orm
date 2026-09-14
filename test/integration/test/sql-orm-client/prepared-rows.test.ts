@@ -34,6 +34,7 @@ interface Environment {
   all(): RowQuery<Record<string, unknown>, AsyncIterableResult<Row>>;
   first(): RowQuery<Record<string, unknown>, Promise<Row | null>>;
   insert(transaction: RuntimeTransaction): Promise<void>;
+  bindingCount(): number;
   loweringCount(): number;
   queryCount(): number;
   close(): Promise<void>;
@@ -64,6 +65,7 @@ async function postgresEnvironment(name: string): Promise<Environment> {
     extensions: [pgvector],
   });
   const context = createExecutionContext({ contract, stack });
+  const bindings = vi.spyOn(context.contractCodecs, 'forColumn');
   const instance = instantiateExecutionStack(stack);
   const driver = instance.driver;
   if (!driver) throw new Error('driver missing');
@@ -94,6 +96,7 @@ async function postgresEnvironment(name: string): Promise<Environment> {
         address: null,
       });
     },
+    bindingCount: () => bindings.mock.calls.length,
     loweringCount: () => lower.mock.calls.length,
     queryCount: () => driverQuery.mock.calls.length,
     async close() {
@@ -139,6 +142,7 @@ async function sqliteEnvironment(name: string): Promise<Environment> {
     driver: sqliteDriver,
   });
   const context = createExecutionContext({ contract: sqliteContract, stack });
+  const bindings = vi.spyOn(context.contractCodecs, 'forColumn');
   const instance = instantiateExecutionStack(stack);
   const driver = instance.driver;
   if (!driver) throw new Error('driver missing');
@@ -170,6 +174,7 @@ async function sqliteEnvironment(name: string): Promise<Environment> {
         name: 'Transaction',
       });
     },
+    bindingCount: () => bindings.mock.calls.length,
     loweringCount: () => lower.mock.calls.length,
     queryCount: () => driverQuery.mock.calls.length,
     async close() {
@@ -192,7 +197,9 @@ for (const [name, setup] of [
         let target: Environment | undefined;
         try {
           target = await setup('Target');
+          const beforeDescription = authoring.bindingCount();
           const description = authoring.all();
+          expect(authoring.bindingCount()).toBeGreaterThan(beforeDescription);
           const query = vi.spyOn(authoring.runtime, 'query');
           const callback = vi.fn(() => description);
           const sql = await authoring.runtime.prepare({}, callback);
@@ -202,6 +209,7 @@ for (const [name, setup] of [
           expect(query).not.toHaveBeenCalled();
           expect(authoring.queryCount()).toBe(0);
           expect(target.queryCount()).toBe(0);
+          const preparedBindings = authoring.bindingCount();
           const result = prepared.query(target.runtime, {});
           expect(result[Symbol.asyncIterator]).toBeTypeOf('function');
           expect(await result).toEqual([{ name: 'Target', posts: [{ title: 'Target post' }] }]);
@@ -210,6 +218,7 @@ for (const [name, setup] of [
           ]);
           expect(callback).toHaveBeenCalledOnce();
           expect(authoring.loweringCount()).toBe(1);
+          expect(authoring.bindingCount()).toBe(preparedBindings);
 
           const priorQueries = target.queryCount();
           const controller = new AbortController();
@@ -222,6 +231,7 @@ for (const [name, setup] of [
           const firstDescription = authoring.first();
           const firstSql = await authoring.runtime.prepare({}, () => firstDescription);
           const first = createPreparedRowQuery(firstDescription, firstSql);
+          const firstBindings = authoring.bindingCount();
           expect(await first.query(authoring.runtime, {})).toBeNull();
           const connection = await target.runtime.connection();
           try {
@@ -241,6 +251,7 @@ for (const [name, setup] of [
             await connection.release();
           }
           expect(authoring.loweringCount()).toBe(2);
+          expect(authoring.bindingCount()).toBe(firstBindings);
         } finally {
           await target?.close();
           await authoring.close();
