@@ -173,6 +173,7 @@ async function main(): Promise<void> {
     },
     clientOptions: {
       documentSelector: [LANGUAGE_ID],
+      initializationOptions: { completion: { supportsTriggerSuggestCommand: true } },
       workspaceFolder: {
         index: 0,
         name: 'workspace',

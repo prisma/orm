@@ -480,6 +480,7 @@ function createServerOn(connection: Connection): LanguageServer {
               : { controlMutationDefaults: project.controlStack.controlMutationDefaults }),
           },
           clientSupportsSnippets: clientCapabilities.completionSnippets,
+          clientSupportsTriggerSuggestCommand: clientCapabilities.completionTriggerSuggestCommand,
         }),
       ];
     } catch {
@@ -707,6 +708,7 @@ function toLspSeverity(severity: number): DiagnosticSeverity {
 interface ResolvedClientCapabilities {
   readonly watchedFilesRegistration: boolean;
   readonly completionSnippets: boolean;
+  readonly completionTriggerSuggestCommand: boolean;
   readonly pullDiagnostics: boolean;
   readonly diagnosticsRefresh: boolean;
 }
@@ -714,6 +716,7 @@ interface ResolvedClientCapabilities {
 const noClientCapabilities: ResolvedClientCapabilities = {
   watchedFilesRegistration: false,
   completionSnippets: false,
+  completionTriggerSuggestCommand: false,
   pullDiagnostics: false,
   diagnosticsRefresh: false,
 };
@@ -724,9 +727,21 @@ function resolveClientCapabilities(params: InitializeParams): ResolvedClientCapa
       params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration === true,
     completionSnippets:
       params.capabilities.textDocument?.completion?.completionItem?.snippetSupport === true,
+    completionTriggerSuggestCommand: supportsCompletionTriggerSuggest(params.initializationOptions),
     pullDiagnostics: params.capabilities.textDocument?.diagnostic !== undefined,
     diagnosticsRefresh: params.capabilities.workspace?.diagnostics?.refreshSupport === true,
   };
+}
+
+function supportsCompletionTriggerSuggest(options: unknown): boolean {
+  if (typeof options !== 'object' || options === null || !('completion' in options)) return false;
+  const completion = options.completion;
+  return (
+    typeof completion === 'object' &&
+    completion !== null &&
+    'supportsTriggerSuggestCommand' in completion &&
+    completion.supportsTriggerSuggestCommand === true
+  );
 }
 
 function resolveRootPath(params: InitializeParams): string {

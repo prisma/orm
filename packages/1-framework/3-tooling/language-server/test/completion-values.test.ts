@@ -145,6 +145,42 @@ function field(args: string, snippets = false) {
 }
 
 describe('classified positions without cursor AST', () => {
+  it.each([false, true])(
+    'uses captured colon presence to gate accepted-key commands: %s',
+    (hasColon) => {
+      const items = provideAttributeNamedKeyCompletionItems(
+        {
+          context: {
+            offset: 1,
+            replacementStartOffset: 0,
+            replacementEndOffset: 4,
+            attributeName: 'probe',
+            path: [],
+            existingNamedKeys: [],
+            hasColon,
+          },
+          sourceFile: new SourceFile('mode: Asc'),
+          clientSupportsSnippets: true,
+          clientSupportsTriggerSuggestCommand: true,
+        },
+        fieldSpec,
+      );
+      const item = items.find((candidate) => candidate.label === 'mode');
+      expect(item?.textEdit).toEqual({
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 4 } },
+        newText: hasColon ? 'mode' : `mode: ${emptyTabStop1}`,
+      });
+      expect(item?.command).toEqual(
+        hasColon
+          ? undefined
+          : {
+              title: 'Suggest argument values',
+              command: 'editor.action.triggerSuggest',
+            },
+      );
+    },
+  );
+
   it('resolves all matching nested signatures using only a path and existing keys', () => {
     const sourceFile = new SourceFile('');
     const items = provideAttributeNamedKeyCompletionItems(

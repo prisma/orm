@@ -30,4 +30,10 @@ The syntax classifier preserves concrete field/model/block owners and records th
 
 Classification preserves existing sigils, token boundaries, completed argument lists, and surrounding text. It rejects comments and trailing trivia after a completed scalar/callee. Unrestricted strings, numbers, integers, JSON, entity references, arbitrary record keys, and rejecting combinators do not invent values. Cross-contract symbol discovery and unrelated generic-block parameter-value completion remain unsupported.
 
-Typing `@` or `@@` triggers attribute-name completion automatically. At value or nested argument positions, invoke the editor's completion command (for example, Ctrl+Space); these positions do not introduce additional trigger characters.
+Typing `.`, `@`, `[`, `(`, `{`, `:`, or `,` triggers completion in supported contexts. Named-key completion inserts `key: `, with an empty value tab stop for snippet clients. Existing colons, whitespace, and values are preserved.
+
+### Client opt-in for suggestions after key acceptance
+
+Clients that implement `editor.action.triggerSuggest` may send `initializationOptions: { completion: { supportsTriggerSuggestCommand: true } }`. This is a Prisma-specific opt-in, not a standard LSP capability. The playground advertises it through `LanguageClientConfig.clientOptions.initializationOptions`.
+
+Only the literal boolean `true` enables the fixed `CompletionItem.command` identifier `editor.action.triggerSuggest` after accepting a new named-key/value slot. No client-supplied command identifier is executed. Without the opt-in, completion items carry no command. Existing-colon edits and non-key candidates never retrigger suggestions, so completion cannot open a value popup with the caret still before an existing colon.

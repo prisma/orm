@@ -351,7 +351,7 @@ const pullDiagnosticsWithRefreshCapabilities: ClientCapabilities = {
 
 interface Harness {
   readonly client: ReturnType<typeof createConnection>;
-  readonly initialize: () => Promise<InitializeResult>;
+  readonly initialize: (initializationOptions?: unknown) => Promise<InitializeResult>;
   readonly waitForDiagnostics: (uri: string) => Promise<readonly Diagnostic[]>;
   readonly waitForDiagnosticsMatching: (
     uri: string,
@@ -538,8 +538,9 @@ function startHarness(
         }
         diagnosticRefreshWaiters.push(resolve);
       }),
-    initialize: async () => {
+    initialize: async (initializationOptions) => {
       const result = await client.sendRequest(InitializeRequest.type, {
+        initializationOptions,
         processId: process.pid,
         rootUri: pathToFileURL(root).toString(),
         capabilities,
@@ -1125,6 +1126,75 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       expect(applyCompletionItem(completion.source, item)).toBe(
         `// use prisma-8\nmodel User { id Int @probe(value: choose(mode: ${snippets ? emptySnippetPlaceholder1 : ''})) }`,
       );
+    },
+    5_000,
+  );
+
+  it.each([
+    [undefined, false],
+    [null, false],
+    [true, false],
+    ['true', false],
+    [{}, false],
+    [{ completion: null }, false],
+    [{ completion: true }, false],
+    [{ completion: { supportsTriggerSuggestCommand: 'true' } }, false],
+    [{ completion: { supportsTriggerSuggestCommand: false } }, false],
+    [{ completion: { supportsTriggerSuggestCommand: true } }, true],
+  ])(
+    'requires explicit trigger-suggest opt-in: %j',
+    async (initializationOptions, enabled) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution);
+      await harness.initialize(initializationOptions);
+      const completion = sourceWithCursor(
+        '// use prisma-8\nmodel User { id Int @probe(value: choose(|)) }',
+      );
+      openDocument(harness, schemaUri, completion.source);
+      await harness.waitForDiagnostics(schemaUri);
+      const item = completionItemByLabel(
+        completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+        'mode',
+      );
+      expect(item.textEdit?.newText).toBe('mode: ');
+      expect(item.command).toEqual(
+        enabled
+          ? { title: 'Suggest argument values', command: 'editor.action.triggerSuggest' }
+          : undefined,
+      );
+    },
+    5_000,
+  );
+
+  it.each([false, true])(
+    'only retriggers new named-key value slots, snippets=%s',
+    async (snippets) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippets ? snippetCompletionCapabilities : {});
+      await harness.initialize({ completion: { supportsTriggerSuggestCommand: true } });
+      for (const [args, label, retrigger] of [
+        ['value: choose(mo|de)', 'mode', true],
+        ['value: choose(mo|de: First)', 'mode', false],
+        ['value: choose(mode: |)', 'First', false],
+        ['value: |', 'choose', false],
+      ] as const) {
+        const completion = sourceWithCursor(
+          `// use prisma-8\nmodel User { id Int @probe(${args}) }`,
+        );
+        openDocument(harness, schemaUri, completion.source);
+        await harness.waitForDiagnostics(schemaUri);
+        const item = completionItemByLabel(
+          completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+          label,
+        );
+        expect(item.command).toEqual(
+          retrigger
+            ? { title: 'Suggest argument values', command: 'editor.action.triggerSuggest' }
+            : undefined,
+        );
+        if (retrigger)
+          expect(item.textEdit?.newText).toBe(`mode: ${snippets ? emptySnippetPlaceholder1 : ''}`);
+      }
     },
     5_000,
   );

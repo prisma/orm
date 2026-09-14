@@ -53,6 +53,7 @@ export interface ProvidePslCompletionItemsInput {
   readonly sourceFile: SourceFile;
   readonly candidates: PslCompletionCandidateSource;
   readonly clientSupportsSnippets: boolean;
+  readonly clientSupportsTriggerSuggestCommand?: boolean;
 }
 
 type DeclarationKeywordCompletionCandidateCategory = 'native' | 'genericBlock';
@@ -158,6 +159,8 @@ export function providePslCompletionItems(
               context,
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
+              clientSupportsTriggerSuggestCommand:
+                input.clientSupportsTriggerSuggestCommand === true,
             },
             spec,
           );
@@ -173,6 +176,8 @@ export function providePslCompletionItems(
               context,
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
+              clientSupportsTriggerSuggestCommand:
+                input.clientSupportsTriggerSuggestCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
                   ? localFieldNames(context, input.candidates.symbolTable)

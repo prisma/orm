@@ -21,6 +21,7 @@ interface CompletionInput<Position extends AttributeArgumentPosition> {
   readonly context: Position;
   readonly sourceFile: SourceFile;
   readonly clientSupportsSnippets: boolean;
+  readonly clientSupportsTriggerSuggestCommand?: boolean;
 }
 
 interface ValueCompletionInput<Position extends AttributeArgumentPosition>
@@ -123,7 +124,17 @@ function namedKeyItems(
       const snippet = input.clientSupportsSnippets && !input.context.hasColon;
       const value = snippet ? '$' + '{1:}' : '';
       const text = input.context.hasColon ? name : `${name}: ${value}`;
-      return completionItem(input, name, text, CompletionItemKind.Property, snippet);
+      return {
+        ...completionItem(input, name, text, CompletionItemKind.Property, snippet),
+        ...(!input.context.hasColon && input.clientSupportsTriggerSuggestCommand === true
+          ? {
+              command: {
+                title: 'Suggest argument values',
+                command: 'editor.action.triggerSuggest',
+              },
+            }
+          : {}),
+      };
     });
 }
 
