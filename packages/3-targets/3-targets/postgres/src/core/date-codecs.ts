@@ -17,10 +17,22 @@ import { PG_TIMESTAMPTZ_NATIVE_TYPE } from './temporal-codec-helpers';
 const TIMESTAMPTZ_TEXT =
   /^(\d{4,6})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(?:Z|([+-])(\d{2})(?::?(\d{2}))?(?::?(\d{2}))?)( BC)?$/;
 
+const MIN_TIMESTAMPTZ_MILLISECONDS = new Date('-004713-11-24T00:00:00.000Z').getTime();
+
 function invalidDate(): RangeError {
   return new RangeError(
     `${PG_TIMESTAMPTZ_DATE_CODEC_ID} requires a valid Date or a representable ISO PostgreSQL timestamp with time zone; use TimestamptzString for unsupported values`,
   );
+}
+
+function validateDate(value: Date): Date {
+  if (
+    !(value instanceof Date) ||
+    !Number.isFinite(value.getTime()) ||
+    value.getTime() < MIN_TIMESTAMPTZ_MILLISECONDS
+  )
+    throw invalidDate();
+  return value;
 }
 
 function decodeDate(wire: unknown): Date {
@@ -72,12 +84,11 @@ function decodeDate(wire: unknown): Date {
     (Number(offsetHour) * 3600 + Number(offsetMinute) * 60 + Number(offsetSecond)) *
     (sign === '-' ? -1 : 1);
   const value = new Date(local.getTime() - offset * 1000 + cycles * 146097 * 86400000);
-  if (!Number.isFinite(value.getTime())) throw invalidDate();
-  return value;
+  return validateDate(value);
 }
 
 function encodeDate(value: Date): string {
-  if (!(value instanceof Date) || !Number.isFinite(value.getTime())) throw invalidDate();
+  validateDate(value);
   const iso = value.toISOString();
   const year = value.getUTCFullYear();
   if (year > 0 && year < 10000) return iso;
