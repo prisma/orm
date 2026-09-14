@@ -102,12 +102,6 @@ const charOut = { codecId: 'sql/char@1', nativeType: 'character' } as const;
 const numericOut = { codecId: 'pg/numeric@1', nativeType: 'numeric' } as const;
 
 const parityCases: readonly ParityCase[] = [
-  {
-    title: 'DateTimeDate',
-    bare: 'DateTimeDate',
-    alias: 'DateTimeDate',
-    expected: { codecId: 'pg/timestamptz-date@1', nativeType: 'timestamptz', typeParams: {} },
-  },
   ...[undefined, 0, 3, 6].map((precision): ParityCase => {
     const spelling = precision === undefined ? 'TimestamptzDate' : `TimestamptzDate(${precision})`;
     return {

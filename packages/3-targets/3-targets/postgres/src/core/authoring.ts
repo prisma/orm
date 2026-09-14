@@ -739,13 +739,6 @@ export const postgresAuthoringFieldPresets = {
       nativeType: 'timestamptz',
     },
   },
-  dateTimeDate: {
-    kind: 'fieldPreset',
-    output: {
-      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
-      nativeType: 'timestamptz',
-    },
-  },
   temporal: {
     createdAtDate: /* @__PURE__ */ temporalAuthoringPresets({
       codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,

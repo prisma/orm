@@ -186,10 +186,6 @@ export const postgresScalarAuthoringTypes = {
     kind: 'typeConstructor',
     output: { codecId: 'pg/numeric@1', nativeType: 'numeric' },
   },
-  DateTimeDate: {
-    kind: 'typeConstructor',
-    output: { codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID, nativeType: 'timestamptz' },
-  },
   DateTime: {
     kind: 'typeConstructor',
     output: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' },

@@ -280,7 +280,6 @@ describe('postgresScalarAuthoringTypes', () => {
     ['Float', 'pg/float8@1'],
     ['Decimal', 'pg/numeric@1'],
     ['DateTime', 'pg/timestamptz-temporal@1'],
-    ['DateTimeDate', 'pg/timestamptz-date@1'],
     ['Json', 'pg/json@1'],
     ['Jsonb', 'pg/jsonb@1'],
     ['Bytes', 'pg/bytea@1'],
@@ -293,8 +292,7 @@ describe('postgresScalarAuthoringTypes', () => {
         kind: 'typeConstructor',
         output: {
           codecId,
-          nativeType:
-            name === 'DateTimeDate' ? 'timestamptz' : codecLookup.targetTypesFor(codecId)?.[0],
+          nativeType: codecLookup.targetTypesFor(codecId)?.[0],
         },
       });
     }

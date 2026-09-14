@@ -13,11 +13,8 @@ describe('Postgres Date adapter wiring', () => {
     });
   });
 
-  it('offers DateTimeDate and precision-bearing TimestamptzDate without changing defaults', () => {
-    expect(postgresAuthoringTypes).toHaveProperty('DateTimeDate', {
-      kind: 'typeConstructor',
-      output: { codecId, nativeType: 'timestamptz' },
-    });
+  it('offers only precision-bearing TimestamptzDate without changing defaults', () => {
+    expect(postgresAuthoringTypes).not.toHaveProperty('DateTimeDate');
     expect(postgresAuthoringTypes).toHaveProperty('TimestamptzDate', {
       kind: 'typeConstructor',
       args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
