@@ -119,7 +119,12 @@ function namedKeyItems(
 ): readonly CompletionItem[] {
   return Object.keys(signature.named ?? {})
     .filter((name) => !input.context.existingNamedKeys.includes(name))
-    .map((name) => completionItem(input, name, name, CompletionItemKind.Property));
+    .map((name) => {
+      const snippet = input.clientSupportsSnippets && !input.context.hasColon;
+      const value = snippet ? '$' + '{1:}' : '';
+      const text = input.context.hasColon ? name : `${name}: ${value}`;
+      return completionItem(input, name, text, CompletionItemKind.Property, snippet);
+    });
 }
 
 function valueItems(

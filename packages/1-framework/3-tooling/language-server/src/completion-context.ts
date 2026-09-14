@@ -134,10 +134,10 @@ export interface AttributeArgumentPosition extends CompletionReplacement {
 
 export interface AttributeNamedKeyPosition extends AttributeArgumentPosition {
   readonly existingNamedKeys: readonly string[];
+  readonly hasColon: boolean;
 }
 
-export interface AttributeArgumentSlotPosition extends AttributeArgumentPosition {
-  readonly existingNamedKeys: readonly string[];
+export interface AttributeArgumentSlotPosition extends AttributeNamedKeyPosition {
   readonly positionalIndex: number;
 }
 
@@ -700,13 +700,18 @@ function classifyArguments(
   const position = argumentPosition(cursor, path);
   if (active === undefined) {
     return followsSeparator(cursor, ['LParen', 'Comma'])
-      ? cursor.factory.argumentSlot({ ...position, positionalIndex, existingNamedKeys })
+      ? cursor.factory.argumentSlot({
+          ...position,
+          positionalIndex,
+          existingNamedKeys,
+          hasColon: false,
+        })
       : UNSUPPORTED;
   }
   const colon = active.colon();
   if (colon !== undefined) {
     if (cursor.offset <= colon.offset)
-      return cursor.factory.namedKey({ ...position, existingNamedKeys });
+      return cursor.factory.namedKey({ ...position, existingNamedKeys, hasColon: true });
     const name = active.name()?.name();
     return name === undefined
       ? UNSUPPORTED
@@ -717,7 +722,12 @@ function classifyArguments(
     value === undefined ||
     (value instanceof IdentifierAst && value.syntax.isInside(cursor.offset))
   ) {
-    return cursor.factory.argumentSlot({ ...position, positionalIndex, existingNamedKeys });
+    return cursor.factory.argumentSlot({
+      ...position,
+      positionalIndex,
+      existingNamedKeys,
+      hasColon: false,
+    });
   }
   return classifyExpression(cursor, value, [
     ...path,

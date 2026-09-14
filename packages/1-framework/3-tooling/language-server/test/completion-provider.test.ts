@@ -517,7 +517,7 @@ describe('providePslCompletionItems', () => {
         start: sourceFile.positionAt(cursorOffset - 'pr'.length),
         end: sourceFile.positionAt(cursorOffset),
       },
-      newText: 'priority',
+      newText: 'priority: ',
     });
   });
 
@@ -648,7 +648,7 @@ describe('providePslCompletionItems', () => {
         start: sourceFile.positionAt(cursorOffset - 'ma'.length),
         end: sourceFile.positionAt(cursorOffset),
       },
-      newText: 'map',
+      newText: 'map: ',
     });
 
     expect(

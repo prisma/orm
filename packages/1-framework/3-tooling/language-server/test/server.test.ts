@@ -771,7 +771,9 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       full: true,
       range: true,
     });
-    expect(result.capabilities.completionProvider).toEqual({ triggerCharacters: ['.', '@'] });
+    expect(result.capabilities.completionProvider).toEqual({
+      triggerCharacters: ['.', '@', '[', '(', '{', ':', ','],
+    });
   });
 
   it('returns model field type completions for configured PSL inputs', async () => {
@@ -1097,6 +1099,31 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       const inserted = snippets ? `choose(mode: ${emptySnippetPlaceholder1})` : 'choose';
       expect(applyCompletionItem(completion.source, item)).toBe(
         `// use prisma-next\nmodel User { id Int @probe(value: ${inserted}) // keep\n}`,
+      );
+    },
+    5_000,
+  );
+
+  it.each([false, true])(
+    'negotiates named-key value stops for snippet support: %s',
+    async (snippets) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippets ? snippetCompletionCapabilities : {});
+      await harness.initialize();
+      const completion = sourceWithCursor(
+        '// use prisma-8\nmodel User { id Int @probe(value: choose(mo|de)) }',
+      );
+      openDocument(harness, schemaUri, completion.source);
+      await harness.waitForDiagnostics(schemaUri);
+      const item = completionItemByLabel(
+        completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+        'mode',
+      );
+      expect(item.textEdit?.newText).toBe(`mode: ${snippets ? emptySnippetPlaceholder1 : ''}`);
+      expect(item.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
+      expect(item.command).toBeUndefined();
+      expect(applyCompletionItem(completion.source, item)).toBe(
+        `// use prisma-8\nmodel User { id Int @probe(value: choose(mode: ${snippets ? emptySnippetPlaceholder1 : ''})) }`,
       );
     },
     5_000,

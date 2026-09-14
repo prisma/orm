@@ -159,6 +159,7 @@ describe('classified positions without cursor AST', () => {
             { kind: 'functionCall', name: 'same' },
           ],
           existingNamedKeys: ['first'],
+          hasColon: true,
         },
         sourceFile,
         clientSupportsSnippets: false,
@@ -181,6 +182,7 @@ describe('classified positions without cursor AST', () => {
             { kind: 'functionCall', name: 'ordered' },
           ],
           existingNamedKeys: ['optional'],
+          hasColon: false,
           positionalIndex: 0,
         },
         sourceFile: new SourceFile(''),
@@ -244,6 +246,34 @@ describe('classified positions without cursor AST', () => {
       })),
     );
   });
+});
+
+describe('named key separators', () => {
+  it.each(['|', 'mo|de', 'choice: ordered(|)', 'choice: ordered(dir|ection)'])(
+    'inserts a separator and empty value stop for %s',
+    (args) => {
+      const name = args.includes('ordered') ? 'direction' : 'mode';
+      for (const snippets of [false, true]) {
+        const result = field(args, snippets);
+        const item = result.items.find((candidate) => candidate.label === name);
+        expect(item?.textEdit?.newText).toBe(`${name}: ${snippets ? emptyTabStop1 : ''}`);
+        expect(item?.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
+        expect(result.apply(name)).not.toContain(`${name}de`);
+      }
+    },
+  );
+
+  it.each(['mo|de:   Asc', 'mo|de :   Asc', 'choice: ordered(dir|ection:   Asc)'])(
+    'replaces only the complete key and preserves its existing separator/value: %s',
+    (args) => {
+      for (const snippets of [false, true]) {
+        const result = field(args, snippets);
+        const name = args.includes('ordered') ? 'direction' : 'mode';
+        expect(result.items.find((item) => item.label === name)?.textEdit?.newText).toBe(name);
+        expect(result.apply(name)).toBe(result.source);
+      }
+    },
+  );
 });
 
 describe('recursive attribute values', () => {

@@ -509,6 +509,7 @@ describe('classifyPslCompletionContext', () => {
           { kind: 'functionCall', name: 'ordered' },
         ],
         existingNamedKeys: ['optional'],
+        hasColon: namedKey,
         ...(!namedKey ? { positionalIndex: args.includes('Asc,') ? 1 : 0 } : {}),
         offset,
         replacementStartOffset: namedKey ? offset - 3 : identifier ? offset - 1 : offset,
@@ -589,6 +590,21 @@ describe('classifyPslCompletionContext', () => {
       offset: marked.indexOf('|'),
       replacementStartOffset: marked.indexOf('|'),
       replacementEndOffset: marked.indexOf('|'),
+    });
+  });
+
+  it.each([
+    ['mo|de', false],
+    ['mo|de:   Asc', true],
+    ['mo|de :   Asc', true],
+  ])('captures colon presence without changing the full key edit: %s', (args, hasColon) => {
+    const marked = `model M { value String @probe(${args}) }`;
+    expect(classify(marked)).toMatchObject({
+      kind: hasColon ? 'fieldAttributeNamedKey' : 'fieldAttributeArgumentSlot',
+      hasColon,
+      path: [],
+      replacementStartOffset: marked.indexOf('mo|'),
+      replacementEndOffset: marked.indexOf('|') + 2,
     });
   });
 
