@@ -22,7 +22,12 @@ import { runCommandAction } from '../../utils/next-actions';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { appRefsDirFor, displayPath, migrationsDirFor } from '../migration/paths';
+import {
+  appRefsDirFor,
+  displayPath,
+  migrationsDirFor,
+  projectConfigPathFor,
+} from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -285,6 +290,14 @@ export function createDbSignCommand(
         signedSource = { json: emitted.value.json, jsonPath: emitted.value.path };
       }
 
+      const client = createClient({
+        family: ctx.config.family,
+        target: ctx.config.target,
+        adapter: ctx.config.adapter,
+        ...ifDefined('driver', ctx.config.driver),
+        extensions: ctx.config.extensions ?? [],
+      });
+
       const refName = args.flags.noAdvanceRef
         ? null
         : (args.flags.advanceRef ?? DEFAULT_ADVANCE_REF);
@@ -294,6 +307,8 @@ export function createDbSignCommand(
           name: refName,
           contractJson: signedSource.json,
           contractJsonPath: signedSource.jsonPath,
+          configPath: projectConfigPathFor(ctx.cwd),
+          client,
         });
         if (!preflight.ok) {
           return notOk(normalizeError(preflight.failure));
@@ -314,13 +329,6 @@ export function createDbSignCommand(
       const header = headerBlock({
         contract: contractRef ?? emitted.value.displayPath,
         database: maskConnectionUrl(dbConnection),
-      });
-      const client = createClient({
-        family: ctx.config.family,
-        target: ctx.config.target,
-        adapter: ctx.config.adapter,
-        ...ifDefined('driver', ctx.config.driver),
-        extensions: ctx.config.extensions ?? [],
       });
       const onProgress = controlProgressReporter(ctx.report);
 

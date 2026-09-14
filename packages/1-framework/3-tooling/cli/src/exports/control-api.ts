@@ -119,9 +119,9 @@ export {
   type ContractIR,
   computeRefAdvancementName,
   executeRefAdvancement,
+  NO_REF_ADVANCEMENT,
+  preflightRefAdvancement,
   type RefAdvancementFields,
-  readContractIR,
-  resolveRefAdvancementFields,
 } from '../control-api/operations/ref-advancement';
 export { resolveContractRef, resolveMigrationRef } from '../control-api/operations/ref-resolution';
 export { readMigrationRefs } from '../control-api/operations/refs';

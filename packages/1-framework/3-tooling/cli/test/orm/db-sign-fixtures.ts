@@ -7,6 +7,7 @@ import type {
 } from '@internal/framework-components/control';
 import { readRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
+import { ok } from '@internal/utils/result';
 import type { MountedTree, PresentedResult } from '@prisma/cli-engine';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import { createTestCli } from '@prisma/cli-engine/testing';
@@ -15,19 +16,25 @@ import { type Mock, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createDbSignCommand } from '../../src/orm/db/sign';
-import { createTestProjectDir } from '../utils/test-project-dir';
+import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 export const HASH_A = `4cb4256${'0'.repeat(57)}`;
 export const HASH_PREVIOUS = `9d0f118${'2'.repeat(57)}`;
 export const CONNECTION = 'postgres://user:secret@localhost:5432/appdb';
 export const MASKED_CONNECTION = 'postgres://****:****@localhost:5432/appdb';
 export const EMITTED_CONTRACT_DTS = 'export type Contract = unknown;\n';
+/** What the fake client renders for any contract: the snapshot must carry this, not the file on disk. */
+export const RENDERED_CONTRACT_DTS = '// rendered\nexport type Contract = { rendered: true };\n';
 
-export const mocks: Record<'connect' | 'close' | 'schemaVerify' | 'sign', Mock> = {
+export const mocks: Record<
+  'connect' | 'close' | 'schemaVerify' | 'sign' | 'renderContractDts',
+  Mock
+> = {
   connect: vi.fn(),
   close: vi.fn(),
   schemaVerify: vi.fn(),
   sign: vi.fn(),
+  renderContractDts: vi.fn(),
 };
 
 /**
@@ -41,6 +48,7 @@ const commands: MountedTree = {
       connect: mocks.connect,
       schemaVerify: mocks.schemaVerify,
       sign: mocks.sign,
+      renderContractDts: mocks.renderContractDts,
       close: mocks.close,
     }),
   ),
@@ -52,6 +60,7 @@ const dirs: string[] = [];
 export async function projectDir(options: { readonly contract?: boolean } = {}): Promise<string> {
   const dir = createTestProjectDir('orm-db-sign');
   dirs.push(dir);
+  writeProjectManifest(dir);
   if (options.contract !== false) {
     await mkdir(join(dir, 'output'), { recursive: true });
     await writeFile(
@@ -154,6 +163,7 @@ export function resetMocks(): void {
   mocks.connect.mockReset().mockResolvedValue(undefined);
   mocks.close.mockReset().mockResolvedValue(undefined);
   mocks.schemaVerify.mockReset().mockResolvedValue(schemaResult());
+  mocks.renderContractDts.mockReset().mockResolvedValue(ok({ contractDts: RENDERED_CONTRACT_DTS }));
   mocks.sign.mockReset().mockImplementation(async (input: SignInput) => {
     return signResult(input.contract.storage.storageHash);
   });

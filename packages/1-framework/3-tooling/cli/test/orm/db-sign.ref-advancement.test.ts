@@ -1,5 +1,5 @@
 import { existsSync, writeFileSync } from 'node:fs';
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import type { MigrationPlanOperation } from '@internal/framework-components/control';
 import {
   contractSnapshotDir,
@@ -10,12 +10,12 @@ import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { writeRef } from '@internal/migration-tools/refs';
 import { blindCast } from '@internal/utils/casts';
+import { notOk } from '@internal/utils/result';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   CONNECTION,
   cleanupProjectDirs,
-  EMITTED_CONTRACT_DTS,
   envelopeOf,
   HASH_A,
   HASH_PREVIOUS,
@@ -24,6 +24,7 @@ import {
   mocks,
   ormConfig,
   projectDir,
+  RENDERED_CONTRACT_DTS,
   refHashOf,
   refsDirOf,
   resetMocks,
@@ -50,7 +51,7 @@ describe('db sign', () => {
         storage: { storageHash: HASH_A },
         target: 'postgres',
       });
-      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(EMITTED_CONTRACT_DTS);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
     });
 
     it('still advances db when --db names the database', async () => {
@@ -183,62 +184,66 @@ describe('db sign', () => {
       expect(await refHashOf(dir, 'db')).toBe(HASH_A);
     });
 
-    it('refuses a missing contract.d.ts before verifying or signing', async () => {
+    it('snapshots the types rendered from the contract, not the contract.d.ts on disk', async () => {
       const dir = await projectDir();
       await rm(join(dir, 'output', 'contract.d.ts'));
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
-      expect(run.exitCode).toBe(2);
-      expect(envelopeOf(run)).toMatchObject({
-        ok: false,
-        error: { code: 'CLI.FILE_NOT_FOUND' },
+      expect(run.exitCode).toBe(0);
+      expect(mocks.renderContractDts).toHaveBeenCalledWith({
+        contract: { storage: { storageHash: HASH_A }, target: 'postgres' },
+        resolveImportSpecifier: expect.any(Function),
       });
-      expect(JSON.stringify(run.json.at(-1))).toContain('contract.d.ts');
-      expect(mocks.schemaVerify).not.toHaveBeenCalled();
-      expect(mocks.sign).not.toHaveBeenCalled();
-      expect(existsSync(refsDirOf(dir))).toBe(false);
+      const storeDir = contractSnapshotDir(join(dir, 'migrations'), HASH_A);
+      expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
     });
 
-    it('refuses a contract.d.ts that is a directory before verifying or signing', async () => {
+    it('refuses before verifying or signing when the contract types cannot be rendered', async () => {
       const dir = await projectDir();
-      const dtsPath = join(dir, 'output', 'contract.d.ts');
-      await rm(dtsPath);
-      await mkdir(dtsPath);
+      mocks.renderContractDts.mockResolvedValue(
+        notOk({
+          code: 'RENDER_FAILED',
+          summary: 'Failed to render contract types',
+          why: 'relation author must declare nullability',
+        }),
+      );
 
       const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
 
       expect(run.exitCode).toBe(2);
       expect(envelopeOf(run)).toMatchObject({
         ok: false,
-        error: { code: 'CLI.FILE_NOT_FOUND' },
+        error: { code: 'CONTRACT.TYPES_RENDER_FAILED' },
       });
-      expect(JSON.stringify(run.json.at(-1))).toContain('contract.d.ts');
+      expect(JSON.stringify(run.json.at(-1))).toContain('relation author must declare nullability');
+      expect(mocks.schemaVerify).not.toHaveBeenCalled();
+      expect(mocks.sign).not.toHaveBeenCalled();
+      expect(existsSync(refsDirOf(dir))).toBe(false);
+      expect(existsSync(join(dir, 'migrations', 'snapshots'))).toBe(false);
+    });
+
+    it('refuses before verifying or signing when the family rejects the contract', async () => {
+      const dir = await projectDir();
+      mocks.renderContractDts.mockResolvedValue(
+        notOk({
+          code: 'CONTRACT_VALIDATION_FAILED',
+          summary: 'Contract validation failed',
+          why: 'storage.storageHash must be a string',
+        }),
+      );
+
+      const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run)).toMatchObject({
+        ok: false,
+        error: { code: 'CONTRACT.VALIDATION_FAILED' },
+      });
       expect(mocks.schemaVerify).not.toHaveBeenCalled();
       expect(mocks.sign).not.toHaveBeenCalled();
       expect(existsSync(refsDirOf(dir))).toBe(false);
     });
-
-    it.skipIf(process.getuid?.() === 0)(
-      'refuses an unreadable contract.d.ts before verifying or signing',
-      async () => {
-        const dir = await projectDir();
-        const dtsPath = join(dir, 'output', 'contract.d.ts');
-        await chmod(dtsPath, 0o000);
-
-        const run = await harness(ormConfig()).run(['db', 'sign', '--json'], { cwd: dir });
-
-        expect(run.exitCode).toBe(2);
-        expect(envelopeOf(run)).toMatchObject({
-          ok: false,
-          error: { code: 'CLI.FILE_NOT_FOUND' },
-        });
-        expect(JSON.stringify(run.json.at(-1))).toContain('contract.d.ts');
-        expect(mocks.schemaVerify).not.toHaveBeenCalled();
-        expect(mocks.sign).not.toHaveBeenCalled();
-        expect(existsSync(refsDirOf(dir))).toBe(false);
-      },
-    );
 
     it('--no-advance-ref signs without contract.d.ts, since no snapshot is written', async () => {
       const dir = await projectDir();
@@ -250,6 +255,7 @@ describe('db sign', () => {
 
       expect(run.exitCode).toBe(0);
       expect(mocks.sign).toHaveBeenCalledTimes(1);
+      expect(mocks.renderContractDts).not.toHaveBeenCalled();
       expect(run.presented?.data).toMatchObject({ advancedRef: null });
       expect(existsSync(join(dir, 'migrations', 'snapshots'))).toBe(false);
     });
@@ -295,6 +301,9 @@ describe('db sign', () => {
         contract: { storage: { storageHash: string } };
       };
       expect(signArg.contract.storage.storageHash).toBe(HASH_B);
+      expect(mocks.renderContractDts).toHaveBeenCalledWith(
+        expect.objectContaining({ contract: snapshotB }),
+      );
       expect(await refHashOf(dir, 'db')).toBe(HASH_B);
       const storeDir = contractSnapshotDir(join(dir, 'migrations'), HASH_B);
       expect(JSON.parse(await readFile(join(storeDir, 'contract.json'), 'utf-8'))).toEqual(

@@ -1,12 +1,13 @@
-import { readFile } from 'node:fs/promises';
 import { writeContractSnapshot } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
 import { validateRefName, writeRef } from '@internal/migration-tools/refs';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import type { CliStructuredError } from '../../utils/cli-errors';
-import { errorFileNotFound } from '../../utils/cli-errors';
+import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
+import { createProjectSpecifierResolver } from '../../utils/project-import-root';
+import type { ControlClient, RenderContractDtsFailure } from '../types';
 
+/** A contract snapshot's two halves: the JSON and the declarations rendered from it. */
 export interface ContractIR {
   readonly contract: unknown;
   readonly contractDts: string;
@@ -16,6 +17,11 @@ export interface RefAdvancementFields {
   readonly advancedRef: { readonly name: string; readonly hash: string } | null;
   readonly plannedAdvanceRef: { readonly name: string; readonly hash: string } | null;
 }
+
+export const NO_REF_ADVANCEMENT: RefAdvancementFields = {
+  advancedRef: null,
+  plannedAdvanceRef: null,
+};
 
 export function computeRefAdvancementName(options: {
   readonly advanceRef?: string;
@@ -30,57 +36,60 @@ export function computeRefAdvancementName(options: {
   return null;
 }
 
-function contractDtsPathOf(contractJsonPath: string): string {
-  return contractJsonPath.replace(/\.json$/i, '.d.ts');
-}
-
-export async function readContractIR(
-  contractJson: Record<string, unknown>,
+function errorContractDtsRenderFailed(
   contractJsonPath: string,
-): Promise<ContractIR> {
-  const contractDts = await readFile(contractDtsPathOf(contractJsonPath), 'utf-8');
-  return { contract: contractJson, contractDts };
-}
-
-function fsErrorCodeOf(error: unknown): string | undefined {
-  const code = error instanceof Error ? Reflect.get(error, 'code') : undefined;
-  return typeof code === 'string' ? code : undefined;
-}
-
-function errorUnreadableContractDts(contractJsonPath: string, cause: unknown): CliStructuredError {
-  const contractDtsPath = contractDtsPathOf(contractJsonPath);
-  const code = fsErrorCodeOf(cause);
-  const why =
-    code === 'ENOENT'
-      ? `The contract types next to ${contractJsonPath} are missing: ${contractDtsPath}`
-      : `The contract types next to ${contractJsonPath} could not be read${code === undefined ? '' : ` (${code})`}: ${contractDtsPath}`;
-  return errorFileNotFound(contractDtsPath, {
-    why,
-    fix: 'Run {bin} contract emit to regenerate the contract artifacts, then advance the ref again.',
-    cause,
+  failure: RenderContractDtsFailure,
+): CliStructuredError {
+  const why = failure.why ?? failure.summary;
+  if (failure.code === 'CONTRACT_VALIDATION_FAILED') {
+    return errorContractValidationFailed(
+      `Contract at ${contractJsonPath} failed to deserialize: ${why}`,
+      { where: { path: contractJsonPath }, ...ifDefined('cause', failure.cause) },
+    );
+  }
+  return new CliStructuredError('CONTRACT.TYPES_RENDER_FAILED', 'Failed to render contract types', {
+    why: `The types for the contract at ${contractJsonPath} could not be rendered: ${why}`,
+    fix: 'Run {bin} contract emit to see why the contract does not emit, fix it, then advance the ref again.',
+    where: { path: contractJsonPath },
+    ...ifDefined('cause', failure.cause),
   });
 }
 
 /**
- * Everything `advanceRefSafely` needs from disk, loaded before a command does
- * the work that precedes the ref write: the ref name is validated and the
- * sibling `.d.ts` of the contract to snapshot is read. The returned
- * `ContractIR` is what the command then hands to `advanceRefSafely`, so no
- * file is read after the database is signed.
+ * Everything `executeRefAdvancement` needs, produced before a command does the
+ * work that precedes the ref write: the ref name is validated and the
+ * declarations of the contract to snapshot are rendered from its JSON, with
+ * the import names the project owning `configPath` can resolve. Nothing is
+ * read or rendered after the database is touched, so a contract that cannot
+ * be snapshotted refuses the command before it changes anything.
  */
 export async function preflightRefAdvancement(args: {
   readonly name: string;
   readonly contractJson: Record<string, unknown>;
   readonly contractJsonPath: string;
+  readonly configPath: string;
+  readonly client: Pick<ControlClient, 'renderContractDts'>;
 }): Promise<Result<ContractIR, CliStructuredError>> {
   if (!validateRefName(args.name)) {
     return notOk(errorInvalidRefName(args.name));
   }
+  let resolveImportSpecifier: ReturnType<typeof createProjectSpecifierResolver>;
   try {
-    return ok(await readContractIR(args.contractJson, args.contractJsonPath));
+    resolveImportSpecifier = createProjectSpecifierResolver(args.configPath);
   } catch (error) {
-    return notOk(errorUnreadableContractDts(args.contractJsonPath, error));
+    if (CliStructuredError.is(error)) {
+      return notOk(error);
+    }
+    throw error;
   }
+  const rendered = await args.client.renderContractDts({
+    contract: args.contractJson,
+    resolveImportSpecifier,
+  });
+  if (!rendered.ok) {
+    return notOk(errorContractDtsRenderFailed(args.contractJsonPath, rendered.failure));
+  }
+  return ok({ contract: args.contractJson, contractDts: rendered.value.contractDts });
 }
 
 export async function executeRefAdvancement(
@@ -104,81 +113,36 @@ export async function executeRefAdvancement(
   return { name, hash };
 }
 
+/**
+ * The ref-advancement tail of db init / db update, run after the database
+ * work with the `ContractIR` that `preflightRefAdvancement` produced before
+ * it. Plan mode reports the ref that an apply would advance without writing.
+ */
 export async function buildRefAdvancementFields(options: {
-  readonly advanceRef?: string;
-  readonly db?: string;
+  readonly name: string;
   readonly refsDir: string;
   readonly migrationsDir: string;
   readonly contractIR: ContractIR;
   readonly mode: 'plan' | 'apply';
   readonly hash: string;
-}): Promise<RefAdvancementFields> {
-  const name = computeRefAdvancementName({
-    ...ifDefined('advanceRef', options.advanceRef),
-    ...ifDefined('db', options.db),
-  });
-  if (name === null) {
-    return { advancedRef: null, plannedAdvanceRef: null };
-  }
+}): Promise<Result<RefAdvancementFields, CliStructuredError>> {
   if (options.mode === 'plan') {
-    return { advancedRef: null, plannedAdvanceRef: { name, hash: options.hash } };
-  }
-  const advancedRef = await executeRefAdvancement(
-    options.refsDir,
-    options.migrationsDir,
-    name,
-    options.hash,
-    options.contractIR,
-  );
-  return { advancedRef, plannedAdvanceRef: null };
-}
-
-export interface ResolveRefAdvancementFieldsOptions {
-  readonly advanceRef?: string;
-  readonly db?: string;
-  readonly refsDir: string;
-  readonly migrationsDir: string;
-  readonly contractJson: Record<string, unknown>;
-  /** Path whose sibling .d.ts readContractIR derives (contract.json path). */
-  readonly contractJsonPath: string;
-  readonly mode: 'plan' | 'apply';
-  readonly hash: string;
-}
-
-/**
- * Full ref-advancement phase for db init/update: ok({advancedRef:null, plannedAdvanceRef:null})
- * when computeRefAdvancementName is null; else readContractIR + buildRefAdvancementFields with
- * MigrationToolsError mapped, other errors rethrown.
- */
-export async function resolveRefAdvancementFields(
-  options: ResolveRefAdvancementFieldsOptions,
-): Promise<Result<RefAdvancementFields, CliStructuredError>> {
-  if (
-    computeRefAdvancementName({
-      ...ifDefined('advanceRef', options.advanceRef),
-      ...ifDefined('db', options.db),
-    }) === null
-  ) {
-    return ok({ advancedRef: null, plannedAdvanceRef: null });
-  }
-  try {
-    const contractIR = await readContractIR(options.contractJson, options.contractJsonPath);
-    const fields = await buildRefAdvancementFields({
-      ...ifDefined('advanceRef', options.advanceRef),
-      ...ifDefined('db', options.db),
-      refsDir: options.refsDir,
-      migrationsDir: options.migrationsDir,
-      contractIR,
-      mode: options.mode,
-      hash: options.hash,
+    return ok({
+      advancedRef: null,
+      plannedAdvanceRef: { name: options.name, hash: options.hash },
     });
-    return ok(fields);
-  } catch (error) {
-    if (MigrationToolsError.is(error)) {
-      return notOk(error);
-    }
-    throw error;
   }
+  const advanced = await advanceRefSafely({
+    refsDir: options.refsDir,
+    migrationsDir: options.migrationsDir,
+    name: options.name,
+    hash: options.hash,
+    contractIR: options.contractIR,
+  });
+  if (!advanced.ok) {
+    return advanced;
+  }
+  return ok({ advancedRef: advanced.value, plannedAdvanceRef: null });
 }
 
 /**
