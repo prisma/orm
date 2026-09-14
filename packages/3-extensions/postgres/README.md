@@ -60,12 +60,6 @@ export default {
 
 The returned client exposes `sql`, `context`, `stack`, `contract`, and `connect()` — and intentionally nothing else. Construct ORM clients (or invoke `withTransaction` from `@internal/sql-runtime`) against the runtime returned by `connect()` instead of caching one on the closure.
 
-## JavaScript Date fields
-
-Choose `DateTimeDate` or `TimestamptzDate(3)` in PSL to read and write JavaScript `Date` values instead of `Temporal.Instant`. The composed `defineContract` callback exposes `field.dateTimeDate()`, `field.temporal.timestamptzDate(3)`, `field.temporal.createdAtDate()`, and `field.temporal.updatedAtDate()`. Both runtime facades use the registered codec automatically; no separate extension or Temporal polyfill is needed for Date-valued fields.
-
-Existing `DateTime`, `Timestamptz`, and unsuffixed temporal presets retain their Temporal representation. See [Postgres temporal representations](../../../docs/reference/postgres-temporal-representations.md) for precision limits and default behavior.
-
 ## Exports
 
 ### `@internal/postgres/config`

@@ -247,10 +247,6 @@ DELETE FROM "user" WHERE "user"."id" = $1 RETURNING "user"."id", "user"."email"
 
 **Note:** MySQL does not support RETURNING clauses. A future MySQL adapter would declare `returning: false` and either reject plans with RETURNING or provide an alternative implementation.
 
-## JavaScript Date columns
-
-Use `timestamptzDateColumn` from `@internal/adapter-postgres/column-types` for an opt-in `pg/timestamptz-date@1` column. The adapter registers `timestamptz` storage and precision expansion for this codec; no branded type import is needed because the emitted application type is the built-in `Date`. PSL offers `DateTimeDate` and `TimestamptzDate(p)` while the existing bare spellings remain Temporal-backed. See [Postgres temporal representations](../../../../docs/reference/postgres-temporal-representations.md) for field presets and precision tradeoffs.
-
 ## JSON and JSONB support
 
 The adapter supports PostgreSQL-native `json` and `jsonb` columns.

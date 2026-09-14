@@ -776,7 +776,7 @@ The check is lazy: registering the target, validating a contract, building a run
 
 That covers more than an explicit write. It is raised on **reads**, because the check is the first thing a Temporal codec does on decode — selecting the column is enough. And it is raised on an **insert into a table carrying `temporal.updatedAt()`**, because that column's clock produces a `Temporal.Instant` even when your code never mentions a temporal value; that path reports `generatorId` rather than `codecId`, since no codec has been reached yet.
 
-Install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type — `DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)` — to read and write PostgreSQL's own text, which needs no Temporal at all. For `timestamptz` fields whose application representation is JavaScript `Date`, opt into `DateTimeDate` or `TimestamptzDate(p)` and use `temporal.createdAtDate()` / `temporal.updatedAtDate()` for defaults. These Date-valued paths do not require Temporal; see [Postgres temporal representations](./postgres-temporal-representations.md) for precision tradeoffs.
+Install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type — `DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)` — to read and write PostgreSQL's own text, which needs no Temporal at all.
 
 ### RUNTIME.TRANSACTION_CLOSED
 
