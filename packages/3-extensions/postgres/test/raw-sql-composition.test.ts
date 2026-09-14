@@ -7,7 +7,7 @@ import {
   IdentifierRef,
   RawExpr,
 } from '@internal/sql-relational-core/ast';
-import { createRawSql, expressionMarker } from '@internal/sql-relational-core/expression';
+import { createRawSql } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import { describe, expect, it } from 'vitest';
 import type { Contract } from './fixtures/namespaced-contract';
@@ -113,7 +113,6 @@ describe('rawSql composition with the typed builder', () => {
 
     // Field proxy top-level access produces IdentifierRef (not ColumnRef); simulate that here.
     const nameExpr = {
-      [expressionMarker]: true as const,
       buildAst: () => IdentifierRef.of('name'),
       returnType: { codecId: 'pg/text@1', nullable: false },
     };
@@ -140,7 +139,6 @@ describe('rawSql composition with the typed builder', () => {
     const rawSql = rawSqlOf(fns, tag);
 
     const idExpr = {
-      [expressionMarker]: true as const,
       buildAst: () => IdentifierRef.of('id'),
       returnType: { codecId: 'pg/int4@1', nullable: false },
     };
@@ -180,7 +178,6 @@ describe('rawSql composition with the typed builder', () => {
 
     // Top-level field proxy produces IdentifierRef for createdAt.
     const createdAtExpr = {
-      [expressionMarker]: true as const,
       buildAst: () => IdentifierRef.of('createdAt'),
       returnType: { codecId: 'pg/timestamptz-temporal@1', nullable: false },
     };
@@ -214,7 +211,6 @@ describe('rawSql composition with the typed builder', () => {
 
     // Top-level field proxy produces IdentifierRef for score.
     const scoreExpr = {
-      [expressionMarker]: true as const,
       buildAst: () => IdentifierRef.of('score'),
       returnType: { codecId: 'pg/int4@1', nullable: true },
     };
@@ -246,7 +242,6 @@ describe('rawSql composition with the typed builder', () => {
     const rawSql = rawSqlOf(fns, tag);
 
     const scoreExpr = {
-      [expressionMarker]: true as const,
       buildAst: () => IdentifierRef.of('score'),
       returnType: { codecId: 'pg/int4@1', nullable: true },
     };
@@ -281,7 +276,6 @@ describe('rawSql composition with the typed builder', () => {
     const rawSql = rawSqlOf(fns, tag);
 
     const scoreExpr = {
-      [expressionMarker]: true as const,
       buildAst: () => IdentifierRef.of('score'),
       returnType: { codecId: 'pg/int4@1', nullable: true },
     };

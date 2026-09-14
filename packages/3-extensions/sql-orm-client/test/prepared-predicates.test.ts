@@ -30,8 +30,8 @@ import {
   TableSource,
   WindowFuncExpr,
 } from '@internal/sql-relational-core/ast';
-import { type Expression, expressionMarker } from '@internal/sql-relational-core/expression';
-import { describe, expect, it, vi } from 'vitest';
+import type { Expression } from '@internal/sql-relational-core/expression';
+import { describe, expect, it } from 'vitest';
 import { bindWhereExpr } from '../src/where-binding';
 import { createCollectionFor } from './collection-fixtures';
 import { getTestContract } from './helpers';
@@ -42,7 +42,7 @@ function parameter<C extends string, N extends boolean>(
   nullable: N,
 ): Expression<{ codecId: C; nullable: N }> {
   const ast = PreparedParamRef.of(name, { codecId }, nullable);
-  return { [expressionMarker]: true, returnType: { codecId, nullable }, buildAst: () => ast };
+  return { returnType: { codecId, nullable }, buildAst: () => ast };
 }
 
 const id = parameter('id', 'pg/int4@1', false);
@@ -107,18 +107,6 @@ it('preserves prepared refs and stable slots in shorthand, callback, relations, 
     ['literal', 3],
     ['prepared', 'email'],
   ]);
-});
-
-it('binds codec input objects without invoking their buildAst method', () => {
-  const { collection } = createCollectionFor('Post');
-  const buildAst = vi.fn(() => {
-    throw new Error('not a SQL expression');
-  });
-  const value = Object.assign([1, 2, 3], { buildAst });
-  const query = collection.where({ embedding: value }).select('id').prepared.all();
-  expect(query.params).toEqual([value]);
-  expect(query.params[0]).toBe(value);
-  expect(buildAst).not.toHaveBeenCalled();
 });
 
 const wrappers: ReadonlyArray<readonly [string, (expr: AnyExpression) => AnyExpression]> = [

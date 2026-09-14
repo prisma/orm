@@ -1,10 +1,6 @@
 import { isRuntimeError } from '@internal/framework-components/runtime';
 import { ColumnRef, ParamRef } from '@internal/sql-relational-core/ast';
-import {
-  type Expression,
-  expressionMarker,
-  toExpr,
-} from '@internal/sql-relational-core/expression';
+import { type Expression, toExpr } from '@internal/sql-relational-core/expression';
 import { describe, expect, it } from 'vitest';
 
 describe('raw SQL codec-required guard', () => {
@@ -87,7 +83,6 @@ describe('raw SQL codec-required guard', () => {
     it('unwraps an Expression without requiring codec', () => {
       const column = ColumnRef.of('users', 'email');
       const expression: Expression<{ codecId: 'pg/text@1'; nullable: false }> = {
-        [expressionMarker]: true,
         returnType: { codecId: 'pg/text@1', nullable: false },
         buildAst: () => column,
       };

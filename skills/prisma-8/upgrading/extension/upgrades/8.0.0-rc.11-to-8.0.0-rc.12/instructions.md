@@ -2,8 +2,6 @@
 from: 8.0.0-rc.11
 to: 8.0.0-rc.12
 changes:
-  - id: nominal-sql-expression-wrappers
-    summary: Mark custom scalar Expression wrappers with the shared expressionMarker and recognize wrappers with isExpression.
   - id: shared-preparable-envelope
     summary: Return the shared Preparable SQL envelope directly from custom ORM preparation descriptions rather than nesting it under plan.
   - id: params-only-sql-facade-prepare
@@ -13,12 +11,6 @@ changes:
   - id: preserve-orm-pagination-expressions
     summary: Preserve expression-valued limit and offset when consuming ORM CollectionState.
 ---
-
-## `nominal-sql-expression-wrappers`
-
-Find custom scalar wrappers implementing `Expression<ScopeField>` from `@internal/sql-relational-core/expression`. Import `expressionMarker` from that entrypoint and add `readonly [expressionMarker] = true` on implementing classes, or `[expressionMarker]: true` on contextually typed expression object literals (`true as const` when inference would widen it). Keep the existing `returnType`, `codec` and `buildAst()` behavior unchanged. `buildOperation()` and raw scalar `.returns()` already supply the marker. Use the exported `isExpression(value)` guard instead of testing for a callable `buildAst` before converting unknown codec inputs. Import the shared marker rather than allocating a local symbol; its global identity supports separately bundled producers.
-
-Do not mark AST nodes, table/query builders, raw-row builders or arbitrary codec input objects merely because they have a `buildAst` method. A codec input with such a method remains a bound value, and its method must not be invoked by operand conversion.
 
 ## `shared-preparable-envelope`
 

@@ -1,13 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ColumnRef, IdentifierRef, LiteralExpr, OperationExpr, ParamRef } from '../src/ast/types';
-import {
-  buildOperation,
-  codecOf,
-  type Expression,
-  expressionMarker,
-  isExpression,
-  toExpr,
-} from '../src/expression';
+import { buildOperation, codecOf, type Expression, isExpression, toExpr } from '../src/expression';
 
 const infixLowering = {
   targetFamily: 'sql',
@@ -30,44 +23,36 @@ describe('toExpr', () => {
   it('unwraps an Expression by calling its buildAst()', () => {
     const column = ColumnRef.of('users', 'email');
     const expression: Expression<{ codecId: 'pg/text@1'; nullable: false }> = {
-      [expressionMarker]: true,
       returnType: { codecId: 'pg/text@1', nullable: false },
       buildAst: () => column,
     };
     expect(toExpr(expression)).toBe(column);
   });
 
-  it('keeps callable buildAst inputs as parameters rather than expressions', () => {
-    const buildAst = vi.fn(() => LiteralExpr.of('wrong'));
+  it('accepts unmarked wrappers with callable buildAst', () => {
+    const ast = LiteralExpr.of('hello');
+    const buildAst = vi.fn(() => ast);
     const value = { buildAst, returnType: { codecId: 'pg/text@1', nullable: false } };
+    expect(toExpr(value)).toBe(ast);
+    expect(codecOf(value)).toEqual({ codecId: 'pg/text@1' });
+    expect(isExpression(value)).toBe(true);
+    expect(buildAst).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    null,
+    undefined,
+    42,
+    'hello',
+    () => LiteralExpr.of('hello'),
+    {},
+    { buildAst: 'not callable' },
+  ])('rejects non-object or non-callable wrappers: %o', (value) => {
+    expect(isExpression(value)).toBe(false);
     expect(toExpr(value, { codecId: 'pg/jsonb@1' })).toEqual(
       ParamRef.of(value, { codec: { codecId: 'pg/jsonb@1' } }),
     );
-    expect(codecOf(value)).toBeUndefined();
-    expect(isExpression(value)).toBe(false);
-    expect(buildAst).not.toHaveBeenCalled();
   });
-
-  it('uses a global marker shared by separately bundled expression producers', () => {
-    expect(expressionMarker).toBe(Symbol.for('prisma.sql.expression'));
-    expect(
-      isExpression({
-        [Symbol.for('prisma.sql.expression')]: true,
-        returnType: { codecId: 'pg/text@1', nullable: false },
-        buildAst: () => LiteralExpr.of('hello'),
-      }),
-    ).toBe(true);
-  });
-
-  it.each([{ [expressionMarker]: true }, { [expressionMarker]: true, buildAst: 'not callable' }])(
-    'rejects incomplete marked expressions: %o',
-    (value) => {
-      expect(isExpression(value)).toBe(false);
-      expect(toExpr(value, { codecId: 'pg/jsonb@1' })).toEqual(
-        ParamRef.of(value, { codec: { codecId: 'pg/jsonb@1' } }),
-      );
-    },
-  );
 
   it('throws for null and undefined without codec', () => {
     expect(() => toExpr(null)).toThrow('Cannot construct a ParamRef');
@@ -112,7 +97,6 @@ describe('codecOf', () => {
     const expr: Expression<{ codecId: 'pg/text@1'; nullable: false }> & {
       codec: typeof codec;
     } = {
-      [expressionMarker]: true,
       returnType: { codecId: 'pg/text@1', nullable: false },
       buildAst: () => IdentifierRef.of('email'),
       codec,
@@ -122,7 +106,6 @@ describe('codecOf', () => {
 
   it('derives CodecRef from returnType.codecId when no explicit codec metadata', () => {
     const expr: Expression<{ codecId: 'pg/text@1'; nullable: false }> = {
-      [expressionMarker]: true,
       returnType: { codecId: 'pg/text@1', nullable: false },
       buildAst: () => ColumnRef.of('user', 'email'),
     };
@@ -131,11 +114,14 @@ describe('codecOf', () => {
 
   it('derives CodecRef from returnType.codecId for non-column AST expressions', () => {
     const expr: Expression<{ codecId: 'pg/text@1'; nullable: false }> = {
-      [expressionMarker]: true,
       returnType: { codecId: 'pg/text@1', nullable: false },
       buildAst: () => LiteralExpr.of('foo'),
     };
     expect(codecOf(expr)).toEqual({ codecId: 'pg/text@1' });
+  });
+
+  it('returns undefined for wrappers without codec metadata', () => {
+    expect(codecOf({ buildAst: () => LiteralExpr.of('hello') })).toBeUndefined();
   });
 
   it('returns undefined for raw values', () => {

@@ -1,9 +1,5 @@
 import { type AnyExpression, LiteralExpr, OperationExpr } from '@internal/sql-relational-core/ast';
-import {
-  type Expression,
-  expressionMarker,
-  toExpr,
-} from '@internal/sql-relational-core/expression';
+import { type Expression, toExpr } from '@internal/sql-relational-core/expression';
 import { InternalError } from '@internal/utils/internal-error';
 import { paradeDbError } from './errors';
 
@@ -26,7 +22,6 @@ interface ProximityStep {
 export class ParadeDbProximityChain
   implements Expression<{ codecId: 'pg/text@1'; nullable: false }>
 {
-  readonly [expressionMarker] = true;
   readonly returnType = { codecId: TEXT, nullable: false } as const;
 
   private readonly start: ProximityTerm;

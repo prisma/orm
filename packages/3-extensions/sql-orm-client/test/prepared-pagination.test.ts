@@ -1,11 +1,10 @@
 import { collectOrderedParamRefs, PreparedParamRef } from '@internal/sql-relational-core/ast';
-import { type Expression, expressionMarker } from '@internal/sql-relational-core/expression';
+import type { Expression } from '@internal/sql-relational-core/expression';
 import { expect, it } from 'vitest';
 import { createCollectionFor } from './collection-fixtures';
 
 const ref = PreparedParamRef.of('page', { codecId: 'pg/int4@1' });
 const page: Expression<{ codecId: 'pg/int4@1'; nullable: false }> = {
-  [expressionMarker]: true,
   returnType: { codecId: 'pg/int4@1', nullable: false },
   buildAst: () => ref,
 };
