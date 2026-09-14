@@ -38,7 +38,7 @@ Non-finite floats are rejected rather than silently mangled: JSON has no spellin
 
 The consumer-facing [`BigInt`, `BigIntNumber`, and `UnboundedInt` representation choices](./integer-representation-types.md), including `BigIntNumber`'s deliberate JSON-number exception, are documented separately from this contributor guide.
 
-The PostgreSQL temporal codecs pair a `Temporal`-valued codec with a raw-text one for each native type — `pg/timestamptz-temporal@1` reads a `Temporal.Instant`, `pg/timestamptz-string@1` reads PostgreSQL's own text, and the contract names which one a column uses.
+The PostgreSQL temporal codecs pair a `Temporal`-valued codec with a raw-text one for each native type. `timestamptz` additionally offers `pg/timestamptz-date@1` for JavaScript `Date` input/output over a string wire format. The contract names the representation: `pg/timestamptz-temporal@1` reads a `Temporal.Instant`, `pg/timestamptz-string@1` reads PostgreSQL's own text, and the Date codec reads a millisecond-resolution Date. Its descriptor emits the built-in `Date` type and declares `targetTypes: []`, so explicit registration does not change reverse inference. See [Postgres temporal representations](./postgres-temporal-representations.md) for authoring and precision tradeoffs.
 
 ## Three case studies
 

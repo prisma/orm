@@ -98,6 +98,18 @@ describe('postgres temporal per-codec presets', () => {
         codecId: 'pg/timestamptz-string@1',
         nativeType: 'timestamptz',
       }),
+      createdAtDate: temporalAuthoringPresets({
+        codecId: 'pg/timestamptz-date@1',
+        nativeType: 'timestamptz',
+      }).createdAt,
+      updatedAtDate: temporalAuthoringPresets({
+        codecId: 'pg/timestamptz-date@1',
+        nativeType: 'timestamptz',
+      }).updatedAt,
+      timestamptzDate: temporalCodecPresetWithPrecision({
+        codecId: 'pg/timestamptz-date@1',
+        nativeType: 'timestamptz',
+      }),
       timestamp: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamp-temporal@1',
         nativeType: 'timestamp',

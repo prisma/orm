@@ -74,6 +74,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       Inet: { codecId: 'pg/inet@1', nativeType: 'inet' },
       Decimal: { codecId: 'pg/numeric@1', nativeType: 'numeric' },
       DateTime: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' },
+      DateTimeDate: { codecId: 'pg/timestamptz-date@1', nativeType: 'timestamptz' },
       Json: { codecId: 'pg/json@1', nativeType: 'json' },
       Jsonb: { codecId: 'pg/jsonb@1', nativeType: 'jsonb' },
       Bytes: { codecId: 'pg/bytea@1', nativeType: 'bytea' },
@@ -91,6 +92,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       DateString: { codecId: 'pg/date-string@1', nativeType: 'date' },
       TimestampString: { codecId: 'pg/timestamp-string@1', nativeType: 'timestamp' },
       TimestamptzString: { codecId: 'pg/timestamptz-string@1', nativeType: 'timestamptz' },
+      TimestamptzDate: { codecId: 'pg/timestamptz-date@1', nativeType: 'timestamptz' },
       TimeString: { codecId: 'pg/time-string@1', nativeType: 'time' },
     });
   });
@@ -105,6 +107,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       'Date',
       'DateString',
       'DateTime',
+      'DateTimeDate',
       'Decimal',
       'Float',
       'Inet',
@@ -120,6 +123,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       'Timestamp',
       'TimestampString',
       'Timestamptz',
+      'TimestamptzDate',
       'TimestamptzString',
       'Timetz',
       'UnboundedInt',

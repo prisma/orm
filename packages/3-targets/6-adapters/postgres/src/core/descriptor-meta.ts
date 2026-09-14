@@ -31,6 +31,7 @@ import {
   PG_TIME_TEMPORAL_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMPTZ_DATE_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
@@ -235,6 +236,7 @@ export const postgresAdapterDescriptorMeta = {
         [PG_TIME_TEMPORAL_CODEC_ID]: precisionHooks,
         [PG_TIMESTAMP_STRING_CODEC_ID]: precisionHooks,
         [PG_TIMESTAMPTZ_STRING_CODEC_ID]: precisionHooks,
+        [PG_TIMESTAMPTZ_DATE_CODEC_ID]: precisionHooks,
         [PG_TIME_STRING_CODEC_ID]: precisionHooks,
         [PG_TIMETZ_CODEC_ID]: precisionHooks,
         [PG_INTERVAL_CODEC_ID]: precisionHooks,
@@ -307,6 +309,12 @@ export const postgresAdapterDescriptorMeta = {
         familyId: 'sql',
         targetId: 'postgres',
         nativeType: 'timestamp',
+      },
+      {
+        typeId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
+        familyId: 'sql',
+        targetId: 'postgres',
+        nativeType: 'timestamptz',
       },
       {
         typeId: PG_TIMESTAMPTZ_STRING_CODEC_ID,

@@ -14,6 +14,7 @@ import {
   text,
   textArray,
   timestamptz,
+  timestamptzDate,
 } from '../../src/exports/contract-free';
 
 describe('postgres column type helpers', () => {
@@ -24,12 +25,16 @@ describe('postgres column type helpers', () => {
       jsonb: jsonb(),
       textArray: textArray(),
       timestamptz: timestamptz(),
+      timestamptzDate: timestamptzDate(),
+      nullableDate: timestamptzDate({ nullable: true }),
     }).toEqual({
       text: { codecId: 'pg/text@1', nullable: false },
       int4: { codecId: 'pg/int4@1', nullable: false },
       jsonb: { codecId: 'pg/jsonb@1', nullable: false },
       textArray: { codecId: 'pg/text-array@1', nullable: false },
       timestamptz: { codecId: 'pg/timestamptz-string@1', nullable: false },
+      timestamptzDate: { codecId: 'pg/timestamptz-date@1', nullable: false },
+      nullableDate: { codecId: 'pg/timestamptz-date@1', nullable: true },
     });
   });
 

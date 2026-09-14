@@ -152,6 +152,11 @@ export const FIXTURES: readonly AggregateFixture[] = [
     samples: ["'2024-01-01T10:00:00.123456'", "'2024-02-01T10:00:00.654321'"],
   },
   {
+    codecId: 'pg/timestamptz-date@1',
+    typeParams: { precision: 3 },
+    samples: ["'2024-01-01T10:00:00.123Z'", "'2024-02-01T10:00:00.654Z'"],
+  },
+  {
     codecId: 'pg/timestamptz-string@1',
     typeParams: { precision: 6 },
     samples: ["'2024-01-01T10:00:00.123456Z'", "'2024-02-01T10:00:00.654321Z'"],

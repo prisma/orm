@@ -31,6 +31,17 @@ This package spans multiple planes:
 - **Runtime plane** (`src/exports/runtime.ts`): Runtime entry point for target-specific runtime code (future)
 - **Authoring pack ref** (`src/exports/pack.ts`): Pure data surface for contract builder workflows
 
+## JavaScript Date representation
+
+`pg/timestamptz-date@1` is an opt-in representation of PostgreSQL `timestamptz(p)` with JavaScript `Date` input/output and a string wire format. It supports precision parameters and emits the built-in `Date` type without a type import. The default `DateTime` and `Timestamptz` spellings still select `Temporal.Instant`; introspection remains Temporal-backed.
+
+- `./codec-ids`: `PG_TIMESTAMPTZ_DATE_CODEC_ID`.
+- `./codecs`: `PgTimestamptzDateCodec`, `PgTimestamptzDateDescriptor`, `pgTimestamptzDateDescriptor`, and `pgTimestamptzDateColumn({ precision: 3 })`.
+- `./codec-types`: `CodecTypes['pg/timestamptz-date@1']` exposes Date input/output.
+- `./contract-free`: `timestamptzDate({ nullable: true })` opts into Date values. The existing `timestamptz()` helper and control-table timestamps remain string-backed.
+
+`min` and `max` preserve the Date codec and its precision parameters. `sum` and `avg` are not offered for it. See [Postgres temporal representations](../../../../docs/reference/postgres-temporal-representations.md) for PSL and TypeScript field presets and representation tradeoffs.
+
 ## `db init`
 
 This package provides the Postgres implementation of the SQL migration planner/runner used by `prisma db init`:
