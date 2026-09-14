@@ -38,7 +38,7 @@ If the project also matches the extension-author role, run **this** flow first a
 
 ## Version detection
 
-- **From-version.** Read the currently-installed Prisma 8 version from `pnpm-lock.yaml` (or `package-lock.json` / `yarn.lock`) by inspecting the resolved version of any `@prisma/orm-*` package. If the lockfile shows multiple `@prisma/orm-*` packages at different minors (already broken), the **lowest** minor is the from-version.
+- **From-version.** Read the currently-installed Prisma 8 version from `pnpm-lock.yaml` (or `package-lock.json` / `yarn.lock`) by inspecting the resolved version of the app's Prisma packages: `@prisma/orm-postgres`, `@prisma/orm-mongo`, or `@prisma/orm-sqlite`. Do not read it from a `@prisma/orm-extension-*` package; extensions carry their own version and are handled by the pre-flight above. Compare full semver strings, prerelease identifier included: `8.0.0-rc.10` and `8.0.0-rc.11` are different versions and different steps in the chain below. If the lockfile shows the app's Prisma packages at different versions (already broken), the **lowest** is the from-version.
 - **To-version.** Either the version the user specified, or whatever `npm view @prisma/orm-postgres dist-tags.latest` reports. Do not assume that is a stable version: while Prisma 8 is a release candidate, `latest` tracks the newest release, `8.0.0-rc.N` included. If the user wants a stable version specifically, they must name it.
 
 Report both back to the user before continuing.
@@ -61,7 +61,7 @@ The chain order does not depend on which extensions are installed; the pre-fligh
 
 For each `(from, to)` step in the chain:
 
-1. **Bump `@prisma/orm-*` deps.** Rewrite every `@prisma/orm-*` entry in the project's `package.json` to the exact `<to>` version (no caret, no tilde). All entries advance to the same version. Cover `dependencies` and `devDependencies`. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
+1. **Bump the app's Prisma packages.** Rewrite every `@prisma/orm-postgres`, `@prisma/orm-mongo`, and `@prisma/orm-sqlite` entry in the project's `package.json` to the exact `<to>` version (no caret, no tilde). All entries advance to the same version. Cover `dependencies` and `devDependencies`. Leave `@prisma/orm-extension-*` entries unchanged: each extension pins its own Prisma version, and the pre-flight has already confirmed every installed extension supports `<to>`. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
 
 2. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The project's code is now broken against the new types — the upgrade instructions for `<from> → <to>` exist to fix it.
 

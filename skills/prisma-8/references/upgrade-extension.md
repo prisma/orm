@@ -26,7 +26,7 @@ If detection is ambiguous, ask the user which role to operate under.
 
 ## Version detection
 
-- **From-version.** Read the currently-installed Prisma 8 version from `pnpm-lock.yaml` (or `package-lock.json` / `yarn.lock`) by inspecting the resolved version of any `@prisma/orm-*` entry. If the lockfile shows multiple `@prisma/orm-*` packages at different minors, the lowest minor is the from-version.
+- **From-version.** Read the currently-installed Prisma 8 version from `pnpm-lock.yaml` (or `package-lock.json` / `yarn.lock`) by inspecting the resolved version of any `@prisma/orm-*` SPI package (`@prisma/orm-framework`, `@prisma/orm-family-*`, `@prisma/orm-target-*`, `@prisma/orm-toolchain`). Do not read it from a `@prisma/orm-extension-*` dependency; another extension carries its own version. Compare full semver strings, prerelease identifier included: `8.0.0-rc.10` and `8.0.0-rc.11` are different versions and different steps in the chain below. If the lockfile shows the SPI packages at different versions, the lowest is the from-version.
 - **To-version.** Either the version the user specified, or whatever `npm view @prisma/orm-framework dist-tags.latest` reports. Do not assume that is a stable version: while Prisma 8 is a release candidate, `latest` tracks the newest release, `8.0.0-rc.N` included. If the user wants a stable version specifically, they must name it.
 
 Report both back to the user before continuing.
@@ -49,14 +49,14 @@ This flow assumes you are an **external extension author** — your extension li
 
 For each `(from, to)` step in the chain:
 
-1. **Bump `@prisma/orm-*` deps.** Rewrite every `@prisma/orm-*` entry in the extension's `package.json` to the exact `<to>` version (e.g. `"8.0.0-rc.11"` — no caret, no tilde, no range, no `workspace:` specifier; the exact-pin rule below details why). All entries advance to the same version. Cover whichever dep field(s) the extension uses today — `dependencies` and/or `peerDependencies` — and any `optionalDependencies`. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
+1. **Bump `@prisma/orm-*` deps.** Rewrite every `@prisma/orm-*` entry other than `@prisma/orm-extension-*` in the extension's `package.json` to the exact `<to>` version (e.g. `"8.0.0-rc.11"` — no caret, no tilde, no range, no `workspace:` specifier; the exact-pin rule below details why). All entries advance to the same version. Cover whichever dep field(s) the extension uses today — `dependencies` and/or `peerDependencies` — and any `optionalDependencies`. The skill itself ships inside the Prisma packages, so bumping them is what updates it; there is no separate skill package to bump.
 
 2. **Install.** Run `pnpm install` (or the project's lockfile-managing command). The extension's source is now broken against the new SPI — the upgrade instructions for `<from> → <to>` exist to fix it.
 
-3. **Check pins.** Every `@prisma/orm-*` entry across `dependencies`, `peerDependencies`, and `optionalDependencies` must now be the single exact string `<to>`. This prints any entry that is not, and exits 1:
+3. **Check pins.** Every `@prisma/orm-*` entry other than `@prisma/orm-extension-*` across `dependencies`, `peerDependencies`, and `optionalDependencies` must now be the single exact string `<to>`. This prints any entry that is not, and exits 1:
 
    ```bash
-   node -e 'const p=require("./package.json");const to=process.argv[1];const bad=[];for(const f of ["dependencies","peerDependencies","optionalDependencies"])for(const [n,v] of Object.entries(p[f]??{}))if(n.startsWith("@prisma/orm-")&&v!==to)bad.push(f+": "+n+"@"+v);if(bad.length){console.error(bad.join("\n"));process.exit(1)}' <to>
+   node -e 'const p=require("./package.json");const to=process.argv[1];const bad=[];for(const f of ["dependencies","peerDependencies","optionalDependencies"])for(const [n,v] of Object.entries(p[f]??{}))if(n.startsWith("@prisma/orm-")&&!n.startsWith("@prisma/orm-extension-")&&v!==to)bad.push(f+": "+n+"@"+v);if(bad.length){console.error(bad.join("\n"));process.exit(1)}' <to>
    ```
 
    If it fails, the bump step did not rewrite every spec — fix the offending entries and re-run before proceeding.
@@ -88,7 +88,7 @@ Move on to the next step. Repeat.
 
 ## Exact-pin rule
 
-Prisma 8 extensions pin every `@prisma/orm-*` dependency to a single **exact** version (no `^`, no `~`, no range, no wildcard, no `workspace:` specifier in the published `package.json`). All `@prisma/orm-*` entries share the same version. The pin advances only after a successful upgrade run against the new minor.
+Prisma 8 extensions pin every `@prisma/orm-*` SPI dependency to a single **exact** version (no `^`, no `~`, no range, no wildcard, no `workspace:` specifier in the published `package.json`). All `@prisma/orm-*` entries share the same version. The pin advances only after a successful upgrade run against the new minor.
 
 The one-line check in step 3 of the per-step flow enforces the rule; the `prisma-8-check-pins` guard the monorepo uses for its own extensions is not published. Wire the check into the extension's CI alongside the build/test step so an accidental range pin fails the PR before it lands.
 
