@@ -22,7 +22,7 @@ Do not mark AST nodes, table/query builders, raw-row builders or arbitrary codec
 
 ## `shared-preparable-envelope`
 
-For custom ORM row descriptions, replace `{ plan, consume }` with `{ ...plan, consume }`; read `description.ast`, `description.params` and `description.meta` instead of `description.plan.*`. Preserve the required consumer's full return type. The common `Preparable<Row, Result>` lives in relational-core's plan entrypoint; plain `SqlQueryPlan` producers do not need a consumer. Integrations composing SQL and ORM can use SQL ORM client's `prepareQuery` and `PreparedFrom<Params, Q>` with a concrete callback-return `Q extends Preparable`, retaining normal SQL `PreparedFor` row/statistics semantics when no required consumer exists.
+For custom ORM row descriptions, replace `{ plan, consume }` with `{ ...plan, consume }`; read `description.ast`, `description.params` and `description.meta` instead of `description.plan.*`. Preserve the required consumer's full return type. The common `Preparable<Row, Result>` lives in relational-core's plan entrypoint; plain `SqlQueryPlan` producers do not need a consumer. Supply both type arguments to `Preparable<Row, Result>`; use `Preparable<unknown, unknown>` for erased constraints and indexed accesses such as `Preparable<unknown, unknown>['consume']`. Integrations composing SQL and ORM can use SQL ORM client's `prepareQuery` and `PreparedFrom<Params, Q>` with a concrete callback-return `Q extends Preparable<unknown, unknown>`, retaining normal SQL `PreparedFor` row/statistics semantics when no required consumer exists.
 
 ## `preserve-orm-pagination-expressions`
 

@@ -77,7 +77,7 @@ export interface SqliteClient<TContract extends Contract<SqlStorage>> {
   runtime(): Runtime;
   prepare<
     D extends Declaration<CT>,
-    Q extends Preparable,
+    Q extends Preparable<unknown, unknown>,
     CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
   >(
     declaration: D,
@@ -248,7 +248,7 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
 
   function prepare<
     D extends Declaration<CT>,
-    Q extends Preparable,
+    Q extends Preparable<unknown, unknown>,
     CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
   >(
     declaration: D,

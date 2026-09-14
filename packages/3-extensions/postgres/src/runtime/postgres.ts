@@ -67,7 +67,7 @@ export interface PostgresClient<TContract extends Contract<SqlStorage>> {
   transaction<R>(fn: (tx: PostgresTransactionContext<TContract>) => PromiseLike<R>): Promise<R>;
   prepare<
     D extends Declaration<CT>,
-    Q extends Preparable,
+    Q extends Preparable<unknown, unknown>,
     CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
   >(
     declaration: D,
@@ -285,7 +285,7 @@ export default function postgres<TContract extends Contract<SqlStorage>>(
 
   function prepare<
     D extends Declaration<CT>,
-    Q extends Preparable,
+    Q extends Preparable<unknown, unknown>,
     CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
   >(
     declaration: D,

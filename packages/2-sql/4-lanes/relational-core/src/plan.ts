@@ -17,13 +17,13 @@ import type { AnyQueryAst } from './ast/types';
  * (inherited from `QueryPlan`) is what `ResultType<P>` inspects to recover
  * the row type.
  */
-export interface Preparable<Row = unknown, Result = unknown> extends QueryPlan<Row> {
+export interface Preparable<Row, Result> extends QueryPlan<Row> {
   readonly ast: AnyQueryAst;
   readonly params: readonly unknown[];
   consume?(rows: AsyncIterableResult<Row>): Result;
 }
 
-export interface SqlQueryPlan<Row = unknown> extends Preparable<Row> {}
+export interface SqlQueryPlan<Row = unknown> extends Preparable<Row, unknown> {}
 
 /**
  * Wraps an `AnyQueryAst` (typically a `RawQueryAst`, minted by a raw statement

@@ -6,6 +6,7 @@ import type {
 import type { Expression } from '@internal/sql-relational-core/expression';
 import type { BindSiteParams } from '@internal/sql-runtime';
 import { expectTypeOf, test } from 'vitest';
+import type { shorthandToWhereExpr } from '../src/filters';
 import type { ModelAccessor, ShorthandWhereFilter } from '../src/types';
 import { createCollectionFor } from './collection-fixtures';
 import type { TestContract } from './helpers';
@@ -73,6 +74,14 @@ type NoEqualityContract = ContractWithTypeMaps<
     };
   }
 >;
+
+test('shorthand translation preserves the model and codec boundary', () => {
+  type Filter = Parameters<typeof shorthandToWhereExpr<TestContract, 'public', 'User'>>[3];
+  expectTypeOf<{ id: number }>().toExtend<Filter>();
+  expectTypeOf<{ id: typeof params.id }>().toExtend<Filter>();
+  expectTypeOf<{ missing: number }>().not.toExtend<Filter>();
+  expectTypeOf<{ id: typeof params.email }>().not.toExtend<Filter>();
+});
 
 test('prepared shorthand does not add equality to an untraited codec', () => {
   expectTypeOf<typeof params.id>().not.toExtend<

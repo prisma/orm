@@ -61,6 +61,7 @@ import type {
   RowSelection,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` property
   RowType,
+  WhereInput,
   WithOrderByState,
   WithVariantState,
   WithWhereState,
@@ -89,7 +90,7 @@ import {
   withMutationScope,
 } from './mutation-executor';
 import { ormError } from './orm-errors';
-import type { FirstFilter, PreparedCollection } from './prepared-collection';
+import type { PreparedCollection } from './prepared-collection';
 import {
   compileAggregate,
   compileDeleteCount,
@@ -239,7 +240,7 @@ class CollectionImpl<
   /** @internal */
   readonly tableName: string;
   /** @internal */
-  readonly namespaceId: string;
+  readonly namespaceId: State['nsId'];
   /** @internal */
   readonly state: CollectionState;
   /** @internal */
@@ -1157,7 +1158,7 @@ class CollectionImpl<
         return describeCollectionRows<Row>(selected.#descriptionOptions());
       },
       first: (
-        filter?: FirstFilter<TContract, ModelName, State>,
+        filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
         configure?: (meta: MetaBuilder<'read'>) => void,
       ) => {
         const selected = this.#forFirst(filter, configure);
@@ -1177,7 +1178,7 @@ class CollectionImpl<
   }
 
   #forFirst(
-    filter: FirstFilter<TContract, ModelName, State> | undefined,
+    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']> | undefined,
     configure: ((meta: MetaBuilder<'read'>) => void) | undefined,
   ) {
     const scoped =
@@ -1219,26 +1220,11 @@ class CollectionImpl<
     configure: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null>;
   async first(
-    filter: (
-      model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
-    ) => WhereArg,
+    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null>;
   async first(
-    filter: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
-    configure?: (meta: MetaBuilder<'read'>) => void,
-  ): Promise<Row | null>;
-  async first(
-    filter?:
-      | ((
-          model: VariantAwareModelAccessor<
-            TContract,
-            ModelName,
-            State['variantName'],
-            State['nsId']
-          >,
-        ) => WhereArg)
-      | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
+    filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null> {
     return consumeFirstRow(this.#forFirst(filter, configure).#dispatch());

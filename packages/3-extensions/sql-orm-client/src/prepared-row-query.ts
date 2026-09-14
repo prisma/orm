@@ -21,7 +21,7 @@ export interface PreparedRowQuery<Params, Result> {
   query(target: RuntimeQueryable, params: Params, options?: RuntimeExecuteOptions): Result;
 }
 
-export type PreparedFrom<Params, Q extends Preparable> = Q extends {
+export type PreparedFrom<Params, Q extends Preparable<unknown, unknown>> = Q extends {
   consume(rows: AsyncIterableResult<never>): infer Result;
 }
   ? PreparedRowQuery<Params, Result>
@@ -29,14 +29,14 @@ export type PreparedFrom<Params, Q extends Preparable> = Q extends {
 
 export async function prepareQuery<
   D extends Declaration<CT>,
-  Q extends Preparable,
+  Q extends Preparable<unknown, unknown>,
   CT extends CodecTypesBase,
 >(
   runtime: Runtime,
   declaration: D,
   callback: (params: BindSiteParams<D>) => Q,
 ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>> {
-  let consume: Preparable['consume'];
+  let consume: Preparable<unknown, unknown>['consume'];
   const statement = await runtime.prepare<D, ResultType<Q>, CT>(declaration, (params) => {
     const authored = callback(params);
     consume = authored.consume;

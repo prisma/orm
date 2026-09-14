@@ -13,6 +13,7 @@ import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-
 import { getFieldToColumnMap, modelOf, resolveModelTableName } from './collection-contract';
 import { ormError } from './orm-errors';
 import { predicateExpression } from './predicate-expression';
+import type { ShorthandWhereFilter } from './types';
 
 export function and(...exprs: AnyExpression[]): AndExpr {
   return AndExpr.of(exprs);
@@ -38,7 +39,7 @@ export function shorthandToWhereExpr<
   context: ExecutionContext<TContract>,
   namespaceId: NsId,
   modelName: ModelName,
-  filters: Readonly<Record<string, unknown>>,
+  filters: ShorthandWhereFilter<TContract, NsId, ModelName>,
 ): AnyExpression | undefined {
   const contract = context.contract;
   const tableName = resolveModelTableName(contract, namespaceId, modelName);

@@ -1,19 +1,9 @@
 import type { Contract } from '@internal/contract/types';
 import type { AsyncIterableResult, MetaBuilder } from '@internal/framework-components/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { WhereArg } from '@internal/sql-relational-core/ast';
 import type { RowQuery } from './collection-dispatch';
-import type { CollectionTypeState, ShorthandWhereFilter, VariantAwareModelAccessor } from './types';
-
-export type FirstFilter<
-  TContract extends Contract<SqlStorage>,
-  ModelName extends string,
-  State extends CollectionTypeState,
-> =
-  | ((
-      model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
-    ) => WhereArg)
-  | ShorthandWhereFilter<TContract, State['nsId'], ModelName>;
+import type { WhereInput } from './collection-internal-types';
+import type { CollectionTypeState } from './types';
 
 export interface PreparedCollection<
   TContract extends Contract<SqlStorage>,
@@ -30,7 +20,7 @@ export interface PreparedCollection<
     configure: (meta: MetaBuilder<'read'>) => void,
   ): RowQuery<Record<string, unknown>, Promise<Row | null>>;
   first(
-    filter: FirstFilter<TContract, ModelName, State>,
+    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): RowQuery<Record<string, unknown>, Promise<Row | null>>;
 }
