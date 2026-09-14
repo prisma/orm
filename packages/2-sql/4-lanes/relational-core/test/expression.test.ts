@@ -50,8 +50,24 @@ describe('toExpr', () => {
 
   it('uses a global marker shared by separately bundled expression producers', () => {
     expect(expressionMarker).toBe(Symbol.for('prisma.sql.expression'));
-    expect(isExpression({ [Symbol.for('prisma.sql.expression')]: true })).toBe(true);
+    expect(
+      isExpression({
+        [Symbol.for('prisma.sql.expression')]: true,
+        returnType: { codecId: 'pg/text@1', nullable: false },
+        buildAst: () => LiteralExpr.of('hello'),
+      }),
+    ).toBe(true);
   });
+
+  it.each([{ [expressionMarker]: true }, { [expressionMarker]: true, buildAst: 'not callable' }])(
+    'rejects incomplete marked expressions: %o',
+    (value) => {
+      expect(isExpression(value)).toBe(false);
+      expect(toExpr(value, { codecId: 'pg/jsonb@1' })).toEqual(
+        ParamRef.of(value, { codec: { codecId: 'pg/jsonb@1' } }),
+      );
+    },
+  );
 
   it('throws for null and undefined without codec', () => {
     expect(() => toExpr(null)).toThrow('Cannot construct a ParamRef');

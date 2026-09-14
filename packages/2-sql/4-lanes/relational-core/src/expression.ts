@@ -157,7 +157,9 @@ export function isExpression(value: unknown): value is Expression<ScopeField> {
     typeof value === 'object' &&
     value !== null &&
     expressionMarker in value &&
-    value[expressionMarker] === true
+    value[expressionMarker] === true &&
+    'buildAst' in value &&
+    typeof value.buildAst === 'function'
   );
 }
 
