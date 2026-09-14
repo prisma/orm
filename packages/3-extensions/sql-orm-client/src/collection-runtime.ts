@@ -57,6 +57,24 @@ export function mapStorageRowToModelFields(
     return { ...row };
   }
 
+  return mapColumnNames(row, columnToField);
+}
+
+export function createStorageRowMapper(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+): (row: Record<string, unknown>) => Record<string, unknown> {
+  const columnToField = getColumnToFieldMap(contract, namespaceId, modelName);
+  return Object.keys(columnToField).length === 0
+    ? (row) => ({ ...row })
+    : (row) => mapColumnNames(row, columnToField);
+}
+
+function mapColumnNames(
+  row: Record<string, unknown>,
+  columnToField: Readonly<Record<string, string>>,
+): Record<string, unknown> {
   const mapped: Record<string, unknown> = {};
   for (const [columnName, value] of Object.entries(row)) {
     mapped[columnToField[columnName] ?? columnName] = value;

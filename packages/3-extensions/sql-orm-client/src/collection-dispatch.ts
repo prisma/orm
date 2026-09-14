@@ -40,6 +40,7 @@ import {
   resolveRowIdentityColumns,
 } from './collection-contract';
 import {
+  createStorageRowMapper,
   mapPolymorphicRow,
   mapResultRows,
   mapStorageRowToModelFields,
@@ -137,6 +138,7 @@ function dispatchWithIncludes<Row>(
       return { raw: row, mapped };
     });
 
+    const bindings: IncludedColumnBindings = new WeakMap();
     for (const parent of parentRows) {
       for (const include of state.includes) {
         parent.mapped[include.relationName] = await decodeIncludePayload(
@@ -144,6 +146,7 @@ function dispatchWithIncludes<Row>(
           context,
           include,
           parent.raw[include.relationName],
+          bindings,
         );
       }
     }
@@ -305,6 +308,7 @@ async function decodeIncludePayload(
   context: CodecExecutionContext,
   include: IncludeExpr,
   raw: unknown,
+  bindings: IncludedColumnBindings,
 ): Promise<unknown> {
   if (include.scalar) {
     return Promise.resolve(
@@ -312,7 +316,7 @@ async function decodeIncludePayload(
     );
   }
   if (include.combine) {
-    return decodeCombineIncludePayload(contract, context, include, include.combine, raw);
+    return decodeCombineIncludePayload(contract, context, include, include.combine, raw, bindings);
   }
   const rawChildren = parseIncludedRows(include, raw);
   const polyInfo = resolvePolymorphismInfo(
@@ -330,16 +334,15 @@ async function decodeIncludePayload(
           childRow,
           include.nested.variantName,
         )
-    : (childRow: Record<string, unknown>) =>
-        mapStorageRowToModelFields(
-          contract,
-          include.relatedNamespaceId,
-          include.relatedModelName,
-          childRow,
-        );
+    : createStorageRowMapper(contract, include.relatedNamespaceId, include.relatedModelName);
+  let columns = bindings.get(include);
+  if (!columns) {
+    columns = new Map();
+    bindings.set(include, columns);
+  }
   const mappedChildren: Record<string, unknown>[] = [];
   for (const childRow of rawChildren) {
-    const decodedChildRow = await decodeIncludedStorageRow(contract, context, include, childRow);
+    const decodedChildRow = decodeIncludedStorageRow(contract, context, include, childRow, columns);
     const mapped = mapChildRow(decodedChildRow);
     // Source each nested-include payload from the RAW child row: it always
     // carries the payload under its relation alias. `mapChildRow` may be the
@@ -351,6 +354,7 @@ async function decodeIncludePayload(
         context,
         nestedInclude,
         decodedChildRow[nestedInclude.relationName],
+        bindings,
       );
     }
     mappedChildren.push(mapped);
@@ -368,12 +372,21 @@ interface IncludedColumnRef extends DecodedValueRef {
   readonly storageColumn: StorageColumn;
 }
 
-async function decodeIncludedStorageRow(
+interface IncludedColumnBinding {
+  readonly ref: IncludedColumnRef;
+  readonly codec: Codec;
+  readonly codecId: string;
+}
+
+type IncludedColumnBindings = WeakMap<IncludeExpr, Map<string, IncludedColumnBinding | null>>;
+
+function decodeIncludedStorageRow(
   contract: Contract<SqlStorage>,
   context: CodecExecutionContext,
   include: IncludeExpr,
   row: Record<string, unknown>,
-): Promise<Record<string, unknown>> {
+  bindings: Map<string, IncludedColumnBinding | null>,
+): Record<string, unknown> {
   const decoded: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(row)) {
     if (value === null || value === undefined) {
@@ -381,35 +394,34 @@ async function decodeIncludedStorageRow(
       continue;
     }
 
-    const ref = resolveIncludedColumnRef(contract, include, key);
-    if (!ref) {
-      decoded[key] = value;
-      continue;
+    let binding = bindings.get(key);
+    if (binding === undefined) {
+      binding = resolveIncludedColumnBinding(contract, context, include, key);
+      bindings.set(key, binding);
     }
-
-    const codec = context.contractCodecs.forColumn(
-      include.relatedNamespaceId,
-      ref.table,
-      ref.column,
-    );
-    if (!codec) {
-      decoded[key] = value;
-      continue;
-    }
-
-    const codecRef = context.codecDescriptors.codecRefForColumn(
-      include.relatedNamespaceId,
-      ref.table,
-      ref.column,
-    );
-    decoded[key] = await decodeIncludedColumnValue(
-      ref,
-      codecRef?.codecId ?? ref.storageColumn.codecId,
-      codec,
-      value,
-    );
+    decoded[key] = binding
+      ? decodeIncludedColumnValue(binding.ref, binding.codecId, binding.codec, value)
+      : value;
   }
   return decoded;
+}
+
+function resolveIncludedColumnBinding(
+  contract: Contract<SqlStorage>,
+  context: CodecExecutionContext,
+  include: IncludeExpr,
+  key: string,
+): IncludedColumnBinding | null {
+  const ref = resolveIncludedColumnRef(contract, include, key);
+  if (!ref) return null;
+  const codec = context.contractCodecs.forColumn(include.relatedNamespaceId, ref.table, ref.column);
+  if (!codec) return null;
+  const codecRef = context.codecDescriptors.codecRefForColumn(
+    include.relatedNamespaceId,
+    ref.table,
+    ref.column,
+  );
+  return { ref, codec, codecId: codecRef?.codecId ?? ref.storageColumn.codecId };
 }
 
 function resolveIncludedColumnRef(
@@ -466,12 +478,12 @@ function resolveStorageColumn(
   return contract.storage.namespaces[namespaceId]?.entries.table?.[tableName]?.columns[columnName];
 }
 
-async function decodeIncludedColumnValue(
+function decodeIncludedColumnValue(
   ref: IncludedColumnRef,
   codecId: string,
   codec: Codec,
   value: unknown,
-): Promise<unknown> {
+): unknown {
   if (ref.storageColumn.many === true) {
     if (!Array.isArray(value)) {
       wrapIncludedDecodeFailure(
@@ -555,6 +567,7 @@ async function decodeCombineIncludePayload(
   include: IncludeExpr,
   branches: Readonly<Record<string, IncludeCombineBranch>>,
   raw: unknown,
+  bindings: IncludedColumnBindings,
 ): Promise<Record<string, unknown>> {
   const parsed = parseCombineEnvelope(include, raw);
   const result: Record<string, unknown> = {};
@@ -572,6 +585,7 @@ async function decodeCombineIncludePayload(
         context,
         syntheticInclude,
         branchRaw,
+        bindings,
       );
     } else {
       result[branchName] = decodeScalarIncludePayload(

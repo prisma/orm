@@ -1,0 +1,789 @@
+{
+  "node": "v26.7.0",
+  "noOptimizationChanges": true,
+  "method": "No AsyncLocalStorage. HTTP/ORM spans correlated directly via Nest interceptor; pool/query elapsed summed over all completed measurement operations. Sequential two-query P7 include and one-query P8 include; exact counts asserted. Compact duration-only PG logging matched by protocol order, all setup/warmup records included.",
+  "cases": [
+    {
+      "name": "p7",
+      "version": "7",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/concurrency/app-prisma7",
+      "repeat": 1,
+      "concurrency": 1,
+      "trace": false,
+      "label": "r1-p7-c1-off",
+      "n": 293,
+      "latency": {
+        "n": 293,
+        "mean": 13.567521131079351,
+        "p50": 10.26220703125,
+        "p95": 32.5849609375
+      },
+      "rps": 73
+    },
+    {
+      "name": "p7",
+      "version": "7",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/concurrency/app-prisma7",
+      "repeat": 1,
+      "concurrency": 1,
+      "trace": true,
+      "label": "r1-p7-c1-on",
+      "n": 435,
+      "latency": {
+        "n": 435,
+        "mean": 9.143188195941091,
+        "p50": 7.602783203125,
+        "p95": 16.974609375
+      },
+      "rps": 108.5,
+      "singleRequest": {
+        "beforeFirstPool": {
+          "n": 435,
+          "mean": 0.2738904229525862,
+          "p50": 0.221435546875,
+          "p95": 0.45556640625
+        },
+        "betweenQueries": {
+          "n": 435,
+          "mean": 0.18345680675287357,
+          "p50": 0.15625,
+          "p95": 0.321533203125
+        },
+        "afterLastReady": {
+          "n": 435,
+          "mean": 1.8346747036637931,
+          "p50": 1.596435546875,
+          "p95": 3.029052734375
+        }
+      },
+      "phases": {
+        "ingress": 1.0090247844827587,
+        "beforeOrm": 0.13928868085488505,
+        "pool": 0.04435389727011494,
+        "query": 3.058148123204023,
+        "ormOther": 2.3188487787356316,
+        "afterOrm": 0.05224328753591954,
+        "json": 1.6879748114224138,
+        "tail": 0.8333058324353448,
+        "total": 9.143188195941091
+      },
+      "serverMsPerRequest": 1.055691954022988,
+      "queryCountPerRequest": 2,
+      "pgCompletionToNodeReadyPerRequest": 2.605675848599138,
+      "queryPendingPerQuery": {
+        "n": 870,
+        "mean": 1.5290740616020115,
+        "p50": 1.536865234375,
+        "p95": 3.378662109375
+      },
+      "pgServerPerQuery": {
+        "n": 870,
+        "mean": 0.5278459770114943,
+        "p50": 0.591,
+        "p95": 0.855
+      },
+      "queryGapPerQuery": {
+        "n": 870,
+        "mean": 1.302837924299569,
+        "p50": 1.119140625,
+        "p95": 2.7724609375
+      },
+      "allPgQueriesMatched": 1469,
+      "excludedUnrelatedDurations": 0,
+      "aggregate": {
+        "cpuCores": 0.7346093479012483,
+        "elu": 0.8449949703504102,
+        "cpuMsPerCompletion": 6.77059306821427,
+        "waitingMean": 0,
+        "wallMs": 3832.8916015625
+      }
+    },
+    {
+      "name": "p8",
+      "version": "8",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/chunked-decode-20260911/results/concurrency/app-prisma8",
+      "repeat": 1,
+      "concurrency": 1,
+      "trace": false,
+      "label": "r1-p8-c1-off",
+      "n": 261,
+      "latency": {
+        "n": 261,
+        "mean": 15.330596339200191,
+        "p50": 14.3798828125,
+        "p95": 24.631103515625
+      },
+      "rps": 65
+    },
+    {
+      "name": "p8",
+      "version": "8",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/chunked-decode-20260911/results/concurrency/app-prisma8",
+      "repeat": 1,
+      "concurrency": 1,
+      "trace": true,
+      "label": "r1-p8-c1-on",
+      "n": 280,
+      "latency": {
+        "n": 280,
+        "mean": 14.214991978236608,
+        "p50": 13.169189453125,
+        "p95": 21.01171875
+      },
+      "rps": 69.75,
+      "singleRequest": {
+        "beforeFirstPool": {
+          "n": 280,
+          "mean": 0.3956787109375,
+          "p50": 0.322509765625,
+          "p95": 0.72802734375
+        },
+        "betweenQueries": {
+          "n": 280,
+          "mean": 0,
+          "p50": 0,
+          "p95": 0
+        },
+        "afterLastReady": {
+          "n": 280,
+          "mean": 5.322606549944196,
+          "p50": 4.593505859375,
+          "p95": 8.88525390625
+        }
+      },
+      "phases": {
+        "ingress": 1.1731785365513392,
+        "beforeOrm": 0.16180507114955356,
+        "pool": 0.04072352818080357,
+        "query": 3.9571620396205356,
+        "ormOther": 5.750224086216519,
+        "afterOrm": 0.05864606584821429,
+        "json": 2.115126255580357,
+        "tail": 0.9581263950892858,
+        "total": 14.214991978236608
+      },
+      "serverMsPerRequest": 3.022303571428571,
+      "queryCountPerRequest": 1,
+      "pgCompletionToNodeReadyPerRequest": 1.167095947265625,
+      "queryPendingPerQuery": {
+        "n": 280,
+        "mean": 3.9571620396205356,
+        "p50": 3.562744140625,
+        "p95": 6.512451171875
+      },
+      "pgServerPerQuery": {
+        "n": 280,
+        "mean": 3.022303571428572,
+        "p50": 2.582,
+        "p95": 4.906
+      },
+      "queryGapPerQuery": {
+        "n": 280,
+        "mean": 1.167095947265625,
+        "p50": 0.998779296875,
+        "p95": 2.86328125
+      },
+      "allPgQueriesMatched": 467,
+      "excludedUnrelatedDurations": 0,
+      "aggregate": {
+        "cpuCores": 0.6485634664829465,
+        "elu": 0.8288425973521882,
+        "cpuMsPerCompletion": 9.298400953160524,
+        "waitingMean": 0,
+        "wallMs": 3853.729248046875
+      }
+    },
+    {
+      "name": "p7",
+      "version": "7",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/concurrency/app-prisma7",
+      "repeat": 1,
+      "concurrency": 50,
+      "trace": false,
+      "label": "r1-p7-c50-off",
+      "n": 492,
+      "latency": {
+        "n": 492,
+        "mean": 429.60702340971164,
+        "p50": 422.96435546875,
+        "p95": 584.063232421875
+      },
+      "rps": 110.5
+    },
+    {
+      "name": "p7",
+      "version": "7",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/concurrency/app-prisma7",
+      "repeat": 1,
+      "concurrency": 50,
+      "trace": true,
+      "label": "r1-p7-c50-on",
+      "n": 531,
+      "latency": {
+        "n": 531,
+        "mean": 398.4420453375118,
+        "p50": 398.982421875,
+        "p95": 501.97607421875
+      },
+      "rps": 120.25,
+      "phases": {
+        "ingress": 67.70083118158546,
+        "beforeOrm": 0.0718927473222693,
+        "pool": 240.7940197960805,
+        "query": 82.68193947887241,
+        "ormOther": 3.9348783618762013,
+        "afterOrm": 0.039752162782485875,
+        "json": 1.9613563551965632,
+        "tail": 1.257375253795904,
+        "total": 398.4420453375118
+      },
+      "serverMsPerRequest": 1.0756610169491512,
+      "queryCountPerRequest": 2,
+      "pgCompletionToNodeReadyPerRequest": 81.8105781397128,
+      "queryPendingPerQuery": {
+        "n": 1062,
+        "mean": 41.340969739436204,
+        "p50": 42.256103515625,
+        "p95": 75.4609375
+      },
+      "pgServerPerQuery": {
+        "n": 1062,
+        "mean": 0.5378305084745758,
+        "p50": 0.586,
+        "p95": 1.032
+      },
+      "queryGapPerQuery": {
+        "n": 1062,
+        "mean": 40.9052890698564,
+        "p50": 41.46533203125,
+        "p95": 74.423095703125
+      },
+      "allPgQueriesMatched": 1693,
+      "excludedUnrelatedDurations": 0,
+      "aggregate": {
+        "cpuCores": 0.902750838768912,
+        "elu": 1,
+        "cpuMsPerCompletion": 7.507283482485755,
+        "waitingMean": 33.25,
+        "wallMs": 3582.855712890625
+      }
+    },
+    {
+      "name": "p8",
+      "version": "8",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/chunked-decode-20260911/results/concurrency/app-prisma8",
+      "repeat": 1,
+      "concurrency": 50,
+      "trace": false,
+      "label": "r1-p8-c50-off",
+      "n": 410,
+      "latency": {
+        "n": 410,
+        "mean": 517.7800936070884,
+        "p50": 514.06689453125,
+        "p95": 772.403564453125
+      },
+      "rps": 90
+    },
+    {
+      "name": "p8",
+      "version": "8",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/chunked-decode-20260911/results/concurrency/app-prisma8",
+      "repeat": 1,
+      "concurrency": 50,
+      "trace": true,
+      "label": "r1-p8-c50-on",
+      "n": 394,
+      "latency": {
+        "n": 394,
+        "mean": 541.5002621103664,
+        "p50": 525.774658203125,
+        "p95": 703.934814453125
+      },
+      "rps": 86,
+      "phases": {
+        "ingress": 149.5829539032757,
+        "beforeOrm": 0.08131741751269035,
+        "pool": 267.324927005671,
+        "query": 113.70015627478585,
+        "ormOther": 7.502950755472739,
+        "afterOrm": 0.05128440276015228,
+        "json": 2.0037600134835025,
+        "tail": 1.2529123374048223,
+        "total": 541.5002621103665
+      },
+      "serverMsPerRequest": 2.8470177664974594,
+      "queryCountPerRequest": 1,
+      "pgCompletionToNodeReadyPerRequest": 110.61524800721764,
+      "queryPendingPerQuery": {
+        "n": 394,
+        "mean": 113.70015627478585,
+        "p50": 105.5400390625,
+        "p95": 197.363525390625
+      },
+      "pgServerPerQuery": {
+        "n": 394,
+        "mean": 2.8470177664974594,
+        "p50": 2.4,
+        "p95": 5.511
+      },
+      "queryGapPerQuery": {
+        "n": 394,
+        "mean": 110.61524800721764,
+        "p50": 102.198486328125,
+        "p95": 191.036865234375
+      },
+      "allPgQueriesMatched": 630,
+      "excludedUnrelatedDurations": 0,
+      "aggregate": {
+        "cpuCores": 0.8364669729656851,
+        "elu": 1,
+        "cpuMsPerCompletion": 9.72636015076378,
+        "waitingMean": 30,
+        "wallMs": 3643.3369140625
+      }
+    },
+    {
+      "name": "p8",
+      "version": "8",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/chunked-decode-20260911/results/concurrency/app-prisma8",
+      "repeat": 2,
+      "concurrency": 1,
+      "trace": true,
+      "label": "r2-p8-c1-on",
+      "n": 293,
+      "latency": {
+        "n": 293,
+        "mean": 13.607380212777304,
+        "p50": 12.302978515625,
+        "p95": 21.863037109375
+      },
+      "rps": 73,
+      "singleRequest": {
+        "beforeFirstPool": {
+          "n": 293,
+          "mean": 0.38486394784556316,
+          "p50": 0.32568359375,
+          "p95": 0.66357421875
+        },
+        "betweenQueries": {
+          "n": 293,
+          "mean": 0,
+          "p50": 0,
+          "p95": 0
+        },
+        "afterLastReady": {
+          "n": 293,
+          "mean": 5.087628986241468,
+          "p50": 4.2734375,
+          "p95": 8.4345703125
+        }
+      },
+      "phases": {
+        "ingress": 1.0426429514185154,
+        "beforeOrm": 0.1627109774957338,
+        "pool": 0.049268911316126277,
+        "query": 3.7742307487201363,
+        "ormOther": 5.503417135505547,
+        "afterOrm": 0.060826011892064845,
+        "json": 1.9732036916062288,
+        "tail": 1.0410797848229523,
+        "total": 13.607380212777304
+      },
+      "serverMsPerRequest": 2.895573378839589,
+      "queryCountPerRequest": 1,
+      "pgCompletionToNodeReadyPerRequest": 1.0304025903903584,
+      "queryPendingPerQuery": {
+        "n": 293,
+        "mean": 3.7742307487201363,
+        "p50": 3.393310546875,
+        "p95": 6.285888671875
+      },
+      "pgServerPerQuery": {
+        "n": 293,
+        "mean": 2.895573378839591,
+        "p50": 2.555,
+        "p95": 4.932
+      },
+      "queryGapPerQuery": {
+        "n": 293,
+        "mean": 1.0304025903903584,
+        "p50": 0.89501953125,
+        "p95": 2.766357421875
+      },
+      "allPgQueriesMatched": 505,
+      "excludedUnrelatedDurations": 0,
+      "aggregate": {
+        "cpuCores": 0.6918110134584581,
+        "elu": 0.8039363200759001,
+        "cpuMsPerCompletion": 9.47686319806107,
+        "waitingMean": 0,
+        "wallMs": 3880.448486328125
+      }
+    },
+    {
+      "name": "p8",
+      "version": "8",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/chunked-decode-20260911/results/concurrency/app-prisma8",
+      "repeat": 2,
+      "concurrency": 1,
+      "trace": false,
+      "label": "r2-p8-c1-off",
+      "n": 303,
+      "latency": {
+        "n": 303,
+        "mean": 13.166224312860974,
+        "p50": 12.518310546875,
+        "p95": 18.078369140625
+      },
+      "rps": 75.5
+    },
+    {
+      "name": "p7",
+      "version": "7",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/concurrency/app-prisma7",
+      "repeat": 2,
+      "concurrency": 1,
+      "trace": true,
+      "label": "r2-p7-c1-on",
+      "n": 346,
+      "latency": {
+        "n": 346,
+        "mean": 11.514776152682442,
+        "p50": 9.957275390625,
+        "p95": 21.343994140625
+      },
+      "rps": 86.25,
+      "singleRequest": {
+        "beforeFirstPool": {
+          "n": 346,
+          "mean": 0.29838641392702314,
+          "p50": 0.242919921875,
+          "p95": 0.487060546875
+        },
+        "betweenQueries": {
+          "n": 346,
+          "mean": 0.19918205834537572,
+          "p50": 0.1689453125,
+          "p95": 0.29296875
+        },
+        "afterLastReady": {
+          "n": 346,
+          "mean": 2.0688921096007946,
+          "p50": 1.75048828125,
+          "p95": 4.24169921875
+        }
+      },
+      "phases": {
+        "ingress": 1.83799999435513,
+        "beforeOrm": 0.14773118564848267,
+        "pool": 0.05411948496206647,
+        "query": 3.6916207550578033,
+        "ormOther": 2.5934049573247835,
+        "afterOrm": 0.045655002483742775,
+        "json": 2.151630379561055,
+        "tail": 0.9926143932893786,
+        "total": 11.514776152682442
+      },
+      "serverMsPerRequest": 1.1162630057803458,
+      "queryCountPerRequest": 2,
+      "pgCompletionToNodeReadyPerRequest": 3.059714256683526,
+      "queryPendingPerQuery": {
+        "n": 692,
+        "mean": 1.8458103775289016,
+        "p50": 1.705322265625,
+        "p95": 4.343994140625
+      },
+      "pgServerPerQuery": {
+        "n": 692,
+        "mean": 0.558131502890173,
+        "p50": 0.618,
+        "p95": 0.8979999999999999
+      },
+      "queryGapPerQuery": {
+        "n": 692,
+        "mean": 1.529857128341763,
+        "p50": 1.25048828125,
+        "p95": 3.709228515625
+      },
+      "allPgQueriesMatched": 1175,
+      "excludedUnrelatedDurations": 0,
+      "aggregate": {
+        "cpuCores": 0.6425273326673123,
+        "elu": 0.8104041019468666,
+        "cpuMsPerCompletion": 7.449592262809418,
+        "waitingMean": 0,
+        "wallMs": 3859.20703125
+      }
+    },
+    {
+      "name": "p7",
+      "version": "7",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/concurrency/app-prisma7",
+      "repeat": 2,
+      "concurrency": 1,
+      "trace": false,
+      "label": "r2-p7-c1-off",
+      "n": 403,
+      "latency": {
+        "n": 403,
+        "mean": 9.871631707506204,
+        "p50": 8.402587890625,
+        "p95": 18.06787109375
+      },
+      "rps": 100.5
+    },
+    {
+      "name": "p8",
+      "version": "8",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/chunked-decode-20260911/results/concurrency/app-prisma8",
+      "repeat": 2,
+      "concurrency": 50,
+      "trace": true,
+      "label": "r2-p8-c50-on",
+      "n": 529,
+      "latency": {
+        "n": 529,
+        "mean": 394.32872219842864,
+        "p50": 396.827880859375,
+        "p95": 534.4501953125
+      },
+      "rps": 119.75,
+      "phases": {
+        "ingress": 109.66950097471644,
+        "beforeOrm": 0.0374656633979206,
+        "pool": 195.5704574152292,
+        "query": 81.1650450621751,
+        "ormOther": 5.511457533376671,
+        "afterOrm": 0.029276106893903593,
+        "json": 1.4807165827327504,
+        "tail": 0.8648028599066635,
+        "total": 394.3287221984286
+      },
+      "serverMsPerRequest": 2.5561436672967877,
+      "queryCountPerRequest": 1,
+      "pgCompletionToNodeReadyPerRequest": 78.58087931238185,
+      "queryPendingPerQuery": {
+        "n": 529,
+        "mean": 81.1650450621751,
+        "p50": 77.446533203125,
+        "p95": 118.541259765625
+      },
+      "pgServerPerQuery": {
+        "n": 529,
+        "mean": 2.5561436672967903,
+        "p50": 2.217,
+        "p95": 4.567
+      },
+      "queryGapPerQuery": {
+        "n": 529,
+        "mean": 78.58087931238185,
+        "p50": 74.9736328125,
+        "p95": 115.24462890625
+      },
+      "allPgQueriesMatched": 883,
+      "excludedUnrelatedDurations": 0,
+      "aggregate": {
+        "cpuCores": 0.9964076593752177,
+        "elu": 1,
+        "cpuMsPerCompletion": 8.320732019834804,
+        "waitingMean": 29.866666666666667,
+        "wallMs": 3607.060791015625
+      }
+    },
+    {
+      "name": "p8",
+      "version": "8",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/chunked-decode-20260911/results/concurrency/app-prisma8",
+      "repeat": 2,
+      "concurrency": 50,
+      "trace": false,
+      "label": "r2-p8-c50-off",
+      "n": 617,
+      "latency": {
+        "n": 617,
+        "mean": 337.58208466812704,
+        "p50": 340.0556640625,
+        "p95": 439.61865234375
+      },
+      "rps": 141.75
+    },
+    {
+      "name": "p7",
+      "version": "7",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/concurrency/app-prisma7",
+      "repeat": 2,
+      "concurrency": 50,
+      "trace": true,
+      "label": "r2-p7-c50-on",
+      "n": 741,
+      "latency": {
+        "n": 741,
+        "mean": 277.7896997037365,
+        "p50": 270.994384765625,
+        "p95": 427.111083984375
+      },
+      "rps": 172.75,
+      "phases": {
+        "ingress": 44.829714385121456,
+        "beforeOrm": 0.04400066422064777,
+        "pool": 171.92322815188513,
+        "query": 56.610322568741566,
+        "ormOther": 2.323113362959674,
+        "afterOrm": 0.018620252931005398,
+        "json": 1.5213094240258098,
+        "tail": 0.5193908938512146,
+        "total": 277.7896997037365
+      },
+      "serverMsPerRequest": 0.9533387314439956,
+      "queryCountPerRequest": 2,
+      "pgCompletionToNodeReadyPerRequest": 56.25488940199055,
+      "queryPendingPerQuery": {
+        "n": 1482,
+        "mean": 28.305161284370783,
+        "p50": 27.009033203125,
+        "p95": 58.15380859375
+      },
+      "pgServerPerQuery": {
+        "n": 1482,
+        "mean": 0.476669365721997,
+        "p50": 0.5609999999999999,
+        "p95": 0.9099999999999999
+      },
+      "queryGapPerQuery": {
+        "n": 1482,
+        "mean": 28.127444700995277,
+        "p50": 26.781494140625,
+        "p95": 56.951171875
+      },
+      "allPgQueriesMatched": 2511,
+      "excludedUnrelatedDurations": 0,
+      "aggregate": {
+        "cpuCores": 1.2093605957704043,
+        "elu": 1,
+        "cpuMsPerCompletion": 7.00064020706457,
+        "waitingMean": 33.294117647058826,
+        "wallMs": 3789.113037109375
+      }
+    },
+    {
+      "name": "p7",
+      "version": "7",
+      "app": "/Users/sevinf/projects/prisma678-benchmarks/results/concurrency/app-prisma7",
+      "repeat": 2,
+      "concurrency": 50,
+      "trace": false,
+      "label": "r2-p7-c50-off",
+      "n": 817,
+      "latency": {
+        "n": 817,
+        "mean": 254.3740449529529,
+        "p50": 253.4521484375,
+        "p95": 298.392578125
+      },
+      "rps": 191.75
+    }
+  ],
+  "comparisons": [
+    {
+      "repeat": 1,
+      "concurrency": 1,
+      "overhead": {
+        "p7": {
+          "rpsRatio": 1.4863013698630136,
+          "medianRatio": 0.7408526430984441
+        },
+        "p8": {
+          "rpsRatio": 1.073076923076923,
+          "medianRatio": 0.9158064516129032
+        }
+      },
+      "phaseDeltaP8MinusP7": {
+        "ingress": 0.16415375206858052,
+        "beforeOrm": 0.02251639029466851,
+        "pool": -0.003630369089311372,
+        "query": 0.8990139164165125,
+        "ormOther": 3.431375307480887,
+        "afterOrm": 0.00640277831229475,
+        "json": 0.42715144415794315,
+        "tail": 0.12482056265394093,
+        "total": 5.071803782295516
+      }
+    },
+    {
+      "repeat": 1,
+      "concurrency": 50,
+      "overhead": {
+        "p7": {
+          "rpsRatio": 1.088235294117647,
+          "medianRatio": 0.9433003436727616
+        },
+        "p8": {
+          "rpsRatio": 0.9555555555555556,
+          "medianRatio": 1.0227747863097676
+        }
+      },
+      "phaseDeltaP8MinusP7": {
+        "ingress": 81.88212272169024,
+        "beforeOrm": 0.00942467019042105,
+        "pool": 26.53090720959048,
+        "query": 31.018216795913446,
+        "ormOther": 3.5680723935965375,
+        "afterOrm": 0.011532239977666406,
+        "json": 0.04240365828693937,
+        "tail": -0.0044629163910816505,
+        "total": 143.05821677285473
+      }
+    },
+    {
+      "repeat": 2,
+      "concurrency": 1,
+      "overhead": {
+        "p7": {
+          "rpsRatio": 0.8582089552238806,
+          "medianRatio": 1.185024842374408
+        },
+        "p8": {
+          "rpsRatio": 0.9668874172185431,
+          "medianRatio": 0.9827986348122867
+        }
+      },
+      "phaseDeltaP8MinusP7": {
+        "ingress": -0.7953570429366146,
+        "beforeOrm": 0.014979791847251123,
+        "pool": -0.004850573645940194,
+        "query": 0.08260999366233301,
+        "ormOther": 2.9100121781807635,
+        "afterOrm": 0.01517100940832207,
+        "json": -0.1784266879548262,
+        "tail": 0.048465391533573654,
+        "total": 2.092604060094862
+      }
+    },
+    {
+      "repeat": 2,
+      "concurrency": 50,
+      "overhead": {
+        "p7": {
+          "rpsRatio": 0.9009126466753585,
+          "medianRatio": 1.0692132082378099
+        },
+        "p8": {
+          "rpsRatio": 0.8447971781305115,
+          "medianRatio": 1.1669497755709801
+        }
+      },
+      "phaseDeltaP8MinusP7": {
+        "ingress": 64.83978658959498,
+        "beforeOrm": -0.00653500082272717,
+        "pool": 23.647229263344087,
+        "query": 24.55472249343353,
+        "ormOther": 3.188344170416997,
+        "afterOrm": 0.010655853962898195,
+        "json": -0.0405928412930594,
+        "tail": 0.3454119660554489,
+        "total": 116.53902249469206
+      }
+    }
+  ]
+}

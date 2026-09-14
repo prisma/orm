@@ -1,0 +1,6093 @@
+{
+  "rawArtifactDirectory": "/Users/sevinf/projects/prisma678-benchmarks/results/latency-investigation-20260911-followup",
+  "commit": "b8f74562bd9afbdc2d583251112f54ee6824f089",
+  "node": "v24.19.0",
+  "poolMax": 10,
+  "totalTrials": 66,
+  "totalCompleted": 146434,
+  "totalErrors": 31,
+  "totalCapped": 666,
+  "trials": [
+    {
+      "label": "lat-01-primary-baseline-r1-posts100-on",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789121337938,
+      "endedAt": 1789121352941,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0009703149999999994,
+      "rpsIncludingDrain": 99.99353165175569,
+      "httpMs": {
+        "p50": 3.0226280000006227,
+        "p95": 4.994184999999561,
+        "p99": 10.930979000000661,
+        "max": 30.88480999999956
+      },
+      "schedulerLagP99Ms": 32.35088600000017,
+      "holdMs": {
+        "n": 1500,
+        "mean": 2.0474559973333704,
+        "p50": 1.8763060000001133,
+        "p95": 2.7972779999981867,
+        "p99": 6.036181999999826,
+        "max": 14.852682000000641
+      },
+      "waitMs": {
+        "n": 1500,
+        "mean": 0.023761887999993937,
+        "p50": 0.022664999996777624,
+        "p95": 0.03682999999728054,
+        "p99": 0.05095400000027439,
+        "max": 0.07186900000124297
+      },
+      "clientQueryMs": {
+        "n": 1500,
+        "mean": 0.5024006606666713,
+        "p50": 0.3878850000000966,
+        "p95": 0.7758539999995264,
+        "p99": 3.349233999997523,
+        "max": 13.496416000001773
+      },
+      "postQueryHoldMs": {
+        "n": 1500,
+        "mean": 1.5311496226666839,
+        "p50": 1.4598809999997684,
+        "p95": 1.859228000001167,
+        "p99": 3.300028999999995,
+        "max": 4.828283000002557
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 2,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14005.882452,
+        "cpuCores": 0.29499390803540637,
+        "cpuMsPerAppCompletion": 2.9490720913633117,
+        "elu": 0.29317604762405786,
+        "completed": 1401,
+        "declaredBytes": 24034155,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.2949857567589711,
+          "p50": 0.28481091366615935,
+          "p95": 0.411095349039755,
+          "p99": 0.411095349039755,
+          "max": 0.411095349039755
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.2931659125687653,
+          "p50": 0.2870257482289081,
+          "p95": 0.37157934698053535,
+          "p99": 0.37157934698053535,
+          "max": 0.37157934698053535
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 11.261073285714286,
+          "p50": 11.182079,
+          "p95": 12.124159,
+          "p99": 12.124159,
+          "max": 12.124159
+        },
+        "maxDelayMs": 16.351231
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 238,
+        "active/null/null": 4,
+        "idle/null/null": 2
+      },
+      "server": null,
+      "checks": {
+        "leases": 1500,
+        "waits": 1500,
+        "queries": 1500,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-02-primary-baseline-r1-posts100-off",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789121357568,
+      "endedAt": 1789121372570,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.00022747999999950252,
+      "rpsIncludingDrain": 99.99848348966505,
+      "httpMs": {
+        "p50": 3.2900429999990592,
+        "p95": 5.218024000001606,
+        "p99": 20.05803300000025,
+        "max": 31.527398000000176
+      },
+      "schedulerLagP99Ms": 26.002128999998604,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-03-primary-patched-r1-posts100-on",
+      "build": "patched",
+      "repeat": 1,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789121377484,
+      "endedAt": 1789121392486,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0005177550000006192,
+      "rpsIncludingDrain": 99.99654841913821,
+      "httpMs": {
+        "p50": 3.517117999999755,
+        "p95": 8.237323999999717,
+        "p99": 30.40845199999967,
+        "max": 61.40156999999999
+      },
+      "schedulerLagP99Ms": 60.016405000000304,
+      "holdMs": {
+        "n": 1500,
+        "mean": 0.950577909333331,
+        "p50": 0.5121699999999691,
+        "p95": 1.7325849999979255,
+        "p99": 14.708956999999828,
+        "max": 39.586403999999675
+      },
+      "waitMs": {
+        "n": 1500,
+        "mean": 0.03444713133334729,
+        "p50": 0.03391399999964051,
+        "p95": 0.04828799999995681,
+        "p99": 0.07636900000034075,
+        "max": 0.2632720000001427
+      },
+      "clientQueryMs": {
+        "n": 1500,
+        "mean": 0.9244022273333358,
+        "p50": 0.48600599999917904,
+        "p95": 1.7083779999993567,
+        "p99": 14.691957999999431,
+        "max": 39.55769700000019
+      },
+      "postQueryHoldMs": {
+        "n": 1500,
+        "mean": 0.006523905333313148,
+        "p50": 0.005290999999488122,
+        "p95": 0.011790999998993357,
+        "p99": 0.017249000000447268,
+        "max": 0.044245999999475316
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 2,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14005.049335000002,
+        "cpuCores": 0.32430810426702433,
+        "cpuMsPerAppCompletion": 3.244250714285714,
+        "elu": 0.3354432508624299,
+        "completed": 1400,
+        "declaredBytes": 24017000,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.32430728450213653,
+          "p50": 0.3239742544139503,
+          "p95": 0.3591986101980616,
+          "p99": 0.3591986101980616,
+          "max": 0.3591986101980616
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.3354404062269306,
+          "p50": 0.32619935248094767,
+          "p95": 0.3923645341182007,
+          "p99": 0.3923645341182007,
+          "max": 0.3923645341182007
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 11.708122428571427,
+          "p50": 11.395071,
+          "p95": 14.704639,
+          "p99": 14.704639,
+          "max": 14.704639
+        },
+        "maxDelayMs": 64.618495
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 290
+      },
+      "server": null,
+      "checks": {
+        "leases": 1500,
+        "waits": 1500,
+        "queries": 1500,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-04-primary-patched-r1-posts100-off",
+      "build": "patched",
+      "repeat": 1,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789121397551,
+      "endedAt": 1789121412553,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0001298159999993942,
+      "rpsIncludingDrain": 99.9991345674898,
+      "httpMs": {
+        "p50": 3.764031000000614,
+        "p95": 9.437982999999804,
+        "p99": 52.14507799999774,
+        "max": 136.18398700000034
+      },
+      "schedulerLagP99Ms": 17.077328999999736,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-05-primary-baseline-r1-posts500-on",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 15,
+      "startedAt": 1789121417556,
+      "endedAt": 1789121443431,
+      "sent": 7329,
+      "completed": 7329,
+      "errors": 0,
+      "capped": 171,
+      "bytes": 125728995,
+      "bytesPerCompletion": 17155,
+      "backlog": 1999,
+      "drainSeconds": 10.86991093,
+      "rpsIncludingDrain": 283.3020963941912,
+      "httpMs": {
+        "p50": 964.389779000001,
+        "p95": 12208.147688000001,
+        "p99": 15455.947862999998,
+        "max": 19619.866648
+      },
+      "schedulerLagP99Ms": 3.0844409999990603,
+      "holdMs": {
+        "n": 7329,
+        "mean": 23.062547580843326,
+        "p50": 25.201838000000862,
+        "p95": 32.242943000000196,
+        "p99": 45.38264299999901,
+        "max": 392.88541799999985
+      },
+      "waitMs": {
+        "n": 7329,
+        "mean": 564.5288670290629,
+        "p50": 533.4550760000002,
+        "p95": 1384.5340870000018,
+        "p99": 1434.3221499999981,
+        "max": 1457.1048009999995
+      },
+      "clientQueryMs": {
+        "n": 7329,
+        "mean": 21.412655138081515,
+        "p50": 23.654841999999917,
+        "p95": 30.4598160000005,
+        "p99": 43.110937000000376,
+        "max": 391.5276300000005
+      },
+      "postQueryHoldMs": {
+        "n": 7329,
+        "mean": 1.6372445577841506,
+        "p50": 1.4556129999982659,
+        "p95": 1.9656250000007276,
+        "p99": 3.924073000000135,
+        "max": 360.9354370000001
+      },
+      "maxPoolWaiting": 520,
+      "maxAppActive": 530,
+      "aggregate": {
+        "intervals": 13,
+        "wallMs": 13292.538018999998,
+        "cpuCores": 1.0676374955418515,
+        "cpuMsPerAppCompletion": 3.0480266323024057,
+        "elu": 1,
+        "completed": 4656,
+        "declaredBytes": 79873680,
+        "cpuCoresSamples": {
+          "n": 13,
+          "mean": 1.0671943512348803,
+          "p50": 1.0601148285236837,
+          "p95": 1.1554920861888818,
+          "p99": 1.1554920861888818,
+          "max": 1.1554920861888818
+        },
+        "eluSamples": {
+          "n": 13,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 13,
+          "mean": 32.258834692307694,
+          "p50": 32.014335,
+          "p95": 40.599551,
+          "p99": 40.599551,
+          "max": 40.599551
+        },
+        "maxDelayMs": 391.380991
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 509,
+        "active/null/null": 1
+      },
+      "server": null,
+      "checks": {
+        "leases": 7329,
+        "waits": 7329,
+        "queries": 7329,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-06-primary-patched-r1-posts500-on",
+      "build": "patched",
+      "repeat": 1,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 15,
+      "startedAt": 1789121458420,
+      "endedAt": 1789121480554,
+      "sent": 7500,
+      "completed": 7500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 128662500,
+      "bytesPerCompletion": 17155,
+      "backlog": 1870,
+      "drainSeconds": 7.1310529959999975,
+      "rpsIncludingDrain": 338.89033663945236,
+      "httpMs": {
+        "p50": 992.3262159999995,
+        "p95": 10219.801989,
+        "p99": 12200.689647000001,
+        "max": 15374.719450000002
+      },
+      "schedulerLagP99Ms": 2.0782930000004853,
+      "holdMs": {
+        "n": 7500,
+        "mean": 22.02261338546661,
+        "p50": 24.098313999999846,
+        "p95": 28.583103000000847,
+        "p99": 37.04907800000001,
+        "max": 431.8411109999979
+      },
+      "waitMs": {
+        "n": 7500,
+        "mean": 587.9540962501326,
+        "p50": 533.6229340000009,
+        "p95": 1510.5036929999987,
+        "p99": 1584.080551000001,
+        "max": 1621.1153460000023
+      },
+      "clientQueryMs": {
+        "n": 7500,
+        "mean": 22.007150132000017,
+        "p50": 24.083356000000094,
+        "p95": 28.561854000001404,
+        "p99": 37.03528700000015,
+        "max": 431.81461299999864
+      },
+      "postQueryHoldMs": {
+        "n": 7500,
+        "mean": 0.0041027569333262365,
+        "p50": 0.0037080000001878943,
+        "p95": 0.007373999998890213,
+        "p99": 0.010000000000218279,
+        "max": 0.08328599999913422
+      },
+      "maxPoolWaiting": 550,
+      "maxAppActive": 560,
+      "aggregate": {
+        "intervals": 13,
+        "wallMs": 13481.178086999998,
+        "cpuCores": 1.0782808376381923,
+        "cpuMsPerAppCompletion": 2.9137093605933053,
+        "elu": 1,
+        "completed": 4989,
+        "declaredBytes": 85586295,
+        "cpuCoresSamples": {
+          "n": 13,
+          "mean": 1.0779462710879315,
+          "p50": 1.0686884055475954,
+          "p95": 1.1353345645906807,
+          "p99": 1.1353345645906807,
+          "max": 1.1353345645906807
+        },
+        "eluSamples": {
+          "n": 13,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 13,
+          "mean": 30.466677153846152,
+          "p50": 28.131327,
+          "p95": 54.001663,
+          "p99": 54.001663,
+          "max": 54.001663
+        },
+        "maxDelayMs": 428.867583
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 437,
+        "active/Client/ClientRead": 1,
+        "active/null/null": 2
+      },
+      "server": null,
+      "checks": {
+        "leases": 7500,
+        "waits": 7500,
+        "queries": 7500,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-07-primary-baseline-r1-includes10-on",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789121485305,
+      "endedAt": 1789121500305,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.00024165499999995177,
+      "rpsIncludingDrain": 9.999838899262054,
+      "httpMs": {
+        "p50": 18.53728499999852,
+        "p95": 22.29657000000043,
+        "p99": 43.66181500000039,
+        "max": 59.37499499999831
+      },
+      "schedulerLagP99Ms": 10.560714999999618,
+      "holdMs": {
+        "n": 150,
+        "mean": 14.860437240000016,
+        "p50": 14.097896000001128,
+        "p95": 17.584744000000683,
+        "p99": 25.338479000000007,
+        "max": 54.80011399999785
+      },
+      "waitMs": {
+        "n": 150,
+        "mean": 0.04689884000007017,
+        "p50": 0.04458100000010745,
+        "p95": 0.06649599999946076,
+        "p99": 0.10257799999999406,
+        "max": 0.1371179999987362
+      },
+      "clientQueryMs": {
+        "n": 150,
+        "mean": 2.809587579999949,
+        "p50": 2.6719359999997323,
+        "p95": 3.6887169999990874,
+        "p99": 4.9668559999990975,
+        "max": 10.782716000001528
+      },
+      "postQueryHoldMs": {
+        "n": 150,
+        "mean": 11.761283760000033,
+        "p50": 11.070058999999674,
+        "p95": 14.050946999999724,
+        "p99": 22.54296599999998,
+        "max": 43.68999899999835
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14035.613377,
+        "cpuCores": 0.20326835196780013,
+        "cpuMsPerAppCompletion": 20.234014184397164,
+        "elu": 0.1947910085494846,
+        "completed": 141,
+        "declaredBytes": 34999725,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.20313867424975435,
+          "p50": 0.18687359581076693,
+          "p95": 0.2656018750934162,
+          "p99": 0.2656018750934162,
+          "max": 0.2656018750934162
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.19471137104345287,
+          "p50": 0.19029252021995113,
+          "p95": 0.23308189875921984,
+          "p99": 0.23308189875921984,
+          "max": 0.23308189875921984
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 18.609882428571428,
+          "p50": 18.464767,
+          "p95": 20.004863,
+          "p99": 20.004863,
+          "max": 20.004863
+        },
+        "maxDelayMs": 90.308607
+      },
+      "pgActivityBackendSamples": {
+        "active/null/null": 5,
+        "idle/Client/ClientRead": 195
+      },
+      "server": null,
+      "checks": {
+        "leases": 150,
+        "waits": 150,
+        "queries": 150,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-08-primary-baseline-r1-includes10-off",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789121504794,
+      "endedAt": 1789121519795,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0004077130000013085,
+      "rpsIncludingDrain": 9.999728198721126,
+      "httpMs": {
+        "p50": 19.124799000000166,
+        "p95": 21.314056999999593,
+        "p99": 23.590980000000854,
+        "max": 23.77417500000047
+      },
+      "schedulerLagP99Ms": 72.67583300000115,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-09-primary-patched-r1-includes10-on",
+      "build": "patched",
+      "repeat": 1,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789121524979,
+      "endedAt": 1789121539980,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0007107180000023305,
+      "rpsIncludingDrain": 9.999526210448716,
+      "httpMs": {
+        "p50": 20.6967769999992,
+        "p95": 25.39525599999979,
+        "p99": 40.9248520000001,
+        "max": 69.58981099999983
+      },
+      "schedulerLagP99Ms": 25.70266300000185,
+      "holdMs": {
+        "n": 150,
+        "mean": 3.0829574866668192,
+        "p50": 2.9454390000000785,
+        "p95": 4.1193880000028,
+        "p99": 5.432901000000129,
+        "max": 7.694166999999652
+      },
+      "waitMs": {
+        "n": 150,
+        "mean": 0.051101979999994,
+        "p50": 0.04762299999856623,
+        "p95": 0.08070500000030734,
+        "p99": 0.09403699999984383,
+        "max": 0.10578699999950913
+      },
+      "clientQueryMs": {
+        "n": 150,
+        "mean": 3.04534387333321,
+        "p50": 2.9011899999995876,
+        "p95": 4.083763999999064,
+        "p99": 5.390778999999384,
+        "max": 7.634086000000025
+      },
+      "postQueryHoldMs": {
+        "n": 150,
+        "mean": 0.012888780000178788,
+        "p50": 0.012707999998383457,
+        "p95": 0.019083000001046457,
+        "p99": 0.027998999999908847,
+        "max": 0.03599800000029063
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 13,
+        "wallMs": 13004.138701000002,
+        "cpuCores": 0.2130654758232419,
+        "cpuMsPerAppCompletion": 21.31333076923077,
+        "elu": 0.2066868454285452,
+        "completed": 130,
+        "declaredBytes": 32269250,
+        "cpuCoresSamples": {
+          "n": 13,
+          "mean": 0.21306684930000083,
+          "p50": 0.2093655882022205,
+          "p95": 0.27637123066468783,
+          "p99": 0.27637123066468783,
+          "max": 0.27637123066468783
+        },
+        "eluSamples": {
+          "n": 13,
+          "mean": 0.20668828309813037,
+          "p50": 0.20518626736820386,
+          "p95": 0.23973033477049915,
+          "p99": 0.23973033477049915,
+          "max": 0.23973033477049915
+        },
+        "perSecondDelayP95Ms": {
+          "n": 13,
+          "mean": 20.05149438461539,
+          "p50": 19.513343,
+          "p95": 22.413311,
+          "p99": 22.413311,
+          "max": 22.413311
+        },
+        "maxDelayMs": 92.274687
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 174,
+        "active/null/null": 15
+      },
+      "server": null,
+      "checks": {
+        "leases": 150,
+        "waits": 150,
+        "queries": 150,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-10-primary-patched-r1-includes10-off",
+      "build": "patched",
+      "repeat": 1,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789121545099,
+      "endedAt": 1789121560100,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0008516450000009002,
+      "rpsIncludingDrain": 9.999432268900357,
+      "httpMs": {
+        "p50": 19.77486399999907,
+        "p95": 22.286551000000145,
+        "p99": 32.343949000000066,
+        "max": 36.227726999999504
+      },
+      "schedulerLagP99Ms": 14.64003700000103,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-11-primary-baseline-r1-includes80-on",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789121564641,
+      "endedAt": 1789121586445,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 362,
+      "drainSeconds": 6.801404709000003,
+      "rpsIncludingDrain": 55.04232484178503,
+      "httpMs": {
+        "p50": 1266.0276670000003,
+        "p95": 11028.059586999998,
+        "p99": 11686.742338000002,
+        "max": 12001.374656
+      },
+      "schedulerLagP99Ms": 2.1632360000003246,
+      "holdMs": {
+        "n": 1200,
+        "mean": 138.61134406999994,
+        "p50": 162.88476699999956,
+        "p95": 203.28110500000003,
+        "p99": 431.5367579999984,
+        "max": 483.61531599999944
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 417.8141574208327,
+        "p50": 288.37220999999954,
+        "p95": 1248.4489549999998,
+        "p99": 1379.533464,
+        "max": 1449.2967900000003
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 122.96088069,
+        "p50": 147.45071499999995,
+        "p95": 184.9558730000008,
+        "p99": 413.26067800000055,
+        "max": 456.0173279999999
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 12.90847412166669,
+        "p50": 11.067982000000484,
+        "p95": 15.557310999996844,
+        "p99": 24.83181500000137,
+        "max": 272.70784099999946
+      },
+      "maxPoolWaiting": 74,
+      "maxAppActive": 84,
+      "aggregate": {
+        "intervals": 12,
+        "wallMs": 13184.946118,
+        "cpuCores": 1.0771721683876205,
+        "cpuMsPerAppCompletion": 18.987241978609624,
+        "elu": 1,
+        "completed": 748,
+        "declaredBytes": 185672300,
+        "cpuCoresSamples": {
+          "n": 12,
+          "mean": 1.0775660007307861,
+          "p50": 1.0710245189759768,
+          "p95": 1.1528060277937338,
+          "p99": 1.1528060277937338,
+          "max": 1.1528060277937338
+        },
+        "eluSamples": {
+          "n": 12,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 12,
+          "mean": 204.35216966666667,
+          "p50": 178.782207,
+          "p95": 424.148991,
+          "p99": 424.148991,
+          "max": 424.148991
+        },
+        "maxDelayMs": 424.148991
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 422,
+        "active/null/null": 8
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-12-small-response-baseline-r1-small80-on",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "small-response",
+      "observe": true,
+      "endpoint": "/posts-with-comments-small",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789121590994,
+      "endedAt": 1789121607761,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37200,
+      "bytesPerCompletion": 31,
+      "backlog": 137,
+      "drainSeconds": 1.7649177629999997,
+      "rpsIncludingDrain": 71.57804272970475,
+      "httpMs": {
+        "p50": 731.9419130000006,
+        "p95": 3112.2421130000002,
+        "p99": 5225.365345,
+        "max": 6122.0742549999995
+      },
+      "schedulerLagP99Ms": 4.830228999999235,
+      "holdMs": {
+        "n": 1200,
+        "mean": 122.14047465916684,
+        "p50": 128.5817689999967,
+        "p95": 177.48542500000076,
+        "p99": 370.41485399999874,
+        "max": 382.15614000000096
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 400.42727936666665,
+        "p50": 341.91845699999976,
+        "p95": 1035.4716430000008,
+        "p99": 1114.6321529999987,
+        "max": 1165.5703460000004
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 109.31291065416653,
+        "p50": 116.6220659999999,
+        "p95": 160.9486680000009,
+        "p99": 357.89821499999744,
+        "max": 370.6342999999997
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 12.453393853333338,
+        "p50": 11.009899000000587,
+        "p95": 14.49802500000078,
+        "p99": 21.966247000000294,
+        "max": 259.4317580000006
+      },
+      "maxPoolWaiting": 82,
+      "maxAppActive": 92,
+      "aggregate": {
+        "intervals": 13,
+        "wallMs": 13907.758345999999,
+        "cpuCores": 1.0920027960054406,
+        "cpuMsPerAppCompletion": 15.449960325534079,
+        "elu": 1,
+        "completed": 983,
+        "declaredBytes": 30473,
+        "cpuCoresSamples": {
+          "n": 13,
+          "mean": 1.091331771381919,
+          "p50": 1.0791671771500075,
+          "p95": 1.1497889366637934,
+          "p99": 1.1497889366637934,
+          "max": 1.1497889366637934
+        },
+        "eluSamples": {
+          "n": 13,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 13,
+          "mean": 192.6707977692308,
+          "p50": 138.674175,
+          "p95": 379.322367,
+          "p99": 379.322367,
+          "max": 379.322367
+        },
+        "maxDelayMs": 379.322367
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 323,
+        "active/null/null": 7
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-13-primary-patched-r1-includes80-on",
+      "build": "patched",
+      "repeat": 1,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789121612688,
+      "endedAt": 1789121634292,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 380,
+      "drainSeconds": 6.600026494999998,
+      "rpsIncludingDrain": 55.555487410063016,
+      "httpMs": {
+        "p50": 1211.5836149999996,
+        "p95": 12289.184773,
+        "p99": 12721.566896,
+        "max": 12877.924079
+      },
+      "schedulerLagP99Ms": 2.767065000000912,
+      "holdMs": {
+        "n": 1200,
+        "mean": 134.4164935483332,
+        "p50": 163.74420199999986,
+        "p95": 221.37937200000124,
+        "p99": 408.9784920000002,
+        "max": 423.90827400000126
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 395.10441206916715,
+        "p50": 282.3023350000003,
+        "p95": 1171.5180349999973,
+        "p99": 1271.2456459999994,
+        "max": 1317.540226000001
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 134.38638388333328,
+        "p50": 163.71516200000042,
+        "p95": 221.3430819999994,
+        "p99": 408.94753499999933,
+        "max": 423.88090100000045
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 0.01004711499997067,
+        "p50": 0.009749999999257852,
+        "p95": 0.01583300000129384,
+        "p99": 0.02974900000026537,
+        "max": 0.056955999998535844
+      },
+      "maxPoolWaiting": 74,
+      "maxAppActive": 84,
+      "aggregate": {
+        "intervals": 12,
+        "wallMs": 13315.764292,
+        "cpuCores": 1.0552113789248803,
+        "cpuMsPerAppCompletion": 19.35392011019284,
+        "elu": 1,
+        "completed": 726,
+        "declaredBytes": 180211350,
+        "cpuCoresSamples": {
+          "n": 12,
+          "mean": 1.0550643476421724,
+          "p50": 1.0580850834274529,
+          "p95": 1.1154928920617033,
+          "p99": 1.1154928920617033,
+          "max": 1.1154928920617033
+        },
+        "eluSamples": {
+          "n": 12,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 12,
+          "mean": 246.52458566666667,
+          "p50": 208.797695,
+          "p95": 414.449663,
+          "p99": 414.449663,
+          "max": 414.449663
+        },
+        "maxDelayMs": 414.449663
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 426,
+        "active/null/null": 4
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-14-small-response-patched-r1-small80-on",
+      "build": "patched",
+      "repeat": 1,
+      "group": "small-response",
+      "observe": true,
+      "endpoint": "/posts-with-comments-small",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789121639239,
+      "endedAt": 1789121655652,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37200,
+      "bytesPerCompletion": 31,
+      "backlog": 111,
+      "drainSeconds": 1.4111236290000022,
+      "rpsIncludingDrain": 73.121135830059,
+      "httpMs": {
+        "p50": 504.12978799999837,
+        "p95": 1452.1812869999994,
+        "p99": 3898.7265019999977,
+        "max": 4535.01656
+      },
+      "schedulerLagP99Ms": 2.483302000000549,
+      "holdMs": {
+        "n": 1200,
+        "mean": 113.19197259166658,
+        "p50": 124.11131999999998,
+        "p95": 144.1203999999998,
+        "p99": 379.0768709999975,
+        "max": 494.31134999999995
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 249.08960553916677,
+        "p50": 140.03913000000102,
+        "p95": 877.2335979999989,
+        "p99": 986.9769220000017,
+        "max": 1023.6091190000006
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 113.16658811166667,
+        "p50": 124.08303299999898,
+        "p95": 144.0865670000003,
+        "p99": 379.049164,
+        "max": 494.28910200000064
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 0.00936679500003038,
+        "p50": 0.008625000002211891,
+        "p95": 0.01375000000007276,
+        "p99": 0.022207999999864114,
+        "max": 0.12178700000004028
+      },
+      "maxPoolWaiting": 65,
+      "maxAppActive": 75,
+      "aggregate": {
+        "intervals": 12,
+        "wallMs": 13012.541575000001,
+        "cpuCores": 1.0893485272111416,
+        "cpuMsPerAppCompletion": 14.812113897596657,
+        "elu": 1,
+        "completed": 957,
+        "declaredBytes": 29667,
+        "cpuCoresSamples": {
+          "n": 12,
+          "mean": 1.089813122361029,
+          "p50": 1.0886085372634966,
+          "p95": 1.152292435236368,
+          "p99": 1.152292435236368,
+          "max": 1.152292435236368
+        },
+        "eluSamples": {
+          "n": 12,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 12,
+          "mean": 188.26854300000002,
+          "p50": 136.708095,
+          "p95": 493.355007,
+          "p99": 493.355007,
+          "max": 493.355007
+        },
+        "maxDelayMs": 493.355007
+      },
+      "pgActivityBackendSamples": {
+        "active/null/null": 6,
+        "idle/Client/ClientRead": 314
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-15-primary-patched-r2-includes10-off",
+      "build": "patched",
+      "repeat": 2,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789121660512,
+      "endedAt": 1789121675513,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0009171219999988267,
+      "rpsIncludingDrain": 9.999388622713838,
+      "httpMs": {
+        "p50": 19.471888000000035,
+        "p95": 21.96719000000121,
+        "p99": 36.77210300000024,
+        "max": 118.82211900000038
+      },
+      "schedulerLagP99Ms": 23.28237799999988,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-16-primary-patched-r2-includes10-on",
+      "build": "patched",
+      "repeat": 2,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789121680426,
+      "endedAt": 1789121695428,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0013807550000013435,
+      "rpsIncludingDrain": 9.999079581391506,
+      "httpMs": {
+        "p50": 18.99485900000036,
+        "p95": 21.736711000001378,
+        "p99": 27.238094999999703,
+        "max": 56.293387000000166
+      },
+      "schedulerLagP99Ms": 42.485177999999905,
+      "holdMs": {
+        "n": 150,
+        "mean": 2.9540946399999513,
+        "p50": 2.720170999999027,
+        "p95": 4.697697999999946,
+        "p99": 5.115805000000364,
+        "max": 5.1394710000004125
+      },
+      "waitMs": {
+        "n": 150,
+        "mean": 0.04705115333335016,
+        "p50": 0.044831999999587424,
+        "p95": 0.06274800000028335,
+        "p99": 0.08866399999897112,
+        "max": 0.10153899999932037
+      },
+      "clientQueryMs": {
+        "n": 150,
+        "mean": 2.9197573533332615,
+        "p50": 2.688506000000416,
+        "p95": 4.654908000000432,
+        "p99": 5.078265000000101,
+        "max": 5.09905499999968
+      },
+      "postQueryHoldMs": {
+        "n": 150,
+        "mean": 0.0122437999999147,
+        "p50": 0.011958000000959146,
+        "p95": 0.017957999998543528,
+        "p99": 0.030665000000226428,
+        "max": 0.04791499999919324
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14045.490329999999,
+        "cpuCores": 0.19332931326720015,
+        "cpuMsPerAppCompletion": 19.258191489361703,
+        "elu": 0.18571831850914872,
+        "completed": 141,
+        "declaredBytes": 34999725,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.19333586852980167,
+          "p50": 0.19186307453102047,
+          "p95": 0.22242005530809897,
+          "p99": 0.22242005530809897,
+          "max": 0.22242005530809897
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.1857242979519809,
+          "p50": 0.18564290414601314,
+          "p95": 0.2101221115227773,
+          "p99": 0.2101221115227773,
+          "max": 0.2101221115227773
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 18.68361042857143,
+          "p50": 18.792447,
+          "p95": 21.889023,
+          "p99": 21.889023,
+          "max": 21.889023
+        },
+        "maxDelayMs": 85.721087
+      },
+      "pgActivityBackendSamples": {
+        "active/null/null": 7,
+        "idle/Client/ClientRead": 189
+      },
+      "server": null,
+      "checks": {
+        "leases": 150,
+        "waits": 150,
+        "queries": 150,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-17-primary-baseline-r2-includes10-off",
+      "build": "baseline",
+      "repeat": 2,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789121700135,
+      "endedAt": 1789121715137,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0013636629999993488,
+      "rpsIncludingDrain": 9.999090973973678,
+      "httpMs": {
+        "p50": 18.95140999999785,
+        "p95": 21.516508000000613,
+        "p99": 23.69693499999994,
+        "max": 26.159622999999556
+      },
+      "schedulerLagP99Ms": 1.3548489999993762,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-18-primary-baseline-r2-includes10-on",
+      "build": "baseline",
+      "repeat": 2,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789121720558,
+      "endedAt": 1789121735559,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0005631049999994531,
+      "rpsIncludingDrain": 9.999624610758904,
+      "httpMs": {
+        "p50": 19.131687000000966,
+        "p95": 28.183146999999735,
+        "p99": 62.93717199999992,
+        "max": 78.69731899999897
+      },
+      "schedulerLagP99Ms": 1.3773349999992206,
+      "holdMs": {
+        "n": 150,
+        "mean": 15.918694753333366,
+        "p50": 14.406918000000587,
+        "p95": 22.37296999999853,
+        "p99": 45.69885500000055,
+        "max": 59.4479680000004
+      },
+      "waitMs": {
+        "n": 150,
+        "mean": 0.04971542666671667,
+        "p50": 0.04683199999999488,
+        "p95": 0.07503900000028807,
+        "p99": 0.08670600000004924,
+        "max": 0.10774700000183657
+      },
+      "clientQueryMs": {
+        "n": 150,
+        "mean": 2.920773559999907,
+        "p50": 2.634266999999454,
+        "p95": 5.1372449999998935,
+        "p99": 8.176956999999675,
+        "max": 10.806021000000328
+      },
+      "postQueryHoldMs": {
+        "n": 150,
+        "mean": 12.731062993333332,
+        "p50": 11.388119999999617,
+        "p95": 19.240920000000187,
+        "p99": 34.44988700000067,
+        "max": 53.677778999999646
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14001.724173,
+        "cpuCores": 0.1940882398783703,
+        "cpuMsPerAppCompletion": 19.411214285714287,
+        "elu": 0.20188018867142785,
+        "completed": 140,
+        "declaredBytes": 34751500,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.19408364074859383,
+          "p50": 0.18520860573532605,
+          "p95": 0.280999224907924,
+          "p99": 0.280999224907924,
+          "max": 0.280999224907924
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.2018739074081853,
+          "p50": 0.19135005162349947,
+          "p95": 0.3237440225507938,
+          "p99": 0.3237440225507938,
+          "max": 0.3237440225507938
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 21.544959,
+          "p50": 19.283967,
+          "p95": 52.690943,
+          "p99": 52.690943,
+          "max": 52.690943
+        },
+        "maxDelayMs": 75.235327
+      },
+      "pgActivityBackendSamples": {
+        "active/null/null": 3,
+        "idle/Client/ClientRead": 185
+      },
+      "server": null,
+      "checks": {
+        "leases": 150,
+        "waits": 150,
+        "queries": 150,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-19-primary-patched-r2-includes80-on",
+      "build": "patched",
+      "repeat": 2,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789121740470,
+      "endedAt": 1789121762054,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 364,
+      "drainSeconds": 6.5806959859999985,
+      "rpsIncludingDrain": 55.60525020965374,
+      "httpMs": {
+        "p50": 1235.6762020000006,
+        "p95": 10926.077567999999,
+        "p99": 12284.964999,
+        "max": 12396.666895
+      },
+      "schedulerLagP99Ms": 3.2258270000002085,
+      "holdMs": {
+        "n": 1200,
+        "mean": 135.81382968916668,
+        "p50": 162.26580000000104,
+        "p95": 203.39897999999994,
+        "p99": 426.07853500000056,
+        "max": 456.66933800000334
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 435.9606431258336,
+        "p50": 311.78758799999923,
+        "p95": 1282.8083069999993,
+        "p99": 1551.8970310000004,
+        "max": 1634.6978510000008
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 135.78354825083335,
+        "p50": 162.22511199999826,
+        "p95": 203.35152299999936,
+        "p99": 426.02928600000087,
+        "max": 456.6193800000001
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 0.009645360833351713,
+        "p50": 0.009207999999489402,
+        "p95": 0.0148750000007567,
+        "p99": 0.025624000001698732,
+        "max": 0.06520600000294507
+      },
+      "maxPoolWaiting": 76,
+      "maxAppActive": 86,
+      "aggregate": {
+        "intervals": 11,
+        "wallMs": 13046.445125,
+        "cpuCores": 1.0980077609455319,
+        "cpuMsPerAppCompletion": 19.758755862068966,
+        "elu": 1,
+        "completed": 725,
+        "declaredBytes": 179963125,
+        "cpuCoresSamples": {
+          "n": 11,
+          "mean": 1.0943153532684529,
+          "p50": 1.0791900244927701,
+          "p95": 1.2223159695100536,
+          "p99": 1.2223159695100536,
+          "max": 1.2223159695100536
+        },
+        "eluSamples": {
+          "n": 11,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 11,
+          "mean": 217.72250663636362,
+          "p50": 168.689663,
+          "p95": 421.789695,
+          "p99": 421.789695,
+          "max": 421.789695
+        },
+        "maxDelayMs": 421.789695
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 425,
+        "active/null/null": 5
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-20-small-response-patched-r2-small80-on",
+      "build": "patched",
+      "repeat": 2,
+      "group": "small-response",
+      "observe": true,
+      "endpoint": "/posts-with-comments-small",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789121808307,
+      "endedAt": 1789121833315,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37200,
+      "bytesPerCompletion": 31,
+      "backlog": 525,
+      "drainSeconds": 9.999541718,
+      "rpsIncludingDrain": 48.00087991757002,
+      "httpMs": {
+        "p50": 1393.5897269999987,
+        "p95": 13586.066094,
+        "p99": 14126.448903999999,
+        "max": 14248.512734
+      },
+      "schedulerLagP99Ms": 4.370064000000639,
+      "holdMs": {
+        "n": 1200,
+        "mean": 138.26477916999997,
+        "p50": 171.99114299999928,
+        "p95": 265.9784040000013,
+        "p99": 471.3227250000018,
+        "max": 530.0450569999994
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 288.94820878666667,
+        "p50": 23.33441899999889,
+        "p95": 970.7188600000009,
+        "p99": 1107.046405000001,
+        "max": 1239.8359550000023
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 138.227715415,
+        "p50": 171.95814400000017,
+        "p95": 265.9389890000002,
+        "p99": 471.2819759999984,
+        "max": 529.9414340000003
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 0.013857169999992796,
+        "p50": 0.012042000002111308,
+        "p95": 0.020458000000871834,
+        "p99": 0.0596239999995305,
+        "max": 0.388742999999522
+      },
+      "maxPoolWaiting": 58,
+      "maxAppActive": 68,
+      "aggregate": {
+        "intervals": 12,
+        "wallMs": 13371.497961,
+        "cpuCores": 0.8430671741400717,
+        "cpuMsPerAppCompletion": 19.139339558573855,
+        "elu": 1,
+        "completed": 589,
+        "declaredBytes": 18259,
+        "cpuCoresSamples": {
+          "n": 12,
+          "mean": 0.8422687676382731,
+          "p50": 0.8327605266855543,
+          "p95": 0.9769965888928992,
+          "p99": 0.9769965888928992,
+          "max": 0.9769965888928992
+        },
+        "eluSamples": {
+          "n": 12,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 12,
+          "mean": 259.74101233333334,
+          "p50": 250.347519,
+          "p95": 466.616319,
+          "p99": 466.616319,
+          "max": 466.616319
+        },
+        "maxDelayMs": 466.616319
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 482,
+        "active/null/null": 8
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-21-primary-baseline-r2-includes80-on",
+      "build": "baseline",
+      "repeat": 2,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789121868246,
+      "endedAt": 1789121890564,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 387,
+      "drainSeconds": 7.313471947000004,
+      "rpsIncludingDrain": 53.77916994945008,
+      "httpMs": {
+        "p50": 1327.4785359999987,
+        "p95": 12218.467417,
+        "p99": 13080.263142,
+        "max": 13382.130734000002
+      },
+      "schedulerLagP99Ms": 2.5282550000010815,
+      "holdMs": {
+        "n": 1200,
+        "mean": 142.3084815025001,
+        "p50": 168.84089499999936,
+        "p95": 209.42269099999976,
+        "p99": 420.10781000000134,
+        "max": 445.8636030000016
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 418.7322578266667,
+        "p50": 287.5530749999998,
+        "p95": 1374.179024000001,
+        "p99": 1557.7709400000022,
+        "max": 1649.2719060000018
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 126.30217468499987,
+        "p50": 152.7555309999998,
+        "p95": 189.24481300000116,
+        "p99": 401.6375020000014,
+        "max": 429.8220500000025
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 13.1620180533333,
+        "p50": 11.405987999998615,
+        "p95": 15.937917000000198,
+        "p99": 22.731321000000207,
+        "max": 268.85740400000213
+      },
+      "maxPoolWaiting": 73,
+      "maxAppActive": 83,
+      "aggregate": {
+        "intervals": 13,
+        "wallMs": 14037.00656,
+        "cpuCores": 1.060816701648674,
+        "cpuMsPerAppCompletion": 19.464955555555555,
+        "elu": 1,
+        "completed": 765,
+        "declaredBytes": 189892125,
+        "cpuCoresSamples": {
+          "n": 13,
+          "mean": 1.060764763233777,
+          "p50": 1.0602399255297652,
+          "p95": 1.097356734482371,
+          "p99": 1.097356734482371,
+          "max": 1.097356734482371
+        },
+        "eluSamples": {
+          "n": 13,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 13,
+          "mean": 219.50526915384614,
+          "p50": 185.466879,
+          "p95": 414.973951,
+          "p99": 414.973951,
+          "max": 414.973951
+        },
+        "maxDelayMs": 414.973951
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 435,
+        "active/null/null": 5
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-22-small-response-baseline-r2-small80-on",
+      "build": "baseline",
+      "repeat": 2,
+      "group": "small-response",
+      "observe": true,
+      "endpoint": "/posts-with-comments-small",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789121896063,
+      "endedAt": 1789121913060,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37200,
+      "bytesPerCompletion": 31,
+      "backlog": 134,
+      "drainSeconds": 1.9944026370000003,
+      "rpsIncludingDrain": 70.61148459477917,
+      "httpMs": {
+        "p50": 731.8882450000001,
+        "p95": 2975.852653,
+        "p99": 4964.506378999999,
+        "max": 5010.6931509999995
+      },
+      "schedulerLagP99Ms": 3.064763999999741,
+      "holdMs": {
+        "n": 1200,
+        "mean": 121.93169429666663,
+        "p50": 130.59260600000198,
+        "p95": 156.21462400000019,
+        "p99": 383.3749260000004,
+        "max": 400.36575099999936
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 385.0276924783335,
+        "p50": 290.4137549999996,
+        "p95": 1153.804371000002,
+        "p99": 1248.7469950000013,
+        "max": 1285.9800609999984
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 108.99077203749994,
+        "p50": 118.37896899999942,
+        "p95": 140.4716700000008,
+        "p99": 371.21835099999953,
+        "max": 382.9882269999998
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 12.551044578333359,
+        "p50": 11.092125000000124,
+        "p95": 14.765512999998464,
+        "p99": 18.612457999999606,
+        "max": 262.13388400000076
+      },
+      "maxPoolWaiting": 79,
+      "maxAppActive": 89,
+      "aggregate": {
+        "intervals": 13,
+        "wallMs": 13810.126166999999,
+        "cpuCores": 1.082409445014305,
+        "cpuMsPerAppCompletion": 15.237727828746177,
+        "elu": 1,
+        "completed": 981,
+        "declaredBytes": 30411,
+        "cpuCoresSamples": {
+          "n": 13,
+          "mean": 1.0828157298362409,
+          "p50": 1.0725108631993192,
+          "p95": 1.1525648270113138,
+          "p99": 1.1525648270113138,
+          "max": 1.1525648270113138
+        },
+        "eluSamples": {
+          "n": 13,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 13,
+          "mean": 166.40598546153845,
+          "p50": 146.145279,
+          "p95": 370.147327,
+          "p99": 370.147327,
+          "max": 370.147327
+        },
+        "maxDelayMs": 370.147327
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 326,
+        "active/null/null": 4
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-23-primary-patched-r2-posts100-off",
+      "build": "patched",
+      "repeat": 2,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789121917961,
+      "endedAt": 1789121932963,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0004963649999982778,
+      "rpsIncludingDrain": 99.99669100949782,
+      "httpMs": {
+        "p50": 2.983013000000028,
+        "p95": 3.6048399999999674,
+        "p99": 14.244908000000578,
+        "max": 23.21969800000079
+      },
+      "schedulerLagP99Ms": 37.05188400000043,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-24-primary-patched-r2-posts100-on",
+      "build": "patched",
+      "repeat": 2,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789121937965,
+      "endedAt": 1789121952967,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0008585290000002743,
+      "rpsIncludingDrain": 99.99427680090216,
+      "httpMs": {
+        "p50": 3.1719740000007732,
+        "p95": 3.872301000000334,
+        "p99": 8.62259400000039,
+        "max": 28.790862999998353
+      },
+      "schedulerLagP99Ms": 6.7070999999996275,
+      "holdMs": {
+        "n": 1500,
+        "mean": 0.5364907046666522,
+        "p50": 0.44628800000009505,
+        "p95": 0.6958690000001297,
+        "p99": 3.7911370000001625,
+        "max": 11.33328800000163
+      },
+      "waitMs": {
+        "n": 1500,
+        "mean": 0.07142180133336297,
+        "p50": 0.029083999999784282,
+        "p95": 0.042290999999750056,
+        "p99": 0.06287399999928311,
+        "max": 14.424682000000757
+      },
+      "clientQueryMs": {
+        "n": 1500,
+        "mean": 0.5152902186666527,
+        "p50": 0.42533000000003085,
+        "p95": 0.6636610000005021,
+        "p99": 3.7817209999993793,
+        "max": 11.308580000000802
+      },
+      "postQueryHoldMs": {
+        "n": 1500,
+        "mean": 0.005723607333326982,
+        "p50": 0.004666999999244581,
+        "p95": 0.010416999999506515,
+        "p99": 0.017207999997481238,
+        "max": 0.12308300000040617
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14002.73855,
+        "cpuCores": 0.29856202664013887,
+        "cpuMsPerAppCompletion": 2.986204285714286,
+        "elu": 0.29470532083665896,
+        "completed": 1400,
+        "declaredBytes": 24017000,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.2985618522080454,
+          "p50": 0.29364788816822474,
+          "p95": 0.3385528089079794,
+          "p99": 0.3385528089079794,
+          "max": 0.3385528089079794
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.29470483912668843,
+          "p50": 0.2932135448920222,
+          "p95": 0.3171294697326028,
+          "p99": 0.3171294697326028,
+          "max": 0.3171294697326028
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 11.148725857142859,
+          "p50": 11.010047,
+          "p95": 11.739135,
+          "p99": 11.739135,
+          "max": 11.739135
+        },
+        "maxDelayMs": 70.582271
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 199,
+        "idle/null/null": 1,
+        "active/null/null": 1,
+        "active/Client/ClientRead": 1
+      },
+      "server": null,
+      "checks": {
+        "leases": 1500,
+        "waits": 1500,
+        "queries": 1500,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-25-primary-baseline-r2-posts100-off",
+      "build": "baseline",
+      "repeat": 2,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789121957470,
+      "endedAt": 1789121972472,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0010741609999982416,
+      "rpsIncludingDrain": 99.99283943943968,
+      "httpMs": {
+        "p50": 3.216102000000319,
+        "p95": 3.704265999999734,
+        "p99": 5.917419000001246,
+        "max": 19.894442999999228
+      },
+      "schedulerLagP99Ms": 2.0800620000009076,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-26-primary-baseline-r2-posts100-on",
+      "build": "baseline",
+      "repeat": 2,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789121977360,
+      "endedAt": 1789121992361,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0001971630000010549,
+      "rpsIncludingDrain": 99.99868559727676,
+      "httpMs": {
+        "p50": 3.3480219999992187,
+        "p95": 7.143587000002299,
+        "p99": 11.920178000000305,
+        "max": 56.48123100000157
+      },
+      "schedulerLagP99Ms": 2.667175999999017,
+      "holdMs": {
+        "n": 1500,
+        "mean": 2.386781947333362,
+        "p50": 2.0323220000009314,
+        "p95": 4.422849999999016,
+        "p99": 6.834170000000086,
+        "max": 38.533204999999725
+      },
+      "waitMs": {
+        "n": 1500,
+        "mean": 0.05753145466671503,
+        "p50": 0.02883300000030431,
+        "p95": 0.0470420000001468,
+        "p99": 0.08458299999983865,
+        "max": 21.76975499999935
+      },
+      "clientQueryMs": {
+        "n": 1500,
+        "mean": 0.6217389726666334,
+        "p50": 0.4513729999998759,
+        "p95": 1.2362840000005235,
+        "p99": 3.404354999998759,
+        "max": 29.29979699999967
+      },
+      "postQueryHoldMs": {
+        "n": 1500,
+        "mean": 1.7470014593333407,
+        "p50": 1.5474489999996877,
+        "p95": 2.9398590000000695,
+        "p99": 4.637557000000015,
+        "max": 16.805991000001086
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14007.187598999999,
+        "cpuCores": 0.35142279384845415,
+        "cpuMsPerAppCompletion": 3.5135224839400427,
+        "elu": 0.3471587018254602,
+        "completed": 1401,
+        "declaredBytes": 24034155,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.35143248582746484,
+          "p50": 0.34970810396773067,
+          "p95": 0.5018442753112129,
+          "p99": 0.5018442753112129,
+          "max": 0.5018442753112129
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.34716505263597236,
+          "p50": 0.3307838111482241,
+          "p95": 0.5230543277862847,
+          "p99": 0.5230543277862847,
+          "max": 0.5230543277862847
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 11.475235571428572,
+          "p50": 11.247615,
+          "p95": 13.066239,
+          "p99": 13.066239,
+          "max": 13.066239
+        },
+        "maxDelayMs": 28.737535
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 216
+      },
+      "server": null,
+      "checks": {
+        "leases": 1500,
+        "waits": 1500,
+        "queries": 1500,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-27-primary-patched-r2-posts500-on",
+      "build": "patched",
+      "repeat": 2,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 15,
+      "startedAt": 1789121997690,
+      "endedAt": 1789122023512,
+      "sent": 7500,
+      "completed": 7500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 128662500,
+      "bytesPerCompletion": 17155,
+      "backlog": 1900,
+      "drainSeconds": 10.815773521,
+      "rpsIncludingDrain": 290.5200572006521,
+      "httpMs": {
+        "p50": 949.2974269999995,
+        "p95": 11627.853318000001,
+        "p99": 12499.686028,
+        "max": 19571.873868
+      },
+      "schedulerLagP99Ms": 4.3097710000001825,
+      "holdMs": {
+        "n": 7500,
+        "mean": 22.127029408800013,
+        "p50": 23.87351800000033,
+        "p95": 29.309438999999657,
+        "p99": 45.02257000000009,
+        "max": 508.14260300000024
+      },
+      "waitMs": {
+        "n": 7500,
+        "mean": 579.5212426655999,
+        "p50": 511.94151299999976,
+        "p95": 1584.271150999999,
+        "p99": 1613.5321320000003,
+        "max": 1636.9638960000011
+      },
+      "clientQueryMs": {
+        "n": 7500,
+        "mean": 22.11159698240008,
+        "p50": 23.856477000001178,
+        "p95": 29.297356000000036,
+        "p99": 44.99677799999972,
+        "max": 508.12114499999734
+      },
+      "postQueryHoldMs": {
+        "n": 7500,
+        "mean": 0.004108176133330563,
+        "p50": 0.0036249999993742676,
+        "p95": 0.007790999999997439,
+        "p99": 0.010916999999608379,
+        "max": 0.1142489999983809
+      },
+      "maxPoolWaiting": 548,
+      "maxAppActive": 558,
+      "aggregate": {
+        "intervals": 13,
+        "wallMs": 13562.883074,
+        "cpuCores": 1.0829761577873793,
+        "cpuMsPerAppCompletion": 2.8632122807017546,
+        "elu": 1,
+        "completed": 5130,
+        "declaredBytes": 88005150,
+        "cpuCoresSamples": {
+          "n": 13,
+          "mean": 1.0811636538513174,
+          "p50": 1.0748472851989488,
+          "p95": 1.1386854763681524,
+          "p99": 1.1386854763681524,
+          "max": 1.1386854763681524
+        },
+        "eluSamples": {
+          "n": 13,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 13,
+          "mean": 29.42188207692308,
+          "p50": 27.066367,
+          "p95": 39.616511,
+          "p99": 39.616511,
+          "max": 39.616511
+        },
+        "maxDelayMs": 506.200063
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 509,
+        "active/null/null": 1
+      },
+      "server": null,
+      "checks": {
+        "leases": 7500,
+        "waits": 7500,
+        "queries": 7500,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-28-primary-baseline-r2-posts500-on",
+      "build": "baseline",
+      "repeat": 2,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 15,
+      "startedAt": 1789122028352,
+      "endedAt": 1789122058171,
+      "sent": 7005,
+      "completed": 7005,
+      "errors": 31,
+      "capped": 495,
+      "bytes": 119638970,
+      "bytesPerCompletion": 17079.082084225553,
+      "backlog": 1999,
+      "drainSeconds": 14.812473753999999,
+      "rpsIncludingDrain": 234.96876031832565,
+      "httpMs": {
+        "p50": 1037.110928,
+        "p95": 12799.059167,
+        "p99": 23456.337329,
+        "max": 24593.996841
+      },
+      "schedulerLagP99Ms": 3.8983209999987594,
+      "holdMs": {
+        "n": 6974,
+        "mean": 26.970680231287577,
+        "p50": 26.18395899999996,
+        "p95": 38.33042699999896,
+        "p99": 45.58994700000039,
+        "max": 8459.774191000004
+      },
+      "waitMs": {
+        "n": 6974,
+        "mean": 563.0485870894736,
+        "p50": 633.507246000001,
+        "p95": 1267.4659040000006,
+        "p99": 1315.4407650000012,
+        "max": 1350.4402730000002
+      },
+      "clientQueryMs": {
+        "n": 6974,
+        "mean": 25.215864135646733,
+        "p50": 24.593675000000076,
+        "p95": 36.222475000000486,
+        "p99": 43.6352050000005,
+        "max": 8458.343359999999
+      },
+      "postQueryHoldMs": {
+        "n": 6974,
+        "mean": 1.741418001003733,
+        "p50": 1.5334549999970477,
+        "p95": 2.4963669999997364,
+        "p99": 4.361030000000028,
+        "max": 359.45914900000025
+      },
+      "maxPoolWaiting": 488,
+      "maxAppActive": 498,
+      "aggregate": {
+        "intervals": 13,
+        "wallMs": 13328.566053999999,
+        "cpuCores": 1.0349825288114973,
+        "cpuMsPerAppCompletion": 3.158157738095238,
+        "elu": 1,
+        "completed": 4368,
+        "declaredBytes": 74933040,
+        "cpuCoresSamples": {
+          "n": 13,
+          "mean": 1.0344996452765882,
+          "p50": 1.0361899578813212,
+          "p95": 1.1320029310906852,
+          "p99": 1.1320029310906852,
+          "max": 1.1320029310906852
+        },
+        "eluSamples": {
+          "n": 13,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 13,
+          "mean": 37.18663776923077,
+          "p50": 34.832383,
+          "p95": 61.931519,
+          "p99": 61.931519,
+          "max": 61.931519
+        },
+        "maxDelayMs": 411.041791
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 580,
+        "active/null/null": 3,
+        "active/Client/ClientRead": 1
+      },
+      "server": null,
+      "checks": {
+        "leases": 6974,
+        "waits": 6974,
+        "queries": 6974,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": false,
+        "waitCountMatches": false,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-29-primary-baseline-r3-posts100-on",
+      "build": "baseline",
+      "repeat": 3,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789122131304,
+      "endedAt": 1789122146307,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0008482209999982615,
+      "rpsIncludingDrain": 99.99434551308364,
+      "httpMs": {
+        "p50": 3.1351300000001174,
+        "p95": 4.112258000000111,
+        "p99": 19.21432900000036,
+        "max": 32.448741000000155
+      },
+      "schedulerLagP99Ms": 50.38307700000041,
+      "holdMs": {
+        "n": 1500,
+        "mean": 2.2010792026666666,
+        "p50": 1.9558369999995193,
+        "p95": 2.52879700000085,
+        "p99": 10.217811000000438,
+        "max": 24.546089999999822
+      },
+      "waitMs": {
+        "n": 1500,
+        "mean": 0.03666995399997298,
+        "p50": 0.02187499999854481,
+        "p95": 0.03629200000068522,
+        "p99": 0.05379200000061246,
+        "max": 19.834877999999662
+      },
+      "clientQueryMs": {
+        "n": 1500,
+        "mean": 0.6297620439999779,
+        "p50": 0.3912930000005872,
+        "p95": 0.879585999999108,
+        "p99": 8.513350000000173,
+        "max": 23.23246199999994
+      },
+      "postQueryHoldMs": {
+        "n": 1500,
+        "mean": 1.55774452533336,
+        "p50": 1.5247119999985443,
+        "p95": 1.853170999998838,
+        "p99": 2.0148799999988114,
+        "max": 4.112467000000834
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 2,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14002.381546999999,
+        "cpuCores": 0.29481891963474294,
+        "cpuMsPerAppCompletion": 2.946586009992862,
+        "elu": 0.291423411443438,
+        "completed": 1401,
+        "declaredBytes": 24034155,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.29481992095331117,
+          "p50": 0.29279484576958037,
+          "p95": 0.3576218075097925,
+          "p99": 0.3576218075097925,
+          "max": 0.3576218075097925
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.29142367614764836,
+          "p50": 0.2916039528946465,
+          "p95": 0.3147584531999103,
+          "p99": 0.3147584531999103,
+          "max": 0.3147584531999103
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 11.321342999999999,
+          "p50": 11.321343,
+          "p95": 11.730943,
+          "p99": 11.730943,
+          "max": 11.730943
+        },
+        "maxDelayMs": 23.265279
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 266,
+        "active/null/null": 2,
+        "idle/null/null": 3
+      },
+      "server": null,
+      "checks": {
+        "leases": 1500,
+        "waits": 1500,
+        "queries": 1500,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-30-primary-baseline-r3-posts100-off",
+      "build": "baseline",
+      "repeat": 3,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789122150713,
+      "endedAt": 1789122165716,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0009088500000000721,
+      "rpsIncludingDrain": 99.99394136709256,
+      "httpMs": {
+        "p50": 3.3799269999981334,
+        "p95": 4.201844000000165,
+        "p99": 23.511818999999377,
+        "max": 44.536175999999614
+      },
+      "schedulerLagP99Ms": 45.104481000000305,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-31-primary-patched-r3-posts100-on",
+      "build": "patched",
+      "repeat": 3,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789122170424,
+      "endedAt": 1789122185425,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0004796559999995509,
+      "rpsIncludingDrain": 99.99680239558334,
+      "httpMs": {
+        "p50": 2.951260999999249,
+        "p95": 3.6461399999989226,
+        "p99": 6.716860000000452,
+        "max": 31.612828000001173
+      },
+      "schedulerLagP99Ms": 4.0178820000001,
+      "holdMs": {
+        "n": 1500,
+        "mean": 0.4537144599999838,
+        "p50": 0.38600099999985105,
+        "p95": 0.5513350000001083,
+        "p99": 2.5174669999996695,
+        "max": 10.954416000000492
+      },
+      "waitMs": {
+        "n": 1500,
+        "mean": 0.02182245199999913,
+        "p50": 0.020791999999346444,
+        "p95": 0.03187499999967258,
+        "p99": 0.04141700000036508,
+        "max": 0.11545900000055553
+      },
+      "clientQueryMs": {
+        "n": 1500,
+        "mean": 0.436616369999977,
+        "p50": 0.3698760000006587,
+        "p95": 0.5215859999989334,
+        "p99": 2.489633999999569,
+        "max": 10.947249999999258
+      },
+      "postQueryHoldMs": {
+        "n": 1500,
+        "mean": 0.004595140000018849,
+        "p50": 0.003917000000001281,
+        "p95": 0.008834000000206288,
+        "p99": 0.01283300000068266,
+        "max": 0.035333000001628534
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14007.303214,
+        "cpuCores": 0.2847388208183897,
+        "cpuMsPerAppCompletion": 2.8468401142041397,
+        "elu": 0.2805091943725197,
+        "completed": 1401,
+        "declaredBytes": 24034155,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.2847363821876954,
+          "p50": 0.2801522724119422,
+          "p95": 0.3321100445219145,
+          "p99": 0.3321100445219145,
+          "max": 0.3321100445219145
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.28050856045277095,
+          "p50": 0.27898085453360477,
+          "p95": 0.29900986837700866,
+          "p99": 0.29900986837700866,
+          "max": 0.29900986837700866
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 11.236497285714284,
+          "p50": 11.173887,
+          "p95": 11.640831,
+          "p99": 11.640831,
+          "max": 11.640831
+        },
+        "maxDelayMs": 13.647871
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 227,
+        "active/null/null": 4,
+        "idle/null/null": 1
+      },
+      "server": null,
+      "checks": {
+        "leases": 1500,
+        "waits": 1500,
+        "queries": 1500,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-32-primary-patched-r3-posts100-off",
+      "build": "patched",
+      "repeat": 3,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789122190410,
+      "endedAt": 1789122205413,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0012351679999991205,
+      "rpsIncludingDrain": 99.99176622467306,
+      "httpMs": {
+        "p50": 2.939555000000837,
+        "p95": 3.4591830000026675,
+        "p99": 7.154576000000816,
+        "max": 31.79031599999871
+      },
+      "schedulerLagP99Ms": 1.350801999999021,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-33-primary-baseline-r3-posts500-on",
+      "build": "baseline",
+      "repeat": 3,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789122209791,
+      "endedAt": 1789122223829,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1351,
+      "drainSeconds": 4.032701366000001,
+      "rpsIncludingDrain": 356.3105826590566,
+      "httpMs": {
+        "p50": 655.0168869999998,
+        "p95": 7144.518312,
+        "p99": 7583.017595,
+        "max": 7880.368155
+      },
+      "schedulerLagP99Ms": 3.0380699999986973,
+      "holdMs": {
+        "n": 5000,
+        "mean": 22.546328262399996,
+        "p50": 25.02379699999983,
+        "p95": 29.49702300000081,
+        "p99": 41.62133300000005,
+        "max": 323.71551100000033
+      },
+      "waitMs": {
+        "n": 5000,
+        "mean": 379.9532653037999,
+        "p50": 351.1399369999999,
+        "p95": 1082.6086220000016,
+        "p99": 1177.162225,
+        "max": 1196.7528760000005
+      },
+      "clientQueryMs": {
+        "n": 5000,
+        "mean": 20.863358100199974,
+        "p50": 23.405077000000347,
+        "p95": 27.930231000000276,
+        "p99": 39.62558700000045,
+        "max": 322.071668999999
+      },
+      "postQueryHoldMs": {
+        "n": 5000,
+        "mean": 1.6706575350000055,
+        "p50": 1.4730490000001737,
+        "p95": 1.9224270000013348,
+        "p99": 3.7326029999994716,
+        "max": 289.65024599999924
+      },
+      "maxPoolWaiting": 349,
+      "maxAppActive": 359,
+      "aggregate": {
+        "intervals": 8,
+        "wallMs": 8273.703635,
+        "cpuCores": 1.0806606562721048,
+        "cpuMsPerAppCompletion": 2.981349116372124,
+        "elu": 1,
+        "completed": 2999,
+        "declaredBytes": 51447845,
+        "cpuCoresSamples": {
+          "n": 8,
+          "mean": 1.0800306212212136,
+          "p50": 1.0773910983106538,
+          "p95": 1.123736843832193,
+          "p99": 1.123736843832193,
+          "max": 1.123736843832193
+        },
+        "eluSamples": {
+          "n": 8,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 8,
+          "mean": 31.496191,
+          "p50": 28.540927,
+          "p95": 50.987007,
+          "p99": 50.987007,
+          "max": 50.987007
+        },
+        "maxDelayMs": 322.174975
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 277,
+        "active/Client/ClientRead": 1,
+        "active/null/null": 2
+      },
+      "server": null,
+      "checks": {
+        "leases": 5000,
+        "waits": 5000,
+        "queries": 5000,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-34-primary-patched-r3-posts500-on",
+      "build": "patched",
+      "repeat": 3,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789122228551,
+      "endedAt": 1789122243668,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1388,
+      "drainSeconds": 5.110893119,
+      "rpsIncludingDrain": 330.88712630182954,
+      "httpMs": {
+        "p50": 708.0580169999994,
+        "p95": 7109.686519000001,
+        "p99": 7683.747352,
+        "max": 8071.975071999999
+      },
+      "schedulerLagP99Ms": 13.294619000000239,
+      "holdMs": {
+        "n": 5000,
+        "mean": 22.158449617400013,
+        "p50": 24.44268700000066,
+        "p95": 33.7270380000009,
+        "p99": 51.810771000000386,
+        "max": 348.5987349999996
+      },
+      "waitMs": {
+        "n": 5000,
+        "mean": 364.7094957922001,
+        "p50": 328.46832300000005,
+        "p95": 888.3236120000001,
+        "p99": 939.3647020000008,
+        "max": 969.4305760000007
+      },
+      "clientQueryMs": {
+        "n": 5000,
+        "mean": 22.141839659199995,
+        "p50": 24.4265149999992,
+        "p95": 33.69757899999968,
+        "p99": 51.77681299999858,
+        "max": 348.57519200000024
+      },
+      "postQueryHoldMs": {
+        "n": 5000,
+        "mean": 0.004669052399990415,
+        "p50": 0.0040829999998095445,
+        "p95": 0.008292000000437838,
+        "p99": 0.015709000001152162,
+        "max": 0.4343779999999242
+      },
+      "maxPoolWaiting": 347,
+      "maxAppActive": 357,
+      "aggregate": {
+        "intervals": 8,
+        "wallMs": 8256.089791999999,
+        "cpuCores": 1.0520425793353583,
+        "cpuMsPerAppCompletion": 2.9786550068587108,
+        "elu": 1,
+        "completed": 2916,
+        "declaredBytes": 50023980,
+        "cpuCoresSamples": {
+          "n": 8,
+          "mean": 1.051855681630124,
+          "p50": 1.051179188857176,
+          "p95": 1.1157492177678812,
+          "p99": 1.1157492177678812,
+          "max": 1.1157492177678812
+        },
+        "eluSamples": {
+          "n": 8,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 8,
+          "mean": 36.216831,
+          "p50": 32.882687,
+          "p95": 54.722559,
+          "p99": 54.722559,
+          "max": 54.722559
+        },
+        "maxDelayMs": 333.447167
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 298,
+        "active/null/null": 2
+      },
+      "server": null,
+      "checks": {
+        "leases": 5000,
+        "waits": 5000,
+        "queries": 5000,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-35-primary-baseline-r3-includes10-on",
+      "build": "baseline",
+      "repeat": 3,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789122248345,
+      "endedAt": 1789122263347,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0013731159999981202,
+      "rpsIncludingDrain": 9.999084673123333,
+      "httpMs": {
+        "p50": 19.257254000000103,
+        "p95": 21.88060399999995,
+        "p99": 31.49845499999992,
+        "max": 32.78021699999954
+      },
+      "schedulerLagP99Ms": 17.838181000000986,
+      "holdMs": {
+        "n": 150,
+        "mean": 14.9458906999999,
+        "p50": 14.435551999999916,
+        "p95": 17.026529999999184,
+        "p99": 27.39030399999956,
+        "max": 28.29785500000071
+      },
+      "waitMs": {
+        "n": 150,
+        "mean": 0.048225619999939226,
+        "p50": 0.046709000000191736,
+        "p95": 0.0626670000001468,
+        "p99": 0.09316799999942305,
+        "max": 0.09891799999968498
+      },
+      "clientQueryMs": {
+        "n": 150,
+        "mean": 2.768512360000068,
+        "p50": 2.653683999998975,
+        "p95": 3.323314000001119,
+        "p99": 4.866949999999633,
+        "max": 5.575661000000764
+      },
+      "postQueryHoldMs": {
+        "n": 150,
+        "mean": 11.913429119999819,
+        "p50": 11.46074099999987,
+        "p95": 13.943678000001455,
+        "p99": 24.54578599999968,
+        "max": 24.999249000000418
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14005.428909000002,
+        "cpuCores": 0.19982329839263901,
+        "cpuMsPerAppCompletion": 19.990078571428572,
+        "elu": 0.19325411256639563,
+        "completed": 140,
+        "declaredBytes": 34751500,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.19982095618884496,
+          "p50": 0.1912635503783495,
+          "p95": 0.2672917456060789,
+          "p99": 0.2672917456060789,
+          "max": 0.2672917456060789
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.1932540454453671,
+          "p50": 0.19040123939935175,
+          "p95": 0.22424841168430765,
+          "p99": 0.22424841168430765,
+          "max": 0.22424841168430765
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 18.914156714285713,
+          "p50": 18.825215,
+          "p95": 21.102591,
+          "p99": 21.102591,
+          "max": 21.102591
+        },
+        "maxDelayMs": 92.471295
+      },
+      "pgActivityBackendSamples": {
+        "active/null/null": 11,
+        "idle/Client/ClientRead": 186
+      },
+      "server": null,
+      "checks": {
+        "leases": 150,
+        "waits": 150,
+        "queries": 150,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-36-primary-baseline-r3-includes10-off",
+      "build": "baseline",
+      "repeat": 3,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789122267979,
+      "endedAt": 1789122282981,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0014147769999972581,
+      "rpsIncludingDrain": 9.999056904284677,
+      "httpMs": {
+        "p50": 19.36647500000072,
+        "p95": 23.737291999999798,
+        "p99": 33.16910900000039,
+        "max": 41.184541999999965
+      },
+      "schedulerLagP99Ms": 22.726534999999785,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-37-primary-patched-r3-includes10-on",
+      "build": "patched",
+      "repeat": 3,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789122287832,
+      "endedAt": 1789122302843,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.010220987000000292,
+      "rpsIncludingDrain": 9.993190648552842,
+      "httpMs": {
+        "p50": 18.723566000000574,
+        "p95": 21.050498999999036,
+        "p99": 27.959050999999818,
+        "max": 34.53940200000034
+      },
+      "schedulerLagP99Ms": 25.952331999999842,
+      "holdMs": {
+        "n": 150,
+        "mean": 3.0186185133332977,
+        "p50": 2.652146000000357,
+        "p95": 4.866040000000794,
+        "p99": 5.145958000000974,
+        "max": 5.435710999998264
+      },
+      "waitMs": {
+        "n": 150,
+        "mean": 0.04449089333337118,
+        "p50": 0.04287500000100408,
+        "p95": 0.05908400000043912,
+        "p99": 0.07241699999940465,
+        "max": 0.07433399999990797
+      },
+      "clientQueryMs": {
+        "n": 150,
+        "mean": 2.987847099999987,
+        "p50": 2.62060399999973,
+        "p95": 4.836247999999614,
+        "p99": 5.111457999999402,
+        "max": 5.406252000000677
+      },
+      "postQueryHoldMs": {
+        "n": 150,
+        "mean": 0.009414519999891126,
+        "p50": 0.009332999999969616,
+        "p95": 0.01333399999930407,
+        "p99": 0.019291000000521308,
+        "max": 0.02233399999749963
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14007.978199999998,
+        "cpuCores": 0.19381647809817412,
+        "cpuMsPerAppCompletion": 19.39269285714286,
+        "elu": 0.18352735232506978,
+        "completed": 140,
+        "declaredBytes": 34751500,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.19381672017031717,
+          "p50": 0.19388641254121222,
+          "p95": 0.20658782119733587,
+          "p99": 0.20658782119733587,
+          "max": 0.20658782119733587
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.18352800841418274,
+          "p50": 0.18262118240707734,
+          "p95": 0.19693318756159534,
+          "p99": 0.19693318756159534,
+          "max": 0.19693318756159534
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 18.439020714285714,
+          "p50": 18.415615,
+          "p95": 19.628031,
+          "p99": 19.628031,
+          "max": 19.628031
+        },
+        "maxDelayMs": 62.357503
+      },
+      "pgActivityBackendSamples": {
+        "active/null/null": 15,
+        "idle/Client/ClientRead": 180
+      },
+      "server": null,
+      "checks": {
+        "leases": 150,
+        "waits": 150,
+        "queries": 150,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-38-primary-patched-r3-includes10-off",
+      "build": "patched",
+      "repeat": 3,
+      "group": "primary",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789122307663,
+      "endedAt": 1789122322664,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.001061460999999042,
+      "rpsIncludingDrain": 9.999292409405323,
+      "httpMs": {
+        "p50": 19.264326999999867,
+        "p95": 32.35361499999999,
+        "p99": 140.23007199999847,
+        "max": 154.01660599999923
+      },
+      "schedulerLagP99Ms": 45.96278900000016,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": 0,
+      "maxAppActive": 0,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "leases": 0,
+        "waits": 0,
+        "queries": 0,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": true
+      }
+    },
+    {
+      "label": "lat-39-primary-baseline-r3-includes80-on",
+      "build": "baseline",
+      "repeat": 3,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789122327225,
+      "endedAt": 1789122348476,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 343,
+      "drainSeconds": 6.247956687999999,
+      "rpsIncludingDrain": 56.47601873537855,
+      "httpMs": {
+        "p50": 1213.195282999999,
+        "p95": 10790.428372000002,
+        "p99": 11827.430705,
+        "max": 11957.351051000001
+      },
+      "schedulerLagP99Ms": 2.674565999999686,
+      "holdMs": {
+        "n": 1200,
+        "mean": 136.7194064166668,
+        "p50": 161.94190200000048,
+        "p95": 205.51713799999925,
+        "p99": 377.3553579999989,
+        "max": 412.4144890000025
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 425.01008569916655,
+        "p50": 305.0620799999997,
+        "p95": 1264.6655690000007,
+        "p99": 1390.2192250000007,
+        "max": 1452.7511720000002
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 121.48467025333319,
+        "p50": 146.63711599999988,
+        "p95": 186.82799599999998,
+        "p99": 361.52892000000065,
+        "max": 396.9075479999992
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 12.485399685833364,
+        "p50": 10.900474000000031,
+        "p95": 14.495219999997062,
+        "p99": 19.650978999998188,
+        "max": 256.97999000000345
+      },
+      "maxPoolWaiting": 76,
+      "maxAppActive": 86,
+      "aggregate": {
+        "intervals": 12,
+        "wallMs": 13306.115653000003,
+        "cpuCores": 1.0755543821515887,
+        "cpuMsPerAppCompletion": 18.73226570680628,
+        "elu": 1,
+        "completed": 764,
+        "declaredBytes": 189643900,
+        "cpuCoresSamples": {
+          "n": 12,
+          "mean": 1.075402955190683,
+          "p50": 1.072821807797409,
+          "p95": 1.1185493887052105,
+          "p99": 1.1185493887052105,
+          "max": 1.1185493887052105
+        },
+        "eluSamples": {
+          "n": 12,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 12,
+          "mean": 226.42687899999999,
+          "p50": 181.141503,
+          "p95": 412.876799,
+          "p99": 412.876799,
+          "max": 412.876799
+        },
+        "maxDelayMs": 412.876799
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 412,
+        "active/Client/ClientRead": 1,
+        "active/null/null": 7
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-40-small-response-baseline-r3-small80-on",
+      "build": "baseline",
+      "repeat": 3,
+      "group": "small-response",
+      "observe": true,
+      "endpoint": "/posts-with-comments-small",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789122353534,
+      "endedAt": 1789122371854,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37200,
+      "bytesPerCompletion": 31,
+      "backlog": 220,
+      "drainSeconds": 3.3158323489999972,
+      "rpsIncludingDrain": 65.51708801077322,
+      "httpMs": {
+        "p50": 959.2378149999986,
+        "p95": 8418.124401,
+        "p99": 10230.407411999999,
+        "max": 10781.904403999999
+      },
+      "schedulerLagP99Ms": 3.764038000000255,
+      "holdMs": {
+        "n": 1200,
+        "mean": 132.9493775991667,
+        "p50": 134.20406600000024,
+        "p95": 219.26145200000065,
+        "p99": 388.94066199999907,
+        "max": 563.9350080000004
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 484.74984140583354,
+        "p50": 398.2789109999994,
+        "p95": 1256.654907,
+        "p99": 1386.3641800000005,
+        "max": 1454.818142
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 119.2290974000001,
+        "p50": 121.88520599999902,
+        "p95": 196.134270999999,
+        "p99": 374.9743589999998,
+        "max": 550.9475849999999
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 13.27440554499998,
+        "p50": 11.420240000003105,
+        "p95": 17.32121200000074,
+        "p99": 31.917280999998184,
+        "max": 262.5103199999994
+      },
+      "maxPoolWaiting": 86,
+      "maxAppActive": 96,
+      "aggregate": {
+        "intervals": 12,
+        "wallMs": 13252.862012,
+        "cpuCores": 1.0726150311629759,
+        "cpuMsPerAppCompletion": 16.320572904707234,
+        "elu": 1,
+        "completed": 871,
+        "declaredBytes": 27001,
+        "cpuCoresSamples": {
+          "n": 12,
+          "mean": 1.0727707679326326,
+          "p50": 1.08194934748125,
+          "p95": 1.110768217292947,
+          "p99": 1.110768217292947,
+          "max": 1.110768217292947
+        },
+        "eluSamples": {
+          "n": 12,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 12,
+          "mean": 180.895743,
+          "p50": 152.961023,
+          "p95": 385.351679,
+          "p99": 385.351679,
+          "max": 385.351679
+        },
+        "maxDelayMs": 385.351679
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 354,
+        "active/null/null": 6
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-41-primary-patched-r3-includes80-on",
+      "build": "patched",
+      "repeat": 3,
+      "group": "primary",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789122377029,
+      "endedAt": 1789122397583,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 312,
+      "drainSeconds": 5.550271974000005,
+      "rpsIncludingDrain": 58.393387762372576,
+      "httpMs": {
+        "p50": 1069.5789910000003,
+        "p95": 11306.174477999999,
+        "p99": 12509.485,
+        "max": 12737.069551999999
+      },
+      "schedulerLagP99Ms": 2.9007879999999204,
+      "holdMs": {
+        "n": 1200,
+        "mean": 135.00556174583298,
+        "p50": 153.67273099999875,
+        "p95": 193.17795599999954,
+        "p99": 384.13948099999834,
+        "max": 546.0465899999999
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 437.9248618158337,
+        "p50": 364.89965200000006,
+        "p95": 1137.350262,
+        "p99": 1397.4946049999999,
+        "max": 1447.1741380000021
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 134.97707463583342,
+        "p50": 153.63777099999788,
+        "p95": 193.14353899999878,
+        "p99": 384.1111890000029,
+        "max": 546.0253809999995
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 0.00916230166665817,
+        "p50": 0.008625000002211891,
+        "p95": 0.01391700000021956,
+        "p99": 0.027040999999371707,
+        "max": 0.04283399999985704
+      },
+      "maxPoolWaiting": 80,
+      "maxAppActive": 90,
+      "aggregate": {
+        "intervals": 12,
+        "wallMs": 13112.301202999999,
+        "cpuCores": 1.071164762199522,
+        "cpuMsPerAppCompletion": 18.217166018158235,
+        "elu": 1,
+        "completed": 771,
+        "declaredBytes": 191381475,
+        "cpuCoresSamples": {
+          "n": 12,
+          "mean": 1.0706452652194265,
+          "p50": 1.07310926728079,
+          "p95": 1.1141633028564542,
+          "p99": 1.1141633028564542,
+          "max": 1.1141633028564542
+        },
+        "eluSamples": {
+          "n": 12,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 12,
+          "mean": 203.063295,
+          "p50": 178.257919,
+          "p95": 367.263743,
+          "p99": 367.263743,
+          "max": 367.263743
+        },
+        "maxDelayMs": 367.263743
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 405,
+        "active/null/null": 5
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-42-small-response-patched-r3-small80-on",
+      "build": "patched",
+      "repeat": 3,
+      "group": "small-response",
+      "observe": true,
+      "endpoint": "/posts-with-comments-small",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789122402511,
+      "endedAt": 1789122419164,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37200,
+      "bytesPerCompletion": 31,
+      "backlog": 106,
+      "drainSeconds": 1.6507547420000002,
+      "rpsIncludingDrain": 72.06880520395332,
+      "httpMs": {
+        "p50": 465.388868,
+        "p95": 1832.8843479999996,
+        "p99": 3807.025396000001,
+        "max": 4486.062062000001
+      },
+      "schedulerLagP99Ms": 5.83172900000136,
+      "holdMs": {
+        "n": 1200,
+        "mean": 106.9575620816669,
+        "p50": 126.16566199999943,
+        "p95": 157.95710899999904,
+        "p99": 366.96291700000074,
+        "max": 389.2359779999988
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 235.58085617749995,
+        "p50": 88.75828999999976,
+        "p95": 776.9765080000016,
+        "p99": 836.1293969999988,
+        "max": 867.3255119999994
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 106.9310267166667,
+        "p50": 126.14809699999932,
+        "p95": 157.92581699999937,
+        "p99": 366.9354579999999,
+        "max": 389.2007689999991
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 0.00944968499997799,
+        "p50": 0.008958000000347965,
+        "p95": 0.013624999999592546,
+        "p99": 0.022957999999562162,
+        "max": 0.047374999998282874
+      },
+      "maxPoolWaiting": 64,
+      "maxAppActive": 74,
+      "aggregate": {
+        "intervals": 13,
+        "wallMs": 13659.038553999999,
+        "cpuCores": 1.0713950284381049,
+        "cpuMsPerAppCompletion": 14.648874874874874,
+        "elu": 1,
+        "completed": 999,
+        "declaredBytes": 30969,
+        "cpuCoresSamples": {
+          "n": 13,
+          "mean": 1.0713003340862124,
+          "p50": 1.0712729716540255,
+          "p95": 1.1259073327960314,
+          "p99": 1.1259073327960314,
+          "max": 1.1259073327960314
+        },
+        "eluSamples": {
+          "n": 13,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 13,
+          "mean": 150.95965438461536,
+          "p50": 135.266303,
+          "p95": 380.633087,
+          "p99": 380.633087,
+          "max": 380.633087
+        },
+        "maxDelayMs": 380.633087
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 324,
+        "active/null/null": 6
+      },
+      "server": null,
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-43-server-log-patched-r1-posts100-on",
+      "build": "patched",
+      "repeat": 1,
+      "group": "server-log",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789122424396,
+      "endedAt": 1789122439397,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.00025567000000314977,
+      "rpsIncludingDrain": 99.99829556238488,
+      "httpMs": {
+        "p50": 2.961702000000514,
+        "p95": 4.12317400000029,
+        "p99": 7.430630999999266,
+        "max": 32.67501100000118
+      },
+      "schedulerLagP99Ms": 1.6785599999993792,
+      "holdMs": {
+        "n": 1500,
+        "mean": 0.4780594260000083,
+        "p50": 0.40733799999907205,
+        "p95": 0.827344000001176,
+        "p99": 2.362694000000374,
+        "max": 5.103226999999606
+      },
+      "waitMs": {
+        "n": 1500,
+        "mean": 0.02577708000000075,
+        "p50": 0.0247079999971902,
+        "p95": 0.037167000000408734,
+        "p99": 0.04954300000008516,
+        "max": 0.17196100000001024
+      },
+      "clientQueryMs": {
+        "n": 1500,
+        "mean": 0.45620770933332944,
+        "p50": 0.38558799999918847,
+        "p95": 0.8003009999993083,
+        "p99": 2.332484999999906,
+        "max": 5.0701849999986734
+      },
+      "postQueryHoldMs": {
+        "n": 1500,
+        "mean": 0.005556810000031571,
+        "p50": 0.004582999999911408,
+        "p95": 0.010000000000218279,
+        "p99": 0.018374999999650754,
+        "max": 0.0488340000010794
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14004.967179999998,
+        "cpuCores": 0.28667621625943723,
+        "cpuMsPerAppCompletion": 2.8677792857142856,
+        "elu": 0.2833185645448826,
+        "completed": 1400,
+        "declaredBytes": 24017000,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.28667991394917236,
+          "p50": 0.28190610914004816,
+          "p95": 0.3228583722554778,
+          "p99": 0.3228583722554778,
+          "max": 0.3228583722554778
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.28331982612375467,
+          "p50": 0.28260504099550576,
+          "p95": 0.3172763859141437,
+          "p99": 0.3172763859141437,
+          "max": 0.3172763859141437
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 11.218943000000001,
+          "p50": 11.149311,
+          "p95": 12.173311,
+          "p99": 12.173311,
+          "max": 12.173311
+        },
+        "maxDelayMs": 31.260671
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 201,
+        "idle/null/null": 2,
+        "active/null/null": 3
+      },
+      "server": {
+        "phases": {
+          "statement": 1500
+        },
+        "statementMs": {
+          "n": 1500,
+          "mean": 0.16004866666666712,
+          "p50": 0.153,
+          "p95": 0.221,
+          "p99": 0.292,
+          "max": 0.97
+        },
+        "executeMs": null,
+        "phaseMs": {
+          "n": 1500,
+          "mean": 0.16004866666666712,
+          "p50": 0.153,
+          "p95": 0.221,
+          "p99": 0.292,
+          "max": 0.97
+        },
+        "countMatches": true,
+        "pids": [1196612, 1196592]
+      },
+      "checks": {
+        "leases": 1500,
+        "waits": 1500,
+        "queries": 1500,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-44-server-log-baseline-r1-posts100-on",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "server-log",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 100,
+      "seconds": 15,
+      "startedAt": 1789122443767,
+      "endedAt": 1789122458768,
+      "sent": 1500,
+      "completed": 1500,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 25732500,
+      "bytesPerCompletion": 17155,
+      "backlog": 0,
+      "drainSeconds": 0.0007305399999992801,
+      "rpsIncludingDrain": 99.99512997051676,
+      "httpMs": {
+        "p50": 2.851908999999978,
+        "p95": 3.588752999999997,
+        "p99": 6.028699999998935,
+        "max": 20.37850299999991
+      },
+      "schedulerLagP99Ms": 1.3516140000001542,
+      "holdMs": {
+        "n": 1500,
+        "mean": 1.8794318966666654,
+        "p50": 1.820147000000361,
+        "p95": 2.211860000001252,
+        "p99": 2.8819100000000617,
+        "max": 8.287600999999995
+      },
+      "waitMs": {
+        "n": 1500,
+        "mean": 0.0317647880000192,
+        "p50": 0.018958000000566244,
+        "p95": 0.03170900000077381,
+        "p99": 0.04187500000034561,
+        "max": 10.445628999998007
+      },
+      "clientQueryMs": {
+        "n": 1500,
+        "mean": 0.3895915286666723,
+        "p50": 0.3462120000003779,
+        "p95": 0.5250489999998535,
+        "p99": 1.4168090000002849,
+        "max": 5.3045230000006995
+      },
+      "postQueryHoldMs": {
+        "n": 1500,
+        "mean": 1.4785034319999828,
+        "p50": 1.4433929999995598,
+        "p95": 1.7148120000001654,
+        "p99": 1.8813559999998688,
+        "max": 2.965661000000182
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14004.099652,
+        "cpuCores": 0.27557773051470996,
+        "cpuMsPerAppCompletion": 2.7565842857142857,
+        "elu": 0.2742980423083618,
+        "completed": 1400,
+        "declaredBytes": 24017000,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.2755749446913799,
+          "p50": 0.2792553743548173,
+          "p95": 0.3307730213235627,
+          "p99": 0.3307730213235627,
+          "max": 0.3307730213235627
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.2742959002315121,
+          "p50": 0.27757937819735473,
+          "p95": 0.30301740559972323,
+          "p99": 0.30301740559972323,
+          "max": 0.30301740559972323
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 11.234156714285712,
+          "p50": 11.173887,
+          "p95": 12.009471,
+          "p99": 12.009471,
+          "max": 12.009471
+        },
+        "maxDelayMs": 21.577727
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 198,
+        "active/null/null": 5,
+        "active/Client/ClientRead": 1
+      },
+      "server": {
+        "phases": {
+          "statement": 1500
+        },
+        "statementMs": {
+          "n": 1500,
+          "mean": 0.14312866666666663,
+          "p50": 0.135,
+          "p95": 0.203,
+          "p99": 0.239,
+          "max": 0.803
+        },
+        "executeMs": null,
+        "phaseMs": {
+          "n": 1500,
+          "mean": 0.14312866666666663,
+          "p50": 0.135,
+          "p95": 0.203,
+          "p99": 0.239,
+          "max": 0.803
+        },
+        "countMatches": true,
+        "pids": [1196915, 1197053, 1197075]
+      },
+      "checks": {
+        "leases": 1500,
+        "waits": 1500,
+        "queries": 1500,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-45-server-log-patched-r1-posts500-on",
+      "build": "patched",
+      "repeat": 1,
+      "group": "server-log",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789122463617,
+      "endedAt": 1789122479443,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1458,
+      "drainSeconds": 5.820168507999998,
+      "rpsIncludingDrain": 316.05225933412675,
+      "httpMs": {
+        "p50": 678.4823510000006,
+        "p95": 8579.758906,
+        "p99": 8854.713029999999,
+        "max": 11340.693102000001
+      },
+      "schedulerLagP99Ms": 2.9111089999996693,
+      "holdMs": {
+        "n": 5000,
+        "mean": 22.227192397399996,
+        "p50": 24.649940000001152,
+        "p95": 33.1625839999997,
+        "p99": 53.894303000000036,
+        "max": 317.5494120000003
+      },
+      "waitMs": {
+        "n": 5000,
+        "mean": 349.65798123759976,
+        "p50": 326.30088199999955,
+        "p95": 835.0211209999998,
+        "p99": 854.8685519999999,
+        "max": 866.561079000001
+      },
+      "clientQueryMs": {
+        "n": 5000,
+        "mean": 22.209352689800028,
+        "p50": 24.62898099999984,
+        "p95": 33.1411250000001,
+        "p99": 53.87059399999998,
+        "max": 317.5297449999998
+      },
+      "postQueryHoldMs": {
+        "n": 5000,
+        "mean": 0.004849038800012295,
+        "p50": 0.004249999999956344,
+        "p95": 0.009042000001500128,
+        "p99": 0.01375000000007276,
+        "max": 0.11525100000017119
+      },
+      "maxPoolWaiting": 347,
+      "maxAppActive": 357,
+      "aggregate": {
+        "intervals": 9,
+        "wallMs": 9112.055567,
+        "cpuCores": 1.0921221810850268,
+        "cpuMsPerAppCompletion": 3.034912473315035,
+        "elu": 1,
+        "completed": 3279,
+        "declaredBytes": 56251245,
+        "cpuCoresSamples": {
+          "n": 9,
+          "mean": 1.0919891725066548,
+          "p50": 1.0940189503793185,
+          "p95": 1.1395925427668465,
+          "p99": 1.1395925427668465,
+          "max": 1.1395925427668465
+        },
+        "eluSamples": {
+          "n": 9,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 9,
+          "mean": 33.20490566666667,
+          "p50": 29.622271,
+          "p95": 55.640063,
+          "p99": 55.640063,
+          "max": 55.640063
+        },
+        "maxDelayMs": 314.834943
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 306,
+        "active/null/null": 3,
+        "idle/null/null": 1
+      },
+      "server": {
+        "phases": {
+          "statement": 5000
+        },
+        "statementMs": {
+          "n": 5000,
+          "mean": 0.14568499999999995,
+          "p50": 0.136,
+          "p95": 0.217,
+          "p99": 0.321,
+          "max": 2.299
+        },
+        "executeMs": null,
+        "phaseMs": {
+          "n": 5000,
+          "mean": 0.14568499999999995,
+          "p50": 0.136,
+          "p95": 0.217,
+          "p99": 0.321,
+          "max": 2.299
+        },
+        "countMatches": true,
+        "pids": [
+          1197151, 1197155, 1197154, 1197150, 1197149, 1197156, 1197153, 1197157, 1197146, 1197152
+        ]
+      },
+      "checks": {
+        "leases": 5000,
+        "waits": 5000,
+        "queries": 5000,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-46-server-log-baseline-r1-posts500-on",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "server-log",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789122484246,
+      "endedAt": 1789122497959,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1309,
+      "drainSeconds": 3.7081958329999996,
+      "rpsIncludingDrain": 364.7452998857374,
+      "httpMs": {
+        "p50": 699.744772,
+        "p95": 6851.850259000001,
+        "p99": 7662.752155000001,
+        "max": 7881.199833000001
+      },
+      "schedulerLagP99Ms": 3.523934000000736,
+      "holdMs": {
+        "n": 5000,
+        "mean": 22.572423749399967,
+        "p50": 25.018536999999924,
+        "p95": 30.499321999999665,
+        "p99": 45.07984199999919,
+        "max": 330.79690200000005
+      },
+      "waitMs": {
+        "n": 5000,
+        "mean": 375.50174496299974,
+        "p50": 335.248063,
+        "p95": 887.0095130000009,
+        "p99": 914.5025750000004,
+        "max": 937.1153080000004
+      },
+      "clientQueryMs": {
+        "n": 5000,
+        "mean": 20.868277689999964,
+        "p50": 23.377017999999225,
+        "p95": 28.69079099999999,
+        "p99": 41.02057799999966,
+        "max": 329.398967000001
+      },
+      "postQueryHoldMs": {
+        "n": 5000,
+        "mean": 1.691883433199984,
+        "p50": 1.4850200000000768,
+        "p95": 1.830732999999782,
+        "p99": 3.912093000000823,
+        "max": 297.3950870000008
+      },
+      "maxPoolWaiting": 353,
+      "maxAppActive": 363,
+      "aggregate": {
+        "intervals": 8,
+        "wallMs": 8234.179499000002,
+        "cpuCores": 1.0738495561183536,
+        "cpuMsPerAppCompletion": 2.9513584779706274,
+        "elu": 1,
+        "completed": 2996,
+        "declaredBytes": 51396380,
+        "cpuCoresSamples": {
+          "n": 8,
+          "mean": 1.0731655839977396,
+          "p50": 1.062130286398277,
+          "p95": 1.1215857447756765,
+          "p99": 1.1215857447756765,
+          "max": 1.1215857447756765
+        },
+        "eluSamples": {
+          "n": 8,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 8,
+          "mean": 31.010815,
+          "p50": 30.785535,
+          "p95": 36.339711,
+          "p99": 36.339711,
+          "max": 36.339711
+        },
+        "maxDelayMs": 329.515007
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 267,
+        "active/null/null": 3
+      },
+      "server": {
+        "phases": {
+          "statement": 5000
+        },
+        "statementMs": {
+          "n": 5000,
+          "mean": 0.13755599999999846,
+          "p50": 0.134,
+          "p95": 0.186,
+          "p99": 0.233,
+          "max": 1.53
+        },
+        "executeMs": null,
+        "phaseMs": {
+          "n": 5000,
+          "mean": 0.13755599999999846,
+          "p50": 0.134,
+          "p95": 0.186,
+          "p99": 0.233,
+          "max": 1.53
+        },
+        "countMatches": true,
+        "pids": [
+          1197485, 1197487, 1197491, 1197484, 1197488, 1197490, 1197493, 1197492, 1197489, 1197486
+        ]
+      },
+      "checks": {
+        "leases": 5000,
+        "waits": 5000,
+        "queries": 5000,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-47-server-log-patched-r1-includes10-on",
+      "build": "patched",
+      "repeat": 1,
+      "group": "server-log",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789122512955,
+      "endedAt": 1789122527956,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0007735340000003532,
+      "rpsIncludingDrain": 9.999484337258844,
+      "httpMs": {
+        "p50": 18.61275899999964,
+        "p95": 21.06296000000293,
+        "p99": 23.592451000000437,
+        "max": 33.52138399999967
+      },
+      "schedulerLagP99Ms": 1.5471529999995255,
+      "holdMs": {
+        "n": 150,
+        "mean": 2.9645837333333533,
+        "p50": 2.680119999999988,
+        "p95": 4.383852000000843,
+        "p99": 5.115447000000131,
+        "max": 5.214864000001398
+      },
+      "waitMs": {
+        "n": 150,
+        "mean": 0.04285221333330507,
+        "p50": 0.042208999999274965,
+        "p95": 0.05162600000039674,
+        "p99": 0.06287599999996019,
+        "max": 0.06550100000094972
+      },
+      "clientQueryMs": {
+        "n": 150,
+        "mean": 2.933440166666681,
+        "p50": 2.6519120000011753,
+        "p95": 4.349267999999938,
+        "p99": 5.084404000001086,
+        "max": 5.181904999997641
+      },
+      "postQueryHoldMs": {
+        "n": 150,
+        "mean": 0.010250159999959579,
+        "p50": 0.010041999999884865,
+        "p95": 0.014750000000276486,
+        "p99": 0.016625000000203727,
+        "max": 0.02579200000036508
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14007.316397,
+        "cpuCores": 0.18825433261183155,
+        "cpuMsPerAppCompletion": 18.835271428571428,
+        "elu": 0.1804280927429606,
+        "completed": 140,
+        "declaredBytes": 34751500,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.18825446973852208,
+          "p50": 0.1873274143363438,
+          "p95": 0.2044119793752327,
+          "p99": 0.2044119793752327,
+          "max": 0.2044119793752327
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.1804279657497226,
+          "p50": 0.17893397428269806,
+          "p95": 0.19556824105350118,
+          "p99": 0.19556824105350118,
+          "max": 0.19556824105350118
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 18.450723571428572,
+          "p50": 18.661375,
+          "p95": 20.217855,
+          "p99": 20.217855,
+          "max": 20.217855
+        },
+        "maxDelayMs": 69.468159
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 185,
+        "active/null/null": 8
+      },
+      "server": {
+        "phases": {
+          "statement": 150
+        },
+        "statementMs": {
+          "n": 150,
+          "mean": 2.400353333333333,
+          "p50": 2.377,
+          "p95": 2.588,
+          "p99": 2.668,
+          "max": 3.948
+        },
+        "executeMs": null,
+        "phaseMs": {
+          "n": 150,
+          "mean": 2.400353333333333,
+          "p50": 2.377,
+          "p95": 2.588,
+          "p99": 2.668,
+          "max": 3.948
+        },
+        "countMatches": true,
+        "pids": [1197960]
+      },
+      "checks": {
+        "leases": 150,
+        "waits": 150,
+        "queries": 150,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-48-server-log-baseline-r1-includes10-on",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "server-log",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 10,
+      "seconds": 15,
+      "startedAt": 1789122532541,
+      "endedAt": 1789122547541,
+      "sent": 150,
+      "completed": 150,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 37233750,
+      "bytesPerCompletion": 248225,
+      "backlog": 0,
+      "drainSeconds": 0.0002489279999995375,
+      "rpsIncludingDrain": 9.999834050753961,
+      "httpMs": {
+        "p50": 19.005522999999812,
+        "p95": 29.72083500000008,
+        "p99": 40.061023999998724,
+        "max": 42.76093700000001
+      },
+      "schedulerLagP99Ms": 1.3376979999993637,
+      "holdMs": {
+        "n": 150,
+        "mean": 15.401469333333301,
+        "p50": 14.14732499999991,
+        "p95": 25.534151000000747,
+        "p99": 33.68901800000094,
+        "max": 35.42962499999976
+      },
+      "waitMs": {
+        "n": 150,
+        "mean": 0.04796875333343754,
+        "p50": 0.04479199999877892,
+        "p95": 0.06966800000009243,
+        "p99": 0.10158400000000256,
+        "max": 0.1423350000004575
+      },
+      "clientQueryMs": {
+        "n": 150,
+        "mean": 2.7338295866666096,
+        "p50": 2.6134540000002744,
+        "p95": 3.396255999999994,
+        "p99": 4.67606700000033,
+        "max": 5.021486999999979
+      },
+      "postQueryHoldMs": {
+        "n": 150,
+        "mean": 12.403530139999972,
+        "p50": 11.165492999998605,
+        "p95": 22.710236000000805,
+        "p99": 30.623475000000326,
+        "max": 32.56804299999931
+      },
+      "maxPoolWaiting": 0,
+      "maxAppActive": 1,
+      "aggregate": {
+        "intervals": 14,
+        "wallMs": 14006.243706000001,
+        "cpuCores": 0.19958463230241325,
+        "cpuMsPerAppCompletion": 19.967364285714286,
+        "elu": 0.2000639739910084,
+        "completed": 140,
+        "declaredBytes": 34751500,
+        "cpuCoresSamples": {
+          "n": 14,
+          "mean": 0.19958474223364972,
+          "p50": 0.19528021026024137,
+          "p95": 0.2754315497464183,
+          "p99": 0.2754315497464183,
+          "max": 0.2754315497464183
+        },
+        "eluSamples": {
+          "n": 14,
+          "mean": 0.20006386030216072,
+          "p50": 0.19977362841060833,
+          "p95": 0.22060217020074152,
+          "p99": 0.22060217020074152,
+          "max": 0.22060217020074152
+        },
+        "perSecondDelayP95Ms": {
+          "n": 14,
+          "mean": 18.436680142857142,
+          "p50": 18.300927,
+          "p95": 19.349503,
+          "p99": 19.349503,
+          "max": 19.349503
+        },
+        "maxDelayMs": 69.795839
+      },
+      "pgActivityBackendSamples": {
+        "active/null/null": 1,
+        "idle/Client/ClientRead": 199
+      },
+      "server": {
+        "phases": {
+          "statement": 150
+        },
+        "statementMs": {
+          "n": 150,
+          "mean": 2.3665533333333335,
+          "p50": 2.342,
+          "p95": 2.575,
+          "p99": 3.102,
+          "max": 3.133
+        },
+        "executeMs": null,
+        "phaseMs": {
+          "n": 150,
+          "mean": 2.3665533333333335,
+          "p50": 2.342,
+          "p95": 2.575,
+          "p99": 3.102,
+          "max": 3.133
+        },
+        "countMatches": true,
+        "pids": [1198238]
+      },
+      "checks": {
+        "leases": 150,
+        "waits": 150,
+        "queries": 150,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-49-server-log-patched-r1-includes80-on",
+      "build": "patched",
+      "repeat": 1,
+      "group": "server-log",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789122552467,
+      "endedAt": 1789122574350,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 374,
+      "drainSeconds": 6.878332512999997,
+      "rpsIncludingDrain": 54.84878700362406,
+      "httpMs": {
+        "p50": 1310.306962999999,
+        "p95": 10760.293544000002,
+        "p99": 12201.620905000002,
+        "max": 12501.968606000002
+      },
+      "schedulerLagP99Ms": 6.2738219999992,
+      "holdMs": {
+        "n": 1200,
+        "mean": 138.43601713500001,
+        "p50": 161.92342499999722,
+        "p95": 217.82916000000114,
+        "p99": 449.37747300000046,
+        "max": 480.99335299999984
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 432.7284106341667,
+        "p50": 296.14939199999935,
+        "p95": 1214.6749549999986,
+        "p99": 1399.0159730000014,
+        "max": 1482.182033000001
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 138.40613893916654,
+        "p50": 161.8892990000022,
+        "p95": 217.78349199999866,
+        "p99": 449.34747199999765,
+        "max": 480.9546850000006
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 0.010727262499992018,
+        "p50": 0.010625000000800355,
+        "p95": 0.015625,
+        "p99": 0.027917000001252745,
+        "max": 0.09900099999867962
+      },
+      "maxPoolWaiting": 75,
+      "maxAppActive": 85,
+      "aggregate": {
+        "intervals": 12,
+        "wallMs": 13242.352038,
+        "cpuCores": 1.049115365618858,
+        "cpuMsPerAppCompletion": 19.057277091906723,
+        "elu": 1,
+        "completed": 729,
+        "declaredBytes": 180956025,
+        "cpuCoresSamples": {
+          "n": 12,
+          "mean": 1.0481815008659752,
+          "p50": 1.0674812443785984,
+          "p95": 1.1373590658317128,
+          "p99": 1.1373590658317128,
+          "max": 1.1373590658317128
+        },
+        "eluSamples": {
+          "n": 12,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 12,
+          "mean": 222.44010566666668,
+          "p50": 193.069055,
+          "p95": 480.509951,
+          "p99": 480.509951,
+          "max": 480.509951
+        },
+        "maxDelayMs": 480.509951
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 425,
+        "active/null/null": 5
+      },
+      "server": {
+        "phases": {
+          "statement": 1200
+        },
+        "statementMs": {
+          "n": 1200,
+          "mean": 2.6308458333333338,
+          "p50": 2.27,
+          "p95": 4.908,
+          "p99": 7.307,
+          "max": 21.781
+        },
+        "executeMs": null,
+        "phaseMs": {
+          "n": 1200,
+          "mean": 2.6308458333333338,
+          "p50": 2.27,
+          "p95": 4.908,
+          "p99": 7.307,
+          "max": 21.781
+        },
+        "countMatches": true,
+        "pids": [
+          1198557, 1198554, 1198558, 1198561, 1198560, 1198559, 1198556, 1198555, 1198553, 1198562
+        ]
+      },
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-50-server-log-baseline-r1-includes80-on",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "server-log",
+      "observe": true,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789122578910,
+      "endedAt": 1789122600064,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 357,
+      "drainSeconds": 6.150128710999997,
+      "rpsIncludingDrain": 56.737243370811754,
+      "httpMs": {
+        "p50": 1385.3437950000007,
+        "p95": 11376.63391,
+        "p99": 12204.500774000002,
+        "max": 12563.57918
+      },
+      "schedulerLagP99Ms": 2.0073660000002747,
+      "holdMs": {
+        "n": 1200,
+        "mean": 139.96898711,
+        "p50": 161.20774200000233,
+        "p95": 220.2603769999987,
+        "p99": 444.9051929999987,
+        "max": 527.4318149999999
+      },
+      "waitMs": {
+        "n": 1200,
+        "mean": 425.5127545866667,
+        "p50": 302.5853500000012,
+        "p95": 1127.8611079999973,
+        "p99": 1399.5446770000017,
+        "max": 1479.958939
+      },
+      "clientQueryMs": {
+        "n": 1200,
+        "mean": 124.6492866366667,
+        "p50": 146.16395300000113,
+        "p95": 193.35847999999987,
+        "p99": 428.8531980000007,
+        "max": 510.9376909999992
+      },
+      "postQueryHoldMs": {
+        "n": 1200,
+        "mean": 12.518979195833317,
+        "p50": 10.933165000000372,
+        "p95": 14.943018999998458,
+        "p99": 25.648762999999235,
+        "max": 363.75055900000007
+      },
+      "maxPoolWaiting": 75,
+      "maxAppActive": 85,
+      "aggregate": {
+        "intervals": 12,
+        "wallMs": 12909.347926,
+        "cpuCores": 1.0791773589076012,
+        "cpuMsPerAppCompletion": 19.349272222222222,
+        "elu": 1,
+        "completed": 720,
+        "declaredBytes": 178722000,
+        "cpuCoresSamples": {
+          "n": 12,
+          "mean": 1.0795528369079415,
+          "p50": 1.07506208443912,
+          "p95": 1.1316208184348315,
+          "p99": 1.1316208184348315,
+          "max": 1.1316208184348315
+        },
+        "eluSamples": {
+          "n": 12,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 12,
+          "mean": 203.09606300000004,
+          "p50": 176.553983,
+          "p95": 427.294719,
+          "p99": 427.294719,
+          "max": 427.294719
+        },
+        "maxDelayMs": 427.294719
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 413,
+        "active/null/null": 7
+      },
+      "server": {
+        "phases": {
+          "statement": 1200
+        },
+        "statementMs": {
+          "n": 1200,
+          "mean": 2.252344999999995,
+          "p50": 2.201,
+          "p95": 2.532,
+          "p99": 3.68,
+          "max": 6.039
+        },
+        "executeMs": null,
+        "phaseMs": {
+          "n": 1200,
+          "mean": 2.252344999999995,
+          "p50": 2.201,
+          "p95": 2.532,
+          "p99": 3.68,
+          "max": 6.039
+        },
+        "countMatches": true,
+        "pids": [
+          1199354, 1199350, 1199353, 1199356, 1199351, 1199347, 1199348, 1199349, 1199355, 1199352
+        ]
+      },
+      "checks": {
+        "leases": 1200,
+        "waits": 1200,
+        "queries": 1200,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-51-short-retry-baseline-r1-posts500-on",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "short-retry",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789122604509,
+      "endedAt": 1789122621013,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1598,
+      "drainSeconds": 6.500607779999999,
+      "rpsIncludingDrain": 303.01914127432224,
+      "httpMs": {
+        "p50": 815.0964499999991,
+        "p95": 7860.638225000001,
+        "p99": 8564.372792999999,
+        "max": 11255.966067999998
+      },
+      "schedulerLagP99Ms": 3.442158999999265,
+      "holdMs": {
+        "n": 5000,
+        "mean": 22.6768063206,
+        "p50": 25.770151000000624,
+        "p95": 33.56677099999979,
+        "p99": 54.771969000000354,
+        "max": 351.6081209999993
+      },
+      "waitMs": {
+        "n": 5000,
+        "mean": 351.7298298999995,
+        "p50": 274.4899519999999,
+        "p95": 871.2153940000007,
+        "p99": 1032.932283,
+        "max": 1063.0437930000007
+      },
+      "clientQueryMs": {
+        "n": 5000,
+        "mean": 20.90805376939998,
+        "p50": 24.126250000001164,
+        "p95": 31.574114999999438,
+        "p99": 50.51561500000025,
+        "max": 349.3537120000001
+      },
+      "postQueryHoldMs": {
+        "n": 5000,
+        "mean": 1.756730673200015,
+        "p50": 1.5397740000007616,
+        "p95": 2.1607420000000275,
+        "p99": 4.252357999999731,
+        "max": 299.9264029999995
+      },
+      "maxPoolWaiting": 325,
+      "maxAppActive": 335,
+      "aggregate": {
+        "intervals": 8,
+        "wallMs": 8130.272256,
+        "cpuCores": 1.0455706441720418,
+        "cpuMsPerAppCompletion": 3.1252845588235294,
+        "elu": 1,
+        "completed": 2720,
+        "declaredBytes": 46661600,
+        "cpuCoresSamples": {
+          "n": 8,
+          "mean": 1.0455483847404536,
+          "p50": 1.0551458441192427,
+          "p95": 1.0866096329743886,
+          "p99": 1.0866096329743886,
+          "max": 1.0866096329743886
+        },
+        "eluSamples": {
+          "n": 8,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 8,
+          "mean": 37.433343,
+          "p50": 33.292287,
+          "p95": 66.191359,
+          "p99": 66.191359,
+          "max": 66.191359
+        },
+        "maxDelayMs": 351.010815
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 317,
+        "active/null/null": 2,
+        "active/Client/ClientRead": 1
+      },
+      "server": null,
+      "checks": {
+        "leases": 5000,
+        "waits": 5000,
+        "queries": 5000,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-52-short-retry-patched-r1-posts500-on",
+      "build": "patched",
+      "repeat": 1,
+      "group": "short-retry",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789122625824,
+      "endedAt": 1789122638266,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1010,
+      "drainSeconds": 2.4376867639999986,
+      "rpsIncludingDrain": 402.0040136781821,
+      "httpMs": {
+        "p50": 650.9442929999987,
+        "p95": 5208.390689,
+        "p99": 6208.485350999999,
+        "max": 6486.51312
+      },
+      "schedulerLagP99Ms": 2.0647030000000086,
+      "holdMs": {
+        "n": 5000,
+        "mean": 21.82852338460004,
+        "p50": 23.757292999998754,
+        "p95": 26.475296000000526,
+        "p99": 39.87766999999985,
+        "max": 335.8383709999998
+      },
+      "waitMs": {
+        "n": 5000,
+        "mean": 399.56393476680074,
+        "p50": 371.1487109999989,
+        "p95": 871.95118,
+        "p99": 891.2604069999998,
+        "max": 906.7033620000002
+      },
+      "clientQueryMs": {
+        "n": 5000,
+        "mean": 21.814007739200036,
+        "p50": 23.742168000000675,
+        "p95": 26.461088000000018,
+        "p99": 39.86767000000009,
+        "max": 335.8171199999997
+      },
+      "postQueryHoldMs": {
+        "n": 5000,
+        "mean": 0.0038807929999990845,
+        "p50": 0.0035830000015266705,
+        "p95": 0.00650000000041473,
+        "p99": 0.008751000000302156,
+        "max": 0.05358499999965716
+      },
+      "maxPoolWaiting": 379,
+      "maxAppActive": 389,
+      "aggregate": {
+        "intervals": 9,
+        "wallMs": 9061.298012,
+        "cpuCores": 1.0849651989130495,
+        "cpuMsPerAppCompletion": 2.7384938718662952,
+        "elu": 1,
+        "completed": 3590,
+        "declaredBytes": 61586450,
+        "cpuCoresSamples": {
+          "n": 9,
+          "mean": 1.0848543971038471,
+          "p50": 1.073457768793371,
+          "p95": 1.14284122161572,
+          "p99": 1.14284122161572,
+          "max": 1.14284122161572
+        },
+        "eluSamples": {
+          "n": 9,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 9,
+          "mean": 29.32917944444445,
+          "p50": 26.525695,
+          "p95": 54.198271,
+          "p99": 54.198271,
+          "max": 54.198271
+        },
+        "maxDelayMs": 323.747839
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 240
+      },
+      "server": null,
+      "checks": {
+        "leases": 5000,
+        "waits": 5000,
+        "queries": 5000,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-53-short-retry-patched-r2-posts500-on",
+      "build": "patched",
+      "repeat": 2,
+      "group": "short-retry",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789122642978,
+      "endedAt": 1789122657376,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1198,
+      "drainSeconds": 4.392253053999999,
+      "rpsIncludingDrain": 347.40912220205604,
+      "httpMs": {
+        "p50": 701.6151310000005,
+        "p95": 6344.659600999999,
+        "p99": 7358.202015000001,
+        "max": 7910.804127999998
+      },
+      "schedulerLagP99Ms": 2.433859000000666,
+      "holdMs": {
+        "n": 5000,
+        "mean": 22.014474948800007,
+        "p50": 24.245638999999755,
+        "p95": 28.9358400000001,
+        "p99": 39.675804000000426,
+        "max": 348.45687499999985
+      },
+      "waitMs": {
+        "n": 5000,
+        "mean": 388.0611429428003,
+        "p50": 354.9193839999998,
+        "p95": 859.7155149999999,
+        "p99": 883.1849669999992,
+        "max": 905.0327799999995
+      },
+      "clientQueryMs": {
+        "n": 5000,
+        "mean": 21.998774397400037,
+        "p50": 24.227349999999205,
+        "p95": 28.92134100000021,
+        "p99": 39.65584499999932,
+        "max": 348.43566699999974
+      },
+      "postQueryHoldMs": {
+        "n": 5000,
+        "mean": 0.004204665200000545,
+        "p50": 0.0040829999998095445,
+        "p95": 0.006833999999798834,
+        "p99": 0.009584000000359083,
+        "max": 0.1117100000001301
+      },
+      "maxPoolWaiting": 372,
+      "maxAppActive": 382,
+      "aggregate": {
+        "intervals": 8,
+        "wallMs": 8154.467614,
+        "cpuCores": 1.0749661921460665,
+        "cpuMsPerAppCompletion": 2.865569467146126,
+        "elu": 1,
+        "completed": 3059,
+        "declaredBytes": 52477145,
+        "cpuCoresSamples": {
+          "n": 8,
+          "mean": 1.0748945099970297,
+          "p50": 1.0675704672249846,
+          "p95": 1.1313661917041726,
+          "p99": 1.1313661917041726,
+          "max": 1.1313661917041726
+        },
+        "eluSamples": {
+          "n": 8,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 8,
+          "mean": 31.352831000000002,
+          "p50": 28.033023,
+          "p95": 51.478527,
+          "p99": 51.478527,
+          "max": 51.478527
+        },
+        "maxDelayMs": 319.815679
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 279,
+        "active/null/null": 1
+      },
+      "server": null,
+      "checks": {
+        "leases": 5000,
+        "waits": 5000,
+        "queries": 5000,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-54-short-retry-baseline-r2-posts500-on",
+      "build": "baseline",
+      "repeat": 2,
+      "group": "short-retry",
+      "observe": true,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789122661787,
+      "endedAt": 1789122674512,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1114,
+      "drainSeconds": 2.719211118999999,
+      "rpsIncludingDrain": 393.1061410350351,
+      "httpMs": {
+        "p50": 673.5379990000001,
+        "p95": 5825.848477,
+        "p99": 6812.304435999999,
+        "max": 7030.448475
+      },
+      "schedulerLagP99Ms": 1.7843990000001213,
+      "holdMs": {
+        "n": 5000,
+        "mean": 22.126573250799993,
+        "p50": 24.114853999999468,
+        "p95": 27.930834999999206,
+        "p99": 40.26682600000004,
+        "max": 336.1122770000002
+      },
+      "waitMs": {
+        "n": 5000,
+        "mean": 390.63264632879986,
+        "p50": 353.0282079999997,
+        "p95": 871.7317949999997,
+        "p99": 889.9820490000002,
+        "max": 911.9935380000006
+      },
+      "clientQueryMs": {
+        "n": 5000,
+        "mean": 20.522390361799935,
+        "p50": 22.53620199999932,
+        "p95": 26.218555999999808,
+        "p99": 37.968455999999605,
+        "max": 331.9139579999992
+      },
+      "postQueryHoldMs": {
+        "n": 5000,
+        "mean": 1.5934369932000005,
+        "p50": 1.4393989999998666,
+        "p95": 1.7124859999994442,
+        "p99": 3.7653530000006867,
+        "max": 287.6828979999991
+      },
+      "maxPoolWaiting": 371,
+      "maxAppActive": 381,
+      "aggregate": {
+        "intervals": 8,
+        "wallMs": 8155.743135,
+        "cpuCores": 1.0759422967040269,
+        "cpuMsPerAppCompletion": 2.8134366784225713,
+        "elu": 1,
+        "completed": 3119,
+        "declaredBytes": 53506445,
+        "cpuCoresSamples": {
+          "n": 8,
+          "mean": 1.0756163294403518,
+          "p50": 1.0710320352871041,
+          "p95": 1.1281910386523637,
+          "p99": 1.1281910386523637,
+          "max": 1.1281910386523637
+        },
+        "eluSamples": {
+          "n": 8,
+          "mean": 1,
+          "p50": 1,
+          "p95": 1,
+          "p99": 1,
+          "max": 1
+        },
+        "perSecondDelayP95Ms": {
+          "n": 8,
+          "mean": 30.930943,
+          "p50": 28.819455,
+          "p95": 51.904511,
+          "p99": 51.904511,
+          "max": 51.904511
+        },
+        "maxDelayMs": 333.447167
+      },
+      "pgActivityBackendSamples": {
+        "idle/Client/ClientRead": 250
+      },
+      "server": null,
+      "checks": {
+        "leases": 5000,
+        "waits": 5000,
+        "queries": 5000,
+        "invalid": 0,
+        "pendingOrUnsupported": 0,
+        "waitErrors": 0,
+        "leaseCountMatches": true,
+        "waitCountMatches": true,
+        "noObserverFiles": null
+      }
+    },
+    {
+      "label": "lat-55-overload-off-baseline-r1-posts500-off",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789123316222,
+      "endedAt": 1789123329033,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1136,
+      "drainSeconds": 2.806535135999999,
+      "rpsIncludingDrain": 390.425665248415,
+      "httpMs": {
+        "p50": 674.6133689999988,
+        "p95": 6009.844465,
+        "p99": 6976.687819,
+        "max": 7250.330064999999
+      },
+      "schedulerLagP99Ms": 2.5166909999989002,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-56-overload-off-patched-r1-posts500-off",
+      "build": "patched",
+      "repeat": 1,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789123333867,
+      "endedAt": 1789123346859,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1203,
+      "drainSeconds": 2.986587610000001,
+      "rpsIncludingDrain": 385.0126107146017,
+      "httpMs": {
+        "p50": 678.9748010000003,
+        "p95": 5884.201015000001,
+        "p99": 6806.139391000001,
+        "max": 7036.653584
+      },
+      "schedulerLagP99Ms": 1.9727440000006027,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-57-overload-off-baseline-r1-includes80-off",
+      "build": "baseline",
+      "repeat": 1,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789123351523,
+      "endedAt": 1789123372248,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 333,
+      "drainSeconds": 5.721305848,
+      "rpsIncludingDrain": 57.91140813240894,
+      "httpMs": {
+        "p50": 1243.1566550000007,
+        "p95": 10500.758902000001,
+        "p99": 11941.957341000001,
+        "max": 12110.249716999999
+      },
+      "schedulerLagP99Ms": 3.3105709999999817,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-58-overload-off-patched-r1-includes80-off",
+      "build": "patched",
+      "repeat": 1,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789123377323,
+      "endedAt": 1789123397805,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 328,
+      "drainSeconds": 5.478987575000001,
+      "rpsIncludingDrain": 58.596646714357895,
+      "httpMs": {
+        "p50": 1228.399582,
+        "p95": 10961.089364999998,
+        "p99": 12345.099529,
+        "max": 12375.516443
+      },
+      "schedulerLagP99Ms": 3.08512299999893,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-59-overload-off-patched-r2-includes80-off",
+      "build": "patched",
+      "repeat": 2,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789123463363,
+      "endedAt": 1789123483437,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 304,
+      "drainSeconds": 5.0706413019999985,
+      "rpsIncludingDrain": 59.788821988484365,
+      "httpMs": {
+        "p50": 1146.6265049999984,
+        "p95": 10191.099564,
+        "p99": 11655.872698,
+        "max": 12061.204337000001
+      },
+      "schedulerLagP99Ms": 4.609266999999818,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-60-overload-off-baseline-r2-includes80-off",
+      "build": "baseline",
+      "repeat": 2,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789123488012,
+      "endedAt": 1789123509399,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 367,
+      "drainSeconds": 6.383681938999999,
+      "rpsIncludingDrain": 56.117557463825506,
+      "httpMs": {
+        "p50": 1267.136004,
+        "p95": 11371.837862,
+        "p99": 11980.955132,
+        "max": 12266.995128999999
+      },
+      "schedulerLagP99Ms": 3.4567080000015267,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-61-overload-off-patched-r2-posts500-off",
+      "build": "patched",
+      "repeat": 2,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789123514124,
+      "endedAt": 1789123527706,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1307,
+      "drainSeconds": 3.5775164229999987,
+      "rpsIncludingDrain": 368.2558609562877,
+      "httpMs": {
+        "p50": 734.0150689999991,
+        "p95": 6544.306147,
+        "p99": 7402.462051,
+        "max": 7705.207885999999
+      },
+      "schedulerLagP99Ms": 2.331949999999779,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-62-overload-off-baseline-r2-posts500-off",
+      "build": "baseline",
+      "repeat": 2,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789123532436,
+      "endedAt": 1789123545565,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1220,
+      "drainSeconds": 3.1243355059999995,
+      "rpsIncludingDrain": 380.9716688295701,
+      "httpMs": {
+        "p50": 713.9446179999995,
+        "p95": 6196.459799999999,
+        "p99": 6991.794787999999,
+        "max": 7245.107344999999
+      },
+      "schedulerLagP99Ms": 2.1388099999994665,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-63-overload-off-baseline-r3-posts500-off",
+      "build": "baseline",
+      "repeat": 3,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789123550720,
+      "endedAt": 1789123565140,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1306,
+      "drainSeconds": 4.41554526,
+      "rpsIncludingDrain": 346.8477889541862,
+      "httpMs": {
+        "p50": 754.6517170000006,
+        "p95": 6506.648522000001,
+        "p99": 7431.339150000001,
+        "max": 7732.405865999999
+      },
+      "schedulerLagP99Ms": 4.629015000000436,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-64-overload-off-patched-r3-posts500-off",
+      "build": "patched",
+      "repeat": 3,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts",
+      "rate": 500,
+      "seconds": 10,
+      "startedAt": 1789123570053,
+      "endedAt": 1789123582902,
+      "sent": 5000,
+      "completed": 5000,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 85775000,
+      "bytesPerCompletion": 17155,
+      "backlog": 1112,
+      "drainSeconds": 2.844536732999998,
+      "rpsIncludingDrain": 389.27055945537313,
+      "httpMs": {
+        "p50": 654.2893769999991,
+        "p95": 5332.554447,
+        "p99": 6286.89395,
+        "max": 6575.474011
+      },
+      "schedulerLagP99Ms": 3.3487910000003467,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-65-overload-off-baseline-r3-includes80-off",
+      "build": "baseline",
+      "repeat": 3,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789123587670,
+      "endedAt": 1789123608317,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 324,
+      "drainSeconds": 5.6430251710000014,
+      "rpsIncludingDrain": 58.13101471608916,
+      "httpMs": {
+        "p50": 1250.5687900000012,
+        "p95": 10054.599180000001,
+        "p99": 11647.823427000001,
+        "max": 11979.214061
+      },
+      "schedulerLagP99Ms": 3.228849999999511,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    },
+    {
+      "label": "lat-66-overload-off-patched-r3-includes80-off",
+      "build": "patched",
+      "repeat": 3,
+      "group": "overload-off",
+      "observe": false,
+      "endpoint": "/posts-with-comments",
+      "rate": 80,
+      "seconds": 15,
+      "startedAt": 1789123613808,
+      "endedAt": 1789123637469,
+      "sent": 1200,
+      "completed": 1200,
+      "errors": 0,
+      "capped": 0,
+      "bytes": 297870000,
+      "bytesPerCompletion": 248225,
+      "backlog": 436,
+      "drainSeconds": 8.658059069,
+      "rpsIncludingDrain": 50.72267325481501,
+      "httpMs": {
+        "p50": 1350.3616540000003,
+        "p95": 12737.028742,
+        "p99": 13528.035378,
+        "max": 13708.498660000001
+      },
+      "schedulerLagP99Ms": 4.157575000000179,
+      "holdMs": null,
+      "waitMs": null,
+      "clientQueryMs": null,
+      "postQueryHoldMs": null,
+      "maxPoolWaiting": null,
+      "maxAppActive": null,
+      "aggregate": null,
+      "pgActivityBackendSamples": {},
+      "server": null,
+      "checks": {
+        "noObserverFiles": true,
+        "noPgSamples": true,
+        "noLogging": true,
+        "noObservation": true,
+        "expectedSent": true,
+        "allCompleted": true,
+        "expectedBytes": true,
+        "errors": 0,
+        "capped": 0,
+        "leaseCountMatches": null,
+        "waitCountMatches": null
+      }
+    }
+  ]
+}

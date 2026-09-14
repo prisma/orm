@@ -8,6 +8,7 @@ import {
 import {
   acquireRuntimeScope,
   createRowEnvelope,
+  createStorageRowMapper,
   mapModelDataToStorageRow,
   mapPolymorphicRow,
   mapResultRows,
@@ -30,6 +31,19 @@ describe('collection-runtime', () => {
     expect(mapStorageRowToModelFields(contract, 'public', 'UnknownModel', { id: 1 })).toEqual({
       id: 1,
     });
+  });
+
+  it('prepared row mappers preserve changing keys, aliases, nulls and source ownership', () => {
+    const mapRow = createStorageRowMapper(contract, 'public', 'Post');
+    const first = Object.freeze({ user_id: 1, title: null });
+    const second = Object.freeze({ views: 2, custom: true });
+    expect(mapRow(first)).toEqual({ userId: 1, title: null });
+    expect(mapRow(second)).toEqual({ views: 2, custom: true });
+    expect(mapRow(first)).not.toBe(first);
+    expect(first).toEqual({ user_id: 1, title: null });
+    const fallback = createStorageRowMapper(contract, 'public', 'UnknownModel');
+    expect(fallback(first)).toEqual({ user_id: 1, title: null });
+    expect(fallback(first)).not.toBe(first);
   });
 
   it('mapModelDataToStorageRow() maps fields and skips undefined values', () => {
