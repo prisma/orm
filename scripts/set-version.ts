@@ -105,7 +105,7 @@ const trackedArtefacts = execSync("git ls-files -- '*contract.json' '*contract.d
   encoding: 'utf-8',
 })
   .split('\n')
-  .filter((rel) => rel && !rel.includes('/migrations/snapshots/'));
+  .filter((rel) => rel && !/(^|\/)migrations\/snapshots\//.test(rel));
 
 for (const rel of trackedArtefacts) {
   const artefactPath = path.join(rootDir, rel);
