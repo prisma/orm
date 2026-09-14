@@ -25,7 +25,7 @@ import sqliteTarget from '@internal/target-sqlite/runtime';
 import { createDevDatabase, timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { Client } from 'pg';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { getTestContract } from './helpers';
 
 type Row = { name: string; posts: { title: unknown }[] };
@@ -153,6 +153,13 @@ async function sqliteEnvironment(name: string): Promise<Environment> {
   const namespaceId = soleDomainNamespaceId(sqliteContract.domain);
   const users = new Collection({ runtime, context }, 'User', { namespaceId });
   const selected = users.select('name').include('posts', (posts) => posts.select('title'));
+  expectTypeOf(selected.all).returns.toEqualTypeOf<AsyncIterableResult<Row>>();
+  expectTypeOf(selected.prepared.all().consume).returns.toEqualTypeOf<
+    ReturnType<typeof selected.all>
+  >();
+  expectTypeOf(selected.prepared.first().consume).returns.toEqualTypeOf<
+    ReturnType<typeof selected.first>
+  >();
   return {
     runtime,
     all: () => selected.where({ id: 1 }).prepared.all(),

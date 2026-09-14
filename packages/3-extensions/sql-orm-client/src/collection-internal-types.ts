@@ -144,9 +144,9 @@ type RefinedIncludeRelationValue<
   IncludedRow,
   NsId extends string = never,
 > =
-  IsToManyRelation<TContract, ParentModelName, RelName, NsId> extends true
-    ? IncludedRow[]
-    : IncludedRow | null;
+  RelationCardinality<TContract, ParentModelName, RelName, NsId> extends '1:1' | 'N:1'
+    ? IncludedRow | null
+    : IncludedRow[];
 
 export type WhereInput<
   TContract extends Contract<SqlStorage>,
