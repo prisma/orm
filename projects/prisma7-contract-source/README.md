@@ -1,6 +1,6 @@
 # Prisma 7 contract source and converter
 
-Transient project workspace. No tracker by the operator's decision. Slices 1 and 4 are in https://github.com/prisma/orm/pull/30287. See [`spec.md`](./spec.md) for the project spec, [`design-notes.md`](./design-notes.md) for the alternatives considered, and [`plan.md`](./plan.md) for the slice sequencing. Slice specs live under [`slices/`](./slices/).
+Transient project workspace. No tracker by the operator's decision. Slices 1 and 4 are in https://github.com/prisma/orm/pull/30287. See [`spec.md`](./spec.md) for the project spec and [`design-notes.md`](./design-notes.md) for the alternatives considered. Slice specs live under [`slices/`](./slices/).
 
 Branch: `prisma7-contract-source`.
 

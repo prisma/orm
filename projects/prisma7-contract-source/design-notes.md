@@ -15,7 +15,7 @@ A contract source is a `ContractConfig` whose `source.load` returns a family con
 
 - **One-shot converter that prints Prisma 8 PSL, using Prisma 7's parser.** This was the original spec. Rejected as the primary shape because the converted file drifts after every Prisma 7 migration, because every Prisma 8 PSL spelling limit becomes a lossy rule, and because `@prisma/prisma7` exposes no parser. The converter survives as the cutover step on top of the interpreter.
 - **Prisma 7's WebAssembly parser via `@prisma/get-dmmf`.** Rejected. Its DMMF output deletes `@ignore` fields and `@@ignore` models, lists views as ordinary models, and may omit implicit referential actions. It is also a 3 MB synchronous CommonJS load on the emit path.
-- **Port Prisma 7's parser to TypeScript.** Unnecessary. The spike under `spike/` shows the Prisma 8 parser handles the grammar with two small additions (attributes on enum members, field lines in `view` blocks).
+- **Port Prisma 7's parser to TypeScript.** Unnecessary. The Prisma 8 parser handles the grammar with two small additions (attributes on enum members, field lines in `view` blocks).
 - **`contract infer` plus hand fixes.** The status quo. Loses relation field names, ORM-side defaults, `@updatedAt`, and needs re-doing after every migration.
 - **Filling the capability gaps in this project** (views, Mongo defaults, Mongo scalar types, opaque Postgres columns). Rejected by the operator: hard error now, fill later. Mongo defaults alone is a runtime change touching the contract validator, the generator registry, and the ORM.
 
@@ -37,6 +37,5 @@ A contract source is a `ContractConfig` whose `source.load` returns a family con
 
 ## References
 
-- `spec.md`, `plan.md`, `slices/*/spec.md`.
-- Parser spike: `spike/schema.prisma`, `spike/tree.txt`, `spike/dump-tree.ts`.
+- `spec.md`, `slices/*/spec.md`.
 - `projects/prisma-8-rc1/parallel-install.md` for the transition story this project serves.

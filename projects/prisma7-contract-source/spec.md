@@ -43,7 +43,7 @@ writes the same contract as Prisma 8 PSL. The user switches `contract:` to that 
 
 - The transition story this serves is `projects/prisma-8-rc1/parallel-install.md`: Prisma 7 owns migrations, Prisma 8 adopts the database read-only with `db sign`, and cutover happens once.
 - Contract sources are `ContractConfig` objects whose `source.load` returns a contract or diagnostics; the emit path calls it without caring about format (`packages/1-framework/3-tooling/cli/src/control-api/operations/contract-emit.ts:227`). The PSL source (`packages/2-sql/2-authoring/contract-psl/src/provider.ts:65`) and the TypeScript source (`packages/2-sql/2-authoring/contract-ts/src/config-types.ts:90`) are the two existing kinds. This project adds a third, one package per family, mirroring `contract-psl`.
-- The Prisma 8 syntax parser (`@internal/psl-parser`) already reads the Prisma 7 grammar almost completely. See `spike/` and `design-notes.md`.
+- The Prisma 8 syntax parser (`@internal/psl-parser`) already reads the Prisma 7 grammar almost completely. See `design-notes.md`.
 - Every existing PSL printer starts from the database schema description, not from a contract. The contract-to-PSL printer is new and exposed as a target-descriptor hook beside `inferPslContract`.
 
 ## Cross-cutting requirements
@@ -126,5 +126,4 @@ Found by the adoption example (slice 4). Each is outside this project's scope an
 
 - The public upgrade guides: [PostgreSQL, 7 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) and [MongoDB, 6 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb). The Postgres guide's phase 2 (`contract infer` plus hand edits) is what the Prisma 7 source replaces; its phase 4 is the cutover routine slice 3 must fit.
 - `design-notes.md` for alternatives considered.
-- `spike/` for the parser experiment.
 - `slices/01-postgres-source/spec.md`, `slices/02-mongo-source/spec.md`, `slices/03-contract-to-psl-and-convert/spec.md`.

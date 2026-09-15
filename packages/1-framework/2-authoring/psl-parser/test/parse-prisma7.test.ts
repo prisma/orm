@@ -3,9 +3,6 @@
  * interpreter can walk them with spans: attributes on enum members, and field
  * lines inside `view` blocks. The default grammar reads neither.
  */
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { parse } from '../src/parse';
 import type { FieldAttributeAst } from '../src/syntax/ast/attributes';
@@ -235,28 +232,5 @@ describe('view blocks', () => {
         fields: Array.from(block.fields()),
       }).toEqual({ entries: ['id', 'Int'], fields: [] });
     });
-  });
-});
-
-describe('Prisma 7 spike schema', () => {
-  it('has zero parse diagnostics with the prisma7 grammar', () => {
-    // A small Prisma 7 schema with every block kind: datasource, generator, enum, view, model.
-    const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/prisma7-spike.prisma');
-    const source = readFileSync(fixture, 'utf8');
-    const result = parse(source, prisma7);
-    expect(result.diagnostics).toEqual([]);
-    expect(greenText(result.document.syntax.green)).toBe(source);
-    const keywords = Array.from(result.document.declarations(), (declaration) =>
-      declaration instanceof GenericBlockDeclarationAst ? declaration.keyword()?.text : 'model',
-    );
-    expect(keywords).toEqual([
-      'datasource',
-      'generator',
-      'enum',
-      'view',
-      'model',
-      'model',
-      'model',
-    ]);
   });
 });
