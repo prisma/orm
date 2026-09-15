@@ -75,6 +75,8 @@ Implicit many-to-many (a list field on both sides, no junction model) becomes th
 
 Every edit a message offers is a Prisma 7 schema change that Prisma 7's next migration applies, so the message says what that migration does, checked with `prisma@7.10.0 migrate diff`. `PRISMA7_UNSUPPORTED_TYPE` for `Unsupported(...)` offers no edit: Prisma 7 rejects `@ignore` on such a field ("Fields of type `Unsupported` cannot take an `@ignore` attribute"), and removing the field drops its column, so the message says a model with that field cannot use this source yet. `PRISMA7_NATIVE_TYPE_UNSUPPORTED` offers `@ignore` first (an empty migration) and a type change second (`ALTER COLUMN ... SET DATA TYPE`). `PRISMA7_RELATION_MODE_UNSUPPORTED` says removing `relationMode` or setting `"foreignKeys"` makes the next migration add the foreign keys (`ADD CONSTRAINT ... FOREIGN KEY`), which fails on any row that breaks one.
 
+The shared pairing helper reports its own `PSL_` codes; the interpreter lists the six it maps (`RELATION_PAIRING_CODES` in `relations.ts`) and reports each as `PRISMA7_RELATION_UNRESOLVED`. `test/relation-pairing-codes.test.ts` drives every diagnostic branch of the helper and fails if it emits a code outside that list, so a rename in `contract-psl` cannot leak a `PSL_` code.
+
 Added in dispatch 6: `PRISMA7_JUNCTION_ID_UNSUPPORTED` (an implicit many-to-many relation on a model without a single-field `@id`, which Prisma 7 forbids too; fixture `junction-composite-id`). `PRISMA7_SCHEMA_READ_FAILED` (dispatch 4) reports an unreadable input path, or a schema directory that holds no `.prisma` file, located at the input path (`test/provider.test.ts`).
 
 ## Edge cases

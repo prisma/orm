@@ -55,6 +55,16 @@ export interface RelationModel {
   readonly relationFields: readonly RelationField[];
 }
 
+/** The codes `applyBackrelationCandidates` reports, each shown as `PRISMA7_RELATION_UNRESOLVED`. */
+export const RELATION_PAIRING_CODES: ReadonlySet<string> = new Set([
+  'PSL_ORPHANED_BACKRELATION',
+  'PSL_AMBIGUOUS_BACKRELATION',
+  'PSL_NON_UNIQUE_BACKRELATION',
+  'PSL_REQUIRED_ONE_TO_ONE_BACKRELATION',
+  'PSL_JUNCTION_ID_NOT_FK_COVERING',
+  'PSL_JUNCTION_TARGET_FK_NOT_ID',
+]);
+
 export interface RelationLowering {
   readonly junctions: readonly ModelNode[];
   readonly foreignKeys: ReadonlyMap<string, readonly ForeignKeyNode[]>;
@@ -461,7 +471,7 @@ export function lowerRelations(
   }
   for (const diagnostic of pairingDiagnostics) {
     diagnostics.push(
-      diagnostic.code.startsWith('PSL_') && diagnostic.code.endsWith('_BACKRELATION')
+      RELATION_PAIRING_CODES.has(diagnostic.code)
         ? { ...diagnostic, code: 'PRISMA7_RELATION_UNRESOLVED' }
         : diagnostic,
     );
