@@ -350,6 +350,10 @@ export function lowerRelations(
           );
           continue;
         }
+        if (attribute.references.some((name) => target.ignoredFields.has(name))) {
+          rejectFkSide(model, relationField);
+          continue;
+        }
         const localColumns = columnNames(model, attribute.fields);
         const referencedColumns = columnNames(target, attribute.references);
         if (localColumns === undefined || referencedColumns === undefined) {
@@ -623,6 +627,7 @@ function singleIdColumn(
   requester: JunctionSide,
   diagnostics: ContractSourceDiagnostic[],
 ): FieldNode | undefined {
+  if (side.model.idFields.some((name) => side.model.ignoredFields.has(name))) return undefined;
   const [idField, ...rest] = side.model.idFields;
   const column = idField === undefined ? undefined : side.model.columns.get(idField);
   if (column === undefined || rest.length > 0) {

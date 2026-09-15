@@ -752,6 +752,7 @@ function readIgnoredField(field: FieldSymbol, isRelationField: boolean, args: Re
   }
   for (const attribute of field.attributes) {
     if (attribute.name !== 'id' && attribute.name !== 'unique') continue;
+    if (attribute.name === 'id') build.idFields = [field.name];
     diagnostics.push(
       ignoredFieldReferenced({
         modelName: model.symbol.name,
