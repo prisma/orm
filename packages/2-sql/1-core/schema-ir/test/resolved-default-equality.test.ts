@@ -155,6 +155,77 @@ describe('resolvedDefaultsEqual', () => {
       ).toBe(true);
     });
   });
+
+  describe('numeric literals', () => {
+    const nativeType = 'numeric(65,30)';
+
+    it('matches a number against the decimal text it denotes', () => {
+      expect({
+        numberFirst: resolvedDefaultsEqual(literal(12.34), literal('12.34'), nativeType),
+        textFirst: resolvedDefaultsEqual(literal('-0.5'), literal(-0.5), 'numeric'),
+      }).toEqual({ numberFirst: true, textFirst: true });
+    });
+
+    it('ignores zeros that do not change the value', () => {
+      expect({
+        trailing: resolvedDefaultsEqual(literal('1.5'), literal('1.50'), nativeType),
+        whole: resolvedDefaultsEqual(literal(10), literal('10.000'), nativeType),
+        leading: resolvedDefaultsEqual(literal('0.5'), literal('00.5'), nativeType),
+        negativeZero: resolvedDefaultsEqual(literal('0'), literal('-0.0'), nativeType),
+      }).toEqual({ trailing: true, whole: true, leading: true, negativeZero: true });
+    });
+
+    it('compares every digit of the decimal text', () => {
+      expect({
+        rounded: resolvedDefaultsEqual(
+          literal(12345678901234567000),
+          literal('12345678901234567890.123456789'),
+          nativeType,
+        ),
+        lastDigit: resolvedDefaultsEqual(
+          literal('0.000000000000000001'),
+          literal('0.000000000000000002'),
+          nativeType,
+        ),
+      }).toEqual({ rounded: false, lastDigit: false });
+    });
+
+    it('compares text that is not a numeral by identity', () => {
+      expect({
+        same: resolvedDefaultsEqual(literal('NaN'), literal('NaN'), nativeType),
+        different: resolvedDefaultsEqual(literal('NaN'), literal('Infinity'), nativeType),
+      }).toEqual({ same: true, different: false });
+    });
+
+    it('leaves a number against its decimal text alone without a numeric native type', () => {
+      expect(resolvedDefaultsEqual(literal(1.5), literal('1.5'), 'float8')).toBe(false);
+    });
+  });
+
+  describe('list literals', () => {
+    it('normalizes each element under the element type', () => {
+      expect({
+        timestamps: resolvedDefaultsEqual(
+          literal(['2024-01-01T00:00:00.000Z']),
+          literal(['2024-01-01 00:00:00']),
+          'timestamp(3)[]',
+        ),
+        int8: resolvedDefaultsEqual(literal([1, -2]), literal(['1', '-2']), 'int8[]'),
+        numeric: resolvedDefaultsEqual(literal([12.5]), literal(['12.50']), 'numeric(10,2)[]'),
+      }).toEqual({ timestamps: true, int8: true, numeric: true });
+    });
+
+    it('fires when an element or the length differs', () => {
+      expect({
+        element: resolvedDefaultsEqual(literal(['1', '2']), literal(['1', '3']), 'int8[]'),
+        length: resolvedDefaultsEqual(literal(['1']), literal(['1', '2']), 'int8[]'),
+      }).toEqual({ element: false, length: false });
+    });
+
+    it('leaves the elements alone without a list native type', () => {
+      expect(resolvedDefaultsEqual(literal([1]), literal(['1']), 'jsonb')).toBe(false);
+    });
+  });
 });
 
 describe('resolvedDefaultsEqual zoneless timestamp literals', () => {

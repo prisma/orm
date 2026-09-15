@@ -4,14 +4,15 @@ import { canonicalStringify } from '@internal/utils/canonical-stringify';
 /**
  * Structural equality for two resolved column defaults, ported from the relational walk's
  * `columnDefaultsEqual` normalized branch: kinds must match; literal values are normalized (Date
- * and temporal-typed strings to ISO instants, with a timestamp that has no zone read as UTC, and a
- * 64-bit-integer native type's safe-integer number to its decimal-text spelling) then compared
- * canonically (JSON objects match their canonical string form); function expressions compare case-
- * and whitespace-insensitively.
+ * and temporal-typed strings to ISO instants, with a timestamp that has no zone read as UTC; a
+ * 64-bit-integer native type's safe-integer number to its decimal-text spelling; a numeric native
+ * type's number or decimal text to its digits without zeros that do not change the value; a list
+ * element by element under its element type) then compared canonically (JSON objects match their
+ * canonical string form); function expressions compare case- and whitespace-insensitively.
  *
- * `nativeType` provides the temporal- and int64-normalization context (the actual side's resolved
- * native type in a diff comparison). A target that reads a raw expression as a literal does so
- * before this comparison, through its `resolveDefault` hook.
+ * `nativeType` provides the normalization context (the actual side's resolved native type in a diff
+ * comparison). A target that reads a raw expression as a literal does so before this comparison,
+ * through its `resolveDefault` hook.
  */
 export function resolvedDefaultsEqual(
   expected: ColumnDefault,
@@ -50,6 +51,23 @@ function isInt64NativeType(nativeType?: string): boolean {
   return normalized === 'int8' || normalized === 'bigint';
 }
 
+function isDecimalNativeType(nativeType?: string): boolean {
+  return (
+    nativeType !== undefined && /^(?:numeric|decimal)(?:\(\d+(?:,\s*\d+)?\))?$/i.test(nativeType)
+  );
+}
+
+const DECIMAL_NUMERAL = /^(-?)(\d+)(?:\.(\d+))?$/;
+
+function decimalDigits(value: string | number): string | number {
+  const numeral = DECIMAL_NUMERAL.exec(String(value));
+  if (numeral === null) return value;
+  const whole = (numeral[2] ?? '').replace(/^0+(?=\d)/, '');
+  const fraction = (numeral[3] ?? '').replace(/0+$/, '');
+  const digits = fraction === '' ? whole : `${whole}.${fraction}`;
+  return digits === '0' ? digits : `${numeral[1] ?? ''}${digits}`;
+}
+
 /**
  * A timestamp spelled without a zone, as Postgres reports a `timestamp
  * without time zone` default: `2024-01-01 00:00:00`, `2024-01-01T00:00:00.5`.
@@ -65,6 +83,10 @@ function parseTemporal(value: string): Date {
 }
 
 function normalizeLiteralValue(value: unknown, nativeType?: string): unknown {
+  if (Array.isArray(value) && nativeType?.endsWith('[]')) {
+    const elementType = nativeType.slice(0, -2);
+    return value.map((element) => normalizeLiteralValue(element, elementType));
+  }
   if (value instanceof Date) {
     return value.toISOString();
   }
@@ -76,6 +98,9 @@ function normalizeLiteralValue(value: unknown, nativeType?: string): unknown {
   }
   if (typeof value === 'number' && Number.isSafeInteger(value) && isInt64NativeType(nativeType)) {
     return String(value);
+  }
+  if ((typeof value === 'number' || typeof value === 'string') && isDecimalNativeType(nativeType)) {
+    return decimalDigits(value);
   }
   return value;
 }
