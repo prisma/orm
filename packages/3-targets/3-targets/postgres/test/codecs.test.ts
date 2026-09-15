@@ -270,11 +270,21 @@ describe('adapter-postgres codecs', () => {
       expect(decoded.byteLength).toBe(0);
     });
 
-    it('normalizes Buffer wire values to a plain Uint8Array view', async () => {
-      const buffer = Buffer.from([0x01, 0x02, 0x03]);
+    it('returns plain Uint8Array wire values by identity', async () => {
+      const input = new Uint8Array([0x01, 0x02, 0x03]);
+      const decoded = await byteaCodec.decode(input, {});
+      expect(decoded).toBe(input);
+    });
+
+    it('normalizes Buffer wire values to a plain Uint8Array view without copying', async () => {
+      const backing = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]);
+      const buffer = Buffer.from(backing.buffer, 1, 3);
       const decoded = await byteaCodec.decode(buffer, {});
       expect(decoded).toBeInstanceOf(Uint8Array);
       expect(decoded.constructor).toBe(Uint8Array);
+      expect(decoded.buffer).toBe(buffer.buffer);
+      expect(decoded.byteOffset).toBe(buffer.byteOffset);
+      expect(decoded.byteLength).toBe(buffer.byteLength);
       expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
     });
 
