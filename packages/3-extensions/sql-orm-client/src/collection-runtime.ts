@@ -134,14 +134,7 @@ export function mapPolymorphicRow(
 
   if (!variant) {
     const baseMap = getCompleteColumnToFieldMap(contract, namespaceId, baseModelName);
-    const mapped: Record<string, unknown> = {};
-    for (const [col, val] of Object.entries(row)) {
-      const field = baseMap[col];
-      if (field !== undefined) {
-        mapped[field] = val;
-      }
-    }
-    return mapped;
+    return mapKnownColumnNames(row, baseMap);
   }
 
   const mtiTable = variant.strategy === 'mti' ? variant.table : undefined;
@@ -152,9 +145,69 @@ export function mapPolymorphicRow(
     variant.modelName,
     mtiTable,
   );
+  return mapKnownColumnNames(row, mergedMap);
+}
+
+export function createPolymorphicRowMapper(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  baseModelName: string,
+  polyInfo: PolymorphismInfo,
+  variantName?: string,
+): (row: Record<string, unknown>) => Record<string, unknown> {
+  const baseMapper = captureColumnMapper(() =>
+    getCompleteColumnToFieldMap(contract, namespaceId, baseModelName),
+  );
+  const mappersByValue = new Map<string, typeof baseMapper>();
+  let pinnedMapper = baseMapper;
+  for (const [name, variant] of polyInfo.variants) {
+    if (variantName && name !== variantName) continue;
+    const mapper = captureColumnMapper(() =>
+      getMergedColumnToFieldMap(
+        contract,
+        namespaceId,
+        baseModelName,
+        variant.modelName,
+        variant.strategy === 'mti' ? variant.table : undefined,
+      ),
+    );
+    if (variantName) pinnedMapper = mapper;
+    for (const [value, candidate] of polyInfo.variantsByValue) {
+      if (candidate === variant) mappersByValue.set(value, mapper);
+    }
+  }
+  const discriminatorColumn = polyInfo.discriminatorColumn;
+  return (row) => {
+    const value = row[discriminatorColumn] ?? row[POLYMORPHIC_DISCRIMINATOR_ALIAS];
+    const mapper = variantName
+      ? pinnedMapper
+      : typeof value === 'string'
+        ? (mappersByValue.get(value) ?? baseMapper)
+        : baseMapper;
+    return mapper(row);
+  };
+}
+
+function captureColumnMapper(
+  resolve: () => Readonly<Record<string, string>>,
+): (row: Record<string, unknown>) => Record<string, unknown> {
+  try {
+    const columns = resolve();
+    return (row) => mapKnownColumnNames(row, columns);
+  } catch (error) {
+    return () => {
+      throw error;
+    };
+  }
+}
+
+function mapKnownColumnNames(
+  row: Record<string, unknown>,
+  columns: Readonly<Record<string, string>>,
+): Record<string, unknown> {
   const mapped: Record<string, unknown> = {};
   for (const [col, val] of Object.entries(row)) {
-    const field = mergedMap[col];
+    const field = columns[col];
     if (field !== undefined) {
       mapped[field] = val;
     }

@@ -2,7 +2,7 @@
 
 ORM client for Prisma 8 — fluent, type-safe model collections.
 
-This package provides a high-level ORM client surface on top of the runtime. Reads with includes compile to a single correlated-subquery plan and use the supplied runtime without acquiring an additional connection scope. Caller-owned connections and transactions remain caller-owned; nested mutations orchestrate several statements inside one scope.
+This package provides a high-level ORM client surface on top of the runtime. Ordinary and prepared SELECT reads with includes compile to a single correlated-subquery plan and use the supplied runtime without acquiring an additional connection scope. Caller-owned connections and transactions remain caller-owned; nested mutations orchestrate several statements inside one scope.
 
 ## Responsibilities
 
@@ -10,7 +10,8 @@ This package provides a high-level ORM client surface on top of the runtime. Rea
 - Build filter/order/include state from fluent APIs (`where`, `include`, `orderBy`, `limit`, `offset`)
 - Accept lane-agnostic `WhereArg` filter inputs (`WhereExpr` or `ToWhereExpr`) and normalize bound payloads inside ORM while preserving bound params/descriptors for runtime encoding and adapter lowering
 - Compile collection state into SQL AST query plans (`SqlQueryPlan`) without rendering SQL in ORM
-- Decode single-query include payloads into nested relation values
+- Buffer SELECT include results and decode embedded include payloads in the ORM consumer
+- Orchestrate multi-statement mutations, such as nested creates
 - Map storage-column rows back to model-field row shapes
 - Expose an `orm()` client with typed collection keys (for example `db.Post`)
 
@@ -58,6 +59,34 @@ const posts = await db.Post
   .limit(10)
   .all();
 ```
+
+## Prepared row descriptions
+
+Built-in collection chains expose terminal-only `.prepared.all(configure?)` and `.prepared.first(filter?, configure?)` views. They synchronously return a `Preparable<DbRow, Result>` without executing it: a description containing a SQL `plan` and a required `consume` function. The description is not itself a `SqlQueryPlan`. Filters, projection, includes, variants, first-row limit replacement and read annotations use the ordinary row pipeline.
+
+`createPreparedRowQuery(description, statement)` is the composition seam for client integrations: prepare `description.plan` through SQL runtime, then wrap that SQL row statement with the description. SQL runtime remains plan-only; the ORM consumer owns model mapping and include decoding.
+
+```ts
+import { createPreparedRowQuery } from '@internal/sql-orm-client';
+
+const description = posts.select('title').prepared.all();
+const statement = await runtime.prepare({}, () => description.plan);
+const prepared = createPreparedRowQuery(description, statement);
+const rows = prepared.query(runtime, {});
+for await (const row of rows) {
+  console.log(row.title);
+}
+```
+
+`query(target, params, options?)` requires an explicit compatible runtime, connection or transaction, independent of the authoring collection. It returns the terminal result directly: a thenable `AsyncIterableResult<Row>` for `all`, or `Promise<Row | null>` for `first`. Each call creates independent consumption state. Include paths retain their existing buffering; database value decoding and execution lifecycle remain SQL runtime responsibilities.
+
+The [Postgres](../postgres/README.md#prepared-sql-and-orm-rows) and [SQLite](../sqlite/README.md#prepared-sql-and-orm-rows) facades compose this surface through `db.prepare({}, () => db.orm.public.Post.select('title').prepared.all())` (SQLite uses `db.orm.Post`). SQL callbacks capture `db.sql` and receive only params. Non-nullable scalar placeholders work in shorthand filters, callback comparisons, relation/include predicates, `prepared.first` filters and fixed lists such as `user.id.in([params.first, 42, params.second])`. Repeated placeholders retain their bind identity; each target keeps its stable slot layout across invocations. Comparisons retain codec identity, existing literal types and field trait requirements.
+
+ORM equality and inequality accept nullable prepared parameters: two nulls compare equal, and null differs from every non-null value. Declaration nullability selects the null-safe operator when the ORM callback or shorthand comparison is created, so the SQL stays fixed across invocations. Ordering, pattern and list comparisons still reject nullable prepared operands with `ORM.FILTER_UNSUPPORTED`. A nullable column can still be compared to a non-nullable parameter; literal-null filters retain their existing null checks. Raw SQL remains opaque, including its interpolations: ORM does not parse, rewrite or reject raw SQL based on parameter nullability. Hand-authored structured ASTs and SQL-builder comparisons retain their explicit operators; ORM does not rewrite them.
+
+Root and nested `.limit(params.take).offset(params.skip)` accept SQL's non-nullable numeric expression operands, including paginated row/scalar/combine include refinements and distinct wrappers. Prepared executions keep SQL and binding slots fixed while pagination values change. `prepared.first()` replaces an earlier limit with `1`; a placeholder used only by that replaced limit remains subject to unused-declaration validation.
+
+Aggregate or mutation terminals, custom helper preparation and dynamic parameter lists are not supported.
 
 ## Pagination
 

@@ -405,7 +405,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
             break;
           }
           const decodedRow = await decodeRow(next.value, decodeContext, codecCtx);
-          yield decodedRow as Row;
+          yield blindCast<Row, 'decoded SQL rows match the query plan result type'>(decodedRow);
         }
       } finally {
         // Best-effort iterator cleanup so the driver can release its
@@ -934,7 +934,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     outcome: TelemetryOutcome,
     durationMs?: number,
   ): void {
-    const contract = this.contract as { target: string };
+    const contract = this.contract;
     this._telemetry = Object.freeze({
       lane: plan.meta.lane,
       target: contract.target,
@@ -994,7 +994,7 @@ export async function withTransaction<R>(
       if (invalidated) {
         throw transactionClosedError();
       }
-      return new AsyncIterableResult(guardedStream(transaction.query(plan, options)));
+      return new AsyncIterableResult(guardedStream(transaction.query<Row>(plan, options)));
     },
     async execute(
       plan: SqlExecutionPlan<unknown> | SqlQueryPlan<unknown>,

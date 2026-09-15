@@ -28,6 +28,7 @@ import {
   OrderByItem,
   OrExpr,
   ParamRef,
+  PreparedParamRef,
   ProjectionItem,
   SelectAst,
   type SqlQueryable,
@@ -95,6 +96,36 @@ const contract = new SqlContractSerializer().deserializeContract({
 
 describe('Postgres adapter', () => {
   const adapter = createPostgresAdapter();
+
+  it.each([
+    ['eq', '='],
+    ['neq', '!='],
+    ['isNotDistinctFrom', 'IS NOT DISTINCT FROM'],
+    ['isDistinctFrom', 'IS DISTINCT FROM'],
+  ] as const)('lowers %s without changing ordinary equality', (op, sqlOperator) => {
+    const ast = SelectAst.from(TableSource.named('user'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+      .withWhere(
+        new BinaryExpr(
+          op,
+          ColumnRef.of('user', 'id'),
+          ParamRef.of(null, { codec: { codecId: 'pg/int4@1' } }),
+        ),
+      );
+    expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
+      `SELECT "user"."id" AS "id" FROM "user" WHERE "user"."id" ${sqlOperator} $1`,
+    );
+  });
+
+  it('types a standalone prepared projection from its declared codec', () => {
+    const ref = PreparedParamRef.of('value', { codecId: 'pg/int4@1' }, true);
+    const ast = SelectAst.from(TableSource.named('user')).withProjection([
+      ProjectionItem.of('value', ref),
+    ]);
+    expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
+      'SELECT $1::integer AS "value" FROM "user"',
+    );
+  });
 
   it('lowers rich select statements with aggregates, JSON, and subqueries', () => {
     const subquery = SelectAst.from(TableSource.named('post'))

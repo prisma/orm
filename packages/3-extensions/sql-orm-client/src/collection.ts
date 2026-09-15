@@ -5,7 +5,7 @@ import type {
   OperationKind,
 } from '@internal/framework-components/runtime';
 import { AsyncIterableResult, createMetaBuilder } from '@internal/framework-components/runtime';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   BinaryExpr,
@@ -16,6 +16,7 @@ import {
   type ToWhereExpr,
   type WhereArg,
 } from '@internal/sql-relational-core/ast';
+import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -43,7 +44,12 @@ import {
   resolveRowIdentityColumns,
   resolveUpsertConflictColumns,
 } from './collection-contract';
-import { dispatchCollectionRows } from './collection-dispatch';
+import {
+  consumeFirstRow,
+  describeCollectionFirst,
+  describeCollectionRows,
+  dispatchCollectionRows,
+} from './collection-dispatch';
 import type {
   CollectionConstructor,
   CollectionInit,
@@ -55,6 +61,7 @@ import type {
   RowSelection,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` property
   RowType,
+  WhereInput,
   WithOrderByState,
   WithVariantState,
   WithWhereState,
@@ -83,6 +90,7 @@ import {
   withMutationScope,
 } from './mutation-executor';
 import { ormError } from './orm-errors';
+import type { PreparedCollection } from './prepared-collection';
 import {
   compileAggregate,
   compileDeleteCount,
@@ -232,7 +240,7 @@ class CollectionImpl<
   /** @internal */
   readonly tableName: string;
   /** @internal */
-  readonly namespaceId: string;
+  readonly namespaceId: State['nsId'];
   /** @internal */
   readonly state: CollectionState;
   /** @internal */
@@ -1081,8 +1089,10 @@ class CollectionImpl<
    * const firstTen = await db.orm.User.orderBy((u) => u.id.asc()).limit(10).all();
    * ```
    */
-  limit(n: number): Collection<TContract, ModelName, Row, State> {
-    return this.#clone({ limit: n });
+  limit(
+    n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#clone({ limit: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**
@@ -1096,8 +1106,10 @@ class CollectionImpl<
    *   .all();
    * ```
    */
-  offset(n: number): Collection<TContract, ModelName, Row, State> {
-    return this.#clone({ offset: n });
+  offset(
+    n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#clone({ offset: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**
@@ -1139,6 +1151,45 @@ class CollectionImpl<
     return this.#withAnnotationsFromMeta(configure, 'all').#dispatch();
   }
 
+  get prepared(): PreparedCollection<TContract, ModelName, Row, State> {
+    return {
+      all: (configure) => {
+        const selected = this.#withAnnotationsFromMeta(configure, 'all');
+        return describeCollectionRows<Row>(selected.#descriptionOptions());
+      },
+      first: (
+        filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+        configure?: (meta: MetaBuilder<'read'>) => void,
+      ) => {
+        const selected = this.#forFirst(filter, configure);
+        return describeCollectionFirst<Row>(selected.#descriptionOptions());
+      },
+    };
+  }
+
+  #descriptionOptions() {
+    return {
+      context: this.ctx.context,
+      state: this.state,
+      tableName: this.tableName,
+      modelName: this.modelName,
+      namespaceId: this.namespaceId,
+    };
+  }
+
+  #forFirst(
+    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']> | undefined,
+    configure: ((meta: MetaBuilder<'read'>) => void) | undefined,
+  ) {
+    const scoped =
+      filter === undefined
+        ? this
+        : typeof filter === 'function'
+          ? this.where(filter)
+          : this.where(filter);
+    return scoped.limit(1).#withAnnotationsFromMeta(configure, 'first');
+  }
+
   /**
    * Read terminal: return the first matching row, or `null` if none
    * match. Optionally accepts a filter (callback or shorthand object)
@@ -1169,37 +1220,14 @@ class CollectionImpl<
     configure: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null>;
   async first(
-    filter: (
-      model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
-    ) => WhereArg,
+    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null>;
   async first(
-    filter: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
-    configure?: (meta: MetaBuilder<'read'>) => void,
-  ): Promise<Row | null>;
-  async first(
-    filter?:
-      | ((
-          model: VariantAwareModelAccessor<
-            TContract,
-            ModelName,
-            State['variantName'],
-            State['nsId']
-          >,
-        ) => WhereArg)
-      | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
+    filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null> {
-    const scoped =
-      filter === undefined
-        ? this
-        : typeof filter === 'function'
-          ? this.where(filter)
-          : this.where(filter);
-    const limited = scoped.limit(1).#withAnnotationsFromMeta(configure, 'first');
-    const rows = await limited.#dispatch().toArray();
-    return rows[0] ?? null;
+    return consumeFirstRow(this.#forFirst(filter, configure).#dispatch());
   }
 
   /**

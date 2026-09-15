@@ -89,6 +89,7 @@ function renderTypedParam(
   codecDescriptorRegistry: PostgresCodecDescriptorRegistry,
   many?: boolean,
   typeParams?: JsonValue,
+  forceCast = false,
 ): string {
   if (codecId === undefined) {
     return `$${index}`;
@@ -116,7 +117,7 @@ function renderTypedParam(
   if (isPgEnumParams(typeParams)) {
     return `$${index}::${quoteQualifiedName(nativeType)}${arraySuffix}`;
   }
-  if (!POSTGRES_INFERRABLE_NATIVE_TYPES.has(nativeType) || many) {
+  if (forceCast || !POSTGRES_INFERRABLE_NATIVE_TYPES.has(nativeType) || many) {
     return `$${index}::${nativeType}${arraySuffix}`;
   }
   return `$${index}`;
@@ -254,6 +255,9 @@ function renderProjection(
       const alias = quoteIdentifier(item.alias);
       if (item.expr.kind === 'literal') {
         return `${renderLiteral(item.expr)} AS ${alias}`;
+      }
+      if (item.expr.kind === 'prepared-param-ref') {
+        return `${renderParamRef(item.expr, pim, true)} AS ${alias}`;
       }
       return `${renderExpr(item.expr, contract, pim)} AS ${alias}`;
     })
@@ -474,6 +478,8 @@ function renderBinary(expr: BinaryExpr, contract: PostgresContract, pim: ParamIn
   const operatorMap: Record<BinaryExpr['op'], string> = {
     eq: '=',
     neq: '!=',
+    isNotDistinctFrom: 'IS NOT DISTINCT FROM',
+    isDistinctFrom: 'IS DISTINCT FROM',
     gt: '>',
     lt: '<',
     gte: '>=',
@@ -710,7 +716,7 @@ function renderExpr(expr: AnyExpression, contract: PostgresContract, pim: ParamI
   }
 }
 
-function renderParamRef(ref: AnyParamRef, pim: ParamIndexMap): string {
+function renderParamRef(ref: AnyParamRef, pim: ParamIndexMap, forceCast = false): string {
   const index = pim.indexMap.get(ref);
   if (index === undefined) {
     throw new InternalError('ParamRef not found in index map');
@@ -722,6 +728,7 @@ function renderParamRef(ref: AnyParamRef, pim: ParamIndexMap): string {
       pim.codecDescriptorRegistry,
       ref.codec.many,
       ref.codec.typeParams,
+      forceCast,
     );
   }
   if (ref.codec === undefined) {
