@@ -1,6 +1,6 @@
 name: Bug report
 description: Report something that doesn't work as expected.
-labels: ["bug", "needs-triage"]
+labels: ["kind/bug", "bug/1-unconfirmed"]
 body:
   - type: markdown
     attributes:
@@ -9,15 +9,15 @@ body:
 
         Before filing, please check that:
 
-        - You are on the **latest minor version** of Prisma 8. While we are pre-1.0, only the latest minor receives fixes — older minors are not supported. If you are on an older minor, please upgrade and re-verify before filing.
-        - You are not reporting a security issue. **Do not file public issues for security reports** — use [Private Vulnerability Reporting](https://github.com/prisma/prisma/security/advisories/new) instead.
+        - You are on the latest release of the line you use. For Prisma 8, that is the latest release candidate: while we are pre-1.0, only the latest release receives fixes. For Prisma 7, that is the latest `7.x`: Prisma 7 is maintained on the [`v7` branch](https://github.com/prisma/orm/tree/v7) of this repository and receives bug fixes for eighteen months after `8.0.0` final, so Prisma 7 reports belong here too. If you are on an older release, please upgrade and re-verify before filing.
+        - You are not reporting a security issue. **Do not file public issues for security reports** — use [Private Vulnerability Reporting](https://github.com/prisma/orm/security/advisories/new) instead.
 
   - type: input
     id: package-and-version
     attributes:
       label: Package and version
-      description: Which `@prisma/*` package (or the `prisma` CLI) and version are you using?
-      placeholder: "e.g. @internal/postgres@0.5.2"
+      description: Which `@prisma/*` package (or the `prisma` CLI) and version are you using? Prisma 7 versions are welcome.
+      placeholder: "e.g. @internal/postgres@0.5.2, or prisma@7.10.0"
     validations:
       required: true
 

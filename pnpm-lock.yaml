@@ -3991,6 +3991,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      postgres-array:
+        specifier: 2.0.0
+        version: 2.0.0
     devDependencies:
       '@internal/psl-printer':
         specifier: workspace:8.0.0-rc.11
@@ -4427,6 +4430,9 @@ importers:
       pg-mem:
         specifier: ^3.0.5
         version: 3.0.14(postgres@3.4.7)
+      pg-types:
+        specifier: 2.2.0
+        version: 2.2.0
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -5119,6 +5125,9 @@ importers:
       pg-cursor:
         specifier: ^2.21.0
         version: 2.21.0(pg@8.22.0)
+      postgres-array:
+        specifier: 2.0.0
+        version: 2.0.0
     devDependencies:
       '@internal/adapter-postgres':
         specifier: workspace:8.0.0-rc.11
@@ -17046,7 +17055,7 @@ snapshots:
       picomatch: 4.0.5
       rolldown: 1.2.0
       rolldown-plugin-dts: 0.27.14(rolldown@1.2.0)(typescript@5.9.3)
-      tinyexec: 1.2.4
+      tinyexec: 1.3.0
       tinyglobby: 0.2.17
       tree-kill: 1.2.2
       unconfig-core: 7.5.0
@@ -17512,6 +17521,3 @@ snapshots:
   zod@3.25.76: {}
 
   zod@4.4.3: {}
-
-time:
-  '@codingame/monaco-vscode-extension-api@25.1.2': '2026-02-03T13:39:27.975Z'

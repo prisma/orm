@@ -7,8 +7,8 @@ Thanks for your interest in Prisma 8. This document is the entry point for exter
 Prisma 8 ships as a release candidate (`8.0.0-rc.N`), and `8.0.0` final is expected within four to eight weeks. While we are on the release-candidate line:
 
 - **Expect breaking changes between release candidates.** APIs, contract schemas, on-disk formats, and CLI flags can shift without a deprecation cycle. Every release ships an upgrade recipe under [`skills/prisma-8/upgrading/`](./skills/prisma-8/upgrading/) that the `prisma-8` skill applies, and the churn settles as we approach final.
-- **Only the latest release receives security fixes.** Older releases are not backported. See [`SECURITY.md`](./SECURITY.md).
-- **New projects should start on Prisma 8.** The release candidate is a complete implementation; the gap you are most likely to hit is a feature that is not built yet, and the [feature scoreboard](./scorecard.md) names each one. Existing [Prisma 7](https://www.prisma.io/docs/orm) applications should migrate incrementally. Prisma 7 continues on the [`v7` branch](https://github.com/prisma/prisma/tree/v7) and receives bug fixes for twelve months after `8.0.0` final.
+- **Only the latest Prisma 8 release receives security fixes.** Older Prisma 8 releases are not backported. Prisma 7 is the exception: it receives security updates for eighteen months after `8.0.0` final, on the `v7` branch. See [`SECURITY.md`](./SECURITY.md).
+- **New projects should start on Prisma 8.** The release candidate is a complete implementation; the gap you are most likely to hit is a feature that is not built yet, and the [feature scoreboard](./scorecard.md) names each one. Existing [Prisma 7](https://www.prisma.io/docs/orm) applications should migrate incrementally. Prisma 7 continues on the [`v7` branch](https://github.com/prisma/orm/tree/v7) and receives bug fixes and security updates for eighteen months after `8.0.0` final.
 
 ## Before you start a substantive change
 
@@ -33,8 +33,8 @@ Optional, only needed for specific test suites:
 ## Setup
 
 ```bash
-git clone https://github.com/prisma/prisma.git
-cd prisma
+git clone https://github.com/prisma/orm.git
+cd orm
 
 corepack enable                      # if you haven't already
 pnpm install --frozen-lockfile

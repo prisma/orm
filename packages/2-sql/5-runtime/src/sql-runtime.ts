@@ -39,7 +39,13 @@ import type { CodecDescriptorRegistry } from '@internal/sql-relational-core/quer
 import type { RuntimeScope } from '@internal/sql-relational-core/types';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { buildDecodeContext, type DecodeContext, decodeRow } from './codecs/decoding';
+import {
+  buildDecodeContext,
+  type DecodeContext,
+  decodeRow,
+  type ListDecoder,
+  sqlNativeArrayListDecoder,
+} from './codecs/decoding';
 import { deriveParamMetadata, encodeParams, encodeParamsWithMetadata } from './codecs/encoding';
 import { validateCodecRegistryCompleteness } from './codecs/validation';
 import { computeSqlContentHash } from './content-hash';
@@ -371,6 +377,10 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     await this.verifyMarkerPromise;
   }
 
+  protected getListDecoder(): ListDecoder {
+    return sqlNativeArrayListDecoder;
+  }
+
   private async *streamRows<Row>(
     exec: SqlExecutionPlan,
     decodeContext: DecodeContext,
@@ -404,7 +414,12 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           if (next.done) {
             break;
           }
-          const decodedRow = await decodeRow(next.value, decodeContext, codecCtx);
+          const decodedRow = await decodeRow(
+            next.value,
+            decodeContext,
+            codecCtx,
+            this.getListDecoder(),
+          );
           yield blindCast<Row, 'decoded SQL rows match the query plan result type'>(decodedRow);
         }
       } finally {

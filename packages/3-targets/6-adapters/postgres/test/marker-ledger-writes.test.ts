@@ -69,9 +69,9 @@ describe('PostgresControlAdapter marker/ledger write lowering', () => {
 
   it('updateMarker reads the current invariants and writes the deduped union (no overwrite)', async () => {
     // The capturing driver returns this row for the internal readMarker probe
-    // and select; a Postgres driver yields `invariants` as a string[] already.
+    // and select; Postgres drivers expose array fields as raw text.
     const driver = createCapturingDriver([
-      { core_hash: 'from', profile_hash: 'prof', invariants: ['inv-a', 'inv-b'] },
+      { core_hash: 'from', profile_hash: 'prof', invariants: '{"inv-a","inv-b"}' },
     ]);
     const matched = await adapter.updateMarker(driver, 'app', 'from', {
       storageHash: 'to',

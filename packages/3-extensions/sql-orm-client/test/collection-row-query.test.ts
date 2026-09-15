@@ -1,6 +1,8 @@
+import { createHook } from 'node:async_hooks';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { Preparable } from '@internal/sql-relational-core/plan';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import * as collectionContract from '../src/collection-contract';
 import { describeCollectionRows } from '../src/collection-dispatch';
 import * as collectionRuntime from '../src/collection-runtime';
 import { createCollectionFor } from './collection-fixtures';
@@ -15,6 +17,198 @@ function source(rows: Record<string, unknown>[]) {
 
 describe('collection row query', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it('ignores inherited field and column mappings in prepared child decoders', async () => {
+    const { collection } = createCollectionFor('User');
+    const state = collection
+      .select('name')
+      .include('posts', (posts) => posts.select('title')).state;
+    const fieldMap = collectionContract.getFieldToColumnMap;
+    const columnMap = collectionContract.getColumnToFieldMap;
+    vi.spyOn(collectionContract, 'getFieldToColumnMap').mockImplementation(
+      (contract, namespace, model) =>
+        model === 'Post'
+          ? Object.setPrototypeOf({}, { title: 'user_id' })
+          : fieldMap(contract, namespace, model),
+    );
+    vi.spyOn(collectionContract, 'getColumnToFieldMap').mockImplementation(
+      (contract, namespace, model) =>
+        model === 'Post'
+          ? Object.setPrototypeOf({ user_id: 'userId' }, { title: Object.prototype.toString })
+          : columnMap(contract, namespace, model),
+    );
+    const query = describeCollectionRows({
+      context: collection.ctx.context,
+      state,
+      tableName: collection.tableName,
+      modelName: collection.modelName,
+      namespaceId: 'public',
+    });
+    expect(await query.consume(source([{ name: 'A', posts: [{ title: 'P' }] }]))).toEqual([
+      { name: 'A', posts: [{ title: 'P' }] },
+    ]);
+  });
+
+  it('fuses fixed prepared child selections and falls back for unexpected row shapes', async () => {
+    const original = collectionRuntime.createStorageRowMapper;
+    const childMapper = vi.fn<(row: Record<string, unknown>) => Record<string, unknown>>();
+    vi.spyOn(collectionRuntime, 'createStorageRowMapper').mockImplementation(
+      (contract, namespace, model) => {
+        const mapper = original(contract, namespace, model);
+        if (model !== 'Post') return mapper;
+        childMapper.mockImplementation(mapper);
+        return childMapper;
+      },
+    );
+    const { collection } = createCollectionFor('User');
+    const selected = collection
+      .select('name')
+      .include('posts', (posts) =>
+        posts
+          .select('userId', 'title')
+          .include('comments', (comments) => comments.select('postId')),
+      );
+    const query = describeCollectionRows({
+      context: collection.ctx.context,
+      state: selected.state,
+      tableName: collection.tableName,
+      modelName: collection.modelName,
+      namespaceId: 'public',
+    });
+    const child = Object.freeze({
+      user_id: 1,
+      title: 'P',
+      comments: Object.freeze([Object.freeze({ post_id: 2 })]),
+    });
+    for (let invocation = 0; invocation < 2; invocation++) {
+      expect(await query.consume(source([{ name: 'A', posts: Object.freeze([child]) }]))).toEqual([
+        { name: 'A', posts: [{ userId: 1, title: 'P', comments: [{ postId: 2 }] }] },
+      ]);
+    }
+    expect(childMapper).not.toHaveBeenCalled();
+    expect(
+      await query.consume(
+        source([
+          { name: 'A', posts: [{ title: null, user_id: undefined, extra: true, comments: [] }] },
+        ]),
+      ),
+    ).toEqual([
+      { name: 'A', posts: [{ title: null, userId: undefined, extra: true, comments: [] }] },
+    ]);
+    expect(childMapper).toHaveBeenCalledOnce();
+  });
+
+  it('preserves prepared nullable to-one cardinality for fixed JSON selections', async () => {
+    const { collection } = createCollectionFor('User');
+    const query = describeCollectionRows({
+      context: collection.ctx.context,
+      state: collection.select('name').include('invitedBy', (user) => user.select('name')).state,
+      tableName: collection.tableName,
+      modelName: collection.modelName,
+      namespaceId: 'public',
+    });
+    expect(
+      await query.consume(
+        source([
+          { name: 'A', invitedBy: null },
+          { name: 'B', invitedBy: '[]' },
+          { name: 'C', invitedBy: '[{"name":"D"}]' },
+        ]),
+      ),
+    ).toEqual([
+      { name: 'A', invitedBy: null },
+      { name: 'B', invitedBy: null },
+      { name: 'C', invitedBy: { name: 'D' } },
+    ]);
+  });
+
+  it('snapshots fixed child cells before a custom codec changes a later raw row', async () => {
+    const { collection } = createCollectionFor('User');
+    const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'title');
+    if (!codec) throw new Error('Missing title codec');
+    const later = { title: 'second' };
+    vi.spyOn(codec, 'decodeJson').mockImplementation((value) => {
+      later.title = 'changed';
+      return String(value).toUpperCase();
+    });
+    const query = describeCollectionRows({
+      context: collection.ctx.context,
+      state: collection.select('name').include('posts', (posts) => posts.select('title')).state,
+      tableName: collection.tableName,
+      modelName: collection.modelName,
+      namespaceId: 'public',
+    });
+    expect(
+      await query.consume(source([{ name: 'A', posts: [{ title: 'first' }, later] }])),
+    ).toEqual([{ name: 'A', posts: [{ title: 'FIRST' }, { title: 'SECOND' }] }]);
+  });
+
+  it('validates every child envelope before running prepared child codecs', async () => {
+    const { collection } = createCollectionFor('User');
+    const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'title');
+    if (!codec) throw new Error('Missing title codec');
+    const decode = vi.spyOn(codec, 'decodeJson');
+    const query = describeCollectionRows({
+      context: collection.ctx.context,
+      state: collection.select('name').include('posts', (posts) => posts.select('title')).state,
+      tableName: collection.tableName,
+      modelName: collection.modelName,
+      namespaceId: 'public',
+    });
+    await expect(
+      query.consume(source([{ name: 'A', posts: [{ title: 'P' }, false] }])).toArray(),
+    ).rejects.toThrow('Include row envelope');
+    expect(decode).not.toHaveBeenCalled();
+  });
+
+  it('does not create Promise resources per nested JSON include', async () => {
+    const { collection } = createCollectionFor('User');
+    const selected = collection
+      .select('name')
+      .include('posts', (posts) =>
+        posts.select('userId').include('comments', (comments) => comments.select('postId')),
+      );
+    const query = describeCollectionRows({
+      context: collection.ctx.context,
+      state: selected.state,
+      tableName: collection.tableName,
+      modelName: collection.modelName,
+      namespaceId: 'public',
+    });
+    async function measure(size: number) {
+      const posts = Array.from({ length: size }, (_, id) => ({
+        user_id: id,
+        comments: [{ post_id: id }],
+      }));
+      let promises = 0;
+      const hook = createHook({
+        init(_id, type) {
+          if (type === 'PROMISE') promises++;
+        },
+      });
+      hook.enable();
+      let result: unknown;
+      try {
+        result = await query.consume(source([{ name: 'A', posts }])).toArray();
+      } finally {
+        hook.disable();
+      }
+      expect(result).toEqual([
+        {
+          name: 'A',
+          posts: posts.map((post) => ({
+            userId: post.user_id,
+            comments: [{ postId: post.user_id }],
+          })),
+        },
+      ]);
+      return promises;
+    }
+    await measure(1);
+    const small = await measure(1);
+    const large = await measure(100);
+    expect(large).toBe(small);
+  });
 
   it('precomputes known but unselected bindings and decodes fresh cells after empty and null payloads', async () => {
     const { collection } = createCollectionFor('User');

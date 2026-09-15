@@ -36,6 +36,8 @@ import { InternalError } from '@internal/utils/internal-error';
 import { resolveAggregate } from './aggregate-codecs';
 import { emptyAggregateResult } from './aggregate-empty-result';
 import {
+  getColumnToFieldMap,
+  getFieldToColumnMap,
   isToOneCardinality,
   resolvePolymorphismInfo,
   resolveRowIdentityColumns,
@@ -167,7 +169,7 @@ function createPreparedRowsConsumer<Row>(
         const parents = (await rows.toArray()).map((raw) => ({ raw, mapped: mapRow(raw) }));
         for (const parent of parents) {
           for (const include of includes) {
-            parent.mapped[include.alias] = await include.consume(parent.raw[include.alias]);
+            parent.mapped[include.alias] = include.consume(parent.raw[include.alias]);
           }
         }
         for (const parent of parents) yield castRow(parent.mapped);
@@ -199,11 +201,10 @@ function createPreparedIncludeConsumer(
     }));
     return {
       alias,
-      consume: async (raw) => {
+      consume: (raw) => {
         const parsed = parseCombineEnvelope(include, raw);
         const result: Record<string, unknown> = {};
-        for (const branch of branches)
-          result[branch.name] = await branch.consume(parsed[branch.name]);
+        for (const branch of branches) result[branch.name] = branch.consume(parsed[branch.name]);
         return result;
       },
     };
@@ -239,10 +240,78 @@ function createPreparedIncludeConsumer(
     createPreparedIncludeConsumer(context, child),
   );
   const toOne = isToOneCardinality(include.cardinality);
+  const fused = deferResolution(() =>
+    createPreparedIncludedRowDecoder(contract, include, bindingFor),
+  );
   return {
     alias,
-    consume: (raw) =>
-      consumeRowInclude(parseIncludedRows(include, raw), mapRow, bindingFor, nested, toOne),
+    consume: (raw) => {
+      const rows = parseIncludedRows(include, raw);
+      if (rows.length === 0) return toOne ? null : [];
+      const decoder = fused();
+      if (!decoder || !rows.every(decoder.matches)) {
+        return consumeRowInclude(rows, mapRow, bindingFor, nested, toOne);
+      }
+      const mapped = rows.map((row) => {
+        const result = decoder.decode(row);
+        for (const child of nested) result[child.alias] = child.consume(row[child.alias]);
+        return result;
+      });
+      return toOne ? (mapped[0] ?? null) : mapped;
+    },
+  };
+}
+
+interface PreparedIncludedRowDecoder {
+  readonly matches: (row: Record<string, unknown>) => boolean;
+  readonly decode: StorageRowMapper;
+}
+
+function createPreparedIncludedRowDecoder(
+  contract: Contract<SqlStorage>,
+  include: IncludeExpr,
+  bindingFor: (key: string) => IncludedColumnBinding | null,
+): PreparedIncludedRowDecoder | undefined {
+  const namespace = include.relatedNamespaceId;
+  const model = include.relatedModelName;
+  if (resolvePolymorphismInfo(contract, namespace, model)) return undefined;
+  const fieldToColumn = getFieldToColumnMap(contract, namespace, model);
+  const columnToField = getColumnToFieldMap(contract, namespace, model);
+  const fields = include.nested.selectedFields ?? Object.keys(fieldToColumn);
+  const columns = fields.map((field) =>
+    Object.hasOwn(fieldToColumn, field) ? (fieldToColumn[field] ?? field) : field,
+  );
+  const aliases = include.nested.includes.map((child) => child.relationName);
+  const table = contract.storage.namespaces[namespace]?.entries.table?.[include.relatedTableName];
+  if (aliases.some((alias) => table?.columns[alias] !== undefined)) return undefined;
+  const keys = [...columns, ...aliases];
+  if (keys.includes('__proto__') || new Set(keys).size !== keys.length) return undefined;
+  const operations = keys.map((key) => {
+    const binding = deferResolution(() => bindingFor(key));
+    return {
+      key,
+      field: Object.hasOwn(columnToField, key) ? (columnToField[key] ?? key) : key,
+      decode(value: unknown) {
+        if (value === null || value === undefined) return value;
+        const resolved = binding();
+        return resolved
+          ? decodeIncludedColumnValue(resolved.ref, resolved.codecId, resolved.codec, value)
+          : value;
+      },
+    };
+  });
+  return {
+    matches(row) {
+      const actual = Object.keys(row);
+      return actual.length === keys.length && actual.every((key, index) => key === keys[index]);
+    },
+    decode(row) {
+      const result: Record<string, unknown> = {};
+      for (const operation of operations) {
+        result[operation.field] = operation.decode(row[operation.key]);
+      }
+      return result;
+    },
   };
 }
 
@@ -254,7 +323,7 @@ function createPreparedScalarConsumer(
   const metadata = deferResolution(() =>
     resolveScalarIncludeMetadata(context.contract, context, include, scalar),
   );
-  return async (raw) => {
+  return (raw) => {
     const { resolved, codec } = metadata();
     return consumeScalarInclude(include, resolved, codec, raw);
   };
@@ -320,7 +389,7 @@ function consumeIncludeRows<Row>(
     const bindings: IncludedColumnBindings = new WeakMap();
     for (const parent of parentRows) {
       for (const include of state.includes) {
-        parent.mapped[include.relationName] = await decodeIncludePayload(
+        parent.mapped[include.relationName] = decodeIncludePayload(
           contract,
           context,
           include,
@@ -482,17 +551,15 @@ function buildIdentityInFilter(
  * each branch is dispatched to the row or scalar decoder per its
  * declared shape (see `decodeCombineIncludePayload`).
  */
-async function decodeIncludePayload(
+function decodeIncludePayload(
   contract: Contract<SqlStorage>,
   context: CodecExecutionContext,
   include: IncludeExpr,
   raw: unknown,
   bindings: IncludedColumnBindings,
-): Promise<unknown> {
+): unknown {
   if (include.scalar) {
-    return Promise.resolve(
-      decodeScalarIncludePayload(contract, context, include, include.scalar, raw),
-    );
+    return decodeScalarIncludePayload(contract, context, include, include.scalar, raw);
   }
   if (include.combine) {
     return decodeCombineIncludePayload(contract, context, include, include.combine, raw, bindings);
@@ -542,16 +609,16 @@ async function decodeIncludePayload(
 type StorageRowMapper = (row: Record<string, unknown>) => Record<string, unknown>;
 interface IncludeConsumer {
   readonly alias: string;
-  readonly consume: (raw: unknown) => Promise<unknown>;
+  readonly consume: (raw: unknown) => unknown;
 }
 
-async function consumeRowInclude(
+function consumeRowInclude(
   rawChildren: readonly Record<string, unknown>[],
   mapChildRow: StorageRowMapper,
   bindingFor: (key: string) => IncludedColumnBinding | null,
   nested: readonly IncludeConsumer[],
   toOne: boolean,
-): Promise<Record<string, unknown>[] | Record<string, unknown> | null> {
+): Record<string, unknown>[] | Record<string, unknown> | null {
   const mappedChildren: Record<string, unknown>[] = [];
   for (const childRow of rawChildren) {
     const decodedChildRow = decodeIncludedStorageRow(childRow, bindingFor);
@@ -561,7 +628,7 @@ async function consumeRowInclude(
     // polymorphic mapper, which keeps only variant model-field columns and so
     // drops the relation alias — reading from `mapped` would lose it.
     for (const child of nested) {
-      mapped[child.alias] = await child.consume(decodedChildRow[child.alias]);
+      mapped[child.alias] = child.consume(decodedChildRow[child.alias]);
     }
     mappedChildren.push(mapped);
   }
@@ -760,14 +827,14 @@ function wrapIncludedDecodeFailure(error: unknown, ref: DecodedValueRef, codecId
  * bug — `parseCombineEnvelope` throws loudly rather than papering over
  * it with an empty shape.
  */
-async function decodeCombineIncludePayload(
+function decodeCombineIncludePayload(
   contract: Contract<SqlStorage>,
   context: CodecExecutionContext,
   include: IncludeExpr,
   branches: Readonly<Record<string, IncludeCombineBranch>>,
   raw: unknown,
   bindings: IncludedColumnBindings,
-): Promise<Record<string, unknown>> {
+): Record<string, unknown> {
   const parsed = parseCombineEnvelope(include, raw);
   const result: Record<string, unknown> = {};
   for (const [branchName, branch] of Object.entries(branches)) {
@@ -779,7 +846,7 @@ async function decodeCombineIncludePayload(
         scalar: undefined,
         combine: undefined,
       };
-      result[branchName] = await decodeIncludePayload(
+      result[branchName] = decodeIncludePayload(
         contract,
         context,
         syntheticInclude,

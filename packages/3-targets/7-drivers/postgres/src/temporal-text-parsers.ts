@@ -6,23 +6,16 @@ const TIME_OID = 1083;
 const TIMESTAMP_OID = 1114;
 const TIMESTAMPTZ_OID = 1184;
 
-const DATE_ARRAY_OID = 1182;
-const TIME_ARRAY_OID = 1183;
-const TIMESTAMP_ARRAY_OID = 1115;
-const TIMESTAMPTZ_ARRAY_OID = 1185;
+export const PG_TYPES_ARRAY_OIDS: ReadonlySet<number> = new Set([
+  651, 791, 199, 1000, 1001, 1005, 1007, 1008, 1009, 1014, 1015, 1016, 1017, 1021, 1022, 1028, 1040,
+  1041, 1115, 1182, 1183, 1185, 1187, 1231, 1270, 2951, 3807, 3907,
+]);
 
 const TEMPORAL_SCALAR_OIDS: ReadonlySet<number> = new Set([
   DATE_OID,
   TIME_OID,
   TIMESTAMP_OID,
   TIMESTAMPTZ_OID,
-]);
-
-const TEMPORAL_ARRAY_OIDS: ReadonlySet<number> = new Set([
-  DATE_ARRAY_OID,
-  TIME_ARRAY_OID,
-  TIMESTAMP_ARRAY_OID,
-  TIMESTAMPTZ_ARRAY_OID,
 ]);
 
 type TextParser = (value: string) => unknown;
@@ -40,30 +33,18 @@ function serverText(value: string): string {
   return value;
 }
 
-type ArrayParser = {
-  readonly create: (source: string) => { readonly parse: () => unknown[] };
-};
-
-function parseTextArray(value: string): unknown {
-  if (!value) {
-    return null;
-  }
-  return blindCast<
-    ArrayParser,
-    'pg-types declares arrayParser as a function; at runtime it is an object exposing create()'
-  >(pgTypes.arrayParser)
-    .create(value)
-    .parse();
+function createTextTypes(rawTextOids: ReadonlySet<number>): CustomTypesConfig {
+  return {
+    getTypeParser(oid, format) {
+      if (rawTextOids.has(oid)) {
+        return serverText;
+      }
+      return getTypeParser(oid, format);
+    },
+  };
 }
 
-export const temporalTextTypes: CustomTypesConfig = {
-  getTypeParser(oid, format) {
-    if (TEMPORAL_SCALAR_OIDS.has(oid)) {
-      return serverText;
-    }
-    if (TEMPORAL_ARRAY_OIDS.has(oid)) {
-      return parseTextArray;
-    }
-    return getTypeParser(oid, format);
-  },
-};
+export const controlTextTypes = createTextTypes(PG_TYPES_ARRAY_OIDS);
+export const temporalTextTypes = createTextTypes(
+  new Set([...TEMPORAL_SCALAR_OIDS, ...PG_TYPES_ARRAY_OIDS]),
+);

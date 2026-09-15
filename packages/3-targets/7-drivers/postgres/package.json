@@ -37,6 +37,7 @@
     "@repo/tsdown": "workspace:8.0.0-rc.11",
     "@types/pg-cursor": "^2.4.6",
     "pg-mem": "^3.0.5",
+    "pg-types": "2.2.0",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
