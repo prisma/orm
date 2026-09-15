@@ -74,9 +74,9 @@ describe('Prisma 7 supported schema against the database Prisma 7 built', () => 
     expect(loaded.ok).toBe(false);
     if (loaded.ok) return;
     expect(loaded.failure.diagnostics.map((d) => [d.code, d.span?.start.line]).sort()).toEqual([
-      ['PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', 114],
-      ['PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', 95],
-      ['PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED', 96],
+      ['PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', 114],
+      ['PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', 95],
+      ['PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED', 96],
     ]);
   });
 });

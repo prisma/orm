@@ -22,7 +22,7 @@ export function parseIndexAttribute(
   const unsupported = (what: string, span: PslSpan): undefined => {
     diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_INDEX_ARGUMENT_UNSUPPORTED',
+        'PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED',
         `"${owner}": @${attribute.name} ${what}`,
         sourceId,
         span,

@@ -15,7 +15,7 @@ export default defineConfig({ contract: prisma7Schema('prisma/schema.prisma') })
 
 - **Package** `packages/2-mongo-family/2-authoring/contract-prisma7`, shaped like the Mongo `contract-psl`. Same `prisma7Schema` factory shape and `source.load` contract as slice 1; the parser additions from slice 1 are reused.
 - **Config**: `defineConfig` in `packages/3-extensions/mongo/src/config/define-config.ts` accepts `contract: string | ContractConfig`.
-- **Provider check**: `provider` must be `mongodb`, else `PRISMA7_PROVIDER_MISMATCH`.
+- **Provider check**: `provider` must be `mongodb`, else `PSL.PRISMA7_PROVIDER_MISMATCH`.
 - **Unknown top-level blocks in the Mongo PSL interpreter.** Found in slice 1 dispatch 3 review: `packages/2-mongo-family/2-authoring/contract-psl` keeps only `enum` blocks and silently drops every other generic block, including `view`. This slice adds a diagnostic for unknown top-level block keywords in the Mongo PSL interpreter, mirroring SQL's `PSL_UNSUPPORTED_TOP_LEVEL_BLOCK`, so a Prisma 7 `view` is never silently lost on either path.
 
 ## Rule table
@@ -23,19 +23,19 @@ export default defineConfig({ contract: prisma7Schema('prisma/schema.prisma') })
 | Prisma 7 | Rule |
 |---|---|
 | id field `String @id @default(auto()) @map("_id") @db.ObjectId` | `_id` with the ObjectId codec. `@default(auto())` on this field is accepted and dropped, since Mongo assigns `_id`. |
-| id field without `@db.ObjectId` | `PRISMA7_MONGO_ID_NOT_OBJECTID` (Prisma 8 requires ObjectId ids, `interpreter.ts:1319-1338`). |
+| id field without `@db.ObjectId` | `PSL.PRISMA7_MONGO_ID_NOT_OBJECTID` (Prisma 8 requires ObjectId ids, `interpreter.ts:1319-1338`). |
 | `@db.ObjectId` on any other field | ObjectId codec. |
 | `String`, `Int`, `Boolean`, `DateTime`, `Float`, lists, composite `type` blocks | Map directly. |
-| `Json`, `Bytes`, `Decimal`, `BigInt` | `PRISMA7_MONGO_TYPE_UNSUPPORTED`. |
-| `@default(...)` on any non-id field, `@updatedAt` | `PRISMA7_MONGO_DEFAULT_UNSUPPORTED`. |
+| `Json`, `Bytes`, `Decimal`, `BigInt` | `PSL.PRISMA7_MONGO_TYPE_UNSUPPORTED`. |
+| `@default(...)` on any non-id field, `@updatedAt` | `PSL.PRISMA7_MONGO_DEFAULT_UNSUPPORTED`. |
 | `@relation(name, fields, references)` | Map directly. |
-| `@relation(onDelete, onUpdate, map)` | `PRISMA7_MONGO_REFERENTIAL_ACTION_UNSUPPORTED`. |
+| `@relation(onDelete, onUpdate, map)` | `PSL.PRISMA7_MONGO_REFERENTIAL_ACTION_UNSUPPORTED`. |
 | `@unique`, `@@unique`, `@@index` | Map directly. Verification item 5 decides whether Prisma 7's index names are set. |
 | `@@fulltext` | `@@textIndex`. |
-| `@map` on a composite-type field | `PRISMA7_MONGO_COMPOSITE_MAP_UNSUPPORTED` (Prisma 8 ignores it silently, `interpreter.ts:1378`). |
+| `@map` on a composite-type field | `PSL.PRISMA7_MONGO_COMPOSITE_MAP_UNSUPPORTED` (Prisma 8 ignores it silently, `interpreter.ts:1378`). |
 | `enum` | Mongo enum with the text codec. Member `@map` is the storage value. |
 | `@@map`, `@map` | Map directly. Collection name is `@@map` or the model name verbatim. |
-| `@@schema`, `view`, `@@id` | Errors: `PRISMA7_MONGO_SCHEMA_UNSUPPORTED`, `PRISMA7_VIEW_UNSUPPORTED`, `PRISMA7_MONGO_COMPOSITE_ID_UNSUPPORTED`. |
+| `@@schema`, `view`, `@@id` | Errors: `PSL.PRISMA7_MONGO_SCHEMA_UNSUPPORTED`, `PSL.PRISMA7_VIEW_UNSUPPORTED`, `PSL.PRISMA7_MONGO_COMPOSITE_ID_UNSUPPORTED`. |
 | `@ignore`, `@@ignore` | Omitted, as in slice 1. |
 
 ## Slice Definition of Done

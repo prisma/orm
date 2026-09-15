@@ -38,8 +38,8 @@ The `NativeTypes.citext` column needs the `citext` extension. Run `CREATE EXTENS
 
 This directory records what Prisma 7 does. It is not the input for the zero-findings end-to-end proof (`contract emit`, `db sign`, `db verify`), because the slice spec makes eight constructs in this schema hard errors for the interpreter:
 
-- `view UserSummary` (`PRISMA7_VIEW_UNSUPPORTED`)
-- `Post.search Unsupported("tsvector")` (`PRISMA7_UNSUPPORTED_TYPE`)
-- `@db.Citext`, `@db.Bit(8)`, `@db.VarBit(8)`, `@db.Xml`, `@db.Oid`, `@db.Money` on `NativeTypes` (`PRISMA7_NATIVE_TYPE_UNSUPPORTED`)
+- `view UserSummary` (`PSL.PRISMA7_VIEW_UNSUPPORTED`)
+- `Post.search Unsupported("tsvector")` (`PSL.PRISMA7_UNSUPPORTED_TYPE`)
+- `@db.Citext`, `@db.Bit(8)`, `@db.VarBit(8)`, `@db.Xml`, `@db.Oid`, `@db.Money` on `NativeTypes` (`PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED`)
 
 Use `../supported/` for the end-to-end proof. It is this schema with those eight constructs removed and nothing else changed.

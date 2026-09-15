@@ -1,12 +1,12 @@
 [
   {
-    "code": "PRISMA7_JUNCTION_ID_UNSUPPORTED",
+    "code": "PSL.PRISMA7_JUNCTION_ID_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 8,
     "message": "Relation field \"Left.rights\" is an implicit many-to-many relation, but \"Left\" has a composite id; Prisma 7 requires a single-field @id on both models of an implicit many-to-many relation."
   },
   {
-    "code": "PRISMA7_JUNCTION_ID_UNSUPPORTED",
+    "code": "PSL.PRISMA7_JUNCTION_ID_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 15,
     "message": "Relation field \"Right.lefts\" is an implicit many-to-many relation, but \"Left\" has a composite id; Prisma 7 requires a single-field @id on both models of an implicit many-to-many relation."

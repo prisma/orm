@@ -6,5 +6,5 @@
 - `Timestamps.updatedAtNow DateTime @default(now()) @updatedAt` became `DateTime @default(now())` (the SQL carries `DEFAULT CURRENT_TIMESTAMP`, which is exactly that default).
 - `Defaults.uuidOpt String? @default(uuid())` became `String?` (no generator; the column stays nullable and has no database default in the SQL).
 
-Everything else is byte-for-byte the supported schema. The test applies `../supported/migration.sql` unchanged, so the database is exactly what Prisma 7.10.0 built, interprets this file, and expects `db verify` to report nothing. `../supported/schema.prisma` itself is the error case: interpreting it yields `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` for `updatedAtOpt` and `uuidOpt` and `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` for `updatedAtNow`.
+Everything else is byte-for-byte the supported schema. The test applies `../supported/migration.sql` unchanged, so the database is exactly what Prisma 7.10.0 built, interprets this file, and expects `db verify` to report nothing. `../supported/schema.prisma` itself is the error case: interpreting it yields `PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` for `updatedAtOpt` and `uuidOpt` and `PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` for `updatedAtNow`.
 

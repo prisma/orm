@@ -82,7 +82,12 @@ export function lowerPrisma7Default(
   const label = `Field "${input.modelName}.${field.name}"`;
   const unknown = (reason: string, span: PslSpan): undefined => {
     diagnostics.push(
-      prisma7Diagnostic('PRISMA7_UNKNOWN_DEFAULT', `${label}: @default ${reason}`, sourceId, span),
+      prisma7Diagnostic(
+        'PSL.PRISMA7_UNKNOWN_DEFAULT',
+        `${label}: @default ${reason}`,
+        sourceId,
+        span,
+      ),
     );
     return undefined;
   };
@@ -126,7 +131,7 @@ function scalarValue(
   const jsonNull = (holds: string): undefined => {
     input.diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED',
+        'PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED',
         `Field "${input.modelName}.${input.field.name}": @default(${printSyntax(expression.syntax).trim()}) ${holds} the JSON value null, which the contract cannot tell apart from SQL NULL. Remove the @default or give it another JSON value; either changes the column default on Prisma 7's next migration.`,
         input.sourceId,
         span,
@@ -303,7 +308,7 @@ function lowerFunction(
     }
     input.diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_UNKNOWN_DEFAULT',
+        'PSL.PRISMA7_UNKNOWN_DEFAULT',
         `${label}: @default(dbgenerated()) with no expression is not supported yet on a required field, because without a column default Prisma 8 requires the value on create. Either remove the @default, which makes Prisma 7's next migration drop the column default (ALTER COLUMN ... DROP DEFAULT) and both clients require the value on create, or write the column's database default as @default(dbgenerated("<expression>")), which Prisma 7's next migration sets on the column.`,
         input.sourceId,
         span,
@@ -348,7 +353,7 @@ function lowerFunction(
   if (!lowered.ok) {
     input.diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_UNKNOWN_DEFAULT',
+        'PSL.PRISMA7_UNKNOWN_DEFAULT',
         `${label}: ${lowered.diagnostic.message}`,
         input.sourceId,
         span,

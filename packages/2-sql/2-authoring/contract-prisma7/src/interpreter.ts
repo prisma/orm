@@ -221,7 +221,7 @@ export function interpretPrisma7Documents(
         case 'view':
           diagnostics.push(
             prisma7Diagnostic(
-              'PRISMA7_VIEW_UNSUPPORTED',
+              'PSL.PRISMA7_VIEW_UNSUPPORTED',
               `View "${block.name}" is not supported; Prisma 8 has no views. Remove the view or replace it with a model over the underlying table.`,
               sourceId,
               keywordPslSpan(block.node.syntax, block.keyword, sourceFile),
@@ -381,7 +381,7 @@ export function interpretPrisma7Documents(
       if (columns === undefined) {
         diagnostics.push(
           prisma7Diagnostic(
-            'PRISMA7_INDEX_ARGUMENT_UNSUPPORTED',
+            'PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED',
             `Model "${modelName}": an index names a field that is not a scalar column of the model.`,
             model.sourceId,
             attribute.span,
@@ -452,7 +452,7 @@ function checkDatasource(
   if (datasource === undefined) {
     diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_PROVIDER_MISMATCH',
+        'PSL.PRISMA7_PROVIDER_MISMATCH',
         `No datasource block found; add \`datasource db { provider = "${namedProvider}" }\`.`,
         fallbackSourceId,
         undefined,
@@ -465,7 +465,7 @@ function checkDatasource(
   if (provider === undefined || !binding.providers.includes(provider)) {
     diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_PROVIDER_MISMATCH',
+        'PSL.PRISMA7_PROVIDER_MISMATCH',
         provider === undefined
           ? `The datasource block declares no string \`provider\`; this contract source reads Prisma 7 schemas for provider "${namedProvider}".`
           : `The datasource provider is "${provider}"; this contract source reads Prisma 7 schemas for provider "${namedProvider}".`,
@@ -483,7 +483,7 @@ function checkDatasource(
     if (scalarValue(block, property) !== 'prisma') continue;
     diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_RELATION_MODE_UNSUPPORTED',
+        'PSL.PRISMA7_RELATION_MODE_UNSUPPORTED',
         `${property} = "prisma" is not supported: the contract declares the foreign keys its relations need, and in this mode Prisma 7 creates none. ${edit}, makes Prisma 7's next migration add those foreign keys, and that migration fails if any existing row breaks one.`,
         datasource.sourceId,
         parameterSpan(block, property),
@@ -510,7 +510,7 @@ function reportTableCollisions(
       const mapAttribute = model.symbol.attributes.find((attribute) => attribute.name === 'map');
       diagnostics.push(
         prisma7Diagnostic(
-          'PRISMA7_TABLE_COLLISION',
+          'PSL.PRISMA7_TABLE_COLLISION',
           `Models ${names} all map to table "${model.namespaceId}"."${model.tableName}"; each model needs its own table.`,
           model.sourceId,
           mapAttribute?.span ?? model.symbol.span,
@@ -592,7 +592,7 @@ function readModelDeclaration(
       default:
         diagnostics.push(
           prisma7Diagnostic(
-            'PRISMA7_UNKNOWN_ATTRIBUTE',
+            'PSL.PRISMA7_UNKNOWN_ATTRIBUTE',
             `Model "${symbol.name}": attribute "@@${attribute.name}" is not supported yet by the Prisma 7 contract source.`,
             sourceId,
             attribute.span,
@@ -641,7 +641,7 @@ function readEnumDeclaration(
       default:
         diagnostics.push(
           prisma7Diagnostic(
-            'PRISMA7_UNKNOWN_ATTRIBUTE',
+            'PSL.PRISMA7_UNKNOWN_ATTRIBUTE',
             `Enum "${block.name}": attribute "@@${attribute.name}" is not supported by the Prisma 7 contract source.`,
             sourceId,
             attribute.span,
@@ -663,7 +663,7 @@ function readEnumDeclaration(
       } else {
         diagnostics.push(
           prisma7Diagnostic(
-            'PRISMA7_UNKNOWN_ATTRIBUTE',
+            'PSL.PRISMA7_UNKNOWN_ATTRIBUTE',
             `Enum member "${block.name}.${name}": attribute "@${attribute.name}" is not supported by the Prisma 7 contract source.`,
             sourceId,
             attribute.span,
@@ -691,7 +691,7 @@ function lowerNativeEnums(
     if (descriptor === undefined) {
       diagnostics.push(
         prisma7Diagnostic(
-          'PRISMA7_UNSUPPORTED_TYPE',
+          'PSL.PRISMA7_UNSUPPORTED_TYPE',
           `Enum "${declaration.name}" cannot be lowered: target "${input.binding.target.targetId}" registers no "${entityKind}" entity kind.`,
           declaration.sourceId,
           declaration.span,
@@ -902,7 +902,7 @@ function readField(args: ReadFieldArgs): void {
     } else {
       diagnostics.push(
         prisma7Diagnostic(
-          'PRISMA7_UNKNOWN_ATTRIBUTE',
+          'PSL.PRISMA7_UNKNOWN_ATTRIBUTE',
           `${label}: attribute "@${attribute.name}" is not supported yet by the Prisma 7 contract source.`,
           sourceId,
           attribute.span,
@@ -915,7 +915,7 @@ function readField(args: ReadFieldArgs): void {
   if (field.typeConstructor !== undefined) {
     diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_UNSUPPORTED_TYPE',
+        'PSL.PRISMA7_UNSUPPORTED_TYPE',
         `${label} has type "${field.typeConstructor.path.join('.')}(...)", which has no Prisma 8 codec, so model "${model.symbol.name}" cannot use this contract source while it has the field. Prisma 7 rejects @ignore on an Unsupported field, and removing the field drops its column on Prisma 7's next migration. Adding @@ignore to model "${model.symbol.name}" keeps the model out of the contract: Prisma 7's next migration is empty, but the model disappears from the Prisma 7 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 7 client as well.`,
         sourceId,
         field.typeConstructor.span,
@@ -940,7 +940,7 @@ function readField(args: ReadFieldArgs): void {
     if (enumDeclaration.namespaceId !== model.namespaceId) {
       diagnostics.push(
         prisma7Diagnostic(
-          'PRISMA7_ENUM_NAMESPACE_MISMATCH',
+          'PSL.PRISMA7_ENUM_NAMESPACE_MISMATCH',
           `${label} uses enum "${enumDeclaration.name}" from schema "${enumDeclaration.namespaceId}", but the model is in schema "${model.namespaceId}". Prisma 8 columns reference the enum type of their own schema; declare the enum in "${model.namespaceId}" or move the model.`,
           sourceId,
           field.span,
@@ -958,7 +958,7 @@ function readField(args: ReadFieldArgs): void {
     if (scalar === undefined) {
       diagnostics.push(
         prisma7Diagnostic(
-          'PRISMA7_UNSUPPORTED_TYPE',
+          'PSL.PRISMA7_UNSUPPORTED_TYPE',
           `${label} has unknown type "${field.typeName}".`,
           sourceId,
           field.span,
@@ -977,7 +977,7 @@ function readField(args: ReadFieldArgs): void {
       if (native === undefined) {
         diagnostics.push(
           prisma7Diagnostic(
-            'PRISMA7_NATIVE_TYPE_UNSUPPORTED',
+            'PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED',
             nativeTypeMessage({
               label,
               nativeType: nativeType.name,
@@ -1022,7 +1022,7 @@ function readField(args: ReadFieldArgs): void {
     if (!resolved.alreadyReported) {
       diagnostics.push(
         prisma7Diagnostic(
-          'PRISMA7_UNSUPPORTED_TYPE',
+          'PSL.PRISMA7_UNSUPPORTED_TYPE',
           `${label} type "${field.typeName}" could not be resolved against target "${binding.target.targetId}".`,
           sourceId,
           field.span,
@@ -1042,7 +1042,7 @@ function readField(args: ReadFieldArgs): void {
           : ', but neither client then fills the value, so both require it on create and leave it unchanged on update.';
     diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED',
+        'PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED',
         `${label}: @updatedAt is not supported on this column, because Prisma 8 has no generator for column type "${resolved.descriptor.nativeType}" yet. Remove @updatedAt: Prisma 7's next migration is empty${withoutUpdatedAt}`,
         sourceId,
         updatedAt.span,
@@ -1054,7 +1054,7 @@ function readField(args: ReadFieldArgs): void {
     const written = attributeText(defaultAttribute);
     diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED',
+        'PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED',
         `${label} combines @updatedAt with ${written}, which Prisma 8 cannot express yet. Remove ${written}: @updatedAt still sets the value on create and on update, and Prisma 7's next migration removes the column default.`,
         sourceId,
         defaultAttribute.span,
@@ -1091,7 +1091,7 @@ function readField(args: ReadFieldArgs): void {
     const written = attributeText(generatingAttribute);
     diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED',
+        'PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED',
         `${label} is optional and its value comes from ${written}, which Prisma 8 cannot express on an optional field yet. Remove ${written} and keep the "?": the database does not change, and both clients then stop filling the value.`,
         sourceId,
         generatingAttribute.span,
