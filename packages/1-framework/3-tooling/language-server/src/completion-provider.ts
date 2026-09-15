@@ -39,6 +39,7 @@ export interface ProvidePslCompletionItemsInput {
   readonly candidates: PslCompletionCandidateSource;
   readonly clientSupportsSnippets: boolean;
   readonly clientSupportsTriggerSuggestCommand?: boolean;
+  readonly clientSupportsTriggerParameterHintsCommand?: boolean;
 }
 
 type DeclarationKeywordCompletionCandidateCategory = 'native' | 'genericBlock';
@@ -132,6 +133,7 @@ export function providePslCompletionItems(
         input.sourceFile,
         input.candidates,
         input.clientSupportsSnippets,
+        input.clientSupportsTriggerParameterHintsCommand === true,
       );
     case 'fieldAttributeNamedKey':
     case 'modelAttributeNamedKey':
@@ -163,6 +165,8 @@ export function providePslCompletionItems(
               clientSupportsSnippets: input.clientSupportsSnippets,
               clientSupportsTriggerSuggestCommand:
                 input.clientSupportsTriggerSuggestCommand === true,
+              clientSupportsTriggerParameterHintsCommand:
+                input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
                   ? localFieldNames(context, input.candidates.symbolTable)
@@ -182,6 +186,8 @@ export function providePslCompletionItems(
               context,
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
+              clientSupportsTriggerParameterHintsCommand:
+                input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
                   ? localFieldNames(context, input.candidates.symbolTable)
@@ -211,6 +217,7 @@ function provideAttributeNameCompletionItems(
   sourceFile: SourceFile,
   source: PslCompletionCandidateSource,
   clientSupportsSnippets: boolean,
+  clientSupportsTriggerParameterHintsCommand: boolean,
 ): readonly CompletionItem[] {
   const names = attributeNames(context, source);
   const replacementRange = {
@@ -235,6 +242,14 @@ function provideAttributeNameCompletionItems(
       filterText: name,
       textEdit: { range: replacementRange, newText },
       ...(newText !== name ? { insertTextFormat: InsertTextFormat.Snippet } : {}),
+      ...(newText !== name && clientSupportsTriggerParameterHintsCommand
+        ? {
+            command: {
+              title: 'Show argument hints',
+              command: 'editor.action.triggerParameterHints',
+            },
+          }
+        : {}),
     };
   });
 }

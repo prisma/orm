@@ -483,6 +483,8 @@ function createServerOn(connection: Connection): LanguageServer {
           },
           clientSupportsSnippets: clientCapabilities.completionSnippets,
           clientSupportsTriggerSuggestCommand: clientCapabilities.completionTriggerSuggestCommand,
+          clientSupportsTriggerParameterHintsCommand:
+            clientCapabilities.completionTriggerParameterHintsCommand,
         }),
       ];
     } catch {
@@ -746,6 +748,7 @@ interface ResolvedClientCapabilities {
   readonly watchedFilesRegistration: boolean;
   readonly completionSnippets: boolean;
   readonly completionTriggerSuggestCommand: boolean;
+  readonly completionTriggerParameterHintsCommand: boolean;
   readonly pullDiagnostics: boolean;
   readonly diagnosticsRefresh: boolean;
 }
@@ -754,6 +757,7 @@ const noClientCapabilities: ResolvedClientCapabilities = {
   watchedFilesRegistration: false,
   completionSnippets: false,
   completionTriggerSuggestCommand: false,
+  completionTriggerParameterHintsCommand: false,
   pullDiagnostics: false,
   diagnosticsRefresh: false,
 };
@@ -764,20 +768,27 @@ function resolveClientCapabilities(params: InitializeParams): ResolvedClientCapa
       params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration === true,
     completionSnippets:
       params.capabilities.textDocument?.completion?.completionItem?.snippetSupport === true,
-    completionTriggerSuggestCommand: supportsCompletionTriggerSuggest(params.initializationOptions),
+    completionTriggerSuggestCommand: supportsCompletionCommand(
+      params.initializationOptions,
+      'supportsTriggerSuggestCommand',
+    ),
+    completionTriggerParameterHintsCommand: supportsCompletionCommand(
+      params.initializationOptions,
+      'supportsTriggerParameterHintsCommand',
+    ),
     pullDiagnostics: params.capabilities.textDocument?.diagnostic !== undefined,
     diagnosticsRefresh: params.capabilities.workspace?.diagnostics?.refreshSupport === true,
   };
 }
 
-function supportsCompletionTriggerSuggest(options: unknown): boolean {
+function supportsCompletionCommand(options: unknown, capability: string): boolean {
   if (typeof options !== 'object' || options === null || !('completion' in options)) return false;
   const completion = options.completion;
   return (
     typeof completion === 'object' &&
     completion !== null &&
-    'supportsTriggerSuggestCommand' in completion &&
-    completion.supportsTriggerSuggestCommand === true
+    capability in completion &&
+    Reflect.get(completion, capability) === true
   );
 }
 

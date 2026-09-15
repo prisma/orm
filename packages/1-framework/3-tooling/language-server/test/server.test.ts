@@ -1269,6 +1269,42 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     );
   });
 
+  it.each([
+    [undefined, false],
+    [null, false],
+    [{ completion: null }, false],
+    [{ completion: { supportsTriggerSuggestCommand: true } }, false],
+    [{ completion: { supportsTriggerParameterHintsCommand: 'true' } }, false],
+    [{ completion: { supportsTriggerParameterHintsCommand: false } }, false],
+    [{ completion: { supportsTriggerParameterHintsCommand: true } }, true],
+  ])(
+    'requires explicit parameter-hints opt-in: %j',
+    async (options, enabled) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippetCompletionCapabilities);
+      await harness.initialize(options);
+      for (const [body, label] of [
+        ['model User { id Int @pro| }', 'probe'],
+        ['model User { id Int @probe(value: ch|) }', 'choose'],
+      ]) {
+        const completion = sourceWithCursor(`// use prisma-8\n${body}`);
+        openDocument(harness, schemaUri, completion.source);
+        await harness.waitForDiagnostics(schemaUri);
+        const item = completionItemByLabel(
+          completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+          label!,
+        );
+        expect(item.insertTextFormat).toBe(InsertTextFormat.Snippet);
+        expect(item.command).toEqual(
+          enabled
+            ? { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' }
+            : undefined,
+        );
+      }
+    },
+    5_000,
+  );
+
   it('completes nested keys and values from updated buffers despite interpretation failure', async () => {
     const resolution = await recursiveCompletionResolution();
     harness = startHarness(async () => resolution);

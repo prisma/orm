@@ -169,7 +169,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
   },
 };
 
-function complete(markedSource: string, snippets = false) {
+function complete(markedSource: string, snippets = false, parameterHints = false) {
   const offset = markedSource.indexOf('|');
   expect(offset).toBeGreaterThanOrEqual(0);
   const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
@@ -190,6 +190,7 @@ function complete(markedSource: string, snippets = false) {
       controlMutationDefaults: assembleControlMutationDefaults([]),
     },
     clientSupportsSnippets: snippets,
+    clientSupportsTriggerParameterHintsCommand: parameterHints,
   });
   return {
     source,
@@ -547,6 +548,71 @@ describe('recursive attribute values', () => {
 });
 
 describe('recursive function arguments', () => {
+  it.each([false, true])('gates function argument hints on client support: %s', (supported) => {
+    for (const [args, snippets, label, hints] of [
+      ['choice: |', true, 'ordered', true],
+      ['choice: |', true, 'empty', false],
+      ['choice: |', false, 'ordered', false],
+      ['choice: or|dered(Asc)', true, 'ordered', false],
+      ['scalar: |', true, 'true', false],
+      ['|', true, 'mode', false],
+    ] as const) {
+      const result = complete(
+        `model Example { value String @probe(${args}) }`,
+        snippets,
+        supported,
+      );
+      const item = result.items.find((candidate) => candidate.label === label);
+      expect(item).toBeDefined();
+      expect(item?.command).toEqual(
+        supported && hints
+          ? { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' }
+          : undefined,
+      );
+    }
+  });
+
+  it('places the cursor inside optional-only function arguments', () => {
+    const spec = fieldAttribute('probe', {
+      documentation: 'Optional call fixture.',
+      positional: [
+        {
+          key: 'value',
+          documentation: 'A call.',
+          type: funcCall('optionalCall', {
+            documentation: 'Optional input.',
+            positional: [
+              { key: 'value', type: optional(bool()), documentation: 'An optional flag.' },
+            ],
+          }),
+        },
+      ],
+    });
+    const items = provideAttributeArgumentSlotCompletionItems(
+      {
+        context: {
+          offset: 0,
+          replacementStartOffset: 0,
+          replacementEndOffset: 0,
+          attributeName: 'probe',
+          path: [],
+          existingNamedKeys: [],
+          hasColon: false,
+          positionalIndex: 0,
+        },
+        sourceFile: new SourceFile(''),
+        clientSupportsSnippets: true,
+        clientSupportsTriggerParameterHintsCommand: true,
+        fieldNames: () => [],
+      },
+      spec,
+    );
+    expect(items[0]).toMatchObject({
+      textEdit: { newText: `optionalCall(${emptyTabStop1})` },
+      command: { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' },
+    });
+  });
+
   it('offers function calls from every alternative', () => {
     expect(field('choice: |').labels).toEqual(['ordered', 'empty']);
   });

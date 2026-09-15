@@ -164,7 +164,10 @@ const candidateSource = [
 
 function complete(
   markedFieldSource: string,
-  options: { readonly clientSupportsSnippets?: boolean } = {},
+  options: {
+    readonly clientSupportsSnippets?: boolean;
+    readonly clientSupportsTriggerParameterHintsCommand?: boolean;
+  } = {},
 ) {
   return completeWithSource({
     markedSource: `${candidateSource}\n${markedFieldSource}`,
@@ -172,6 +175,8 @@ function complete(
     authoringContributions: attributeContributions,
     controlMutationDefaults,
     clientSupportsSnippets: options.clientSupportsSnippets === true,
+    clientSupportsTriggerParameterHintsCommand:
+      options.clientSupportsTriggerParameterHintsCommand === true,
   });
 }
 
@@ -209,6 +214,7 @@ function completeWithSource(input: {
   readonly authoringContributions?: typeof attributeContributions;
   readonly controlMutationDefaults?: typeof controlMutationDefaults;
   readonly clientSupportsSnippets?: boolean;
+  readonly clientSupportsTriggerParameterHintsCommand?: boolean;
 }) {
   const cursorOffset = input.markedSource.indexOf('|');
   expect(cursorOffset).toBeGreaterThanOrEqual(0);
@@ -241,6 +247,8 @@ function completeWithSource(input: {
           : { controlMutationDefaults: input.controlMutationDefaults }),
       },
       clientSupportsSnippets: input.clientSupportsSnippets === true,
+      clientSupportsTriggerParameterHintsCommand:
+        input.clientSupportsTriggerParameterHintsCommand === true,
     }),
     sourceFile,
     cursorOffset,
@@ -594,6 +602,26 @@ describe('providePslCompletionItems', () => {
         '}',
       ].join('\n'),
     );
+  });
+
+  it.each([false, true])('gates argument snippet hints on client support: %s', (supported) => {
+    for (const [source, snippets, hints] of [
+      ['model Post { id Int @mar| }', true, true],
+      ['model Post { id Int @mar| }', false, false],
+      ['model Post { id Int @mar|ker("x") }', true, false],
+      ['|', true, false],
+    ] as const) {
+      const { items } = complete(source, {
+        clientSupportsSnippets: snippets,
+        clientSupportsTriggerParameterHintsCommand: supported,
+      });
+      const item = completionItemByLabel(items, source === '|' ? 'model' : 'marker');
+      expect(item.command).toEqual(
+        supported && hints
+          ? { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' }
+          : undefined,
+      );
+    }
   });
 
   it('keeps plain contributed attribute completion free of snippet syntax', () => {
@@ -1053,7 +1081,9 @@ describe('providePslCompletionItems', () => {
       ...options,
       clientSupportsSnippets: true,
     }).items;
-    expect(completionItemByLabel(snippetItems, 'uuid').textEdit?.newText).toBe('uuid()');
+    expect(completionItemByLabel(snippetItems, 'uuid').textEdit?.newText).toBe(
+      `uuid(${emptySnippetPlaceholder1})`,
+    );
     expect(completionItemByLabel(snippetItems, 'cuid').textEdit?.newText).toBe(
       `cuid(${emptySnippetPlaceholder1})`,
     );
@@ -1088,7 +1118,7 @@ describe('providePslCompletionItems', () => {
     expect(snippets.map((item) => [item.label, item.textEdit?.newText])).toEqual([
       ['title', 'title'],
       ['slug', 'slug'],
-      ['wildcard', 'wildcard()'],
+      ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
       ['title', `title(sort: ${emptySnippetPlaceholder1})`],
       ['slug', `slug(sort: ${emptySnippetPlaceholder1})`],
     ]);
@@ -1115,7 +1145,7 @@ describe('providePslCompletionItems', () => {
       ]),
     ).toEqual([
       ['scopedOnly', 'scopedOnly'],
-      ['wildcard', 'wildcard()'],
+      ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
       ['scopedOnly', `scopedOnly(sort: ${emptySnippetPlaceholder1})`],
     ]);
   }, 5_000);

@@ -19,6 +19,7 @@ interface CompletionInput<Position extends AttributeArgumentPosition> {
   readonly sourceFile: SourceFile;
   readonly clientSupportsSnippets: boolean;
   readonly clientSupportsTriggerSuggestCommand?: boolean;
+  readonly clientSupportsTriggerParameterHintsCommand?: boolean;
 }
 
 interface ValueCompletionInput<Position extends AttributeArgumentPosition>
@@ -97,8 +98,24 @@ function valueItems(
   }
   if (type.kind === 'funcCall') {
     const snippet = input.clientSupportsSnippets && syntax !== 'functionName';
-    const text = snippet ? `${type.name}(${requiredArgumentsSnippet(type.signature)})` : type.name;
-    return [completionItem(input, type.name, text, CompletionItemKind.Function, snippet)];
+    const hasParameters =
+      (type.signature.positional?.length ?? 0) > 0 ||
+      Object.keys(type.signature.named ?? {}).length > 0;
+    const args = requiredArgumentsSnippet(type.signature) || (hasParameters ? '$' + '{1:}' : '');
+    const text = snippet ? `${type.name}(${args})` : type.name;
+    return [
+      {
+        ...completionItem(input, type.name, text, CompletionItemKind.Function, snippet),
+        ...(snippet && input.clientSupportsTriggerParameterHintsCommand === true && hasParameters
+          ? {
+              command: {
+                title: 'Show argument hints',
+                command: 'editor.action.triggerParameterHints',
+              },
+            }
+          : {}),
+      },
+    ];
   }
   if (syntax === 'functionName') return [];
   switch (type.kind) {
