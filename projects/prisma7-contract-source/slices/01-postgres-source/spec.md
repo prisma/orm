@@ -87,6 +87,7 @@ Added in dispatch 6: `PRISMA7_JUNCTION_ID_UNSUPPORTED` (an implicit many-to-many
 | Case | Disposition |
 |---|---|
 | A model `@@map`ped to the same table as another | `PRISMA7_TABLE_COLLISION`, both spans. |
+| A model `@@map`ped to the table of an implicit many-to-many relation (`@@map("_PostToTag")` next to `Post.tags`/`Tag.posts`) | `PRISMA7_TABLE_COLLISION` on the model's `@@map` and on the relation field, naming both. Prisma 7.10.0 validates the schema, but its migration creates only the relation's `_PostToTag` and never the model's table. Renaming the model's table with `@@map` makes Prisma 7's next migration create it (`CREATE TABLE`), and that schema was checked by hand with `db verify`, with zero findings; renaming the relation instead rebuilds `_PostToTag` as the model's table (dropping `A` and `B`) and creates an empty table for the relation. Fixture `junction-table-collision`. |
 | A model named like an implicit junction model (`PostToTag`, `Favorites`) | `PRISMA7_JUNCTION_NAME_COLLISION` on the relation field; rename the model and keep its table with `@@map`. |
 | Enum inside a `@@schema` namespace | Prisma 7 creates the type in that schema (`CREATE TYPE "audit"."AuditAction"`); the native enum entity is placed in the same namespace. |
 | `@default(ENUM_MEMBER)` on a native enum field | Column default with the member's storage value. Test pins it. |

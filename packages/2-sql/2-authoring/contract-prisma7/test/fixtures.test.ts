@@ -66,6 +66,7 @@ describe('Prisma 7 fixtures', () => {
       'json-null-default',
       'junction-composite-id',
       'junction-name-collision',
+      'junction-table-collision',
       'keys',
       'list-defaults',
       'long-names',

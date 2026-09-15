@@ -45,6 +45,8 @@ export interface RelationField {
 export interface RelationModel {
   readonly modelName: string;
   readonly tableName: string;
+  /** The model's `@@map` attribute, or the model when it has none. */
+  readonly tableSpan: PslSpan;
   readonly namespaceId: string;
   readonly sourceId: string;
   readonly columns: ReadonlyMap<string, FieldNode>;
@@ -194,6 +196,33 @@ interface JunctionSide {
   readonly field: RelationField;
 }
 
+interface JunctionRequest {
+  readonly requester: JunctionSide;
+  readonly partner: JunctionSide;
+  readonly name: string;
+}
+
+function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const group = groups.get(keyOf(item)) ?? [];
+    groups.set(keyOf(item), group);
+    group.push(item);
+  }
+  return groups;
+}
+
+function orderJunctionSides(
+  requester: JunctionSide,
+  partner: JunctionSide,
+): readonly [JunctionSide, JunctionSide] {
+  const requesterFirst =
+    requester.model === partner.model
+      ? requester.field.field.name < partner.field.field.name
+      : requester.model.modelName < partner.model.modelName;
+  return requesterFirst ? [requester, partner] : [partner, requester];
+}
+
 function junctionPairKey(name: string): string {
   return `_${name}`;
 }
@@ -286,6 +315,7 @@ export function lowerRelations(
   const foreignKeys = new Map<string, ForeignKeyNode[]>();
   const junctions = new Map<string, ModelNode>();
   const reportedJunctionNames = new Set<string>();
+  const junctionRequests: JunctionRequest[] = [];
   const addForeignKey = (modelName: string, node: ForeignKeyNode): void => {
     const existing = foreignKeys.get(modelName) ?? [];
     foreignKeys.set(modelName, existing);
@@ -531,11 +561,43 @@ export function lowerRelations(
         }
         continue;
       }
-      const junction = synthesizeJunction(
-        { model, field: relationField },
-        { model: target, field: partner },
-        diagnostics,
+      junctionRequests.push({
+        requester: { model, field: relationField },
+        partner: { model: target, field: partner },
+        name: junctionName,
+      });
+    }
+  }
+
+  for (const [name, requests] of groupBy(junctionRequests, (request) => request.name)) {
+    const [first] = requests;
+    if (first === undefined) continue;
+    const [sideA] = orderJunctionSides(first.requester, first.partner);
+    const tableName = prisma7ConstraintName(`_${name}`, '');
+    const tableOwner = [...models.values()].find(
+      (other) => other.tableName === tableName && other.namespaceId === sideA.model.namespaceId,
+    );
+    if (tableOwner !== undefined) {
+      const relationField = `${first.requester.model.modelName}.${first.requester.field.field.name}`;
+      const message = `Model "${tableOwner.modelName}" and the implicit many-to-many relation "${relationField}" both use table "${tableOwner.namespaceId}"."${tableName}"; Prisma 7 creates the relation's table there and never creates the model's. Rename the model's table with @@map, which makes Prisma 7's next migration create it, or give the relation its own name with @relation("<name>") on both fields, which makes Prisma 7's next migration rebuild "${tableName}" as the model's table and create an empty table for the relation, losing the relation's rows.`;
+      diagnostics.push(
+        prisma7Diagnostic(
+          'PRISMA7_TABLE_COLLISION',
+          message,
+          tableOwner.sourceId,
+          tableOwner.tableSpan,
+        ),
+        prisma7Diagnostic(
+          'PRISMA7_TABLE_COLLISION',
+          message,
+          first.requester.model.sourceId,
+          first.requester.field.field.span,
+        ),
       );
+      continue;
+    }
+    for (const { requester, partner } of requests) {
+      const junction = synthesizeJunction(requester, partner, diagnostics);
       if (junction === undefined) continue;
       const key = junctionPairKey(junction.name);
       if (!junctions.has(key)) {
@@ -543,10 +605,10 @@ export function lowerRelations(
         fkRelationMetadata.push(...junction.foreignKeys);
       }
       candidates.push({
-        modelName: model.modelName,
-        tableName: model.tableName,
-        field,
-        targetModelName: target.modelName,
+        modelName: requester.model.modelName,
+        tableName: requester.model.tableName,
+        field: requester.field.field,
+        targetModelName: partner.model.modelName,
         isList: true,
         relationName: junction.candidateRelationName,
       });
@@ -670,11 +732,8 @@ function synthesizeJunction(
   partner: JunctionSide,
   diagnostics: ContractSourceDiagnostic[],
 ): SynthesizedJunction | undefined {
-  const selfRelation = requester.model === partner.model;
-  const requesterFirst = selfRelation
-    ? requester.field.field.name < partner.field.field.name
-    : requester.model.modelName < partner.model.modelName;
-  const [sideA, sideB] = requesterFirst ? [requester, partner] : [partner, requester];
+  const [sideA, sideB] = orderJunctionSides(requester, partner);
+  const requesterFirst = sideA === requester;
   const name =
     requester.field.attribute?.name ?? `${sideA.model.modelName}To${sideB.model.modelName}`;
   const idA = singleIdColumn(sideA, requester, diagnostics);

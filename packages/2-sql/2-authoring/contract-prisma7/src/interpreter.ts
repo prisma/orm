@@ -328,6 +328,9 @@ export function interpretPrisma7Documents(
     relationModels.set(modelName, {
       modelName,
       tableName: build.declaration.tableName,
+      tableSpan:
+        build.declaration.symbol.attributes.find((attribute) => attribute.name === 'map')?.span ??
+        build.declaration.symbol.span,
       namespaceId: build.declaration.namespaceId,
       sourceId: build.declaration.sourceId,
       columns: build.columns,
