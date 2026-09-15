@@ -5,7 +5,7 @@ import type {
   PslTypeMap,
   RelationField,
 } from '@internal/family-sql/psl-infer';
-import { mapDefault } from '@internal/family-sql/psl-infer';
+import { mapDefault, toFieldName, toModelName } from '@internal/family-sql/psl-infer';
 import type {
   PslAttributeArgument,
   PslField,
@@ -17,10 +17,7 @@ import type {
 import {
   composeCheckWirePrefix,
   computeCheckContentHash,
-  createUniqueFieldName,
   formatWireName,
-  toFieldName,
-  toModelName,
 } from '@internal/sql-schema-ir/naming';
 import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
@@ -31,7 +28,11 @@ import {
   buildIndexAttribute,
   buildModelConstraintAttribute,
 } from './infer-index-attributes';
-import { resolveColumnFieldName, type TableColumnFieldNameMap } from './infer-names';
+import {
+  createUniqueFieldName,
+  resolveColumnFieldName,
+  type TableColumnFieldNameMap,
+} from './infer-names';
 import {
   buildAttribute,
   buildMapAttribute,

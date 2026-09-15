@@ -1,6 +1,6 @@
 import type { SqlDescribedContractSpace } from '@internal/family-sql/control';
 import type { EnumInfo, PslPrinterOptions } from '@internal/family-sql/psl-infer';
-import { inferRelations } from '@internal/family-sql/psl-infer';
+import { inferRelations, toModelName } from '@internal/family-sql/psl-infer';
 import { coordinateKey } from '@internal/framework-components/ir';
 import type {
   PslDocumentAst,
@@ -13,7 +13,6 @@ import {
   makePslNamespaceEntries,
   UNSPECIFIED_PSL_NAMESPACE_ID,
 } from '@internal/framework-components/psl-ast';
-import { toModelName } from '@internal/sql-schema-ir/naming';
 import { SqlSchemaIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { parsePostgresDefault } from '../default-normalizer';
 import { postgresError } from '../errors';

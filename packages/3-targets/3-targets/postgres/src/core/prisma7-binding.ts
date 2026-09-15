@@ -3,6 +3,7 @@ import { postgresNowGeneratorIdFor } from './now-generators';
 import { postgresCreateNamespace } from './postgres-schema';
 import { storedTemporalText, type TemporalNativeType } from './prisma7-temporal-defaults';
 import { prisma7PostgresTypeMap } from './prisma7-type-map';
+import { junctionRelationFieldNames } from './psl-infer/junction-relation-field-names';
 
 const TEMPORAL_NATIVE_TYPES: ReadonlySet<string> = new Set<TemporalNativeType>([
   'timestamp',
@@ -53,6 +54,7 @@ export const prisma7PostgresBinding = {
   },
   /** `NAMEDATALEN - 1`. */
   identifierMaxBytes: 63,
+  junctionRelationFieldNames,
   updatedAtGeneratorId: postgresNowGeneratorIdFor,
   literalDefaultForm: ({
     nativeType,

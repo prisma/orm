@@ -334,7 +334,7 @@ export function interpretPrisma7Documents(
       relationFields: build.relationFields,
     });
   }
-  const lowered = lowerRelations(relationModels, binding.identifierMaxBytes, diagnostics);
+  const lowered = lowerRelations(relationModels, binding, diagnostics);
 
   const modelNodes: ModelNode[] = [];
   for (const [modelName, build] of builds) {

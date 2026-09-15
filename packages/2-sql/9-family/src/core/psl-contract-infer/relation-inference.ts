@@ -2,12 +2,8 @@ import {
   backingIndexColumnKeys,
   isBackedByColumnKeys,
 } from '@internal/sql-contract/foreign-key-materialization';
-import {
-  deriveRelationFieldName,
-  resolveUniqueRelationFieldName,
-} from '@internal/sql-schema-ir/naming';
 import type { SqlForeignKeyIR, SqlTableIR } from '@internal/sql-schema-ir/types';
-import { deriveBackRelationFieldName, pluralize } from './name-transforms';
+import { deriveBackRelationFieldName, deriveRelationFieldName, pluralize } from './name-transforms';
 import type { RelationField } from './printer-config';
 
 const DEFAULT_ON_DELETE = 'noAction';
@@ -61,7 +57,7 @@ export function inferRelations(
 
       const isOneToOne = detectOneToOne(fk, table);
 
-      const childRelFieldName = resolveUniqueRelationFieldName(
+      const childRelFieldName = resolveUniqueFieldName(
         deriveRelationFieldName(fk.columns, parentTableName),
         childUsed,
         parentModelName,
@@ -88,7 +84,7 @@ export function inferRelations(
       const parentUsed = usedFieldNames.get(parentTableName) ?? new Set();
       usedFieldNames.set(parentTableName, parentUsed);
 
-      const backRelFieldName = resolveUniqueRelationFieldName(
+      const backRelFieldName = resolveUniqueFieldName(
         deriveBackRelationFieldName(childModelName, isOneToOne),
         parentUsed,
         childModelName,
@@ -214,6 +210,27 @@ export function buildChildRelationField(
     onUpdate: onUpdate ? REFERENTIAL_ACTION_PSL[onUpdate] : undefined,
     index,
   };
+}
+
+function resolveUniqueFieldName(
+  desired: string,
+  usedNames: ReadonlySet<string>,
+  fallbackSuffix: string,
+): string {
+  if (!usedNames.has(desired)) {
+    return desired;
+  }
+
+  const withSuffix = `${desired}${fallbackSuffix}`;
+  if (!usedNames.has(withSuffix)) {
+    return withSuffix;
+  }
+
+  let counter = 2;
+  while (usedNames.has(`${desired}${counter}`)) {
+    counter++;
+  }
+  return `${desired}${counter}`;
 }
 
 function addRelationField(

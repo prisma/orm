@@ -42,8 +42,6 @@ This package defines the core types for the SQL Schema IR, a target-agnostic rep
 
 4. **Name-identified indexes**: `SqlIndexIR` is identified by its full physical name (its diff-tree `id` is the name, so same-column-tuple siblings and expression indexes are representable). Wire-named indexes carry a `prefix` plus a content-hash wire name; the shared naming helpers (`formatWireName`, `parseWireName`, `normalizeSqlBody`, `computeIndexContentHash`) live in `@internal/sql-schema-ir/naming`.
 
-5. **Inferred PSL names**: the names `contract infer` derives from database names (`toModelName`, `toFieldName`, `toEnumName`, `toEnumMemberName`, `deriveRelationFieldName`, and the two uniqueness rules `resolveUniqueRelationFieldName` and `createUniqueFieldName`) also live in `@internal/sql-schema-ir/naming`, so the SQL family's inference, the Postgres target's PSL writer, and the Prisma 7 contract source share them. `junctionRelationFieldNames` composes them for an implicit many-to-many junction table's `A` and `B` foreign keys.
-
 ## Usage
 
 ### Basic Usage

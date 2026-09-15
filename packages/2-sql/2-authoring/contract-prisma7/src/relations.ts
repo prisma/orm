@@ -22,9 +22,9 @@ import type {
   ModelNode,
   RelationNode,
 } from '@internal/sql-contract-ts/contract-builder';
-import { junctionRelationFieldNames } from '@internal/sql-schema-ir/naming';
 import { andList, fieldList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { prisma7ConstraintName } from './indexes';
+import type { Prisma7TargetBinding } from './target-binding';
 
 export interface RelationAttribute {
   readonly name: string | undefined;
@@ -70,6 +70,12 @@ export const RELATION_PAIRING_CODES: ReadonlySet<string> = new Set([
   'PSL_JUNCTION_ID_NOT_FK_COVERING',
   'PSL_JUNCTION_TARGET_FK_NOT_ID',
 ]);
+
+/** What the relation pass needs from the target to name junction tables, indexes and fields. */
+export type JunctionNaming = Pick<
+  Prisma7TargetBinding,
+  'identifierMaxBytes' | 'junctionRelationFieldNames'
+>;
 
 export interface RelationLowering {
   readonly junctions: ReadonlyMap<string, ModelNode>;
@@ -334,7 +340,7 @@ function referentialActionRejections(input: {
 
 export function lowerRelations(
   models: ReadonlyMap<string, RelationModel>,
-  identifierMaxBytes: number,
+  naming: JunctionNaming,
   diagnostics: ContractSourceDiagnostic[],
 ): RelationLowering {
   const fkRelationMetadata: FkRelationMetadata[] = [];
@@ -608,7 +614,7 @@ export function lowerRelations(
     if (first === undefined) continue;
     const name = first.name;
     const [sideA] = orderJunctionSides(first.requester, first.partner);
-    const tableName = prisma7ConstraintName(`_${name}`, '', identifierMaxBytes);
+    const tableName = prisma7ConstraintName(`_${name}`, '', naming.identifierMaxBytes);
     const sideLabel = (side: JunctionSide): string =>
       `${side.model.modelName}.${side.field.field.name}`;
     const pairs = new Map<string, JunctionRequest>();
@@ -656,7 +662,7 @@ export function lowerRelations(
       continue;
     }
     for (const { requester, partner } of requests) {
-      const junction = synthesizeJunction(requester, partner, identifierMaxBytes, diagnostics);
+      const junction = synthesizeJunction(requester, partner, naming, diagnostics);
       if (junction === undefined) continue;
       if (!junctions.has(junction.key)) {
         junctions.set(junction.key, junction.node);
@@ -789,7 +795,7 @@ function singleIdColumn(
 function synthesizeJunction(
   requester: JunctionSide,
   partner: JunctionSide,
-  identifierMaxBytes: number,
+  naming: JunctionNaming,
   diagnostics: ContractSourceDiagnostic[],
 ): SynthesizedJunction | undefined {
   const [sideA, sideB] = orderJunctionSides(requester, partner);
@@ -800,10 +806,10 @@ function synthesizeJunction(
   const idB = singleIdColumn(sideB, requester, diagnostics);
   if (idA === undefined || idB === undefined) return undefined;
 
-  const tableName = prisma7ConstraintName(`_${name}`, '', identifierMaxBytes);
+  const tableName = prisma7ConstraintName(`_${name}`, '', naming.identifierMaxBytes);
   const namespaceId = sideA.model.namespaceId;
   const key = junctionKey(namespaceId, name);
-  const [relationFieldA, relationFieldB] = junctionRelationFieldNames(
+  const [relationFieldA, relationFieldB] = naming.junctionRelationFieldNames(
     sideA.model.tableName,
     sideB.model.tableName,
   );
@@ -838,7 +844,7 @@ function synthesizeJunction(
     options: undefined,
     where: undefined,
     unique: undefined,
-    map: prisma7ConstraintName(`_${name}`, '_B_index', identifierMaxBytes),
+    map: prisma7ConstraintName(`_${name}`, '_B_index', naming.identifierMaxBytes),
     name: undefined,
   };
   return {
