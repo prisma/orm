@@ -8,7 +8,7 @@ Prisma 8 ships as a release candidate (`8.0.0-rc.N`), and `8.0.0` final is expec
 
 - **Expect breaking changes between release candidates.** APIs, contract schemas, on-disk formats, and CLI flags can shift without a deprecation cycle. Every release ships an upgrade recipe under [`skills/prisma-8/upgrading/`](./skills/prisma-8/upgrading/) that the `prisma-8` skill applies, and the churn settles as we approach final.
 - **Only the latest release receives security fixes.** Older releases are not backported. See [`SECURITY.md`](./SECURITY.md).
-- **New projects should start on Prisma 8.** The release candidate is a complete implementation; the gap you are most likely to hit is a feature that is not built yet, and the [feature scoreboard](./scorecard.md) names each one. Existing [Prisma 7](https://www.prisma.io/docs/orm) applications should migrate incrementally. Prisma 7 continues on the [`v7` branch](https://github.com/prisma/prisma/tree/v7) and receives bug fixes for twelve months after `8.0.0` final.
+- **New projects should start on Prisma 8.** The release candidate is a complete implementation; the gap you are most likely to hit is a feature that is not built yet, and the [feature scoreboard](./scorecard.md) names each one. Existing [Prisma 7](https://www.prisma.io/docs/orm) applications should migrate incrementally. Prisma 7 continues on the [`v7` branch](https://github.com/prisma/prisma/tree/v7) and receives bug fixes and security updates for eighteen months after `8.0.0` final.
 
 ## Before you start a substantive change
 
