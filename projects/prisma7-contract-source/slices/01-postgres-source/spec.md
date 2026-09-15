@@ -52,6 +52,7 @@ Plain scalars map to Prisma 7's Postgres storage: `String` text, `Boolean` bool,
 | `now()` | Column default (verification item 2). |
 | literal, list literal, enum member | Column default. |
 | `dbgenerated("expr")` | Raw expression column default. |
+| `dbgenerated()` with no expression | `PRISMA7_UNKNOWN_DEFAULT`, saying the form is not supported yet. Prisma 7 creates no `DEFAULT` for it, and a contract without a default would make the ORM require the value on create. The message offers two edits: remove the `@default` (no database change, both clients then require the value) or write the expression, which Prisma 7's next migration sets as the column default. Fixture `dbgenerated-without-expression`. |
 | `uuid()`, `uuid(4)`, `uuid(7)`, `ulid()`, `nanoid(n)` | ORM-side execution generator, no column default. On optional fields: `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED`. |
 | `cuid()`, `cuid(2)` | ORM-side `cuid2` generator. |
 | `@updatedAt` | Execution generator on create and update, column codec `pg/timestamp-temporal@1` with `typeParams.precision = 3` (item 2 showed the precision must be a type parameter), or the `@db.*` override, no storage default. On an optional field: `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED`. With any `@default`: `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED`. Both because Prisma 8 PSL cannot spell the combination, so the converter could not print it (decision recorded in `design-notes.md`). |

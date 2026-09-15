@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"T.a\": @default(dbgenerated()) with no expression is not supported yet; without a default, Prisma 8 requires the value on create. Either remove the @default, which leaves the database unchanged but makes both clients require the value on create, or write the column's database default as @default(dbgenerated(\"<expression>\")), which Prisma 7's next migration sets on the column."
+  }
+]

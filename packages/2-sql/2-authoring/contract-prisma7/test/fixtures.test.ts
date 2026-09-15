@@ -44,6 +44,7 @@ describe('Prisma 7 fixtures', () => {
   it('has a case per rule row', () => {
     expect(cases).toEqual([
       'bigint-default-not-integer',
+      'dbgenerated-without-expression',
       'defaults',
       'enum-default-member',
       'enum-namespace-mismatch',

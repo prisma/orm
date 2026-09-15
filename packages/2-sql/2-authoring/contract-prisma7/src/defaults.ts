@@ -224,6 +224,18 @@ function lowerFunction(
 ): LoweredPrisma7Default | undefined {
   const fn = call.path().join('.');
   const span = input.attribute.span;
+  const callArgs = [...call.args()];
+  if (fn === 'dbgenerated' && callArgs.length === 0) {
+    input.diagnostics.push(
+      prisma7Diagnostic(
+        'PRISMA7_UNKNOWN_DEFAULT',
+        `${label}: @default(dbgenerated()) with no expression is not supported yet; without a default, Prisma 8 requires the value on create. Either remove the @default, which leaves the database unchanged but makes both clients require the value on create, or write the column's database default as @default(dbgenerated("<expression>")), which Prisma 7's next migration sets on the column.`,
+        input.sourceId,
+        span,
+      ),
+    );
+    return undefined;
+  }
   const keys = FUNCTION_ARGUMENT_KEYS[fn];
   const entry = input.controlMutationDefaults.defaultFunctionRegistry.get(fn);
   if (keys === undefined || entry === undefined) {
@@ -234,7 +246,7 @@ function lowerFunction(
   }
   const args: Record<string, unknown> = {};
   let index = 0;
-  for (const arg of call.args()) {
+  for (const arg of callArgs) {
     const key = arg.name()?.name() ?? keys[index];
     const value = arg.value();
     const literal = value === undefined ? undefined : literalArgument(value);
