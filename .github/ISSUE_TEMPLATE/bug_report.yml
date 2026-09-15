@@ -10,7 +10,7 @@ body:
         Before filing, please check that:
 
         - You are on the latest release of the line you use. For Prisma 8, that is the latest release candidate: while we are pre-1.0, only the latest release receives fixes. For Prisma 7, that is the latest `7.x`: Prisma 7 is maintained on the [`v7` branch](https://github.com/prisma/orm/tree/v7) of this repository and receives bug fixes for eighteen months after `8.0.0` final, so Prisma 7 reports belong here too. If you are on an older release, please upgrade and re-verify before filing.
-        - You are not reporting a security issue. **Do not file public issues for security reports** — use [Private Vulnerability Reporting](https://github.com/prisma/prisma/security/advisories/new) instead.
+        - You are not reporting a security issue. **Do not file public issues for security reports** — use [Private Vulnerability Reporting](https://github.com/prisma/orm/security/advisories/new) instead.
 
   - type: input
     id: package-and-version
