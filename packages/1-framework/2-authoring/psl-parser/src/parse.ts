@@ -20,15 +20,14 @@ export interface ParseResult {
   readonly sourceFile: SourceFile;
 }
 
-export type PslDialect = 'psl' | 'prisma7';
+export type PslGrammar = 'psl' | 'prisma7';
 
 export interface ParseOptions {
   /**
-   * `prisma7` also reads two Prisma 7 constructs: `@` attributes after an
-   * `enum` member, and field lines in a `view` body. Defaults to `psl`, which
-   * reads neither.
+   * `prisma7` also reads two Prisma 7 constructs: `@` attributes after an `enum` member, and field
+   * lines in a `view` body. Defaults to `psl`, which reads neither.
    */
-  readonly dialect?: PslDialect;
+  readonly grammar?: PslGrammar;
 }
 
 const TRIVIA_KINDS: ReadonlySet<TokenKind> = new Set<TokenKind>([
@@ -493,16 +492,16 @@ type MemberParser = (cursor: Cursor) => void;
  */
 export function parse(source: string, options: ParseOptions = {}): ParseResult {
   const cursor = new Cursor(source);
-  const green = parseDocument(cursor, options.dialect ?? 'psl');
+  const green = parseDocument(cursor, options.grammar ?? 'psl');
   const root = createSyntaxTree(green);
   const document = DocumentAst.cast(root) ?? new DocumentAst(root);
   return { document, diagnostics: cursor.diagnostics, sourceFile: cursor.sourceFile };
 }
 
-function parseDocument(cursor: Cursor, dialect: PslDialect): GreenNode {
+function parseDocument(cursor: Cursor, grammar: PslGrammar): GreenNode {
   cursor.startNode('Document');
   while (cursor.peekKind() !== 'Eof') {
-    parseDeclaration(cursor, false, dialect);
+    parseDeclaration(cursor, false, grammar);
   }
   cursor.flushTrivia(); // attach trailing trivia so the round-trip stays lossless
   return cursor.finishNode();
@@ -525,7 +524,7 @@ function keywordIs(cursor: Cursor, keyword: string): boolean {
  * Recovery runs via the `if (!node)` tail rather than as a `??` arm, because it
  * appends raw tokens to the open parent instead of returning a child node.
  */
-function parseDeclaration(cursor: Cursor, insideNamespace: boolean, dialect: PslDialect): void {
+function parseDeclaration(cursor: Cursor, insideNamespace: boolean, grammar: PslGrammar): void {
   const name = cursor.peekKind(1) === 'Ident' ? cursor.peekToken(1).text : '';
   if (insideNamespace && keywordIs(cursor, 'namespace')) {
     cursor.diagnostic(
@@ -549,10 +548,10 @@ function parseDeclaration(cursor: Cursor, insideNamespace: boolean, dialect: Psl
 
   const node =
     parseModel(cursor) ??
-    parseNamespace(cursor, dialect) ??
+    parseNamespace(cursor, grammar) ??
     parseCompositeType(cursor) ??
     parseTypesBlock(cursor) ??
-    parseGenericBlock(cursor, dialect);
+    parseGenericBlock(cursor, grammar);
   if (!node) {
     parseUnsupportedTopLevel(cursor);
   }
@@ -604,14 +603,13 @@ export function parseModel(cursor: Cursor): GreenNode | undefined {
  * open, so a bare identifier with no brace (e.g. `oops`) is read as an unfinished
  * custom declaration rather than unsupported content.
  *
- * In the `prisma7` dialect a `view` block stays a generic block (so interpreters
- * keep rejecting the keyword) but its body uses the model-member grammar, so the
- * field lines parse as `FieldDeclaration` nodes with spans instead of mangled
- * entries.
+ * With the `prisma7` grammar, a `view` block stays a generic block (so interpreters keep rejecting
+ * the keyword), but its body is read like a model body, so the field lines parse as
+ * `FieldDeclaration` nodes with spans instead of mangled entries.
  */
 export function parseGenericBlock(
   cursor: Cursor,
-  dialect: PslDialect = 'psl',
+  grammar: PslGrammar = 'psl',
 ): GreenNode | undefined {
   if (cursor.peekKind() !== 'Ident') return undefined;
   const keyword = cursor.peekToken().text;
@@ -623,7 +621,7 @@ export function parseGenericBlock(
     parseIdentifier(cursor);
   }
   if (cursor.peekKind() === 'LBrace') {
-    parseBlockBody(cursor, genericBlockMemberParser(keyword, dialect));
+    parseBlockBody(cursor, genericBlockMemberParser(keyword, grammar));
   } else {
     cursor.diagnostic(
       'PSL_INVALID_DECLARATION',
@@ -635,9 +633,9 @@ export function parseGenericBlock(
   return cursor.finishNode();
 }
 
-export function parseNamespace(cursor: Cursor, dialect: PslDialect = 'psl'): GreenNode | undefined {
+export function parseNamespace(cursor: Cursor, grammar: PslGrammar = 'psl'): GreenNode | undefined {
   if (!keywordIs(cursor, 'namespace')) return undefined;
-  return parseBlock(cursor, 'Namespace', true, (inner) => parseDeclaration(inner, true, dialect));
+  return parseBlock(cursor, 'Namespace', true, (inner) => parseDeclaration(inner, true, grammar));
 }
 
 export function parseCompositeType(cursor: Cursor): GreenNode | undefined {
@@ -710,14 +708,13 @@ function parseNamedTypeMember(cursor: Cursor): void {
 }
 
 /**
- * In the `prisma7` dialect, `view` bodies use the model grammar and `enum`
- * members may carry `@` attributes (`USER @map("user")`). Every other generic
- * block, and every generic block in the `psl` dialect, uses the plain
- * `key = value` grammar.
+ * With the `prisma7` grammar, a `view` body is read like a model body and an `enum` member may
+ * carry `@` attributes (`USER @map("user")`). Every other generic block, and every generic block
+ * with the `psl` grammar, reads plain `key = value` entries.
  */
-function genericBlockMemberParser(keyword: string, dialect: PslDialect): MemberParser {
-  if (dialect === 'prisma7' && keyword === 'view') return parseModelMember;
-  if (dialect === 'prisma7' && keyword === 'enum') return parseEnumMember;
+function genericBlockMemberParser(keyword: string, grammar: PslGrammar): MemberParser {
+  if (grammar === 'prisma7' && keyword === 'view') return parseModelMember;
+  if (grammar === 'prisma7' && keyword === 'enum') return parseEnumMember;
   return parseKeyValueMember;
 }
 
@@ -786,9 +783,9 @@ export function parseNamedType(cursor: Cursor): GreenNode | undefined {
 
 /**
  * A generic-block entry is either `key = value` or a bare `key` (committing a
- * `KeyValuePair` carrying only the key). With `memberAttributes` (enum blocks in
- * the `prisma7` dialect) any number of `@` attributes may follow, as in
- * `USER @map("user")`. A `key =` with no following expression is flagged.
+ * `KeyValuePair` carrying only the key). With `memberAttributes` (enum blocks parsed with the
+ * `prisma7` grammar) any number of `@` attributes may follow, as in `USER @map("user")`. A
+ * `key =` with no following expression is flagged.
  */
 export function parseKeyValue(
   cursor: Cursor,

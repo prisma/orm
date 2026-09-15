@@ -25,7 +25,7 @@ describe('format given a Prisma 7 construct in a Prisma 8 document', () => {
 
 describe('emitDocument', () => {
   it('raises an internal error for a block member it has no rule for instead of dropping it', () => {
-    const { document } = parse('view ActiveUsers {\n  id Int\n}\n', { dialect: 'prisma7' });
+    const { document } = parse('view ActiveUsers {\n  id Int\n}\n', { grammar: 'prisma7' });
     expect(() => emitDocument(document, '  ', '\n')).toThrow(
       expect.objectContaining({
         isPrismaInternalError: true,

@@ -1,7 +1,7 @@
 /**
- * The `prisma7` dialect reads two Prisma 7 constructs so the Prisma 7
+ * The `prisma7` grammar reads two Prisma 7 constructs so the Prisma 7
  * interpreter can walk them with spans: attributes on enum members, and field
- * lines inside `view` blocks. The default dialect reads neither.
+ * lines inside `view` blocks. The default grammar reads neither.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -14,7 +14,7 @@ import { StringLiteralExprAst } from '../src/syntax/ast/expressions';
 import type { GreenElement } from '../src/syntax/green';
 import { printTree } from './support';
 
-const prisma7 = { dialect: 'prisma7' } as const;
+const prisma7 = { grammar: 'prisma7' } as const;
 
 function greenText(element: GreenElement): string {
   if (element.type === 'token') return element.text;
@@ -39,7 +39,7 @@ function attributeArgs(attribute: FieldAttributeAst) {
 }
 
 describe('enum member attributes', () => {
-  describe('given the prisma7 dialect', () => {
+  describe('given the prisma7 grammar', () => {
     it('parses positional and named attribute arguments on members with spans', () => {
       const source = 'enum Role {\n  USER @map("user")\n  ADMIN @map(name: "admin") @deprecated\n}';
       const block = onlyGenericBlock(source);
@@ -107,7 +107,7 @@ describe('enum member attributes', () => {
       }
     });
 
-    it('parses a bare enum block into the same tree as the default dialect', () => {
+    it('parses a bare enum block into the same tree as the default grammar', () => {
       const source = 'enum Role {\n  ADMIN\n  USER\n}';
       const block = onlyGenericBlock(source);
       for (const entry of block.entries()) {
@@ -119,7 +119,7 @@ describe('enum member attributes', () => {
     });
   });
 
-  describe('given the default dialect', () => {
+  describe('given the default grammar', () => {
     it('reports an attribute after an enum member as an invalid block entry at the attribute', () => {
       const result = parse('enum Role {\n  USER @map("user")\n}');
       expect(result.diagnostics).toEqual([
@@ -148,7 +148,7 @@ describe('view blocks', () => {
   const source =
     'view ActiveUsers {\n  id    Int    @unique\n  email String @db.VarChar(255)\n  posts Post[]\n\n  @@map("active_users")\n}';
 
-  describe('given the prisma7 dialect', () => {
+  describe('given the prisma7 grammar', () => {
     it('parses a view with the model body grammar and keeps the view keyword', () => {
       const block = onlyGenericBlock(source);
       expect(block.keyword()?.text).toBe('view');
@@ -201,7 +201,7 @@ describe('view blocks', () => {
     });
   });
 
-  describe('given the default dialect', () => {
+  describe('given the default grammar', () => {
     it('reports an attribute on a view field line as an invalid block entry', () => {
       const result = parse('view ActiveUsers {\n  id Int @unique\n}');
       expect(result.diagnostics).toEqual([
@@ -228,7 +228,7 @@ describe('view blocks', () => {
 });
 
 describe('Prisma 7 spike schema', () => {
-  it('parses with zero diagnostics in the prisma7 dialect', () => {
+  it('has zero parse diagnostics with the prisma7 grammar', () => {
     // A small Prisma 7 schema with every block kind: datasource, generator, enum, view, model.
     const fixture = join(dirname(fileURLToPath(import.meta.url)), 'fixtures/prisma7-spike.prisma');
     const source = readFileSync(fixture, 'utf8');
