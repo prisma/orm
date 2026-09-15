@@ -333,6 +333,7 @@ function referentialActionRejections(input: {
 
 export function lowerRelations(
   models: ReadonlyMap<string, RelationModel>,
+  identifierMaxBytes: number,
   diagnostics: ContractSourceDiagnostic[],
 ): RelationLowering {
   const fkRelationMetadata: FkRelationMetadata[] = [];
@@ -606,7 +607,7 @@ export function lowerRelations(
     if (first === undefined) continue;
     const name = first.name;
     const [sideA] = orderJunctionSides(first.requester, first.partner);
-    const tableName = prisma7ConstraintName(`_${name}`, '');
+    const tableName = prisma7ConstraintName(`_${name}`, '', identifierMaxBytes);
     const sideLabel = (side: JunctionSide): string =>
       `${side.model.modelName}.${side.field.field.name}`;
     const pairs = new Map<string, JunctionRequest>();
@@ -654,7 +655,7 @@ export function lowerRelations(
       continue;
     }
     for (const { requester, partner } of requests) {
-      const junction = synthesizeJunction(requester, partner, diagnostics);
+      const junction = synthesizeJunction(requester, partner, identifierMaxBytes, diagnostics);
       if (junction === undefined) continue;
       if (!junctions.has(junction.key)) {
         junctions.set(junction.key, junction.node);
@@ -786,6 +787,7 @@ function singleIdColumn(
 function synthesizeJunction(
   requester: JunctionSide,
   partner: JunctionSide,
+  identifierMaxBytes: number,
   diagnostics: ContractSourceDiagnostic[],
 ): SynthesizedJunction | undefined {
   const [sideA, sideB] = orderJunctionSides(requester, partner);
@@ -796,7 +798,7 @@ function synthesizeJunction(
   const idB = singleIdColumn(sideB, requester, diagnostics);
   if (idA === undefined || idB === undefined) return undefined;
 
-  const tableName = prisma7ConstraintName(`_${name}`, '');
+  const tableName = prisma7ConstraintName(`_${name}`, '', identifierMaxBytes);
   const namespaceId = sideA.model.namespaceId;
   const key = junctionKey(namespaceId, name);
   const foreignKey = (column: 'A' | 'B', side: JunctionSide, id: FieldNode): ForeignKeyNode => ({
@@ -830,7 +832,7 @@ function synthesizeJunction(
     options: undefined,
     where: undefined,
     unique: undefined,
-    map: prisma7ConstraintName(`_${name}`, '_B_index'),
+    map: prisma7ConstraintName(`_${name}`, '_B_index', identifierMaxBytes),
     name: undefined,
   };
   return {

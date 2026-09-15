@@ -12,20 +12,11 @@ export interface IndexAttribute {
   readonly span: PslSpan;
 }
 
-/** Prisma 7 index type names to Prisma 8's Postgres index type literals. */
-const INDEX_TYPES: Readonly<Record<string, string>> = {
-  BTree: 'btree',
-  Hash: 'hash',
-  Gin: 'gin',
-  Gist: 'gist',
-  SpGist: 'spgist',
-  Brin: 'brin',
-};
-
 export function parseIndexAttribute(
   attribute: ResolvedAttribute,
   owner: string,
   sourceId: string,
+  indexTypes: Readonly<Record<string, string>>,
   diagnostics: ContractSourceDiagnostic[],
 ): IndexAttribute | undefined {
   const unsupported = (what: string, span: PslSpan): undefined => {
@@ -77,7 +68,7 @@ export function parseIndexAttribute(
         const token =
           expression === undefined ? undefined : IdentifierAst.cast(expression.syntax)?.name();
         type =
-          token !== undefined && Object.hasOwn(INDEX_TYPES, token) ? INDEX_TYPES[token] : undefined;
+          token !== undefined && Object.hasOwn(indexTypes, token) ? indexTypes[token] : undefined;
         if (type === undefined) {
           return unsupported(
             `type "${token ?? ''}" is not an index type Prisma 8 supports.`,
@@ -93,19 +84,17 @@ export function parseIndexAttribute(
   return { fields, map, type, span: attribute.span };
 }
 
-/** PostgreSQL's identifier limit (`NAMEDATALEN - 1`), which Prisma 7 fits its generated names into. */
-const POSTGRES_IDENTIFIER_BYTES = 63;
 const utf8 = new TextEncoder();
 
 /**
  * A generated constraint name as Prisma 7 spells it: `base` cut so that
- * `base + suffix` is at most 63 bytes, cut on a character boundary, with the
- * suffix kept whole. Prisma 7.10.0 emits `..._aVeryLongCo_idx` for a long
- * `@@index`, `..._AB_pkey` and `..._B_index` for a long implicit junction, and
- * cuts a multi-byte name before the character that would cross the budget.
+ * `base + suffix` is at most `maxBytes` bytes, cut on a character boundary,
+ * with the suffix kept whole. Prisma 7.10.0 emits `..._aVeryLongCo_idx` for a
+ * long `@@index`, `..._AB_pkey` and `..._B_index` for a long implicit junction,
+ * and cuts a multi-byte name before the character that would cross the budget.
  */
-export function prisma7ConstraintName(base: string, suffix: string): string {
-  const budget = POSTGRES_IDENTIFIER_BYTES - utf8.encode(suffix).length;
+export function prisma7ConstraintName(base: string, suffix: string, maxBytes: number): string {
+  const budget = maxBytes - utf8.encode(suffix).length;
   let bytes = 0;
   let kept = '';
   for (const character of base) {
@@ -116,13 +105,18 @@ export function prisma7ConstraintName(base: string, suffix: string): string {
   return `${kept}${suffix}`;
 }
 
-/** Prisma 7's default index name: `{table}_{columns}_idx`, or `_key` for a unique index, cut to 63 bytes. */
+/** Prisma 7's default index name: `{table}_{columns}_idx`, or `_key` for a unique index, cut to `maxBytes`. */
 export function defaultIndexName(
   tableName: string,
   columns: readonly string[],
   unique: boolean,
+  maxBytes: number,
 ): string {
-  return prisma7ConstraintName(`${tableName}_${columns.join('_')}`, unique ? '_key' : '_idx');
+  return prisma7ConstraintName(
+    `${tableName}_${columns.join('_')}`,
+    unique ? '_key' : '_idx',
+    maxBytes,
+  );
 }
 
 export function indexNode(
@@ -130,6 +124,7 @@ export function indexNode(
   columns: readonly string[],
   attribute: IndexAttribute,
   unique: boolean,
+  maxBytes: number,
 ): IndexNode {
   return {
     columns,
@@ -138,7 +133,7 @@ export function indexNode(
       : { type: attribute.type, options: {} }),
     where: undefined,
     unique: unique ? true : undefined,
-    map: attribute.map ?? defaultIndexName(tableName, columns, unique),
+    map: attribute.map ?? defaultIndexName(tableName, columns, unique, maxBytes),
     name: undefined,
   };
 }

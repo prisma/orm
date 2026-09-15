@@ -12,7 +12,6 @@ import {
   instantiateAuthoringEntityType,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
-import type { TargetPackRef } from '@internal/framework-components/components';
 import type {
   AssembledAuthoringContributions,
   ControlMutationDefaults,
@@ -55,17 +54,14 @@ import { basename } from 'pathe';
 import { givesColumnDefault, lowerPrisma7Default } from './defaults';
 import { andList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
-import {
-  type Prisma7TypeMap,
-  prisma7NativeTypeMapping,
-  prisma7ScalarMapping,
-} from './native-types';
+import { prisma7NativeTypeMapping, prisma7ScalarMapping } from './native-types';
 import {
   lowerRelations,
   parseRelationAttribute,
   type RelationField,
   type RelationModel,
 } from './relations';
+import type { Prisma7TargetBinding } from './target-binding';
 
 export interface Prisma7Document {
   readonly document: DocumentAst;
@@ -76,24 +72,7 @@ export interface Prisma7Document {
 export interface InterpretPrisma7DocumentsInput {
   readonly documents: readonly Prisma7Document[];
   readonly seedDiagnostics: readonly ContractSourceDiagnostic[];
-  readonly target: TargetPackRef<'sql', string>;
-  readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
-  readonly nativeEnum: {
-    readonly entityKind: string;
-    readonly typeConstructor: readonly string[];
-  };
-  readonly typeMap: Prisma7TypeMap;
-  /**
-   * Picks the ORM-side "now" generator for an `@updatedAt` column from the
-   * column's resolved codec, so the generated value is in the representation
-   * that codec encodes (a zoneless `timestamp` and a `timestamptz` differ).
-   */
-  readonly updatedAt: {
-    readonly generatorIdFor: (column: {
-      readonly codecId: string;
-      readonly nativeType: string;
-    }) => string;
-  };
+  readonly binding: Prisma7TargetBinding;
   readonly controlMutationDefaults: ControlMutationDefaults;
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookup;
@@ -101,7 +80,6 @@ export interface InterpretPrisma7DocumentsInput {
 }
 
 const SUMMARY = 'Prisma 7 schema interpretation failed';
-const ACCEPTED_PROVIDERS: ReadonlySet<string> = new Set(['postgresql', 'postgres']);
 const EMPTY_DESCRIPTORS: ReadonlyMap<string, ColumnDescriptor> = new Map();
 
 interface SourceBlock {
@@ -181,8 +159,9 @@ function parameterSpan(block: PslExtensionBlock, key: string): PslSpan {
 export function interpretPrisma7Documents(
   input: InterpretPrisma7DocumentsInput,
 ): Result<Contract, ContractSourceDiagnostics> {
+  const { binding } = input;
   const diagnostics: ContractSourceDiagnostic[] = [...input.seedDiagnostics];
-  const defaultNamespaceId = input.target.defaultNamespaceId;
+  const defaultNamespaceId = binding.target.defaultNamespaceId;
   const datasources: SourceBlock[] = [];
   const enumBlocks: SourceBlock[] = [];
   const models: ModelDeclaration[] = [];
@@ -264,7 +243,13 @@ export function interpretPrisma7Documents(
     }
     for (const symbol of Object.values(table.topLevel.models)) {
       if (!claimName('model', symbol.name, sourceId, symbol.span)) continue;
-      const declaration = readModelDeclaration(symbol, sourceId, defaultNamespaceId, diagnostics);
+      const declaration = readModelDeclaration(
+        symbol,
+        sourceId,
+        defaultNamespaceId,
+        binding.indexTypes,
+        diagnostics,
+      );
       if (declaration === undefined) {
         ignoredModels.add(symbol.name);
       } else {
@@ -273,7 +258,12 @@ export function interpretPrisma7Documents(
     }
   }
 
-  checkDatasource(datasources, input.documents[0]?.sourceId ?? 'schema.prisma', diagnostics);
+  checkDatasource(
+    datasources,
+    input.documents[0]?.sourceId ?? 'schema.prisma',
+    binding,
+    diagnostics,
+  );
   reportTableCollisions(models, diagnostics);
 
   const enums = new Map<string, EnumDeclaration>();
@@ -344,7 +334,7 @@ export function interpretPrisma7Documents(
       relationFields: build.relationFields,
     });
   }
-  const lowered = lowerRelations(relationModels, diagnostics);
+  const lowered = lowerRelations(relationModels, binding.identifierMaxBytes, diagnostics);
 
   const modelNodes: ModelNode[] = [];
   for (const [modelName, build] of builds) {
@@ -399,7 +389,7 @@ export function interpretPrisma7Documents(
         );
         return [];
       }
-      return [indexNode(model.tableName, columns, attribute, unique)];
+      return [indexNode(model.tableName, columns, attribute, unique, binding.identifierMaxBytes)];
     });
     const foreignKeys = lowered.foreignKeys.get(modelName);
     const relations = lowered.relations.get(modelName);
@@ -425,9 +415,9 @@ export function interpretPrisma7Documents(
 
   const createNamespace = (namespace: SqlNamespaceInput): SqlNamespaceBase => {
     const entities = namespaceEntities.get(namespace.id);
-    if (entities === undefined) return input.createNamespace(namespace);
+    if (entities === undefined) return binding.createNamespace(namespace);
     const valueSet = { ...namespace.entries['valueSet'], ...entities['valueSet'] };
-    return input.createNamespace({
+    return binding.createNamespace({
       ...namespace,
       entries: {
         ...namespace.entries,
@@ -440,7 +430,7 @@ export function interpretPrisma7Documents(
   return ok(
     buildSqlContractFromDefinition(
       {
-        target: input.target,
+        target: binding.target,
         warnings: undefined,
         createNamespace,
         ...(namespaceEntities.size > 0 ? { namespaces: [...namespaceEntities.keys()] } : {}),
@@ -454,14 +444,16 @@ export function interpretPrisma7Documents(
 function checkDatasource(
   datasources: readonly SourceBlock[],
   fallbackSourceId: string,
+  binding: Prisma7TargetBinding,
   diagnostics: ContractSourceDiagnostic[],
 ): void {
   const [datasource] = datasources;
+  const [namedProvider] = binding.providers;
   if (datasource === undefined) {
     diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_PROVIDER_MISMATCH',
-        'No datasource block found; a Prisma 7 schema for Postgres declares `datasource db { provider = "postgresql" }`.',
+        `No datasource block found; a Prisma 7 schema for ${binding.databaseName} declares \`datasource db { provider = "${namedProvider}" }\`.`,
         fallbackSourceId,
         undefined,
       ),
@@ -470,13 +462,13 @@ function checkDatasource(
   }
   const block = datasource.block.block;
   const provider = scalarValue(block, 'provider');
-  if (provider === undefined || !ACCEPTED_PROVIDERS.has(provider)) {
+  if (provider === undefined || !binding.providers.includes(provider)) {
     diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_PROVIDER_MISMATCH',
         provider === undefined
-          ? 'The datasource block declares no string `provider`; this contract source reads Prisma 7 schemas for provider "postgresql".'
-          : `The datasource provider is "${provider}"; this contract source reads Prisma 7 schemas for provider "postgresql".`,
+          ? `The datasource block declares no string \`provider\`; this contract source reads Prisma 7 schemas for provider "${namedProvider}".`
+          : `The datasource provider is "${provider}"; this contract source reads Prisma 7 schemas for provider "${namedProvider}".`,
         datasource.sourceId,
         parameterSpan(block, 'provider'),
       ),
@@ -545,6 +537,7 @@ function readModelDeclaration(
   symbol: ModelSymbol,
   sourceId: string,
   defaultNamespaceId: string,
+  indexTypes: Prisma7TargetBinding['indexTypes'],
   diagnostics: ContractSourceDiagnostic[],
 ): ModelDeclaration | undefined {
   if (symbol.attributes.some((attribute) => attribute.name === 'ignore')) return undefined;
@@ -564,17 +557,35 @@ function readModelDeclaration(
           requireStringArgument(attribute, symbol.name, sourceId, diagnostics) ?? namespaceId;
         break;
       case 'id': {
-        const parsed = parseIndexAttribute(attribute, symbol.name, sourceId, diagnostics);
+        const parsed = parseIndexAttribute(
+          attribute,
+          symbol.name,
+          sourceId,
+          indexTypes,
+          diagnostics,
+        );
         if (parsed?.fields !== undefined) id = parsed;
         break;
       }
       case 'unique': {
-        const parsed = parseIndexAttribute(attribute, symbol.name, sourceId, diagnostics);
+        const parsed = parseIndexAttribute(
+          attribute,
+          symbol.name,
+          sourceId,
+          indexTypes,
+          diagnostics,
+        );
         if (parsed?.fields !== undefined) uniqueIndexes.push(parsed);
         break;
       }
       case 'index': {
-        const parsed = parseIndexAttribute(attribute, symbol.name, sourceId, diagnostics);
+        const parsed = parseIndexAttribute(
+          attribute,
+          symbol.name,
+          sourceId,
+          indexTypes,
+          diagnostics,
+        );
         if (parsed?.fields !== undefined) indexes.push(parsed);
         break;
       }
@@ -672,7 +683,7 @@ function lowerNativeEnums(
 ): NamespaceEntities {
   const result: NamespaceEntities = new Map();
   if (enums.size === 0) return result;
-  const { entityKind } = input.nativeEnum;
+  const { entityKind } = input.binding.nativeEnum;
   const descriptor: AuthoringEntityTypeDescriptor | undefined = buildEntityTypesByDiscriminator(
     input.authoringContributions,
   ).get(entityKind);
@@ -681,7 +692,7 @@ function lowerNativeEnums(
       diagnostics.push(
         prisma7Diagnostic(
           'PRISMA7_UNSUPPORTED_TYPE',
-          `Enum "${declaration.name}" cannot be lowered: target "${input.target.targetId}" registers no "${entityKind}" entity kind.`,
+          `Enum "${declaration.name}" cannot be lowered: target "${input.binding.target.targetId}" registers no "${entityKind}" entity kind.`,
           declaration.sourceId,
           declaration.span,
         ),
@@ -689,8 +700,8 @@ function lowerNativeEnums(
       continue;
     }
     const context: AuthoringEntityContext = {
-      family: input.target.familyId,
-      target: input.target.targetId,
+      family: input.binding.target.familyId,
+      target: input.binding.target.targetId,
       codecLookup: input.codecLookup,
       sourceId: declaration.sourceId,
       diagnostics: {
@@ -844,6 +855,7 @@ function readIgnoredField(field: FieldSymbol, isRelationField: boolean, args: Re
 
 function readField(args: ReadFieldArgs): void {
   const { field, build, diagnostics, input } = args;
+  const { binding } = input;
   const model = build.declaration;
   const sourceId = model.sourceId;
   const label = `Field "${model.symbol.name}.${field.name}"`;
@@ -866,11 +878,20 @@ function readField(args: ReadFieldArgs): void {
     } else if (attribute.name.startsWith('db.') && !isRelationField) {
       nativeType = { name: attribute.name.slice('db.'.length), attribute };
     } else if (attribute.name === 'id' && !isRelationField) {
-      if (parseIndexAttribute(attribute, label, sourceId, diagnostics) !== undefined) {
+      if (
+        parseIndexAttribute(attribute, label, sourceId, binding.indexTypes, diagnostics) !==
+        undefined
+      ) {
         build.idFields = [field.name];
       }
     } else if (attribute.name === 'unique' && !isRelationField) {
-      const parsed = parseIndexAttribute(attribute, label, sourceId, diagnostics);
+      const parsed = parseIndexAttribute(
+        attribute,
+        label,
+        sourceId,
+        binding.indexTypes,
+        diagnostics,
+      );
       if (parsed !== undefined) build.uniqueIndexes.push({ ...parsed, fields: [field.name] });
     } else if (attribute.name === 'default' && !isRelationField) {
       defaultAttribute = attribute;
@@ -928,12 +949,12 @@ function readField(args: ReadFieldArgs): void {
       return;
     }
     call = {
-      path: input.nativeEnum.typeConstructor,
+      path: binding.nativeEnum.typeConstructor,
       args: [{ kind: 'positional', value: enumDeclaration.name, span: field.span }],
       span: field.span,
     };
   } else {
-    const scalar = prisma7ScalarMapping(input.typeMap, field.typeName);
+    const scalar = prisma7ScalarMapping(binding.typeMap, field.typeName);
     if (scalar === undefined) {
       diagnostics.push(
         prisma7Diagnostic(
@@ -949,7 +970,7 @@ function readField(args: ReadFieldArgs): void {
     let span = field.span;
     if (nativeType !== undefined) {
       const native = prisma7NativeTypeMapping(
-        input.typeMap,
+        binding.typeMap,
         nativeType.name,
         nativeType.attribute.args.map((arg) => arg.value),
       );
@@ -988,8 +1009,8 @@ function readField(args: ReadFieldArgs): void {
     scalarColumnDescriptors: args.scalarColumnDescriptors,
     authoringContributions: input.authoringContributions,
     composedExtensions: args.composedExtensions,
-    familyId: input.target.familyId,
-    targetId: input.target.targetId,
+    familyId: binding.target.familyId,
+    targetId: binding.target.targetId,
     diagnostics,
     sourceId,
     entityLabel: label,
@@ -1002,7 +1023,7 @@ function readField(args: ReadFieldArgs): void {
       diagnostics.push(
         prisma7Diagnostic(
           'PRISMA7_UNSUPPORTED_TYPE',
-          `${label} type "${field.typeName}" could not be resolved against target "${input.target.targetId}".`,
+          `${label} type "${field.typeName}" could not be resolved against target "${binding.target.targetId}".`,
           sourceId,
           field.span,
         ),
@@ -1029,9 +1050,8 @@ function readField(args: ReadFieldArgs): void {
           attribute: defaultAttribute,
           field,
           modelName: model.symbol.name,
-          nativeType: resolved.descriptor.nativeType,
-          typeParams: resolved.descriptor.typeParams,
           codecId: resolved.descriptor.codecId,
+          literalForm: binding.literalDefaultForm(resolved.descriptor),
           enumMembers:
             enumDeclaration === undefined
               ? undefined
@@ -1046,10 +1066,7 @@ function readField(args: ReadFieldArgs): void {
       ? undefined
       : {
           kind: 'generator' as const,
-          id: input.updatedAt.generatorIdFor({
-            codecId: resolved.descriptor.codecId,
-            nativeType: resolved.descriptor.nativeType,
-          }),
+          id: binding.updatedAtGeneratorId(resolved.descriptor.codecId),
         };
   const generator = updatedAtGenerator ?? lowered?.onCreate;
   const generatingAttribute = updatedAt ?? defaultAttribute;

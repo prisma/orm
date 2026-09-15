@@ -2,11 +2,10 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { validateContractDomain } from '@internal/contract/validate-domain';
-import type { TargetPackRef } from '@internal/framework-components/components';
 import { rangeToPslSpan } from '@internal/psl-parser';
 import type { ParseDiagnostic, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
-import type { SqlNamespaceBase, SqlNamespaceInput, SqlStorage } from '@internal/sql-contract/types';
+import type { SqlStorage } from '@internal/sql-contract/types';
 import {
   validateModelStorageReferences,
   validateSqlStorageConsistency,
@@ -19,35 +18,12 @@ import { isStructuredError } from '@internal/utils/structured-error';
 import { dirname, extname, join, normalize } from 'pathe';
 import { prisma7Diagnostic } from './diagnostics';
 import { interpretPrisma7Documents, type Prisma7Document } from './interpreter';
-import type { Prisma7TypeMap } from './native-types';
+import type { Prisma7TargetBinding } from './target-binding';
 
 export interface Prisma7SchemaOptions {
+  readonly binding: Prisma7TargetBinding;
   readonly output?: string;
-  readonly target: TargetPackRef<'sql', string>;
-  readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
   readonly defaultControlPolicy?: ControlPolicy;
-  /**
-   * The target's native enum vocabulary: the entity kind its pack registers
-   * (Postgres: `native_enum`) and the type constructor path that references
-   * one from a field (Postgres: `pg.enum`).
-   */
-  readonly nativeEnum: {
-    readonly entityKind: string;
-    readonly typeConstructor: readonly string[];
-  };
-  /** The target's table of what Prisma 7 creates for each scalar and `@db.*` type. */
-  readonly typeMap: Prisma7TypeMap;
-  /**
-   * Picks the execution generator `@updatedAt` lowers to on create and update
-   * from the column's resolved codec, so the generated value is in the
-   * representation that codec encodes.
-   */
-  readonly updatedAt: {
-    readonly generatorIdFor: (column: {
-      readonly codecId: string;
-      readonly nativeType: string;
-    }) => string;
-  };
 }
 
 function defaultOutputFromSchemaPath(schemaPath: string): string {
@@ -180,11 +156,7 @@ export function prisma7Schema(schemaPath: string, options: Prisma7SchemaOptions)
           const interpreted = interpretPrisma7Documents({
             documents,
             seedDiagnostics,
-            target: options.target,
-            createNamespace: options.createNamespace,
-            nativeEnum: options.nativeEnum,
-            typeMap: options.typeMap,
-            updatedAt: options.updatedAt,
+            binding: options.binding,
             controlMutationDefaults: context.controlMutationDefaults,
             authoringContributions: context.authoringContributions,
             codecLookup: context.codecLookup,
@@ -194,7 +166,7 @@ export function prisma7Schema(schemaPath: string, options: Prisma7SchemaOptions)
           contract = applySqlSpecifierControlPolicy(
             interpreted.value,
             options.defaultControlPolicy,
-            options.createNamespace,
+            options.binding.createNamespace,
           );
           validateInterpretedContract(contract);
         } catch (error) {

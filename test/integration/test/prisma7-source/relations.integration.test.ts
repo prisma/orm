@@ -13,14 +13,9 @@ import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { prisma7Schema } from '@internal/sql-contract-prisma7/provider';
-import postgres, {
-  INSTANT_NOW_GENERATOR_ID,
-  PLAIN_DATE_TIME_NOW_GENERATOR_ID,
-} from '@internal/target-postgres/control';
-import postgresPackRef from '@internal/target-postgres/pack';
-import { prisma7PostgresTypeMap } from '@internal/target-postgres/prisma7-type-map';
+import postgres from '@internal/target-postgres/control';
+import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { blindCast } from '@internal/utils/casts';
 import { timeouts, withClient, withDevDatabase } from '@repo/test-utils';
 import { dirname, join } from 'pathe';
@@ -115,18 +110,7 @@ describe('Prisma 7 relations against the database Prisma 7 built', () => {
       await withDevDatabase(async ({ connectionString }) => {
         await withClient(connectionString, (client) => client.query(migrationSql));
 
-        const config = prisma7Schema(schemaPath, {
-          target: postgresPackRef,
-          createNamespace: postgresCreateNamespace,
-          nativeEnum: { entityKind: 'native_enum', typeConstructor: ['pg', 'enum'] },
-          typeMap: prisma7PostgresTypeMap,
-          updatedAt: {
-            generatorIdFor: ({ codecId }) =>
-              codecId === 'pg/timestamptz-temporal@1'
-                ? INSTANT_NOW_GENERATOR_ID
-                : PLAIN_DATE_TIME_NOW_GENERATOR_ID,
-          },
-        });
+        const config = prisma7Schema(schemaPath, { binding: prisma7PostgresBinding });
         const loaded = await config.source.load(sourceContext());
         expect(loaded.ok).toBe(true);
         if (!loaded.ok) return;

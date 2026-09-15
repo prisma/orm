@@ -6,16 +6,11 @@ import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import postgres, {
-  INSTANT_NOW_GENERATOR_ID,
-  PLAIN_DATE_TIME_NOW_GENERATOR_ID,
-} from '@internal/target-postgres/control';
-import postgresPackRef from '@internal/target-postgres/pack';
-import { prisma7PostgresTypeMap } from '@internal/target-postgres/prisma7-type-map';
+import postgres from '@internal/target-postgres/control';
+import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
-import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { dirname, join } from 'pathe';
-import { type Prisma7SchemaOptions, prisma7Schema } from '../src/provider';
+import { prisma7Schema } from '../src/provider';
 
 export const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -39,24 +34,10 @@ export function postgresSourceContext(resolvedInputs: readonly string[]): Contra
   };
 }
 
-/** What `@prisma/orm-postgres/config`'s `prisma7Schema` passes to the SQL provider. */
-export const postgresPrisma7Options: Prisma7SchemaOptions = {
-  target: postgresPackRef,
-  createNamespace: postgresCreateNamespace,
-  nativeEnum: { entityKind: 'native_enum', typeConstructor: ['pg', 'enum'] },
-  typeMap: prisma7PostgresTypeMap,
-  updatedAt: {
-    generatorIdFor: ({ codecId }) =>
-      codecId === 'pg/timestamptz-temporal@1'
-        ? INSTANT_NOW_GENERATOR_ID
-        : PLAIN_DATE_TIME_NOW_GENERATOR_ID,
-  },
-};
-
 /** Loads `fixtures/<caseName>/schema.prisma` through the provider, as `contract emit` does. */
 export function loadFixtureSchema(caseName: string) {
   const schemaPath = join(fixturesDir, caseName, 'schema.prisma');
-  return prisma7Schema(schemaPath, postgresPrisma7Options).source.load(
+  return prisma7Schema(schemaPath, { binding: prisma7PostgresBinding }).source.load(
     postgresSourceContext([schemaPath]),
   );
 }

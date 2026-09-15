@@ -2,11 +2,12 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { basename, dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { prisma7Schema } from '../src/provider';
-import { postgresPrisma7Options, postgresSourceContext } from './support';
+import { postgresSourceContext } from './support';
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const update = process.env['UPDATE_PRISMA7_FIXTURES'] === '1';
@@ -123,7 +124,7 @@ describe('Prisma 7 fixtures', () => {
       const schemaPath = existsSync(directory)
         ? directory
         : join(fixturesDir, caseName, 'schema.prisma');
-      const config = prisma7Schema(schemaPath, postgresPrisma7Options);
+      const config = prisma7Schema(schemaPath, { binding: prisma7PostgresBinding });
       const result = await config.source.load(postgresSourceContext([schemaPath]));
       const diagnosticsPath = expectedPath(caseName, 'expected-diagnostics.json');
       const contractPath = expectedPath(caseName, 'expected-contract.json');

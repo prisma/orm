@@ -18,7 +18,7 @@ import {
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { prisma7Diagnostic } from './diagnostics';
-import { storedTemporalText, type TemporalNativeType } from './temporal-literals';
+import type { Prisma7LiteralDefaultForm } from './target-binding';
 
 export interface LoweredPrisma7Default {
   readonly storage: ColumnDefault | undefined;
@@ -29,9 +29,8 @@ export interface LowerPrisma7DefaultInput {
   readonly attribute: ResolvedAttribute;
   readonly field: FieldSymbol;
   readonly modelName: string;
-  readonly nativeType: string;
-  readonly typeParams: Readonly<Record<string, unknown>> | undefined;
   readonly codecId: string;
+  readonly literalForm: Prisma7LiteralDefaultForm | undefined;
   /** Storage value per member name when the field is typed by a Prisma 7 enum. */
   readonly enumMembers: ReadonlyMap<string, string> | undefined;
   readonly controlMutationDefaults: ControlMutationDefaults;
@@ -40,11 +39,6 @@ export interface LowerPrisma7DefaultInput {
 }
 
 type LiteralValue = string | number | boolean;
-
-function base64ToHex(base64: string): string | undefined {
-  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64) || base64.length % 4 !== 0) return undefined;
-  return `\\x${Buffer.from(base64, 'base64').toString('hex')}`;
-}
 
 const CLIENT_SIDE_GENERATORS: ReadonlySet<string> = new Set(['uuid', 'cuid', 'ulid', 'nanoid']);
 
@@ -99,7 +93,10 @@ export function lowerPrisma7Default(
     return lowerFunction(call, input, label, unknown);
   }
 
-  const rawLiteral = rawSqlLiteral(expression, input);
+  const rawLiteral =
+    input.literalForm?.kind === 'sqlExpression'
+      ? sqlExpressionDefault(expression, input.literalForm, input.field.list)
+      : undefined;
   if (rawLiteral === 'unreadable') {
     return unknown('holds a value this contract source does not read.', attribute.span);
   }
@@ -121,7 +118,7 @@ function scalarValue(
   unknown: (reason: string, span: PslSpan) => undefined,
 ): ColumnDefaultLiteralInputValue | undefined {
   const span = input.attribute.span;
-  const isJson = input.nativeType === 'json' || input.nativeType === 'jsonb';
+  const isJson = input.literalForm?.kind === 'json';
   const jsonNull = (holds: string): undefined => {
     input.diagnostics.push(
       prisma7Diagnostic(
@@ -166,53 +163,26 @@ function scalarValue(
   return unknown('holds a value this contract source does not read.', span);
 }
 
-const TEMPORAL_NATIVE_TYPES: ReadonlySet<string> = new Set<TemporalNativeType>([
-  'timestamp',
-  'timestamptz',
-  'date',
-  'time',
-  'timetz',
-]);
-
-function isTemporalNativeType(nativeType: string): nativeType is TemporalNativeType {
-  return TEMPORAL_NATIVE_TYPES.has(nativeType);
-}
-
-function rawSqlText(text: string, nativeType: 'bytea' | TemporalNativeType): string | undefined {
-  const value = nativeType === 'bytea' ? base64ToHex(text) : storedTemporalText(text, nativeType);
-  return value === undefined ? undefined : `'${value.replace(/'/g, "''")}'`;
-}
-
-/**
- * A `Bytes` or `DateTime` default is carried as the SQL literal of the default
- * Postgres stores (`'\x68656c6c6f'`, `'2024-01-02 03:04:05'`), and a list default
- * as an `ARRAY[...]` of those literals cast to the column type, rather than
- * through the column codec, whose JSON form (base64, a Temporal value) is not
- * what introspection reads back; verify parses both sides with the same parser.
- */
-function rawSqlLiteral(
+function sqlExpressionDefault(
   expression: ExpressionAst,
-  input: LowerPrisma7DefaultInput,
+  form: Extract<Prisma7LiteralDefaultForm, { readonly kind: 'sqlExpression' }>,
+  isList: boolean,
 ): { readonly expression: string } | 'unreadable' | undefined {
-  const { nativeType } = input;
-  if (nativeType !== 'bytea' && !isTemporalNativeType(nativeType)) return undefined;
-  const array = input.field.list ? ArrayLiteralAst.cast(expression.syntax) : undefined;
+  const array = isList ? ArrayLiteralAst.cast(expression.syntax) : undefined;
   if (array === undefined) {
     const text = StringLiteralExprAst.cast(expression.syntax)?.value();
     if (text === undefined) return undefined;
-    const literal = rawSqlText(text, nativeType);
+    const literal = form.literal(text);
     return literal === undefined ? 'unreadable' : { expression: literal };
   }
   const literals: string[] = [];
   for (const element of array.elements()) {
     const text = StringLiteralExprAst.cast(element.syntax)?.value();
-    const literal = text === undefined ? undefined : rawSqlText(text, nativeType);
+    const literal = text === undefined ? undefined : form.literal(text);
     if (literal === undefined) return 'unreadable';
     literals.push(literal);
   }
-  const precision = input.typeParams?.['precision'];
-  const typeName = `${nativeType.toUpperCase()}${typeof precision === 'number' ? `(${precision})` : ''}`;
-  return { expression: `ARRAY[${literals.join(', ')}]::${typeName}[]` };
+  return { expression: form.list(literals) };
 }
 
 function blindListValue(
@@ -226,12 +196,12 @@ function blindListValue(
 
 const INTEGER_TEXT = /^-?\d+$/;
 
-/** The number token of an `int8` default that `BigInt()` would reject: Prisma 7 rejects it too ("is not a valid integer"). */
+/** The number token of a `BigInt` default that `BigInt()` would reject: Prisma 7 rejects it too ("is not a valid integer"). */
 function nonIntegerBigintReason(
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
 ): string | undefined {
-  if (input.nativeType !== 'int8') return undefined;
+  if (input.literalForm?.kind !== 'bigint') return undefined;
   const text = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
   if (text === undefined || INTEGER_TEXT.test(text)) return undefined;
   return `holds ${text}, which is not an integer; a BigInt default must be a whole number.`;
@@ -245,13 +215,12 @@ function elementValue(
   if (member !== undefined) return input.enumMembers?.get(member);
   const number = NumberLiteralExprAst.cast(expression.syntax);
   if (number !== undefined) {
-    // int8 goes through its codec as a bigint built from the source text: a JS
-    // number would round past 2^53.
-    if (input.nativeType === 'int8') {
+    // Built from the source text: a JS number would round past 2^53.
+    if (input.literalForm?.kind === 'bigint') {
       const text = number.token()?.text;
       return text === undefined || !INTEGER_TEXT.test(text)
         ? undefined
-        : blindCast<ColumnDefaultLiteralInputValue, 'the int8 codec encodes a bigint to JSON'>(
+        : blindCast<ColumnDefaultLiteralInputValue, 'the column codec encodes a bigint to JSON'>(
             BigInt(text),
           );
     }
@@ -259,7 +228,7 @@ function elementValue(
   }
   const text = StringLiteralExprAst.cast(expression.syntax)?.value();
   if (text !== undefined) {
-    if (input.nativeType === 'json' || input.nativeType === 'jsonb') {
+    if (input.literalForm?.kind === 'json') {
       try {
         return blindCast<ColumnDefaultLiteralInputValue, 'JSON.parse yields a JSON value'>(
           JSON.parse(text),
