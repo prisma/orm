@@ -198,7 +198,13 @@ function blindListValue(
   >(values);
 }
 
-const WHOLE_NUMBER_SCALARS: ReadonlySet<string> = new Set(['Int', 'BigInt']);
+/** The Prisma 7 scalars whose number defaults must be whole numbers, as each is named in a message. */
+const WHOLE_NUMBER_SCALARS: Readonly<Record<string, string>> = {
+  Int: 'an Int',
+  BigInt: 'a BigInt',
+};
+
+const WHOLE_NUMBER_TEXT = /^-?\d+$/;
 
 function tryDecodeJson(codec: Codec, json: JsonValue): { readonly value: unknown } | undefined {
   try {
@@ -237,11 +243,25 @@ function rejectedNumberReason(
   input: LowerPrisma7DefaultInput,
 ): string | undefined {
   const text = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
-  if (text === undefined || numberDefault(text, input.codec) !== undefined) return undefined;
+  if (text === undefined || numberValue(text, input) !== undefined) return undefined;
   const { typeName } = input.field;
-  return WHOLE_NUMBER_SCALARS.has(typeName)
-    ? `holds ${text}, which is not an integer; a ${typeName} default must be a whole number.`
-    : `holds ${text}, which is not a valid ${typeName} value.`;
+  const wholeNumberScalar = Object.hasOwn(WHOLE_NUMBER_SCALARS, typeName)
+    ? WHOLE_NUMBER_SCALARS[typeName]
+    : undefined;
+  return wholeNumberScalar === undefined
+    ? `holds ${text}, which is not a valid ${typeName} value.`
+    : `holds ${text}, which is not an integer; ${wholeNumberScalar} default must be a whole number.`;
+}
+
+/** A number default for the field: Prisma 7 accepts only whole numbers for `Int` and `BigInt`. */
+function numberValue(
+  text: string,
+  input: LowerPrisma7DefaultInput,
+): { readonly value: ColumnDefaultLiteralInputValue } | undefined {
+  if (Object.hasOwn(WHOLE_NUMBER_SCALARS, input.field.typeName) && !WHOLE_NUMBER_TEXT.test(text)) {
+    return undefined;
+  }
+  return numberDefault(text, input.codec);
 }
 
 function elementValue(
@@ -251,7 +271,7 @@ function elementValue(
   const member = IdentifierAst.cast(expression.syntax)?.name();
   if (member !== undefined) return input.enumMembers?.get(member);
   const number = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
-  if (number !== undefined) return numberDefault(number, input.codec)?.value;
+  if (number !== undefined) return numberValue(number, input)?.value;
   const text = StringLiteralExprAst.cast(expression.syntax)?.value();
   if (text !== undefined) {
     if (input.literalForm?.kind === 'json') {
