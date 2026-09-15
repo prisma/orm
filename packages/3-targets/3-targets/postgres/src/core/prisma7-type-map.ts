@@ -3,8 +3,9 @@
  * native type, expressed as the Prisma 8 authoring type constructor that
  * produces the same column. Derived from the SQL recorded in
  * `test/integration/test/fixtures/prisma7-source/reference/migration.sql`.
- * `args` are the constructor's positional arguments; a `@db.*` entry passes
- * the attribute's own arguments through.
+ * `args` are the constructor's positional arguments. A `@db.*` attribute's own
+ * arguments replace them; without any, the column gets `args`, so `@db.Char`
+ * is `Char(1)`, the `character(1)` Postgres stores for Prisma 7's `CHAR`.
  */
 export const prisma7PostgresTypeMap = {
   scalars: {
@@ -19,25 +20,25 @@ export const prisma7PostgresTypeMap = {
     Bytes: { constructorName: 'Bytes', args: [] },
   },
   nativeTypes: {
-    Text: 'String',
-    VarChar: 'VarChar',
-    Char: 'Char',
-    Uuid: 'Uuid',
-    Inet: 'Inet',
-    Boolean: 'Boolean',
-    Integer: 'Int',
-    SmallInt: 'SmallInt',
-    BigInt: 'BigInt',
-    Real: 'Real',
-    DoublePrecision: 'Float',
-    Decimal: 'Numeric',
-    Timestamp: 'Timestamp',
-    Timestamptz: 'Timestamptz',
-    Date: 'Date',
-    Time: 'Time',
-    Timetz: 'Timetz',
-    Json: 'Json',
-    JsonB: 'Jsonb',
-    ByteA: 'Bytes',
+    Text: { constructorName: 'String', args: [] },
+    VarChar: { constructorName: 'VarChar', args: [] },
+    Char: { constructorName: 'Char', args: ['1'] },
+    Uuid: { constructorName: 'Uuid', args: [] },
+    Inet: { constructorName: 'Inet', args: [] },
+    Boolean: { constructorName: 'Boolean', args: [] },
+    Integer: { constructorName: 'Int', args: [] },
+    SmallInt: { constructorName: 'SmallInt', args: [] },
+    BigInt: { constructorName: 'BigInt', args: [] },
+    Real: { constructorName: 'Real', args: [] },
+    DoublePrecision: { constructorName: 'Float', args: [] },
+    Decimal: { constructorName: 'Numeric', args: [] },
+    Timestamp: { constructorName: 'Timestamp', args: [] },
+    Timestamptz: { constructorName: 'Timestamptz', args: [] },
+    Date: { constructorName: 'Date', args: [] },
+    Time: { constructorName: 'Time', args: [] },
+    Timetz: { constructorName: 'Timetz', args: [] },
+    Json: { constructorName: 'Json', args: [] },
+    JsonB: { constructorName: 'Jsonb', args: [] },
+    ByteA: { constructorName: 'Bytes', args: [] },
   },
 } as const;

@@ -72,6 +72,7 @@ describe('Prisma 7 fixtures', () => {
       'native-type-rejected-varbit',
       'native-type-rejected-xml',
       'native-types-accepted',
+      'native-types-without-arguments',
       'preview-features-ignored',
       'provider-mismatch',
       'provider-missing',
