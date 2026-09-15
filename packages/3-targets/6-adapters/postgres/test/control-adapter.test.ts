@@ -1828,13 +1828,13 @@ describe('PostgresControlAdapter', () => {
 
   describe('parsePgReloptions', () => {
     it('throws when a reloption entry has no "=" separator', () => {
-      expect(() => parsePgReloptions(['no_eq_sign'], 'item_body_idx')).toThrow(
+      expect(() => parsePgReloptions('{no_eq_sign}', 'item_body_idx')).toThrow(
         /malformed reloption entry "no_eq_sign" on index "item_body_idx"/,
       );
     });
 
     it('parses well-formed key=value entries into a record', () => {
-      expect(parsePgReloptions(['fillfactor=70', 'fastupdate=true'], 'item_body_idx')).toEqual({
+      expect(parsePgReloptions('{fillfactor=70,fastupdate=true}', 'item_body_idx')).toEqual({
         fillfactor: '70',
         fastupdate: 'true',
       });
@@ -1842,13 +1842,19 @@ describe('PostgresControlAdapter', () => {
 
     it('returns undefined for a null or empty input', () => {
       expect(parsePgReloptions(null, 'item_body_idx')).toBeUndefined();
-      expect(parsePgReloptions([], 'item_body_idx')).toBeUndefined();
+      expect(parsePgReloptions('{}', 'item_body_idx')).toBeUndefined();
+    });
+
+    it('rejects a native array input', () => {
+      expect(() => parsePgReloptions(['fillfactor=70'], 'item_body_idx')).toThrow(
+        'expected raw text for a Postgres array',
+      );
     });
   });
 
   describe('parsePgNameArray', () => {
-    it('passes a real JS array through as strings', () => {
-      expect(parsePgNameArray(['a', 'b'])).toEqual(['a', 'b']);
+    it('rejects a real JS array input', () => {
+      expect(() => parsePgNameArray(['a', 'b'])).toThrow('expected raw text for a Postgres array');
     });
 
     it('parses an unquoted array literal', () => {
@@ -1886,7 +1892,7 @@ describe('PostgresControlAdapter', () => {
     });
 
     it('rejects an unterminated quoted element', () => {
-      expect(parsePgNameArray('{"unterminated}')).toEqual([]);
+      expect(() => parsePgNameArray('{"unterminated}')).toThrow('array dimension not balanced');
     });
   });
 
@@ -1922,7 +1928,35 @@ describe('PostgresControlAdapter', () => {
       await expect(adapter.readMarker(driver, 'app')).resolves.toBeNull();
     });
 
-    it('throws CONTRACT.MARKER_ROW_CORRUPT when marker row fails validation', async () => {
+    it('rejects native array invariants with a structured marker error', async () => {
+      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const driver = createMockDriver([
+        {
+          match: includes('"information_schema"."tables"'),
+          rows: [{ table_schema: 'prisma_contract' }],
+        },
+        {
+          match: includes('"prisma_contract"."marker"'),
+          rows: [{ ...validMarkerRow, invariants: ['inv-1', 'inv-2'] }],
+        },
+      ]);
+
+      await expect(adapter.readMarker(driver, 'app')).rejects.toSatisfy((err: unknown) => {
+        expect(CliStructuredError.is(err)).toBe(true);
+        const structured = err as CliStructuredError & { readonly cause?: unknown };
+        const envelope = structured.toEnvelope();
+        expect(envelope.code).toBe('CONTRACT.MARKER_ROW_CORRUPT');
+        expect(envelope.why).toContain('Invalid contract marker row');
+        expect(envelope.why).toContain('expected raw text for a Postgres array');
+        expect(structured.cause).toBeInstanceOf(TypeError);
+        expect((structured.cause as Error).message).toContain(
+          'expected raw text for a Postgres array',
+        );
+        return true;
+      });
+    });
+
+    it('rejects SQL NULL invariants as a corrupt marker row', async () => {
       const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
       const driver = createMockDriver([
         {
@@ -1937,8 +1971,18 @@ describe('PostgresControlAdapter', () => {
 
       await expect(adapter.readMarker(driver, 'app')).rejects.toSatisfy((err: unknown) => {
         expect(CliStructuredError.is(err)).toBe(true);
-        expect((err as unknown as CliStructuredError).toEnvelope().code).toBe(
-          'CONTRACT.MARKER_ROW_CORRUPT',
+        const structured = err as CliStructuredError & { readonly cause?: unknown };
+        const envelope = structured.toEnvelope();
+        expect(envelope).toMatchObject({
+          code: 'CONTRACT.MARKER_ROW_CORRUPT',
+          why: expect.stringContaining('Invalid contract marker row'),
+          meta: { space: 'app' },
+        });
+        expect(envelope.why).toContain('expected raw text for a Postgres array, got object');
+        expect(JSON.stringify(envelope)).toContain('prisma_contract.marker');
+        expect(structured.cause).toBeInstanceOf(TypeError);
+        expect((structured.cause as Error).message).toContain(
+          'expected raw text for a Postgres array, got object',
         );
         return true;
       });
@@ -1968,6 +2012,32 @@ describe('PostgresControlAdapter', () => {
   });
 
   describe('readAllMarkers', () => {
+    it('decodes invariants array text before marker validation', async () => {
+      const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+      const driver = createMockDriver([
+        { match: includes('"information_schema"."tables"'), rows: [{ '?column?': 1 }] },
+        {
+          match: includes('"prisma_contract"."marker"'),
+          rows: [
+            {
+              space: 'app',
+              core_hash: 'abc',
+              profile_hash: 'def',
+              contract_json: null,
+              canonical_version: null,
+              updated_at: new Date('2024-01-01T00:00:00Z'),
+              app_tag: null,
+              meta: {},
+              invariants: '{inv-a,inv-b}',
+            },
+          ],
+        },
+      ]);
+
+      const result = await adapter.readAllMarkers(driver);
+      expect(result.get('app')?.invariants).toEqual(['inv-a', 'inv-b']);
+    });
+
     it('throws CONTRACT.MARKER_ROW_CORRUPT on first corrupt row', async () => {
       const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
       const driver = createMockDriver([
@@ -1984,7 +2054,7 @@ describe('PostgresControlAdapter', () => {
               updated_at: new Date('2024-01-01T00:00:00Z'),
               app_tag: null,
               meta: {},
-              invariants: 'not-an-array',
+              invariants: '{not-an-array',
             },
           ],
         },

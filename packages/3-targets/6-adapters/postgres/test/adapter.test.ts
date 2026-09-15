@@ -701,7 +701,7 @@ describe('Postgres adapter', () => {
       updated_at: new Date('2026-04-30T00:00:00Z'),
       app_tag: 'app',
       meta: {},
-      invariants: ['inv-1'],
+      invariants: '{"inv-1"}',
     };
     let call = 0;
     const queryable: SqlQueryable = {

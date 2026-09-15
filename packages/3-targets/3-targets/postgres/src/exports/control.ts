@@ -95,5 +95,6 @@ export {
   INSTANT_NOW_GENERATOR_ID,
   instantNowControlDescriptor,
 } from '../core/instant-now-generator';
+export { decodePostgresListText, parsePostgresListText } from '../core/list-decoder';
 
 export default postgresTargetDescriptor;

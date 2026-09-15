@@ -1,4 +1,5 @@
 import type { StorageHashBase } from '@internal/contract/types';
+import type { CodecControlHooks } from '@internal/family-sql/control';
 import { SqlStorage, StorageTable } from '@internal/sql-contract/types';
 import type { RawSqlLiteral } from '@internal/sql-relational-core/ast';
 import {
@@ -96,7 +97,8 @@ describe('adapter-postgres structured error codes', () => {
 
   it('raises RUNTIME.TYPE_PARAMS_INVALID for a non-positive length type param', () => {
     const hooks = postgresAdapterDescriptorMeta.types.codecTypes.controlPlaneHooks;
-    const expand = hooks['pg/varchar@1'].expandNativeType;
+    const hookMap: ReadonlyMap<string, CodecControlHooks> = new Map(Object.entries(hooks));
+    const expand = hookMap.get('pg/varchar@1')?.expandNativeType;
     expect(
       structuredCodeOf(() =>
         expand?.({ nativeType: 'character varying', typeParams: { length: 0 } }),
@@ -166,7 +168,7 @@ describe('adapter-postgres structured error codes', () => {
   });
 
   it('raises CONTRACT.INTROSPECTION_UNSUPPORTED for a malformed index reloption entry', () => {
-    expect(structuredCodeOf(() => parsePgReloptions(['no_eq_sign'], 'item_body_idx'))).toBe(
+    expect(structuredCodeOf(() => parsePgReloptions('{no_eq_sign}', 'item_body_idx'))).toBe(
       'CONTRACT.INTROSPECTION_UNSUPPORTED',
     );
   });
