@@ -26,7 +26,8 @@ function run(
   bin: string,
   args: readonly string[],
 ): Promise<string> {
-  return new Promise((resolve) => {
+  const command = [bin, ...args].join(' ');
+  return new Promise((resolve, reject) => {
     const child = spawn(join(BIN, bin), args, {
       cwd,
       env: { ...process.env, DATABASE_URL: databaseUrl },
@@ -38,9 +39,15 @@ function run(
     child.stderr.on('data', (chunk: Buffer) => {
       output += chunk.toString();
     });
-    child.on('close', (status) => {
-      expect(status, `${bin} ${args.join(' ')}\n${output}`).toBe(0);
-      resolve(output);
+    child.on('error', (error) => {
+      reject(new Error(`${command} did not start: ${error.message}`));
+    });
+    child.on('close', (status, signal) => {
+      if (status === 0) {
+        resolve(output);
+      } else {
+        reject(new Error(`${command} exited with ${status ?? signal}\n${output}`));
+      }
     });
   });
 }
