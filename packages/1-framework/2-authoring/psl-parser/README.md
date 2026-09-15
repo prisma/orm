@@ -36,6 +36,12 @@ Interpretation/validation (for example `@internal/sql-contract-psl`) is responsi
 - enforcing pack composition (using `@<ns>.*` without composing the pack fails), and
 - ensuring parity with the TS authoring surface.
 
+## Attribute specification metadata
+
+`fieldAttribute`, `modelAttribute`, and `blockAttribute` require Markdown `documentation` in their configuration and retain it on the returned `AttributeSpec`. Each parameter declaration requires its own documentation: positional entries use `{ key, type, documentation }`, and named entries use `{ type, documentation }`. The signature passed to `funcCall` also requires `documentation`, including for nullary functions.
+
+Documentation describes the declaration, not the reusable argument type. Keep optionality and defaults on the type, for example `{ type: optional(str(), 'public'), documentation: 'The storage schema name.' }`. Interpretation returns only parsed argument values; it does not copy documentation into the output.
+
 ## Public API
 
 - `parse(schema)` in `src/parse.ts` (also at `@internal/psl-parser/syntax`) — the CST parser: returns the `DocumentAst`, its backing `SourceFile`, and syntactic diagnostics. The recursive-descent / lossless-CST path supersedes the legacy `parsePslDocument`.

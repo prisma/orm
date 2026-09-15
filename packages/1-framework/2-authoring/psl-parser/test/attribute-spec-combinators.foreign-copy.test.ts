@@ -70,7 +70,10 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
   it('funcCall accepts a node from another module copy', () => {
     const { arg, ctx } = foreignArg('now()');
 
-    const result = funcCall('now', {}).parse(arg, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      arg,
+      ctx,
+    );
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toMatchObject({ fn: 'now', args: {} });
