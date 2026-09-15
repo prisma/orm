@@ -64,6 +64,8 @@ describe('printPsl literal defaults', () => {
         introspected('scaledDecimal', 'numeric(10,2)', "'-1.25'::numeric"),
         introspected('safeBigInt', 'int8', '5'),
         introspected('negSafeBigInt', 'int8', "'-5'::integer"),
+        introspected('negBigInt', 'int8', "'-9007199254740993'::bigint"),
+        introspected('hugeBigInt', 'int8', "'9007199254740993'::bigint"),
       ]);
 
       expect(output).toMatchInlineSnapshot(`
@@ -84,6 +86,8 @@ describe('printPsl literal defaults', () => {
           scaledDecimal Numeric(10, 2)  @default("-1.25")
           safeBigInt    BigInt          @default(5)
           negSafeBigInt BigInt          @default(-5)
+          negBigInt     BigInt          @default(-9007199254740993)
+          hugeBigInt    BigInt          @default(9007199254740993)
 
           @@map("number_defaults")
         }
@@ -93,8 +97,6 @@ describe('printPsl literal defaults', () => {
 
     it('prints a default that has no PSL literal as dbgenerated with the expression Postgres printed', () => {
       const output = printTable('raw_defaults', [
-        introspected('negBigInt', 'int8', "'-9007199254740993'::bigint"),
-        introspected('hugeBigInt', 'int8', "'9007199254740993'::bigint"),
         introspected('stamp', 'timestamp(3)', "'2024-01-01 00:00:00'::timestamp without time zone"),
         introspected('day', 'date', "'2024-01-01'::date"),
         introspected('jsonNull', 'jsonb', "'null'::jsonb", { nullable: true }),
@@ -108,13 +110,11 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model RawDefaults {
-          id         Int          @id
-          negBigInt  BigInt       @default(dbgenerated("'-9007199254740993'::bigint"))
-          hugeBigInt BigInt       @default(dbgenerated("'9007199254740993'::bigint"))
-          stamp      Timestamp(3) @default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))
-          day        Date         @default(dbgenerated("'2024-01-01'::date"))
-          jsonNull   Jsonb?       @default(dbgenerated("'null'::jsonb"))
-          textNull   VarChar(32)? @default(dbgenerated("NULL::character varying"))
+          id       Int          @id
+          stamp    Timestamp(3) @default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))
+          day      Date         @default(dbgenerated("'2024-01-01'::date"))
+          jsonNull Jsonb?       @default(dbgenerated("'null'::jsonb"))
+          textNull VarChar(32)? @default(dbgenerated("NULL::character varying"))
 
           @@map("raw_defaults")
         }
@@ -165,6 +165,12 @@ describe('printPsl literal defaults', () => {
         }),
         introspected('emptyBigInts', 'int8', 'ARRAY[]::bigint[]', { many: true }),
         introspected(
+          'hugeBigInts',
+          'int8',
+          "ARRAY['9007199254740993'::bigint, '-9007199254740993'::bigint]",
+          { many: true },
+        ),
+        introspected(
           'negFloats',
           'float8',
           "ARRAY[('-1.5'::numeric)::double precision, (2)::double precision]",
@@ -201,6 +207,7 @@ describe('printPsl literal defaults', () => {
           bigInts        BigInt[]          @default([1, 2]) @noCheck(elementNotNull)
           negBigInts     BigInt[]          @default([-1, 2]) @noCheck(elementNotNull)
           emptyBigInts   BigInt[]          @default([]) @noCheck(elementNotNull)
+          hugeBigInts    BigInt[]          @default([9007199254740993, -9007199254740993]) @noCheck(elementNotNull)
           negFloats      Float[]           @default([-1.5, 2]) @noCheck(elementNotNull)
           longDecimals   Numeric(65, 30)[] @default(["12345678901234567890.123456789", "0.000000000000000001"]) @noCheck(elementNotNull)
           scaledDecimals Numeric(10, 2)[]  @default(["-1.25", "2"]) @noCheck(elementNotNull)
@@ -215,12 +222,6 @@ describe('printPsl literal defaults', () => {
     it('prints a default with an element that has no PSL literal as dbgenerated with the expression Postgres printed', () => {
       const output = printTable('raw_list_defaults', [
         introspected(
-          'hugeBigInts',
-          'int8',
-          "ARRAY['9007199254740993'::bigint, '-9007199254740993'::bigint]",
-          { many: true },
-        ),
-        introspected(
           'timestamps',
           'timestamp(3)',
           "ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]",
@@ -233,9 +234,8 @@ describe('printPsl literal defaults', () => {
         // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
         model RawListDefaults {
-          id          Int            @id
-          hugeBigInts BigInt[]       @default(dbgenerated("ARRAY['9007199254740993'::bigint, '-9007199254740993'::bigint]")) @noCheck(elementNotNull)
-          timestamps  Timestamp(3)[] @default(dbgenerated("ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]")) @noCheck(elementNotNull)
+          id         Int            @id
+          timestamps Timestamp(3)[] @default(dbgenerated("ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]")) @noCheck(elementNotNull)
 
           @@map("raw_list_defaults")
         }

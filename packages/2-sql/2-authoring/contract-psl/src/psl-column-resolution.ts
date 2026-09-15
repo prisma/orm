@@ -2,6 +2,7 @@ import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ColumnDefault,
   ExecutionMutationDefaultPhases,
+  JsonValue,
   ValueSetRef,
 } from '@internal/contract/types';
 import type {
@@ -22,7 +23,7 @@ import {
   isAuthoringTypeConstructorDescriptor,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
+import type { AnyCodecDescriptor, Codec, CodecLookup } from '@internal/framework-components/codec';
 import type {
   ControlMutationDefaultRegistry,
   MutationDefaultGeneratorDescriptor,
@@ -30,12 +31,16 @@ import type {
 import type {
   FieldSymbol,
   ModelSymbol,
+  NumLiteral,
   PslSpan,
   ResolvedTypeConstructorCall,
   SymbolTable,
 } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
-
+import type {
+  AuthoredColumnDefault,
+  AuthoredColumnDefaultLiteralValue,
+} from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
 import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
@@ -704,9 +709,10 @@ export function lowerDefaultForField(input: {
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly codecLookup: CodecLookup | undefined;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): {
-  readonly defaultValue?: ColumnDefault;
+  readonly defaultValue?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
 } {
   const node = findFieldAttributeNode(input.field, 'default');
@@ -730,9 +736,18 @@ export function lowerDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const value = interpreted.value;
+  const numberCodec = numberHoldingCodec(input.codecLookup, input.columnDescriptor.codecId);
+  const literalValue = (
+    literal: string | boolean | NumLiteral,
+  ): AuthoredColumnDefaultLiteralValue =>
+    typeof literal === 'object' ? numberLiteralDefault(literal, numberCodec) : literal;
 
   if (Array.isArray(value)) {
-    return { defaultValue: { kind: 'literal', value: [...value] } };
+    return { defaultValue: { kind: 'literal', value: value.map(literalValue) } };
+  }
+
+  if (typeof value === 'object' && 'text' in value) {
+    return { defaultValue: { kind: 'literal', value: literalValue(value) } };
   }
 
   if (typeof value === 'object') {
@@ -792,6 +807,50 @@ export function lowerDefaultForField(input: {
   }
 
   return { defaultValue: { kind: 'literal', value } };
+}
+
+function numberHoldingCodec(
+  codecLookup: CodecLookup | undefined,
+  codecId: string,
+): Codec | undefined {
+  const holdsNumbers = codecLookup?.descriptorFor?.(codecId)?.traits.includes('numeric') === true;
+  return holdsNumbers ? codecLookup?.get(codecId) : undefined;
+}
+
+function numberLiteralDefault(
+  literal: NumLiteral,
+  numberCodec: Codec | undefined,
+): AuthoredColumnDefaultLiteralValue {
+  const number = Number(literal.text);
+  if (numberCodec === undefined || tryDecodeJson(numberCodec, number) !== undefined) return number;
+  const decoded = tryDecodeJson(numberCodec, canonicalDecimalText(literal.text));
+  return decoded !== undefined && isNumberValue(decoded.value) ? decoded.value : number;
+}
+
+const DECIMAL_NUMERAL = /^(-?)0*(\d+)(\.\d+)?$/;
+
+/**
+ * Leading zeros and the sign of zero never change a decimal. Trailing zeros are kept, because a
+ * column without a scale keeps them.
+ */
+function canonicalDecimalText(text: string): string {
+  const numeral = DECIMAL_NUMERAL.exec(text);
+  if (numeral === null) return text;
+  const [, sign = '', whole = '', fraction = ''] = numeral;
+  const digits = `${whole}${fraction}`;
+  return /^[0.]+$/.test(digits) ? digits : `${sign}${digits}`;
+}
+
+function isNumberValue(value: unknown): value is string | number | bigint {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint';
+}
+
+function tryDecodeJson(codec: Codec, json: JsonValue): { readonly value: unknown } | undefined {
+  try {
+    return { value: codec.decodeJson(json) };
+  } catch {
+    return undefined;
+  }
 }
 
 export function resolveColumnDescriptor(

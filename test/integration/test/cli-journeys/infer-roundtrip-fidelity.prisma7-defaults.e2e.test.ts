@@ -33,6 +33,7 @@
  *   bigInts        BigInt[]  @default([1, 2])
  *   negBigInts     BigInt[]  @default([-1, 2])
  *   emptyBigInts   BigInt[]  @default([])
+ *   hugeBigInts    BigInt[]  @default([9007199254740993, -9007199254740993])
  *   negFloats      Float[]   @default([-1.5, 2])
  *   negDecimals    Decimal[] @default([-1.5, 2])
  *   longDecimals   Decimal[] @default([12345678901234567890.123456789, 0.000000000000000001])
@@ -43,8 +44,7 @@
  *
  * model RawListDefaults {
  *   id          Int        @id
- *   hugeBigInts BigInt[]   @default([9007199254740993, -9007199254740993])
- *   timestamps  DateTime[] @default(["2024-01-01T00:00:00.000Z"])
+ *   timestamps DateTime[] @default(["2024-01-01T00:00:00.000Z"])
  *   @@map("raw_list_defaults")
  * }
  * ```
@@ -99,6 +99,7 @@ CREATE TABLE "list_defaults" (
     "bigInts" BIGINT[] DEFAULT ARRAY[1, 2]::BIGINT[],
     "negBigInts" BIGINT[] DEFAULT ARRAY[-1, 2]::BIGINT[],
     "emptyBigInts" BIGINT[] DEFAULT ARRAY[]::BIGINT[],
+    "hugeBigInts" BIGINT[] DEFAULT ARRAY[9007199254740993, -9007199254740993]::BIGINT[],
     "negFloats" DOUBLE PRECISION[] DEFAULT ARRAY[-1.5, 2]::DOUBLE PRECISION[],
     "negDecimals" DECIMAL(65,30)[] DEFAULT ARRAY[-1.5, 2]::DECIMAL(65,30)[],
     "longDecimals" DECIMAL(65,30)[] DEFAULT ARRAY[12345678901234567890.123456789, 0.000000000000000001]::DECIMAL(65,30)[],
@@ -126,7 +127,6 @@ CREATE TABLE "sql_defaults" (
 const RAW_LIST_DEFAULTS_SQL = `
 CREATE TABLE "raw_list_defaults" (
     "id" INTEGER NOT NULL,
-    "hugeBigInts" BIGINT[] DEFAULT ARRAY[9007199254740993, -9007199254740993]::BIGINT[],
     "timestamps" TIMESTAMP(3)[] DEFAULT ARRAY['2024-01-01 00:00:00 +00:00']::TIMESTAMP(3)[],
 
     CONSTRAINT "raw_list_defaults_pkey" PRIMARY KEY ("id")
@@ -139,6 +139,7 @@ const LIST_COLUMNS = [
   'bigInts',
   'negBigInts',
   'emptyBigInts',
+  'hugeBigInts',
   'negFloats',
   'negDecimals',
   'longDecimals',
@@ -227,6 +228,7 @@ withTempDir(({ createTempDir }) => {
               bigInts        BigInt[]          @default([1, 2]) @noCheck(elementNotNull)
               negBigInts     BigInt[]          @default([-1, 2]) @noCheck(elementNotNull)
               emptyBigInts   BigInt[]          @default([]) @noCheck(elementNotNull)
+              hugeBigInts    BigInt[]          @default([9007199254740993, -9007199254740993]) @noCheck(elementNotNull)
               negFloats      Float[]           @default([-1.5, 2]) @noCheck(elementNotNull)
               negDecimals    Numeric(65, 30)[] @default(["-1.5", "2"]) @noCheck(elementNotNull)
               longDecimals   Numeric(65, 30)[] @default(["12345678901234567890.123456789", "0.000000000000000001"]) @noCheck(elementNotNull)
@@ -250,8 +252,8 @@ withTempDir(({ createTempDir }) => {
               wholeDecimal  Numeric(65, 30) @default("10")
               scaledDecimal Numeric(10, 2)  @default("-1.25")
               negSafeBigInt BigInt          @default(-5)
-              negBigInt     BigInt          @default(dbgenerated("'-9007199254740993'::bigint"))
-              hugeBigInt    BigInt          @default(dbgenerated("'9007199254740993'::bigint"))
+              negBigInt     BigInt          @default(-9007199254740993)
+              hugeBigInt    BigInt          @default(9007199254740993)
               stamp         Timestamp(3)    @default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))
               jsonNull      Jsonb?          @default(dbgenerated("'null'::jsonb"))
 
@@ -351,9 +353,8 @@ withTempDir(({ createTempDir }) => {
             // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
             model RawListDefaults {
-              id          Int            @id(map: "raw_list_defaults_pkey")
-              hugeBigInts BigInt[]       @default(dbgenerated("ARRAY['9007199254740993'::bigint, '-9007199254740993'::bigint]")) @noCheck(elementNotNull)
-              timestamps  Timestamp(3)[] @default(dbgenerated("ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]")) @noCheck(elementNotNull)
+              id         Int            @id(map: "raw_list_defaults_pkey")
+              timestamps Timestamp(3)[] @default(dbgenerated("ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]")) @noCheck(elementNotNull)
 
               @@map("raw_list_defaults")
             }
@@ -366,10 +367,6 @@ withTempDir(({ createTempDir }) => {
             expect.objectContaining({
               code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
               span: expect.objectContaining({ start: expect.objectContaining({ line: 6 }) }),
-            }),
-            expect.objectContaining({
-              code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
-              span: expect.objectContaining({ start: expect.objectContaining({ line: 7 }) }),
             }),
           ]);
         },

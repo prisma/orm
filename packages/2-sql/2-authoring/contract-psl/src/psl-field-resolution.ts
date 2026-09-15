@@ -1,6 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
-  ColumnDefault,
   ColumnDefaultLiteralInputValue,
   ExecutionMutationDefaultPhases,
 } from '@internal/contract/types';
@@ -18,7 +17,10 @@ import type {
   SymbolTable,
 } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
-import type { EnumTypeHandle } from '@internal/sql-contract-ts/contract-builder';
+import type {
+  AuthoredColumnDefault,
+  EnumTypeHandle,
+} from '@internal/sql-contract-ts/contract-builder';
 import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
@@ -45,7 +47,7 @@ import {
 } from './sql-attribute-specs';
 
 type LoweredFieldDefault = {
-  readonly defaultValue?: ColumnDefault;
+  readonly defaultValue?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
 };
 
@@ -107,7 +109,7 @@ export type ResolvedField = {
   readonly columnName: string;
   readonly descriptor: ColumnDescriptor;
   readonly nullable: boolean;
-  readonly defaultValue?: ColumnDefault;
+  readonly defaultValue?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
   readonly isId: boolean;
   readonly isUnique: boolean;
@@ -599,6 +601,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             generatorDescriptorById,
             sourceId,
             defaultFunctionRegistry,
+            codecLookup,
             diagnostics,
           })
       : {};

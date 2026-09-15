@@ -386,9 +386,12 @@ model Post {
     ]);
   });
 
-  it('accepts scalar literals on a scalar field', () => {
-    const schema = 'model Post {\n  id Int @id\n  views Int @default(3)\n}\n';
-    expect(interpretDefault(schema, 'views')).toEqual({ value: { value: 3 }, diagnostics: [] });
+  it('accepts scalar literals on a scalar field, keeping a number as written', () => {
+    const schema = 'model Post {\n  id Int @id\n  price Decimal @default(1.50)\n}\n';
+    expect(interpretDefault(schema, 'price')).toEqual({
+      value: { value: { text: '1.50' } },
+      diagnostics: [],
+    });
   });
 
   it('accepts a list literal on a list field and rejects a list on a scalar field', () => {
