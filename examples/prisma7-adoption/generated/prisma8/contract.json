@@ -159,7 +159,7 @@
               }
             },
             "relations": {
-              "a": {
+              "post": {
                 "cardinality": "N:1",
                 "nullable": false,
                 "on": {
@@ -175,7 +175,7 @@
                   "namespace": "public"
                 }
               },
-              "b": {
+              "tag": {
                 "cardinality": "N:1",
                 "nullable": false,
                 "on": {

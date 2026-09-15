@@ -197,19 +197,7 @@
               }
             },
             "relations": {
-              "a": {
-                "to": {
-                  "namespace": "public",
-                  "model": "AVeryLongModelNameThatKeepsGoingAndGoingForeverX"
-                },
-                "cardinality": "N:1",
-                "nullable": false,
-                "on": {
-                  "localFields": ["A"],
-                  "targetFields": ["id"]
-                }
-              },
-              "b": {
+              "anotherVeryLongModelNameThatAlsoKeepsGoingAndGoing": {
                 "to": {
                   "namespace": "public",
                   "model": "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing"
@@ -218,6 +206,18 @@
                 "nullable": false,
                 "on": {
                   "localFields": ["B"],
+                  "targetFields": ["id"]
+                }
+              },
+              "aVeryLongModelNameThatKeepsGoingAndGoingForeverX": {
+                "to": {
+                  "namespace": "public",
+                  "model": "AVeryLongModelNameThatKeepsGoingAndGoingForeverX"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["A"],
                   "targetFields": ["id"]
                 }
               }

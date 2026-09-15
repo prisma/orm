@@ -24,6 +24,7 @@ import type {
 } from '@internal/sql-contract-ts/contract-builder';
 import { andList, fieldList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { prisma7ConstraintName } from './indexes';
+import { junctionRelationFieldNames } from './junction-field-names';
 
 export interface RelationAttribute {
   readonly name: string | undefined;
@@ -573,10 +574,14 @@ export function lowerRelations(
         model.modelName,
         target.modelName,
       );
+      const requester: JunctionSide = { model, field: relationField };
+      const partnerSide: JunctionSide = { model: target, field: partner };
+      const junctionNamespaceId = orderJunctionSides(requester, partnerSide)[0].model.namespaceId;
       const namesake = models.get(junctionName);
-      if (namesake !== undefined) {
-        if (!reportedJunctionNames.has(junctionName)) {
-          reportedJunctionNames.add(junctionName);
+      if (namesake !== undefined && namesake.namespaceId === junctionNamespaceId) {
+        const reportedKey = junctionKey(junctionNamespaceId, junctionName);
+        if (!reportedJunctionNames.has(reportedKey)) {
+          reportedJunctionNames.add(reportedKey);
           diagnostics.push(
             prisma7Diagnostic(
               'PRISMA7_JUNCTION_NAME_COLLISION',
@@ -588,11 +593,7 @@ export function lowerRelations(
         }
         continue;
       }
-      junctionRequests.push({
-        requester: { model, field: relationField },
-        partner: { model: target, field: partner },
-        name: junctionName,
-      });
+      junctionRequests.push({ requester, partner: partnerSide, name: junctionName });
     }
   }
 
@@ -778,7 +779,8 @@ function singleIdColumn(
 /**
  * Prisma 7's implicit junction: table `_AToB` (or `_Name`), columns `A` and `B`
  * typed like the two ids, primary key `(A, B)`, index `_AToB_B_index`, and two
- * cascading foreign keys. `A` is the model whose name is smaller in plain
+ * cascading foreign keys, with relation fields named as `contract infer` names
+ * them. `A` is the model whose name is smaller in plain
  * string order; for a self-relation, the field whose name is smaller. This is
  * prisma-engines' rule (`psl/parser-database/src/relations.rs`,
  * `ingest_relation`: the side with the greater model name, or field name for a
@@ -801,6 +803,10 @@ function synthesizeJunction(
   const tableName = prisma7ConstraintName(`_${name}`, '', identifierMaxBytes);
   const namespaceId = sideA.model.namespaceId;
   const key = junctionKey(namespaceId, name);
+  const [relationFieldA, relationFieldB] = junctionRelationFieldNames(
+    sideA.model.tableName,
+    sideB.model.tableName,
+  );
   const foreignKey = (column: 'A' | 'B', side: JunctionSide, id: FieldNode): ForeignKeyNode => ({
     columns: [column],
     references: {
@@ -815,7 +821,7 @@ function synthesizeJunction(
   });
   const metadata = (column: 'A' | 'B', side: JunctionSide, id: FieldNode): FkRelationMetadata => ({
     declaringModelName: key,
-    declaringFieldName: column.toLowerCase(),
+    declaringFieldName: column === 'A' ? relationFieldA : relationFieldB,
     declaringTableName: tableName,
     declaringNamespaceId: namespaceId,
     targetModelName: side.model.modelName,

@@ -27,7 +27,7 @@
             "relations": {
               "tags": {
                 "to": {
-                  "namespace": "two",
+                  "namespace": "one",
                   "model": "Tag"
                 },
                 "cardinality": "N:M",
@@ -40,6 +40,46 @@
                   "namespaceId": "one",
                   "parentColumns": ["A"],
                   "childColumns": ["B"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "Tag": {
+            "storage": {
+              "table": "Tag",
+              "namespaceId": "one",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "posts": {
+                "to": {
+                  "namespace": "one",
+                  "model": "Post"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["B"]
+                },
+                "through": {
+                  "table": "_PostToTag",
+                  "namespaceId": "one",
+                  "parentColumns": ["B"],
+                  "childColumns": ["A"],
                   "targetColumns": ["id"]
                 }
               }
@@ -89,7 +129,7 @@
               },
               "tag": {
                 "to": {
-                  "namespace": "two",
+                  "namespace": "one",
                   "model": "Tag"
                 },
                 "cardinality": "N:1",
@@ -105,9 +145,9 @@
       },
       "two": {
         "models": {
-          "Tag": {
+          "PostToTag": {
             "storage": {
-              "table": "Tag",
+              "table": "PostToTag",
               "namespaceId": "two",
               "fields": {
                 "id": {
@@ -120,56 +160,6 @@
                 "type": {
                   "kind": "scalar",
                   "codecId": "pg/int4@1"
-                },
-                "nullable": false
-              }
-            },
-            "relations": {
-              "posts": {
-                "to": {
-                  "namespace": "one",
-                  "model": "Post"
-                },
-                "cardinality": "N:M",
-                "on": {
-                  "localFields": ["id"],
-                  "targetFields": ["B"]
-                },
-                "through": {
-                  "table": "_PostToTag",
-                  "namespaceId": "one",
-                  "parentColumns": ["B"],
-                  "childColumns": ["A"],
-                  "targetColumns": ["id"]
-                }
-              }
-            }
-          },
-          "Tagging": {
-            "storage": {
-              "table": "_PostToTag",
-              "namespaceId": "two",
-              "fields": {
-                "id": {
-                  "column": "id"
-                },
-                "extra": {
-                  "column": "extra"
-                }
-              }
-            },
-            "fields": {
-              "id": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "pg/int4@1"
-                },
-                "nullable": false
-              },
-              "extra": {
-                "type": {
-                  "kind": "scalar",
-                  "codecId": "pg/text@1"
                 },
                 "nullable": false
               }
@@ -186,14 +176,14 @@
       "model": "Post"
     },
     "Tag": {
-      "namespace": "two",
+      "namespace": "one",
       "model": "Tag"
     },
-    "two._PostToTag": {
+    "PostToTag": {
       "namespace": "two",
-      "model": "Tagging"
+      "model": "PostToTag"
     },
-    "one._PostToTag": {
+    "_PostToTag": {
       "namespace": "one",
       "model": "PostToTag"
     }
@@ -203,7 +193,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "639871edd5893ff551660661b7cc305bca94f1f5ab9fe5f91a1121c73a3cd9cd",
+    "storageHash": "648e760b3a9e25a88f6323bdcf6eae63be660dffbe599f69c0b33d3aa23576e5",
     "namespaces": {
       "one": {
         "id": "one",
@@ -211,6 +201,21 @@
         "entries": {
           "table": {
             "Post": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Tag": {
               "columns": {
                 "id": {
                   "nativeType": "int4",
@@ -268,7 +273,7 @@
                     "columns": ["B"]
                   },
                   "target": {
-                    "namespaceId": "two",
+                    "namespaceId": "one",
                     "tableName": "Tag",
                     "columns": ["id"]
                   },
@@ -295,31 +300,11 @@
         "kind": "postgres-schema",
         "entries": {
           "table": {
-            "Tag": {
+            "PostToTag": {
               "columns": {
                 "id": {
                   "nativeType": "int4",
                   "codecId": "pg/int4@1",
-                  "nullable": false
-                }
-              },
-              "uniques": [],
-              "indexes": [],
-              "foreignKeys": [],
-              "primaryKey": {
-                "columns": ["id"]
-              }
-            },
-            "_PostToTag": {
-              "columns": {
-                "id": {
-                  "nativeType": "int4",
-                  "codecId": "pg/int4@1",
-                  "nullable": false
-                },
-                "extra": {
-                  "nativeType": "text",
-                  "codecId": "pg/text@1",
                   "nullable": false
                 }
               },
