@@ -147,19 +147,10 @@ const LIST_COLUMNS = [
 ] as const;
 
 /**
- * `db init` cannot create these defaults, on `main` too. It renders a `BigInt[]` or `Numeric[]`
- * default by reading the whole list with the element codec, and a `dbgenerated` timestamp default
- * through a codec that needs a global `Temporal`.
+ * `db init` renders a `dbgenerated` timestamp default through a codec that needs a global
+ * `Temporal`, which the CLI does not install.
  */
-const DB_INIT_UNSUPPORTED_FIELDS = [
-  'bigInts',
-  'negBigInts',
-  'emptyBigInts',
-  'negDecimals',
-  'longDecimals',
-  'scaledDecimals',
-  'stamp',
-] as const;
+const DB_INIT_UNSUPPORTED_FIELDS = ['stamp'] as const;
 
 interface VerifyIssue {
   readonly path: readonly string[];
