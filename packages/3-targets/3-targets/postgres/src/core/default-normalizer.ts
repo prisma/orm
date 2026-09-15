@@ -124,10 +124,11 @@ function readLiteralToken(expression: string): LiteralToken | undefined {
 
 /**
  * `int8` and `numeric` defaults are decimal text, the JSON form of their codecs, so no digit is
- * lost to a JavaScript number.
+ * lost to a JavaScript number. A column that is not a number type stores the numeral as text.
  */
 function numberValue(numeral: string, nativeType: string | undefined): JsonValue | undefined {
   if (nativeType !== undefined && DECIMAL_TEXT_TYPE_PATTERN.test(nativeType)) return numeral;
+  if (nativeType !== undefined && !NUMBER_TYPE_PATTERN.test(nativeType)) return numeral;
   const parsed = Number(numeral);
   return Number.isFinite(parsed) ? parsed : undefined;
 }

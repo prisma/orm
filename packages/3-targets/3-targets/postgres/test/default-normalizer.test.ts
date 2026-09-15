@@ -525,6 +525,28 @@ describe('parsePostgresDefault number literals Postgres prints with a cast', () 
   });
 });
 
+describe('parsePostgresDefault numerals on a column that is not a number type', () => {
+  it.each([
+    { raw: "'-1'::integer", nativeType: 'text', value: '-1' },
+    { raw: "'-1'::integer", nativeType: 'character varying(10)', value: '-1' },
+    { raw: "'-1.5'::numeric", nativeType: 'text', value: '-1.5' },
+    { raw: '5', nativeType: 'text', value: '5' },
+  ])('reads $raw as the text $value for $nativeType', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+
+  it.each([
+    { raw: "ARRAY['-1'::integer, 2]", value: ['-1', '2'] },
+    { raw: "'{-1,2}'::text[]", value: ['-1', '2'] },
+  ])('reads the elements of $raw as text for text[]', ({ raw, value }) => {
+    expect(parsePostgresDefault(raw, 'text[]')).toEqual({ kind: 'literal', value });
+  });
+
+  it('reads a numeral as a number when no native type is given', () => {
+    expect(parsePostgresDefault("'-1'::integer")).toEqual({ kind: 'literal', value: -1 });
+  });
+});
+
 describe('parsePostgresDefault numeric columns', () => {
   it.each([
     { raw: '12345678901234567890.123456789', nativeType: 'numeric(65,30)' },
