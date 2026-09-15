@@ -26,12 +26,12 @@ Read [`docs/oss/versioning.md`](../../docs/oss/versioning.md) before running thi
 
 - The source-of-truth model (root `package.json` `version`).
 - The lockstep guarantee (every workspace package matches the root).
-- The v8 RC line (`8.0.0-rc.N`, `latest` frozen until `8.0.0` final).
+- The v8 RC line (`8.0.0-rc.N`, with `latest` tracking the newest RC or stable release).
 - The dist-tag convention (`latest` / `dev` / `beta`).
 - The full release procedure (this skill covers steps 1-2 of 3; merging the PR is the publish trigger — there is no separate dispatch step).
 - The emergency-patch path (this skill does **not** handle patches).
 
-This SKILL.md covers steps 1-2 — opening the bump PR and driving the release notes. Merging (step 3) stays the human gate.
+This SKILL.md covers steps 1-2 — opening the bump PR, assembling upgrade guides, and driving the release notes. Merging (step 3) stays the human gate. Read the canonical [upgrade instruction lifecycle](../../upgrade-instructions/README.md) for fragment storage, synthesis, archives, and coverage-check modes.
 
 ## Pre-flight
 
@@ -40,7 +40,7 @@ The skill does **not** require the maintainer to be on `main` or to have a clean
 Before invoking this skill, confirm:
 
 1. The maintainer can fetch from `origin` (`git fetch origin main` succeeds).
-2. You are ready to draft the release notes for this bump. The [`draft-release-notes`](../draft-release-notes/SKILL.md) skill (invoked in step 7 below) enumerates the merged PRs since the previous stable tag and surfaces the release-notes-worthy changes — including any breaking changes — so this no longer rests on the maintainer's unaided recollection. If you already know of an in-flight breaking change that must be called out, note it so the authoring step gives it prominence.
+2. You are ready to draft the release notes for this bump. The [`draft-release-notes`](../draft-release-notes/SKILL.md) skill (invoked in step 8 below) enumerates the merged PRs since the previous actual published stable/RC tag and surfaces the release-notes-worthy changes — including any breaking changes — so this no longer rests on the maintainer's unaided recollection. If you already know of an in-flight breaking change that must be called out, note it so the authoring step gives it prominence.
 
 If either precondition is unmet, stop and surface the issue. Do **not** try to auto-resolve.
 
@@ -88,7 +88,13 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
    - `skills/prisma-8/SKILL.md` changed only its `library_version` stamp (the bump script writes it).
    - The tracked `contract.json` / `contract.d.ts` artefacts that carry an extension pack's version stamp (today: `examples/supabase/src/` and the fixtures under `packages/3-extensions/supabase/test/fixtures/`) changed only that stamp. The bump script restamps them because the extension writes its own package version into every contract it emits; `fixtures:check` would otherwise diff them, and `check:upgrade-coverage` treats a stamp-only artefact change as part of the release sweep, so no upgrade-recipe entry is needed for it.
 
-6. **Commit.** Stage every file from step 5 (`package.json` files, `pnpm-lock.yaml`, `skills/prisma-8/SKILL.md`, and the restamped contract artefacts) together in a single commit:
+6. **Assemble and review upgrade guides before notes.** Resolve the previous **actual published stable/RC release ref** (`$PREV_TAG`) and the target version from step 3. Exclude dev/beta builds; an in-tree version that never shipped is not a release boundary. Use this same lower bound for the notes. Stable transition endpoints use `major.minor`; RC endpoints retain the full version.
+
+   Follow the [canonical lifecycle](../../upgrade-instructions/README.md): read every pending fragment and any originals already archived for this current unmerged release; do not replay older archives. At cutover, include existing unshipped guidance and assets as input, preserving originals rather than dropping or duplicating them. Synthesize one `instructions.md` per audience at `skills/prisma-8/upgrading/<audience>/upgrades/<from>-to-<to>/`, resolving ordering and overlap. Copy required assets into `scripts/<fragment-name>/`, rewriting relative references so each audience is self-contained, and move unchanged originals to `upgrade-instructions/releases/<transition>/sources/<name>/<audience>/...` without overwriting another contribution.
+
+   Produce both audience guides even when one or both are empty: use `changes: []` without no-op consumer prose. Review the guides and scripts against all source fragments and the release PR diff before drafting notes. Review owns omissions and synthesis correctness; there is no release-wide migration execution gate.
+
+7. **Commit the release preparation.** Include every file from step 5 (`package.json` files, `pnpm-lock.yaml`, `skills/prisma-8/SKILL.md`, and the restamped contract artefacts), the reviewed guides/assets, and the pending-to-archive moves from step 6:
 
    ```text
    chore(release): bump to <version>
@@ -96,38 +102,42 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
 
    No body is required — the PR description will explain the bump in detail.
 
-7. **Draft the release notes.** From inside this `release/<version>` worktree, run the [`draft-release-notes`](../draft-release-notes/SKILL.md) skill for `<version>`. It enumerates the merged PRs since the previous stable `v*` tag, triages which are user-facing, categorizes them (breaking changes first), writes `docs/releases/v<version>.md`, and prepends a matching `CHANGELOG.md` entry — committing both on the release branch as their own commit. Committing the notes here is what lands them in the bump PR diff, so the PR-mode `check:release-notes` gate passes and the maintainer reviews the notes as part of the release PR.
+   Check the committed preparation with `pnpm check:upgrade-coverage --mode publish --prev "$PREV_TAG" --head HEAD`. `$PREV_TAG` must be the actual prior release, not merely the PR base. This checks committed trees, not uncommitted working files.
 
-8. **Push the branch** to `origin`.
+8. **Draft the release notes.** From inside this `release/<version>` worktree, run the [`draft-release-notes`](../draft-release-notes/SKILL.md) skill for `<version>`, using the previous published stable/RC ref resolved in step 6. It enumerates merged PRs, triages user-facing changes, and writes `docs/releases/v<version>.md` plus the matching `CHANGELOG.md` entry as their own commit. Breaking-change links point to the reviewed, assembled consumer guides, never pending fragments or archives. The notes ride in the bump PR diff for human review and the PR-mode `check:release-notes` gate.
 
-9. **Open the PR** with `gh pr create`. Use the title:
+9. **Recheck and push the branch** to `origin`. After committing the notes and any fixes, rerun `pnpm check:upgrade-coverage --mode publish --prev "$PREV_TAG" --head HEAD` against the candidate commit. If new fragments arrive before merge, incorporate them using pending inputs plus this release's archived originals, refresh and review the guides, update notes as needed, commit, and rerun the check. No pending fragments may remain. CI checks the effective merged release tree, including merge groups; publication independently checks the actual candidate commit before registry side effects, not just a stale branch snapshot. Ordinary dev builds allow pending work and do not assemble it.
 
-   ```text
-   chore(release): bump to <version>
-   ```
+10. **Open the PR** with `gh pr create`. Use the title:
 
-   The body should:
+    ```text
+    chore(release): bump to <version>
+    ```
 
-   - State the previous and new version (`<previous> → <new>`).
-   - Link to [`docs/oss/versioning.md`](../../docs/oss/versioning.md) for context.
-   - Point reviewers at the committed `docs/releases/v<version>.md` (authored by the `draft-release-notes` skill in step 7) as the human-review surface for the release's user-facing changes.
-   - Note that **merging this PR ships the release**: the resulting push to `main` carries the bumped root `version`, the `Publish to npm` workflow detects the change and publishes `<new>` under dist-tag `latest`, and a matching GitHub Release (marked pre-release on the RC line) is created automatically.
+    The body should:
 
-10. **Update the docs site.** The public docs live in [prisma/web](https://github.com/prisma/web) (`apps/docs/content/docs/`), and every release changes what they should say. Prepare that PR now, from the same release notes, so it is ready when the release is published:
+    - State the previous and new version (`<previous> → <new>`).
+    - Link to [`docs/oss/versioning.md`](../../docs/oss/versioning.md) for context.
+    - Point reviewers at the committed `docs/releases/v<version>.md` (authored by the `draft-release-notes` skill in step 8) as the human-review surface for the release's user-facing changes.
+    - Note that **merging this PR ships the release**: the resulting push to `main` carries the bumped root `version`, the `Publish to npm` workflow detects the change and publishes `<new>` under dist-tag `latest`, and a matching GitHub Release (marked pre-release on the RC line) is created automatically.
+
+11. **Update the docs site.** The public docs live in [prisma/web](https://github.com/prisma/web) (`apps/docs/content/docs/`), and every release changes what they should say. Prepare that PR now, from the same release notes, so it is ready when the release is published:
 
     1. Clone `prisma/web` into a gitignored path inside the release worktree (`wip/web`) and branch from `main` as `docs/orm8-<version>`. Run `pnpm install --frozen-lockfile` there; the linters below need it.
-    2. Move the version numbers first. `(index)/prisma-orm/release-status.mdx` carries a version table and a "Versions were checked on <date>" line; `guides/upgrade-prisma-orm/postgresql.mdx` and `mongodb.mdx` each name the `@prisma/orm-*` version they target. Grep the tree for the previous version string to catch any page added since.
+    2. Move the version numbers first. `(index)/prisma-orm/release-status.mdx` carries a version table and a `Versions were checked on <date>` line; `guides/upgrade-prisma-orm/postgresql.mdx` and `mongodb.mdx` each name the `@prisma/orm-*` version they target. Grep the tree for the previous version string to catch any page added since.
     3. Walk `docs/releases/v<version>.md` entry by entry and find every page that states the old behaviour. Breaking changes and renames usually live in code samples and tables across many pages (grep for the old identifier, excluding the `v6/` and `v7/` trees, which document older versions and must not change). New CLI flags go in the command's page under `cli/`. New client or type surface goes in the matching page under `orm/reference/`, with a short section, and in `orm/coming-from-prisma-orm-7.mdx` if the feature replaces a Prisma ORM 7 one. A fix that removes a workaround means finding the guide that taught the workaround; the migration guides under `guides/upgrade-prisma-orm/` and the pages under `orm/migrations/` are the usual places.
     4. Follow `apps/docs/AGENTS.md` for page kinds and placement, and write in plain English. From `apps/docs`, run `pnpm lint:links`, `pnpm lint:spellcheck`, and `pnpm lint:code`.
     5. Commit as `docs(docs): update the Prisma ORM 8 pages for <version>` and open the PR against `main` with `gh pr create -R prisma/web`. The body lists each release-notes entry and the pages that now reflect it, names anything from the notes that has no page to land on, and says that the PR must merge only after the ORM release PR is published, because until then the site would describe a version that is not on the registry. Link the two PRs to each other.
 
-11. **Stop and report** both PR URLs **and the worktree path** to the maintainer. The maintainer can `git worktree remove ../release-<version>` after the PRs merge. Do not merge either PR yourself; the release PR merge is a human gate where someone confirms the release notes are acceptable, and the docs PR waits for the publish. (Merging the release PR triggers the publish — there is no separate dispatch step.)
+12. **Stop and report** both PR URLs **and the worktree path** to the maintainer. The maintainer can `git worktree remove ../release-<version>` after the PRs merge. Do not merge either PR yourself; the release PR merge is a human gate where someone confirms the release notes are acceptable, and the docs PR waits for the publish. (Merging the release PR triggers the publish — there is no separate dispatch step.)
 
     If the maintainer asks you to merge, the order is: release PR first, wait for the `Publish to npm` run on `main` to succeed and for `pnpm view @prisma/orm-postgres dist-tags.latest` to report `<version>`, then merge the docs PR and confirm its Vercel `docs` deployment succeeds. On `prisma/orm` the merge queue refuses a PR with any unresolved review thread, even with green checks; CodeRabbit routinely flags the tag-pinned recipe links in the notes as dead, which is expected (the tag is created by the publish), so answer and resolve that thread rather than change the links.
 
 ## Idempotency
 
-`pnpm bump-version` is idempotent because it reads the root version from `git show HEAD:package.json` rather than from the working tree: running it twice in the same worktree without committing produces the same target version, not a double-bump. The skill as a whole is not — step 2's `git worktree add -b "release/$NEXT" …` fails if the branch or sibling worktree already exists from an earlier run. To rerun from scratch, remove them first (`git worktree remove ../release-$NEXT` and `git branch -D release/$NEXT`), or skip straight to step 3 inside the existing worktree. Do not stack bumps.
+`pnpm bump-version` reads the root version from `git show HEAD:package.json`: repeating it before committing produces the same target, but running it after the bump commit would advance again. Do not stack bumps.
+
+If the release branch/worktree already exists, inspect its Git status and diff before resuming instead of recreating it or blindly bumping again. For interrupted assembly, inspect pending fragments, this unmerged release's archived originals, and the current output guides. Resume from those ordinary working-copy inputs; do not replay older archives or add an assembly command, staging protocol, ledger, hashes, or historical deletion scan. See the [lifecycle](../../upgrade-instructions/README.md).
 
 ## Out of scope
 
