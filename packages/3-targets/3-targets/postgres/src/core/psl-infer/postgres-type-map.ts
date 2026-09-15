@@ -48,6 +48,7 @@ const PARAMETERIZED_NATIVE_TYPES: Record<string, string> = {
   decimal: 'Numeric',
   timestamp: 'Timestamp',
   timestamptz: 'TimestamptzString',
+  'timestamp with time zone': 'TimestamptzString',
   time: 'Time',
   timetz: 'Timetz',
 };
