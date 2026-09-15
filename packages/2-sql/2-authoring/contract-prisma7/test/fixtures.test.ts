@@ -76,6 +76,7 @@ describe('Prisma 7 fixtures', () => {
       'provider-mismatch',
       'provider-missing',
       'relation-ambiguous',
+      'relation-argument-invalid',
       'relation-mode',
       'relation-nullability',
       'relation-unresolved',

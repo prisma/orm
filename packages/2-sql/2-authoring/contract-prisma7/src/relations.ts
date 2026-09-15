@@ -80,12 +80,22 @@ function stringValue(expression: ResolvedAttributeArg['expression']): string | u
     : StringLiteralExprAst.cast(expression.syntax)?.value();
 }
 
+const PRISMA7_REFERENTIAL_ACTIONS: ReadonlySet<string> = new Set([
+  'Cascade',
+  'Restrict',
+  'NoAction',
+  'SetNull',
+  'SetDefault',
+]);
+
 function actionValue(
   expression: ResolvedAttributeArg['expression'],
 ): ReferentialAction | undefined {
   const token =
     expression === undefined ? undefined : IdentifierAst.cast(expression.syntax)?.name();
-  return token === undefined ? undefined : normalizeReferentialAction(token);
+  return token !== undefined && PRISMA7_REFERENTIAL_ACTIONS.has(token)
+    ? normalizeReferentialAction(token)
+    : undefined;
 }
 
 export function parseRelationAttribute(
