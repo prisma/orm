@@ -2,60 +2,25 @@ import type { ColumnDefault } from '@internal/contract/types';
 import { canonicalStringify } from '@internal/utils/canonical-stringify';
 
 /**
- * Structural equality for two resolved column defaults, ported from the
- * relational walk's `columnDefaultsEqual` normalized branch: kinds must
- * match; literal values are normalized (Date and temporal-typed strings to
- * ISO instants, and a 64-bit-integer native type's safe-integer number to
- * its decimal-text spelling) then compared canonically (JSON objects match
- * their canonical string form); function expressions compare case- and
- * whitespace-insensitively.
+ * Structural equality for two resolved column defaults, ported from the relational walk's
+ * `columnDefaultsEqual` normalized branch: kinds must match; literal values are normalized (Date
+ * and temporal-typed strings to ISO instants, with a timestamp that has no zone read as UTC; a
+ * 64-bit-integer native type's safe-integer number to its decimal-text spelling; a numeric native
+ * type's number to its decimal text, and when the type has a modifier, its decimal text to its
+ * digits without zeros that do not change the value; a list element by element under its element
+ * type) then compared canonically (JSON objects match their canonical string form); function
+ * expressions compare case- and whitespace-insensitively.
  *
- * `nativeType` provides the temporal- and int64-normalization context (the
- * actual side's resolved native type in a diff comparison).
+ * `nativeType` provides the normalization context (the actual side's resolved native type in a diff
+ * comparison). A target that reads a raw expression as a literal does so before this comparison,
+ * through its `resolveDefault` hook.
  */
-/**
- * A raw expression that is nothing but a quoted SQL string, optionally cast
- * to one type name (`'confidential'::auth.oauth_client_type`), denotes that
- * string. The introspection side may read such a default as a literal while
- * an older contract still declares it as a raw expression; comparing the
- * string the expression spells keeps both spellings equal. The cast is one
- * optionally schema-qualified, optionally quoted type name with optional
- * modifiers, the shape Postgres reports, so an expression that goes on after
- * the literal (`'a'::text || 'b'`) is not a string literal.
- */
-const QUOTED_STRING_EXPRESSION =
-  /^'((?:[^']|'')*)'(?:::(?:(?:"[^"]+"|\w+)\.)?(?:"[^"]+"|[\w\s]+?)(?:\(\d+(?:,\s*\d+)?\))?)?$/;
-
-function quotedStringValue(expression: string): string | undefined {
-  const match = QUOTED_STRING_EXPRESSION.exec(expression.trim());
-  return match?.[1] === undefined ? undefined : match[1].replace(/''/g, "'");
-}
-
-function rawExpressionEqualsLiteral(
-  raw: ColumnDefault,
-  literal: ColumnDefault,
-  nativeType?: string,
-): boolean {
-  if (raw.kind !== 'function' || literal.kind !== 'literal') return false;
-  const spelled = quotedStringValue(raw.expression);
-  if (spelled === undefined) return false;
-  return literalValuesEqual(
-    normalizeLiteralValue(spelled, nativeType),
-    normalizeLiteralValue(literal.value, nativeType),
-  );
-}
-
 export function resolvedDefaultsEqual(
   expected: ColumnDefault,
   actual: ColumnDefault,
   nativeType?: string,
 ): boolean {
-  if (expected.kind !== actual.kind) {
-    return (
-      rawExpressionEqualsLiteral(expected, actual, nativeType) ||
-      rawExpressionEqualsLiteral(actual, expected, nativeType)
-    );
-  }
+  if (expected.kind !== actual.kind) return false;
   if (expected.kind === 'literal' && actual.kind === 'literal') {
     return literalValuesEqual(
       normalizeLiteralValue(expected.value, nativeType),
@@ -88,20 +53,44 @@ function isInt64NativeType(nativeType?: string): boolean {
 }
 
 /**
- * A timestamp spelled without a zone, as Postgres reports a `timestamp
- * without time zone` default: `2024-01-01 00:00:00`, `2024-01-01T00:00:00.5`.
- * `Date` would read that as host-local time, so it is pinned to UTC first —
- * the value is a wall-clock time and the contract spells the same wall time
- * as an ISO instant.
+ * A numeric type with a modifier (`numeric(10,2)`) stores every value at its scale, so zeros that
+ * do not change the value do not count. Without one, the value keeps the scale it was written with.
  */
-const ZONELESS_TIMESTAMP = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/;
+const DECIMAL_NATIVE_TYPE = /^(?:numeric|decimal)(\(\d+(?:,\s*\d+)?\))?$/i;
+const DECIMAL_NUMERAL = /^(-?)(\d+)(?:\.(\d+))?$/;
+
+function decimalDigits(value: string | number): string | number {
+  const numeral = DECIMAL_NUMERAL.exec(String(value));
+  if (numeral === null) return value;
+  const whole = (numeral[2] ?? '').replace(/^0+(?=\d)/, '');
+  const fraction = (numeral[3] ?? '').replace(/0+$/, '');
+  const digits = fraction === '' ? whole : `${whole}.${fraction}`;
+  return digits === '0' ? digits : `${numeral[1] ?? ''}${digits}`;
+}
+
+/**
+ * A timestamp as Postgres prints it, with or without an offset: `2024-01-01 00:00:00`,
+ * `0001-01-01 00:00:00+00`, `2024-01-02 03:04:05+05:30`. It is rebuilt as an ISO string before
+ * `Date` reads it, because `Date` reads this spelling without a zone as host-local time and reads a
+ * year below 100 as 19xx or 20xx. A value without a zone is a wall-clock time, and the contract
+ * spells the same wall time as an ISO instant, so it is read as UTC.
+ */
+const POSTGRES_TIMESTAMP =
+  /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(?:([+-]\d{2})(?::?(\d{2}))?)?$/;
 
 function parseTemporal(value: string): Date {
-  const zoneless = ZONELESS_TIMESTAMP.exec(value);
-  return zoneless === null ? new Date(value) : new Date(`${zoneless[1]}T${zoneless[2]}Z`);
+  const timestamp = POSTGRES_TIMESTAMP.exec(value);
+  if (timestamp === null) return new Date(value);
+  const [, date, time, offsetHours, offsetMinutes = '00'] = timestamp;
+  const zone = offsetHours === undefined ? 'Z' : `${offsetHours}:${offsetMinutes}`;
+  return new Date(`${date}T${time}${zone}`);
 }
 
 function normalizeLiteralValue(value: unknown, nativeType?: string): unknown {
+  if (Array.isArray(value) && nativeType?.endsWith('[]')) {
+    const elementType = nativeType.slice(0, -2);
+    return value.map((element) => normalizeLiteralValue(element, elementType));
+  }
   if (value instanceof Date) {
     return value.toISOString();
   }
@@ -113,6 +102,10 @@ function normalizeLiteralValue(value: unknown, nativeType?: string): unknown {
   }
   if (typeof value === 'number' && Number.isSafeInteger(value) && isInt64NativeType(nativeType)) {
     return String(value);
+  }
+  const decimalType = nativeType === undefined ? null : DECIMAL_NATIVE_TYPE.exec(nativeType);
+  if ((typeof value === 'number' || typeof value === 'string') && decimalType !== null) {
+    return decimalType[1] === undefined ? String(value) : decimalDigits(value);
   }
   return value;
 }

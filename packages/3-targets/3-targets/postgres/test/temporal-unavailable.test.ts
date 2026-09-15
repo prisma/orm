@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   PG_DATE_TEMPORAL_CODEC_ID,
   PG_TIME_TEMPORAL_CODEC_ID,
@@ -153,11 +153,22 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
     });
   });
 
-  it('plainDateTimeNow is the current moment as UTC wall-clock time', () => {
-    const value = plainDateTimeNow();
-    expect(value).toBeInstanceOf(Temporal.PlainDateTime);
-    const skew = Math.abs(value.toZonedDateTime('UTC').epochMilliseconds - Date.now());
-    expect(skew).toBeLessThan(5_000);
+  describe('on a host outside UTC', () => {
+    const previousTz = process.env['TZ'];
+    beforeAll(() => {
+      process.env['TZ'] = 'Etc/GMT-3';
+    });
+    afterAll(() => {
+      if (previousTz === undefined) delete process.env['TZ'];
+      else process.env['TZ'] = previousTz;
+    });
+
+    it('plainDateTimeNow is the current moment as UTC wall-clock time', () => {
+      const value = plainDateTimeNow();
+      expect(value).toBeInstanceOf(Temporal.PlainDateTime);
+      const skew = Math.abs(value.toZonedDateTime('UTC').epochMilliseconds - Date.now());
+      expect(skew).toBeLessThan(5_000);
+    });
   });
 
   it('restores whatever Temporal the host had once the window closes', () => {
