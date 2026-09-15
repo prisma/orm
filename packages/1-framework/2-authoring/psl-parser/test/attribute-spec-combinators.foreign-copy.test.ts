@@ -10,6 +10,7 @@ import {
   json,
   list,
   num,
+  numLiteral,
   record,
   str,
 } from '../src/exports';
@@ -51,6 +52,7 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
     ['str', str(), '"x"', 'x'],
     ['int', int(), '3', 3],
     ['num', num(), '2.5', 2.5],
+    ['numLiteral', numLiteral(), '2.50', { text: '2.50' }],
     ['bool', bool(), 'true', true],
     ['identifier', identifier('Cascade'), 'Cascade', 'Cascade'],
     ['entityRef', entityRef(), 'User', 'User'],

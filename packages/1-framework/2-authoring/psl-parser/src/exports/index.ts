@@ -50,6 +50,7 @@ export { json } from '../attribute-spec/combinators/json';
 export type { ListOptions } from '../attribute-spec/combinators/list';
 export { list } from '../attribute-spec/combinators/list';
 export { num } from '../attribute-spec/combinators/num';
+export { numLiteral } from '../attribute-spec/combinators/num-literal';
 export { oneOf } from '../attribute-spec/combinators/one-of';
 export { record } from '../attribute-spec/combinators/record';
 export { str } from '../attribute-spec/combinators/str';
@@ -79,6 +80,7 @@ export type {
   InspectableArgType,
   ModelAttributeCtx,
   NamedOut,
+  NumLiteral,
   OptionalArgType,
   OutOf,
   Param,
