@@ -1,10 +1,6 @@
 import { RawQueryAst } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
-import {
-  buildDecodeContext,
-  decodeRow as decodeRowBase,
-  sqlNativeArrayListDecoder,
-} from '../src/codecs/decoding';
+import { buildDecodeContext, decodeRow, sqlNativeArrayListDecoder } from '../src/codecs/decoding';
 import { defineTestCodec } from './test-codec';
 import { buildTestContractCodecs } from './utils';
 
@@ -30,15 +26,6 @@ const rowsAst = RawQueryAst.rows(['select id, email from "user"'], {
 
 const affectedCountAst = RawQueryAst.affectedCount(['update "user" set seen = now()']);
 
-function decodeRow(
-  row: Parameters<typeof decodeRowBase>[0],
-  decodeCtx: Parameters<typeof decodeRowBase>[1],
-  rowCtx: Parameters<typeof decodeRowBase>[2],
-  listDecoder: Parameters<typeof decodeRowBase>[3] = sqlNativeArrayListDecoder,
-): ReturnType<typeof decodeRowBase> {
-  return decodeRowBase(row, decodeCtx, rowCtx, listDecoder);
-}
-
 describe('raw-query decode context', () => {
   it('takes its aliases and codecs from the declared row spec', () => {
     const ctx = buildDecodeContext(rowsAst, contractCodecs);
@@ -62,6 +49,7 @@ describe('raw-query row decoding', () => {
       { id: 4, email: 'a@b.example' },
       buildDecodeContext(rowsAst, contractCodecs),
       {},
+      sqlNativeArrayListDecoder,
     );
 
     expect(decoded).toEqual({ id: 40, email: 'decoded:a@b.example' });
@@ -72,6 +60,7 @@ describe('raw-query row decoding', () => {
       { id: 4, email: null },
       buildDecodeContext(rowsAst, contractCodecs),
       {},
+      sqlNativeArrayListDecoder,
     );
 
     expect(decoded).toEqual({ id: 40, email: null });
@@ -82,6 +71,7 @@ describe('raw-query row decoding', () => {
       { id: 4, email: 'a@b.example', surplus: 'ignored' },
       buildDecodeContext(rowsAst, contractCodecs),
       {},
+      sqlNativeArrayListDecoder,
     );
 
     expect(decoded).toEqual({ id: 40, email: 'decoded:a@b.example' });
@@ -89,7 +79,12 @@ describe('raw-query row decoding', () => {
 
   it('raises RUNTIME.RAW_ROW_COLUMN_MISSING when the result omits a declared column', async () => {
     await expect(
-      decodeRow({ id: 4 }, buildDecodeContext(rowsAst, contractCodecs), {}),
+      decodeRow(
+        { id: 4 },
+        buildDecodeContext(rowsAst, contractCodecs),
+        {},
+        sqlNativeArrayListDecoder,
+      ),
     ).rejects.toMatchObject({
       code: 'RUNTIME.RAW_ROW_COLUMN_MISSING',
       details: {
@@ -105,6 +100,7 @@ describe('raw-query row decoding', () => {
       { affectedRows: 3 },
       buildDecodeContext(affectedCountAst, contractCodecs),
       {},
+      sqlNativeArrayListDecoder,
     );
 
     expect(decoded).toEqual({ affectedRows: 3 });
@@ -128,6 +124,7 @@ describe('column names that collide with object machinery', () => {
       { constructor: 4 },
       buildDecodeContext(oddNamesAst, contractCodecs),
       {},
+      sqlNativeArrayListDecoder,
     );
 
     expect(Object.hasOwn(decoded, 'constructor')).toBe(true);
@@ -141,7 +138,12 @@ describe('column names that collide with object machinery', () => {
       ['__proto__', { polluted: true }],
     ]);
 
-    const decoded = await decodeRow(wireRow, buildDecodeContext(rowsAst, contractCodecs), {});
+    const decoded = await decodeRow(
+      wireRow,
+      buildDecodeContext(rowsAst, contractCodecs),
+      {},
+      sqlNativeArrayListDecoder,
+    );
 
     expect(decoded).toEqual({ id: 40, email: 'decoded:a@b.example' });
     expect(Object.getPrototypeOf(decoded)).toBe(Object.prototype);

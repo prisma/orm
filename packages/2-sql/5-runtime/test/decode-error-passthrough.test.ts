@@ -9,24 +9,11 @@ import {
 import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
 import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
-import {
-  buildDecodeContext,
-  decodeRow as decodeRowBase,
-  sqlNativeArrayListDecoder,
-} from '../src/codecs/decoding';
+import { buildDecodeContext, decodeRow, sqlNativeArrayListDecoder } from '../src/codecs/decoding';
 import { defineTestCodec } from './test-codec';
 import { buildTestContractCodecs } from './utils';
 
 const TEST_HASH = coreHash('test');
-
-function decodeRow(
-  row: Parameters<typeof decodeRowBase>[0],
-  decodeCtx: Parameters<typeof decodeRowBase>[1],
-  rowCtx: Parameters<typeof decodeRowBase>[2],
-  listDecoder: Parameters<typeof decodeRowBase>[3] = sqlNativeArrayListDecoder,
-): ReturnType<typeof decodeRowBase> {
-  return decodeRowBase(row, decodeCtx, rowCtx, listDecoder);
-}
 
 function buildPlan(): SqlExecutionPlan {
   const ast = SelectAst.from(TableSource.named('users')).withProjection([
@@ -68,6 +55,7 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toBe(original);
   });
@@ -90,6 +78,7 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toBe(original);
   });
@@ -114,6 +103,7 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toBe(original);
   });
@@ -142,6 +132,7 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         { value: ['wire'] },
         buildDecodeContext(ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toBe(original);
   });
@@ -164,6 +155,7 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
