@@ -1659,13 +1659,6 @@ function patchModelDomainFields(
           type: { kind: 'valueObject', name: rf.valueObjectTypeName },
           ...(rf.many ? { many: true as const } : {}),
         };
-      } else if (rf.many && rf.scalarCodecId) {
-        needsPatch = true;
-        patchedFields[rf.field.name] = {
-          nullable: rf.field.optional,
-          type: { kind: 'scalar', codecId: rf.scalarCodecId },
-          many: true as const,
-        };
       }
     }
 
@@ -2526,6 +2519,12 @@ export function interpretPslDocumentToSqlContract(
     }
     for (const unique of modelNode.uniques ?? []) {
       uniqueColumnSets.push(unique.columns);
+    }
+    for (const index of modelNode.indexes ?? []) {
+      // A partial unique index constrains only the rows its predicate selects.
+      if (index.unique === true && index.columns !== undefined && index.where === undefined) {
+        uniqueColumnSets.push(index.columns);
+      }
     }
     modelUniqueColumnSets.set(modelNode.modelName, uniqueColumnSets);
   }

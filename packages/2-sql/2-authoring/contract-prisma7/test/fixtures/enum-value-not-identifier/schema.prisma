@@ -1,0 +1,13 @@
+datasource db {
+  provider = "postgresql"
+}
+
+enum Status {
+  IN_PROGRESS @map("in-progress")
+  DONE
+}
+
+model Task {
+  id     Int    @id
+  status Status @default(IN_PROGRESS)
+}

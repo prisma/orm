@@ -181,6 +181,17 @@ describe('contract emit', () => {
     });
   });
 
+  it('on a terminal the paths are not mirrored to stdout, so the prose is not duplicated', async () => {
+    const run = await harness().run(['contract', 'emit'], {
+      cwd: PROJECT_DIR,
+      isTty: { stdout: true, stderr: true },
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(run.stdout).toBe('');
+    expect(run.stderr).toContain('Emitted contract.json and contract.d.ts');
+  });
+
   it('writes the emitted paths to stdout and the prose to stderr', async () => {
     // Only stdout is a terminal. Marking stderr one too makes the engine read
     // the pair as a single screen and drop the stdout mirror to avoid drawing

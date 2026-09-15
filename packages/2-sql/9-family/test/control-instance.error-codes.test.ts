@@ -135,6 +135,16 @@ describe('sql family instance structured error codes', () => {
     });
   });
 
+  it('raises CONTRACT.CONVERT_UNSUPPORTED when the target descriptor has no printPslContract', () => {
+    const instance = createSqlFamilyInstance(makeStack());
+    const error = captureError(() => instance.printPslContract?.(undefined as never));
+    expect(isStructuredError(error)).toBe(true);
+    expect(error).toMatchObject({
+      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      meta: { targetId: 'postgres' },
+    });
+  });
+
   it('raises CONTRACT.PACK_CONTRIBUTION_INVALID when a required classifier descriptor operation is missing', () => {
     const instance = createSqlFamilyInstance(makeStack());
     const error = captureError(() => instance.classifySubjectGranularity?.({} as SchemaDiffIssue));

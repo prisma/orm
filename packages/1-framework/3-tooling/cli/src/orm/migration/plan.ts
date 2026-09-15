@@ -63,6 +63,15 @@ function operationNodes(result: MigrationPlanResult): readonly TreeNode[] {
   );
 }
 
+/**
+ * A plan that wrote a baseline and no delta package: the `db` ref already
+ * names the target and the listed operations are the schema the baseline
+ * records, already in the database. Nothing is to be applied.
+ */
+function isBaselineOnly(result: MigrationPlanResult): boolean {
+  return result.baselineDir !== undefined && result.dir === undefined && result.from === result.to;
+}
+
 function operationBlocks(result: MigrationPlanResult): readonly Block[] {
   if (result.operations.length === 0) {
     return [];
@@ -73,7 +82,14 @@ function operationBlocks(result: MigrationPlanResult): readonly Block[] {
   return [
     {
       kind: 'tree',
-      roots: [{ label: result.dir ?? 'operations', children: operationNodes(result) }],
+      roots: [
+        {
+          label: isBaselineOnly(result)
+            ? `${result.baselineDir} (the schema the baseline records)`
+            : (result.dir ?? 'operations'),
+          children: operationNodes(result),
+        },
+      ],
     },
     ...(destructive
       ? [
@@ -101,7 +117,14 @@ function previewBlocks(result: MigrationPlanResult): readonly Block[] {
     return [];
   }
   return [
-    { kind: 'summary', status: 'info', tone: 'muted', text: previewBlockHeader(preview) },
+    {
+      kind: 'summary',
+      status: 'info',
+      tone: 'muted',
+      text: isBaselineOnly(result)
+        ? `${previewBlockHeader(preview)} of what the baseline records — already in the database, not applied`
+        : previewBlockHeader(preview),
+    },
     { kind: 'drawing', lines: statements },
   ];
 }
@@ -167,6 +190,12 @@ function planNextActions(
   ];
   if (written.length === 0) {
     return [];
+  }
+  if (isBaselineOnly(result)) {
+    return [
+      { kind: 'edit-file', label: `Review ${written.join(' and ')}` },
+      runCommandAction('Confirm the database is up to date', '{bin} migration status'),
+    ];
   }
   return [
     { kind: 'edit-file', label: `Review ${written.join(' and ')}` },

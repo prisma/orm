@@ -54,6 +54,7 @@ Unsupported PSL constructs in v1 (strict errors):
   - Example: `User.posts Post[]` + `Post.user User @relation(fields: [userId], references: [id])`
   - Matching may use `@relation("Name")` or `@relation(name: "Name")` when multiple candidates exist
   - Navigation list fields accept only `@relation` (name-only form); other field attributes are strict errors
+- **A singular back-relation is one-to-one** when the FK columns equal the owning model's `@id`, a `@unique`/`@@unique` constraint, or a unique `@@index` over the same columns (any order; an expression index or a partial index with `where:` does not count); otherwise `PSL_NON_UNIQUE_BACKRELATION`
 - **Implicit Prisma ORM many-to-many remains unsupported** (list navigation on both sides without explicit join model)
   - Represent many-to-many with an explicit join model (two foreign keys)
 
@@ -63,6 +64,8 @@ Supported `@default(...)` surface in v1 when composed contributors provide handl
 - Execution defaults: `uuid()`, `uuid(4)`, `uuid(7)`, `cuid(2)`, `ulid()`, `nanoid()`, `nanoid(<2-255>)`
 - Explicitly unsupported in v1: `cuid()` (diagnostic suggests `cuid(2)`)
 - `dbgenerated("...")` preserves the parsed PSL string-literal contents as-is (escaped sequences are not normalized in v1).
+- A string literal default on a JSON column (`Json`, `Jsonb`, SQLite `Json`) is JSON text: `@default("{\"a\":1}")` lowers to the literal `{ a: 1 }`, `@default("{}")` to `{}`, `@default("[]")` to `[]`; text that does not parse is `PSL_INVALID_JSON_DEFAULT`.
+- An integer literal default on a bigint column (`BigInt`, `UnboundedInt`, SQLite `BigInt`) is built from the token's digits, so `@default(9007199254740993)` keeps its exact value; a JS `number` would round past 2^53.
 
 Supported timestamp authoring surface:
 

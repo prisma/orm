@@ -27,7 +27,7 @@ interface InferDocument {
   readonly ok: true;
   readonly summary: string;
   readonly target: { readonly familyId: string; readonly id: string };
-  readonly psl: { readonly path: string };
+  readonly psl: { readonly path: string; readonly overwrote: boolean };
   readonly meta: { readonly dbUrl?: string };
   readonly timings: { readonly total: number };
 }
@@ -50,6 +50,18 @@ function inferPresentations(inputs: {
               rows: [{ label: 'database', value: database }],
             },
           ]),
+      ...(document.psl.overwrote
+        ? [
+            {
+              kind: 'summary' as const,
+              status: 'warn' as const,
+              text: [
+                { text: 'Overwrote existing file ' },
+                { text: document.psl.path, tone: 'identifier' as const },
+              ],
+            },
+          ]
+        : []),
       {
         kind: 'summary',
         status: 'ok',
@@ -179,13 +191,7 @@ export function createContractInferCommand({
         output: args.flags.output,
       });
       const displayPath = relative(ctx.cwd, outputPath);
-      if (existsSync(outputPath)) {
-        ctx.report({
-          kind: 'message',
-          severity: 'warn',
-          text: `Overwriting existing file: ${displayPath}`,
-        });
-      }
+      const overwrote = existsSync(outputPath);
       await publishTextArtifact({
         path: outputPath,
         content: pslContent,
@@ -198,7 +204,7 @@ export function createContractInferCommand({
         ok: true,
         summary: 'Contract inferred successfully',
         target: { familyId: ctx.config.family.familyId, id: ctx.config.target.targetId },
-        psl: { path: displayPath },
+        psl: { path: displayPath, overwrote },
         meta: { ...ifDefined('dbUrl', database) },
         timings: { total: Date.now() - startedAt },
       };

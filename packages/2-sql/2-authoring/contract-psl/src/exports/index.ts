@@ -7,3 +7,5 @@ export {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract,
 } from '../interpreter';
+export type { LiteralDefaultForm } from '../literal-default-forms';
+export { literalDefaultForm } from '../literal-default-forms';

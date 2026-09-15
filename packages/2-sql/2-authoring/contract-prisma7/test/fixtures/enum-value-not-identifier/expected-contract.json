@@ -1,0 +1,115 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Task": {
+            "storage": {
+              "table": "Task",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "status": {
+                  "column": "status"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "status": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/enum@1",
+                  "typeParams": {
+                    "typeName": "Status"
+                  }
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Task": {
+      "namespace": "public",
+      "model": "Task"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "54d10b03187d5711c6594c855889738e01bee7a433558d60860e537dcfac57d1",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Task": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "status": {
+                  "nativeType": "Status",
+                  "codecId": "pg/enum@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "typeName": "Status"
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": "in-progress"
+                  },
+                  "valueSet": {
+                    "plane": "storage",
+                    "entityKind": "valueSet",
+                    "namespaceId": "public",
+                    "entityName": "Status"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          },
+          "native_enum": {
+            "Status": {
+              "kind": "postgres-enum",
+              "typeName": "Status",
+              "members": ["in-progress", "DONE"]
+            }
+          },
+          "valueSet": {
+            "Status": {
+              "kind": "valueSet",
+              "values": ["in-progress", "DONE"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

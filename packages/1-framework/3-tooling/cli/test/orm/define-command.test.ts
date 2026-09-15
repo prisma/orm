@@ -55,7 +55,7 @@ describe('defineOrmCommand', () => {
       const envelope = erroredEnvelope(run);
 
       expect(envelope.nextActions).toEqual([
-        { kind: 'user-choice', label: 'Run `{bin} migration list` to see every space.' },
+        { kind: 'user-choice', label: 'Run `prisma migration list` to see every space.' },
       ]);
       expect(envelope.error).not.toHaveProperty('fix');
     });

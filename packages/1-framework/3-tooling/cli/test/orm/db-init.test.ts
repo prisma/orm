@@ -256,7 +256,7 @@ describe('db init', () => {
       {
         kind: 'run-command',
         label: 'Confirm the space is up to date',
-        command: '{bin} migration status',
+        command: 'prisma migration status',
       },
     ]);
   });
@@ -314,7 +314,7 @@ describe('db init', () => {
         {
           kind: 'run-command',
           label: 'Apply the planned operations',
-          command: '{bin} db init',
+          command: 'prisma db init',
         },
       ]);
     });

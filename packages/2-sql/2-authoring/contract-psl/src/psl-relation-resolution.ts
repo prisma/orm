@@ -454,7 +454,7 @@ export function applyBackrelationCandidates(input: {
       if (!fkColumnsAreUnique(matched.localColumns, uniqueColumnSets)) {
         input.diagnostics.push({
           code: 'PSL_NON_UNIQUE_BACKRELATION',
-          message: `Backrelation field "${candidate.modelName}.${candidate.field.name}" is singular, but the matching FK on "${matched.declaringModelName}" (fields ${matched.localColumns.map((column) => `"${column}"`).join(', ')}) is not unique. A singular back-relation implies at most one related row; add @unique (or @@unique([...])) to the FK fields, or make "${candidate.field.name}" a list.`,
+          message: `Backrelation field "${candidate.modelName}.${candidate.field.name}" is singular, but the matching FK on "${matched.declaringModelName}" (fields ${matched.localColumns.map((column) => `"${column}"`).join(', ')}) is not unique. A singular back-relation implies at most one related row; add @unique (or @@unique([...]), or a unique @@index([...], unique: true) over the same columns) to the FK fields, or make "${candidate.field.name}" a list.`,
           sourceId: input.sourceId,
           span: candidate.field.span,
         });

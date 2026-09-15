@@ -29,6 +29,7 @@ import type { RefResolutionError } from '@internal/migration-tools/ref-resolutio
 import { ifDefined } from '@internal/utils/defined';
 import type { NextAction } from '@prisma/cli-engine/protocol';
 import type { MigrateFailure } from '../control-api/types';
+import { resolveBin } from '../orm/bin-name';
 import { chooseAction, runCommandAction } from './next-actions';
 
 export {
@@ -638,7 +639,10 @@ export function requireLiveDatabase(args: {
     why: args.why,
     missingFlags,
     ...ifDefined('commandName', args.commandName),
-    ...ifDefined('retryCommand', args.retryCommand),
+    ...ifDefined(
+      'retryCommand',
+      args.retryCommand === undefined ? undefined : resolveBin(args.retryCommand),
+    ),
   });
 }
 

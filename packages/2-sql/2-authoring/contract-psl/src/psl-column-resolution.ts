@@ -1,6 +1,7 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ColumnDefault,
+  ColumnDefaultLiteralValue,
   ExecutionMutationDefaultPhases,
   ValueSetRef,
 } from '@internal/contract/types';
@@ -34,11 +35,20 @@ import type {
   ResolvedTypeConstructorCall,
   SymbolTable,
 } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { ExpressionAst, SourceFile } from '@internal/psl-parser/syntax';
 
 import { InternalError } from '@internal/utils/internal-error';
+import { ok, type Result } from '@internal/utils/result';
 import { contractError } from './contract-errors';
 import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
+import {
+  bigintLiteralFromToken,
+  jsonLiteralFromText,
+  type LiteralDefaultForm,
+  listElementExpressions,
+  literalDefaultForm,
+} from './literal-default-forms';
+import { getAttribute } from './psl-attribute-parsing';
 
 import { mapPslHelperArgs } from './psl-authoring-arguments';
 import {
@@ -730,9 +740,28 @@ export function lowerDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const value = interpreted.value;
+  const form = literalDefaultForm(input.columnDescriptor.codecId);
+  const attribute = getAttribute(input.field.attributes, 'default');
+  const argument = attribute?.args.find((arg) => arg.kind === 'positional')?.expression;
+  const invalidJson = (error: string): Record<string, never> => {
+    input.diagnostics.push({
+      code: 'PSL_INVALID_JSON_DEFAULT',
+      message: `Field "${input.modelName}.${input.fieldName}" @default is not valid JSON text: ${error}`,
+      sourceId: input.sourceId,
+      span: attribute?.span ?? input.field.span,
+    });
+    return {};
+  };
 
   if (Array.isArray(value)) {
-    return { defaultValue: { kind: 'literal', value: [...value] } };
+    const elements = listElementExpressions(argument);
+    const lowered: ColumnDefaultLiteralValue[] = [];
+    for (const [index, element] of value.entries()) {
+      const literal = literalDefaultValue(form, element, elements?.[index]);
+      if (!literal.ok) return invalidJson(literal.failure);
+      lowered.push(literal.value);
+    }
+    return { defaultValue: { kind: 'literal', value: lowered } };
   }
 
   if (typeof value === 'object') {
@@ -791,7 +820,23 @@ export function lowerDefaultForField(input: {
     return { executionDefaults: { onCreate: lowered.value.generated } };
   }
 
-  return { defaultValue: { kind: 'literal', value } };
+  const literal = literalDefaultValue(form, value, argument);
+  if (!literal.ok) return invalidJson(literal.failure);
+  return { defaultValue: { kind: 'literal', value: literal.value } };
+}
+
+function literalDefaultValue(
+  form: LiteralDefaultForm | undefined,
+  parsed: string | number | boolean,
+  expression: ExpressionAst | undefined,
+): Result<ColumnDefaultLiteralValue, string> {
+  if (form === 'bigint' && typeof parsed === 'number') {
+    return ok(bigintLiteralFromToken(expression, parsed));
+  }
+  if (form === 'json' && typeof parsed === 'string') {
+    return jsonLiteralFromText(parsed);
+  }
+  return ok(parsed);
 }
 
 export function resolveColumnDescriptor(

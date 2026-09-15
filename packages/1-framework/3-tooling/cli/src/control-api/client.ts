@@ -21,6 +21,7 @@ import {
   hasMigrations,
   hasOperationPreview,
   hasPslContractInfer,
+  hasPslContractPrint,
   hasSchemaView,
 } from '@internal/framework-components/control';
 import {
@@ -589,6 +590,14 @@ class ControlClientImpl implements ControlClient {
     this.init();
     if (this.familyInstance && hasPslContractInfer(this.familyInstance)) {
       return this.familyInstance.inferPslContract(schemaIR);
+    }
+    return undefined;
+  }
+
+  printPslContract(contract: unknown): PslDocumentAst | undefined {
+    this.init();
+    if (this.familyInstance && hasPslContractPrint(this.familyInstance)) {
+      return this.familyInstance.printPslContract(contract);
     }
     return undefined;
   }

@@ -66,7 +66,7 @@ export function buildNativeEnumBlocks(
   return { enumNameMap, enumBlocks };
 }
 
-function buildNativeEnumBlock(
+export function buildNativeEnumBlock(
   name: string,
   typeName: string,
   values: readonly string[],

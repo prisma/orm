@@ -3,6 +3,7 @@ import { structuredError } from '@internal/utils/structured-error';
 
 type SqlFamilyErrorCode =
   | 'CONTRACT.FOREIGN_KEY_INVALID'
+  | 'CONTRACT.CONVERT_UNSUPPORTED'
   | 'CONTRACT.INFER_UNSUPPORTED'
   | 'CONTRACT.MARKER_ROW_CORRUPT'
   | 'CONTRACT.PACK_CONTRIBUTION_INVALID'

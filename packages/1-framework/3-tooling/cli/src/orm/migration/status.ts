@@ -51,6 +51,7 @@ import { createToneMigrationListStyler } from '../../utils/formatters/migration-
 import type { MigrationListEntry } from '../../utils/formatters/migration-list-types';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
+import { resolveBin } from '../bin-name';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
@@ -125,13 +126,17 @@ export function buildNoPathSummary(args: {
       : 'the database state';
   const targetShort = shortDisplayHash(args.targetHash);
   if (!args.explicitTarget) {
-    return `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`{bin} migration plan --name <name>\` to author one.`;
+    return resolveBin(
+      `No migration path from ${markerPart} to the application's contract (${targetShort}). Run \`{bin} migration plan --name <name>\` to author one.`,
+    );
   }
   const targetLabel =
     args.refName !== undefined
       ? `the target (${targetShort} via \`${args.refName}\`)`
       : `the target (${targetShort})`;
-  return `No migration path from ${markerPart} to ${targetLabel}. Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`;
+  return resolveBin(
+    `No migration path from ${markerPart} to ${targetLabel}. Run \`{bin} migration plan --name <name>\` to author one, or pass \`--to <contract>\` to pick a reachable target.`,
+  );
 }
 
 export function buildStatusHeadline(args: {
@@ -146,7 +151,9 @@ export function buildStatusHeadline(args: {
   if (args.pendingCount === 0) {
     return 'Up to date';
   }
-  return `${args.pendingCount} pending — run \`{bin} db migrate --to ${shortDisplayHash(args.targetHash)}\``;
+  return resolveBin(
+    `${args.pendingCount} pending — run \`{bin} db migrate --to ${shortDisplayHash(args.targetHash)}\``,
+  );
 }
 
 interface SpaceSection {

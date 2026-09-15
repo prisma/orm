@@ -18,6 +18,7 @@ import {
 import { castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { resolveBin } from '../../orm/bin-name';
 import { CliStructuredError } from '../../utils/cli-errors';
 import type { OnControlProgress } from '../types';
 import {
@@ -345,7 +346,9 @@ function mapMarkerCheckFailures(
         spaceId,
         remediation:
           spaceId === appSpaceId
-            ? 'Run `{bin} db update` to advance the marker, or roll the database back to the recorded hash.'
+            ? resolveBin(
+                'Run `{bin} db update` to advance the marker, or roll the database back to the recorded hash.',
+              )
             : `Apply on-disk migrations under \`${migrationsDir}/${spaceId}/\` to advance the marker, or remove the conflicting marker row.`,
       });
       continue;

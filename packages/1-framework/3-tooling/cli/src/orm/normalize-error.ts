@@ -2,6 +2,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { isStructuredError } from '@internal/utils/structured-error';
 import type { Diagnostic, NextAction } from '@prisma/cli-engine/protocol';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
+import { resolveBin } from './bin-name';
 
 /**
  * The shape prisma/prisma's structured errors present to this module. Two kinds carry it: the
@@ -75,7 +76,30 @@ function actionsFromFix(fix: string | undefined): readonly NextAction[] {
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
-    .map((label) => ({ kind: 'user-choice', label }) satisfies NextAction);
+    .map((label) => ({ kind: 'user-choice', label: resolveBin(label) }) satisfies NextAction);
+}
+
+/**
+ * Library-raised errors name the binary as `{bin}`; only the CLI knows the
+ * invocation, so the placeholder is resolved here, at the one boundary every
+ * settled error crosses.
+ */
+function resolveBinInAction(action: NextAction): NextAction {
+  return {
+    ...action,
+    label: resolveBin(action.label),
+    ...ifDefined('command', action.command === undefined ? undefined : resolveBin(action.command)),
+    ...ifDefined('commands', action.commands?.map(resolveBin)),
+  };
+}
+
+function resolveBinInDiagnostic(diagnostic: Diagnostic): Diagnostic {
+  return {
+    ...diagnostic,
+    summary: resolveBin(diagnostic.summary),
+    ...ifDefined('why', diagnostic.why === undefined ? undefined : resolveBin(diagnostic.why)),
+    nextActions: diagnostic.nextActions.map(resolveBinInAction),
+  };
 }
 
 /**
@@ -85,9 +109,9 @@ export function toEngineDiagnostic(error: Error & RaisedError): Diagnostic {
   return {
     code: error.code,
     severity: error.severity ?? 'error',
-    summary: error.message,
-    ...ifDefined('why', error.why),
-    nextActions: error.nextActions ?? actionsFromFix(error.fix),
+    summary: resolveBin(error.message),
+    ...ifDefined('why', error.why === undefined ? undefined : resolveBin(error.why)),
+    nextActions: (error.nextActions ?? actionsFromFix(error.fix)).map(resolveBinInAction),
     ...ifDefined('where', error.where),
     ...ifDefined('meta', error.meta),
     ...ifDefined('docsUrl', error.docsUrl),
@@ -112,7 +136,7 @@ export function normalizeError(error: unknown): CliStructuredError {
   return new CliStructuredError(diagnostic.code, diagnostic.summary, {
     severity: diagnostic.severity,
     nextActions: diagnostic.nextActions,
-    ...ifDefined('diagnostics', error.diagnostics),
+    ...ifDefined('diagnostics', error.diagnostics?.map(resolveBinInDiagnostic)),
     ...ifDefined('why', diagnostic.why),
     ...ifDefined('where', diagnostic.where),
     ...ifDefined('meta', diagnostic.meta),

@@ -193,7 +193,7 @@ describe('typed next actions on the CLI factories', () => {
       {
         kind: 'run-command',
         label: 'Extend the migration graph',
-        command: '{bin} migration plan',
+        command: 'prisma migration plan',
       },
     ]);
   });
@@ -206,7 +206,7 @@ describe('typed next actions on the CLI factories', () => {
       {
         kind: 'run-command',
         label: "See every space's migrations",
-        command: '{bin} migration list',
+        command: 'prisma migration list',
       },
     ]);
   });
@@ -221,12 +221,12 @@ describe('typed next actions on the CLI factories', () => {
       {
         kind: 'run-command',
         label: 'Catch the on-disk graph up to the live marker',
-        command: `{bin} migration plan --from ${graphTip}`,
+        command: `prisma migration plan --from ${graphTip}`,
       },
       {
         kind: 'run-command',
         label: 'Point the local db ref at the live marker',
-        command: `{bin} migration ref set db ${markerHash}`,
+        command: `prisma migration ref set db ${markerHash}`,
       },
       {
         kind: 'user-choice',
@@ -251,12 +251,12 @@ describe('typed next actions on the CLI factories', () => {
       {
         kind: 'run-command',
         label: 'Plan the missing edge',
-        command: `{bin} migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
+        command: `prisma migration plan --from ${fromHash} --to ${targetHash} --name <slug>`,
       },
       {
         kind: 'run-command',
         label: 'Apply it',
-        command: `{bin} db migrate --to ${targetHash}`,
+        command: `prisma db migrate --to ${targetHash}`,
       },
     ]);
   });

@@ -3,8 +3,10 @@
  * `prisma.config.ts` points `defineConfig` from the Postgres config entry at
  * `prisma7Schema('./schema.prisma')` runs `contract emit`, `db sign`, and
  * `db verify` through the real command family against a database built by the
- * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. A schema with a
- * `view` fails `contract emit` with one diagnostic and writes nothing.
+ * SQL Prisma 7.10.0 generated, with exit 0 and zero findings; then cuts over
+ * with `contract convert`, switches `contract:` to the written PSL file, and
+ * emits and verifies the identical contract. A schema with a `view` fails
+ * `contract emit` with one diagnostic and writes nothing.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -14,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { withTempDir, writeProjectManifest } from '../utils/cli-test-helpers';
 import {
   type JourneyContext,
+  runContractConvert,
   runContractEmit,
   runDbSign,
   runDbVerify,
@@ -69,6 +72,45 @@ interface SourceDiagnostic {
 
 function output(run: { readonly stdout: string; readonly stderr: string }): string {
   return `${stripAnsi(run.stderr)}\n${stripAnsi(run.stdout)}`;
+}
+
+interface ComparableContract {
+  readonly profileHash: string;
+  readonly domain: unknown;
+  readonly storage: { readonly storageHash: string };
+  readonly execution?: { readonly executionHash: string };
+}
+
+/** The planes the cutover must preserve: the three hashes and the domain plane. */
+function comparablePlanes(contractJsonPath: string) {
+  const contract = JSON.parse(readFileSync(contractJsonPath, 'utf-8')) as ComparableContract;
+  const requireHash = (value: unknown, name: string): string => {
+    if (typeof value !== 'string' || value.length === 0) {
+      throw new Error(`${name} is missing from ${contractJsonPath}; nothing to compare`);
+    }
+    return value;
+  };
+  return {
+    storageHash: requireHash(contract.storage?.storageHash, 'storageHash'),
+    executionHash:
+      contract.execution === undefined
+        ? 'no execution section'
+        : requireHash(contract.execution.executionHash, 'executionHash'),
+    profileHash: requireHash(contract.profileHash, 'profileHash'),
+    domain: contract.domain,
+  };
+}
+
+/** Switches the project from the Prisma 7 source to the PSL source at `contractPath`. */
+function switchConfigToPslSource(
+  ctx: JourneyContext,
+  connectionString: string,
+  contractPath: string,
+) {
+  const config = readFileSync(join(JOURNEY_FIXTURES, 'prisma.config.with-db.psl.ts'), 'utf-8')
+    .replace(/\{\{DB_URL\}\}/g, () => connectionString)
+    .replace("prismaContract('./contract.prisma'", () => `prismaContract('./${contractPath}'`);
+  writeFileSync(ctx.configPath, config, 'utf-8');
 }
 
 withTempDir(({ createTempDir }) => {
@@ -167,6 +209,24 @@ withTempDir(({ createTempDir }) => {
 
         const sign = await runDbSign(ctx, ['--json']);
         expect(sign.exitCode, `db sign\n${output(sign)}`).toBe(0);
+        expect(sign.presented?.data).toMatchObject({ marker: { created: true } });
+        expect(sign.presented?.data).not.toHaveProperty('marker.previous');
+
+        // Signing again reports the marker it found as the previous one, so
+        // `from` and the ref advancement's "was" name the same contract.
+        const signAgain = await runDbSign(ctx, ['--json']);
+        expect(signAgain.exitCode, `db sign (again)\n${output(signAgain)}`).toBe(0);
+        const signedAgain = signAgain.presented?.data as
+          | { contract: { storageHash: string } }
+          | undefined;
+        expect(signedAgain).toBeDefined();
+        expect(signAgain.presented?.data).toMatchObject({
+          marker: {
+            created: false,
+            updated: false,
+            previous: { storageHash: signedAgain?.contract.storageHash },
+          },
+        });
 
         const verify = await runDbVerify(ctx, ['--json']);
         expect(verify.exitCode, `db verify\n${output(verify)}`).toBe(0);
@@ -176,6 +236,36 @@ withTempDir(({ createTempDir }) => {
           schema: { strict: false },
         });
         expect(output(verify)).not.toMatch(/✖ (?:missing|extra|mismatch):/);
+
+        // Cutover: convert, point contract: at the written file, emit again.
+        const prisma7Planes = comparablePlanes(contractJsonPath);
+        const convert = await runContractConvert(ctx, ['--json']);
+        expect(convert.exitCode, `contract convert\n${output(convert)}`).toBe(0);
+        expect(convert.presented?.data).toMatchObject({
+          ok: true,
+          source: { format: 'prisma7', input: 'schema.prisma' },
+          psl: { path: 'contract.prisma' },
+        });
+        const converted = readFileSync(join(ctx.testDir, 'contract.prisma'), 'utf-8');
+        expect(
+          converted.startsWith(
+            '// use prisma-8\n// Converted from schema.prisma by `prisma contract convert`.\n',
+          ),
+        ).toBe(true);
+
+        switchConfigToPslSource(ctx, db.connectionString, 'contract.prisma');
+        const emitConverted = await runContractEmit(ctx, ['--json']);
+        expect(emitConverted.exitCode, `contract emit (converted)\n${output(emitConverted)}`).toBe(
+          0,
+        );
+        expect(comparablePlanes(contractJsonPath)).toEqual(prisma7Planes);
+
+        const verifyConverted = await runDbVerify(ctx, ['--json']);
+        expect(verifyConverted.exitCode, `db verify (converted)\n${output(verifyConverted)}`).toBe(
+          0,
+        );
+        expect(verifyConverted.presented?.data).toMatchObject({ ok: true, mode: 'full' });
+        expect(output(verifyConverted)).not.toMatch(/✖ (?:missing|extra|mismatch):/);
       },
       timeouts.spinUpPpgDev,
     );

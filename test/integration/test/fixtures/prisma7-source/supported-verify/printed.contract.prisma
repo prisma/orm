@@ -1,0 +1,246 @@
+// use prisma-8
+// Converted from prisma/schema.prisma by `prisma contract convert`.
+
+namespace audit {
+  model AuditLog {
+    id     Int                  @id @default(autoincrement())
+    action pg.enum(AuditAction) @default("CREATE")
+    at     Timestamptz(3)       @default(now())
+
+    @@map("audit_log")
+  }
+
+  model Composite {
+    a Int
+    b String
+
+    @@id([a, b])
+    @@map("Composite")
+  }
+
+  native_enum AuditAction {
+    CREATE = "CREATE"
+    DELETE = "DELETE"
+  }
+}
+
+namespace public {
+  model Defaults {
+    id              Int              @id @default(autoincrement())
+    bigSequence     BigInt           @default(autoincrement())
+    createdAt       Timestamp(3)     @default(now())
+    generated       Uuid             @default(dbgenerated("gen_random_uuid()"))
+    uuid4           String           @default(uuid(4))
+    uuid7           String           @default(uuid(7))
+    cuid1           String           @default(cuid(2))
+    cuid2           String           @default(cuid(2))
+    ulid            String           @default(ulid())
+    nanoid          String           @default(nanoid())
+    nanoidSized     String           @default(nanoid(10))
+    uuidOpt         String?
+    stringLiteral   String           @default("hello")
+    intLiteral      Int              @default(42)
+    bigIntLiteral   BigInt           @default(9007199254740993)
+    floatLiteral    Float            @default(1.5)
+    decimalLiteral  Numeric(65, 30)  @default(12.34)
+    booleanLiteral  Boolean          @default(true)
+    dateTimeLiteral Timestamp(3)     @default(dbgenerated("'2024-01-01T00:00:00.000Z'"))
+    jsonLiteral     Jsonb            @default("{\"a\":1}")
+    bytesLiteral    Bytes            @default(dbgenerated("'\\x68656c6c6f'"))
+    stringList      String[]?        @default(["a", "b"]) @noCheck(elementNotNull)
+    intList         Int[]?           @default([1, 2]) @noCheck(elementNotNull)
+    enumMember      pg.enum(Role)    @default("user")
+    enumList        pg.enum(Role)[]? @default(["ADMIN"]) @noCheck(elementNotNull)
+
+    @@map("Defaults")
+  }
+
+  model User {
+    id        Int       @id @default(autoincrement())
+    email     String
+    profile   Profile?
+    settings  Settings?
+    edited    Post[]    @relation("PostEditor")
+    favorites Post[]    @relation("Favorites")
+    followers User[]    @relation("Followers")
+    following User[]    @relation("Following")
+    posts     Post[]    @relation("PostAuthor")
+
+    @@index([email], unique: true, map: "User_email_key")
+    @@map("User")
+  }
+
+  model Post {
+    id       Int    @id @default(autoincrement())
+    slug     String
+    title    String
+    category String
+    hashed   String
+    authorId Int
+    editorId Int?
+    tags     Tag[]
+    author   User   @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Restrict, onUpdate: Cascade, index: false)
+    editor   User?  @relation("PostEditor", fields: [editorId], references: [id], onDelete: SetNull, onUpdate: Cascade, index: false)
+    fans     User[] @relation("Favorites")
+
+    @@index([title, category], unique: true, map: "Post_title_category_key")
+    @@index([slug], unique: true, map: "Post_slug_key")
+    @@index([category], map: "Post_category_idx")
+    @@index([title, category], map: "post_title_category")
+    @@index([hashed], type: "hash", options: {}, map: "Post_hashed_idx")
+    @@map("Post")
+  }
+
+  model Favorites {
+    A Int
+    B Int
+    a Post @relation("Favorites", fields: [A], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+    b User @relation("Favorites", fields: [B], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+
+    @@id([A, B])
+    @@index([B], map: "_Favorites_B_index")
+    @@map("_Favorites")
+  }
+
+  model Follows {
+    A Int
+    B Int
+    a User @relation("Followers", fields: [A], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+    b User @relation("Following", fields: [B], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+
+    @@id([A, B])
+    @@index([B], map: "_Follows_B_index")
+    @@map("_Follows")
+  }
+
+  model MappedIndexes {
+    id        Int    @id @default(autoincrement())
+    firstName String @map("first_name")
+    other     String
+
+    @@index([firstName, other], unique: true, map: "mapped_indexes_first_name_other_key")
+    @@index([firstName], map: "mapped_indexes_first_name_idx")
+    @@map("mapped_indexes")
+  }
+
+  model NativeTypes {
+    id              Int             @id @default(autoincrement())
+    text            String
+    varChar         VarChar(255)
+    char            Char(10)
+    uuid            Uuid
+    inet            Inet
+    boolean         Boolean
+    integer         Int
+    smallInt        SmallInt
+    bigInt          BigInt
+    real            Real
+    doublePrecision Float
+    decimal         Numeric(10, 2)
+    timestamp       Timestamp(6)
+    timestamptz     Timestamptz(6)
+    date            Date
+    time            Time(6)
+    timetz          Timetz(6)
+    json            Json
+    jsonB           Jsonb
+    byteA           Bytes
+    varCharList     VarChar(32)[]?  @noCheck(elementNotNull)
+    timestamptzOpt  Timestamptz(3)?
+
+    @@map("NativeTypes")
+  }
+
+  model Tag {
+    id    Int    @id @default(autoincrement())
+    name  String
+    posts Post[]
+
+    @@index([name], unique: true, map: "Tag_name_key")
+    @@map("Tag")
+  }
+
+  model PostToTag {
+    A Int
+    B Int
+    a Post @relation(fields: [A], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+    b Tag  @relation(fields: [B], references: [id], onDelete: Cascade, onUpdate: Cascade, index: false)
+
+    @@id([A, B])
+    @@index([B], map: "_PostToTag_B_index")
+    @@map("_PostToTag")
+  }
+
+  model Profile {
+    id     Int    @id @default(autoincrement())
+    bio    String
+    userId Int
+    user   User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade, index: false)
+
+    @@index([userId], unique: true, map: "Profile_userId_key")
+    @@map("Profile")
+  }
+
+  model Scalars {
+    id           Int                @id @default(autoincrement())
+    string       String
+    stringOpt    String?
+    stringList   String[]?          @noCheck(elementNotNull)
+    boolean      Boolean
+    booleanOpt   Boolean?
+    booleanList  Boolean[]?         @noCheck(elementNotNull)
+    int          Int
+    intOpt       Int?
+    intList      Int[]?             @noCheck(elementNotNull)
+    bigInt       BigInt
+    bigIntOpt    BigInt?
+    bigIntList   BigInt[]?          @noCheck(elementNotNull)
+    float        Float
+    floatOpt     Float?
+    floatList    Float[]?           @noCheck(elementNotNull)
+    decimal      Numeric(65, 30)
+    decimalOpt   Numeric(65, 30)?
+    decimalList  Numeric(65, 30)[]? @noCheck(elementNotNull)
+    dateTime     Timestamp(3)
+    dateTimeOpt  Timestamp(3)?
+    dateTimeList Timestamp(3)[]?    @noCheck(elementNotNull)
+    json         Jsonb
+    jsonOpt      Jsonb?
+    jsonList     Jsonb[]?           @noCheck(elementNotNull)
+    bytes        Bytes
+    bytesOpt     Bytes?
+    bytesList    Bytes[]?           @noCheck(elementNotNull)
+    role         pg.enum(Role)
+    roleOpt      pg.enum(Role)?
+    roleList     pg.enum(Role)[]?   @noCheck(elementNotNull)
+
+    @@map("Scalars")
+  }
+
+  model Settings {
+    id     Int    @id @default(autoincrement())
+    theme  String
+    userId Int?
+    user   User?  @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade, index: false)
+
+    @@index([userId], unique: true, map: "Settings_userId_key")
+    @@map("Settings")
+  }
+
+  model Timestamps {
+    id           Int                                                   @id @default(autoincrement())
+    createdAt    Timestamp(3)                                          @default(now())
+    updatedAt    temporal.timestamp(3, onCreate: now, onUpdate: now)
+    updatedAtOpt Timestamp(3)?
+    updatedAtNow Timestamp(3)                                          @default(now())
+    updatedAtTz  temporal.timestamptz(6, onCreate: now, onUpdate: now)
+
+    @@map("Timestamps")
+  }
+
+  native_enum Role {
+    user = "user"
+    ADMIN = "ADMIN"
+    @@map("user_role")
+  }
+}

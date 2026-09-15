@@ -48,6 +48,95 @@ function makeNs(
 }
 
 describe('printPslFromAst', () => {
+  const idOnlyAst: PslDocumentAst = {
+    kind: 'document',
+    sourceId: 't',
+    namespaces: [
+      makeNs(
+        UNSPECIFIED_PSL_NAMESPACE_ID,
+        [
+          {
+            kind: 'model',
+            name: 'X',
+            fields: [
+              {
+                kind: 'field',
+                name: 'id',
+                typeName: 'Int',
+                optional: false,
+                list: false,
+                attributes: [attr('field', 'id', [], 0)],
+                span: span(0),
+              },
+            ],
+            attributes: [],
+            span: span(0),
+          },
+        ],
+        [],
+        0,
+      ),
+    ],
+    span: span(0),
+  };
+
+  it('prints an optional list field as Type[]?', () => {
+    const ast: PslDocumentAst = {
+      kind: 'document',
+      sourceId: 't',
+      namespaces: [
+        makeNs(
+          UNSPECIFIED_PSL_NAMESPACE_ID,
+          [
+            {
+              kind: 'model',
+              name: 'X',
+              fields: [
+                {
+                  kind: 'field',
+                  name: 'id',
+                  typeName: 'Int',
+                  optional: false,
+                  list: false,
+                  attributes: [attr('field', 'id', [], 0)],
+                  span: span(0),
+                },
+                {
+                  kind: 'field',
+                  name: 'tags',
+                  typeName: 'String',
+                  optional: true,
+                  list: true,
+                  attributes: [],
+                  span: span(1),
+                },
+              ],
+              attributes: [],
+              span: span(0),
+            },
+          ],
+          [],
+          0,
+        ),
+      ],
+      span: span(0),
+    };
+    expect(printPslFromAst(ast)).toContain('tags String[]?');
+  });
+
+  it('opens with the infer header when no header is given', () => {
+    expect(printPslFromAst(idOnlyAst)).toMatch(
+      /^\/\/ use prisma-8\n\/\/ Contract inferred from the live database schema\. Edit as needed, then run `prisma contract emit`\.\n/,
+    );
+  });
+
+  it('prints the given header lines after the use prisma-8 directive', () => {
+    const header = '// Converted from prisma/schema.prisma by `prisma contract convert`.';
+    const printed = printPslFromAst(idOnlyAst, { header });
+    expect(printed.startsWith(`// use prisma-8\n${header}\n`)).toBe(true);
+    expect(printed).not.toContain('inferred from the live database');
+  });
+
   it('prints model with @id field', () => {
     const models: PslModel[] = [
       {

@@ -54,6 +54,20 @@ export function hasPslContractInfer<TFamilyId extends string, TSchemaIR>(
 }
 
 /**
+ * Capability declaring that a family can print a loaded contract as a PSL
+ * document AST in the current dialect. Consumed by `prisma contract convert`.
+ */
+export interface PslContractPrintCapable<TContract = unknown> {
+  printPslContract(contract: TContract): PslDocumentAst;
+}
+
+export function hasPslContractPrint<TFamilyId extends string, TSchemaIR>(
+  instance: ControlFamilyInstance<TFamilyId, TSchemaIR>,
+): instance is ControlFamilyInstance<TFamilyId, TSchemaIR> & PslContractPrintCapable {
+  return typeof Reflect.get(instance, 'printPslContract') === 'function';
+}
+
+/**
  * Capability declaring that a family can render a textual preview of migration
  * operations for the CLI's "DDL preview" output. SQL families emit
  * `language: 'sql'` statements; Mongo families emit `language: 'mongodb-shell'`.

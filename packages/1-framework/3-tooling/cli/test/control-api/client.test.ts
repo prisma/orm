@@ -960,6 +960,39 @@ describe('ControlClient progress emission', () => {
     });
   });
 
+  describe('printPslContract()', () => {
+    it('delegates to family instance when capability is implemented', () => {
+      const fakeAst = { kind: 'document', namespaces: [] } as unknown;
+      const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
+      (mockFamilyInstance as unknown as { printPslContract: (contract: unknown) => unknown })[
+        'printPslContract'
+      ] = (contract: unknown) => {
+        void contract;
+        return fakeAst;
+      };
+
+      const client = createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+      });
+
+      expect(client.printPslContract({})).toBe(fakeAst);
+    });
+
+    it('returns undefined when family does not implement the capability', () => {
+      const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
+
+      const client = createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+      });
+
+      expect(client.printPslContract({})).toBeUndefined();
+    });
+  });
+
   describe('toOperationPreview()', () => {
     it('delegates to family instance when capability is implemented', () => {
       const fakePreview = {

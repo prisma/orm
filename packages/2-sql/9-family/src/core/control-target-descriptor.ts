@@ -63,6 +63,14 @@ export interface SqlControlTargetDescriptor<
     describedContracts?: readonly SqlDescribedContractSpace[],
   ) => PslDocumentAst;
   /**
+   * Contract→PSL printing for `contract convert`: the loaded contract as a
+   * Prisma 8 PSL document that interprets back to the same contract. Target
+   * logic (owns the dialect spellings), so it lives on the descriptor.
+   * Optional: the family instance throws `CONTRACT.CONVERT_UNSUPPORTED` when
+   * it is absent.
+   */
+  readonly printPslContract?: (contract: TContract) => PslDocumentAst;
+  /**
    * The full-tree node diff the family verify verdict derives from —
    * expected-tree derivation, pre-diff normalization, the generic differ,
    * and ownership scoping, all target-side. The family applies strict

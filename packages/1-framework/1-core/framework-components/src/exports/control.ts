@@ -11,6 +11,7 @@ export type {
   MigratableTargetDescriptor,
   OperationPreviewCapable,
   PslContractInferCapable,
+  PslContractPrintCapable,
   SchemaSubjectClassifierCapable,
   SchemaViewCapable,
 } from '../control/control-capabilities';
@@ -18,6 +19,7 @@ export {
   hasMigrations,
   hasOperationPreview,
   hasPslContractInfer,
+  hasPslContractPrint,
   hasSchemaSubjectClassifier,
   hasSchemaView,
 } from '../control/control-capabilities';

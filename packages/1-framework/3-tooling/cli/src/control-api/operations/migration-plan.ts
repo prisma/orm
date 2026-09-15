@@ -562,7 +562,7 @@ async function executeMigrationPlanCommandInner(
           })),
           emittedExtensionDirs,
           ...(preview !== undefined ? { preview } : {}),
-          summary: buildAutoBaselinePlanSummary(0, emittedExtensionDirs.length),
+          summary: buildBaselineOnlyPlanSummary(baselineOps.length, emittedExtensionDirs.length),
           timings: { total: Date.now() - startTime },
         };
         return ok(result);
@@ -735,6 +735,23 @@ async function executeMigrationPlanCommandInner(
  */
 function buildPlanSummary(plannedOpsCount: number, emittedExtensionDirsCount: number): string {
   const base = `Planned ${plannedOpsCount} operation(s)`;
+  if (emittedExtensionDirsCount === 0) return base;
+  const noun =
+    emittedExtensionDirsCount === 1 ? 'extension-space migration' : 'extension-space migrations';
+  return `${base}; materialised ${emittedExtensionDirsCount} ${noun}`;
+}
+
+/**
+ * The `db` ref already names the contract and no on-disk migration reaches it,
+ * so the plan records the current schema as a baseline bundle and proposes
+ * nothing: the operations it lists are what the baseline records, and they
+ * are already in the database.
+ */
+function buildBaselineOnlyPlanSummary(
+  baselineOpsCount: number,
+  emittedExtensionDirsCount: number,
+): string {
+  const base = `Recorded the current schema as a baseline (${baselineOpsCount} operation(s)); nothing to apply`;
   if (emittedExtensionDirsCount === 0) return base;
   const noun =
     emittedExtensionDirsCount === 1 ? 'extension-space migration' : 'extension-space migrations';

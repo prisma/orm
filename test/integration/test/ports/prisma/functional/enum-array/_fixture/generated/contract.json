@@ -47,6 +47,12 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Plan",
+                  "namespaceId": "public",
+                  "plane": "domain"
                 }
               }
             },

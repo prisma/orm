@@ -8,6 +8,8 @@ import {
   postgresTarget,
   symbolTableInputFromParseArgs,
 } from './fixtures';
+import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
+import { unboundTables } from './unbound-tables';
 
 const baseInput = {
   target: postgresTarget,
@@ -190,8 +192,127 @@ model Profiles {
           code: 'PSL_NON_UNIQUE_BACKRELATION',
           message: expect.stringContaining('Users.profiles'),
         }),
+        expect.objectContaining({
+          message: expect.stringContaining('unique @@index([...], unique: true)'),
+        }),
       ]),
     );
+  });
+
+  it('resolves a 1:1 back-relation whose FK is covered by a unique @@index and keeps it an index', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model User {
+  id      Int @id
+  profile Profile?
+}
+
+model Profile {
+  id     Int @id
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+  @@index([userId], unique: true, map: "Profile_userId_key")
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const models = modelsOf(result.value) as RelationModels;
+    expect(models['User']?.relations).toEqual({
+      profile: {
+        to: crossRef('Profile', 'public'),
+        cardinality: '1:1',
+        nullable: true,
+        on: { localFields: ['id'], targetFields: ['userId'] },
+      },
+    });
+    const profile = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))[
+      'profile'
+    ];
+    expect(profile?.uniques).toEqual([]);
+    expect(profile?.indexes).toEqual([
+      { name: 'Profile_userId_key', unique: true, columns: ['userId'] },
+    ]);
+  });
+
+  it('resolves a 1:1 back-relation whose composite FK is covered by a unique @@index in another column order', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model Users {
+  tenantId Int
+  id       Int
+  profiles Profiles?
+  @@id([tenantId, id])
+}
+
+model Profiles {
+  id           Int @id
+  userTenantId Int
+  userId       Int
+  user Users @relation(fields: [userTenantId, userId], references: [tenantId, id])
+  @@index([userId, userTenantId], unique: true)
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const models = modelsOf(result.value) as RelationModels;
+    expect(models['Users']?.relations?.['profiles']).toMatchObject({ cardinality: '1:1' });
+  });
+
+  it('rejects a singular back-relation when the only unique index over the FK is partial', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model User {
+  id      Int @id
+  profile Profile?
+}
+
+model Profile {
+  id     Int @id
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+  @@index([userId], unique: true, where: "id > 0", name: "profile_user_active")
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map((d) => d.code)).toEqual(['PSL_NON_UNIQUE_BACKRELATION']);
+  });
+
+  it('rejects a singular back-relation when the only unique index over the FK is an expression index', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model User {
+  id      Int @id
+  profile Profile?
+}
+
+model Profile {
+  id     Int @id
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+  @@index(expression: "(\\"userId\\")", unique: true, name: "profile_user_expr")
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map((d) => d.code)).toContain('PSL_NON_UNIQUE_BACKRELATION');
   });
 
   it('rejects a singular back-relation whose FK is only a subset of a composite @@unique', () => {

@@ -53,6 +53,12 @@
                 "type": {
                   "codecId": "pg/text@1",
                   "kind": "scalar"
+                },
+                "valueSet": {
+                  "entityKind": "enum",
+                  "entityName": "Enum",
+                  "namespaceId": "public",
+                  "plane": "domain"
                 }
               },
               "id": {

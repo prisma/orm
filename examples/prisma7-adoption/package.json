@@ -13,6 +13,7 @@
     "emit": "prisma contract emit",
     "sign": "prisma db sign",
     "verify": "prisma db verify",
+    "convert": "prisma contract convert",
     "seed": "tsx scripts/seed.ts",
     "start": "tsx src/main.ts",
     "test": "vitest run",

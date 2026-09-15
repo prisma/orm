@@ -30,10 +30,15 @@ export interface PrintPslOptions {
    * emitted as-is.
    */
   readonly codecLookup?: CodecLookup;
+  /**
+   * The comment lines printed after the `// use prisma-8` directive. Defaults
+   * to the `contract infer` wording; `contract convert` passes its own.
+   */
+  readonly header?: string;
 }
 
 export function printPslFromAst(ast: PslDocumentAst, options: PrintPslOptions = {}): string {
-  const doc = astDocumentToPrintDocument(ast);
+  const doc = astDocumentToPrintDocument(ast, options.header);
   return serializePrintDocument(doc, {
     ...ifDefined('pslBlockDescriptors', options.pslBlockDescriptors),
     ...ifDefined('codecLookup', options.codecLookup),

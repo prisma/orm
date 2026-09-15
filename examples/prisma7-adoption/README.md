@@ -15,7 +15,8 @@ pnpm v7:generate         # prisma7 generate: the Prisma 7 client
 pnpm seed                # rows written through the Prisma 7 client
 pnpm start               # the same rows read and written through the Prisma 8 ORM
 pnpm v7:read             # the same rows read through Prisma 7 again
-pnpm test                # the whole story on a fresh database, including the second migration
+pnpm convert             # prisma contract convert: the cutover file, generated/prisma8/contract.prisma
+pnpm test                # the whole story on a fresh database, including the second migration and the cutover
 ```
 
 `prisma/migrations/` holds two Prisma 7 migrations, the initial one and one adding `Post.viewCount`. On a fresh database `pnpm v7:migrate` applies both at once, so to watch the refresh loop that every later Prisma 7 migration needs, run `pnpm test`: it rolls a scratch copy of this example back to the first migration, runs the commands above, then lands the second migration and runs `pnpm emit`, `pnpm sign`, and `pnpm verify` again. After every `prisma7 migrate deploy` (or `migrate dev`) that is the whole loop: emit, sign, verify. Nothing else changes.
@@ -58,9 +59,24 @@ Two rules to know before you start:
 
 `src/db.ts` instantiates both clients over the same `DATABASE_URL`, as the guide's `src/db.ts` does: `prisma` (Prisma 7, through `@prisma/adapter-pg`) and `db` (Prisma 8, `postgres<Contract>({ url, contractJson })`). `scripts/seed.ts` and `src/v7-read.ts` are the routes that have not moved: they use the Prisma 7 client. `src/main.ts` is a route that has: it lists users with their posts and the posts' tags through `db.orm.public.User.include('posts', ...)`, reaching the tags through the `_PostToTag` junction Prisma 7 created, creates a post connected to an existing tag through `db.orm.public.Post.include('tags').create({ ..., tags: (tags) => tags.connect([...]) })`, and renames a user through `db.orm.public.User.where(...).update(...)`, printing the `updatedAt` before and after: Prisma 8's own generator sets it, as Prisma 7's `@updatedAt` did. Run `pnpm start` and then `pnpm v7:read` to see the post Prisma 8 wrote come back through Prisma 7.
 
-### 4. Transfer migration ownership, then 5. remove Prisma 7
+### 4. Transfer migration ownership (cutover)
 
-Out of scope here. When the last route has moved, follow the guide's phase 4 (`prisma migration plan --name baseline`, `prisma db sign`, `prisma migration ref set db <timestamp>_baseline`) and phase 5.
+When the last route has moved, Prisma 8 takes the schema over. The guide's phase 4 is `prisma migration plan --name baseline`, `prisma db sign`, `prisma migration ref set db <timestamp>_baseline`; this example puts one step in front of it, because the contract still reads the Prisma 7 file:
+
+```bash
+pnpm convert                                                    # prisma contract convert: writes generated/prisma8/contract.prisma
+prisma contract emit --config prisma.config.cutover.ts          # same contract.json, now from the Prisma 8 file
+prisma db verify --config prisma.config.cutover.ts              # zero findings
+prisma migration plan --name baseline --config prisma.config.cutover.ts
+prisma db sign --config prisma.config.cutover.ts
+prisma migration ref set db <timestamp>_baseline --config prisma.config.cutover.ts
+```
+
+`prisma contract convert` prints the contract the Prisma 7 source produced as Prisma 8 PSL: the same storage, execution, and profile hashes and the same domain plane, so the marker `pnpm sign` wrote stays valid. Native enum members come back named after their database values (`USER @map("user")` becomes `user = "user"`), and every relation carries `index: false`, because Prisma 7 created no foreign-key indexes; see the [CLI README](../../packages/1-framework/3-tooling/cli/README.md) for the full list of spellings. `prisma.config.cutover.ts` is `prisma.config.ts` with `contract: 'generated/prisma8/contract.prisma'` in place of `prisma7Schema(...)`; in your own project you edit `prisma.config.ts` in place, and the `--config` flags disappear. `migration plan --name baseline` writes `migrations/app/<timestamp>_baseline/` describing the schema Prisma 8 now owns; `db sign` records it, and the `db` ref names it. `pnpm test` runs this sequence after the second migration.
+
+### 5. Remove Prisma 7
+
+The guide's phase 5: remove `@prisma/prisma7`, `@prisma/client`, and `@prisma/adapter-pg`, delete `prisma7.config.ts`, `prisma/` (schema and Prisma 7 migrations), and `generated/prisma7/`, and drop the `v7:*` scripts. This example keeps them, because showing both side by side is its purpose.
 
 ## What a Prisma 7 user meets along the way
 
@@ -81,10 +97,11 @@ Out of scope here. When the last route has moved, follow the guide's phase 4 (`p
 | `prisma/schema.prisma`, `prisma/migrations/` | The Prisma 7 schema and its migrations; Prisma 7 owns both. |
 | `prisma7.config.ts` | Prisma 7's config (`@prisma/prisma7/config`). |
 | `prisma.config.ts` | Prisma 8's config; `prisma7Schema('prisma/schema.prisma')` is the contract source. |
+| `prisma.config.cutover.ts` | Prisma 8's config after the cutover; `generated/prisma8/contract.prisma` (written by `pnpm convert`) is the contract source. |
 | `generated/prisma8/` | `contract.json` and `contract.d.ts` emitted by Prisma 8 (committed). |
 | `generated/prisma7/` | The Prisma 7 client (`pnpm v7:generate`, gitignored). |
 | `src/db.ts` | Both clients over one `DATABASE_URL`. |
 | `src/main.ts` | Routes that moved to Prisma 8. |
 | `scripts/seed.ts`, `src/v7-read.ts` | Routes still on Prisma 7. |
 | `scripts/db-start.ts` | In-process Postgres for local runs. |
-| `test/adoption.test.ts` | The whole story on a fresh database, including the second migration. |
+| `test/adoption.test.ts` | The whole story on a fresh database, including the second migration and the cutover. |

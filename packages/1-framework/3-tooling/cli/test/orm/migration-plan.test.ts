@@ -174,8 +174,9 @@ describe('migration plan', () => {
 
     expect(run.presented?.presentation.next).toEqual([
       { kind: 'edit-file', label: `Review ${dir}` },
-      { kind: 'run-command', label: 'Apply the migration', command: '{bin} db migrate' },
+      { kind: 'run-command', label: 'Apply the migration', command: 'prisma db migrate' },
     ]);
+    expect(run.stderr).not.toContain('{bin}');
   });
 
   it('reports no changes without writing a package', async () => {
@@ -212,6 +213,39 @@ describe('migration plan', () => {
       baselineDir: join('migrations', 'app', dirs[0] ?? ''),
       dir: join('migrations', 'app', dirs[1] ?? ''),
     });
+  });
+
+  it('a baseline-only plan says the schema was recorded and proposes nothing to apply', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+    await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_TO });
+    await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_TO });
+
+    const run = await harness(project).run(['migration', 'plan', '--name', 'baseline'], {
+      cwd: project.dir,
+      isTty: { stdout: true },
+    });
+    const dirs = await plannedDirs(project);
+    const baselineDir = join('migrations', 'app', dirs[0] ?? '');
+
+    expect(run.exitCode).toBe(0);
+    expect(dirs.map((entry) => entry.replace(/^\d+T\d+_/, ''))).toEqual(['baseline']);
+    expect(run.presented?.data).toMatchObject({
+      from: HASH_TO,
+      to: HASH_TO,
+      baselineDir,
+      summary: expect.stringMatching(
+        /^Recorded the current schema as a baseline \(\d+ operation\(s\)\); nothing to apply$/,
+      ),
+    });
+    expect(run.presented?.presentation.next).toEqual([
+      { kind: 'edit-file', label: `Review ${baselineDir}` },
+      {
+        kind: 'run-command',
+        label: 'Confirm the database is up to date',
+        command: 'prisma migration status',
+      },
+    ]);
+    expect(JSON.stringify(run.presented?.presentation.human)).not.toContain('Apply the migration');
   });
 
   it('renders extension-space dirs under the configured migrations directory', async () => {

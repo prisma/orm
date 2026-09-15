@@ -121,6 +121,8 @@ The source interprets every construct Prisma 7 creates in Postgres: scalars and 
 
 Two things `db verify` gained alongside this source benefit every Prisma 8 project: it now recognises three more default spellings introspection reports (an enum literal cast to a type in another schema, a zoneless `timestamp` literal, and an `ARRAY[...]` list default), and it now compares a schema-qualified mixed-case type name such as `audit."AuditAction"` correctly.
 
+**Cutover.** `prisma7Schema` is for the side-by-side period; when the project leaves Prisma 7, `prisma contract convert` writes the same contract as a Prisma 8 `contract.prisma` (identical hashes and domain plane, so the signed marker stays valid), and `contract:` switches to that path. The order is the upgrade guide's phase 4: convert, switch `contract:`, `prisma contract emit`, `prisma migration plan --name baseline`, `prisma db sign`, `prisma migration ref set db <timestamp>_baseline`, then remove Prisma 7. See the `prisma contract convert` section of the CLI README and `examples/prisma7-adoption`.
+
 ### `@internal/postgres/runtime`
 
 `@internal/postgres/runtime` exposes a single `postgres(...)` helper that composes the Postgres execution stack and returns query/runtime roots:

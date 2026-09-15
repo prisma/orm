@@ -232,7 +232,10 @@ describe('migration status', () => {
         severity: 'warn',
         message:
           'Database was updated outside the migration system (marker for space "app" does not match any migration)',
-        hints: [expect.stringContaining('db sign'), expect.stringContaining('db update')],
+        hints: [
+          "Run 'prisma db sign' to overwrite the marker if the database already matches the contract",
+          "Run 'prisma db update' to push the current contract to the database",
+        ],
       },
     ]);
   });
@@ -300,7 +303,7 @@ describe('migration status', () => {
     expect(run.presented?.presentation.human.at(-1)).toEqual({
       kind: 'summary',
       status: 'warn',
-      text: `1 pending — run \`{bin} db migrate --to ${HASH_HEAD.slice(0, 12)}\``,
+      text: `1 pending — run \`prisma db migrate --to ${HASH_HEAD.slice(0, 12)}\``,
     });
   });
 

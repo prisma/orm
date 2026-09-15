@@ -1,7 +1,7 @@
 # Prisma 7 contract source and converter — Plan
 
 **Spec:** `projects/prisma7-contract-source/spec.md`
-**Tracker:** none; the operator decided Linear is not needed for this project. **PR for slices 1 and 4:** https://github.com/prisma/orm/pull/30287
+**Tracker:** none; the operator decided Linear is not needed for this project. **PR for slices 1 and 4:** https://github.com/prisma/orm/pull/30287. **PR for slice 3:** https://github.com/prisma/orm/pull/30300 (base `prisma7-contract-source`; retarget to `main` when 30287 merges).
 
 ## At a glance
 
@@ -21,9 +21,9 @@ One stack of three slices. Slice 1 lands the parser additions, the config change
    - **Outcome:** A Mongo project configured with `prisma7Schema(...)` emits and signs against collections shaped by Prisma 7.
    - **Builds on:** slice 1's parser grammar and factory shape.
    - **Hands to:** the Mongo fixture corpus for slice 3's round trip.
-   - **Focus:** new `packages/2-mongo-family/2-authoring/contract-prisma7`, `packages/3-extensions/mongo/src/config/define-config.ts`. Verification item 5 first.
+   - **Focus:** new `packages/2-mongo-family/2-authoring/contract-prisma7`, `packages/3-extensions/mongo/src/config/define-config.ts`. Verification item 5 first. Also the Mongo contract-to-PSL printer hook (moved here from slice 3 on 2026-09-14: it needs the Mongo source and fixtures).
 
-3. **Slice `03-contract-to-psl-and-convert`** — Linear: TML-____
+3. **Slice `03-contract-to-psl-and-convert`** — built, reviewed, QA run; **PR https://github.com/prisma/orm/pull/30300** (stacked on 30287)
    - **Outcome:** `prisma contract convert` writes a Prisma 8 `contract.prisma` whose contract hashes equal the Prisma 7 source's, for every fixture of both families.
    - **Builds on:** slices 1 and 2 (fixtures and contracts). The Postgres printer may begin after slice 1 alone.
    - **Hands to:** the cutover path; project close-out.

@@ -9,6 +9,6 @@
     "code": "PRISMA7_RELATION_UNRESOLVED",
     "file": "schema.prisma",
     "line": 8,
-    "message": "Backrelation field \"User.notes\" is singular, but the matching FK on \"Note\" (fields \"userId\") is not unique. A singular back-relation implies at most one related row; add @unique (or @@unique([...])) to the FK fields, or make \"notes\" a list."
+    "message": "Backrelation field \"User.notes\" is singular, but the matching FK on \"Note\" (fields \"userId\") is not unique. A singular back-relation implies at most one related row; add @unique (or @@unique([...]), or a unique @@index([...], unique: true) over the same columns) to the FK fields, or make \"notes\" a list."
   }
 ]

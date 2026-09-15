@@ -116,7 +116,7 @@ describe('contract infer', () => {
       ok: true,
       summary: 'Contract inferred successfully',
       target: { familyId: 'sql', id: 'postgres' },
-      psl: { path: 'generated/contract.prisma' },
+      psl: { path: 'generated/contract.prisma', overwrote: false },
       meta: { dbUrl: 'postgres://****:****@localhost:5432/appdb' },
       timings: { total: expect.any(Number) },
     });
@@ -170,16 +170,17 @@ describe('contract infer', () => {
     await writeFile(join(dir, 'contract.prisma'), 'model Stale {}\n', 'utf-8');
 
     const run2 = await harness(ormConfig(dir)).run(
-      ['contract', 'infer', '--output', 'contract.prisma', '--json'],
-      { cwd: dir },
+      ['contract', 'infer', '--output', 'contract.prisma'],
+      { cwd: dir, isTty: { stdout: true } },
     );
 
-    expect(run1.events).not.toContainEqual(expect.objectContaining({ severity: 'warn' }));
+    expect(run1.presented?.data).toMatchObject({ psl: { overwrote: false } });
     expect(run2.exitCode).toBe(0);
-    expect(run2.events).toContainEqual({
-      kind: 'message',
-      severity: 'warn',
-      text: 'Overwriting existing file: contract.prisma',
+    expect(run2.presented?.data).toMatchObject({ psl: { overwrote: true } });
+    expect(run2.presented?.presentation.human).toContainEqual({
+      kind: 'summary',
+      status: 'warn',
+      text: [{ text: 'Overwrote existing file ' }, { text: 'contract.prisma', tone: 'identifier' }],
     });
     expect(await readFile(join(dir, 'contract.prisma'), 'utf-8')).toBe(PSL);
   });

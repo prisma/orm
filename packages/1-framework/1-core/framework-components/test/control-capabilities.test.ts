@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   hasOperationPreview,
   hasPslContractInfer,
+  hasPslContractPrint,
   hasSchemaView,
 } from '../src/control/control-capabilities';
 import type { ControlFamilyInstance } from '../src/control/control-instances';
@@ -45,6 +46,30 @@ describe('hasPslContractInfer', () => {
     } as unknown as ControlFamilyInstance<'sql', unknown>;
 
     expect(hasPslContractInfer(instance)).toBe(false);
+  });
+});
+
+describe('hasPslContractPrint', () => {
+  it('returns true when instance exposes printPslContract function', () => {
+    const instance = {
+      ...baseInstance,
+      printPslContract: (_contract: unknown) => SYNTHETIC_AST,
+    } as ControlFamilyInstance<'sql', unknown>;
+
+    expect(hasPslContractPrint(instance)).toBe(true);
+  });
+
+  it('returns false when instance does not declare printPslContract', () => {
+    expect(hasPslContractPrint(baseInstance)).toBe(false);
+  });
+
+  it('returns false when printPslContract is present but not a function', () => {
+    const instance = {
+      ...baseInstance,
+      printPslContract: 'not a function',
+    } as unknown as ControlFamilyInstance<'sql', unknown>;
+
+    expect(hasPslContractPrint(instance)).toBe(false);
   });
 });
 

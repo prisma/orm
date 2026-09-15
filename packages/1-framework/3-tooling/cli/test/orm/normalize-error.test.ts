@@ -3,7 +3,7 @@ import { structuredError } from '@internal/utils/structured-error';
 import { CliStructuredError as EngineStructuredError } from '@prisma/cli-engine/protocol';
 import { describe, expect, it } from 'vitest';
 import { normalizeError, toEngineDiagnostic } from '../../src/orm/normalize-error';
-import { errorSpaceNotFound } from '../../src/utils/cli-errors';
+import { errorSpaceNotFound, requireLiveDatabase } from '../../src/utils/cli-errors';
 
 describe('normalizeError', () => {
   describe('a prisma/prisma error carrying fix prose', () => {
@@ -16,7 +16,7 @@ describe('normalizeError', () => {
 
     it('turns the fix prose into a single next action', () => {
       expect(normalizeError(raised).nextActions).toEqual([
-        { kind: 'user-choice', label: 'Run `{bin} migration list` to see every space.' },
+        { kind: 'user-choice', label: 'Run `prisma migration list` to see every space.' },
       ]);
     });
 
@@ -32,7 +32,7 @@ describe('normalizeError', () => {
         where: { path: '/app/migrations' },
         meta: { spaceId: 'billing' },
         nextActions: [
-          { kind: 'user-choice', label: 'Run `{bin} migration list` to see every space.' },
+          { kind: 'user-choice', label: 'Run `prisma migration list` to see every space.' },
         ],
       });
     });
@@ -52,8 +52,8 @@ describe('normalizeError', () => {
 
       expect(normalizeError(multiline).nextActions).toEqual([
         { kind: 'user-choice', label: 'Plan the missing edge, then apply it:' },
-        { kind: 'user-choice', label: '1. {bin} migration plan' },
-        { kind: 'user-choice', label: '2. {bin} db migrate' },
+        { kind: 'user-choice', label: '1. prisma migration plan' },
+        { kind: 'user-choice', label: '2. prisma db migrate' },
       ]);
     });
   });
@@ -75,7 +75,7 @@ describe('normalizeError', () => {
         {
           kind: 'run-command',
           label: "See every space's migrations",
-          command: '{bin} migration list',
+          command: 'prisma migration list',
         },
       ]);
     });
@@ -103,7 +103,7 @@ describe('normalizeError', () => {
         why: 'storage.storageHash is missing',
         where: { path: '/app/contract.json' },
         meta: { target: 'postgres' },
-        nextActions: [{ kind: 'user-choice', label: 'Run `{bin} contract emit` to regenerate.' }],
+        nextActions: [{ kind: 'user-choice', label: 'Run `prisma contract emit` to regenerate.' }],
       });
     });
   });
@@ -210,8 +210,43 @@ describe('toEngineDiagnostic', () => {
       summary: 'Config file not found',
       why: 'No prisma.config.ts in /app',
       where: { path: '/app/prisma.config.ts' },
-      nextActions: [{ kind: 'user-choice', label: "Run '{bin} orm init' to create a config file" }],
+      nextActions: [
+        { kind: 'user-choice', label: "Run 'prisma orm init' to create a config file" },
+      ],
     });
+  });
+
+  it('resolves the {bin} placeholder in typed run-command actions and in why', () => {
+    const raised = new CliStructuredError('MIGRATION.NO_PATH', 'No migration path', {
+      why: 'Run `{bin} migration plan` to extend the graph',
+      nextActions: [
+        { kind: 'run-command', label: 'Plan with {bin}', command: '{bin} migration plan' },
+      ],
+    });
+
+    const diagnostic = toEngineDiagnostic(raised);
+    expect(diagnostic.why).toBe('Run `prisma migration plan` to extend the graph');
+    expect(diagnostic.nextActions).toEqual([
+      { kind: 'run-command', label: 'Plan with prisma', command: 'prisma migration plan' },
+    ]);
+    expect(JSON.stringify(normalizeError(raised).toEnvelope?.() ?? diagnostic)).not.toContain(
+      '{bin}',
+    );
+  });
+
+  it('resolves the binary in a retry command handed to the live-database requirement', () => {
+    const error = requireLiveDatabase({
+      dbConnection: undefined,
+      hasDriver: true,
+      why: 'needs a database',
+      commandName: 'migration status',
+      retryCommand: '{bin} migration status --from <contract>',
+    });
+
+    expect(error).not.toBeNull();
+    const envelope = JSON.stringify(normalizeError(error));
+    expect(envelope).toContain('prisma migration status --from <contract>');
+    expect(envelope).not.toContain('{bin}');
   });
 
   it('always carries a next-action list', () => {

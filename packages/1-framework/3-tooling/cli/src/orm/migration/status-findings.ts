@@ -2,6 +2,7 @@ import { ifDefined } from '@internal/utils/defined';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
 import type { StatusDiagnosticJson } from '../../commands/json/schemas';
 import { runCommandAction } from '../../utils/next-actions';
+import { resolveBin } from '../bin-name';
 
 /**
  * One condition `migration status` found while still delivering its full
@@ -27,7 +28,7 @@ export function contractUnreadableFinding(reason: string): StatusFinding {
       code: 'CONTRACT.UNREADABLE',
       severity: 'warn',
       message,
-      hints: ["Run '{bin} contract emit' to generate a valid contract"],
+      hints: [resolveBin("Run '{bin} contract emit' to generate a valid contract")],
     },
     diagnostic: {
       code: 'CONTRACT.UNREADABLE',
@@ -44,7 +45,7 @@ export function markerNotInHistoryFinding(space: string): StatusFinding {
   const hints = [
     "Run '{bin} db sign' to overwrite the marker if the database already matches the contract",
     "Run '{bin} db update' to push the current contract to the database",
-  ];
+  ].map(resolveBin);
   return {
     document: { code: 'MIGRATION.MARKER_NOT_IN_HISTORY', severity: 'warn', message, hints },
     diagnostic: {

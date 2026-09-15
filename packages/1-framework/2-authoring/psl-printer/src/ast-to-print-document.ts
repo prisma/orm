@@ -22,10 +22,15 @@ import type { PrinterField, PrinterModel, PrinterNamedType } from './types';
 // add `@id` where introspection couldn't infer one, etc.) and then run
 // `contract emit` to produce the canonical artifacts. The header invites that
 // workflow rather than warning against it.
-const DEFAULT_AST_PRINT_HEADER =
-  '// use prisma-8\n// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.';
+const USE_PRISMA_8_DIRECTIVE = '// use prisma-8';
+export const DEFAULT_AST_PRINT_HEADER_LINES =
+  '// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.';
 
-export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
+/** `headerLines` are the comment lines printed after the `// use prisma-8` directive. */
+export function astDocumentToPrintDocument(
+  ast: PslDocumentAst,
+  headerLines: string = DEFAULT_AST_PRINT_HEADER_LINES,
+): PrintDocument {
   // FK dependencies are resolved across the whole document — a model in one
   // namespace can reference a model in another, and the topo-sort needs to
   // see every model to produce a stable order. After sorting, we re-bucket by
@@ -98,7 +103,7 @@ export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
   });
 
   return {
-    headerComment: DEFAULT_AST_PRINT_HEADER,
+    headerComment: `${USE_PRISMA_8_DIRECTIVE}\n${headerLines}`,
     namedTypes,
     namespaces: namespaceSections,
   };

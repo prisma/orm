@@ -169,7 +169,7 @@ describe('ref set', () => {
     expect(envelope).toMatchObject({
       ok: false,
       error: { code: 'MIGRATION.HASH_NOT_IN_GRAPH', why: expect.stringContaining('empty') },
-      nextActions: [{ kind: 'run-command', command: '{bin} migration plan' }],
+      nextActions: [{ kind: 'run-command', command: 'prisma migration plan' }],
     });
   });
 

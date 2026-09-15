@@ -7,7 +7,7 @@
  * the schema and migrations rolled back to the first version.
  */
 import { spawn } from 'node:child_process';
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -52,8 +52,22 @@ function run(
   });
 }
 
-async function verifyHasNoFindings(cwd: string, databaseUrl: string): Promise<void> {
-  const output = await run(cwd, databaseUrl, 'prisma', ['db', 'verify', '--json']);
+function resultEnvelope(output: string) {
+  const terminal = output
+    .split('\n')
+    .filter((line) => line.startsWith('{'))
+    .map((line) => JSON.parse(line))
+    .find((event) => event.kind === 'result');
+  expect(terminal, output).toBeDefined();
+  return terminal.envelope;
+}
+
+async function verifyHasNoFindings(
+  cwd: string,
+  databaseUrl: string,
+  configArgs: readonly string[] = [],
+): Promise<void> {
+  const output = await run(cwd, databaseUrl, 'prisma', ['db', 'verify', '--json', ...configArgs]);
   const terminal = output
     .split('\n')
     .filter((line) => line.startsWith('{'))
@@ -65,7 +79,14 @@ async function verifyHasNoFindings(cwd: string, databaseUrl: string): Promise<vo
 
 function createStoryCopy(): string {
   const dir = mkdtempSync(join(EXAMPLE_ROOT, '.story-'));
-  for (const entry of ['prisma', 'scripts', 'src', 'prisma.config.ts', 'prisma7.config.ts']) {
+  for (const entry of [
+    'prisma',
+    'scripts',
+    'src',
+    'prisma.config.ts',
+    'prisma.config.cutover.ts',
+    'prisma7.config.ts',
+  ]) {
     cpSync(join(EXAMPLE_ROOT, entry), join(dir, entry), { recursive: true });
   }
   writeFileSync(
@@ -126,6 +147,40 @@ describe('adopting Prisma 8 beside Prisma 7', () => {
           expect(JSON.parse(readContract(dir))).toEqual(JSON.parse(readContract(EXAMPLE_ROOT)));
           await v8('db', 'sign');
           await verifyHasNoFindings(dir, connectionString);
+
+          // Cutover (the guide's phase 4): convert, read the converted file,
+          // emit the identical contract, verify, then hand migrations to
+          // Prisma 8.
+          const prisma7Contract = readContract(dir);
+          await v8('contract', 'convert');
+          const converted = readFileSync(join(dir, 'generated/prisma8/contract.prisma'), 'utf-8');
+          expect(converted).toMatch(
+            /^\/\/ use prisma-8\n\/\/ Converted from prisma\/schema\.prisma by `prisma contract convert`\.\n/,
+          );
+          const cutover = ['--config', 'prisma.config.cutover.ts'];
+          // The converted file must produce the artifacts on its own, so the
+          // Prisma 7 emit's files go first: a no-op emit would otherwise
+          // compare the stale file with itself.
+          rmSync(join(dir, 'generated/prisma8/contract.json'));
+          rmSync(join(dir, 'generated/prisma8/contract.d.ts'));
+          await v8('contract', 'emit', ...cutover);
+          expect(JSON.parse(readContract(dir))).toEqual(JSON.parse(prisma7Contract));
+          await verifyHasNoFindings(dir, connectionString, cutover);
+
+          const plan = resultEnvelope(
+            await v8('migration', 'plan', '--name', 'baseline', '--json', ...cutover),
+          );
+          expect(plan).toMatchObject({
+            ok: true,
+            result: { baselineDir: expect.stringMatching(/^migrations\/app\/\w+_baseline$/) },
+          });
+          const baseline = (plan.result.baselineDir as string).replace(/^migrations\/app\//, '');
+          expect(readdirSync(join(dir, 'migrations/app'))).toContain(baseline);
+          await v8('db', 'sign', ...cutover);
+          await verifyHasNoFindings(dir, connectionString, cutover);
+          await v8('migration', 'ref', 'set', 'db', baseline ?? '', ...cutover);
+          const refs = resultEnvelope(await v8('migration', 'ref', 'list', '--json', ...cutover));
+          expect(JSON.stringify(refs)).toContain('"db"');
         });
       } finally {
         rmSync(dir, { recursive: true, force: true });

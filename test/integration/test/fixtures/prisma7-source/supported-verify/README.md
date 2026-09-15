@@ -8,3 +8,5 @@
 
 Everything else is byte-for-byte the supported schema. The test applies `../supported/migration.sql` unchanged, so the database is exactly what Prisma 7.10.0 built, interprets this file, and expects `db verify` to report nothing. `../supported/schema.prisma` itself is the error case: interpreting it yields `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` for `updatedAtOpt` and `uuidOpt` and `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` for `updatedAtNow`.
 
+
+`contract.prisma` is the Prisma 8 spelling of `schema.prisma`, written by hand from the printing rules the `prisma contract convert` printer follows (`packages/3-targets/3-targets/postgres/src/core/psl-print/`); `../../prisma7-source/prisma8-spelling.integration.test.ts` holds it to the same three hashes and domain plane as the Prisma 7 source, and to zero `db verify` findings against `../supported/migration.sql`.
