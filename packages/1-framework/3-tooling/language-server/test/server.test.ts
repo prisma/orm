@@ -848,15 +848,18 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
         activeParameter: parameter,
         signatures: [
           {
-            label: '@marker(target: string, name: string, priority?: integer)',
+            label: '@marker(string, name: string, priority?: integer)',
             documentation: {
               kind: MarkupKind.Markdown,
               value: 'Attaches a named marker to a target.',
             },
             parameters: [
               {
-                label: 'target: string',
-                documentation: { kind: MarkupKind.Markdown, value: 'The marker target.' },
+                label: 'string',
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: '**target**\n\nThe marker target.',
+                },
               },
               {
                 label: 'name: string',
@@ -1003,7 +1006,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     await harness.waitForDiagnostics(schemaUri);
     expect(await requestSignatureHelp(harness, schemaUri, position)).toBeNull();
     expect((await requestSignatureHelp(harness, schemaUri, position))?.signatures[0]?.label).toBe(
-      '@marker(target: string, name: string, priority?: integer)',
+      '@marker(string, name: string, priority?: integer)',
     );
     expect(factory).toHaveBeenCalledTimes(2);
   });

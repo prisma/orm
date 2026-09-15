@@ -1,5 +1,10 @@
 import type { AttributeSpec, PositionalParam } from '@internal/psl-parser';
-import { MarkupKind, type SignatureHelp, type SignatureInformation } from 'vscode-languageserver';
+import {
+  MarkupKind,
+  type ParameterInformation,
+  type SignatureHelp,
+  type SignatureInformation,
+} from 'vscode-languageserver';
 import { type ArgumentSignature, resolveGrammar } from './attribute-argument-grammar';
 import { type AttributeSpecSource, attributeSpecResolver } from './attribute-spec-resolution';
 import {
@@ -11,6 +16,7 @@ import {
 
 export interface ProvidePslSignatureHelpInput extends ClassifyPslCompletionContextInput {
   readonly candidates: AttributeSpecSource;
+  readonly clientSupportsLabelOffsets?: boolean;
 }
 
 export function providePslSignatureHelp(input: ProvidePslSignatureHelpInput): SignatureHelp | null {
@@ -18,12 +24,13 @@ export function providePslSignatureHelp(input: ProvidePslSignatureHelpInput): Si
   if (context === undefined) return null;
   const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
   if (spec === undefined) return null;
-  return signatureHelp(context, spec);
+  return signatureHelp(context, spec, input.clientSupportsLabelOffsets === true);
 }
 
 function signatureHelp(
   context: AttributeArgumentCompletionContext,
   spec: AttributeSpec<never, never>,
+  labelOffsets: boolean,
 ): SignatureHelp | null {
   const callIndex = context.path.reduce(
     (last, step, index) => (step.kind === 'functionCall' ? index : last),
@@ -40,7 +47,7 @@ function signatureHelp(
     const active = context.path[callIndex + 1];
     const params = parameters(grammar, active?.kind === 'namedArgument' ? active.name : undefined);
     const index = parameterIndex(context, active, params);
-    return [{ signature: renderSignature(name, grammar, params), index }];
+    return [{ signature: renderSignature(name, grammar, params, labelOffsets), index }];
   });
   if (signatures.length === 0) return null;
   const matched = signatures.findIndex(
@@ -92,13 +99,30 @@ function renderSignature(
   name: string,
   signature: ArgumentSignature,
   params: readonly PositionalParam<unknown, never>[],
+  labelOffsets: boolean,
 ): SignatureInformation {
-  const rendered = params.map((param) => ({
-    label: `${param.key}${'optional' in param.type && param.type.optional === true ? '?' : ''}: ${param.type.label}`,
-    documentation: { kind: MarkupKind.Markdown, value: param.documentation },
-  }));
+  let label = `${name}(`;
+  const rendered: ParameterInformation[] = params.map((param, index) => {
+    if (index > 0) label += ', ';
+    const positional = index < (signature.positional?.length ?? 0);
+    const optional = 'optional' in param.type && param.type.optional === true;
+    const typeLabel =
+      optional && param.type.label.includes(' | ') ? `(${param.type.label})` : param.type.label;
+    const text = positional
+      ? `${typeLabel}${optional ? '?' : ''}`
+      : `${param.key}${optional ? '?' : ''}: ${param.type.label}`;
+    const start = label.length;
+    label += text;
+    const documentation = positional
+      ? `**${param.key}**\n\n${param.documentation}${signature.named?.[param.key] === undefined ? '' : `\n\nAccepted positionally or by \`${param.key}:\`.`}`
+      : param.documentation;
+    return {
+      label: positional && labelOffsets ? [start, label.length] : text,
+      documentation: { kind: MarkupKind.Markdown, value: documentation },
+    };
+  });
   return {
-    label: `${name}(${rendered.map((param) => param.label).join(', ')})`,
+    label: `${label})`,
     documentation: { kind: MarkupKind.Markdown, value: signature.documentation },
     parameters: rendered,
   };

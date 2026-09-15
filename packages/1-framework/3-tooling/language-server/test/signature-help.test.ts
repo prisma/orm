@@ -84,7 +84,24 @@ const authoringContributions = assembleAuthoringContributions([
     id: 'signature-fixture',
     authoring: {
       attributeSpecs: {
-        field: { probe: () => fieldSpec, pair: () => pairSpec, wrapped: () => wrappedSpec },
+        field: {
+          probe: () => fieldSpec,
+          pair: () => pairSpec,
+          wrapped: () => wrappedSpec,
+          repeated: () =>
+            fieldAttribute('repeated', {
+              documentation: 'Repeated types.',
+              positional: [
+                { key: 'first', type: text, documentation: 'First text.' },
+                { key: 'second', type: text, documentation: 'Second text.' },
+                {
+                  key: 'last',
+                  type: optional(oneOf(str(), bool())),
+                  documentation: 'Optional value.',
+                },
+              ],
+            }),
+        },
         model: { probe: () => modelSpec },
       },
     },
@@ -101,7 +118,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
   },
 };
 
-function help(markedSource: string) {
+function help(markedSource: string, labelOffsets = true) {
   const offset = markedSource.indexOf('|');
   expect(offset).toBeGreaterThanOrEqual(0);
   const { document, sourceFile } = parse(markedSource.replace('|', ''));
@@ -111,6 +128,7 @@ function help(markedSource: string) {
     document,
     sourceFile,
     position: sourceFile.positionAt(offset),
+    clientSupportsLabelOffsets: labelOffsets,
     candidates: {
       pslBlockDescriptors,
       symbolTable,
@@ -141,7 +159,7 @@ function selected(markedSource: string) {
 }
 
 const attributeLabel =
-  '@probe(value: string, flag?: boolean, call: nested(), collection: nested()[], records: { [key]: nested() }, choice: choose() | choose(), empty: empty())';
+  '@probe(string, flag?: boolean, call: nested(), collection: nested()[], records: { [key]: nested() }, choice: choose() | choose(), empty: empty())';
 
 describe('providePslSignatureHelp', () => {
   it('renders documented parameters, optional markers, and a single positional/name alias', () => {
@@ -152,7 +170,12 @@ describe('providePslSignatureHelp', () => {
       label: attributeLabel,
       documentation: markdown('**Extension** attribute.'),
       parameters: [
-        { label: 'value: string', documentation: markdown('The *value*.') },
+        {
+          label: [7, 13],
+          documentation: markdown(
+            '**value**\n\nThe *value*.\n\nAccepted positionally or by `value:`.',
+          ),
+        },
         { label: 'flag?: boolean', documentation: markdown('An optional flag.') },
         { label: 'call: nested()', documentation: markdown('A nested call.') },
         { label: 'collection: nested()[]', documentation: markdown('Nested calls in a list.') },
@@ -167,6 +190,24 @@ describe('providePslSignatureHelp', () => {
         { label: 'empty: empty()', documentation: markdown('A parameterless call.') },
       ],
     });
+  });
+
+  it('falls back to string labels for clients without offset support', () => {
+    expect(
+      help('model Example { value String @pair(|) }', false)?.signatures[0]?.parameters?.[0]?.label,
+    ).toBe('string');
+  });
+
+  it('keeps repeated positional labels and optional unions unambiguous', () => {
+    const result = help('model Example { value String @repeated("a", |"b") }');
+    const signature = result?.signatures[0];
+    expect(signature?.label).toBe('@repeated(string, string, (string | boolean)?)');
+    expect(result?.activeParameter).toBe(1);
+    expect(signature?.parameters).toEqual([
+      { label: [10, 16], documentation: markdown('**first**\n\nFirst text.') },
+      { label: [18, 24], documentation: markdown('**second**\n\nSecond text.') },
+      { label: [26, 45], documentation: markdown('**last**\n\nOptional value.') },
+    ]);
   });
 
   it.each(['flag: |true, value: "a"', 'flag|: true', 'flag: true|', '"a", flag: |'])(
@@ -194,7 +235,7 @@ describe('providePslSignatureHelp', () => {
     expect(
       selected(`model Example {\n value String @probe(call: nested("a",${gap}flag: true))\n}`),
     ).toEqual({
-      label: 'nested(value: string, flag?: boolean)',
+      label: 'nested(string, flag?: boolean)',
       documentation: markdown('**Nested** function.'),
       activeParameter: 1,
       parameter: { label: 'flag?: boolean', documentation: markdown('Nested flag.') },
@@ -220,7 +261,12 @@ describe('providePslSignatureHelp', () => {
             : '**Extension** attribute.',
       ),
       activeParameter: 0,
-      parameter: { label: 'value: string', documentation: markdown('The named *value*.') },
+      parameter: {
+        label: source.includes('@@probe') ? [8, 14] : [7, 13],
+        documentation: markdown(
+          '**value**\n\nThe named *value*.\n\nAccepted positionally or by `value:`.',
+        ),
+      },
     });
   });
 
@@ -230,7 +276,7 @@ describe('providePslSignatureHelp', () => {
     'records: { item: nested("a", flag: |true) }',
   ])('selects the innermost known signature: %s', (args) => {
     expect(selected(`model Example {\n value String @probe(${args})\n}`)).toEqual({
-      label: 'nested(value: string, flag?: boolean)',
+      label: 'nested(string, flag?: boolean)',
       documentation: markdown('**Nested** function.'),
       activeParameter: 1,
       parameter: { label: 'flag?: boolean', documentation: markdown('Nested flag.') },
@@ -255,17 +301,17 @@ describe('providePslSignatureHelp', () => {
   ])('recovers unfinished argument lists: %s', (source) => {
     const result = selected(source);
     expect(result.label).toBe(
-      source.includes('nested(') ? 'nested(value: string, flag?: boolean)' : attributeLabel,
+      source.includes('nested(') ? 'nested(string, flag?: boolean)' : attributeLabel,
     );
     expect(result.activeParameter).toBe(source.endsWith('(|') ? 0 : 1);
   });
 
   it.each(['"a", |', '"a", nested("b")|'])('tracks the second positional parameter: %s', (args) => {
     expect(selected(`model Example {\n value String @pair(${args})\n}`)).toEqual({
-      label: '@pair(text: string, call: nested())',
+      label: '@pair(string, nested())',
       documentation: markdown('Two positional parameters.'),
       activeParameter: 1,
-      parameter: { label: 'call: nested()', documentation: markdown('Second parameter.') },
+      parameter: { label: [14, 22], documentation: markdown('**call**\n\nSecond parameter.') },
     });
   });
 
@@ -273,7 +319,7 @@ describe('providePslSignatureHelp', () => {
     expect(
       selected('model Example {\n value String @pair("a", nested("b", flag: |true))\n}'),
     ).toEqual({
-      label: 'nested(value: string, flag?: boolean)',
+      label: 'nested(string, flag?: boolean)',
       documentation: markdown('**Nested** function.'),
       activeParameter: 1,
       parameter: { label: 'flag?: boolean', documentation: markdown('Nested flag.') },
@@ -296,7 +342,7 @@ describe('providePslSignatureHelp', () => {
     expect(
       selected('model Example {\n value String @wrapped(wrap(nested("b", flag: |true)))\n}'),
     ).toEqual({
-      label: 'nested(value: string, flag?: boolean)',
+      label: 'nested(string, flag?: boolean)',
       documentation: markdown('**Nested** function.'),
       activeParameter: 1,
       parameter: { label: 'flag?: boolean', documentation: markdown('Nested flag.') },
@@ -305,10 +351,10 @@ describe('providePslSignatureHelp', () => {
 
   it('returns to the enclosing function rather than the attribute after a nested call closes', () => {
     expect(selected('model Example {\n value String @wrapped(wrap(nested("b")|))\n}')).toEqual({
-      label: 'wrap(inner: nested())',
+      label: 'wrap(nested())',
       documentation: markdown('Wraps another call.'),
       activeParameter: 0,
-      parameter: { label: 'inner: nested()', documentation: markdown('The wrapped call.') },
+      parameter: { label: [5, 13], documentation: markdown('**inner**\n\nThe wrapped call.') },
     });
   });
 
@@ -349,9 +395,7 @@ describe('providePslSignatureHelp', () => {
 
   it('never invokes argument parsers to inspect metadata', () => {
     parseArgument.mockClear();
-    expect(field('call: nested(|)')?.signatures[0]?.label).toBe(
-      'nested(value: string, flag?: boolean)',
-    );
+    expect(field('call: nested(|)')?.signatures[0]?.label).toBe('nested(string, flag?: boolean)');
     expect(parseArgument).not.toHaveBeenCalled();
   });
 });

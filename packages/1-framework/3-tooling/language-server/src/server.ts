@@ -504,6 +504,7 @@ function createServerOn(connection: Connection): LanguageServer {
 
     try {
       return providePslSignatureHelp({
+        clientSupportsLabelOffsets: clientCapabilities.signatureLabelOffsets,
         document: artifacts.document,
         sourceFile: artifacts.sourceFile,
         position,
@@ -747,6 +748,7 @@ function toLspSeverity(severity: number): DiagnosticSeverity {
 interface ResolvedClientCapabilities {
   readonly watchedFilesRegistration: boolean;
   readonly completionSnippets: boolean;
+  readonly signatureLabelOffsets: boolean;
   readonly completionTriggerSuggestCommand: boolean;
   readonly completionTriggerParameterHintsCommand: boolean;
   readonly pullDiagnostics: boolean;
@@ -756,6 +758,7 @@ interface ResolvedClientCapabilities {
 const noClientCapabilities: ResolvedClientCapabilities = {
   watchedFilesRegistration: false,
   completionSnippets: false,
+  signatureLabelOffsets: false,
   completionTriggerSuggestCommand: false,
   completionTriggerParameterHintsCommand: false,
   pullDiagnostics: false,
@@ -768,6 +771,9 @@ function resolveClientCapabilities(params: InitializeParams): ResolvedClientCapa
       params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration === true,
     completionSnippets:
       params.capabilities.textDocument?.completion?.completionItem?.snippetSupport === true,
+    signatureLabelOffsets:
+      params.capabilities.textDocument?.signatureHelp?.signatureInformation?.parameterInformation
+        ?.labelOffsetSupport === true,
     completionTriggerSuggestCommand: supportsCompletionCommand(
       params.initializationOptions,
       'supportsTriggerSuggestCommand',
