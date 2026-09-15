@@ -226,6 +226,10 @@ export async function setDefault(
     id: `setDefault.${tableName}.${columnName}`,
     label: `Set default on "${tableName}"."${columnName}"`,
     operationClass,
+    // A widening SET DEFAULT changes an existing default, but its postcheck
+    // only asserts that *a* default exists — so the idempotency probe would
+    // treat "default present" as "already applied" and skip the change.
+    ...ifDefined('skipIdempotencyProbe', operationClass === 'widening' ? true : undefined),
     target: targetDetails('column', columnName, schemaName, tableName),
     precheck: [step(`ensure column "${columnName}" exists`, present.sql, present.params)],
     execute: [
