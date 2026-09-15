@@ -129,16 +129,23 @@ withTempDir(({ createTempDir }) => {
             ]),
           ),
         ).toEqual({
-          audit: { tables: ['Composite', 'audit_log'], enums: ['AuditAction'] },
+          audit: {
+            tables: ['Composite', 'CompositeChild', 'Label', '_LabelToPost', 'audit_log'],
+            enums: ['AuditAction'],
+          },
           public: {
             tables: [
               'Defaults',
+              'ListDefaults',
               'NativeTypes',
+              'NumberDefaults',
               'Post',
               'Profile',
+              'Review',
               'Scalars',
               'Settings',
               'Tag',
+              'TemporalDefaults',
               'Timestamps',
               'User',
               '_Favorites',

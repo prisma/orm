@@ -53,6 +53,7 @@ CREATE TABLE "NativeTypes" (
     "text" TEXT NOT NULL,
     "varChar" VARCHAR(255) NOT NULL,
     "char" CHAR(10) NOT NULL,
+    "charNoLength" CHAR NOT NULL,
     "uuid" UUID NOT NULL,
     "inet" INET NOT NULL,
     "citext" CITEXT NOT NULL,
@@ -209,6 +210,74 @@ CREATE TABLE "LegacyThing" (
 );
 
 -- CreateTable
+CREATE TABLE "NumberDefaults" (
+    "id" SERIAL NOT NULL,
+    "negativeInt" INTEGER NOT NULL DEFAULT -1,
+    "negativeSmallInt" SMALLINT NOT NULL DEFAULT -2,
+    "negativeFloat" DOUBLE PRECISION NOT NULL DEFAULT -1.5,
+    "negativeDecimal" DECIMAL(65,30) NOT NULL DEFAULT -12.34,
+    "longDecimal" DECIMAL(65,30) NOT NULL DEFAULT 12345678901234567890.123456789,
+    "tinyDecimal" DECIMAL(65,30) NOT NULL DEFAULT 0.000000000000000001,
+    "zerosBare" DECIMAL NOT NULL DEFAULT 1.50,
+    "zerosScaled" DECIMAL(10,2) NOT NULL DEFAULT 1.50,
+    "zerosDefault" DECIMAL(65,30) NOT NULL DEFAULT 1.50,
+    "negativeBigInt" BIGINT NOT NULL DEFAULT -9007199254740993,
+
+    CONSTRAINT "NumberDefaults_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ListDefaults" (
+    "id" SERIAL NOT NULL,
+    "ints" INTEGER[] DEFAULT ARRAY[-1, 2]::INTEGER[],
+    "bigInts" BIGINT[] DEFAULT ARRAY[9007199254740993, -1]::BIGINT[],
+    "floats" DOUBLE PRECISION[] DEFAULT ARRAY[-1.5, 2.25]::DOUBLE PRECISION[],
+    "decimals" DECIMAL(65,30)[] DEFAULT ARRAY[1.50, -2, 0.000000000000000001]::DECIMAL(65,30)[],
+    "dateTimes" TIMESTAMP(3)[] DEFAULT ARRAY['2024-01-01 00:00:00 +00:00', '2024-01-02 03:04:05.123 +02:00']::TIMESTAMP(3)[],
+    "bytes" BYTEA[] DEFAULT ARRAY['\x68656c6c6f', '\x776f726c64']::BYTEA[],
+    "emptyVarChar" VARCHAR(32)[] DEFAULT ARRAY[]::VARCHAR(32)[],
+
+    CONSTRAINT "ListDefaults_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "TemporalDefaults" (
+    "id" SERIAL NOT NULL,
+    "date" DATE NOT NULL DEFAULT '2024-01-02 03:04:05 +00:00',
+    "time" TIME(3) NOT NULL DEFAULT '1970-01-01 12:34:56.789 +00:00',
+    "timetz" TIMETZ(6) NOT NULL DEFAULT '2024-01-02 03:04:05 +02:00',
+    "timestamptz" TIMESTAMPTZ(6) NOT NULL DEFAULT '2024-01-02 03:04:05 +02:00',
+    "beforeYearOne" TIMESTAMPTZ(3) NOT NULL DEFAULT '0001-01-01 00:30:00 +01:00',
+
+    CONSTRAINT "TemporalDefaults_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "Review" (
+    "id" SERIAL NOT NULL,
+    "authorId" INTEGER NOT NULL,
+
+    CONSTRAINT "Review_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "audit"."CompositeChild" (
+    "id" SERIAL NOT NULL,
+    "compositeA" INTEGER,
+    "compositeB" TEXT NOT NULL,
+
+    CONSTRAINT "CompositeChild_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "audit"."Label" (
+    "id" SERIAL NOT NULL,
+    "name" TEXT NOT NULL,
+
+    CONSTRAINT "Label_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_Follows" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL,
@@ -230,6 +299,14 @@ CREATE TABLE "_Favorites" (
     "B" INTEGER NOT NULL,
 
     CONSTRAINT "_Favorites_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateTable
+CREATE TABLE "audit"."_LabelToPost" (
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL,
+
+    CONSTRAINT "_LabelToPost_AB_pkey" PRIMARY KEY ("A","B")
 );
 
 -- CreateIndex
@@ -274,6 +351,9 @@ CREATE INDEX "_PostToTag_B_index" ON "_PostToTag"("B");
 -- CreateIndex
 CREATE INDEX "_Favorites_B_index" ON "_Favorites"("B");
 
+-- CreateIndex
+CREATE INDEX "_LabelToPost_B_index" ON "audit"."_LabelToPost"("B");
+
 -- AddForeignKey
 ALTER TABLE "Post" ADD CONSTRAINT "Post_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
@@ -288,6 +368,12 @@ ALTER TABLE "Profile" ADD CONSTRAINT "Profile_userId_fkey" FOREIGN KEY ("userId"
 
 -- AddForeignKey
 ALTER TABLE "Settings" ADD CONSTRAINT "Settings_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Review" ADD CONSTRAINT "Review_authorId_fkey" FOREIGN KEY ("authorId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit"."CompositeChild" ADD CONSTRAINT "CompositeChild_compositeA_compositeB_fkey" FOREIGN KEY ("compositeA", "compositeB") REFERENCES "audit"."Composite"("a", "b") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "_Follows" ADD CONSTRAINT "_Follows_A_fkey" FOREIGN KEY ("A") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -306,3 +392,9 @@ ALTER TABLE "_Favorites" ADD CONSTRAINT "_Favorites_A_fkey" FOREIGN KEY ("A") RE
 
 -- AddForeignKey
 ALTER TABLE "_Favorites" ADD CONSTRAINT "_Favorites_B_fkey" FOREIGN KEY ("B") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit"."_LabelToPost" ADD CONSTRAINT "_LabelToPost_A_fkey" FOREIGN KEY ("A") REFERENCES "audit"."Label"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "audit"."_LabelToPost" ADD CONSTRAINT "_LabelToPost_B_fkey" FOREIGN KEY ("B") REFERENCES "Post"("id") ON DELETE CASCADE ON UPDATE CASCADE;

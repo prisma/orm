@@ -15,14 +15,14 @@
 
 The reference schema has no `relationMode`, so nothing else needed removing. `previewFeatures = ["multiSchema", "views"]` is kept on purpose: the interpreter ignores preview features other than `multiSchema`.
 
-Still covered: every scalar with and without `?` and as `[]`, every accepted `@db.*` type, native enums with `@@map` and member `@map` in both schemas, `@updatedAt` in all three forms, every default function and literal, `@id`, `@@id`, `@unique`, `@@unique`, `@@index` with and without `map:` and with `type: Hash`, explicit relations with omitted actions on required and optional scalars, the unnamed, named, and self-referential implicit many-to-many relations, multiSchema, `@ignore`, and `@@ignore`.
+Still covered: every scalar with and without `?` and as `[]`, every accepted `@db.*` type, native enums with `@@map` and member `@map` in both schemas, `@updatedAt` in all three forms, every default function and literal, `@id`, `@@id`, `@unique`, `@@unique`, `@@index` with and without `map:` and with `type: Hash`, negative, long, tiny, and trailing-zero number defaults, a `BigInt` default beyond 2^53, list defaults of every number type and of `DateTime` and `Bytes`, an empty `@db.VarChar(n)` list default, `DateTime` string defaults on `@db.Date`, `@db.Time`, `@db.Timetz`, and `@db.Timestamptz` (one before year 1), `@db.Char` with no length, explicit relations with omitted actions on required and optional scalars, an optional relation over a required column, a composite foreign key mixing an optional and a required column, the unnamed, named, self-referential, and cross-schema implicit many-to-many relations, multiSchema, `@ignore`, and `@@ignore`.
 
 `migration.sql` needs no extensions.
 
 ## How `migration.sql` was produced
 
 - Prisma version: `prisma@7.10.0` (schema engine `0edf323efd1d98336f3f0a68684b56f689b900d3`).
-- Date: 2026-09-13.
+- Date: 2026-09-15.
 - Run from a scratch directory containing a copy of `schema.prisma` and the same `prisma.config.ts` as described in `../reference/README.md`:
 
 ```bash
