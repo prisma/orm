@@ -24,19 +24,32 @@ function presetGeneratorIds(output: object): string[] {
   });
 }
 
+const STRING_TIMESTAMP_CODEC_IDS = ['pg/timestamp-string@1', 'pg/timestamptz-string@1'];
+
+function codecFor(codecId: string) {
+  return postgresCodecRegistry.descriptorFor(codecId)?.factory({})({ name: '<test>' });
+}
+
 describe('the "now" generator for each codec', () => {
-  it.each(Object.entries(postgresNowGeneratorIds))(
-    'generates a value %s encodes',
-    async (codecId, generatorId) => {
-      const value = generate[generatorId]?.();
-      expect(value).toBeDefined();
-      const descriptor = postgresCodecRegistry.descriptorFor(codecId);
-      const codec = descriptor?.factory({})({ name: '<test>' });
-      expect(codec).toBeDefined();
-      await expect(codec?.encode(value, {})).resolves.toBeDefined();
-      expect(codec?.encodeJson(value)).toBeDefined();
-    },
-  );
+  it.each(
+    Object.entries(postgresNowGeneratorIds).filter(
+      ([codecId]) => !STRING_TIMESTAMP_CODEC_IDS.includes(codecId),
+    ),
+  )('generates a value %s encodes', async (codecId, generatorId) => {
+    const value = generate[generatorId]?.();
+    const codec = codecFor(codecId);
+    const wire = await codec?.encode(value, {});
+    expect(typeof wire).toBe('string');
+    expect(codec?.decodeJson(codec.encodeJson(value))).toEqual(value);
+  });
+
+  it('gives the string timestamp codecs a Date from timestampNow, which they pass through unencoded', async () => {
+    for (const codecId of STRING_TIMESTAMP_CODEC_IDS) {
+      expect(postgresNowGeneratorIdFor(codecId)).toBe('timestampNow');
+      const value = generate['timestampNow']?.();
+      expect(await codecFor(codecId)?.encode(value, {})).toBeInstanceOf(Date);
+    }
+  });
 
   it('has no generator for a codec without one', () => {
     expect(
