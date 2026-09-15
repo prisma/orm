@@ -258,8 +258,8 @@ function referentialActionRejections(input: {
   readonly span: PslSpan;
 }): ContractSourceDiagnostic[] {
   const { model, relationField, label, fieldNames, span } = input;
-  const replaceAction =
-    "or choose another action, which replaces the foreign key on Prisma 7's next migration.";
+  const anotherAction =
+    "choose another action, which replaces the foreign key on Prisma 7's next migration and leaves the Prisma 7 client unchanged.";
   const fieldsWhere = (predicate: (column: FieldNode) => boolean): readonly string[] =>
     fieldNames.filter((name) => {
       const column = model.columns.get(name);
@@ -274,7 +274,7 @@ function referentialActionRejections(input: {
       rejections.push(
         prisma7Diagnostic(
           'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
-          `${label}: ${key}: SetNull sets the foreign key fields to null, but ${fields} ${required.length === 1 ? 'is' : 'are'} required, so Prisma 8 cannot describe this foreign key. Make ${fields}${relationField.optional ? '' : ` and "${model.modelName}.${relationField.name}"`} optional, which drops NOT NULL on Prisma 7's next migration, ${replaceAction}`,
+          `${label}: ${key}: SetNull sets the foreign key fields to null, but ${fields} ${required.length === 1 ? 'is' : 'are'} required, so Prisma 8 cannot describe this foreign key. Make ${fields}${relationField.optional ? '' : ` and "${model.modelName}.${relationField.name}"`} optional, which drops NOT NULL on Prisma 7's next migration and makes ${required.length === 1 && relationField.optional ? 'it' : 'them'} nullable in the Prisma 7 client, or ${anotherAction}`,
           model.sourceId,
           span,
         ),
@@ -287,15 +287,41 @@ function referentialActionRejections(input: {
       if (withoutDefault.length === 0) continue;
       const fields = fieldList(model.modelName, withoutDefault);
       const one = withoutDefault.length === 1;
-      const generatorNote = withoutDefault.some(
+      const generated = withoutDefault.filter(
         (name) => model.columns.get(name)?.executionDefaults?.onCreate !== undefined,
-      )
-        ? ' (a client-side generator such as uuid() does not give the column one)'
-        : '';
+      );
+      const plain = withoutDefault.filter((name) => !generated.includes(name));
+      const generatorNote =
+        generated.length > 0
+          ? ' (a client-side generator such as uuid() does not give the column one)'
+          : '';
+      const example =
+        'a column default, such as a literal or @default(dbgenerated("<expression>"))';
+      const plainFields = fieldList(model.modelName, plain);
+      const generatedFields = fieldList(model.modelName, generated);
+      const edit =
+        generated.length === 0
+          ? `Give ${plainFields} ${example}`
+          : plain.length === 0
+            ? `Replace the @default on ${generatedFields} with ${example}, because a field takes only one @default`
+            : `Give ${plainFields} ${example}, and replace the @default on ${generatedFields} with one, because a field takes only one @default`;
+      const effects = [
+        `Prisma 7's next migration sets ${one ? 'it' : 'them'}`,
+        ...(plain.length > 0
+          ? [
+              `${plainFields} ${plain.length === 1 ? 'becomes' : 'become'} optional when creating records with the Prisma 7 client`,
+            ]
+          : []),
+        ...(generated.length > 0
+          ? [
+              `the Prisma 7 client stops generating ${generated.length === 1 ? 'a value' : 'values'} for ${generatedFields}`,
+            ]
+          : []),
+      ];
       rejections.push(
         prisma7Diagnostic(
           'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
-          `${label}: ${key}: SetDefault sets the foreign key fields to their column defaults, but ${fields} ${one ? 'is' : 'are'} required and ${one ? 'has' : 'have'} no column default${generatorNote}, so Prisma 8 cannot describe this foreign key. Give ${fields} a column default, such as a literal or @default(dbgenerated("<expression>")), which sets it on Prisma 7's next migration, ${replaceAction}`,
+          `${label}: ${key}: SetDefault sets the foreign key fields to their column defaults, but ${fields} ${one ? 'is' : 'are'} required and ${one ? 'has' : 'have'} no column default${generatorNote}, so Prisma 8 cannot describe this foreign key. ${edit}: ${andList(effects)}. Or ${anotherAction}`,
           model.sourceId,
           span,
         ),

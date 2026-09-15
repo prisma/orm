@@ -895,7 +895,7 @@ function readField(args: ReadFieldArgs): void {
     diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_UNSUPPORTED_TYPE',
-        `${label} has type "${field.typeConstructor.path.join('.')}(...)", which has no Prisma 8 codec, so model "${model.symbol.name}" cannot use this contract source while it has the field. Prisma 7 rejects @ignore on an Unsupported field, and removing the field drops its column on Prisma 7's next migration. Adding @@ignore to model "${model.symbol.name}" keeps the model out of the contract: Prisma 7's next migration is empty, but the model disappears from the Prisma 7 client too, and any relation field that points to it needs @ignore.`,
+        `${label} has type "${field.typeConstructor.path.join('.')}(...)", which has no Prisma 8 codec, so model "${model.symbol.name}" cannot use this contract source while it has the field. Prisma 7 rejects @ignore on an Unsupported field, and removing the field drops its column on Prisma 7's next migration. Adding @@ignore to model "${model.symbol.name}" keeps the model out of the contract: Prisma 7's next migration is empty, but the model disappears from the Prisma 7 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 7 client as well.`,
         sourceId,
         field.typeConstructor.span,
       ),
