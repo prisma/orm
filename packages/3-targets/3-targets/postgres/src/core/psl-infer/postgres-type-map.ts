@@ -29,8 +29,12 @@ const PRESERVED_NATIVE_TYPES: Record<string, string> = {
   decimal: 'Numeric',
   timestamp: 'Timestamp',
   'timestamp without time zone': 'Timestamp',
-  timestamptz: 'Timestamptz',
-  'timestamp with time zone': 'Timestamptz',
+  // timestamptz introspects to the string representation: the Temporal-backed
+  // `Timestamptz` needs a global `Temporal`, which some runtimes (e.g. Node 24)
+  // do not ship, so an inferred contract would fail on first read. This also
+  // matches the `orm init` scaffold default (`createdAt TimestamptzString`).
+  timestamptz: 'TimestamptzString',
+  'timestamp with time zone': 'TimestamptzString',
   date: 'Date',
   time: 'Time',
   'time without time zone': 'Time',
@@ -47,7 +51,7 @@ const PARAMETERIZED_NATIVE_TYPES: Record<string, string> = {
   numeric: 'Numeric',
   decimal: 'Numeric',
   timestamp: 'Timestamp',
-  timestamptz: 'Timestamptz',
+  timestamptz: 'TimestamptzString',
   time: 'Time',
   timetz: 'Timetz',
 };

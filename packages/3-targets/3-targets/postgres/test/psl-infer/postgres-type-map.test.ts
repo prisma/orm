@@ -14,11 +14,11 @@ describe('createPostgresTypeMap', () => {
       nativeType: 'numeric',
     });
     expect(typeMap.resolve('timestamptz')).toEqual({
-      pslType: { name: 'Timestamptz' },
+      pslType: { name: 'TimestamptzString' },
       nativeType: 'timestamptz',
     });
     expect(typeMap.resolve('timestamp with time zone')).toEqual({
-      pslType: { name: 'Timestamptz' },
+      pslType: { name: 'TimestamptzString' },
       nativeType: 'timestamp with time zone',
     });
     expect(typeMap.resolve('jsonb')).toEqual({ pslType: { name: 'Jsonb' }, nativeType: 'jsonb' });
@@ -138,28 +138,36 @@ describe('createPostgresTypeMap', () => {
   });
 });
 
-describe('representation-explicit spellings stay out of introspection', () => {
+describe('temporal representation spellings in introspection', () => {
   const map = createPostgresTypeMap();
 
   it.each([
     ['date', 'Date'],
     ['timestamp', 'Timestamp'],
     ['timestamp without time zone', 'Timestamp'],
-    ['timestamptz', 'Timestamptz'],
-    ['timestamp with time zone', 'Timestamptz'],
     ['time', 'Time'],
     ['time without time zone', 'Time'],
   ])('resolves %s to the bare %s, never a *String spelling', (nativeType, pslName) => {
     expect(map.resolve(nativeType)).toMatchObject({ pslType: { name: pslName } });
   });
 
-  it('keeps precision on the bare spelling', () => {
+  it.each([
+    ['timestamptz', 'TimestamptzString'],
+    ['timestamp with time zone', 'TimestamptzString'],
+  ])(
+    'resolves %s to the runtime-safe %s spelling (Temporal is unavailable on some runtimes)',
+    (nativeType, pslName) => {
+      expect(map.resolve(nativeType)).toMatchObject({ pslType: { name: pslName } });
+    },
+  );
+
+  it('keeps precision on the TimestamptzString spelling', () => {
     expect(map.resolve('timestamptz(6)')).toMatchObject({
-      pslType: { name: 'Timestamptz', args: ['6'] },
+      pslType: { name: 'TimestamptzString', args: ['6'] },
     });
   });
 
-  it('never produces a *String name for any native type it knows', () => {
+  it('produces a *String spelling only for timestamptz', () => {
     const natives = [
       'date',
       'timestamp',
@@ -182,6 +190,7 @@ describe('representation-explicit spellings stay out of introspection', () => {
         : [],
     );
 
-    expect(stringSpellings).toEqual([]);
+    expect(stringSpellings.length).toBeGreaterThan(0);
+    expect(new Set(stringSpellings)).toEqual(new Set(['TimestamptzString']));
   });
 });
