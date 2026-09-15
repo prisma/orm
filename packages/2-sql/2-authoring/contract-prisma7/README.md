@@ -39,7 +39,7 @@ The package itself is target-neutral: the Postgres facade supplies the target pa
 | Explicit relations | Foreign keys with `onDelete` `restrict` (any foreign key field required) or `setNull` (every field optional) and `onUpdate` `cascade` unless given; paired through `@internal/sql-contract-psl/resolution`. |
 | Implicit many-to-many | Junction `_AToB` or `_Name`: columns `A` and `B`, primary key `(A, B)`, index `_AToB_B_index`, cascading foreign keys. |
 | `@ignore`, `@@ignore` | Omitted, together with relations over them. An `@ignore`d field that a key, an index, or a relation uses is an error. |
-| `view`, `Unsupported(...)`, unmapped `@db.*`, `relationMode = "prisma"`, generators on optional fields, `@updatedAt` with `@default`, index arguments | Hard errors (table below). |
+| `view`, `Unsupported(...)`, unmapped `@db.*`, `relationMode = "prisma"`, generators on optional fields, `@updatedAt` with `@default`, index arguments, an `@ignore`d field that a key, index, or relation uses, `SetNull` or `SetDefault` over a required field that cannot take it, a JSON `null` default, `dbgenerated()` with no expression, a model named like an implicit junction | Hard errors (table below). |
 
 ## Diagnostics
 
