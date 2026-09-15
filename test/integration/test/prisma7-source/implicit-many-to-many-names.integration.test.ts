@@ -27,14 +27,9 @@ import {
 
 type JunctionFields = Record<string, Record<string, string>>;
 
-const fixtureDir = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '../fixtures/prisma7-source/implicit-many-to-many-names',
-);
-const schemaPath = join(fixtureDir, 'schema.prisma');
-const migrationSql = readFileSync(join(fixtureDir, 'migration.sql'), 'utf8');
+const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), '../fixtures/prisma7-source');
 
-async function interpret(): Promise<Contract<SqlStorage>> {
+async function interpret(schemaPath: string): Promise<Contract<SqlStorage>> {
   const stack = createControlStack({
     family: sql,
     target: postgres,
@@ -55,13 +50,18 @@ async function interpret(): Promise<Contract<SqlStorage>> {
   return loaded.value as Contract<SqlStorage>;
 }
 
-function interpretedJunctionFields(contract: Contract<SqlStorage>): JunctionFields {
+function interpretedJunctionFields(
+  contract: Contract<SqlStorage>,
+  namespaceIds: readonly string[],
+): JunctionFields {
   const tableOf = (namespace: string, model: string): string =>
     (contract.domain.namespaces[namespace]?.models[model]?.storage as SqlModelStorage | undefined)
       ?.table ?? '';
   const fields: JunctionFields = {};
-  for (const [namespace, { models }] of Object.entries(contract.domain.namespaces)) {
-    for (const [modelName, model] of Object.entries(models)) {
+  for (const namespace of namespaceIds) {
+    for (const [modelName, model] of Object.entries(
+      contract.domain.namespaces[namespace]?.models ?? {},
+    )) {
       const table = tableOf(namespace, modelName);
       if (!table.startsWith('_')) continue;
       fields[table] = Object.fromEntries(
@@ -94,29 +94,79 @@ function inferredJunctionFields(models: readonly PslModel[]): JunctionFields {
   return fields;
 }
 
+/**
+ * Applies the fixture's Prisma 7 SQL, drops `droppedSchemas`, and returns the
+ * junction relation field names infer gives the tables left, next to the
+ * interpreter's names for the junctions in `namespaceIds`.
+ */
+async function junctionFieldNames(
+  fixture: string,
+  namespaceIds: readonly string[],
+  droppedSchemas: readonly string[] = [],
+): Promise<{ readonly interpreted: JunctionFields; readonly inferred: JunctionFields }> {
+  const contract = await interpret(join(fixturesDir, fixture, 'schema.prisma'));
+  const migrationSql = readFileSync(join(fixturesDir, fixture, 'migration.sql'), 'utf8');
+  return withDevDatabase(async ({ connectionString }) => {
+    await withClient(connectionString, async (client) => {
+      await client.query(migrationSql);
+      for (const schema of droppedSchemas) await client.query(`DROP SCHEMA "${schema}" CASCADE`);
+    });
+    const inferred = await withDriver(connectionString, async (driver) => {
+      const family = createFamilyInstance();
+      const schema = await family.introspect({
+        driver,
+        contract: new PostgresContractSerializer().serializeContract(contract),
+      });
+      return flatPslModels(family.inferPslContract(schema));
+    });
+    return {
+      interpreted: interpretedJunctionFields(contract, namespaceIds),
+      inferred: inferredJunctionFields(inferred),
+    };
+  });
+}
+
 describe('implicit many-to-many junction relation field names', () => {
   it(
     'match the names contract infer gives the junction tables Prisma 7 created',
     async () => {
-      await withDevDatabase(async ({ connectionString }) => {
-        await withClient(connectionString, (client) => client.query(migrationSql));
-        const contract = await interpret();
-        const inferred = await withDriver(connectionString, async (driver) => {
-          const family = createFamilyInstance();
-          const schema = await family.introspect({
-            driver,
-            contract: new PostgresContractSerializer().serializeContract(contract),
-          });
-          return flatPslModels(family.inferPslContract(schema));
-        });
+      const { interpreted, inferred } = await junctionFieldNames('implicit-many-to-many-names', [
+        'public',
+        'shop',
+      ]);
+      expect(interpreted).toEqual(inferred);
+      expect(interpreted).toEqual({
+        _AToB: { a2: 'A', b2: 'B' },
+        _CategoryToProduct: { category: 'Category', product: 'Product' },
+        _Favorites: { blogPosts: 'blog_posts', user: 'User' },
+        _Follows: { user: 'User', userUser: 'User' },
+        _Loop: { a2: 'A', aA: 'A' },
+        _PostToTag: { blogPosts: 'blog_posts', tag: 'Tag' },
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
 
-        expect(interpretedJunctionFields(contract)).toEqual(inferredJunctionFields(inferred));
-        expect(interpretedJunctionFields(contract)).toEqual({
-          _CategoryToProduct: { category: 'Category', product: 'Product' },
-          _Favorites: { blogPosts: 'blog_posts', user: 'User' },
-          _Follows: { user: 'User', userUser: 'User' },
-          _PostToTag: { blogPosts: 'blog_posts', tag: 'Tag' },
-        });
+  it(
+    'match infer for relations with one name in two schemas, one schema at a time',
+    async () => {
+      const one = await junctionFieldNames(
+        'implicit-many-to-many-names-two-schemas',
+        ['one'],
+        ['two'],
+      );
+      const two = await junctionFieldNames(
+        'implicit-many-to-many-names-two-schemas',
+        ['two'],
+        ['one'],
+      );
+      expect({ one: one.interpreted, two: two.interpreted }).toEqual({
+        one: one.inferred,
+        two: two.inferred,
+      });
+      expect({ one: one.interpreted, two: two.interpreted }).toEqual({
+        one: { _X: { a2: 'A', b2: 'B' } },
+        two: { _X: { c: 'C', d: 'D' } },
       });
     },
     timeouts.spinUpPpgDev,

@@ -1,8 +1,9 @@
 import type { SqlDescribedContractSpace } from '@internal/family-sql/control';
 import type { RelationField } from '@internal/family-sql/psl-infer';
-import { buildChildRelationField, deriveRelationFieldName } from '@internal/family-sql/psl-infer';
+import { buildChildRelationField } from '@internal/family-sql/psl-infer';
 import { coordinateKey, elementCoordinates } from '@internal/framework-components/ir';
 import type { SqlModelStorage } from '@internal/sql-contract/types';
+import { deriveRelationFieldName } from '@internal/sql-schema-ir/naming';
 import type { SqlForeignKeyIR } from '@internal/sql-schema-ir/types';
 import { SqlTableIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';

@@ -22,9 +22,9 @@ import type {
   ModelNode,
   RelationNode,
 } from '@internal/sql-contract-ts/contract-builder';
+import { junctionRelationFieldNames } from '@internal/sql-schema-ir/naming';
 import { andList, fieldList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { prisma7ConstraintName } from './indexes';
-import { junctionRelationFieldNames } from './junction-field-names';
 
 export interface RelationAttribute {
   readonly name: string | undefined;

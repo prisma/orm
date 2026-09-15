@@ -16,12 +16,7 @@ export type {
 export { mapDefault } from '../core/psl-contract-infer/default-mapping';
 export {
   deriveBackRelationFieldName,
-  deriveRelationFieldName,
   pluralize,
-  toEnumMemberName,
-  toEnumName,
-  toFieldName,
-  toModelName,
 } from '../core/psl-contract-infer/name-transforms';
 export type {
   EnumInfo,

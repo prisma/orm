@@ -1,13 +1,13 @@
-import { toEnumMemberName, toEnumName } from '@internal/family-sql/psl-infer';
 import type {
   PslExtensionBlock,
   PslExtensionBlockParamValue,
 } from '@internal/framework-components/psl-ast';
 import {
-  buildTopLevelNameMap,
   createUniqueFieldName,
-  type TopLevelNameResult,
-} from './infer-names';
+  toEnumMemberName,
+  toEnumName,
+} from '@internal/sql-schema-ir/naming';
+import { buildTopLevelNameMap, type TopLevelNameResult } from './infer-names';
 import { escapePslString, SYNTHETIC_SPAN } from './psl-literals';
 
 export const PSL_SCALAR_TYPE_NAMES = new Set([

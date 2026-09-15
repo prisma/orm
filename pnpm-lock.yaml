@@ -2485,6 +2485,9 @@ importers:
       '@internal/sql-contract-ts':
         specifier: workspace:8.0.0-rc.11
         version: link:../contract-ts
+      '@internal/sql-schema-ir':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../1-core/schema-ir
       '@internal/utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../1-framework/0-foundation/utils

@@ -40,6 +40,20 @@ CREATE TABLE "shop"."Product" (
 );
 
 -- CreateTable
+CREATE TABLE "A" (
+    "id" INTEGER NOT NULL,
+
+    CONSTRAINT "A_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "B" (
+    "id" INTEGER NOT NULL,
+
+    CONSTRAINT "B_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "_Follows" (
     "A" INTEGER NOT NULL,
     "B" INTEGER NOT NULL,
@@ -71,6 +85,22 @@ CREATE TABLE "_CategoryToProduct" (
     CONSTRAINT "_CategoryToProduct_AB_pkey" PRIMARY KEY ("A","B")
 );
 
+-- CreateTable
+CREATE TABLE "_AToB" (
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL,
+
+    CONSTRAINT "_AToB_AB_pkey" PRIMARY KEY ("A","B")
+);
+
+-- CreateTable
+CREATE TABLE "_Loop" (
+    "A" INTEGER NOT NULL,
+    "B" INTEGER NOT NULL,
+
+    CONSTRAINT "_Loop_AB_pkey" PRIMARY KEY ("A","B")
+);
+
 -- CreateIndex
 CREATE INDEX "_Follows_B_index" ON "_Follows"("B");
 
@@ -82,6 +112,12 @@ CREATE INDEX "_Favorites_B_index" ON "_Favorites"("B");
 
 -- CreateIndex
 CREATE INDEX "_CategoryToProduct_B_index" ON "_CategoryToProduct"("B");
+
+-- CreateIndex
+CREATE INDEX "_AToB_B_index" ON "_AToB"("B");
+
+-- CreateIndex
+CREATE INDEX "_Loop_B_index" ON "_Loop"("B");
 
 -- AddForeignKey
 ALTER TABLE "_Follows" ADD CONSTRAINT "_Follows_A_fkey" FOREIGN KEY ("A") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -106,3 +142,15 @@ ALTER TABLE "_CategoryToProduct" ADD CONSTRAINT "_CategoryToProduct_A_fkey" FORE
 
 -- AddForeignKey
 ALTER TABLE "_CategoryToProduct" ADD CONSTRAINT "_CategoryToProduct_B_fkey" FOREIGN KEY ("B") REFERENCES "shop"."Product"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_AToB" ADD CONSTRAINT "_AToB_A_fkey" FOREIGN KEY ("A") REFERENCES "A"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_AToB" ADD CONSTRAINT "_AToB_B_fkey" FOREIGN KEY ("B") REFERENCES "B"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_Loop" ADD CONSTRAINT "_Loop_A_fkey" FOREIGN KEY ("A") REFERENCES "A"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "_Loop" ADD CONSTRAINT "_Loop_B_fkey" FOREIGN KEY ("B") REFERENCES "A"("id") ON DELETE CASCADE ON UPDATE CASCADE;

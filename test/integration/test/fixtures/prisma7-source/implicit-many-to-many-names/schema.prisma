@@ -41,3 +41,19 @@ model Product {
 
   @@schema("shop")
 }
+
+model A {
+  id   Int @id
+  bees B[]
+  next A[] @relation("Loop")
+  prev A[] @relation("Loop")
+
+  @@schema("public")
+}
+
+model B {
+  id  Int @id
+  ays A[]
+
+  @@schema("public")
+}

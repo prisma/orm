@@ -1,5 +1,5 @@
-import { toFieldName } from '@internal/family-sql/psl-infer';
 import type { PslModel } from '@internal/framework-components/psl-ast';
+import { createUniqueFieldName, toFieldName } from '@internal/sql-schema-ir/naming';
 import type { SqlTableIR } from '@internal/sql-schema-ir/types';
 import { assertDefined } from '@internal/utils/assertions';
 import { postgresError } from '../errors';
@@ -67,21 +67,6 @@ export function resolveColumnFieldName(
   return (
     fieldNamesByTable.get(tableName)?.get(columnName)?.fieldName ?? toFieldName(columnName).name
   );
-}
-
-export function createUniqueFieldName(
-  desiredName: string,
-  usedFieldNames: ReadonlySet<string>,
-): string {
-  if (!usedFieldNames.has(desiredName)) {
-    return desiredName;
-  }
-
-  let counter = 2;
-  while (usedFieldNames.has(`${desiredName}${counter}`)) {
-    counter++;
-  }
-  return `${desiredName}${counter}`;
 }
 
 export function buildTopLevelNameMap(

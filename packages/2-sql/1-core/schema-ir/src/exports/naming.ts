@@ -20,3 +20,14 @@ export {
   WIRE_NAME_PREFIX_MAX_BYTES,
   type WireName,
 } from '../naming';
+export {
+  createUniqueFieldName,
+  deriveRelationFieldName,
+  junctionRelationFieldNames,
+  type NameResult,
+  resolveUniqueRelationFieldName,
+  toEnumMemberName,
+  toEnumName,
+  toFieldName,
+  toModelName,
+} from '../psl-names';
