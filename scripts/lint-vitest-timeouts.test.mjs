@@ -70,6 +70,19 @@ describe('findDefaultTimeoutBudgets', () => {
 
   it('leaves timeouts.default alone outside the two budget settings', () => {
     assert.deepEqual(findDefaultTimeoutBudgets('const wait = timeouts.default;\n'), []);
+    assert.deepEqual(findDefaultTimeoutBudgets('    teardownTimeout: timeouts.default,\n'), []);
+  });
+
+  it('recognises a quoted key and a parenthesised value', () => {
+    assert.deepEqual(
+      findDefaultTimeoutBudgets(
+        '    \'testTimeout\': timeouts.default,\n    "hookTimeout": (timeouts.default),\n',
+      ),
+      [
+        { line: 1, setting: 'testTimeout' },
+        { line: 2, setting: 'hookTimeout' },
+      ],
+    );
   });
 });
 
@@ -93,6 +106,19 @@ describe('lint-vitest-timeouts', () => {
     const result = runLint();
 
     assert.equal(result.status, 0, result.stderr);
+  });
+
+  it('scans a config written in JavaScript', () => {
+    writeRepoFile(
+      'packages/a/vitest.config.cjs',
+      "const { timeouts } = require('@repo/test-utils');\nmodule.exports = {\n  test: {\n    hookTimeout: timeouts.default,\n  },\n};\n",
+    );
+    git('add', '-A');
+
+    const result = runLint();
+
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /packages\/a\/vitest\.config\.cjs:4 hookTimeout/);
   });
 
   it('ignores an untracked config', () => {

@@ -396,9 +396,10 @@ async function executeMigrationPlanCommandInner(
   const resolveImportSpecifier = createProjectSpecifierResolver(options.configPath);
 
   // Likewise the destination snapshot's declarations: rendered now, written
-  // with the planned package later.
+  // with the planned package later. A plan whose source already is the
+  // destination writes no new snapshot, so it renders nothing.
   let destinationDeclarations: string | null = null;
-  if (!destinationInStore) {
+  if (!destinationInStore && fromHash !== toStorageHash) {
     const rendered = await renderSnapshotDeclarations({
       client: options.client,
       contractJson: emittedContractJson,

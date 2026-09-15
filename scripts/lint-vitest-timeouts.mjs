@@ -20,7 +20,10 @@ import { join } from 'node:path';
 
 const GIT_ROOT = process.cwd();
 
-const BUDGET_LINE = /^\s*(testTimeout|hookTimeout)\s*:\s*timeouts\.default\b/;
+const BUDGET_LINE = /^\s*['"]?(testTimeout|hookTimeout)['"]?\s*:\s*\(?\s*timeouts\.default\b/;
+
+/** Every extension vitest loads a config from. */
+const CONFIG_GLOBS = ['js', 'mjs', 'cjs', 'ts', 'cts', 'mts'].map((ext) => `*vitest.config.${ext}`);
 
 /** The lines of a vitest config that budget tests or hooks with `timeouts.default`. */
 export function findDefaultTimeoutBudgets(source) {
@@ -35,7 +38,7 @@ export function findDefaultTimeoutBudgets(source) {
 }
 
 function trackedVitestConfigs() {
-  const out = execFileSync('git', ['ls-files', '--', '*vitest.config.ts', '*vitest.config.mts'], {
+  const out = execFileSync('git', ['ls-files', '--', ...CONFIG_GLOBS], {
     cwd: GIT_ROOT,
     encoding: 'utf-8',
   });
