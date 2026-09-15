@@ -8,6 +8,7 @@
  * composition.
  */
 
+import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { SqlAggregateDescriptor } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import { buildSqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/aggregate-descriptor-registry';
 import {
@@ -16,7 +17,7 @@ import {
   FunctionCallExpr,
 } from '@internal/sql-relational-core/ast';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createAggregateBuilder } from '../src/aggregate-builder';
 import { Collection, reservedCollectionMemberNames } from '../src/collection';
 import { orm } from '../src/orm';
@@ -142,6 +143,52 @@ describe('derived aggregate builder', () => {
 });
 
 describe('empty-input answers', () => {
+  it('prepared consumers retain metadata but convert contributed empty values separately', async () => {
+    const runtime = createMockRuntime();
+    const lower = vi.fn(headcountAny.lower!);
+    const context = contextWith([{ ...headcountAny, lower }]);
+    const resolve = vi.spyOn(context.aggregateDescriptors, 'resolve');
+    const original = context.contractCodecs.forCodecRef.bind(context.contractCodecs);
+    const decodeJson = vi.fn(() => ({ value: 0 }));
+    const codecs = vi.spyOn(context.contractCodecs, 'forCodecRef').mockImplementation((ref) => ({
+      ...original(ref),
+      decodeJson,
+    }));
+    const posts = new Collection({ runtime, context }, 'Post', { namespaceId: 'public' });
+    const description = posts.prepared.aggregate((agg) => ({
+      total: (agg as unknown as DynamicAggregateMethods)['headcount']!(),
+    }));
+    const resolutions = resolve.mock.calls.length;
+    const bindings = codecs.mock.calls.length;
+    expect(resolutions).toBeGreaterThan(0);
+    expect(bindings).toBeGreaterThan(0);
+    expect(lower).toHaveBeenCalledOnce();
+    expect(decodeJson).not.toHaveBeenCalled();
+    const rows = (values: Record<string, unknown>[]) =>
+      new AsyncIterableResult(
+        (async function* () {
+          yield* values;
+        })(),
+      );
+    const [a, b] = await Promise.all([
+      description.consume(rows([])),
+      description.consume(rows([{ total: null }])),
+    ]);
+    expect(a).toEqual({ total: { value: 0 } });
+    expect(b).toEqual(a);
+    expect(a.total).not.toBe(b.total);
+    expect(decodeJson).toHaveBeenCalledTimes(2);
+    const decoded = { value: 7 };
+    expect(await description.consume(rows([{ total: decoded }]))).toEqual({ total: decoded });
+    expect(decodeJson).toHaveBeenCalledTimes(2);
+    expect(resolve).toHaveBeenCalledTimes(resolutions);
+    expect(codecs).toHaveBeenCalledTimes(bindings);
+    expect(lower).toHaveBeenCalledOnce();
+    expect(runtime.executions).toEqual([]);
+    codecs.mockRestore();
+    resolve.mockRestore();
+  });
+
   // Each non-nullable row declares its empty answer in its own result codec's
   // canonical JSON, so the two rows below answer in different forms from the
   // same zero: decimal text reads back as a `bigint`, a JSON number as a

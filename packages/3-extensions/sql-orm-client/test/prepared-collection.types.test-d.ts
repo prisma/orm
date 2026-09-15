@@ -17,8 +17,15 @@ test('prepared terminals preserve projections and nested includes', () => {
   selected.prepared.where({ id: 1 });
   // @ts-expect-error mutations are not preparation terminals
   selected.prepared.create({});
-  // @ts-expect-error aggregate preparation is not exposed
-  selected.prepared.aggregate(() => ({}));
+  const aggregate = selected.prepared.aggregate((agg) => ({
+    total: agg.count(),
+    min: agg.min('id'),
+  }));
+  expectTypeOf(aggregate.consume).returns.toEqualTypeOf<
+    Promise<{ total: number; min: number | null }>
+  >();
+  // @ts-expect-error aggregate field operands remain model field names
+  selected.prepared.aggregate((agg) => ({ min: agg.min('missing') }));
   // @ts-expect-error first rejects unknown fields
   selected.prepared.first({ missing: 1 });
 });

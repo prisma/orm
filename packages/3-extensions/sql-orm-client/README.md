@@ -86,7 +86,9 @@ ORM equality and inequality accept nullable prepared parameters: two nulls compa
 
 Root and nested `.limit(params.take).offset(params.skip)` accept SQL's non-nullable numeric expression operands, including paginated row/scalar/combine include refinements and distinct wrappers. Prepared executions keep SQL and binding slots fixed while pagination values change. `prepared.first()` replaces an earlier limit with `1`; a placeholder used only by that replaced limit remains subject to unused-declaration validation.
 
-Aggregate or mutation terminals, custom helper preparation and dynamic parameter lists are not supported.
+Ungrouped collections also expose `.prepared.aggregate(selector, configure?)`. For example, `db.prepare({}, () => db.orm.public.Post.prepared.aggregate((agg) => ({ total: agg.count() })))` returns a query whose `query(target, {})` produces `Promise<{ total: number }>`. Preparation invokes the selector and annotation callback once and retains alias, empty-result descriptor and codec metadata. Executions return fresh objects; projected values are already decoded by SQL runtime, while contributed empty-result conversion runs separately whenever a fallback is needed. WHERE parameters and pre-aggregate pagination use the same collection chain as ordinary aggregates.
+
+Grouped aggregate and mutation preparation, custom helper preparation and dynamic parameter lists are not supported.
 
 ## Pagination
 
