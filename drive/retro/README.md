@@ -19,7 +19,7 @@ When a retro lesson could land in multiple surfaces, the team's preference:
 
 Patterns the team has seen multiple times. Each entry: pattern → severity → mitigation surface (where it landed).
 
-_(Empty at seeding; populated by retros over time.)_
+- **2026-09-15 — Final editor-project retro:** Editor acceptance must verify the rendered editor, not just HTTP or LSP transport. Record invocation and acceptance separately; verify the applied edit, caret, and visible follow-up suggestions, including required client opt-ins.
 
 ## Mandatory-final-retro template
 
