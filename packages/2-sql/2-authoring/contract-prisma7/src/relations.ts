@@ -48,7 +48,6 @@ export interface RelationModel {
   readonly namespaceId: string;
   readonly sourceId: string;
   readonly columns: ReadonlyMap<string, FieldNode>;
-  /** Names of the fields marked `@ignore`. */
   readonly ignoredFields: ReadonlySet<string>;
   /** Relation fields marked `@ignore`; their back-relations are omitted with them. */
   readonly ignoredRelationFields: readonly RelationField[];

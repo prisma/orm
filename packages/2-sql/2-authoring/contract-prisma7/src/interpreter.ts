@@ -1011,7 +1011,7 @@ function readField(args: ReadFieldArgs): void {
     diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED',
-        `${label} combines @updatedAt with ${written}, which Prisma 8 cannot spell yet. Remove ${written}: @updatedAt still sets the value on create and on update, and Prisma 7's next migration removes the column default.`,
+        `${label} combines @updatedAt with ${written}, which Prisma 8 cannot express yet. Remove ${written}: @updatedAt still sets the value on create and on update, and Prisma 7's next migration removes the column default.`,
         sourceId,
         defaultAttribute.span,
       ),
@@ -1054,7 +1054,7 @@ function readField(args: ReadFieldArgs): void {
     diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED',
-        `${label} is optional and its value comes from ${written}, which Prisma 8 cannot spell on an optional field yet. Remove ${written} and keep the "?": the database does not change, and both clients then stop filling the value.`,
+        `${label} is optional and its value comes from ${written}, which Prisma 8 cannot express on an optional field yet. Remove ${written} and keep the "?": the database does not change, and both clients then stop filling the value.`,
         sourceId,
         generatingAttribute.span,
       ),

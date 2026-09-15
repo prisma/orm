@@ -1,5 +1,5 @@
 /**
- * Each diagnostic for a generated value Prisma 8 cannot spell points at the
+ * Each diagnostic for a generated value Prisma 8 cannot express points at the
  * attribute its message says to remove. Removing exactly those attributes from
  * the supported schema must give a contract that verifies with zero findings
  * against the SQL Prisma 7.10.0 generated for the unedited schema.
@@ -46,7 +46,7 @@ function load(directory: string, fileName: string, schema: string) {
   });
 }
 
-describe('advice for generated values Prisma 8 cannot spell', () => {
+describe('advice for generated values Prisma 8 cannot express', () => {
   it(
     'removing the attribute each diagnostic names makes the supported schema verify against the database Prisma 7 built',
     async () => {
