@@ -240,14 +240,14 @@ describe('executeContractEmit', () => {
           code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
           severity: 'error',
           summary:
-            'prisma/schema.prisma:9:1 PSL.PRISMA7_VIEW_UNSUPPORTED: View "ActiveUsers" is not supported; Prisma 8 has no views.',
+            'prisma/schema.prisma:9:1 View "ActiveUsers" is not supported; Prisma 8 has no views.',
           nextActions: [],
           where: { path: 'prisma/schema.prisma', line: 9 },
         },
         {
           code: 'PSL.PRISMA7_SCHEMA_READ_FAILED',
           severity: 'error',
-          summary: 'prisma/schema PSL.PRISMA7_SCHEMA_READ_FAILED: ENOENT',
+          summary: 'prisma/schema ENOENT',
           nextActions: [],
           where: { path: 'prisma/schema' },
         },

@@ -188,7 +188,7 @@ withTempDir(({ createTempDir }) => {
         const terminalRun = await runContractEmit(ctx);
         expect(terminalRun.exitCode).toBe(2);
         expect(stripAnsi(terminalRun.stderr)).toContain(
-          './schema.prisma:9:1 PSL.PRISMA7_VIEW_UNSUPPORTED: View "ActiveUsers" is not supported',
+          '[PSL.PRISMA7_VIEW_UNSUPPORTED] ./schema.prisma:9:1 View "ActiveUsers" is not supported',
         );
         expect(stripAnsi(terminalRun.stderr)).not.toContain('return ok(Contract)');
 
@@ -211,7 +211,7 @@ withTempDir(({ createTempDir }) => {
               code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
               severity: 'error',
               summary: expect.stringContaining(
-                './schema.prisma:9:1 PSL.PRISMA7_VIEW_UNSUPPORTED: View "ActiveUsers" is not supported',
+                './schema.prisma:9:1 View "ActiveUsers" is not supported',
               ),
               nextActions: [],
               where: { path: './schema.prisma', line: 9 },

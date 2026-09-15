@@ -87,9 +87,9 @@ function formatLocation({ sourceId, line, character }: DiagnosticLocation): stri
 
 /**
  * The finding the CLI prints under the error, one per source diagnostic. The
- * summary starts with the location and the source's code because the terminal
- * renderer shows a finding's summary and nothing of its `where`. A source code
- * that is not yet dotted is wrapped as `CONTRACT.SOURCE_DIAGNOSTIC`.
+ * terminal renderer prints a finding's code and summary and nothing of its
+ * `where`, so the summary starts with the location. A source code that is not
+ * yet dotted is wrapped as `CONTRACT.SOURCE_DIAGNOSTIC` and named in the summary.
  */
 function sourceDiagnosticToFinding(raw: unknown): Diagnostic | undefined {
   if (!isRecord(raw)) return undefined;
@@ -97,9 +97,10 @@ function sourceDiagnosticToFinding(raw: unknown): Diagnostic | undefined {
   const message = typeof raw['message'] === 'string' ? raw['message'] : '';
   const location = diagnosticLocation(raw);
   const formatted = formatLocation(location);
+  const locatedSummary = (text: string) =>
+    formatted === undefined ? text : `${formatted} ${text}`;
   const finding = {
     severity: 'error',
-    summary: `${formatted === undefined ? '' : `${formatted} `}${code}: ${message}`,
     nextActions: [],
     ...ifDefined(
       'where',
@@ -109,8 +110,13 @@ function sourceDiagnosticToFinding(raw: unknown): Diagnostic | undefined {
     ),
   } as const;
   return isStructuredErrorCode(code)
-    ? { code, ...finding }
-    : { code: 'CONTRACT.SOURCE_DIAGNOSTIC', ...finding, meta: { code } };
+    ? { code, summary: locatedSummary(message), ...finding }
+    : {
+        code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+        summary: locatedSummary(`${code}: ${message}`),
+        ...finding,
+        meta: { code },
+      };
 }
 
 function sourceDiagnosticsToFindings(diagnostics: readonly unknown[]): Diagnostic[] {
