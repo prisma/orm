@@ -242,8 +242,8 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly CategoriesOnPostsManyToMany: {
-      readonly postId: CodecTypes['pg/text@1']['output'];
       readonly categoryId: CodecTypes['pg/text@1']['output'];
+      readonly postId: CodecTypes['pg/text@1']['output'];
     };
     readonly CategoryManyToMany: {
       readonly id: CodecTypes['pg/text@1']['output'];
@@ -258,8 +258,8 @@ export type FieldOutputTypes = {
 export type FieldInputTypes = {
   readonly public: {
     readonly CategoriesOnPostsManyToMany: {
-      readonly postId: CodecTypes['pg/text@1']['input'];
       readonly categoryId: CodecTypes['pg/text@1']['input'];
+      readonly postId: CodecTypes['pg/text@1']['input'];
     };
     readonly CategoryManyToMany: {
       readonly id: CodecTypes['pg/text@1']['input'];
@@ -305,11 +305,12 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_PostManyToMany = {
-    id: CodecTypes['pg/text@1']['output'];
-    published: CodecTypes['pg/bool@1']['output'] | null;
-    categories: public_CategoriesOnPostsManyToMany[];
-    readonly [RelationKeys]?: 'categories';
+  export type public_CategoriesOnPostsManyToMany = {
+    categoryId: CodecTypes['pg/text@1']['output'];
+    postId: CodecTypes['pg/text@1']['output'];
+    category: public_CategoryManyToMany;
+    post: public_PostManyToMany;
+    readonly [RelationKeys]?: 'category' | 'post';
   };
   export type public_CategoryManyToMany = {
     id: CodecTypes['pg/text@1']['output'];
@@ -317,20 +318,19 @@ export namespace Models {
     posts: public_CategoriesOnPostsManyToMany[];
     readonly [RelationKeys]?: 'posts';
   };
-  export type public_CategoriesOnPostsManyToMany = {
-    postId: CodecTypes['pg/text@1']['output'];
-    categoryId: CodecTypes['pg/text@1']['output'];
-    category: public_CategoryManyToMany;
-    post: public_PostManyToMany;
-    readonly [RelationKeys]?: 'category' | 'post';
+  export type public_PostManyToMany = {
+    id: CodecTypes['pg/text@1']['output'];
+    published: CodecTypes['pg/bool@1']['output'] | null;
+    categories: public_CategoriesOnPostsManyToMany[];
+    readonly [RelationKeys]?: 'categories';
   };
 }
 
 export declare const models: {
   public: {
-    PostManyToMany: Models.public_PostManyToMany;
-    CategoryManyToMany: Models.public_CategoryManyToMany;
     CategoriesOnPostsManyToMany: Models.public_CategoriesOnPostsManyToMany;
+    CategoryManyToMany: Models.public_CategoryManyToMany;
+    PostManyToMany: Models.public_PostManyToMany;
   };
 };
 
@@ -354,12 +354,12 @@ type ContractBase = Omit<
           readonly table: {
             readonly categoriesOnPostsManyToMany: {
               columns: {
-                readonly postId: {
+                readonly categoryId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly categoryId: {
+                readonly postId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -369,15 +369,15 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'categoriesOnPostsManyToMany_postId_idx_a7a72715';
-                  readonly prefix: 'categoriesOnPostsManyToMany_postId_idx';
-                  readonly columns: readonly ['postId'];
-                  readonly unique: false;
-                },
-                {
                   readonly name: 'categoriesOnPostsManyToMany_categoryId_idx_15c304f2';
                   readonly prefix: 'categoriesOnPostsManyToMany_categoryId_idx';
                   readonly columns: readonly ['categoryId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'categoriesOnPostsManyToMany_postId_idx_a7a72715';
+                  readonly prefix: 'categoriesOnPostsManyToMany_postId_idx';
+                  readonly columns: readonly ['postId'];
                   readonly unique: false;
                 },
               ];
@@ -455,17 +455,17 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly postManyToMany: {
+    readonly categoriesOnPostsManyToMany: {
       readonly namespace: 'public' & NamespaceId;
-      readonly model: 'PostManyToMany';
+      readonly model: 'CategoriesOnPostsManyToMany';
     };
     readonly categoryManyToMany: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'CategoryManyToMany';
     };
-    readonly categoriesOnPostsManyToMany: {
+    readonly postManyToMany: {
       readonly namespace: 'public' & NamespaceId;
-      readonly model: 'CategoriesOnPostsManyToMany';
+      readonly model: 'PostManyToMany';
     };
   };
   readonly domain: {
@@ -474,11 +474,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly CategoriesOnPostsManyToMany: {
             readonly fields: {
-              readonly postId: {
+              readonly categoryId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly categoryId: {
+              readonly postId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -513,8 +513,8 @@ type ContractBase = Omit<
               readonly table: 'categoriesOnPostsManyToMany';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly postId: { readonly column: 'postId' };
                 readonly categoryId: { readonly column: 'categoryId' };
+                readonly postId: { readonly column: 'postId' };
               };
             };
           };

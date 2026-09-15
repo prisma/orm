@@ -253,8 +253,8 @@ export type FieldOutputTypes = {
     readonly WalletLink: {
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'];
-      readonly walletId: CodecTypes['pg/text@1']['output'];
       readonly userId: CodecTypes['pg/text@1']['output'];
+      readonly walletId: CodecTypes['pg/text@1']['output'];
     };
   };
 };
@@ -271,8 +271,8 @@ export type FieldInputTypes = {
     readonly WalletLink: {
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'];
-      readonly walletId: CodecTypes['pg/text@1']['input'];
       readonly userId: CodecTypes['pg/text@1']['input'];
+      readonly walletId: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -329,8 +329,8 @@ export namespace Models {
   export type public_WalletLink = {
     id: CodecTypes['pg/text@1']['output'];
     name: CodecTypes['pg/text@1']['output'];
-    walletId: CodecTypes['pg/text@1']['output'];
     userId: CodecTypes['pg/text@1']['output'];
+    walletId: CodecTypes['pg/text@1']['output'];
     user: public_User;
     wallet: public_Wallet;
     readonly [RelationKeys]?: 'user' | 'wallet';
@@ -411,12 +411,12 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly walletId: {
+                readonly userId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly userId: {
+                readonly walletId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -426,15 +426,15 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'walletLink_walletId_idx_2e003173';
-                  readonly prefix: 'walletLink_walletId_idx';
-                  readonly columns: readonly ['walletId'];
-                  readonly unique: false;
-                },
-                {
                   readonly name: 'walletLink_userId_idx_a489d58a';
                   readonly prefix: 'walletLink_userId_idx';
                   readonly columns: readonly ['userId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'walletLink_walletId_idx_2e003173';
+                  readonly prefix: 'walletLink_walletId_idx';
+                  readonly columns: readonly ['walletId'];
                   readonly unique: false;
                 },
               ];
@@ -563,11 +563,11 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly walletId: {
+              readonly userId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly userId: {
+              readonly walletId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -601,8 +601,8 @@ type ContractBase = Omit<
               readonly fields: {
                 readonly id: { readonly column: 'id' };
                 readonly name: { readonly column: 'name' };
-                readonly walletId: { readonly column: 'walletId' };
                 readonly userId: { readonly column: 'userId' };
+                readonly walletId: { readonly column: 'walletId' };
               };
             };
           };

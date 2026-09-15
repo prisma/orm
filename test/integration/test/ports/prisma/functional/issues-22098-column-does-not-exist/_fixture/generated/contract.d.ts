@@ -243,16 +243,16 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly test: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly TESTE_N_MERICO: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly test: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly TESTE_N_MERICO: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -275,8 +275,8 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_test = {
-    id: CodecTypes['pg/text@1']['output'];
     TESTE_N_MERICO: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/text@1']['output'];
     readonly [RelationKeys]?: never;
   };
 }
@@ -307,12 +307,12 @@ type ContractBase = Omit<
           readonly table: {
             readonly test: {
               columns: {
-                readonly id: {
+                readonly TESTE_NÚMERICO: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly TESTE_NÚMERICO: {
+                readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -342,11 +342,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly test: {
             readonly fields: {
-              readonly id: {
+              readonly TESTE_N_MERICO: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly TESTE_N_MERICO: {
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -356,8 +356,8 @@ type ContractBase = Omit<
               readonly table: 'test';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly TESTE_N_MERICO: { readonly column: 'TESTE_NÚMERICO' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };

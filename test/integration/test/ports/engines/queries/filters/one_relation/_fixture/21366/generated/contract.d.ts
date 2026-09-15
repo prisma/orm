@@ -242,24 +242,24 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly device: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly device_id: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
     };
     readonly device_state: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly device_id: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly device: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly device_id: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
     };
     readonly device_state: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly device_id: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
     };
   };
 };
@@ -290,14 +290,14 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_device = {
-    id: CodecTypes['pg/int4@1']['output'];
     device_id: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
     current_state: public_device_state;
     readonly [RelationKeys]?: 'current_state';
   };
   export type public_device_state = {
-    id: CodecTypes['pg/int4@1']['output'];
     device_id: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
     device: public_device[];
     readonly [RelationKeys]?: 'device';
   };
@@ -330,14 +330,14 @@ type ContractBase = Omit<
           readonly table: {
             readonly device: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly device_id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
               };
@@ -361,14 +361,14 @@ type ContractBase = Omit<
             };
             readonly device_state: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly device_id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
               };
@@ -400,13 +400,13 @@ type ContractBase = Omit<
         readonly models: {
           readonly device: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly device_id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
             readonly relations: {
@@ -427,20 +427,20 @@ type ContractBase = Omit<
               readonly table: 'device';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly device_id: { readonly column: 'device_id' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
           readonly device_state: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly device_id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
             readonly relations: {
@@ -460,8 +460,8 @@ type ContractBase = Omit<
               readonly table: 'device_state';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly device_id: { readonly column: 'device_id' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };

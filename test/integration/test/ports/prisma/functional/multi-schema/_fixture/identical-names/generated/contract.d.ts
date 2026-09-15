@@ -243,30 +243,30 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly base: {
     readonly User: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly email: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
   };
   readonly transactional: {
     readonly Post: {
+      readonly authorId: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly title: CodecTypes['pg/text@1']['output'];
-      readonly authorId: CodecTypes['pg/text@1']['output'];
     };
   };
 };
 export type FieldInputTypes = {
   readonly base: {
     readonly User: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly email: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
   };
   readonly transactional: {
     readonly Post: {
+      readonly authorId: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly title: CodecTypes['pg/text@1']['input'];
-      readonly authorId: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -305,15 +305,15 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type base_User = {
-    id: CodecTypes['pg/text@1']['output'];
     email: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/text@1']['output'];
     posts: transactional_Post[];
     readonly [RelationKeys]?: 'posts';
   };
   export type transactional_Post = {
+    authorId: CodecTypes['pg/text@1']['output'];
     id: CodecTypes['pg/text@1']['output'];
     title: CodecTypes['pg/text@1']['output'];
-    authorId: CodecTypes['pg/text@1']['output'];
     author: base_User;
     readonly [RelationKeys]?: 'author';
   };
@@ -348,12 +348,12 @@ type ContractBase = Omit<
           readonly table: {
             readonly some_table: {
               columns: {
-                readonly id: {
+                readonly email: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly email: {
+                readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -379,17 +379,17 @@ type ContractBase = Omit<
           readonly table: {
             readonly some_table: {
               columns: {
+                readonly authorId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
                 readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly title: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly authorId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -446,11 +446,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly User: {
             readonly fields: {
-              readonly id: {
+              readonly email: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly email: {
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -472,8 +472,8 @@ type ContractBase = Omit<
               readonly table: 'some_table';
               readonly namespaceId: 'base';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly email: { readonly column: 'email' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
@@ -483,15 +483,15 @@ type ContractBase = Omit<
         readonly models: {
           readonly Post: {
             readonly fields: {
+              readonly authorId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly title: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly authorId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -511,9 +511,9 @@ type ContractBase = Omit<
               readonly table: 'some_table';
               readonly namespaceId: 'transactional';
               readonly fields: {
+                readonly authorId: { readonly column: 'authorId' };
                 readonly id: { readonly column: 'id' };
                 readonly title: { readonly column: 'title' };
-                readonly authorId: { readonly column: 'authorId' };
               };
             };
           };

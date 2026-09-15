@@ -29,8 +29,8 @@ export type FieldOutputTypes = {
   readonly __unbound__: {
     readonly User: {
       readonly _id: CodecTypes['mongo/objectId@1']['output'];
-      readonly name: CodecTypes['mongo/string@1']['output'] | null;
       readonly ids: ReadonlyArray<CodecTypes['mongo/objectId@1']['output']>;
+      readonly name: CodecTypes['mongo/string@1']['output'] | null;
     };
   };
 };
@@ -38,8 +38,8 @@ export type FieldInputTypes = {
   readonly __unbound__: {
     readonly User: {
       readonly _id: CodecTypes['mongo/objectId@1']['input'];
-      readonly name: CodecTypes['mongo/string@1']['input'] | null;
       readonly ids: ReadonlyArray<CodecTypes['mongo/objectId@1']['input']>;
+      readonly name: CodecTypes['mongo/string@1']['input'] | null;
     };
   };
 };
@@ -47,8 +47,8 @@ export type FieldInputTypes = {
 export namespace Models {
   export type unbound_User = {
     _id: CodecTypes['mongo/objectId@1']['output'];
-    name: CodecTypes['mongo/string@1']['output'] | null;
     ids: ReadonlyArray<CodecTypes['mongo/objectId@1']['output']>;
+    name: CodecTypes['mongo/string@1']['output'] | null;
     readonly [RelationKeys]?: never;
   };
 }
@@ -113,14 +113,14 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
               };
-              readonly name: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
               readonly ids: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
                 readonly many: true;
+              };
+              readonly name: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
               };
             };
             readonly relations: Record<string, never>;

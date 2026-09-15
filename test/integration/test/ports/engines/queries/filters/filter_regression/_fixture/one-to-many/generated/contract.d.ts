@@ -246,9 +246,9 @@ export type FieldOutputTypes = {
       readonly name: CodecTypes['pg/text@1']['output'] | null;
     };
     readonly Location: {
+      readonly companyId: CodecTypes['pg/int4@1']['output'] | null;
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'] | null;
-      readonly companyId: CodecTypes['pg/int4@1']['output'] | null;
     };
   };
 };
@@ -259,9 +259,9 @@ export type FieldInputTypes = {
       readonly name: CodecTypes['pg/text@1']['input'] | null;
     };
     readonly Location: {
+      readonly companyId: CodecTypes['pg/int4@1']['input'] | null;
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'] | null;
-      readonly companyId: CodecTypes['pg/int4@1']['input'] | null;
     };
   };
 };
@@ -293,25 +293,25 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_Location = {
-    id: CodecTypes['pg/int4@1']['output'];
-    name: CodecTypes['pg/text@1']['output'] | null;
-    companyId: CodecTypes['pg/int4@1']['output'] | null;
-    company: public_Company | null;
-    readonly [RelationKeys]?: 'company';
-  };
   export type public_Company = {
     id: CodecTypes['pg/int4@1']['output'];
     name: CodecTypes['pg/text@1']['output'] | null;
     locations: public_Location[];
     readonly [RelationKeys]?: 'locations';
   };
+  export type public_Location = {
+    companyId: CodecTypes['pg/int4@1']['output'] | null;
+    id: CodecTypes['pg/int4@1']['output'];
+    name: CodecTypes['pg/text@1']['output'] | null;
+    company: public_Company | null;
+    readonly [RelationKeys]?: 'company';
+  };
 }
 
 export declare const models: {
   public: {
-    Location: Models.public_Location;
     Company: Models.public_Company;
+    Location: Models.public_Location;
   };
 };
 
@@ -353,6 +353,11 @@ type ContractBase = Omit<
             };
             readonly location: {
               columns: {
+                readonly companyId: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
@@ -361,11 +366,6 @@ type ContractBase = Omit<
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
-                  readonly nullable: true;
-                };
-                readonly companyId: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
                   readonly nullable: true;
                 };
               };
@@ -405,8 +405,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly location: { readonly namespace: 'public' & NamespaceId; readonly model: 'Location' };
     readonly company: { readonly namespace: 'public' & NamespaceId; readonly model: 'Company' };
+    readonly location: { readonly namespace: 'public' & NamespaceId; readonly model: 'Location' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -447,6 +447,10 @@ type ContractBase = Omit<
           };
           readonly Location: {
             readonly fields: {
+              readonly companyId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
@@ -454,10 +458,6 @@ type ContractBase = Omit<
               readonly name: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly companyId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
             readonly relations: {
@@ -478,9 +478,9 @@ type ContractBase = Omit<
               readonly table: 'location';
               readonly namespaceId: 'public';
               readonly fields: {
+                readonly companyId: { readonly column: 'companyId' };
                 readonly id: { readonly column: 'id' };
                 readonly name: { readonly column: 'name' };
-                readonly companyId: { readonly column: 'companyId' };
               };
             };
           };

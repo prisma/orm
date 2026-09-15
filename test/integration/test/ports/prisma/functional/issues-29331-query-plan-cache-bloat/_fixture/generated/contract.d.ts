@@ -244,7 +244,9 @@ export type FieldOutputTypes = {
   readonly public: {
     readonly Contact: { readonly id: CodecTypes['pg/text@1']['output'] };
     readonly ContactAnalytics: {
-      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly bool1: CodecTypes['pg/bool@1']['output'] | null;
+      readonly bool2: CodecTypes['pg/bool@1']['output'] | null;
+      readonly bool3: CodecTypes['pg/bool@1']['output'] | null;
       readonly contactId: CodecTypes['pg/text@1']['output'];
       readonly date1: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly date2: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
@@ -253,16 +255,14 @@ export type FieldOutputTypes = {
       readonly date5: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly date6: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly date7: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly float1: CodecTypes['pg/float8@1']['output'] | null;
+      readonly float2: CodecTypes['pg/float8@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
       readonly val1: CodecTypes['pg/int4@1']['output'] | null;
       readonly val2: CodecTypes['pg/int4@1']['output'] | null;
       readonly val3: CodecTypes['pg/int4@1']['output'] | null;
       readonly val4: CodecTypes['pg/int4@1']['output'] | null;
       readonly val5: CodecTypes['pg/int4@1']['output'] | null;
-      readonly float1: CodecTypes['pg/float8@1']['output'] | null;
-      readonly float2: CodecTypes['pg/float8@1']['output'] | null;
-      readonly bool1: CodecTypes['pg/bool@1']['output'] | null;
-      readonly bool2: CodecTypes['pg/bool@1']['output'] | null;
-      readonly bool3: CodecTypes['pg/bool@1']['output'] | null;
     };
   };
 };
@@ -270,7 +270,9 @@ export type FieldInputTypes = {
   readonly public: {
     readonly Contact: { readonly id: CodecTypes['pg/text@1']['input'] };
     readonly ContactAnalytics: {
-      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly bool1: CodecTypes['pg/bool@1']['input'] | null;
+      readonly bool2: CodecTypes['pg/bool@1']['input'] | null;
+      readonly bool3: CodecTypes['pg/bool@1']['input'] | null;
       readonly contactId: CodecTypes['pg/text@1']['input'];
       readonly date1: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly date2: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
@@ -279,16 +281,14 @@ export type FieldInputTypes = {
       readonly date5: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly date6: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly date7: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly float1: CodecTypes['pg/float8@1']['input'] | null;
+      readonly float2: CodecTypes['pg/float8@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
       readonly val1: CodecTypes['pg/int4@1']['input'] | null;
       readonly val2: CodecTypes['pg/int4@1']['input'] | null;
       readonly val3: CodecTypes['pg/int4@1']['input'] | null;
       readonly val4: CodecTypes['pg/int4@1']['input'] | null;
       readonly val5: CodecTypes['pg/int4@1']['input'] | null;
-      readonly float1: CodecTypes['pg/float8@1']['input'] | null;
-      readonly float2: CodecTypes['pg/float8@1']['input'] | null;
-      readonly bool1: CodecTypes['pg/bool@1']['input'] | null;
-      readonly bool2: CodecTypes['pg/bool@1']['input'] | null;
-      readonly bool3: CodecTypes['pg/bool@1']['input'] | null;
     };
   };
 };
@@ -352,7 +352,9 @@ export namespace Models {
     readonly [RelationKeys]?: 'analytics';
   };
   export type public_ContactAnalytics = {
-    id: CodecTypes['pg/text@1']['output'];
+    bool1: CodecTypes['pg/bool@1']['output'] | null;
+    bool2: CodecTypes['pg/bool@1']['output'] | null;
+    bool3: CodecTypes['pg/bool@1']['output'] | null;
     contactId: CodecTypes['pg/text@1']['output'];
     date1: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
     date2: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
@@ -361,16 +363,14 @@ export namespace Models {
     date5: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
     date6: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
     date7: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+    float1: CodecTypes['pg/float8@1']['output'] | null;
+    float2: CodecTypes['pg/float8@1']['output'] | null;
+    id: CodecTypes['pg/text@1']['output'];
     val1: CodecTypes['pg/int4@1']['output'] | null;
     val2: CodecTypes['pg/int4@1']['output'] | null;
     val3: CodecTypes['pg/int4@1']['output'] | null;
     val4: CodecTypes['pg/int4@1']['output'] | null;
     val5: CodecTypes['pg/int4@1']['output'] | null;
-    float1: CodecTypes['pg/float8@1']['output'] | null;
-    float2: CodecTypes['pg/float8@1']['output'] | null;
-    bool1: CodecTypes['pg/bool@1']['output'] | null;
-    bool2: CodecTypes['pg/bool@1']['output'] | null;
-    bool3: CodecTypes['pg/bool@1']['output'] | null;
     contact: public_Contact;
     readonly [RelationKeys]?: 'contact';
   };
@@ -416,10 +416,20 @@ type ContractBase = Omit<
             };
             readonly contactAnalytics: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
+                readonly bool1: {
+                  readonly nativeType: 'bool';
+                  readonly codecId: 'pg/bool@1';
+                  readonly nullable: true;
+                };
+                readonly bool2: {
+                  readonly nativeType: 'bool';
+                  readonly codecId: 'pg/bool@1';
+                  readonly nullable: true;
+                };
+                readonly bool3: {
+                  readonly nativeType: 'bool';
+                  readonly codecId: 'pg/bool@1';
+                  readonly nullable: true;
                 };
                 readonly contactId: {
                   readonly nativeType: 'text';
@@ -461,6 +471,21 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: true;
                 };
+                readonly float1: {
+                  readonly nativeType: 'float8';
+                  readonly codecId: 'pg/float8@1';
+                  readonly nullable: true;
+                };
+                readonly float2: {
+                  readonly nativeType: 'float8';
+                  readonly codecId: 'pg/float8@1';
+                  readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
                 readonly val1: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
@@ -484,31 +509,6 @@ type ContractBase = Omit<
                 readonly val5: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
-                  readonly nullable: true;
-                };
-                readonly float1: {
-                  readonly nativeType: 'float8';
-                  readonly codecId: 'pg/float8@1';
-                  readonly nullable: true;
-                };
-                readonly float2: {
-                  readonly nativeType: 'float8';
-                  readonly codecId: 'pg/float8@1';
-                  readonly nullable: true;
-                };
-                readonly bool1: {
-                  readonly nativeType: 'bool';
-                  readonly codecId: 'pg/bool@1';
-                  readonly nullable: true;
-                };
-                readonly bool2: {
-                  readonly nativeType: 'bool';
-                  readonly codecId: 'pg/bool@1';
-                  readonly nullable: true;
-                };
-                readonly bool3: {
-                  readonly nativeType: 'bool';
-                  readonly codecId: 'pg/bool@1';
                   readonly nullable: true;
                 };
               };
@@ -586,9 +586,17 @@ type ContractBase = Omit<
           };
           readonly ContactAnalytics: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              readonly bool1: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
+              };
+              readonly bool2: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
+              };
+              readonly bool3: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
               };
               readonly contactId: {
                 readonly nullable: false;
@@ -643,6 +651,18 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamptz-temporal@1';
                 };
               };
+              readonly float1: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+              };
+              readonly float2: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
               readonly val1: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
@@ -663,26 +683,6 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly float1: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
-              };
-              readonly float2: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
-              };
-              readonly bool1: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
-              };
-              readonly bool2: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
-              };
-              readonly bool3: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
-              };
             };
             readonly relations: {
               readonly contact: {
@@ -702,7 +702,9 @@ type ContractBase = Omit<
               readonly table: 'contactAnalytics';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
+                readonly bool1: { readonly column: 'bool1' };
+                readonly bool2: { readonly column: 'bool2' };
+                readonly bool3: { readonly column: 'bool3' };
                 readonly contactId: { readonly column: 'contactId' };
                 readonly date1: { readonly column: 'date1' };
                 readonly date2: { readonly column: 'date2' };
@@ -711,16 +713,14 @@ type ContractBase = Omit<
                 readonly date5: { readonly column: 'date5' };
                 readonly date6: { readonly column: 'date6' };
                 readonly date7: { readonly column: 'date7' };
+                readonly float1: { readonly column: 'float1' };
+                readonly float2: { readonly column: 'float2' };
+                readonly id: { readonly column: 'id' };
                 readonly val1: { readonly column: 'val1' };
                 readonly val2: { readonly column: 'val2' };
                 readonly val3: { readonly column: 'val3' };
                 readonly val4: { readonly column: 'val4' };
                 readonly val5: { readonly column: 'val5' };
-                readonly float1: { readonly column: 'float1' };
-                readonly float2: { readonly column: 'float2' };
-                readonly bool1: { readonly column: 'bool1' };
-                readonly bool2: { readonly column: 'bool2' };
-                readonly bool3: { readonly column: 'bool3' };
               };
             };
           };

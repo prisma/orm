@@ -243,9 +243,9 @@ export type FieldOutputTypes = {
   readonly public: {
     readonly Character: { readonly id: CodecTypes['pg/text@1']['output'] };
     readonly CharacterInfo: {
+      readonly characterId: CodecTypes['pg/text@1']['output'];
       readonly entryId: CodecTypes['pg/text@1']['output'];
       readonly entryLanguage: CodecTypes['pg/text@1']['output'];
-      readonly characterId: CodecTypes['pg/text@1']['output'];
     };
   };
 };
@@ -253,9 +253,9 @@ export type FieldInputTypes = {
   readonly public: {
     readonly Character: { readonly id: CodecTypes['pg/text@1']['input'] };
     readonly CharacterInfo: {
+      readonly characterId: CodecTypes['pg/text@1']['input'];
       readonly entryId: CodecTypes['pg/text@1']['input'];
       readonly entryLanguage: CodecTypes['pg/text@1']['input'];
-      readonly characterId: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -287,9 +287,9 @@ export namespace Models {
     readonly [RelationKeys]?: 'info';
   };
   export type public_CharacterInfo = {
+    characterId: CodecTypes['pg/text@1']['output'];
     entryId: CodecTypes['pg/text@1']['output'];
     entryLanguage: CodecTypes['pg/text@1']['output'];
-    characterId: CodecTypes['pg/text@1']['output'];
     details: public_Character;
     readonly [RelationKeys]?: 'details';
   };
@@ -335,17 +335,17 @@ type ContractBase = Omit<
             };
             readonly characterInfo: {
               columns: {
+                readonly characterId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
                 readonly entryId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly entryLanguage: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly characterId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -425,15 +425,15 @@ type ContractBase = Omit<
           };
           readonly CharacterInfo: {
             readonly fields: {
+              readonly characterId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
               readonly entryId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly entryLanguage: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly characterId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -456,9 +456,9 @@ type ContractBase = Omit<
               readonly table: 'characterInfo';
               readonly namespaceId: 'public';
               readonly fields: {
+                readonly characterId: { readonly column: 'characterId' };
                 readonly entryId: { readonly column: 'entryId' };
                 readonly entryLanguage: { readonly column: 'entryLanguage' };
-                readonly characterId: { readonly column: 'characterId' };
               };
             };
           };

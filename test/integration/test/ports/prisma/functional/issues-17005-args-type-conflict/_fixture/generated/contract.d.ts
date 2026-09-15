@@ -246,8 +246,8 @@ export type FieldOutputTypes = {
     readonly Post: { readonly id: CodecTypes['pg/text@1']['output'] };
     readonly PostMedia: {
       readonly id: CodecTypes['pg/text@1']['output'];
-      readonly postId: CodecTypes['pg/text@1']['output'];
       readonly mediaId: CodecTypes['pg/text@1']['output'];
+      readonly postId: CodecTypes['pg/text@1']['output'];
     };
   };
 };
@@ -257,8 +257,8 @@ export type FieldInputTypes = {
     readonly Post: { readonly id: CodecTypes['pg/text@1']['input'] };
     readonly PostMedia: {
       readonly id: CodecTypes['pg/text@1']['input'];
-      readonly postId: CodecTypes['pg/text@1']['input'];
       readonly mediaId: CodecTypes['pg/text@1']['input'];
+      readonly postId: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -286,20 +286,20 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_Post = {
-    id: CodecTypes['pg/text@1']['output'];
-    media: public_PostMedia[];
-    readonly [RelationKeys]?: 'media';
-  };
   export type public_Media = {
     id: CodecTypes['pg/text@1']['output'];
     posts: public_PostMedia[];
     readonly [RelationKeys]?: 'posts';
   };
+  export type public_Post = {
+    id: CodecTypes['pg/text@1']['output'];
+    media: public_PostMedia[];
+    readonly [RelationKeys]?: 'media';
+  };
   export type public_PostMedia = {
     id: CodecTypes['pg/text@1']['output'];
-    postId: CodecTypes['pg/text@1']['output'];
     mediaId: CodecTypes['pg/text@1']['output'];
+    postId: CodecTypes['pg/text@1']['output'];
     media: public_Media;
     post: public_Post;
     readonly [RelationKeys]?: 'media' | 'post';
@@ -308,8 +308,8 @@ export namespace Models {
 
 export declare const models: {
   public: {
-    Post: Models.public_Post;
     Media: Models.public_Media;
+    Post: Models.public_Post;
     PostMedia: Models.public_PostMedia;
   };
 };
@@ -365,12 +365,12 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly postId: {
+                readonly mediaId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly mediaId: {
+                readonly postId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -380,15 +380,15 @@ type ContractBase = Omit<
               uniques: readonly [{ readonly columns: readonly ['postId', 'mediaId'] }];
               indexes: readonly [
                 {
-                  readonly name: 'postMedia_postId_idx_a7a72715';
-                  readonly prefix: 'postMedia_postId_idx';
-                  readonly columns: readonly ['postId'];
-                  readonly unique: false;
-                },
-                {
                   readonly name: 'postMedia_mediaId_idx_6b06655c';
                   readonly prefix: 'postMedia_mediaId_idx';
                   readonly columns: readonly ['mediaId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'postMedia_postId_idx_a7a72715';
+                  readonly prefix: 'postMedia_postId_idx';
+                  readonly columns: readonly ['postId'];
                   readonly unique: false;
                 },
               ];
@@ -430,8 +430,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
     readonly media: { readonly namespace: 'public' & NamespaceId; readonly model: 'Media' };
+    readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
     readonly postMedia: { readonly namespace: 'public' & NamespaceId; readonly model: 'PostMedia' };
   };
   readonly domain: {
@@ -496,11 +496,11 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly postId: {
+              readonly mediaId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly mediaId: {
+              readonly postId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -533,8 +533,8 @@ type ContractBase = Omit<
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly id: { readonly column: 'id' };
-                readonly postId: { readonly column: 'postId' };
                 readonly mediaId: { readonly column: 'mediaId' };
+                readonly postId: { readonly column: 'postId' };
               };
             };
           };

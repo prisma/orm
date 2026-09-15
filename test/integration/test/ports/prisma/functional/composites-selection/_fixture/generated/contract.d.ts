@@ -33,20 +33,20 @@ export type NameInput = {
   readonly firstName: CodecTypes['mongo/string@1']['input'];
   readonly lastName: CodecTypes['mongo/string@1']['input'];
 };
-export type ThingOutput = { readonly name: CodecTypes['mongo/string@1']['output'] };
-export type ThingInput = { readonly name: CodecTypes['mongo/string@1']['input'] };
 export type ProfileOutput = {
-  readonly name: NameOutput;
   readonly alternateName: NameOutput | null;
-  readonly url: CodecTypes['mongo/string@1']['output'];
   readonly favoriteThings: ReadonlyArray<ThingOutput>;
+  readonly name: NameOutput;
+  readonly url: CodecTypes['mongo/string@1']['output'];
 };
 export type ProfileInput = {
-  readonly name: NameInput;
   readonly alternateName: NameInput | null;
-  readonly url: CodecTypes['mongo/string@1']['input'];
   readonly favoriteThings: ReadonlyArray<ThingInput>;
+  readonly name: NameInput;
+  readonly url: CodecTypes['mongo/string@1']['input'];
 };
+export type ThingOutput = { readonly name: CodecTypes['mongo/string@1']['output'] };
+export type ThingInput = { readonly name: CodecTypes['mongo/string@1']['input'] };
 export type FieldOutputTypes = {
   readonly __unbound__: {
     readonly User: {
@@ -189,32 +189,32 @@ type ContractBase = Omit<
               };
             };
           };
-          readonly Thing: {
-            readonly fields: {
-              readonly name: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-            };
-          };
           readonly Profile: {
             readonly fields: {
-              readonly name: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Name' };
-              };
               readonly alternateName: {
                 readonly nullable: true;
+                readonly type: { readonly kind: 'valueObject'; readonly name: 'Name' };
+              };
+              readonly favoriteThings: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'valueObject'; readonly name: 'Thing' };
+                readonly many: true;
+              };
+              readonly name: {
+                readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'Name' };
               };
               readonly url: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
               };
-              readonly favoriteThings: {
+            };
+          };
+          readonly Thing: {
+            readonly fields: {
+              readonly name: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'valueObject'; readonly name: 'Thing' };
-                readonly many: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
               };
             };
           };
@@ -238,32 +238,32 @@ type ContractBase = Omit<
         };
       };
     };
-    readonly Thing: {
-      readonly fields: {
-        readonly name: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-      };
-    };
     readonly Profile: {
       readonly fields: {
-        readonly name: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'valueObject'; readonly name: 'Name' };
-        };
         readonly alternateName: {
           readonly nullable: true;
+          readonly type: { readonly kind: 'valueObject'; readonly name: 'Name' };
+        };
+        readonly favoriteThings: {
+          readonly nullable: false;
+          readonly type: { readonly kind: 'valueObject'; readonly name: 'Thing' };
+          readonly many: true;
+        };
+        readonly name: {
+          readonly nullable: false;
           readonly type: { readonly kind: 'valueObject'; readonly name: 'Name' };
         };
         readonly url: {
           readonly nullable: false;
           readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         };
-        readonly favoriteThings: {
+      };
+    };
+    readonly Thing: {
+      readonly fields: {
+        readonly name: {
           readonly nullable: false;
-          readonly type: { readonly kind: 'valueObject'; readonly name: 'Thing' };
-          readonly many: true;
+          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
         };
       };
     };

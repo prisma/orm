@@ -243,8 +243,8 @@ export type FieldOutputTypes = {
   readonly public: {
     readonly SuggestionModel: {
       readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly suggestedContent: CodecTypes['pg/text@1']['output'];
       readonly status: 'pending' | 'accepted' | 'rejected';
+      readonly suggestedContent: CodecTypes['pg/text@1']['output'];
     };
   };
 };
@@ -252,8 +252,8 @@ export type FieldInputTypes = {
   readonly public: {
     readonly SuggestionModel: {
       readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly suggestedContent: CodecTypes['pg/text@1']['input'];
       readonly status: 'pending' | 'accepted' | 'rejected';
+      readonly suggestedContent: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -279,8 +279,8 @@ export type StorageColumnInputTypes = {
 export namespace Models {
   export type public_SuggestionModel = {
     id: CodecTypes['pg/int4@1']['output'];
-    suggestedContent: CodecTypes['pg/text@1']['output'];
     status: 'pending' | 'accepted' | 'rejected';
+    suggestedContent: CodecTypes['pg/text@1']['output'];
     readonly [RelationKeys]?: never;
   };
 }
@@ -320,11 +320,6 @@ type ContractBase = Omit<
                     readonly expression: 'autoincrement()';
                   };
                 };
-                readonly suggested_content: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly status: {
                   readonly nativeType: 'SuggestionStatus';
                   readonly codecId: 'pg/enum@1';
@@ -334,6 +329,11 @@ type ContractBase = Omit<
                     readonly expression: '\'pending\'::"SuggestionStatus"';
                   };
                   readonly typeParams: { readonly typeName: 'SuggestionStatus' };
+                };
+                readonly suggested_content: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -380,10 +380,6 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly suggestedContent: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly status: {
                 readonly nullable: false;
                 readonly type: {
@@ -392,6 +388,10 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly typeName: 'SuggestionStatus' };
                 };
               };
+              readonly suggestedContent: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
             };
             readonly relations: Record<string, never>;
             readonly storage: {
@@ -399,8 +399,8 @@ type ContractBase = Omit<
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly id: { readonly column: 'id' };
-                readonly suggestedContent: { readonly column: 'suggested_content' };
                 readonly status: { readonly column: 'status' };
+                readonly suggestedContent: { readonly column: 'suggested_content' };
               };
             };
           };

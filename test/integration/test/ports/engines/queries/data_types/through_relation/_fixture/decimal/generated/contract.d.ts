@@ -243,8 +243,8 @@ export type FieldOutputTypes = {
   readonly public: {
     readonly Child: {
       readonly childId: CodecTypes['pg/int4@1']['output'];
-      readonly parentId: CodecTypes['pg/int4@1']['output'] | null;
       readonly dec: CodecTypes['pg/numeric@1']['output'];
+      readonly parentId: CodecTypes['pg/int4@1']['output'] | null;
     };
     readonly Parent: { readonly id: CodecTypes['pg/int4@1']['output'] };
   };
@@ -253,8 +253,8 @@ export type FieldInputTypes = {
   readonly public: {
     readonly Child: {
       readonly childId: CodecTypes['pg/int4@1']['input'];
-      readonly parentId: CodecTypes['pg/int4@1']['input'] | null;
       readonly dec: CodecTypes['pg/numeric@1']['input'];
+      readonly parentId: CodecTypes['pg/int4@1']['input'] | null;
     };
     readonly Parent: { readonly id: CodecTypes['pg/int4@1']['input'] };
   };
@@ -281,24 +281,24 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type public_Child = {
+    childId: CodecTypes['pg/int4@1']['output'];
+    dec: CodecTypes['pg/numeric@1']['output'];
+    parentId: CodecTypes['pg/int4@1']['output'] | null;
+    parent: public_Parent | null;
+    readonly [RelationKeys]?: 'parent';
+  };
   export type public_Parent = {
     id: CodecTypes['pg/int4@1']['output'];
     children: public_Child[];
     readonly [RelationKeys]?: 'children';
   };
-  export type public_Child = {
-    childId: CodecTypes['pg/int4@1']['output'];
-    parentId: CodecTypes['pg/int4@1']['output'] | null;
-    dec: CodecTypes['pg/numeric@1']['output'];
-    parent: public_Parent | null;
-    readonly [RelationKeys]?: 'parent';
-  };
 }
 
 export declare const models: {
   public: {
-    Parent: Models.public_Parent;
     Child: Models.public_Child;
+    Parent: Models.public_Parent;
   };
 };
 
@@ -327,15 +327,15 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly parentId: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: true;
-                };
                 readonly dec: {
                   readonly nativeType: 'numeric';
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: false;
+                };
+                readonly parentId: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
                 };
               };
               primaryKey: { readonly columns: readonly ['childId'] };
@@ -387,8 +387,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly parent: { readonly namespace: 'public' & NamespaceId; readonly model: 'Parent' };
     readonly child: { readonly namespace: 'public' & NamespaceId; readonly model: 'Child' };
+    readonly parent: { readonly namespace: 'public' & NamespaceId; readonly model: 'Parent' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -400,13 +400,13 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly parentId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly dec: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/numeric@1' };
+              };
+              readonly parentId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
             readonly relations: {
@@ -428,8 +428,8 @@ type ContractBase = Omit<
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly childId: { readonly column: 'childId' };
-                readonly parentId: { readonly column: 'parentId' };
                 readonly dec: { readonly column: 'dec' };
+                readonly parentId: { readonly column: 'parentId' };
               };
             };
           };

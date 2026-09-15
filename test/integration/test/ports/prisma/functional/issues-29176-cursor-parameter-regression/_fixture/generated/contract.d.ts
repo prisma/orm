@@ -243,8 +243,8 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly ListResult: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly connection_uuid: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
       readonly query_ref: CodecTypes['pg/text@1']['output'];
       readonly result_index: CodecTypes['pg/int4@1']['output'];
     };
@@ -253,8 +253,8 @@ export type FieldOutputTypes = {
 export type FieldInputTypes = {
   readonly public: {
     readonly ListResult: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly connection_uuid: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
       readonly query_ref: CodecTypes['pg/text@1']['input'];
       readonly result_index: CodecTypes['pg/int4@1']['input'];
     };
@@ -283,8 +283,8 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_ListResult = {
-    id: CodecTypes['pg/text@1']['output'];
     connection_uuid: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/text@1']['output'];
     query_ref: CodecTypes['pg/text@1']['output'];
     result_index: CodecTypes['pg/int4@1']['output'];
     readonly [RelationKeys]?: never;
@@ -317,12 +317,12 @@ type ContractBase = Omit<
           readonly table: {
             readonly listResult: {
               columns: {
-                readonly id: {
+                readonly connection_uuid: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly connection_uuid: {
+                readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -367,11 +367,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly ListResult: {
             readonly fields: {
-              readonly id: {
+              readonly connection_uuid: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly connection_uuid: {
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -389,8 +389,8 @@ type ContractBase = Omit<
               readonly table: 'listResult';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly connection_uuid: { readonly column: 'connection_uuid' };
+                readonly id: { readonly column: 'id' };
                 readonly query_ref: { readonly column: 'query_ref' };
                 readonly result_index: { readonly column: 'result_index' };
               };
