@@ -52,7 +52,6 @@
     }
   },
   "exports": {
-    "./interpreter": "./dist/interpreter.mjs",
     "./provider": "./dist/provider.mjs",
     "./package.json": "./package.json"
   },

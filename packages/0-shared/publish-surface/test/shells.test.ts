@@ -88,6 +88,30 @@ describe('publicShells', () => {
     expect(dangling).toEqual([]);
   });
 
+  it('publishes the Prisma schema sources only through the entrypoints applications import', () => {
+    const published = (shellDir: string, pattern: RegExp): string[] => {
+      const manifest: unknown = JSON.parse(
+        readFileSync(join(repoRoot, shellDir, 'package.json'), 'utf8'),
+      );
+      return Object.keys((manifest as { exports?: Record<string, unknown> }).exports ?? {}).filter(
+        (subpath) => pattern.test(subpath),
+      );
+    };
+
+    expect(published('packages/9-public/@prisma/orm-family-sql', /contract-(psl|prisma7)/)).toEqual(
+      [
+        './contract-prisma7/provider',
+        './contract-psl',
+        './contract-psl/attribute-specs',
+        './contract-psl/provider',
+      ],
+    );
+    expect(published('packages/9-public/@prisma/orm-target-postgres', /prisma7/)).toEqual([
+      './target/prisma7-binding',
+    ]);
+    expect(published('packages/9-public/@prisma/orm-postgres', /prisma7/)).toEqual([]);
+  });
+
   it('gives exactly the facades the re-exports that make one', () => {
     for (const [name, shell] of publicShells) {
       expect(`${name}: ${shell.reexports !== undefined}`).toBe(
