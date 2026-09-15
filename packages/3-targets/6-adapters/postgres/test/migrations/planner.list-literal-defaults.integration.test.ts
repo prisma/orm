@@ -1,4 +1,10 @@
-import { type ColumnDefault, type Contract, coreHash, profileHash } from '@internal/contract/types';
+import {
+  asNamespaceId,
+  type ColumnDefault,
+  type Contract,
+  coreHash,
+  profileHash,
+} from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import {
   APP_SPACE_ID,
@@ -7,7 +13,7 @@ import {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
-import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { PostgresNativeEnum, postgresCreateNamespace } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
@@ -109,7 +115,57 @@ const listDefaults: readonly ListDefaultCase[] = [
     },
     default: { kind: 'function', expression: "ARRAY['2024-01-01 00:00:00']::TIMESTAMP(3)[]" },
   },
+  {
+    column: 'castBytes',
+    type: { nativeType: 'bytea', codecId: 'pg/bytea@1' },
+    default: { kind: 'function', expression: "ARRAY['\\x68656c6c6f']::BYTEA[]" },
+  },
 ];
+
+const auditSchema = 'audit';
+
+function auditNamespace(withDefaults: boolean) {
+  return postgresCreateNamespace({
+    id: asNamespaceId(auditSchema),
+    entries: {
+      table: {
+        AuditLog: {
+          columns: {
+            id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            actions: {
+              nativeType: 'audit.AuditAction',
+              codecId: 'pg/enum@1',
+              nullable: true,
+              many: true,
+              noCheck: ['elementNotNull'],
+              typeParams: { typeName: 'audit.AuditAction' },
+              valueSet: {
+                plane: 'storage',
+                entityKind: 'valueSet',
+                namespaceId: auditSchema,
+                entityName: 'AuditAction',
+              },
+              ...(withDefaults
+                ? { default: { kind: 'literal', value: ['CREATE', 'DELETE'] } }
+                : {}),
+            },
+          },
+          primaryKey: { columns: ['id'] },
+          uniques: [],
+          indexes: [],
+          foreignKeys: [],
+        },
+      },
+      native_enum: {
+        AuditAction: new PostgresNativeEnum({
+          typeName: 'AuditAction',
+          members: ['CREATE', 'DELETE'],
+        }),
+      },
+      valueSet: { AuditAction: { kind: 'valueSet', values: ['CREATE', 'DELETE'] } },
+    },
+  });
+}
 
 const codecs = createPostgresBuiltinCodecLookup();
 
@@ -161,6 +217,7 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
             },
           },
         }),
+        [auditSchema]: auditNamespace(withDefaults),
       },
     }),
     roots: {},
@@ -190,6 +247,7 @@ describe('planned list defaults apply and verify', { concurrent: false }, () => 
   beforeEach(async () => {
     driver = await createDriver(database.connectionString);
     await resetDatabase(driver);
+    await driver.query(`DROP SCHEMA IF EXISTS "${auditSchema}" CASCADE`);
   }, testTimeout);
 
   afterEach(async () => {
@@ -266,7 +324,7 @@ describe('planned list defaults apply and verify', { concurrent: false }, () => 
 
     await planAndApply(
       contract,
-      await familyInstance.introspect({ driver: driver! }),
+      await familyInstance.introspect({ driver: driver!, contract }),
       additiveAndWidening,
     );
 

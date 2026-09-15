@@ -200,5 +200,23 @@ function renderArrayLiteralDefault(elements: unknown[], nativeType: string): str
   }
   const rendered = `ARRAY[${elements.map((el) => renderDefaultLiteral(el)).join(', ')}]`;
   if (nativeType === '') return rendered;
-  return `${rendered}::${nativeType.endsWith('[]') ? nativeType : `${nativeType}[]`}`;
+  const elementType = nativeType.endsWith('[]') ? nativeType.slice(0, -2) : nativeType;
+  return `${rendered}::${elementTypeSql(elementType)}[]`;
+}
+
+/**
+ * A builtin type name is lowercase words, any of which may carry a modifier: `int8`,
+ * `numeric(65,30)`, `character varying(32)`.
+ */
+const BUILTIN_TYPE_NAME =
+  /^[a-z_][a-z0-9_]*(?:\(\d+(?:,\s*\d+)?\))?(?: [a-z_][a-z0-9_]*(?:\(\d+(?:,\s*\d+)?\))?)*$/;
+
+/**
+ * Any other type name, such as the native enum `audit.AuditAction`, is quoted per segment, since
+ * Postgres folds an unquoted name to lowercase. A name that is already quoted is used as it is.
+ */
+function elementTypeSql(elementType: string): string {
+  return elementType.includes('"') || BUILTIN_TYPE_NAME.test(elementType)
+    ? elementType
+    : quoteQualifiedName(elementType);
 }

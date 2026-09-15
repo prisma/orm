@@ -52,6 +52,19 @@ describe('renderDefaultLiteral array columns', () => {
     },
   );
 
+  it.each([
+    { nativeType: 'audit.AuditAction[]', cast: '"audit"."AuditAction"[]' },
+    { nativeType: 'AuditAction', cast: '"AuditAction"[]' },
+    { nativeType: 'auth.oauth_client_type', cast: '"auth"."oauth_client_type"[]' },
+    { nativeType: 'user_role', cast: 'user_role[]' },
+    { nativeType: '"audit"."AuditAction"[]', cast: '"audit"."AuditAction"[]' },
+    { nativeType: 'character varying(32)', cast: 'character varying(32)[]' },
+  ])('casts a $nativeType list to $cast', ({ nativeType, cast }) => {
+    expect(renderDefaultLiteral(['CREATE'], arrayColumn(nativeType))).toBe(
+      `ARRAY['CREATE']::${cast}`,
+    );
+  });
+
   it('renders an ARRAY[...] expression without a cast when no native type is known', () => {
     expect(renderDefaultLiteral(['a'], arrayColumn(''))).toBe("ARRAY['a']");
   });
