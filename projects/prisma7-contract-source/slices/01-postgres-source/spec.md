@@ -73,7 +73,7 @@ Implicit many-to-many (a list field on both sides, no junction model) becomes th
 
 `PRISMA7_PROVIDER_MISMATCH`, `PRISMA7_RELATION_MODE_UNSUPPORTED`, `PRISMA7_VIEW_UNSUPPORTED`, `PRISMA7_UNSUPPORTED_TYPE`, `PRISMA7_NATIVE_TYPE_UNSUPPORTED`, `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED`, `PRISMA7_UNKNOWN_ATTRIBUTE`, `PRISMA7_UNKNOWN_DEFAULT`, `PRISMA7_RELATION_UNRESOLVED`, `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED`, `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` (dispatch 5, option (a); ORM-side generators such as `uuid()` on an optional field also use the first), `PRISMA7_TABLE_COLLISION` (added in dispatch 7: two models map to the same table), `PRISMA7_JUNCTION_ID_UNSUPPORTED` (added in dispatch 6: an implicit many-to-many whose side has a composite id), `PRISMA7_ENUM_NAMESPACE_MISMATCH` (added in dispatch 4: a column may only use an enum type from its own schema, which is what the IR can express). Each has a fixture. The implementer may add codes; every added code needs a fixture and a line here.
 
-Added in dispatch 6: `PRISMA7_JUNCTION_ID_UNSUPPORTED` (an implicit many-to-many relation on a model without a single-field `@id`, which Prisma 7 forbids too; fixture `junction-composite-id`). `PRISMA7_SCHEMA_READ_FAILED` (dispatch 4) reports an unreadable input path.
+Added in dispatch 6: `PRISMA7_JUNCTION_ID_UNSUPPORTED` (an implicit many-to-many relation on a model without a single-field `@id`, which Prisma 7 forbids too; fixture `junction-composite-id`). `PRISMA7_SCHEMA_READ_FAILED` (dispatch 4) reports an unreadable input path, or a schema directory that holds no `.prisma` file, located at the input path (`test/provider.test.ts`).
 
 ## Edge cases
 
@@ -85,6 +85,8 @@ Added in dispatch 6: `PRISMA7_JUNCTION_ID_UNSUPPORTED` (an implicit many-to-many
 | `@db.Timestamptz(n)` with `@updatedAt` | Generators as above, column `timestamptz(n)`. |
 | Self-referential implicit many-to-many | Junction `_RelationName` is required by Prisma 7; use it. Column `A` belongs to the side with the smaller model name, or for a self relation the smaller field name by plain string comparison, per prisma-engines `psl/parser-database/src/relations.rs` (`ingest_relation`). Pinned by `test/junction-sides.test.ts`. |
 | Multi-file directory with a `datasource` in one file | The provider check runs once across the merged document. |
+| A schema directory with a subdirectory named `x.prisma`, or with `.prisma` files and directories reached through symbolic links | Only regular files are read, following symbolic links; the subdirectory is skipped, as Prisma 7.10.0 skips it. Pinned by `test/provider.test.ts`. |
+| An empty schema directory | `PRISMA7_SCHEMA_READ_FAILED` located at the input path; Prisma 7.10.0 itself panics (`psl::validate_multi_file() must be called with at least one file`). |
 | `previewFeatures` other than `multiSchema` | Ignored. |
 
 ## Slice Definition of Done

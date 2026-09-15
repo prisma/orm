@@ -67,23 +67,26 @@ interface SchemaFile {
 }
 
 /**
- * The files a Prisma 7 schema input names: the file itself, or every `.prisma`
- * file under the directory, nested directories included, as Prisma 7 reads a
- * schema directory. Sorted by path so duplicate detection blames the later file
- * deterministically.
+ * The files a Prisma 7 schema input names: the file itself, or every regular
+ * `.prisma` file under the directory, nested directories and symbolic links
+ * included, as Prisma 7 reads a schema directory. Sorted by path so duplicate
+ * detection blames the later file deterministically.
  */
 async function listSchemaFiles(absolutePath: string, displayPath: string): Promise<SchemaFile[]> {
   const info = await stat(absolutePath);
   if (!info.isDirectory()) return [{ sourceId: displayPath, absolutePath }];
   const entries = await readdir(absolutePath, { recursive: true });
-  return entries
-    .filter((entry) => extname(entry) === '.prisma')
-    .map((entry) => normalize(entry))
-    .sort()
-    .map((entry) => ({
-      sourceId: join(displayPath, entry),
-      absolutePath: join(absolutePath, entry),
-    }));
+  const files: SchemaFile[] = [];
+  for (const entry of entries
+    .filter((name) => extname(name) === '.prisma')
+    .map((name) => normalize(name))
+    .sort()) {
+    const entryPath = join(absolutePath, entry);
+    if ((await stat(entryPath)).isFile()) {
+      files.push({ sourceId: join(displayPath, entry), absolutePath: entryPath });
+    }
+  }
+  return files;
 }
 
 export function prisma7Schema(schemaPath: string, options: Prisma7SchemaOptions): ContractConfig {
@@ -109,6 +112,20 @@ export function prisma7Schema(schemaPath: string, options: Prisma7SchemaOptions)
               prisma7Diagnostic('PRISMA7_SCHEMA_READ_FAILED', message, schemaPath, undefined),
             ],
             meta: { schemaPath, absolutePath, cause: message },
+          });
+        }
+        if (files.length === 0) {
+          return notOk({
+            summary: `Failed to read Prisma 7 schema at "${schemaPath}"`,
+            diagnostics: [
+              prisma7Diagnostic(
+                'PRISMA7_SCHEMA_READ_FAILED',
+                `The schema directory "${schemaPath}" contains no .prisma file.`,
+                schemaPath,
+                undefined,
+              ),
+            ],
+            meta: { schemaPath, absolutePath },
           });
         }
         const documents: Prisma7Document[] = [];

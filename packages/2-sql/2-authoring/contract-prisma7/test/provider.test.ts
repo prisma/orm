@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -94,6 +94,63 @@ describe('prisma7Schema', () => {
         sourceId: 'prisma/schema/broken.prisma',
       }),
     );
+  });
+
+  it('skips a directory whose name ends in .prisma, as Prisma 7 does', async () => {
+    const dir = scratchDir('dot-prisma-directory');
+    writeFileSync(
+      join(dir, 'schema.prisma'),
+      'datasource db {\n  provider = "postgresql"\n}\n\nmodel A {\n  id Int @id\n}\n',
+    );
+    mkdirSync(join(dir, 'extra.prisma'));
+
+    const config = prisma7Schema('prisma/schema', postgresPrisma7Options);
+    const result = await config.source.load(postgresSourceContext([dir]));
+    expect(result.ok).toBe(true);
+  });
+
+  it('reads .prisma files and directories reached through symbolic links', async () => {
+    const shared = scratchDir('symlink-target');
+    mkdirSync(join(shared, 'models'));
+    writeFileSync(join(shared, 'b.prisma'), 'model B {\n  id Int @id\n}\n');
+    writeFileSync(join(shared, 'models', 'c.prisma'), 'model C {\n  id Int @id\n}\n');
+    const dir = scratchDir('symlinks');
+    writeFileSync(
+      join(dir, 'schema.prisma'),
+      'datasource db {\n  provider = "postgresql"\n}\n\nmodel A {\n  id Int @id\n}\n',
+    );
+    symlinkSync(join(shared, 'b.prisma'), join(dir, 'b.prisma'));
+    symlinkSync(join(shared, 'models'), join(dir, 'linked'));
+
+    const config = prisma7Schema('prisma/schema', postgresPrisma7Options);
+    const result = await config.source.load(postgresSourceContext([dir]));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(Object.keys(result.value.domain.namespaces['public']?.models ?? {}).sort()).toEqual([
+      'A',
+      'B',
+      'C',
+    ]);
+  });
+
+  it('returns PRISMA7_SCHEMA_READ_FAILED at the input path when a directory holds no .prisma file', async () => {
+    const dir = scratchDir('empty');
+    writeFileSync(join(dir, 'notes.txt'), 'not a schema\n');
+
+    const config = prisma7Schema('prisma/schema', postgresPrisma7Options);
+    const result = await config.source.load(postgresSourceContext([dir]));
+    expect(result).toMatchObject({
+      ok: false,
+      failure: {
+        diagnostics: [
+          {
+            code: 'PRISMA7_SCHEMA_READ_FAILED',
+            sourceId: 'prisma/schema',
+            message: 'The schema directory "prisma/schema" contains no .prisma file.',
+          },
+        ],
+      },
+    });
   });
 
   it('returns PRISMA7_SCHEMA_READ_FAILED when the input does not exist', async () => {
