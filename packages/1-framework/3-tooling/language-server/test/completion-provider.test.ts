@@ -33,17 +33,34 @@ const emptySnippetPlaceholder2 = '$' + '{2:}';
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const markerAttribute = fieldAttribute('marker', {
-  positional: [{ key: 'target', type: str() }],
-  named: { name: str(), priority: optional(int()) },
+  documentation: 'Attaches a named marker to a target.',
+  positional: [{ key: 'target', type: str(), documentation: 'The marker target.' }],
+  named: {
+    name: { type: str(), documentation: 'The marker name.' },
+    priority: { type: optional(int()), documentation: 'The marker priority.' },
+  },
 });
 const orderFixtureAttribute = fieldAttribute('orderFixture', {
-  named: { zebra: int(), alpha: int(), middle: int() },
+  documentation: 'Accepts named values in declaration order rather than alphabetical order.',
+  named: {
+    zebra: { type: int(), documentation: 'The first declared value.' },
+    alpha: { type: int(), documentation: 'The second declared value.' },
+    middle: { type: int(), documentation: 'The third declared value.' },
+  },
 });
 const rlsAttribute = modelAttribute('rls', {
-  named: { enabled: optional(str()), mode: str() },
+  documentation: 'Configures row-level security for this model.',
+  named: {
+    enabled: { type: optional(str()), documentation: 'The security enablement setting.' },
+    mode: { type: str(), documentation: 'The security mode.' },
+  },
 });
 const auditAttribute = blockAttribute('audit', {
-  named: { reason: optional(str()), level: int() },
+  documentation: 'Configures auditing for this block.',
+  named: {
+    reason: { type: optional(str()), documentation: 'The reason for auditing.' },
+    level: { type: int(), documentation: 'The audit level.' },
+  },
 });
 
 const attributeContributions = assembleAuthoringContributions([
@@ -56,8 +73,12 @@ const attributeContributions = assembleAuthoringContributions([
           orderFixture: () => orderFixtureAttribute,
           ownerAware: (ctx: FieldAttributeSpecContext) =>
             fieldAttribute('ownerAware', {
+              documentation: 'Selects a key based on the declaring model’s fields.',
               named: {
-                [Object.hasOwn(ctx.model.fields, 'scopedOnly') ? 'scopedKey' : 'topKey']: str(),
+                [Object.hasOwn(ctx.model.fields, 'scopedOnly') ? 'scopedKey' : 'topKey']: {
+                  type: str(),
+                  documentation: 'The value for the owner-specific key.',
+                },
               },
             }),
         },
@@ -475,11 +496,15 @@ describe('providePslCompletionItems', () => {
             field: {
               first: (ctx: FieldAttributeSpecContext) => {
                 factoryOwnerNames.push(ctx.model.name);
-                return fieldAttribute('first', {});
+                return fieldAttribute('first', {
+                  documentation: 'Marks the first contributed field attribute.',
+                });
               },
               second: (ctx: FieldAttributeSpecContext) => {
                 factoryOwnerNames.push(ctx.model.name);
-                return fieldAttribute('second', {});
+                return fieldAttribute('second', {
+                  documentation: 'Marks the second contributed field attribute.',
+                });
               },
             },
             model: {},

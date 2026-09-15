@@ -77,7 +77,7 @@ describe('composed mutation default registries', () => {
           [
             'slugid',
             {
-              signature: {},
+              signature: { documentation: 'Generates a slug identifier when a value is omitted.' },
               lower: (input: {
                 call: TypedDefaultFunctionCall;
                 context: DefaultFunctionLoweringContext;
@@ -135,7 +135,7 @@ describe('composed mutation default registries', () => {
           [
             'slugid',
             {
-              signature: {},
+              signature: { documentation: 'Generates a slug identifier for text fields.' },
               lower: () => ({
                 ok: true as const,
                 value: {

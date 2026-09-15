@@ -51,8 +51,11 @@ describe('postgres attribute specs are consumable from a resolved language-serve
       'rls'
     ]?.(ctx);
 
-    expect(spec?.name).toBe('rls');
-    expect(spec?.level).toBe('model');
+    expect(spec).toMatchObject({
+      name: 'rls',
+      level: 'model',
+      documentation: 'Enables PostgreSQL row-level security on this model’s table.',
+    });
   });
 });
 
@@ -96,8 +99,17 @@ describe('mongo attribute specs are consumable from a resolved language-server p
       'index'
     ]?.(ctx);
 
-    expect(spec?.name).toBe('index');
-    expect(spec?.level).toBe('model');
+    expect(spec).toMatchObject({
+      name: 'index',
+      level: 'model',
+      documentation: 'Declares a MongoDB index over the selected fields.',
+      named: {
+        sparse: {
+          documentation: 'Whether documents missing indexed fields are omitted from the index.',
+          type: { kind: 'bool', optional: true },
+        },
+      },
+    });
   });
 
   it("enumerates the SQL family's built-in attribute surface", async () => {
@@ -150,7 +162,18 @@ describe('mongo attribute specs are consumable from a resolved language-server p
         interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
     });
 
-    expect(spec).toMatchObject({ name: 'relation', level: 'field' });
+    expect(spec).toMatchObject({
+      name: 'relation',
+      level: 'field',
+      documentation:
+        'Defines the relation name, foreign-key fields, and referential actions for this relation.',
+      named: {
+        onDelete: {
+          documentation: 'The referential action when a referenced row is deleted.',
+          type: { kind: 'oneOf', optional: true },
+        },
+      },
+    });
     expect(Object.keys(spec?.named ?? {}).sort()).toEqual([
       'fields',
       'index',

@@ -47,36 +47,104 @@ const rejecting: RejectingArgType<never, AttributeCtx> = {
 };
 const direction = oneOf(identifier('Asc'), identifier('Desc'));
 const ordered = funcCall('ordered', {
-  positional: [{ key: 'direction', type: direction }],
-  named: { required: list(bool()), optional: optional(str()), direction },
+  documentation: 'Orders boolean values in a selected direction.',
+  positional: [{ key: 'direction', type: direction, documentation: 'The ordering direction.' }],
+  named: {
+    required: { type: list(bool()), documentation: 'The values to order.' },
+    optional: { type: optional(str()), documentation: 'An optional label for the ordering.' },
+    direction: { type: direction, documentation: 'The ordering direction supplied by name.' },
+  },
 });
 const signature = {
-  positional: [{ key: 'value', type: oneOf(identifier('First'), identifier('Second')) }],
+  documentation: 'Exercises scalar, collection, and nested-function argument completion.',
+  positional: [
+    {
+      key: 'value',
+      type: oneOf(identifier('First'), identifier('Second')),
+      documentation: 'The first or second positional choice.',
+    },
+  ],
   named: {
-    mode: oneOf(identifier('Asc'), identifier('Desc'), identifier('Asc')),
-    fixed: oneOf(str('quoted"value'), num(-1), bool(), identifier('Fixed')),
-    flags: list(bool()),
-    matrices: list(list(bool())),
-    scalar: bool(),
-    call: funcCall('f', { named: { x: bool() } }),
-    records: record(list(bool())),
-    choice: oneOf(ordered, funcCall('empty', {})),
-    nested: funcCall('wrap', {
-      positional: [{ key: 'value', type: list(ordered) }],
-      named: { extra: optional(bool()) },
-    }),
-    overlap: oneOf(
-      funcCall('same', { named: { first: bool() } }),
-      funcCall('same', { named: { second: bool() } }),
-    ),
-    all: oneOf(str(), identifier('Alpha'), bool(), num(), identifier('Alpha')),
-    none: oneOf(str(), num(), int(), json(), entityRef(), rejecting),
-    rejected: rejecting,
-    recordValues: record(bool()),
-    unionLists: oneOf(list(identifier('A')), list(identifier('B')), list(identifier('A'))),
-    format: funcCall('format', {
-      named: { text: str(), options: record(str()), enabled: optional(bool(), true) },
-    }),
+    mode: {
+      type: oneOf(identifier('Asc'), identifier('Desc'), identifier('Asc')),
+      documentation: 'The ascending or descending mode.',
+    },
+    fixed: {
+      type: oneOf(str('quoted"value'), num(-1), bool(), identifier('Fixed')),
+      documentation: 'A fixed literal or boolean value.',
+    },
+    flags: { type: list(bool()), documentation: 'A list of boolean flags.' },
+    matrices: { type: list(list(bool())), documentation: 'A matrix of boolean values.' },
+    scalar: { type: bool(), documentation: 'A single boolean value.' },
+    call: {
+      type: funcCall('f', {
+        documentation: 'Accepts a boolean input.',
+        named: { x: { type: bool(), documentation: 'The boolean input.' } },
+      }),
+      documentation: 'A call with a required boolean argument.',
+    },
+    records: {
+      type: record(list(bool())),
+      documentation: 'Lists of boolean values keyed by name.',
+    },
+    choice: {
+      type: oneOf(
+        ordered,
+        funcCall('empty', { documentation: 'Produces an empty value without arguments.' }),
+      ),
+      documentation: 'An ordered value or an empty value.',
+    },
+    nested: {
+      type: funcCall('wrap', {
+        documentation: 'Wraps a list of ordered values.',
+        positional: [
+          { key: 'value', type: list(ordered), documentation: 'The ordered values to wrap.' },
+        ],
+        named: { extra: { type: optional(bool()), documentation: 'An optional extra flag.' } },
+      }),
+      documentation: 'A wrapper around nested ordering calls.',
+    },
+    overlap: {
+      type: oneOf(
+        funcCall('same', {
+          documentation: 'Accepts the first boolean variant.',
+          named: { first: { type: bool(), documentation: 'The first variant flag.' } },
+        }),
+        funcCall('same', {
+          documentation: 'Accepts the second boolean variant.',
+          named: { second: { type: bool(), documentation: 'The second variant flag.' } },
+        }),
+      ),
+      documentation: 'A function whose alternatives share a name.',
+    },
+    all: {
+      type: oneOf(str(), identifier('Alpha'), bool(), num(), identifier('Alpha')),
+      documentation: 'A scalar value with enumerated completion candidates.',
+    },
+    none: {
+      type: oneOf(str(), num(), int(), json(), entityRef(), rejecting),
+      documentation: 'A free-form value without enumerated candidates.',
+    },
+    rejected: { type: rejecting, documentation: 'A value that always fails interpretation.' },
+    recordValues: { type: record(bool()), documentation: 'Boolean values keyed by name.' },
+    unionLists: {
+      type: oneOf(list(identifier('A')), list(identifier('B')), list(identifier('A'))),
+      documentation: 'A list of `A` or `B` identifiers.',
+    },
+    format: {
+      type: funcCall('format', {
+        documentation: 'Formats text using named options.',
+        named: {
+          text: { type: str(), documentation: 'The text to format.' },
+          options: { type: record(str()), documentation: 'Formatting options keyed by name.' },
+          enabled: {
+            type: optional(bool(), true),
+            documentation: 'Whether formatting is enabled. Defaults to true.',
+          },
+        },
+      }),
+      documentation: 'A formatting call with required and optional arguments.',
+    },
   },
 };
 const fieldSpec = fieldAttribute('probe', signature);
@@ -231,7 +299,18 @@ describe('classified positions without cursor AST', () => {
   });
 
   it('preserves callee parentheses and excludes scalar alternatives without inspecting an expression', () => {
-    const spec = fieldAttribute('probe', { named: { value: oneOf(bool(), funcCall('f', {})) } });
+    const spec = fieldAttribute('probe', {
+      documentation: 'Accepts a boolean or a nullary function call.',
+      named: {
+        value: {
+          type: oneOf(
+            bool(),
+            funcCall('f', { documentation: 'Produces a value without arguments.' }),
+          ),
+          documentation: 'The boolean value or function call.',
+        },
+      },
+    });
     const items = provideAttributeValueCompletionItems(
       {
         context: {

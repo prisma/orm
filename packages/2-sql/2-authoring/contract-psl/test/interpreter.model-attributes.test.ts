@@ -22,8 +22,15 @@ function stampScopeFrom(ctx: Parameters<ModelAttributeSpecFactory>[0]): string {
 
 const stampSpecFactory: ModelAttributeSpecFactory = (ctx) =>
   modelAttribute('stamp', {
-    positional: [{ key: 'label', type: str() }],
-    named: { scope: optional(str(), stampScopeFrom(ctx)) },
+    documentation: 'Records a label and the authoring scope for this model.',
+    positional: [{ key: 'label', type: str(), documentation: 'The label stored in the stamp.' }],
+    named: {
+      scope: {
+        type: optional(str(), stampScopeFrom(ctx)),
+        documentation:
+          'The stamp scope. Defaults to the declaring model and its available models and default functions.',
+      },
+    },
   });
 
 const stampAuthoringContributions: AuthoringContributions = {

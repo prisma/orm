@@ -140,11 +140,19 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
 };
 
 const markerAttribute = fieldAttribute('marker', {
-  positional: [{ key: 'target', type: str() }],
-  named: { name: str(), priority: optional(int()) },
+  documentation: 'Attaches a named marker to a target.',
+  positional: [{ key: 'target', type: str(), documentation: 'The marker target.' }],
+  named: {
+    name: { type: str(), documentation: 'The marker name.' },
+    priority: { type: optional(int()), documentation: 'The marker priority.' },
+  },
 });
 const rlsAttribute = modelAttribute('rls', {
-  named: { mode: str(), enabled: optional(str()) },
+  documentation: 'Configures row-level security for this model.',
+  named: {
+    mode: { type: str(), documentation: 'The security mode.' },
+    enabled: { type: optional(str()), documentation: 'The security enablement setting.' },
+  },
 });
 const completionAuthoringContributions = assembleAuthoringContributions([
   {
@@ -232,14 +240,22 @@ async function recursiveCompletionResolution(): Promise<ConfigResolution> {
     ).href
   )) as { sqlAttributeSpecs: AttributeSpecNamespace };
   const signature = {
+    documentation: 'Selects a value and a set of flags.',
     named: {
-      value: funcCall('choose', {
-        named: {
-          mode: oneOf(identifier('First'), identifier('Second')),
-          enabled: optional(bool()),
-        },
-      }),
-      flags: list(bool()),
+      value: {
+        type: funcCall('choose', {
+          documentation: 'Chooses between the first and second modes.',
+          named: {
+            mode: {
+              type: oneOf(identifier('First'), identifier('Second')),
+              documentation: 'The selected mode.',
+            },
+            enabled: { type: optional(bool()), documentation: 'Whether the choice is enabled.' },
+          },
+        }),
+        documentation: 'The configured choice.',
+      },
+      flags: { type: list(bool()), documentation: 'The boolean flags accompanying the choice.' },
     },
   };
   const probeField = fieldAttribute('probe', signature);

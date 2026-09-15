@@ -18,16 +18,27 @@ import { classifyPslCompletionContext } from '../src/completion-context';
 import { providePslCompletionItems } from '../src/completion-provider';
 
 const completionOnlyNestedSignature = {
-  named: { local: list(fieldRef()), remote: list(referencedFieldRef()) },
+  documentation: 'Selects fields from the declaring and referenced models.',
+  named: {
+    local: { type: list(fieldRef()), documentation: 'Fields on the declaring model.' },
+    remote: { type: list(referencedFieldRef()), documentation: 'Fields on the referenced model.' },
+  },
 } as unknown as FuncCallSig;
 const fieldSpec = fieldAttribute('probe', {
+  documentation: 'Selects local and referenced fields, directly or through a nested call.',
   named: {
-    local: list(fieldRef()),
-    remote: list(referencedFieldRef()),
-    nested: funcCall('fields', completionOnlyNestedSignature),
+    local: { type: list(fieldRef()), documentation: 'Fields on the declaring model.' },
+    remote: { type: list(referencedFieldRef()), documentation: 'Fields on the referenced model.' },
+    nested: {
+      type: funcCall('fields', completionOnlyNestedSignature),
+      documentation: 'A nested field selection.',
+    },
   },
 });
-const modelSpec = modelAttribute('probe', { named: { local: list(fieldRef()) } });
+const modelSpec = modelAttribute('probe', {
+  documentation: 'Selects fields from this model.',
+  named: { local: { type: list(fieldRef()), documentation: 'Fields on the declaring model.' } },
+});
 const authoringContributions = assembleAuthoringContributions([
   {
     id: 'scoped-completion-fixture',

@@ -34,7 +34,7 @@ interface ArgumentSignature {
   readonly named?: Readonly<Record<string, Param<unknown, never>>>;
 }
 
-type Grammar = ArgumentSignature | Param<unknown, never>;
+type Grammar = ArgumentSignature | ArgType<unknown, never>;
 
 export function provideAttributeNamedKeyCompletionItems(
   input: CompletionInput<AttributeNamedKeyPosition>,
@@ -102,7 +102,7 @@ function advanceGrammar(grammar: Grammar, step: AttributeArgumentPathStep): read
     }
     case 'namedArgument': {
       if ('kind' in grammar) return [];
-      const param = grammar.named?.[step.name];
+      const param = grammar.named?.[step.name]?.type;
       return param === undefined ? [] : [param];
     }
     case 'listElement':
@@ -140,7 +140,7 @@ function namedKeyItems(
 
 function valueItems(
   input: ValueCompletionInput<AttributeArgumentPosition>,
-  param: Param<unknown, never> | undefined,
+  param: ArgType<unknown, never> | undefined,
   syntax: AttributeValuePosition['syntax'],
 ): readonly CompletionItem[] {
   if (param === undefined) return [];

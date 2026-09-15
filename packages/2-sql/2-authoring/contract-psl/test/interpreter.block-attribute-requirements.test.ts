@@ -22,7 +22,9 @@ const pslBlockDescriptors = {
   },
 };
 
-const auditedModelSpec = modelAttribute('audited', {});
+const auditedModelSpec = modelAttribute('audited', {
+  documentation: 'Allows audit rules to target this model.',
+});
 
 const auditContributions: AuthoringContributions = {
   entityTypes: {
