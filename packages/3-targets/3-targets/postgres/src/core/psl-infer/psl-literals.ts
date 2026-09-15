@@ -103,17 +103,17 @@ const formatFloat: PslDefaultValueFormat = (value) =>
   typeof value === 'string' && SPECIAL_VALUE_TEXT.test(value) ? `"${value}"` : formatNumber(value);
 
 /**
- * `pg/int8@1` reads a PSL number only within the safe integer range. Past it the literal is
- * rounded before the codec sees it, and a PSL string is not a `bigint`.
+ * `pg/int8@1` reads a PSL number from the text written, so every digit of an `int8` survives. A
+ * PSL string is not a `bigint`. A JavaScript number past the safe integer range is already rounded.
  */
-const formatSafeInteger: PslDefaultValueFormat = (value) => {
-  const integer = typeof value === 'string' && INTEGER_TEXT.test(value) ? Number(value) : value;
-  return typeof integer === 'number' && Number.isSafeInteger(integer) ? String(integer) : undefined;
+const formatInteger: PslDefaultValueFormat = (value) => {
+  if (typeof value === 'string') return INTEGER_TEXT.test(value) ? value : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) ? String(value) : undefined;
 };
 
 /**
- * `pg/numeric@1` stores decimal text, `NaN` or `Infinity`. A PSL number reaches it as a JavaScript
- * number, which loses digits, and `db init` cannot read a stored number back.
+ * `pg/numeric@1` stores decimal text, `NaN` or `Infinity`, and reads a PSL string as that text. A
+ * PSL number would also keep every digit, but has no spelling for `NaN` or `Infinity`.
  */
 const formatDecimalText: PslDefaultValueFormat = (value) => {
   const text = typeof value === 'number' && Number.isFinite(value) ? plainNumeral(value) : value;
@@ -132,7 +132,7 @@ const DEFAULT_VALUE_FORMATS: ReadonlyMap<string, PslDefaultValueFormat> = new Ma
   ['SmallInt', formatNumber],
   ['Float', formatFloat],
   ['Real', formatFloat],
-  ['BigInt', formatSafeInteger],
+  ['BigInt', formatInteger],
   ['Numeric', formatDecimalText],
   ['Date', noLiteral],
   ['Time', noLiteral],
