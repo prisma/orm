@@ -117,7 +117,7 @@ const formatDecimalText: PslDefaultValueFormat = (value) => {
 
 /**
  * The temporal codecs encode Temporal values, which no PSL literal is. A JSON codec reads a PSL
- * string as a JSON string, so an object default would become text.
+ * string as a JSON string, not as JSON text, so a JSON default keeps its raw expression.
  */
 const noLiteral: PslDefaultValueFormat = () => undefined;
 

@@ -338,9 +338,9 @@ function buildScalarField(
 }
 
 /**
- * A literal default prints in the spelling its codec accepts. A literal no PSL spelling reaches
- * prints as the raw expression Postgres reported, as `dbgenerated(...)`: `contract emit` accepts
- * that on a scalar column and rejects it at the field on a list column.
+ * A literal default prints as the PSL literal its codec accepts. A literal that has no such PSL
+ * literal prints as `dbgenerated(...)` with the expression Postgres reported: `contract emit`
+ * accepts that on a scalar column and rejects it at the field on a list column.
  */
 function inferDefaultAttribute(
   column: SqlColumnIR,
