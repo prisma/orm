@@ -131,7 +131,7 @@ export function prisma7Schema(schemaPath: string, options: Prisma7SchemaOptions)
               },
             });
           }
-          const { document, sourceFile, diagnostics } = parse(schema);
+          const { document, sourceFile, diagnostics } = parse(schema, { grammar: 'prisma7' });
           seedDiagnostics.push(...mapParseDiagnostics(diagnostics, sourceFile, file.sourceId));
           documents.push({ document, sourceFile, sourceId: file.sourceId });
         }

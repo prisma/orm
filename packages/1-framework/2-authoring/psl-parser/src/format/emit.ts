@@ -1,3 +1,4 @@
+import { InternalError } from '@internal/utils/internal-error';
 import { ModelAttributeAst } from '../syntax/ast/attributes';
 import {
   CompositeTypeDeclarationAst,
@@ -430,7 +431,11 @@ function walkRegion(
     if (element instanceof SyntaxNode) {
       if (!sawOpenBrace) continue;
       const member = classify(element);
-      if (member === undefined) continue;
+      if (member === undefined) {
+        throw new InternalError(
+          `Formatter has no rule for a ${element.kind} node at offset ${element.offset}; formatting would drop its text`,
+        );
+      }
       if (!ledByComment) {
         if (newlines >= 2 && sawContent && !writer.lastIsBlank()) writer.blank();
         else if (separationBlankWanted(writer, member.category, sawContent, lastWasRegular)) {
