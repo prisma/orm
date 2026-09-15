@@ -592,30 +592,32 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     contract?: unknown,
     schema = 'public',
   ): Promise<PostgresDatabaseSchemaNode> {
-    const declaredNamespaces = extractContractNamespaceIds(contract);
-    const resolvedSchemas =
-      declaredNamespaces.length > 0
-        ? await this.resolveNamespaceSchemas(driver, declaredNamespaces)
-        : [schema];
+    return readInUtc(driver, async () => {
+      const declaredNamespaces = extractContractNamespaceIds(contract);
+      const resolvedSchemas =
+        declaredNamespaces.length > 0
+          ? await this.resolveNamespaceSchemas(driver, declaredNamespaces)
+          : [schema];
 
-    // Walk schemas sequentially: every introspectSchema call shares the one
-    // control connection, so a parallel walk only serialises behind the wire
-    // protocol and trips pg's "already executing a query" deprecation.
-    const namespaces: Record<string, PostgresNamespaceSchemaNode> = {};
-    let pgVersion = 'unknown';
-    for (const resolved of resolvedSchemas) {
-      const { namespace, pgVersion: version } = await this.introspectSchema(driver, resolved);
-      namespaces[resolved] = namespace;
-      pgVersion = version;
-    }
+      // Walk schemas sequentially: every introspectSchema call shares the one
+      // control connection, so a parallel walk only serialises behind the wire
+      // protocol and trips pg's "already executing a query" deprecation.
+      const namespaces: Record<string, PostgresNamespaceSchemaNode> = {};
+      let pgVersion = 'unknown';
+      for (const resolved of resolvedSchemas) {
+        const { namespace, pgVersion: version } = await this.introspectSchema(driver, resolved);
+        namespaces[resolved] = namespace;
+        pgVersion = version;
+      }
 
-    const roles = await this.introspectRoles(driver);
-    const existingSchemas = await this.listExistingSchemas(driver);
-    return new PostgresDatabaseSchemaNode({
-      namespaces,
-      roles,
-      existingSchemas,
-      pgVersion,
+      const roles = await this.introspectRoles(driver);
+      const existingSchemas = await this.listExistingSchemas(driver);
+      return new PostgresDatabaseSchemaNode({
+        namespaces,
+        roles,
+        existingSchemas,
+        pgVersion,
+      });
     });
   }
 
@@ -1690,6 +1692,36 @@ function pgIsTextLikeNativeType(nativeType: string): boolean {
     nativeType === 'character' ||
     nativeType.startsWith('character(')
   );
+}
+
+/**
+ * Runs `read` with the session time zone set to UTC, then restores the zone the session had.
+ * Postgres prints a `timestamptz` value, such as a column default, in the session time zone, so
+ * reading in UTC gives the same text whatever zone the server, the role, or the caller set. When
+ * `read` fails, its error is the one thrown: inside the caller's transaction the failure aborts the
+ * transaction, and the caller's rollback restores the zone.
+ */
+async function readInUtc<T>(
+  driver: SqlControlDriverInstance<'postgres'>,
+  read: () => Promise<T>,
+): Promise<T> {
+  const { rows } = await driver.query<{ time_zone: string }>(
+    "SELECT current_setting('TimeZone') AS time_zone",
+  );
+  const timeZone = rows[0]?.time_zone;
+  if (timeZone === undefined) return read();
+  const setTimeZone = (zone: string) =>
+    driver.query("SELECT set_config('TimeZone', $1, false)", [zone]);
+  await setTimeZone('UTC');
+  let result: T;
+  try {
+    result = await read();
+  } catch (error) {
+    await setTimeZone(timeZone).catch(() => undefined);
+    throw error;
+  }
+  await setTimeZone(timeZone);
+  return result;
 }
 
 function pgInlineLiteral(wire: unknown, nativeType: string): string {
