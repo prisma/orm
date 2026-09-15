@@ -188,7 +188,7 @@ describe('Collection', () => {
         relationName: 'posts',
         relatedModelName: 'Post',
         relatedTableName: 'posts',
-        targetColumn: 'user_id',
+        targetColumns: ['user_id'],
         cardinality: '1:N',
       });
       expect(withPosts.state.includes[0]?.nested.filters).toEqual([
@@ -240,8 +240,8 @@ describe('Collection', () => {
         relationName: 'author',
         relatedModelName: 'User',
         relatedTableName: 'users',
-        targetColumn: 'id',
-        localColumn: 'user_id',
+        targetColumns: ['id'],
+        localColumns: ['user_id'],
         cardinality: 'N:1',
       });
 
