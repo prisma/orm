@@ -199,6 +199,7 @@ export type ComparisonMethodFns<T, CodecId extends string = never> = {
   lt(value: T): AnyExpression;
   gte(value: T): AnyExpression;
   lte(value: T): AnyExpression;
+  // LIKE takes a non-null string pattern, even when the field type T is nullable.
   like(pattern: PredicateOperand<string, CodecId>): AnyExpression;
   in(values: readonly T[]): AnyExpression;
   notIn(values: readonly T[]): AnyExpression;
