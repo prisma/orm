@@ -7,8 +7,6 @@ import { interpretArgs } from '../interpret';
 import type { AttributeCtx, FuncCallArgType, FuncCallSig, TypedFuncCall } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
-// A name-pinned function-call argument — `funcCall('now', {})` matches `now()`, parsing the call's
-// arguments through `sig`.
 export function funcCall<const Name extends string, const Signature extends FuncCallSig>(
   name: Name,
   sig: Signature,

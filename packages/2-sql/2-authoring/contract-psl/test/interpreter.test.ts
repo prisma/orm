@@ -167,7 +167,10 @@ describe('interpretPslDocumentToSqlContract', () => {
           [
             'slugid',
             {
-              signature: {},
+              signature: {
+                documentation:
+                  'Generates a slug identifier without changing the field’s storage type.',
+              },
               lower: () => ({
                 ok: true as const,
                 value: {

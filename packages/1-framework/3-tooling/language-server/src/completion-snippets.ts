@@ -1,4 +1,4 @@
-import type { Param, PositionalParam } from '@internal/psl-parser';
+import type { ArgType, Param, PositionalParam } from '@internal/psl-parser';
 
 interface ArgumentSignature {
   readonly positional?: readonly PositionalParam<unknown, never>[];
@@ -7,7 +7,7 @@ interface ArgumentSignature {
 
 type RequiredArgument =
   | { readonly kind: 'positional'; readonly argument: PositionalParam<unknown, never> }
-  | { readonly kind: 'named'; readonly key: string; readonly type: Param<unknown, never> };
+  | { readonly kind: 'named'; readonly key: string; readonly type: ArgType<unknown, never> };
 
 export function requiredArgumentsSnippet(signature: ArgumentSignature): string {
   return requiredArguments(signature)
@@ -24,7 +24,7 @@ function requiredArguments(signature: ArgumentSignature): readonly RequiredArgum
         ? []
         : [{ kind: 'positional', argument } satisfies RequiredArgument],
     ),
-    ...Object.entries(signature.named ?? {}).flatMap(([key, type]) =>
+    ...Object.entries(signature.named ?? {}).flatMap(([key, { type }]) =>
       positionalKeys.has(key) || isOptionalParam(type)
         ? []
         : [{ kind: 'named', key, type } satisfies RequiredArgument],
@@ -39,7 +39,7 @@ function requiredArgumentSnippet(argument: RequiredArgument, tabStop: number): s
   return `${argument.key}: ${argSnippetPlaceholder(argument.type, tabStop)}`;
 }
 
-function argSnippetPlaceholder(param: Param<unknown, never>, tabStop: number): string {
+function argSnippetPlaceholder(param: ArgType<unknown, never>, tabStop: number): string {
   const placeholder = `\${${tabStop.toString()}:}`;
   if (param.kind === 'str') return `"${placeholder}"`;
   if (param.kind === 'list') return `[${placeholder}]`;
@@ -47,6 +47,6 @@ function argSnippetPlaceholder(param: Param<unknown, never>, tabStop: number): s
   return placeholder;
 }
 
-function isOptionalParam(param: Param<unknown, never>): boolean {
+function isOptionalParam(param: ArgType<unknown, never>): boolean {
   return 'optional' in param && param.optional === true;
 }

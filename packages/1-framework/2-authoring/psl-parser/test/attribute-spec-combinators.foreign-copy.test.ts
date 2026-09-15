@@ -52,7 +52,12 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
     ['int', int(), '3', 3],
     ['num', num(), '2.5', 2.5],
     ['bool', bool(), 'true', true],
-    ['identifier', identifier('Cascade'), 'Cascade', 'Cascade'],
+    [
+      'identifier',
+      identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+      'Cascade',
+      'Cascade',
+    ],
     ['entityRef', entityRef(), 'User', 'User'],
     ['fieldRef', fieldRef(), 'id', 'id'],
     ['json', json(), '"{\\"a\\":1}"', { a: 1 }],
@@ -70,7 +75,10 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
   it('funcCall accepts a node from another module copy', () => {
     const { arg, ctx } = foreignArg('now()');
 
-    const result = funcCall('now', {}).parse(arg, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      arg,
+      ctx,
+    );
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toMatchObject({ fn: 'now', args: {} });

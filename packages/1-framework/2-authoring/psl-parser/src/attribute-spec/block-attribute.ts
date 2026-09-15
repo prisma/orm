@@ -6,6 +6,7 @@ interface BlockAttributeConfig<
   Pos extends readonly PositionalParam<unknown, AttributeCtx>[],
   Named extends Record<string, Param<unknown, AttributeCtx>>,
 > {
+  readonly documentation: string;
   readonly positional?: Pos;
   readonly named?: Named;
   readonly refine?: (
@@ -25,6 +26,7 @@ export function blockAttribute<
   return {
     level: 'block',
     name,
+    documentation: config.documentation,
     positional: config.positional ?? [],
     named: config.named ?? {},
     ...(config.refine !== undefined ? { refine: config.refine } : {}),

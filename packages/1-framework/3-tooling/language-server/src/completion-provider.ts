@@ -2,23 +2,17 @@ import {
   type AuthoringPslBlockDescriptorNamespace,
   isAuthoringPslBlockDescriptor,
 } from '@internal/framework-components/authoring';
-import type {
-  AssembledAuthoringContributions,
-  ControlMutationDefaults,
-} from '@internal/framework-components/control';
 import {
   type AttributeSpec,
   assembleAttributeSpecs,
-  type BlockAttributeSpecFactory,
   findBlockDescriptor,
   type NamespaceSymbol,
   type SymbolTable,
 } from '@internal/psl-parser';
 import type { GenericBlockDeclarationAst, SourceFile } from '@internal/psl-parser/syntax';
-import { blindCast } from '@internal/utils/casts';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
+import { type AttributeSpecSource, attributeSpecResolver } from './attribute-spec-resolution';
 import type {
-  AttributeArgumentCompletionContext,
   AttributeNameCompletionContext,
   DeclarationKeywordCompletionContext,
   GenericBlockKeyCompletionContext,
@@ -27,12 +21,7 @@ import type {
   PslCompletionContext,
 } from './completion-context';
 import { requiredArgumentsSnippet } from './completion-snippets';
-import {
-  fieldSymbolForNode,
-  localFieldNames,
-  modelSymbolForNode,
-  referencedFieldNames,
-} from './completion-symbols';
+import { localFieldNames, referencedFieldNames } from './completion-symbols';
 import {
   provideAttributeArgumentSlotCompletionItems,
   provideAttributeNamedKeyCompletionItems,
@@ -40,12 +29,8 @@ import {
 } from './completion-values';
 import { refinesScalarType } from './named-type-classification';
 
-export interface PslCompletionCandidateSource {
+export interface PslCompletionCandidateSource extends AttributeSpecSource {
   readonly scalarTypes: readonly string[];
-  readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
-  readonly symbolTable: SymbolTable;
-  readonly authoringContributions?: AssembledAuthoringContributions;
-  readonly controlMutationDefaults?: ControlMutationDefaults;
 }
 
 export interface ProvidePslCompletionItemsInput {
@@ -54,6 +39,7 @@ export interface ProvidePslCompletionItemsInput {
   readonly candidates: PslCompletionCandidateSource;
   readonly clientSupportsSnippets: boolean;
   readonly clientSupportsTriggerSuggestCommand?: boolean;
+  readonly clientSupportsTriggerParameterHintsCommand?: boolean;
 }
 
 type DeclarationKeywordCompletionCandidateCategory = 'native' | 'genericBlock';
@@ -147,6 +133,7 @@ export function providePslCompletionItems(
         input.sourceFile,
         input.candidates,
         input.clientSupportsSnippets,
+        input.clientSupportsTriggerParameterHintsCommand === true,
       );
     case 'fieldAttributeNamedKey':
     case 'modelAttributeNamedKey':
@@ -178,6 +165,8 @@ export function providePslCompletionItems(
               clientSupportsSnippets: input.clientSupportsSnippets,
               clientSupportsTriggerSuggestCommand:
                 input.clientSupportsTriggerSuggestCommand === true,
+              clientSupportsTriggerParameterHintsCommand:
+                input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
                   ? localFieldNames(context, input.candidates.symbolTable)
@@ -197,6 +186,8 @@ export function providePslCompletionItems(
               context,
               sourceFile: input.sourceFile,
               clientSupportsSnippets: input.clientSupportsSnippets,
+              clientSupportsTriggerParameterHintsCommand:
+                input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
                   ? localFieldNames(context, input.candidates.symbolTable)
@@ -226,6 +217,7 @@ function provideAttributeNameCompletionItems(
   sourceFile: SourceFile,
   source: PslCompletionCandidateSource,
   clientSupportsSnippets: boolean,
+  clientSupportsTriggerParameterHintsCommand: boolean,
 ): readonly CompletionItem[] {
   const names = attributeNames(context, source);
   const replacementRange = {
@@ -250,6 +242,14 @@ function provideAttributeNameCompletionItems(
       filterText: name,
       textEdit: { range: replacementRange, newText },
       ...(newText !== name ? { insertTextFormat: InsertTextFormat.Snippet } : {}),
+      ...(newText !== name && clientSupportsTriggerParameterHintsCommand
+        ? {
+            command: {
+              title: 'Show argument hints',
+              command: 'editor.action.triggerParameterHints',
+            },
+          }
+        : {}),
     };
   });
 }
@@ -290,76 +290,6 @@ function attributeNameEditText(input: {
 
   const required = requiredArgumentsSnippet(input.spec);
   return required.length === 0 ? input.name : `${input.name}(${required})`;
-}
-
-function attributeSpecResolver(
-  context: AttributeNameCompletionContext | AttributeArgumentCompletionContext,
-  source: PslCompletionCandidateSource,
-): (name: string) => AttributeSpec<never, never> | undefined {
-  switch (context.kind) {
-    case 'blockAttributeName':
-    case 'blockAttributeNamedKey':
-    case 'blockAttributeArgumentSlot':
-    case 'blockAttributeValue': {
-      const descriptor = findBlockDescriptor(source.pslBlockDescriptors, context.blockKeyword);
-      return (name) => {
-        const factory = descriptor?.attributes?.[name];
-        if (factory === undefined) {
-          return undefined;
-        }
-        return blindCast<
-          BlockAttributeSpecFactory,
-          'block descriptor attributes are validated as factories at control-stack assembly but exposed through framework-components as unknown to avoid a parser dependency'
-        >(factory)();
-      };
-    }
-    case 'modelAttributeName':
-    case 'modelAttributeNamedKey':
-    case 'modelAttributeArgumentSlot':
-    case 'modelAttributeValue': {
-      if (source.authoringContributions === undefined) {
-        return () => undefined;
-      }
-      const model = modelSymbolForNode(source.symbolTable, context.model);
-      if (model === undefined || source.controlMutationDefaults === undefined) {
-        return () => undefined;
-      }
-      const specs = assembleAttributeSpecs(source.authoringContributions);
-      const specContext = {
-        symbols: source.symbolTable,
-        model,
-        controlMutationDefaults: source.controlMutationDefaults.defaultFunctionRegistry,
-      };
-      return (name) => specs.model[name]?.(specContext);
-    }
-    case 'fieldAttributeName':
-    case 'fieldAttributeNamedKey':
-    case 'fieldAttributeArgumentSlot':
-    case 'fieldAttributeValue': {
-      if (source.authoringContributions === undefined) {
-        return () => undefined;
-      }
-      const model = modelSymbolForNode(source.symbolTable, context.model);
-      if (model === undefined || source.controlMutationDefaults === undefined) {
-        return () => undefined;
-      }
-      const field = fieldSymbolForNode(model, context.field);
-      if (field === undefined) {
-        return () => undefined;
-      }
-      const specs = assembleAttributeSpecs(source.authoringContributions);
-      const specContext = {
-        symbols: source.symbolTable,
-        model,
-        controlMutationDefaults: source.controlMutationDefaults.defaultFunctionRegistry,
-      };
-      return (name) =>
-        specs.field[name]?.({
-          ...specContext,
-          field,
-        });
-    }
-  }
 }
 
 function provideDeclarationKeywordCompletionItems(

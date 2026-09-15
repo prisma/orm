@@ -40,7 +40,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
     const name = arg.name()?.name();
 
     let key: string;
-    let param: Param<unknown, Ctx>;
+    let param: ArgType<unknown, Ctx>;
     if (name === undefined) {
       const posParam = spec.positional[positionalSlot];
       if (posParam === undefined) {
@@ -72,7 +72,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
         continue;
       }
       key = name;
-      param = namedParam;
+      param = namedParam.type;
     }
 
     if (seen.has(key)) {
@@ -93,8 +93,8 @@ export function interpretArgs<Ctx extends AttributeCtx>(
   const finalized = new Set<string>();
   const finalizeAbsentKey = (
     key: string,
-    positionalParam: Param<unknown, Ctx> | undefined,
-    namedParam: Param<unknown, Ctx> | undefined,
+    positionalParam: ArgType<unknown, Ctx> | undefined,
+    namedParam: ArgType<unknown, Ctx> | undefined,
   ): void => {
     if (finalized.has(key) || seen.has(key)) return;
     finalized.add(key);
@@ -111,10 +111,10 @@ export function interpretArgs<Ctx extends AttributeCtx>(
 
   for (const param of spec.positional) {
     const namedParam = Object.hasOwn(spec.named, param.key) ? spec.named[param.key] : undefined;
-    finalizeAbsentKey(param.key, param.type, namedParam);
+    finalizeAbsentKey(param.key, param.type, namedParam?.type);
   }
   for (const key of Object.keys(spec.named)) {
-    finalizeAbsentKey(key, undefined, spec.named[key]);
+    finalizeAbsentKey(key, undefined, spec.named[key]?.type);
   }
 
   if (diagnostics.length > 0) {
@@ -169,7 +169,7 @@ function parseArgValue<Ctx extends AttributeCtx>(
 }
 
 function isOptionalArgType<Ctx extends AttributeCtx>(
-  param: Param<unknown, Ctx>,
+  param: ArgType<unknown, Ctx>,
 ): param is OptionalArgType<unknown, Ctx> {
   return 'optional' in param && param.optional === true;
 }

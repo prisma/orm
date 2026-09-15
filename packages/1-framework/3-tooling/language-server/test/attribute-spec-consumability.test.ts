@@ -9,8 +9,12 @@ import { runPipeline } from '../src/pipeline';
 
 vi.mock('@internal/config-loader', { spy: true });
 
-const rlsSpec = modelAttribute('rls', {});
-const markerSpec = fieldAttribute('marker', {});
+const rlsSpec = modelAttribute('rls', {
+  documentation: 'Enables row-level security on the model.',
+});
+const markerSpec = fieldAttribute('marker', {
+  documentation: 'Marks the field for the family contribution.',
+});
 
 const familyPack = {
   kind: 'family',
@@ -107,7 +111,11 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       controlMutationDefaults:
         interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
     });
-    expect(spec).toMatchObject({ name: 'marker', level: 'field' });
+    expect(spec).toMatchObject({
+      name: 'marker',
+      level: 'field',
+      documentation: 'Marks the field for the family contribution.',
+    });
   });
 
   it('invokes the enumerated factory to obtain the attribute spec', async () => {
@@ -136,7 +144,10 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       'rls'
     ]?.(ctx);
 
-    expect(spec?.name).toBe('rls');
-    expect(spec?.level).toBe('model');
+    expect(spec).toMatchObject({
+      name: 'rls',
+      level: 'model',
+      documentation: 'Enables row-level security on the model.',
+    });
   });
 });

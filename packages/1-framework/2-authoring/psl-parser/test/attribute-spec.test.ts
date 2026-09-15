@@ -83,7 +83,12 @@ function failing(): ArgType<never, AttributeCtx> {
 describe('interpretAttribute positional binding', () => {
   it('binds a positional argument into its slot key', () => {
     const { node, ctx } = fieldAttr('@rel("Posts")');
-    const spec = fieldAttribute('rel', { positional: [{ key: 'name', type: str() }] });
+    const spec = fieldAttribute('rel', {
+      documentation: 'Declares a field attribute for argument binding.',
+      positional: [
+        { key: 'name', type: str(), documentation: 'The value bound to this positional slot.' },
+      ],
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -94,7 +99,14 @@ describe('interpretAttribute positional binding', () => {
   it('rejects more positional arguments than declared slots', () => {
     const { node, ctx } = fieldAttr('@rel("a", "b")');
     const spec = fieldAttribute('rel', {
-      positional: [{ key: 'name', type: optional(str()) }],
+      documentation: 'Declares a field attribute for argument binding.',
+      positional: [
+        {
+          key: 'name',
+          type: optional(str()),
+          documentation: 'The value bound to this positional slot.',
+        },
+      ],
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -112,7 +124,11 @@ describe('interpretAttribute named binding', () => {
   it('binds named arguments by key', () => {
     const { node, ctx } = fieldAttr('@rel(name: "Posts", map: "fk")');
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()), map: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: {
+        name: { type: optional(str()), documentation: 'The relation name.' },
+        map: { type: optional(str()), documentation: 'The mapped constraint name.' },
+      },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -124,7 +140,8 @@ describe('interpretAttribute named binding', () => {
   it('rejects an unknown named argument anchored to the argument span', () => {
     const { node, ctx } = fieldAttr('@rel(foo: "x")');
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -143,8 +160,15 @@ describe('interpretAttribute positional-or-named duplicate', () => {
   it('rejects a key supplied both positionally and by name even when the values agree, anchored to the duplicate', () => {
     const { node, ctx } = fieldAttr('@rel("Foo", name: "Foo")');
     const spec = fieldAttribute('rel', {
-      positional: [{ key: 'name', type: optional(str()) }],
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      positional: [
+        {
+          key: 'name',
+          type: optional(str()),
+          documentation: 'The value bound to this positional slot.',
+        },
+      ],
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -160,8 +184,15 @@ describe('interpretAttribute positional-or-named duplicate', () => {
   it('rejects a key supplied both positionally and by name when the values disagree, anchored to the duplicate', () => {
     const { node, ctx } = fieldAttr('@rel("A", name: "B")');
     const spec = fieldAttribute('rel', {
-      positional: [{ key: 'name', type: optional(str()) }],
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      positional: [
+        {
+          key: 'name',
+          type: optional(str()),
+          documentation: 'The value bound to this positional slot.',
+        },
+      ],
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -179,7 +210,8 @@ describe('interpretAttribute duplicate named arguments', () => {
   it('rejects a named key supplied twice with differing values, anchored to the duplicate', () => {
     const { node, ctx } = fieldAttr('@rel(name: "A", name: "B")');
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -195,7 +227,8 @@ describe('interpretAttribute duplicate named arguments', () => {
   it('rejects a named key supplied twice even when the values are equal', () => {
     const { node, ctx } = fieldAttr('@rel(name: "A", name: "A")');
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -212,7 +245,10 @@ describe('interpretAttribute optional and default application', () => {
   it('applies a default for an absent optional argument', () => {
     const { node, ctx } = fieldAttr('@rel()');
     const spec = fieldAttribute('rel', {
-      named: { map: optional(str(), 'default_fk') },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: {
+        map: { type: optional(str(), 'default_fk'), documentation: 'The value supplied by name.' },
+      },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -223,7 +259,10 @@ describe('interpretAttribute optional and default application', () => {
 
   it('omits an absent optional argument with no default', () => {
     const { node, ctx } = fieldAttr('@rel()');
-    const spec = fieldAttribute('rel', { named: { name: optional(str()) } });
+    const spec = fieldAttribute('rel', {
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -234,7 +273,10 @@ describe('interpretAttribute optional and default application', () => {
   it('overrides a default when the argument is present', () => {
     const { node, ctx } = fieldAttr('@rel(map: "explicit")');
     const spec = fieldAttribute('rel', {
-      named: { map: optional(str(), 'default_fk') },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: {
+        map: { type: optional(str(), 'default_fk'), documentation: 'The value supplied by name.' },
+      },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -245,7 +287,10 @@ describe('interpretAttribute optional and default application', () => {
 
   it('reports a missing required argument', () => {
     const { node, ctx } = fieldAttr('@rel()');
-    const spec = fieldAttribute('rel', { named: { name: str() } });
+    const spec = fieldAttribute('rel', {
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: str(), documentation: 'The value supplied by name.' } },
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -259,7 +304,8 @@ describe('interpretAttribute refine', () => {
     const { node, ctx } = fieldAttr('@rel(name: "bad")');
     const seen: string[] = [];
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
       refine: (parsed, refineCtx): readonly PslDiagnostic[] => {
         if (parsed.name !== undefined) seen.push(parsed.name);
         return [
@@ -286,7 +332,8 @@ describe('interpretAttribute refine', () => {
   it('returns ok when refine reports no diagnostics', () => {
     const { node, ctx } = fieldAttr('@rel(name: "ok")');
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
       refine: (): readonly PslDiagnostic[] => [],
     });
 
@@ -300,7 +347,8 @@ describe('interpretAttribute refine', () => {
     const { node, ctx } = fieldAttr('@rel(name: "x")');
     let refined = false;
     const spec = fieldAttribute('rel', {
-      named: { name: failing() },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: failing(), documentation: 'The value supplied by name.' } },
       refine: (): readonly PslDiagnostic[] => {
         refined = true;
         return [];
@@ -317,7 +365,10 @@ describe('interpretAttribute refine', () => {
 describe('interpretAttribute leaf purity', () => {
   it('threads a failing leaf diagnostic through the Result rather than a sink', () => {
     const { node, ctx } = fieldAttr('@rel(name: "x")');
-    const spec = fieldAttribute('rel', { named: { name: failing() } });
+    const spec = fieldAttribute('rel', {
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: failing(), documentation: 'The value supplied by name.' } },
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -335,7 +386,11 @@ describe('interpretArgs', () => {
 
     const result = interpretArgs(
       node.argList()?.args() ?? [],
-      { name: 'rel', positional: [], named: { size: int() } },
+      {
+        name: 'rel',
+        positional: [],
+        named: { size: { type: int(), documentation: 'The value supplied by name.' } },
+      },
       ctx,
       span,
     );
@@ -350,7 +405,11 @@ describe('interpretArgs', () => {
 
     const result = interpretArgs(
       node.argList()?.args() ?? [],
-      { name: 'rel', positional: [], named: { size: int() } },
+      {
+        name: 'rel',
+        positional: [],
+        named: { size: { type: int(), documentation: 'The value supplied by name.' } },
+      },
       ctx,
       span,
     );

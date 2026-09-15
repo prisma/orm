@@ -33,17 +33,34 @@ const emptySnippetPlaceholder2 = '$' + '{2:}';
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const markerAttribute = fieldAttribute('marker', {
-  positional: [{ key: 'target', type: str() }],
-  named: { name: str(), priority: optional(int()) },
+  documentation: 'Attaches a named marker to a target.',
+  positional: [{ key: 'target', type: str(), documentation: 'The marker target.' }],
+  named: {
+    name: { type: str(), documentation: 'The marker name.' },
+    priority: { type: optional(int()), documentation: 'The marker priority.' },
+  },
 });
 const orderFixtureAttribute = fieldAttribute('orderFixture', {
-  named: { zebra: int(), alpha: int(), middle: int() },
+  documentation: 'Accepts named values in declaration order rather than alphabetical order.',
+  named: {
+    zebra: { type: int(), documentation: 'The first declared value.' },
+    alpha: { type: int(), documentation: 'The second declared value.' },
+    middle: { type: int(), documentation: 'The third declared value.' },
+  },
 });
 const rlsAttribute = modelAttribute('rls', {
-  named: { enabled: optional(str()), mode: str() },
+  documentation: 'Configures row-level security for this model.',
+  named: {
+    enabled: { type: optional(str()), documentation: 'The security enablement setting.' },
+    mode: { type: str(), documentation: 'The security mode.' },
+  },
 });
 const auditAttribute = blockAttribute('audit', {
-  named: { reason: optional(str()), level: int() },
+  documentation: 'Configures auditing for this block.',
+  named: {
+    reason: { type: optional(str()), documentation: 'The reason for auditing.' },
+    level: { type: int(), documentation: 'The audit level.' },
+  },
 });
 
 const attributeContributions = assembleAuthoringContributions([
@@ -56,8 +73,12 @@ const attributeContributions = assembleAuthoringContributions([
           orderFixture: () => orderFixtureAttribute,
           ownerAware: (ctx: FieldAttributeSpecContext) =>
             fieldAttribute('ownerAware', {
+              documentation: 'Selects a key based on the declaring model’s fields.',
               named: {
-                [Object.hasOwn(ctx.model.fields, 'scopedOnly') ? 'scopedKey' : 'topKey']: str(),
+                [Object.hasOwn(ctx.model.fields, 'scopedOnly') ? 'scopedKey' : 'topKey']: {
+                  type: str(),
+                  documentation: 'The value for the owner-specific key.',
+                },
               },
             }),
         },
@@ -143,7 +164,10 @@ const candidateSource = [
 
 function complete(
   markedFieldSource: string,
-  options: { readonly clientSupportsSnippets?: boolean } = {},
+  options: {
+    readonly clientSupportsSnippets?: boolean;
+    readonly clientSupportsTriggerParameterHintsCommand?: boolean;
+  } = {},
 ) {
   return completeWithSource({
     markedSource: `${candidateSource}\n${markedFieldSource}`,
@@ -151,6 +175,8 @@ function complete(
     authoringContributions: attributeContributions,
     controlMutationDefaults,
     clientSupportsSnippets: options.clientSupportsSnippets === true,
+    clientSupportsTriggerParameterHintsCommand:
+      options.clientSupportsTriggerParameterHintsCommand === true,
   });
 }
 
@@ -188,6 +214,7 @@ function completeWithSource(input: {
   readonly authoringContributions?: typeof attributeContributions;
   readonly controlMutationDefaults?: typeof controlMutationDefaults;
   readonly clientSupportsSnippets?: boolean;
+  readonly clientSupportsTriggerParameterHintsCommand?: boolean;
 }) {
   const cursorOffset = input.markedSource.indexOf('|');
   expect(cursorOffset).toBeGreaterThanOrEqual(0);
@@ -220,6 +247,8 @@ function completeWithSource(input: {
           : { controlMutationDefaults: input.controlMutationDefaults }),
       },
       clientSupportsSnippets: input.clientSupportsSnippets === true,
+      clientSupportsTriggerParameterHintsCommand:
+        input.clientSupportsTriggerParameterHintsCommand === true,
     }),
     sourceFile,
     cursorOffset,
@@ -475,11 +504,15 @@ describe('providePslCompletionItems', () => {
             field: {
               first: (ctx: FieldAttributeSpecContext) => {
                 factoryOwnerNames.push(ctx.model.name);
-                return fieldAttribute('first', {});
+                return fieldAttribute('first', {
+                  documentation: 'Marks the first contributed field attribute.',
+                });
               },
               second: (ctx: FieldAttributeSpecContext) => {
                 factoryOwnerNames.push(ctx.model.name);
-                return fieldAttribute('second', {});
+                return fieldAttribute('second', {
+                  documentation: 'Marks the second contributed field attribute.',
+                });
               },
             },
             model: {},
@@ -569,6 +602,26 @@ describe('providePslCompletionItems', () => {
         '}',
       ].join('\n'),
     );
+  });
+
+  it.each([false, true])('gates argument snippet hints on client support: %s', (supported) => {
+    for (const [source, snippets, hints] of [
+      ['model Post { id Int @mar| }', true, true],
+      ['model Post { id Int @mar| }', false, false],
+      ['model Post { id Int @mar|ker("x") }', true, false],
+      ['|', true, false],
+    ] as const) {
+      const { items } = complete(source, {
+        clientSupportsSnippets: snippets,
+        clientSupportsTriggerParameterHintsCommand: supported,
+      });
+      const item = completionItemByLabel(items, source === '|' ? 'model' : 'marker');
+      expect(item.command).toEqual(
+        supported && hints
+          ? { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' }
+          : undefined,
+      );
+    }
   });
 
   it('keeps plain contributed attribute completion free of snippet syntax', () => {
@@ -1028,7 +1081,9 @@ describe('providePslCompletionItems', () => {
       ...options,
       clientSupportsSnippets: true,
     }).items;
-    expect(completionItemByLabel(snippetItems, 'uuid').textEdit?.newText).toBe('uuid()');
+    expect(completionItemByLabel(snippetItems, 'uuid').textEdit?.newText).toBe(
+      `uuid(${emptySnippetPlaceholder1})`,
+    );
     expect(completionItemByLabel(snippetItems, 'cuid').textEdit?.newText).toBe(
       `cuid(${emptySnippetPlaceholder1})`,
     );
@@ -1063,7 +1118,7 @@ describe('providePslCompletionItems', () => {
     expect(snippets.map((item) => [item.label, item.textEdit?.newText])).toEqual([
       ['title', 'title'],
       ['slug', 'slug'],
-      ['wildcard', 'wildcard()'],
+      ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
       ['title', `title(sort: ${emptySnippetPlaceholder1})`],
       ['slug', `slug(sort: ${emptySnippetPlaceholder1})`],
     ]);
@@ -1090,7 +1145,7 @@ describe('providePslCompletionItems', () => {
       ]),
     ).toEqual([
       ['scopedOnly', 'scopedOnly'],
-      ['wildcard', 'wildcard()'],
+      ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
       ['scopedOnly', `scopedOnly(sort: ${emptySnippetPlaceholder1})`],
     ]);
   }, 5_000);

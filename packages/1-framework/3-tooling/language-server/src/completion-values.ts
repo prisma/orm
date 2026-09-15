@@ -1,15 +1,12 @@
-import type {
-  ArgType,
-  AttributeSpec,
-  InspectableArgType,
-  Param,
-  PositionalParam,
-} from '@internal/psl-parser';
+import type { ArgType, AttributeSpec } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
-import { blindCast } from '@internal/utils/casts';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
+import {
+  type ArgumentSignature,
+  directArgType,
+  resolveGrammar,
+} from './attribute-argument-grammar';
 import type {
-  AttributeArgumentPathStep,
   AttributeArgumentPosition,
   AttributeArgumentSlotPosition,
   AttributeNamedKeyPosition,
@@ -22,19 +19,13 @@ interface CompletionInput<Position extends AttributeArgumentPosition> {
   readonly sourceFile: SourceFile;
   readonly clientSupportsSnippets: boolean;
   readonly clientSupportsTriggerSuggestCommand?: boolean;
+  readonly clientSupportsTriggerParameterHintsCommand?: boolean;
 }
 
 interface ValueCompletionInput<Position extends AttributeArgumentPosition>
   extends CompletionInput<Position> {
   readonly fieldNames: (kind: 'fieldRef' | 'referencedFieldRef') => readonly string[];
 }
-
-interface ArgumentSignature {
-  readonly positional?: readonly PositionalParam<unknown, never>[];
-  readonly named?: Readonly<Record<string, Param<unknown, never>>>;
-}
-
-type Grammar = ArgumentSignature | Param<unknown, never>;
 
 export function provideAttributeNamedKeyCompletionItems(
   input: CompletionInput<AttributeNamedKeyPosition>,
@@ -71,49 +62,6 @@ export function provideAttributeValueCompletionItems(
   );
 }
 
-function directArgType(param: ArgType<unknown, never>): InspectableArgType<never> {
-  return blindCast<
-    InspectableArgType<never>,
-    'Completion inspects registry combinators whose constructors retain kind-specific metadata; public ArgType erases that metadata, and completion never invokes parse.'
-  >(param);
-}
-
-function resolveGrammar(
-  signature: ArgumentSignature,
-  path: readonly AttributeArgumentPathStep[],
-): readonly Grammar[] {
-  let grammars: readonly Grammar[] = [signature];
-  for (const step of path) {
-    grammars = grammars.flatMap((grammar) => advanceGrammar(grammar, step));
-  }
-  return grammars;
-}
-
-function advanceGrammar(grammar: Grammar, step: AttributeArgumentPathStep): readonly Grammar[] {
-  const type = 'kind' in grammar ? directArgType(grammar) : undefined;
-  if (type?.kind === 'oneOf') {
-    return type.alternatives.flatMap((alternative) => advanceGrammar(alternative, step));
-  }
-  switch (step.kind) {
-    case 'positionalArgument': {
-      if ('kind' in grammar) return [];
-      const param = grammar.positional?.[step.index]?.type;
-      return param === undefined ? [] : [param];
-    }
-    case 'namedArgument': {
-      if ('kind' in grammar) return [];
-      const param = grammar.named?.[step.name];
-      return param === undefined ? [] : [param];
-    }
-    case 'listElement':
-      return type?.kind === 'list' ? [type.of] : [];
-    case 'recordValue':
-      return type?.kind === 'record' ? [type.of] : [];
-    case 'functionCall':
-      return type?.kind === 'funcCall' && type.name === step.name ? [type.signature] : [];
-  }
-}
-
 function namedKeyItems(
   input: CompletionInput<AttributeNamedKeyPosition>,
   signature: ArgumentSignature,
@@ -140,7 +88,7 @@ function namedKeyItems(
 
 function valueItems(
   input: ValueCompletionInput<AttributeArgumentPosition>,
-  param: Param<unknown, never> | undefined,
+  param: ArgType<unknown, never> | undefined,
   syntax: AttributeValuePosition['syntax'],
 ): readonly CompletionItem[] {
   if (param === undefined) return [];
@@ -150,8 +98,24 @@ function valueItems(
   }
   if (type.kind === 'funcCall') {
     const snippet = input.clientSupportsSnippets && syntax !== 'functionName';
-    const text = snippet ? `${type.name}(${requiredArgumentsSnippet(type.signature)})` : type.name;
-    return [completionItem(input, type.name, text, CompletionItemKind.Function, snippet)];
+    const hasParameters =
+      (type.signature.positional?.length ?? 0) > 0 ||
+      Object.keys(type.signature.named ?? {}).length > 0;
+    const args = requiredArgumentsSnippet(type.signature) || (hasParameters ? '$' + '{1:}' : '');
+    const text = snippet ? `${type.name}(${args})` : type.name;
+    return [
+      {
+        ...completionItem(input, type.name, text, CompletionItemKind.Function, snippet),
+        ...(snippet && input.clientSupportsTriggerParameterHintsCommand === true && hasParameters
+          ? {
+              command: {
+                title: 'Show argument hints',
+                command: 'editor.action.triggerParameterHints',
+              },
+            }
+          : {}),
+      },
+    ];
   }
   if (syntax === 'functionName') return [];
   switch (type.kind) {

@@ -48,6 +48,22 @@ describe('createPostgresDefaultFunctionRegistry', () => {
     );
   });
 
+  it('retains declaration documentation in the opaque function registry', () => {
+    expect(registry.get('now')?.signature).toMatchObject({
+      documentation: 'Uses the current database timestamp as the default value.',
+    });
+    expect(registry.get('uuid')?.signature).toMatchObject({
+      documentation: 'Generates a UUID when a value is not supplied.',
+      positional: [
+        {
+          key: 'version',
+          documentation: 'The UUID version: `4` or `7`. Defaults to `4`.',
+          type: { kind: 'oneOf', optional: true },
+        },
+      ],
+    });
+  });
+
   it('lowers autoincrement() to a storage default', () => {
     const handler = registry.get('autoincrement')!;
     const result = handler.lower({ call: makeCall('autoincrement'), context: stubContext });
