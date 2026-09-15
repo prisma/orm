@@ -66,7 +66,7 @@
     "typecheck:examples": "turbo run typecheck --filter='./examples/**'",
     "record": "turbo run record --filter=@internal/cli --",
     "clean": "turbo run clean",
-    "prepare": "husky && skills add ./skills-contrib --skill '*' --agent universal claude-code -y && node scripts/sync-agent-rules.mjs",
+    "prepare": "husky && skills add ./skills-contrib --skill \"*\" --agent universal claude-code -y && node scripts/sync-agent-rules.mjs",
     "errors:list": "node scripts/list-error-codes.mjs",
     "check:error-reference": "node scripts/list-error-codes.mjs --verify docs/reference/error-reference.md",
     "lint:consumer-internal-imports": "node scripts/lint-consumer-internal-imports.mjs",
