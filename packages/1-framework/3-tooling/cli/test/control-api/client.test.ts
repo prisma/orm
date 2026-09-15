@@ -1158,6 +1158,31 @@ describe('ControlClient progress emission', () => {
       timeouts.databaseOperation,
     );
 
+    it("canonicalises with the target's preserve-empty hook before the family re-reads the contract", async () => {
+      const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
+      const target = {
+        ...mockTarget,
+        contractSerializer: {
+          ...mockTarget.contractSerializer,
+          shouldPreserveEmpty: (path: readonly string[]) => path.at(-1) === 'tables',
+        },
+      } as unknown as typeof mockTarget;
+      mockFamilyInstance.deserializeContract = (json: unknown) => {
+        const tables = (json as { storage: { namespaces: { app: { tables?: unknown } } } }).storage
+          .namespaces.app.tables;
+        if (tables === undefined) {
+          throw new Error('storage.namespaces.app.tables must be an object (was missing)');
+        }
+        return json as Contract;
+      };
+      const client = createControlClient({ family: mockFamily, target, adapter: mockAdapter });
+
+      const rendered = await client.renderContractDts({ contract: emittableContract() });
+      await client.close();
+
+      expect(rendered.ok).toBe(true);
+    });
+
     it('reports a contract the family rejects as CONTRACT_VALIDATION_FAILED', async () => {
       const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
       mockFamilyInstance.deserializeContract = () => {
