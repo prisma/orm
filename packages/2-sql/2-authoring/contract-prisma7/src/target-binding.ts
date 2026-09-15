@@ -25,8 +25,6 @@ export type Prisma7LiteralDefaultForm =
 export interface Prisma7TargetBinding {
   readonly target: TargetPackRef<'sql', string>;
   readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
-  /** The database the target is, as messages name it. */
-  readonly databaseName: string;
   /** The datasource `provider` values the target reads; messages name the first. */
   readonly providers: readonly [string, ...string[]];
   /** What Prisma 7 creates for each scalar and `@db.*` type. */

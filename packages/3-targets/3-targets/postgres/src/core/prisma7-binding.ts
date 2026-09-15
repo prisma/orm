@@ -40,7 +40,6 @@ function arrayLiteral(literals: readonly string[], typeName: string): string {
 export const prisma7PostgresBinding = {
   target: postgresTargetDescriptorMeta,
   createNamespace: postgresCreateNamespace,
-  databaseName: 'Postgres',
   providers: ['postgresql', 'postgres'],
   typeMap: prisma7PostgresTypeMap,
   nativeEnum: { entityKind: 'native_enum', typeConstructor: ['pg', 'enum'] },

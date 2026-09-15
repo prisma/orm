@@ -453,7 +453,7 @@ function checkDatasource(
     diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_PROVIDER_MISMATCH',
-        `No datasource block found; a Prisma 7 schema for ${binding.databaseName} declares \`datasource db { provider = "${namedProvider}" }\`.`,
+        `No datasource block found; add \`datasource db { provider = "${namedProvider}" }\`.`,
         fallbackSourceId,
         undefined,
       ),
