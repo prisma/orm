@@ -45,3 +45,32 @@ describe('one relation name on implicit many-to-many relations in two schemas', 
     });
   });
 });
+
+describe('a model named like an implicit junction model', () => {
+  it('loads when the model is in another schema than the junction', async () => {
+    const result = await loadFixtureSchema('junction-name-in-other-schema');
+    if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
+    const { namespaces } = result.value.domain;
+    expect({
+      one: Object.keys(namespaces['one']?.models ?? {}).sort(),
+      two: Object.keys(namespaces['two']?.models ?? {}).sort(),
+    }).toEqual({ one: ['Post', 'PostToTag', 'Tag'], two: ['PostToTag'] });
+  });
+});
+
+describe('implicit many-to-many junction relation fields', () => {
+  it('are named after the tables they reference, as contract infer names them', async () => {
+    const result = await loadFixtureSchema('implicit-many-to-many');
+    if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
+    const models = result.value.domain.namespaces['public']?.models ?? {};
+    expect({
+      PostToTag: Object.keys(models['PostToTag']?.relations ?? {}),
+      Favorites: Object.keys(models['Favorites']?.relations ?? {}),
+      Follows: Object.keys(models['Follows']?.relations ?? {}),
+    }).toEqual({
+      PostToTag: ['post', 'tag'],
+      Favorites: ['post', 'user'],
+      Follows: ['user', 'userUser'],
+    });
+  });
+});

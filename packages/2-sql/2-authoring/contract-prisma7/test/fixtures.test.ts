@@ -2,11 +2,12 @@ import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { basename, dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
-import { prisma7Schema } from '../src/provider';
-import { postgresPrisma7Options, postgresSourceContext } from './support';
+import { prisma7Contract } from '../src/provider';
+import { postgresSourceContext } from './support';
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 const update = process.env['UPDATE_PRISMA7_FIXTURES'] === '1';
@@ -43,7 +44,6 @@ const cases = readdirSync(fixturesDir, { withFileTypes: true })
 describe('Prisma 7 fixtures', () => {
   it('has a case per rule row', () => {
     expect(cases).toEqual([
-      'bigint-default-not-integer',
       'datetime-defaults',
       'dbgenerated-without-expression',
       'dbgenerated-without-expression-optional',
@@ -63,9 +63,11 @@ describe('Prisma 7 fixtures', () => {
       'implicit-many-to-many',
       'index-argument-unsupported',
       'indexes',
+      'integer-default-not-whole-number',
       'json-null-default',
       'junction-composite-id',
       'junction-name-collision',
+      'junction-name-in-other-schema',
       'junction-table-collision',
       'junction-table-name-in-other-schema',
       'keys',
@@ -89,6 +91,7 @@ describe('Prisma 7 fixtures', () => {
       'native-type-rejected-xml',
       'native-types-accepted',
       'native-types-without-arguments',
+      'number-defaults',
       'preview-features-ignored',
       'provider-mismatch',
       'provider-missing',
@@ -113,6 +116,7 @@ describe('Prisma 7 fixtures', () => {
       'updated-at',
       'updated-at-optional',
       'updated-at-with-default',
+      'updated-at-without-generator',
       'view',
     ]);
   });
@@ -123,7 +127,7 @@ describe('Prisma 7 fixtures', () => {
       const schemaPath = existsSync(directory)
         ? directory
         : join(fixturesDir, caseName, 'schema.prisma');
-      const config = prisma7Schema(schemaPath, postgresPrisma7Options);
+      const config = prisma7Contract(schemaPath, { binding: prisma7PostgresBinding });
       const result = await config.source.load(postgresSourceContext([schemaPath]));
       const diagnosticsPath = expectedPath(caseName, 'expected-diagnostics.json');
       const contractPath = expectedPath(caseName, 'expected-contract.json');

@@ -1,9 +1,0 @@
-datasource db {
-  provider = "postgresql"
-}
-
-model M {
-  id   Int      @id
-  big  BigInt   @default(1.5)
-  bigs BigInt[] @default([1, 2.5])
-}

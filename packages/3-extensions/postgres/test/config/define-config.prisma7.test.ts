@@ -29,9 +29,11 @@ describe('defineConfig with a ContractConfig', () => {
     expect(config.contract?.output).toBe('prisma/schema.json');
   });
 
-  it('prisma7Schema forwards the explicit output path', () => {
-    expect(prisma7Schema('prisma/schema.prisma', { output: 'out/contract.json' }).output).toBe(
-      'out/contract.json',
-    );
+  it('writes the contract where the top-level output directory says, as the adoption guide sets it', () => {
+    const config = defineConfig({
+      output: 'generated/prisma8',
+      contract: prisma7Schema('prisma/schema.prisma'),
+    });
+    expect(config.contract?.output).toBe('generated/prisma8/contract.json');
   });
 });

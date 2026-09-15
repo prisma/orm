@@ -1,8 +1,7 @@
 /**
  * The mechanism that turns a Prisma 7 scalar or `@db.*` spelling into the
  * Prisma 8 type constructor call that produces the same column. The table
- * itself is target knowledge: the Postgres one lives in
- * `@internal/target-postgres/prisma7-type-map` and the facade passes it in.
+ * itself is target knowledge, supplied by the target binding.
  */
 export interface Prisma7TypeMapping {
   readonly constructorName: string;

@@ -65,3 +65,36 @@ describe('dbgenerated() with no expression', () => {
     });
   });
 });
+
+describe('Decimal and BigInt number defaults', () => {
+  it('keep the number exactly as written, as decimal text', async () => {
+    const { columns } = await loadFixtureTable('number-defaults', 'Decimals');
+    expect(
+      Object.fromEntries(
+        [
+          'long',
+          'tiny',
+          'negative',
+          'whole',
+          'zerosBare',
+          'zerosScaled',
+          'zerosDefault',
+          'list',
+          'bigLong',
+          'bigList',
+        ].map((column) => [column, columns[column]?.['default']]),
+      ),
+    ).toEqual({
+      long: { kind: 'literal', value: '12345678901234567890.123456789' },
+      tiny: { kind: 'literal', value: '0.000000000000000001' },
+      negative: { kind: 'literal', value: '-1.5' },
+      whole: { kind: 'literal', value: '42' },
+      zerosBare: { kind: 'literal', value: '1.50' },
+      zerosScaled: { kind: 'literal', value: '1.50' },
+      zerosDefault: { kind: 'literal', value: '1.50' },
+      list: { kind: 'literal', value: ['1.50', '-2', '0.000000000000000001'] },
+      bigLong: { kind: 'literal', value: '9007199254740993' },
+      bigList: { kind: 'literal', value: ['9007199254740993', '-1'] },
+    });
+  });
+});

@@ -4,7 +4,8 @@ import { defineConfig as definePostgresConfig, prisma7Schema } from '@prisma/orm
 
 export default definePrismaConfig({
   orm: definePostgresConfig({
-    contract: prisma7Schema('prisma/schema.prisma', { output: 'generated/prisma8/contract.json' }),
+    contract: prisma7Schema('prisma/schema.prisma'),
+    output: 'generated/prisma8',
     db: {
       // biome-ignore lint/style/noNonNullAssertion: loaded from .env
       connection: process.env['DATABASE_URL']!,

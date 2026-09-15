@@ -115,7 +115,7 @@
               }
             },
             "relations": {
-              "a": {
+              "a2": {
                 "to": {
                   "namespace": "one",
                   "model": "A"
@@ -127,7 +127,7 @@
                   "targetFields": ["id"]
                 }
               },
-              "b": {
+              "b2": {
                 "to": {
                   "namespace": "one",
                   "model": "B"
@@ -255,7 +255,7 @@
               }
             },
             "relations": {
-              "a": {
+              "c": {
                 "to": {
                   "namespace": "two",
                   "model": "C"
@@ -267,7 +267,7 @@
                   "targetFields": ["id"]
                 }
               },
-              "b": {
+              "d": {
                 "to": {
                   "namespace": "two",
                   "model": "D"

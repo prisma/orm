@@ -75,7 +75,7 @@
               }
             },
             "relations": {
-              "a": {
+              "post": {
                 "to": {
                   "namespace": "one",
                   "model": "Post"
@@ -87,7 +87,7 @@
                   "targetFields": ["id"]
                 }
               },
-              "b": {
+              "tag": {
                 "to": {
                   "namespace": "two",
                   "model": "Tag"

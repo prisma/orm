@@ -376,9 +376,9 @@ export namespace Models {
   export type public_PostToTag = {
     A: CodecTypes['pg/int4@1']['output'];
     B: CodecTypes['pg/int4@1']['output'];
-    a: public_Post;
-    b: public_Tag;
-    readonly [RelationKeys]?: 'a' | 'b';
+    post: public_Post;
+    tag: public_Tag;
+    readonly [RelationKeys]?: 'post' | 'tag';
   };
   export type public_Tag = {
     id: CodecTypes['pg/int4@1']['output'];
@@ -728,7 +728,7 @@ type ContractBase = Omit<
               };
             };
             readonly relations: {
-              readonly a: {
+              readonly post: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
                 readonly cardinality: 'N:1';
                 readonly nullable: false;
@@ -737,7 +737,7 @@ type ContractBase = Omit<
                   readonly targetFields: readonly ['id'];
                 };
               };
-              readonly b: {
+              readonly tag: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Tag' };
                 readonly cardinality: 'N:1';
                 readonly nullable: false;

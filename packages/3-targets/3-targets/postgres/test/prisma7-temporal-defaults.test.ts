@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { storedTemporalText } from '../src/temporal-literals';
+import { storedTemporalText } from '../src/core/prisma7-temporal-defaults';
 
 /**
  * Each row is a `@default("...")` Prisma 7 accepts for a `DateTime` field, and

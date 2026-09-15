@@ -209,7 +209,7 @@
               }
             },
             "relations": {
-              "a": {
+              "post": {
                 "to": {
                   "namespace": "public",
                   "model": "Post"
@@ -221,7 +221,7 @@
                   "targetFields": ["id"]
                 }
               },
-              "b": {
+              "user": {
                 "to": {
                   "namespace": "public",
                   "model": "User"
@@ -265,7 +265,7 @@
               }
             },
             "relations": {
-              "a": {
+              "user": {
                 "to": {
                   "namespace": "public",
                   "model": "User"
@@ -277,7 +277,7 @@
                   "targetFields": ["id"]
                 }
               },
-              "b": {
+              "userUser": {
                 "to": {
                   "namespace": "public",
                   "model": "User"
@@ -321,7 +321,7 @@
               }
             },
             "relations": {
-              "a": {
+              "post": {
                 "to": {
                   "namespace": "public",
                   "model": "Post"
@@ -333,7 +333,7 @@
                   "targetFields": ["id"]
                 }
               },
-              "b": {
+              "tag": {
                 "to": {
                   "namespace": "public",
                   "model": "Tag"
