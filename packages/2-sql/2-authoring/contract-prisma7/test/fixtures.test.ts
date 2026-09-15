@@ -77,6 +77,7 @@ describe('Prisma 7 fixtures', () => {
       'multi-file-relation-unresolved',
       'multi-schema',
       'naming',
+      'native-type-model-ignored',
       'native-type-rejected-bit',
       'native-type-rejected-citext',
       'native-type-rejected-money',

@@ -790,7 +790,7 @@ function nativeTypeMessage(input: {
   const uses = keysUsingField(field, model);
   if (uses.length > 0) {
     const constraints = [...new Set(uses.map((use) => `the ${use.constraint}`))];
-    return `${label}: native type "@db.${nativeType}" has no Prisma 8 codec, and ${andList(uses.map((use) => use.usedBy))} ${uses.length === 1 ? 'uses' : 'use'} the field, so model "${model.symbol.name}" cannot use this contract source until the column type changes; @ignore does not help, because Prisma 7 still creates ${andList(constraints)} over the column. Changing the field's type is a column type change on Prisma 7's next migration.`;
+    return `${label}: native type "@db.${nativeType}" has no Prisma 8 codec, and ${andList(uses.map((use) => use.usedBy))} ${uses.length === 1 ? 'uses' : 'use'} the field, so @ignore on the field does not help: Prisma 7 still creates ${andList(constraints)} over the column. Add @@ignore to model "${model.symbol.name}" to keep the model out of the contract: Prisma 7's next migration is empty, but the model disappears from the Prisma 7 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 7 client as well. Changing the field's type instead changes the column type on Prisma 7's next migration.`;
   }
   const cannotInsert =
     !field.optional && !field.list && !givesColumnDefault(input.defaultAttribute);
