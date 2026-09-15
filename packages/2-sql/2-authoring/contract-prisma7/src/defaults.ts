@@ -3,7 +3,9 @@ import type {
   ColumnDefault,
   ColumnDefaultLiteralInputValue,
   ExecutionMutationDefaultValue,
+  JsonValue,
 } from '@internal/contract/types';
+import type { Codec } from '@internal/framework-components/codec';
 import type { ControlMutationDefaults } from '@internal/framework-components/control';
 import type { FieldSymbol, PslSpan, ResolvedAttribute } from '@internal/psl-parser';
 import type { ExpressionAst } from '@internal/psl-parser/syntax';
@@ -30,6 +32,8 @@ export interface LowerPrisma7DefaultInput {
   readonly field: FieldSymbol;
   readonly modelName: string;
   readonly codecId: string;
+  /** The column's codec, which decides how a number literal is carried. */
+  readonly codec: Codec | undefined;
   readonly literalForm: Prisma7LiteralDefaultForm | undefined;
   /** Storage value per member name when the field is typed by a Prisma 7 enum. */
   readonly enumMembers: ReadonlyMap<string, string> | undefined;
@@ -137,7 +141,7 @@ function scalarValue(
       const value = elementValue(element, input);
       if (value === undefined) {
         return unknown(
-          nonIntegerBigintReason(element, input) ?? 'lists may only hold literals or enum members.',
+          rejectedNumberReason(element, input) ?? 'lists may only hold literals or enum members.',
           span,
         );
       }
@@ -149,8 +153,8 @@ function scalarValue(
   const value = elementValue(expression, input);
   if (isJson && value === null) return jsonNull('is');
   if (value !== undefined) return value;
-  const bigintReason = nonIntegerBigintReason(expression, input);
-  if (bigintReason !== undefined) return unknown(bigintReason, span);
+  const numberReason = rejectedNumberReason(expression, input);
+  if (numberReason !== undefined) return unknown(numberReason, span);
   const identifier = IdentifierAst.cast(expression.syntax)?.name();
   if (identifier !== undefined) {
     return unknown(
@@ -194,17 +198,45 @@ function blindListValue(
   >(values);
 }
 
-const INTEGER_TEXT = /^-?\d+$/;
+function tryDecodeJson(codec: Codec, json: JsonValue): { readonly value: unknown } | undefined {
+  try {
+    return { value: codec.decodeJson(json) };
+  } catch {
+    return undefined;
+  }
+}
 
-/** The number token of a `BigInt` default that `BigInt()` would reject: Prisma 7 rejects it too ("is not a valid integer"). */
-function nonIntegerBigintReason(
+/**
+ * A number literal is carried as the value its column codec reads. A codec that
+ * reads a JSON number gets the number. A codec that reads only text, because a
+ * JS number would round the digits, gets what it decodes from the literal
+ * exactly as written.
+ */
+function numberDefault(
+  text: string,
+  codec: Codec | undefined,
+): { readonly value: ColumnDefaultLiteralInputValue } | undefined {
+  const number = Number(text);
+  if (codec === undefined || tryDecodeJson(codec, number) !== undefined) return { value: number };
+  const fromText = tryDecodeJson(codec, text);
+  return fromText === undefined
+    ? undefined
+    : {
+        value: blindCast<
+          ColumnDefaultLiteralInputValue,
+          'the contract build passes a literal default to the codec encodeJson, which takes the value the codec decodes'
+        >(fromText.value),
+      };
+}
+
+/** The number literal the column codec reads neither as a number nor as text, such as `1.5` for a `BigInt`, which Prisma 7 rejects too. */
+function rejectedNumberReason(
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
 ): string | undefined {
-  if (input.literalForm?.kind !== 'bigint') return undefined;
   const text = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
-  if (text === undefined || INTEGER_TEXT.test(text)) return undefined;
-  return `holds ${text}, which is not an integer; a BigInt default must be a whole number.`;
+  if (text === undefined || numberDefault(text, input.codec) !== undefined) return undefined;
+  return `holds ${text}, which is not a valid ${input.field.typeName} value.`;
 }
 
 function elementValue(
@@ -213,19 +245,8 @@ function elementValue(
 ): ColumnDefaultLiteralInputValue | undefined {
   const member = IdentifierAst.cast(expression.syntax)?.name();
   if (member !== undefined) return input.enumMembers?.get(member);
-  const number = NumberLiteralExprAst.cast(expression.syntax);
-  if (number !== undefined) {
-    // Built from the source text: a JS number would round past 2^53.
-    if (input.literalForm?.kind === 'bigint') {
-      const text = number.token()?.text;
-      return text === undefined || !INTEGER_TEXT.test(text)
-        ? undefined
-        : blindCast<ColumnDefaultLiteralInputValue, 'the column codec encodes a bigint to JSON'>(
-            BigInt(text),
-          );
-    }
-    return number.value();
-  }
+  const number = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
+  if (number !== undefined) return numberDefault(number, input.codec)?.value;
   const text = StringLiteralExprAst.cast(expression.syntax)?.value();
   if (text !== undefined) {
     if (input.literalForm?.kind === 'json') {

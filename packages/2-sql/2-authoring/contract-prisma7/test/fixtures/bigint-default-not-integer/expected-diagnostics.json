@@ -3,12 +3,12 @@
     "code": "PRISMA7_UNKNOWN_DEFAULT",
     "file": "schema.prisma",
     "line": 7,
-    "message": "Field \"M.big\": @default holds 1.5, which is not an integer; a BigInt default must be a whole number."
+    "message": "Field \"M.big\": @default holds 1.5, which is not a valid BigInt value."
   },
   {
     "code": "PRISMA7_UNKNOWN_DEFAULT",
     "file": "schema.prisma",
     "line": 8,
-    "message": "Field \"M.bigs\": @default holds 2.5, which is not an integer; a BigInt default must be a whole number."
+    "message": "Field \"M.bigs\": @default holds 2.5, which is not a valid BigInt value."
   }
 ]

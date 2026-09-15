@@ -90,6 +90,7 @@ describe('Prisma 7 fixtures', () => {
       'native-type-rejected-xml',
       'native-types-accepted',
       'native-types-without-arguments',
+      'number-defaults',
       'preview-features-ignored',
       'provider-mismatch',
       'provider-missing',

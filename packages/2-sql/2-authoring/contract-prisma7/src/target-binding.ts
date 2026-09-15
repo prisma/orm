@@ -12,8 +12,6 @@ export interface Prisma7ColumnType {
 export type Prisma7LiteralDefaultForm =
   /** A string holding JSON text, parsed. */
   | { readonly kind: 'json' }
-  /** A whole number, read from its source text as a `bigint`. */
-  | { readonly kind: 'bigint' }
   /** A string, carried as the SQL expression of the default the database stores. */
   | {
       readonly kind: 'sqlExpression';

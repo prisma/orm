@@ -1064,6 +1064,7 @@ function readField(args: ReadFieldArgs): void {
           field,
           modelName: model.symbol.name,
           codecId: resolved.descriptor.codecId,
+          codec: input.codecLookup.get(resolved.descriptor.codecId),
           literalForm: binding.literalDefaultForm(resolved.descriptor),
           enumMembers:
             enumDeclaration === undefined
