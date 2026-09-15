@@ -93,7 +93,7 @@ model Timestamps {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   updatedAtOpt DateTime?
-  updatedAtNow DateTime  @default(now())
+  updatedAtNow DateTime  @updatedAt
   updatedAtTz  DateTime  @updatedAt @db.Timestamptz(6)
 
   @@schema("public")
