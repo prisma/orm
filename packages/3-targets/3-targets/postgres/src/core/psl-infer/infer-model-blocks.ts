@@ -373,7 +373,7 @@ function inferDefaultAttribute(
   if (parsed === undefined) {
     return undefined;
   }
-  if (parsed.kind === 'literal' && parsed.value !== null) {
+  if (parsed.kind === 'literal') {
     return literalOrRawAttribute(valueFormat(parsed.value), column, defaultMapping);
   }
   return mappedAttribute(parsed, defaultMapping);

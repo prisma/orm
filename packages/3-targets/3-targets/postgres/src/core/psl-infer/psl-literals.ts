@@ -73,7 +73,8 @@ export function escapePslString(value: string): string {
 export type PslDefaultValueFormat = (value: unknown) => string | undefined;
 
 const INTEGER_TEXT = /^-?\d+$/;
-const DECIMAL_TEXT = /^-?\d+(?:\.\d+)?$/;
+const SPECIAL_VALUE_TEXT = /^(?:NaN|-?Infinity)$/;
+const DECIMAL_TEXT = /^(?:-?\d+(?:\.\d+)?|NaN|-?Infinity)$/;
 
 /** PSL has no exponent syntax, so the decimal point moves to where the exponent puts it. */
 function plainNumeral(value: number): string {
@@ -97,6 +98,10 @@ export const formatPslValue: PslDefaultValueFormat = (value) => {
 const formatNumber: PslDefaultValueFormat = (value) =>
   typeof value === 'number' && Number.isFinite(value) ? plainNumeral(value) : undefined;
 
+/** PSL has no number for `NaN` or `Infinity`; the float codecs pass their quoted text through. */
+const formatFloat: PslDefaultValueFormat = (value) =>
+  typeof value === 'string' && SPECIAL_VALUE_TEXT.test(value) ? `"${value}"` : formatNumber(value);
+
 /**
  * `pg/int8@1` reads a PSL number only within the safe integer range. Past it the literal is
  * rounded before the codec sees it, and a PSL string is not a `bigint`.
@@ -107,8 +112,8 @@ const formatSafeInteger: PslDefaultValueFormat = (value) => {
 };
 
 /**
- * `pg/numeric@1` stores decimal text. A PSL number reaches it as a JavaScript number, which
- * loses digits, and `db init` cannot read a stored number back.
+ * `pg/numeric@1` stores decimal text, `NaN` or `Infinity`. A PSL number reaches it as a JavaScript
+ * number, which loses digits, and `db init` cannot read a stored number back.
  */
 const formatDecimalText: PslDefaultValueFormat = (value) => {
   const text = typeof value === 'number' && Number.isFinite(value) ? plainNumeral(value) : value;
@@ -116,21 +121,21 @@ const formatDecimalText: PslDefaultValueFormat = (value) => {
 };
 
 /**
- * The temporal codecs encode Temporal values, which no PSL literal is. A JSON codec reads a PSL
- * string as a JSON string, not as JSON text, so a JSON default keeps its raw expression.
+ * The codecs of `Date`, `Time`, `Timestamp` and `Timestamptz` encode Temporal values, which no PSL
+ * literal is. A JSON codec reads a PSL string as a JSON string, not as JSON text, so a JSON default
+ * keeps its raw expression.
  */
 const noLiteral: PslDefaultValueFormat = () => undefined;
 
 const DEFAULT_VALUE_FORMATS: ReadonlyMap<string, PslDefaultValueFormat> = new Map([
   ['Int', formatNumber],
   ['SmallInt', formatNumber],
-  ['Float', formatNumber],
-  ['Real', formatNumber],
+  ['Float', formatFloat],
+  ['Real', formatFloat],
   ['BigInt', formatSafeInteger],
   ['Numeric', formatDecimalText],
   ['Date', noLiteral],
   ['Time', noLiteral],
-  ['Timetz', noLiteral],
   ['Timestamp', noLiteral],
   ['Timestamptz', noLiteral],
   ['Json', noLiteral],

@@ -5,20 +5,20 @@ import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { printPslFromFlat } from '../fixtures';
 
 /**
- * A column as the control adapter introspects it: `rawDefault` is what Postgres printed for a column
- * Prisma 7.10.0 created, and the resolved default is read by the target's own parser.
+ * A column as the control adapter introspects it: `rawDefault` is what Postgres printed for the
+ * column, and the resolved default is read by the target's own parser.
  */
 function introspected(
   name: string,
   nativeType: string,
   rawDefault: string,
-  shape: { readonly many?: true } = {},
+  shape: { readonly many?: true; readonly nullable?: true } = {},
 ): SqlColumnIRInput {
   const resolvedNativeType = shape.many ? `${nativeType}[]` : nativeType;
   return {
     name,
     nativeType,
-    nullable: shape.many === true,
+    nullable: shape.many === true || shape.nullable === true,
     default: rawDefault,
     ...ifDefined('many', shape.many),
     resolvedNativeType,
@@ -49,7 +49,7 @@ function printTable(name: string, columns: readonly SqlColumnIRInput[]): string 
 }
 
 describe('printPsl literal defaults', () => {
-  describe('given scalar number columns Prisma 7 created', () => {
+  describe('given scalar columns', () => {
     it('prints each default as the literal its codec accepts, with every digit and no exponent', () => {
       const output = printTable('number_defaults', [
         introspected('negInt', 'int4', "'-1'::integer"),
@@ -97,6 +97,10 @@ describe('printPsl literal defaults', () => {
         introspected('hugeBigInt', 'int8', "'9007199254740993'::bigint"),
         introspected('stamp', 'timestamp(3)', "'2024-01-01 00:00:00'::timestamp without time zone"),
         introspected('day', 'date', "'2024-01-01'::date"),
+        introspected('jsonNull', 'jsonb', "'null'::jsonb", { nullable: true }),
+        introspected('textNull', 'character varying(32)', 'NULL::character varying', {
+          nullable: true,
+        }),
       ]);
 
       expect(output).toMatchInlineSnapshot(`
@@ -109,8 +113,39 @@ describe('printPsl literal defaults', () => {
           hugeBigInt BigInt       @default(dbgenerated("'9007199254740993'::bigint"))
           stamp      Timestamp(3) @default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))
           day        Date         @default(dbgenerated("'2024-01-01'::date"))
+          jsonNull   Jsonb?       @default(dbgenerated("'null'::jsonb"))
+          textNull   VarChar(32)? @default(dbgenerated("NULL::character varying"))
 
           @@map("raw_defaults")
+        }
+        "
+      `);
+    });
+  });
+
+  describe('given special values and a time with time zone, written in SQL', () => {
+    it('prints each default as the quoted text its codec accepts', () => {
+      const output = printTable('special_value_defaults', [
+        introspected('floatNaN', 'float8', "'NaN'::double precision"),
+        introspected('floatNegInf', 'float8', "'-Infinity'::double precision"),
+        introspected('realNaN', 'float4', "'NaN'::real"),
+        introspected('decimalNaN', 'numeric', "'NaN'::numeric"),
+        introspected('timeWithZone', 'timetz', "'12:34:56+00'::time with time zone"),
+      ]);
+
+      expect(output).toMatchInlineSnapshot(`
+        "// use prisma-8
+        // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
+
+        model SpecialValueDefaults {
+          id           Int     @id
+          floatNaN     Float   @default("NaN")
+          floatNegInf  Float   @default("-Infinity")
+          realNaN      Real    @default("NaN")
+          decimalNaN   Numeric @default("NaN")
+          timeWithZone Timetz  @default("12:34:56+00")
+
+          @@map("special_value_defaults")
         }
         "
       `);
