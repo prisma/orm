@@ -175,9 +175,8 @@ withTempDir(({ createTempDir }) => {
         expect(verify.presented?.data).toMatchObject({
           ok: true,
           mode: 'full',
-          schema: { strict: false },
+          schema: { strict: false, warnings: [] },
         });
-        expect(output(verify)).not.toMatch(/✖ (?:missing|extra|mismatch):/);
 
         const strictVerify = await runDbVerify(ctx, ['--json', '--strict']);
         expect(strictVerify.exitCode, `db verify --strict\n${output(strictVerify)}`).toBe(4);
