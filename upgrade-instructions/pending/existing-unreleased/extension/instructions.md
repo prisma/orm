@@ -19,7 +19,7 @@ changes:
   - id: preserve-prepared-reference-nullability
     summary: Preserve declaration nullability when constructing or cloning PreparedParamRef AST nodes.
   - id: preserve-orm-pagination-expressions
-    summary: Preserve expression-valued limit and offset when consuming ORM CollectionState.
+    summary: Preserve expression-valued limit and offset when consuming ORM CollectionState or GroupPagingState.
   - id: psl-infer-raw-default-parser-is-target-owned
     summary: |
       `parseRawDefault` is no longer exported from the `family/psl-infer` subpath; import `parsePostgresDefault` from `@prisma/orm-postgres/target/default-normalizer` instead.
@@ -39,7 +39,7 @@ For integrations accepting both SQL and ORM callbacks, constrain the callback re
 
 ## `preserve-orm-pagination-expressions`
 
-Update extension code that reads or mirrors ORM `CollectionState.limit` and `offset`: these fields now contain relational-core `LimitOffsetValue | undefined` (`number | AnyExpression | undefined`), not just numbers. Forward them unchanged to the existing `SelectAst.withLimit` and `withOffset` methods. If processing numeric literals separately, narrow with `typeof value === 'number'`; preserve expression nodes rather than coercing, serializing or boxing them as literal parameters. Test presence against `undefined`, not truthiness, so zero limits and offsets survive. Keep grouped post-aggregation paging's separate numeric state unchanged.
+Update extension code that reads or mirrors ORM `CollectionState.limit` and `offset` or `GroupPagingState.limit` and `offset`: these fields now contain relational-core `LimitOffsetValue | undefined` (`number | AnyExpression | undefined`), not just numbers. Forward them unchanged to the existing `SelectAst.withLimit` and `withOffset` methods. If processing numeric literals separately, narrow with `typeof value === 'number'`; preserve expression nodes rather than coercing, serializing or boxing them as literal parameters. Test presence against `undefined`, not truthiness, so zero limits and offsets survive. Keep grouped post-aggregation paging separate from pre-group collection paging, preserving expression operands at both stages.
 
 ## `preserve-prepared-reference-nullability`
 

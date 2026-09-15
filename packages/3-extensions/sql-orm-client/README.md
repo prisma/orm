@@ -88,7 +88,11 @@ Root and nested `.limit(params.take).offset(params.skip)` accept SQL's non-nulla
 
 Ungrouped collections also expose `.prepared.aggregate(selector, configure?)`. For example, `db.prepare({}, () => db.orm.public.Post.prepared.aggregate((agg) => ({ total: agg.count() })))` returns a query whose `query(target, {})` produces `Promise<{ total: number }>`. Preparation invokes the selector and annotation callback once and retains alias, empty-result descriptor and codec metadata. Executions return fresh objects; projected values are already decoded by SQL runtime, while contributed empty-result conversion runs separately whenever a fallback is needed. WHERE parameters and pre-aggregate pagination use the same collection chain as ordinary aggregates.
 
-Grouped aggregate and mutation preparation, custom helper preparation and dynamic parameter lists are not supported.
+Grouped collections expose the same `.prepared.aggregate(selector, configure?)` terminal and return `Promise<Array<GroupKeys & AggregateResult<Spec>>>`. Group keys retain model names and decoded values; empty input produces `[]`. The prepared consumer captures the storage-to-model mapper and aggregate aliases once, then allocates fresh arrays and objects for each execution.
+
+Prepared HAVING comparands must use the selected aggregate's output codec (for example, Postgres `count()` uses `pg/int8number@1`, not the counted column's codec). Equality and inequality select null-safe operators for nullable prepared parameters at construction; ordered comparisons reject nullable parameters. Literal HAVING comparisons retain their existing numeric types. Projection-only aggregate operations remain unavailable in HAVING. After grouping, `.limit(params.take).offset(params.skip)` requires a prior group-key `.orderBy(...)` and accepts non-nullable numeric expressions. Pre-group pagination limits input rows; post-group pagination limits groups.
+
+Mutation preparation, custom helper preparation and dynamic parameter lists are not supported.
 
 ## Pagination
 

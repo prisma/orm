@@ -70,7 +70,20 @@ vi.mock('@internal/adapter-sqlite/runtime', async (importOriginal) => {
 
 type Row = { id: number; name: string };
 type NoParams = Record<never, never>;
+type GroupParams = {
+  readonly minimum: number;
+  readonly excluded: number | null;
+  readonly threshold: number;
+  readonly pre: number;
+  readonly take: number;
+  readonly skip: number;
+};
+type GroupResult = Array<{ id: number; total: bigint }>;
 interface Environment {
+  grouped(
+    selector: () => void,
+    configure: () => void,
+  ): Promise<PreparedRowQuery<GroupParams, Promise<GroupResult>>>;
   runtime: Runtime;
   aggregateRuntime: Runtime;
   bigCount(id: number): Promise<PreparedRowQuery<NoParams, Promise<{ total: bigint }>>>;
@@ -111,6 +124,34 @@ async function postgresEnvironment(name: string): Promise<Environment> {
   return {
     runtime,
     aggregateRuntime: runtime,
+    grouped: async (selector, configure) => {
+      const prepared = await db.prepare(
+        {
+          minimum: 'pg/int4@1',
+          excluded: { codecId: 'pg/int4@1', nullable: true },
+          threshold: 'pg/int8number@1',
+          pre: 'pg/int4@1',
+          take: 'pg/int4@1',
+          skip: 'pg/int4@1',
+        },
+        (p) =>
+          db.orm.public.User.where((user) => user.id.gte(p.minimum))
+            .orderBy((user) => user.id.asc())
+            .limit(p.pre)
+            .groupBy('id')
+            .having((h) => h.count().gte(p.threshold))
+            .having((h) => h.min('id').neq(p.excluded))
+            .orderBy((user) => user.id.asc())
+            .limit(p.take)
+            .offset(p.skip)
+            .prepared.aggregate((agg) => {
+              selector();
+              return { total: agg.countBigInt() };
+            }, configure),
+      );
+      expectTypeOf<ReturnType<typeof prepared.query>>().toEqualTypeOf<Promise<GroupResult>>();
+      return prepared;
+    },
     bigCount: (id) =>
       db.prepare({}, () =>
         db.orm.public.User.where({ id }).prepared.aggregate((agg) => ({
@@ -217,6 +258,34 @@ async function sqliteEnvironment(name: string): Promise<Environment> {
   return {
     runtime,
     aggregateRuntime: await aggregateDb.connect(),
+    grouped: async (selector, configure) => {
+      const prepared = await aggregateDb.prepare(
+        {
+          minimum: 'sqlite/integer@1',
+          excluded: { codecId: 'sqlite/integer@1', nullable: true },
+          threshold: 'sqlite/bigintnumber@1',
+          pre: 'sqlite/integer@1',
+          take: 'sqlite/integer@1',
+          skip: 'sqlite/integer@1',
+        },
+        (p) =>
+          aggregateDb.orm.Meter.where((meter) => meter.id.gte(p.minimum))
+            .orderBy((meter) => meter.id.asc())
+            .limit(p.pre)
+            .groupBy('id')
+            .having((h) => h.count().gte(p.threshold))
+            .having((h) => h.min('id').neq(p.excluded))
+            .orderBy((meter) => meter.id.asc())
+            .limit(p.take)
+            .offset(p.skip)
+            .prepared.aggregate((agg) => {
+              selector();
+              return { total: agg.countBigInt() };
+            }, configure),
+      );
+      expectTypeOf<ReturnType<typeof prepared.query>>().toEqualTypeOf<Promise<GroupResult>>();
+      return prepared;
+    },
     bigCount: (id) =>
       aggregateDb.prepare({}, () =>
         aggregateDb.orm.Meter.where({ id }).prepared.aggregate((agg) => ({
@@ -355,6 +424,76 @@ for (const [name, setup] of [
   ['sqlite', sqliteEnvironment],
 ] as const) {
   describe(`prepared facade on ${name}`, () => {
+    it(
+      'prepares grouped HAVING and both pagination stages once for explicit execution scopes',
+      async () => {
+        const authoring = await setup('Authoring');
+        let target: Environment | undefined;
+        try {
+          target = await setup('Target');
+          const selector = vi.fn();
+          const configure = vi.fn();
+          const authorQuery = vi.spyOn(authoring.aggregateRuntime, 'query');
+          const targetQuery = vi.spyOn(target.aggregateRuntime, 'query');
+          const before = lowerings[name].mock.calls.length;
+          const prepared = await authoring.grouped(selector, configure);
+          expect(authorQuery).not.toHaveBeenCalled();
+          expect(targetQuery).not.toHaveBeenCalled();
+          expect(selector).toHaveBeenCalledOnce();
+          expect(configure).toHaveBeenCalledOnce();
+          expect(lowerings[name].mock.calls.length - before).toBe(1);
+          const params = { minimum: 1, excluded: null, threshold: 1, pre: 10, take: 10, skip: 0 };
+          const [a, b] = await Promise.all([
+            prepared.query(target.aggregateRuntime, params),
+            prepared.query(authoring.aggregateRuntime, { ...params, excluded: 1 }),
+          ]);
+          expect(a).toEqual([{ id: 1, total: 1n }]);
+          expect(b).toEqual([]);
+          expect(
+            await prepared.query(target.aggregateRuntime, { ...params, threshold: 2 }),
+          ).toEqual([]);
+          const again = await prepared.query(target.aggregateRuntime, params);
+          expect(again).toEqual(a);
+          expect(again).not.toBe(a);
+          expect(again[0]).not.toBe(a[0]);
+          expect(selector).toHaveBeenCalledOnce();
+          expect(configure).toHaveBeenCalledOnce();
+          expect(lowerings[name].mock.calls.length - before).toBe(1);
+          const connection = await target.aggregateRuntime.connection();
+          try {
+            const tx = await connection.transaction();
+            try {
+              await target.insertAggregate(tx);
+              expect(await prepared.query(tx, { ...params, take: 1, skip: 1 })).toEqual([
+                { id: 2, total: 1n },
+              ]);
+              expect(await prepared.query(tx, { ...params, pre: 1, take: 1, skip: 1 })).toEqual([]);
+              expect(await prepared.query(tx, { ...params, minimum: 2 })).toEqual([
+                { id: 2, total: 1n },
+              ]);
+              expect(
+                await prepared.query(authoring.aggregateRuntime, { ...params, minimum: 2 }),
+              ).toEqual([]);
+            } finally {
+              await tx.rollback();
+            }
+            expect(await prepared.query(connection, { ...params, minimum: 2 })).toEqual([]);
+          } finally {
+            await connection.release();
+          }
+          const controller = new AbortController();
+          controller.abort();
+          await expect(
+            prepared.query(target.aggregateRuntime, params, { signal: controller.signal }),
+          ).rejects.toThrow();
+        } finally {
+          await target?.close();
+          await authoring.close();
+        }
+      },
+      timeouts.spinUpPpgDev,
+    );
+
     it(
       'prepares aggregate objects once with ordinary parity, nullable filters, pagination and explicit transactions',
       async () => {

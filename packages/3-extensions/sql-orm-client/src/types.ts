@@ -129,8 +129,8 @@ export function emptyState(): CollectionState {
  */
 export interface GroupPagingState {
   readonly orderBy: readonly OrderByItem[];
-  readonly limit: number | undefined;
-  readonly offset: number | undefined;
+  readonly limit: LimitOffsetValue | undefined;
+  readonly offset: LimitOffsetValue | undefined;
 }
 
 export function emptyGroupPagingState(): GroupPagingState {
@@ -848,16 +848,15 @@ export type AggregateIncludeReducers<
         >;
       };
 
-export type HavingComparisonMethods<T> = Pick<
-  ComparisonMethods<T, 'equality' | 'order'>,
+export type HavingComparisonMethods<T, CodecId extends string = never> = Pick<
+  ComparisonMethods<T, 'equality' | 'order', CodecId>,
   'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte'
 >;
 
 /**
- * The value a HAVING comparison accepts. The comparison happens inside the
- * database, where the operand is an inlined numeric literal — so the
- * comparand stays `number` regardless of the result's application
- * representation. A field-taking metric compares as `number | null` — a
+ * Literal HAVING comparands stay `number` regardless of the result's application
+ * representation; prepared comparands carry the declared aggregate output codec.
+ * A field-taking metric compares as `number | null` — a
  * grouped value's SQL domain includes NULL; a no-input metric reads
  * nullability off its declared row, so `count()` compares as plain `number`.
  */
@@ -869,6 +868,10 @@ type HavingZeroArgComparand<Row> = Row extends {
     : number
   : never;
 
+type AggregateOutputCodecId<Row> = Row extends { readonly output: infer Id extends string }
+  ? Id
+  : never;
+
 type FieldHavingCall<
   TContract extends Contract<SqlStorage>,
   ModelName extends string,
@@ -876,7 +879,12 @@ type FieldHavingCall<
   NsId extends string,
 > = <FieldName extends AggregateFieldNames<TContract, ModelName, Op, NsId>>(
   field: FieldName,
-) => HavingComparisonMethods<number | null>;
+) => HavingComparisonMethods<
+  number | null,
+  AggregateOutputCodecId<
+    AggregateRowFor<TContract, Op, FieldCodecId<TContract, ModelName, FieldName, NsId>>
+  >
+>;
 
 type HavingMethod<
   TContract extends Contract<SqlStorage>,
@@ -886,10 +894,18 @@ type HavingMethod<
 > =
   HasZeroArgCall<TContract, Op> extends true
     ? {
-        (): HavingComparisonMethods<HavingZeroArgComparand<AggregateRowFor<TContract, Op, never>>>;
+        (): HavingComparisonMethods<
+          HavingZeroArgComparand<AggregateRowFor<TContract, Op, never>>,
+          AggregateOutputCodecId<AggregateRowFor<TContract, Op, never>>
+        >;
         <FieldName extends AggregateFieldNames<TContract, ModelName, Op, NsId>>(
           field: FieldName,
-        ): HavingComparisonMethods<number | null>;
+        ): HavingComparisonMethods<
+          number | null,
+          AggregateOutputCodecId<
+            AggregateRowFor<TContract, Op, FieldCodecId<TContract, ModelName, FieldName, NsId>>
+          >
+        >;
       }
     : FieldHavingCall<TContract, ModelName, Op, NsId>;
 
