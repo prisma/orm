@@ -32,10 +32,14 @@ export function prisma7Diagnostic(
   return { code, message, sourceId, ...(span !== undefined ? { span } : {}) };
 }
 
+export function andList(items: readonly string[]): string {
+  const leading = items.slice(0, -1);
+  const last = items[items.length - 1] ?? '';
+  return leading.length === 0 ? last : `${leading.join(', ')} and ${last}`;
+}
+
 export function fieldList(modelName: string, fieldNames: readonly string[]): string {
-  const quoted = fieldNames.map((name) => `"${modelName}.${name}"`);
-  const last = quoted.pop();
-  return quoted.length === 0 ? `${last}` : `${quoted.join(', ')} and ${last}`;
+  return andList(fieldNames.map((name) => `"${modelName}.${name}"`));
 }
 
 export function ignoredFieldReferenced(input: {

@@ -52,6 +52,8 @@ export interface RelationModel {
   readonly ignoredFields: ReadonlySet<string>;
   /** Relation fields marked `@ignore`; their back-relations are omitted with them. */
   readonly ignoredRelationFields: readonly RelationField[];
+  /** Fields whose type or attributes were reported; keys and relations over them report nothing more. */
+  readonly rejectedFields: ReadonlySet<string>;
   readonly idFields: readonly string[];
   readonly uniqueFieldSets: readonly (readonly string[])[];
   readonly relationFields: readonly RelationField[];
@@ -350,7 +352,12 @@ export function lowerRelations(
           );
           continue;
         }
-        if (attribute.references.some((name) => target.ignoredFields.has(name))) {
+        if (
+          attribute.fields.some((name) => model.rejectedFields.has(name)) ||
+          attribute.references.some(
+            (name) => target.ignoredFields.has(name) || target.rejectedFields.has(name),
+          )
+        ) {
           rejectFkSide(model, relationField);
           continue;
         }
@@ -627,7 +634,13 @@ function singleIdColumn(
   requester: JunctionSide,
   diagnostics: ContractSourceDiagnostic[],
 ): FieldNode | undefined {
-  if (side.model.idFields.some((name) => side.model.ignoredFields.has(name))) return undefined;
+  if (
+    side.model.idFields.some(
+      (name) => side.model.ignoredFields.has(name) || side.model.rejectedFields.has(name),
+    )
+  ) {
+    return undefined;
+  }
   const [idField, ...rest] = side.model.idFields;
   const column = idField === undefined ? undefined : side.model.columns.get(idField);
   if (column === undefined || rest.length > 0) {

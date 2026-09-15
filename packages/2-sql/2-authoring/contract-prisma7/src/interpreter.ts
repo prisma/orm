@@ -52,8 +52,8 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { basename } from 'pathe';
-import { lowerPrisma7Default } from './defaults';
-import { ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
+import { givesColumnDefault, lowerPrisma7Default } from './defaults';
+import { andList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
 import {
   type Prisma7TypeMap,
@@ -138,6 +138,7 @@ interface ModelBuild {
   readonly columns: Map<string, FieldNode>;
   readonly ignoredFields: Set<string>;
   readonly ignoredRelationFields: RelationField[];
+  readonly rejectedFields: Set<string>;
   idFields: readonly string[];
   readonly uniqueIndexes: IndexAttribute[];
   readonly relationFields: RelationField[];
@@ -292,11 +293,13 @@ export function interpretPrisma7Documents(
       columns: new Map(),
       ignoredFields: new Set(),
       ignoredRelationFields: [],
+      rejectedFields: new Set(),
       idFields: declaration.id?.fields ?? [],
       uniqueIndexes: [...declaration.uniqueIndexes],
       relationFields: [],
     };
     for (const field of Object.values(declaration.symbol.fields)) {
+      const reported = diagnostics.length;
       readField({
         field,
         build,
@@ -309,6 +312,13 @@ export function interpretPrisma7Documents(
         input,
         diagnostics,
       });
+      if (
+        diagnostics.length > reported &&
+        !build.columns.has(field.name) &&
+        !build.ignoredFields.has(field.name)
+      ) {
+        build.rejectedFields.add(field.name);
+      }
     }
     builds.set(declaration.symbol.name, build);
   }
@@ -323,6 +333,7 @@ export function interpretPrisma7Documents(
       columns: build.columns,
       ignoredFields: build.ignoredFields,
       ignoredRelationFields: build.ignoredRelationFields,
+      rejectedFields: build.rejectedFields,
       idFields: build.idFields,
       uniqueFieldSets: build.uniqueIndexes.flatMap((index) =>
         index.fields === undefined ? [] : [index.fields],
@@ -371,6 +382,7 @@ export function interpretPrisma7Documents(
         );
         return [];
       }
+      if (attribute.fields?.some((name) => build.rejectedFields.has(name))) return [];
       const columns =
         attribute.fields === undefined ? undefined : keyColumns(model, attribute.fields);
       if (columns === undefined) {
@@ -721,6 +733,66 @@ function lowerNativeEnums(
   return result;
 }
 
+interface FieldUse {
+  readonly usedBy: string;
+  readonly constraint: 'primary key' | 'unique index' | 'index' | 'foreign key';
+}
+
+function keysUsingField(field: FieldSymbol, model: ModelDeclaration): readonly FieldUse[] {
+  const modelName = model.symbol.name;
+  const uses: FieldUse[] = [];
+  for (const attribute of field.attributes) {
+    if (attribute.name === 'id') uses.push({ usedBy: 'its @id', constraint: 'primary key' });
+    if (attribute.name === 'unique')
+      uses.push({ usedBy: 'its @unique', constraint: 'unique index' });
+  }
+  if (model.id?.fields?.includes(field.name)) {
+    uses.push({ usedBy: `@@id on model "${modelName}"`, constraint: 'primary key' });
+  }
+  for (const unique of model.uniqueIndexes) {
+    if (unique.fields?.includes(field.name)) {
+      uses.push({ usedBy: `@@unique on model "${modelName}"`, constraint: 'unique index' });
+    }
+  }
+  for (const index of model.indexes) {
+    if (index.fields?.includes(field.name)) {
+      uses.push({ usedBy: `@@index on model "${modelName}"`, constraint: 'index' });
+    }
+  }
+  for (const other of Object.values(model.symbol.fields)) {
+    const relation = other.attributes.find((attribute) => attribute.name === 'relation');
+    const parsed =
+      relation === undefined
+        ? undefined
+        : parseRelationAttribute(relation, other.name, model.sourceId, []);
+    if (parsed?.fields?.includes(field.name)) {
+      uses.push({
+        usedBy: `relation field "${modelName}.${other.name}"`,
+        constraint: 'foreign key',
+      });
+    }
+  }
+  return uses;
+}
+
+function nativeTypeMessage(input: {
+  readonly label: string;
+  readonly nativeType: string;
+  readonly field: FieldSymbol;
+  readonly model: ModelDeclaration;
+  readonly defaultAttribute: ResolvedAttribute | undefined;
+}): string {
+  const { label, nativeType, field, model } = input;
+  const uses = keysUsingField(field, model);
+  if (uses.length > 0) {
+    const constraints = [...new Set(uses.map((use) => `the ${use.constraint}`))];
+    return `${label}: native type "@db.${nativeType}" has no Prisma 8 codec, and ${andList(uses.map((use) => use.usedBy))} ${uses.length === 1 ? 'uses' : 'use'} the field, so model "${model.symbol.name}" cannot use this contract source until the column type changes; @ignore does not help, because Prisma 7 still creates ${andList(constraints)} over the column. Changing the field's type is a column type change on Prisma 7's next migration.`;
+  }
+  const cannotInsert =
+    !field.optional && !field.list && !givesColumnDefault(input.defaultAttribute);
+  return `${label}: native type "@db.${nativeType}" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too${cannotInsert ? '; because the field is required and its column has no default, neither client can then insert rows' : ''}. Changing the field's type instead changes the column type on Prisma 7's next migration.`;
+}
+
 interface ReadFieldArgs {
   readonly field: FieldSymbol;
   readonly build: ModelBuild;
@@ -881,7 +953,13 @@ function readField(args: ReadFieldArgs): void {
         diagnostics.push(
           prisma7Diagnostic(
             'PRISMA7_NATIVE_TYPE_UNSUPPORTED',
-            `${label}: native type "@db.${nativeType.name}" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract; Prisma 7's next migration is then empty. Changing the field's type instead changes the column type on Prisma 7's next migration.`,
+            nativeTypeMessage({
+              label,
+              nativeType: nativeType.name,
+              field,
+              model,
+              defaultAttribute,
+            }),
             sourceId,
             nativeType.attribute.span,
           ),

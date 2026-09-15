@@ -46,6 +46,18 @@ function base64ToHex(base64: string): string | undefined {
   return `\\x${Buffer.from(base64, 'base64').toString('hex')}`;
 }
 
+const CLIENT_SIDE_GENERATORS: ReadonlySet<string> = new Set(['uuid', 'cuid', 'ulid', 'nanoid']);
+
+export function givesColumnDefault(attribute: ResolvedAttribute | undefined): boolean {
+  const expression = attribute?.args.find((arg) => arg.kind === 'positional')?.expression;
+  if (expression === undefined) return false;
+  const call = FunctionCallAst.cast(expression.syntax);
+  if (call === undefined) return true;
+  const fn = call.path().join('.');
+  if (CLIENT_SIDE_GENERATORS.has(fn)) return false;
+  return fn !== 'dbgenerated' || [...call.args()].length > 0;
+}
+
 /** Positional argument keys per Prisma 7 default function, matching the target registry's signatures. */
 const FUNCTION_ARGUMENT_KEYS: Readonly<Record<string, readonly string[]>> = {
   uuid: ['version'],

@@ -80,6 +80,7 @@ describe('Prisma 7 fixtures', () => {
       'native-type-rejected-citext',
       'native-type-rejected-money',
       'native-type-rejected-oid',
+      'native-type-rejected-uses',
       'native-type-rejected-varbit',
       'native-type-rejected-xml',
       'native-types-accepted',
