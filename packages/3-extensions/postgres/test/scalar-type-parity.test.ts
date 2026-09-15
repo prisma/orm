@@ -91,6 +91,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       DateString: { codecId: 'pg/date-string@1', nativeType: 'date' },
       TimestampString: { codecId: 'pg/timestamp-string@1', nativeType: 'timestamp' },
       TimestamptzString: { codecId: 'pg/timestamptz-string@1', nativeType: 'timestamptz' },
+      TimestamptzJsDate: { codecId: 'pg/timestamptz-date@1', nativeType: 'timestamptz' },
       TimeString: { codecId: 'pg/time-string@1', nativeType: 'time' },
     });
   });
@@ -120,6 +121,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       'Timestamp',
       'TimestampString',
       'Timestamptz',
+      'TimestamptzJsDate',
       'TimestamptzString',
       'Timetz',
       'UnboundedInt',

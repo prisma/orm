@@ -5,6 +5,7 @@ import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { parse } from '@internal/psl-parser/syntax';
 import { notOk, ok } from '@internal/utils/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import type { ProjectInterpretation } from '../src/config-resolution';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
 import type { PipelineInputs } from '../src/pipeline';
@@ -44,15 +45,18 @@ const unmarkedSource = 'model Stray {\n  id Int @id\n}\n';
 function projectWithMirror(interpretation?: ProjectInterpretation): {
   readonly texts: Map<string, string>;
   readonly store: ProjectArtifacts;
+  readonly onInterpretationError: ReturnType<typeof vi.fn>;
 } {
+  const onInterpretationError = vi.fn();
   const texts = new Map<string, string>();
   const store = createProjectArtifacts({
     inputs,
     controlStack,
+    onInterpretationError,
     getText: (uri) => texts.get(uri),
     ...(interpretation === undefined ? {} : { interpretation }),
   });
-  return { texts, store };
+  return { texts, store, onInterpretationError };
 }
 
 const interpretContext = { composedExtensions: [] } as unknown as ContractSourceContext;
@@ -152,6 +156,7 @@ describe('createProjectArtifacts', () => {
       inputs: twoInputs,
       controlStack,
       getText: (uri) => texts.get(uri),
+      onInterpretationError: vi.fn(),
     });
     texts.set(schemaUri, unmarkedSource);
     texts.set(schema2Uri, cleanSource);
@@ -191,6 +196,7 @@ describe('createProjectArtifacts', () => {
       inputs: twoInputs,
       controlStack,
       getText: (uri) => texts.get(uri),
+      onInterpretationError: vi.fn(),
     });
     texts.set(schemaUri, cleanSource);
     texts.set(schema2Uri, twoModelSource);
@@ -252,6 +258,89 @@ describe('interpret slot', () => {
     message: 'relation target not found',
     span: { start: { offset: 31, line: 3, column: 3 }, end: { offset: 37, line: 3, column: 9 } },
   };
+
+  it('reports an unexpected failure without caching it and recovers on the same artifacts', () => {
+    const error = new Error('interpreter exploded');
+    const { interpretation, spy } = interpretationDouble(() => ok({} as never));
+    spy.mockImplementationOnce(() => {
+      throw error;
+    });
+    const { texts, store, onInterpretationError } = projectWithMirror(interpretation);
+    texts.set(schemaUri, cleanSource);
+    const artifacts = store.document(schemaUri);
+
+    expect(artifacts?.interpretDiagnostics()).toEqual([
+      {
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+        message:
+          'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
+        severity: 1,
+      },
+    ]);
+    expect(onInterpretationError).toHaveBeenCalledExactlyOnceWith(schemaUri, error);
+    expect(artifacts?.interpretDiagnostics()).toEqual([]);
+    expect(artifacts?.interpretDiagnostics()).toEqual([]);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries and reports every failed attempt without caching deterministic exceptions', () => {
+    const error = new Error('deterministic failure');
+    const { interpretation, spy } = interpretationDouble(() => {
+      throw error;
+    });
+    const { texts, store, onInterpretationError } = projectWithMirror(interpretation);
+    texts.set(schemaUri, cleanSource);
+    const artifacts = store.document(schemaUri);
+    expect(artifacts?.interpretDiagnostics()).toEqual(artifacts?.interpretDiagnostics());
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(onInterpretationError.mock.calls).toEqual([
+      [schemaUri, error],
+      [schemaUri, error],
+    ]);
+  });
+
+  it.each([
+    LSPErrorCodes.RequestCancelled,
+    LSPErrorCodes.ServerCancelled,
+    LSPErrorCodes.ContentModified,
+  ])('preserves protocol control-flow error %s', (code) => {
+    const error = new ResponseError(code, 'cancelled', { retriggerRequest: false });
+    const { interpretation } = interpretationDouble(() => {
+      throw error;
+    });
+    const { texts, store, onInterpretationError } = projectWithMirror(interpretation);
+    texts.set(schemaUri, cleanSource);
+    expect(() => store.document(schemaUri)?.interpretDiagnostics()).toThrow(error);
+    expect(onInterpretationError).not.toHaveBeenCalled();
+  });
+
+  it('retries diagnostic mapping failures on the same artifacts', () => {
+    const error = new Error('mapping failed');
+    const { interpretation, spy } = interpretationDouble(() => ok({} as never));
+    spy.mockImplementationOnce(() =>
+      notOk({
+        summary: 'invalid finding',
+        diagnostics: [
+          {
+            code: 'TEST',
+            get message(): string {
+              throw error;
+            },
+          },
+        ],
+      }),
+    );
+    const { texts, store, onInterpretationError } = projectWithMirror(interpretation);
+    texts.set(schemaUri, cleanSource);
+    const artifacts = store.document(schemaUri);
+    expect(artifacts?.interpretDiagnostics().map((item) => item.code)).toEqual([
+      'PRISMA_NEXT_INTERPRETATION_FAILED',
+    ]);
+    expect(onInterpretationError).toHaveBeenCalledExactlyOnceWith(schemaUri, error);
+    expect(artifacts?.interpretDiagnostics()).toEqual([]);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
 
   it('does not interpret on document reads, only when the slot is pulled', () => {
     const { interpretation, spy } = interpretationDouble(() => ok({} as never));

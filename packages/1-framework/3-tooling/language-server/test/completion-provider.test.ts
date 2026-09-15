@@ -7,6 +7,7 @@ import type {
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
+  type ControlMutationDefaultRegistry,
 } from '@internal/framework-components/control';
 import {
   type AttributeSpecNamespace,
@@ -168,6 +169,10 @@ interface ActualSqlBlockModule {
   readonly sqlFamilyPslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
 }
 
+interface ActualPostgresDefaultsModule {
+  createPostgresDefaultFunctionRegistry(): ControlMutationDefaultRegistry;
+}
+
 interface ActualMongoAttributeModule {
   readonly mongoAttributeSpecs: AttributeSpecNamespace;
 }
@@ -273,13 +278,16 @@ function actualAuthoringContributions(stack: CompletionTestStack): typeof attrib
 function completeWithActualStack(
   markedSource: string,
   stack: CompletionTestStack,
-  options: { readonly clientSupportsSnippets?: boolean } = {},
+  options: {
+    readonly clientSupportsSnippets?: boolean;
+    readonly controlMutationDefaults?: typeof controlMutationDefaults;
+  } = {},
 ) {
   return completeWithSource({
     markedSource,
     pslBlockDescriptors: stack.pslBlockDescriptors,
     authoringContributions: actualAuthoringContributions(stack),
-    controlMutationDefaults,
+    controlMutationDefaults: options.controlMutationDefaults ?? controlMutationDefaults,
     clientSupportsSnippets: options.clientSupportsSnippets === true,
   });
 }
@@ -509,7 +517,7 @@ describe('providePslCompletionItems', () => {
         start: sourceFile.positionAt(cursorOffset - 'pr'.length),
         end: sourceFile.positionAt(cursorOffset),
       },
-      newText: 'priority',
+      newText: 'priority: ',
     });
   });
 
@@ -640,13 +648,15 @@ describe('providePslCompletionItems', () => {
         start: sourceFile.positionAt(cursorOffset - 'ma'.length),
         end: sourceFile.positionAt(cursorOffset),
       },
-      newText: 'map',
+      newText: 'map: ',
     });
 
     expect(
-      completeWithActualStack(['model Post {', '  id Int @default(|)', '}'].join('\n'), stack)
-        .items,
-    ).toEqual([]);
+      completeWithActualStack(
+        ['model Post {', '  id Int @default(|)', '}'].join('\n'),
+        stack,
+      ).items.map((item) => item.label),
+    ).toEqual(['true', 'false']);
 
     const mapCompletion = completeWithActualStack(
       ['model Post {', '  id Int @ma| // keep', '}'].join('\n'),
@@ -965,6 +975,125 @@ describe('providePslCompletionItems', () => {
 
     expect(items).toEqual([]);
   });
+
+  it('uses actual SQL enum metadata and rejects an empty enum without invented values', async () => {
+    const stack = await actualSqlStack();
+    const names = (schema: string) =>
+      completeWithActualStack(schema, stack).items.map((item) => item.label);
+    expect(names('enum Mood { Happy Sad }\nmodel Post { mood Mood @default(|) }')).toEqual([
+      'Happy',
+      'Sad',
+    ]);
+    expect(names('enum Mood {}\nmodel Post { mood Mood @default(|) }')).toEqual([]);
+    expect(
+      names(
+        'enum Mood { Top }\nnamespace scoped { enum Mood { Scoped }\nmodel Post { mood scoped.Mood @default(|) } }',
+      ),
+    ).toEqual(['Scoped']);
+  }, 5_000);
+
+  it('uses actual adapter default-function signatures through the SQL factory', async () => {
+    const stack = await actualSqlStack();
+    const defaults = await importFromPackageRoot<ActualPostgresDefaultsModule>(
+      '../../../3-targets/6-adapters/postgres/src/core/control-mutation-defaults.ts',
+    );
+    const options = {
+      controlMutationDefaults: {
+        ...controlMutationDefaults,
+        defaultFunctionRegistry: defaults.createPostgresDefaultFunctionRegistry(),
+      },
+    };
+    const source = (args: string) => `model Post { value String @default(${args}) }`;
+    const candidates = completeWithActualStack(source('|'), stack, options).items;
+    expect(candidates.map((item) => item.label)).toEqual([
+      'true',
+      'false',
+      'autoincrement',
+      'now',
+      'uuid',
+      'cuid',
+      'ulid',
+      'nanoid',
+      'dbgenerated',
+    ]);
+    expect(
+      completeWithActualStack(source('uuid(|)'), stack, options).items.map((item) => item.label),
+    ).toEqual(['4', '7']);
+    expect(
+      completeWithActualStack(source('cuid(|)'), stack, options).items.map((item) => item.label),
+    ).toEqual(['2']);
+    expect(completeWithActualStack(source('nanoid(|)'), stack, options).items).toEqual([]);
+    expect(completeWithActualStack(source('dbgenerated(|)'), stack, options).items).toEqual([]);
+    const snippetItems = completeWithActualStack(source('|'), stack, {
+      ...options,
+      clientSupportsSnippets: true,
+    }).items;
+    expect(completionItemByLabel(snippetItems, 'uuid').textEdit?.newText).toBe('uuid()');
+    expect(completionItemByLabel(snippetItems, 'cuid').textEdit?.newText).toBe(
+      `cuid(${emptySnippetPlaceholder1})`,
+    );
+    expect(completionItemByLabel(snippetItems, 'dbgenerated').textEdit?.newText).toBe(
+      `dbgenerated("${emptySnippetPlaceholder1}")`,
+    );
+  }, 5_000);
+
+  it('uses distinct local and referenced fields through actual SQL relation specs', async () => {
+    const stack = await actualSqlStack();
+    const schema = (args: string) =>
+      `model Target { topOnly Int }\nnamespace remote { model Target { remoteOnly Int } }\nmodel Owner { ownOnly Int\n relation remote.Target @relation(${args}) }`;
+    expect(
+      completeWithActualStack(schema('fields: [|]'), stack).items.map((item) => item.label),
+    ).toEqual(['ownOnly', 'relation']);
+    expect(
+      completeWithActualStack(schema('references: [|]'), stack).items.map((item) => item.label),
+    ).toEqual(['remoteOnly']);
+    expect(
+      completeWithActualStack(schema('onDelete: |'), stack).items.map((item) => item.label),
+    ).toEqual(['NoAction', 'Restrict', 'Cascade', 'SetNull', 'SetDefault']);
+  }, 5_000);
+
+  it('uses actual Mongo field-named functions and keeps distinct snippet edits', async () => {
+    const stack = await actualMongoStack();
+    const schema = (args: string) => `model Post { title String\n slug String\n @@index(${args}) }`;
+    const plain = completeWithActualStack(schema('[|]'), stack).items;
+    expect(plain.map((item) => item.label)).toEqual(['title', 'slug', 'wildcard']);
+    const snippets = completeWithActualStack(schema('[|]'), stack, {
+      clientSupportsSnippets: true,
+    }).items;
+    expect(snippets.map((item) => [item.label, item.textEdit?.newText])).toEqual([
+      ['title', 'title'],
+      ['slug', 'slug'],
+      ['wildcard', 'wildcard()'],
+      ['title', `title(sort: ${emptySnippetPlaceholder1})`],
+      ['slug', `slug(sort: ${emptySnippetPlaceholder1})`],
+    ]);
+    expect(
+      completeWithActualStack(schema('[title(|)]'), stack).items.map((item) => item.label),
+    ).toEqual(['sort']);
+    expect(
+      completeWithActualStack(schema('[title(sort: |)]'), stack).items.map((item) => item.label),
+    ).toEqual(['Asc', 'Desc']);
+    expect(completeWithActualStack(schema('[wildcard(|)]'), stack).items).toEqual([]);
+    expect(
+      completeWithActualStack(schema('[title], type: |'), stack).items.map((item) => item.label),
+    ).toEqual(['1', '-1', '"text"', '"2dsphere"', '"2d"', '"hashed"']);
+  }, 5_000);
+
+  it('scopes actual Mongo dynamic function names to the declaring namespace model', async () => {
+    const stack = await actualMongoStack();
+    const schema =
+      'model Post { topOnly String }\nnamespace scoped { model Post { scopedOnly String\n @@index([|]) } }';
+    expect(
+      completeWithActualStack(schema, stack, { clientSupportsSnippets: true }).items.map((item) => [
+        item.label,
+        item.textEdit?.newText,
+      ]),
+    ).toEqual([
+      ['scopedOnly', 'scopedOnly'],
+      ['wildcard', 'wildcard()'],
+      ['scopedOnly', `scopedOnly(sort: ${emptySnippetPlaceholder1})`],
+    ]);
+  }, 5_000);
 
   it('does not return generic block symbols as model field type candidates', () => {
     const { items } = complete(['model Post {', '  audit |', '}'].join('\n'));

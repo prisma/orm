@@ -77,7 +77,7 @@ describe('lsp', () => {
     expect(parsed.result.capabilities).toMatchObject({
       documentFormattingProvider: true,
       foldingRangeProvider: true,
-      completionProvider: { triggerCharacters: ['.', '@'] },
+      completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ','] },
     });
     expect(JSON.parse(frames[1]?.body ?? '')).toEqual({ jsonrpc: '2.0', id: 2, result: null });
     expect(run.exitCode).toBe(0);

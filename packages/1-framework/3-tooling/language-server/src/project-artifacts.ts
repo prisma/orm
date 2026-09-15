@@ -1,8 +1,13 @@
 import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
 import type { DocumentAst, SourceFile } from '@internal/psl-parser/syntax';
 import { InternalError } from '@internal/utils/internal-error';
+import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import type { ProjectInterpretation } from './config-resolution';
-import { type LspDiagnostic, mapInterpreterDiagnostics } from './diagnostic-mapping';
+import {
+  type LspDiagnostic,
+  mapInterpreterDiagnostics,
+  ParseDiagnosticSeverity,
+} from './diagnostic-mapping';
 import { computeDocumentDiagnostics, type DocumentDiagnostics } from './document-diagnostics';
 import type { PipelineInputs } from './pipeline';
 import type { SchemaInputSet } from './schema-inputs';
@@ -24,6 +29,7 @@ export interface ProjectArtifactsOptions {
   readonly controlStack: PipelineInputs;
   readonly getText: (uri: string) => string | undefined;
   readonly interpretation?: ProjectInterpretation;
+  readonly onInterpretationError: (uri: string, error: unknown) => void;
 }
 
 /**
@@ -57,7 +63,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       return () => [];
     }
     let memo: readonly LspDiagnostic[] | undefined;
-    return () => {
+    const interpretDiagnostics = (): readonly LspDiagnostic[] => {
       if (memo === undefined) {
         const result = interpretation.source.interpret(
           {
@@ -74,6 +80,30 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
         );
       }
       return memo;
+    };
+    return () => {
+      try {
+        return interpretDiagnostics();
+      } catch (error) {
+        if (
+          error instanceof ResponseError &&
+          (error.code === LSPErrorCodes.RequestCancelled ||
+            error.code === LSPErrorCodes.ServerCancelled ||
+            error.code === LSPErrorCodes.ContentModified)
+        ) {
+          throw error;
+        }
+        options.onInterpretationError(uri, error);
+        return [
+          {
+            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+            code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+            message:
+              'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
+            severity: ParseDiagnosticSeverity.Error,
+          },
+        ];
+      }
     };
   }
 

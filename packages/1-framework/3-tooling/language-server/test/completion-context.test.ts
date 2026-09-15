@@ -1,4 +1,9 @@
-import { parse } from '@internal/psl-parser/syntax';
+import {
+  FieldDeclarationAst,
+  GenericBlockDeclarationAst,
+  ModelDeclarationAst,
+  parse,
+} from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { classifyPslCompletionContext } from '../src/completion-context';
 
@@ -267,7 +272,7 @@ describe('classifyPslCompletionContext', () => {
   });
 
   it('classifies top-level attribute named keys as distinct concrete kinds with concrete owners', () => {
-    const fieldContext = classify(['model M {', '  id Int @map(|)', '}'].join('\n'));
+    const fieldContext = classify(['model M {', '  id Int @map(na|me: "")', '}'].join('\n'));
     expect(fieldContext).toMatchObject({
       kind: 'fieldAttributeNamedKey',
       attributeName: 'map',
@@ -280,7 +285,9 @@ describe('classifyPslCompletionContext', () => {
     expect(fieldContext).not.toHaveProperty('block');
     expect(fieldContext).not.toHaveProperty('blockKeyword');
 
-    const modelContext = classify(['model M {', '  @@index(fields: [id], |)', '}'].join('\n'));
+    const modelContext = classify(
+      ['model M {', '  @@index(fields: [id], na|me: "")', '}'].join('\n'),
+    );
     expect(modelContext).toMatchObject({
       kind: 'modelAttributeNamedKey',
       attributeName: 'index',
@@ -293,7 +300,7 @@ describe('classifyPslCompletionContext', () => {
     expect(modelContext).not.toHaveProperty('block');
     expect(modelContext).not.toHaveProperty('blockKeyword');
 
-    const blockContext = classify(['policy Foo {', '  @@audit(|)', '}'].join('\n'));
+    const blockContext = classify(['policy Foo {', '  @@audit(ena|bled: true)', '}'].join('\n'));
     expect(blockContext).toMatchObject({
       kind: 'blockAttributeNamedKey',
       attributeName: 'audit',
@@ -313,21 +320,36 @@ describe('classifyPslCompletionContext', () => {
     expectUnsupported(['policy Rule {', '  @@audit()|', '}'].join('\n'));
   });
 
-  it('keeps named-key completion active inside closed and unfinished attribute argument lists', () => {
-    expect(classify(['model Post {', '  id Int @map(|)', '}'].join('\n'))).toMatchObject({
-      kind: 'fieldAttributeNamedKey',
-      attributeName: 'map',
-    });
-    expect(classify(['model Post {', '  id Int @map(|'].join('\n'))).toMatchObject({
-      kind: 'fieldAttributeNamedKey',
-      attributeName: 'map',
-    });
+  it('preserves ambiguous slots inside closed and unfinished attribute argument lists', () => {
+    for (const source of ['model Post { id Int @map(|) }', 'model Post { id Int @map(|']) {
+      expect(classify(source)).toMatchObject({
+        kind: 'fieldAttributeArgumentSlot',
+        attributeName: 'map',
+        path: [],
+        positionalIndex: 0,
+        existingNamedKeys: [],
+      });
+    }
   });
 
-  it('does not classify attribute values or nested argument positions as named keys', () => {
-    expectUnsupported(['model Post {', '  id Int @map(name: value|)', '}'].join('\n'));
-    expectUnsupported(['model Post {', '  id Int @default(autoincrement(|))', '}'].join('\n'));
-    expectUnsupported(['model Post {', '  authorId Int @relation(fields: [|])', '}'].join('\n'));
+  it('distinguishes values from nested ambiguous argument slots', () => {
+    expect(classify(['model Post {', '  id Int @map(name: value|)', '}'].join('\n'))).toMatchObject(
+      { kind: 'fieldAttributeValue' },
+    );
+    expect(
+      classify(['model Post {', '  id Int @default(autoincrement(|))', '}'].join('\n')),
+    ).toMatchObject({
+      kind: 'fieldAttributeArgumentSlot',
+      path: [
+        { kind: 'positionalArgument', index: 0 },
+        { kind: 'functionCall', name: 'autoincrement' },
+      ],
+      positionalIndex: 0,
+      existingNamedKeys: [],
+    });
+    expect(
+      classify(['model Post {', '  authorId Int @relation(fields: [|])', '}'].join('\n')),
+    ).toMatchObject({ kind: 'fieldAttributeValue' });
   });
 
   it('bounds field attribute completion to the active attribute span', () => {
@@ -422,6 +444,168 @@ describe('classifyPslCompletionContext', () => {
   it('returns unsupported outside model field type prefixes', () => {
     expectUnsupported(['model Post {', '  |id Int', '}'].join('\n'));
     expectUnsupported(['model Post {', '  id Int |', '}'].join('\n'));
+  });
+
+  it.each([
+    ['model M { value String @probe(', ') }', 'fieldAttributeValue'],
+    ['model M { @@probe(', ') }', 'modelAttributeValue'],
+    ['policy M { @@probe(', ') }', 'blockAttributeValue'],
+  ])('preserves the full nested value position for %s', (prefix, suffix, kind) => {
+    const marked = `${prefix}nested: wrap([ordered(direction: A|sc)])${suffix}`;
+    const context = classify(marked);
+    expect(context).toEqual({
+      kind,
+      ...(kind === 'fieldAttributeValue'
+        ? { field: expect.any(FieldDeclarationAst), model: expect.any(ModelDeclarationAst) }
+        : kind === 'modelAttributeValue'
+          ? { model: expect.any(ModelDeclarationAst) }
+          : { block: expect.any(GenericBlockDeclarationAst), blockKeyword: 'policy' }),
+      attributeName: 'probe',
+      path: [
+        { kind: 'namedArgument', name: 'nested' },
+        { kind: 'functionCall', name: 'wrap' },
+        { kind: 'positionalArgument', index: 0 },
+        { kind: 'listElement' },
+        { kind: 'functionCall', name: 'ordered' },
+        { kind: 'namedArgument', name: 'direction' },
+      ],
+      syntax: 'scalar',
+      offset: marked.indexOf('|'),
+      replacementStartOffset: marked.indexOf('A|'),
+      replacementEndOffset: marked.indexOf('|') + 2,
+    });
+    expect(context).not.toHaveProperty('attribute');
+  });
+
+  it.each([
+    [
+      'model M { value String @probe(',
+      'fieldAttribute',
+      { field: expect.any(FieldDeclarationAst), model: expect.any(ModelDeclarationAst) },
+    ],
+    ['model M { @@probe(', 'modelAttribute', { model: expect.any(ModelDeclarationAst) }],
+    [
+      'policy M { @@probe(',
+      'blockAttribute',
+      { block: expect.any(GenericBlockDeclarationAst), blockKeyword: 'policy' },
+    ],
+  ])('preserves exact nested keys and ambiguous slots for %s', (prefix, ownerKind, owner) => {
+    for (const args of [
+      'optional: true, req|uired: []',
+      'optional: true, |',
+      'optional: true, Asc, |',
+      'optional: true, A|sc',
+    ]) {
+      const marked = `${prefix}choice: ordered(${args})) }`;
+      const namedKey = args.includes('req|');
+      const identifier = args.includes('A|');
+      const offset = marked.indexOf('|');
+      expect(classify(marked)).toEqual({
+        ...owner,
+        kind: `${ownerKind}${namedKey ? 'NamedKey' : 'ArgumentSlot'}`,
+        attributeName: 'probe',
+        path: [
+          { kind: 'namedArgument', name: 'choice' },
+          { kind: 'functionCall', name: 'ordered' },
+        ],
+        existingNamedKeys: ['optional'],
+        hasColon: namedKey,
+        ...(!namedKey ? { positionalIndex: args.includes('Asc,') ? 1 : 0 } : {}),
+        offset,
+        replacementStartOffset: namedKey ? offset - 3 : identifier ? offset - 1 : offset,
+        replacementEndOffset: namedKey ? offset + 5 : identifier ? offset + 2 : offset,
+      });
+    }
+  });
+
+  it.each(['flags: [true |]', 'scalar: true |', 'call: f |(x: true)', 'flags: []|'])(
+    'rejects completed expression boundaries during classification: %s',
+    (args) => {
+      expectUnsupported(`model M { value String @probe(${args}) }`);
+    },
+  );
+
+  it.each(['flags: [, |]', 'flags: [true,, |]'])(
+    'classifies recovered nested comma gaps: %s',
+    (args) => {
+      const marked = `model M { value String @probe(${args}) }`;
+      expect(classify(marked)).toMatchObject({
+        kind: 'fieldAttributeValue',
+        attributeName: 'probe',
+        path: [{ kind: 'namedArgument', name: 'flags' }, { kind: 'listElement' }],
+        syntax: 'scalar',
+        offset: marked.indexOf('|'),
+        replacementStartOffset: marked.indexOf('|'),
+        replacementEndOffset: marked.indexOf('|'),
+      });
+    },
+  );
+
+  it.each([
+    ['choice: or|dered(true)', 'choice', 'functionName', 'ordered'],
+    ['fixed: "ol|d"', 'fixed', 'scalar', '"old"'],
+    ['fixed: -1|2', 'fixed', 'scalar', '-12'],
+  ])('captures the exact leaf and replacement for %s', (args, name, syntax, token) => {
+    const marked = `model M { value String @probe(${args}) }`;
+    const source = marked.replace('|', '');
+    expect(classify(marked)).toEqual({
+      kind: 'fieldAttributeValue',
+      model: expect.any(ModelDeclarationAst),
+      field: expect.any(FieldDeclarationAst),
+      attributeName: 'probe',
+      path: [{ kind: 'namedArgument', name }],
+      syntax,
+      offset: marked.indexOf('|'),
+      replacementStartOffset: source.indexOf(token),
+      replacementEndOffset: source.indexOf(token) + token.length,
+    });
+  });
+
+  it.each(['()', '(', ''])('captures name edit boundaries and existing arguments: %s', (suffix) => {
+    const marked = `model M { value String @pr|obe${suffix}`;
+    expect(classify(marked)).toEqual({
+      kind: 'fieldAttributeName',
+      model: expect.any(ModelDeclarationAst),
+      field: expect.any(FieldDeclarationAst),
+      offset: marked.indexOf('|'),
+      replacementStartOffset: marked.indexOf('pr|'),
+      replacementEndOffset: marked.indexOf('|') + 3,
+      hasArgumentList: suffix.length > 0,
+    });
+  });
+
+  it('retains the entire recovered record/list path at EOF', () => {
+    const marked = 'model M { value String @probe(records: { key: [, |';
+    expect(classify(marked)).toEqual({
+      kind: 'fieldAttributeValue',
+      model: expect.any(ModelDeclarationAst),
+      field: expect.any(FieldDeclarationAst),
+      attributeName: 'probe',
+      path: [
+        { kind: 'namedArgument', name: 'records' },
+        { kind: 'recordValue' },
+        { kind: 'listElement' },
+      ],
+      syntax: 'scalar',
+      offset: marked.indexOf('|'),
+      replacementStartOffset: marked.indexOf('|'),
+      replacementEndOffset: marked.indexOf('|'),
+    });
+  });
+
+  it.each([
+    ['mo|de', false],
+    ['mo|de:   Asc', true],
+    ['mo|de :   Asc', true],
+  ])('captures colon presence without changing the full key edit: %s', (args, hasColon) => {
+    const marked = `model M { value String @probe(${args}) }`;
+    expect(classify(marked)).toMatchObject({
+      kind: hasColon ? 'fieldAttributeNamedKey' : 'fieldAttributeArgumentSlot',
+      hasColon,
+      path: [],
+      replacementStartOffset: marked.indexOf('mo|'),
+      replacementEndOffset: marked.indexOf('|') + 2,
+    });
   });
 
   it('returns unsupported for invalid over-qualified names', () => {

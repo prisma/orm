@@ -102,6 +102,20 @@ const charOut = { codecId: 'sql/char@1', nativeType: 'character' } as const;
 const numericOut = { codecId: 'pg/numeric@1', nativeType: 'numeric' } as const;
 
 const parityCases: readonly ParityCase[] = [
+  ...[undefined, 0, 3, 6].map((precision): ParityCase => {
+    const spelling =
+      precision === undefined ? 'TimestamptzJsDate' : `TimestamptzJsDate(${precision})`;
+    return {
+      title: spelling,
+      bare: spelling,
+      alias: spelling,
+      expected: {
+        codecId: 'pg/timestamptz-date@1',
+        nativeType: 'timestamptz',
+        typeParams: precision === undefined ? {} : { precision },
+      },
+    };
+  }),
   {
     title: 'VarChar(191)',
     bare: 'VarChar(191)',
@@ -327,6 +341,43 @@ describe('native types as bare scalar types — parity with the live bare-type p
       codecId: expected.codecId,
       nativeType: expected.nativeType,
       typeRef: 'Named',
+    });
+  });
+
+  it('lowers the Date updatedAt shorthand identically to explicit Date clock phases', () => {
+    const shorthand = emit(`model sample {
+      id Int @id
+      at temporal.updatedAtJsDate()
+    }`);
+    const explicit = emit(`model sample {
+      id Int @id
+      at temporal.timestamptzJsDate(onCreate: now, onUpdate: now)
+    }`);
+    expect(shorthand.ok).toBe(true);
+    expect(explicit.ok).toBe(true);
+    if (!shorthand.ok || !explicit.ok) return;
+    expect(shorthand.value).toEqual(explicit.value);
+    expect(
+      storageOf(shorthand.value).namespaces['public']?.entries.table['sample']?.columns['at'],
+    ).toMatchObject({
+      codecId: 'pg/timestamptz-date@1',
+      nativeType: 'timestamptz',
+    });
+  });
+
+  it('lowers a Date creation preset to a database now default', () => {
+    const result = emit(`model sample {
+      id Int @id
+      at temporal.createdAtJsDate()
+    }`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      storageOf(result.value).namespaces['public']?.entries.table['sample']?.columns['at'],
+    ).toMatchObject({
+      codecId: 'pg/timestamptz-date@1',
+      nativeType: 'timestamptz',
+      default: { kind: 'function', expression: 'now()' },
     });
   });
 

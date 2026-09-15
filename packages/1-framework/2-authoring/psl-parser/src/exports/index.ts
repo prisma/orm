@@ -76,6 +76,7 @@ export type {
   FieldAttributeCtx,
   FuncCallSig,
   InferAttr,
+  InspectableArgType,
   ModelAttributeCtx,
   NamedOut,
   OptionalArgType,

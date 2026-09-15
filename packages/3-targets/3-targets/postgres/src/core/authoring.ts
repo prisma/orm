@@ -30,7 +30,7 @@ import { assertWireNamePrefixLength, normalizeSqlBody } from '@internal/sql-sche
 import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { PG_ENUM_CODEC_ID } from './codec-ids';
+import { PG_ENUM_CODEC_ID, PG_TIMESTAMPTZ_DATE_CODEC_ID } from './codec-ids';
 import { postgresError } from './errors';
 import { INSTANT_NOW_GENERATOR_ID } from './instant-now-generator';
 import { PostgresNativeEnum } from './postgres-native-enum';
@@ -740,6 +740,18 @@ export const postgresAuthoringFieldPresets = {
     },
   },
   temporal: {
+    createdAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
+      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
+      nativeType: 'timestamptz',
+    }).createdAt,
+    updatedAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
+      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
+      nativeType: 'timestamptz',
+    }).updatedAt,
+    timestamptzJsDate: /* @__PURE__ */ temporalCodecPresetWithPrecision({
+      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
+      nativeType: 'timestamptz',
+    }),
     .../* @__PURE__ */ temporalAuthoringPresets({
       codecId: 'pg/timestamptz-temporal@1',
       nativeType: 'timestamptz',

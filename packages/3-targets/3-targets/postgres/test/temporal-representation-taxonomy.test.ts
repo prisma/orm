@@ -1,5 +1,6 @@
 import { ColumnRef, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { describe, expect, it } from 'vitest';
+import { pgTimestamptzDateColumn, pgTimestamptzDateDescriptor } from '../src/core/date-codecs';
 import {
   pgDateTemporalColumn,
   pgDateTemporalDescriptor,
@@ -51,6 +52,7 @@ interface TaxonomyRow {
   readonly precisionBearing: boolean;
   readonly temporal: Representation;
   readonly string: Representation;
+  readonly date?: Representation;
 }
 
 const TAXONOMY: readonly TaxonomyRow[] = [
@@ -104,6 +106,12 @@ const TAXONOMY: readonly TaxonomyRow[] = [
       column: pgTimestamptzStringColumn,
       rendersAtPrecisionSix: 'TimestamptzString<6>',
     },
+    date: {
+      codecId: 'pg/timestamptz-date@1',
+      descriptor: pgTimestamptzDateDescriptor,
+      column: pgTimestamptzDateColumn,
+      rendersAtPrecisionSix: 'Date',
+    },
   },
   {
     nativeType: 'time',
@@ -124,25 +132,26 @@ const TAXONOMY: readonly TaxonomyRow[] = [
   },
 ];
 
-const halves = TAXONOMY.flatMap((row) => [
+const representations = TAXONOMY.flatMap((row) => [
   { row, kind: 'temporal' as const, rep: row.temporal },
   { row, kind: 'string' as const, rep: row.string },
+  ...(row.date ? [{ row, kind: 'date' as const, rep: row.date }] : []),
 ]);
 
 const sourceExpression = ColumnRef.of('reading', 'at');
 
-describe('the eight representation-explicit temporal codecs', () => {
-  it('covers every PostgreSQL temporal type that has two representations, and no others', () => {
+describe('the nine representation-explicit temporal codecs', () => {
+  it('covers Temporal and string representations plus Date for timestamptz', () => {
     expect(TAXONOMY.map((row) => row.nativeType)).toEqual([
       'date',
       'timestamp',
       'timestamptz',
       'time',
     ]);
-    expect(halves).toHaveLength(8);
+    expect(representations).toHaveLength(9);
   });
 
-  describe.each(halves)('$rep.codecId', ({ row, kind, rep }) => {
+  describe.each(representations)('$rep.codecId', ({ row, kind, rep }) => {
     it('declares the id the taxonomy names', () => {
       expect(rep.descriptor.codecId).toBe(rep.codecId);
     });

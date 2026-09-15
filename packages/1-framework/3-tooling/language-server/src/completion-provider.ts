@@ -10,33 +10,34 @@ import {
   type AttributeSpec,
   assembleAttributeSpecs,
   type BlockAttributeSpecFactory,
-  type FieldSymbol,
   findBlockDescriptor,
-  type ModelSymbol,
   type NamespaceSymbol,
-  type Param,
-  type PositionalParam,
   type SymbolTable,
 } from '@internal/psl-parser';
-import type {
-  FieldAttributeAst,
-  FieldDeclarationAst,
-  GenericBlockDeclarationAst,
-  ModelAttributeAst,
-  ModelDeclarationAst,
-  SourceFile,
-} from '@internal/psl-parser/syntax';
+import type { GenericBlockDeclarationAst, SourceFile } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
 import type {
+  AttributeArgumentCompletionContext,
   AttributeNameCompletionContext,
-  AttributeNamedKeyCompletionContext,
   DeclarationKeywordCompletionContext,
   GenericBlockKeyCompletionContext,
   ModelTypeCompletionContext,
   NamespaceMemberCompletionContext,
   PslCompletionContext,
 } from './completion-context';
+import { requiredArgumentsSnippet } from './completion-snippets';
+import {
+  fieldSymbolForNode,
+  localFieldNames,
+  modelSymbolForNode,
+  referencedFieldNames,
+} from './completion-symbols';
+import {
+  provideAttributeArgumentSlotCompletionItems,
+  provideAttributeNamedKeyCompletionItems,
+  provideAttributeValueCompletionItems,
+} from './completion-values';
 import { refinesScalarType } from './named-type-classification';
 
 export interface PslCompletionCandidateSource {
@@ -52,6 +53,7 @@ export interface ProvidePslCompletionItemsInput {
   readonly sourceFile: SourceFile;
   readonly candidates: PslCompletionCandidateSource;
   readonly clientSupportsSnippets: boolean;
+  readonly clientSupportsTriggerSuggestCommand?: boolean;
 }
 
 type DeclarationKeywordCompletionCandidateCategory = 'native' | 'genericBlock';
@@ -148,8 +150,61 @@ export function providePslCompletionItems(
       );
     case 'fieldAttributeNamedKey':
     case 'modelAttributeNamedKey':
-    case 'blockAttributeNamedKey':
-      return provideAttributeNamedKeyCompletionItems(context, input.sourceFile, input.candidates);
+    case 'blockAttributeNamedKey': {
+      const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
+      return spec === undefined
+        ? []
+        : provideAttributeNamedKeyCompletionItems(
+            {
+              context,
+              sourceFile: input.sourceFile,
+              clientSupportsSnippets: input.clientSupportsSnippets,
+              clientSupportsTriggerSuggestCommand:
+                input.clientSupportsTriggerSuggestCommand === true,
+            },
+            spec,
+          );
+    }
+    case 'fieldAttributeArgumentSlot':
+    case 'modelAttributeArgumentSlot':
+    case 'blockAttributeArgumentSlot': {
+      const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
+      return spec === undefined
+        ? []
+        : provideAttributeArgumentSlotCompletionItems(
+            {
+              context,
+              sourceFile: input.sourceFile,
+              clientSupportsSnippets: input.clientSupportsSnippets,
+              clientSupportsTriggerSuggestCommand:
+                input.clientSupportsTriggerSuggestCommand === true,
+              fieldNames: (kind) =>
+                kind === 'fieldRef'
+                  ? localFieldNames(context, input.candidates.symbolTable)
+                  : referencedFieldNames(context, input.candidates.symbolTable),
+            },
+            spec,
+          );
+    }
+    case 'fieldAttributeValue':
+    case 'modelAttributeValue':
+    case 'blockAttributeValue': {
+      const spec = attributeSpecResolver(context, input.candidates)(context.attributeName);
+      return spec === undefined
+        ? []
+        : provideAttributeValueCompletionItems(
+            {
+              context,
+              sourceFile: input.sourceFile,
+              clientSupportsSnippets: input.clientSupportsSnippets,
+              fieldNames: (kind) =>
+                kind === 'fieldRef'
+                  ? localFieldNames(context, input.candidates.symbolTable)
+                  : referencedFieldNames(context, input.candidates.symbolTable),
+            },
+            spec,
+          );
+    }
     case 'declarationKeyword':
       return provideDeclarationKeywordCompletionItems(
         context,
@@ -173,10 +228,9 @@ function provideAttributeNameCompletionItems(
   clientSupportsSnippets: boolean,
 ): readonly CompletionItem[] {
   const names = attributeNames(context, source);
-  const replacementEndOffset = attributeNameReplacementEndOffset(context);
   const replacementRange = {
     start: sourceFile.positionAt(context.replacementStartOffset),
-    end: sourceFile.positionAt(replacementEndOffset),
+    end: sourceFile.positionAt(context.replacementEndOffset),
   };
 
   const resolveSpec = attributeSpecResolver(context, source);
@@ -185,7 +239,7 @@ function provideAttributeNameCompletionItems(
     const newText = attributeNameEditText({
       name,
       spec: resolveSpec(name),
-      attribute: context.attribute,
+      hasArgumentList: context.hasArgumentList,
       clientSupportsSnippets,
     });
     return {
@@ -198,33 +252,6 @@ function provideAttributeNameCompletionItems(
       ...(newText !== name ? { insertTextFormat: InsertTextFormat.Snippet } : {}),
     };
   });
-}
-
-function provideAttributeNamedKeyCompletionItems(
-  context: AttributeNamedKeyCompletionContext,
-  sourceFile: SourceFile,
-  source: PslCompletionCandidateSource,
-): readonly CompletionItem[] {
-  const spec = attributeSpec(context, source);
-  if (spec === undefined) {
-    return [];
-  }
-  const existing = existingAttributeNamedKeys(context.attribute, context.offset);
-  const replacementRange = {
-    start: sourceFile.positionAt(context.replacementStartOffset),
-    end: sourceFile.positionAt(namedKeyReplacementEndOffset(context)),
-  };
-
-  return Object.keys(spec.named)
-    .filter((name) => !existing.has(name))
-    .map((name) => ({
-      label: name,
-      kind: CompletionItemKind.Property,
-      detail: 'Attribute argument',
-      sortText: name,
-      filterText: name,
-      textEdit: { range: replacementRange, newText: name },
-    }));
 }
 
 function attributeNames(
@@ -254,110 +281,26 @@ function attributeNames(
 function attributeNameEditText(input: {
   readonly name: string;
   readonly spec: AttributeSpec<never, never> | undefined;
-  readonly attribute: FieldAttributeAst | ModelAttributeAst;
+  readonly hasArgumentList: boolean;
   readonly clientSupportsSnippets: boolean;
 }): string {
-  if (
-    !input.clientSupportsSnippets ||
-    input.spec === undefined ||
-    input.attribute.argList() !== undefined
-  ) {
+  if (!input.clientSupportsSnippets || input.spec === undefined || input.hasArgumentList) {
     return input.name;
   }
 
-  const required = requiredAttributeArguments(input.spec);
-  if (required.length === 0) {
-    return input.name;
-  }
-  return `${input.name}(${required
-    .map((argument, index) => requiredAttributeArgumentSnippet(argument, index + 1))
-    .join(', ')})`;
-}
-
-type RequiredAttributeArgument =
-  | { readonly kind: 'positional'; readonly argument: PositionalParam<unknown, never> }
-  | { readonly kind: 'named'; readonly key: string; readonly type: Param<unknown, never> };
-
-function requiredAttributeArguments(
-  spec: AttributeSpec<never, never>,
-): readonly RequiredAttributeArgument[] {
-  const positionalKeys = new Set(spec.positional.map((argument) => argument.key));
-  return [
-    ...spec.positional.flatMap((argument) =>
-      isOptionalParam(argument.type)
-        ? []
-        : [{ kind: 'positional', argument } satisfies RequiredAttributeArgument],
-    ),
-    ...Object.entries(spec.named).flatMap(([key, type]) =>
-      positionalKeys.has(key) || isOptionalParam(type)
-        ? []
-        : [{ kind: 'named', key, type } satisfies RequiredAttributeArgument],
-    ),
-  ];
-}
-
-function requiredAttributeArgumentSnippet(
-  argument: RequiredAttributeArgument,
-  tabStop: number,
-): string {
-  if (argument.kind === 'positional') {
-    return argSnippetPlaceholder(argument.argument.type, tabStop);
-  }
-  return `${argument.key}: ${argSnippetPlaceholder(argument.type, tabStop)}`;
-}
-
-function argSnippetPlaceholder(param: Param<unknown, never>, tabStop: number): string {
-  const placeholder = `\${${tabStop.toString()}:}`;
-  if (param.kind === 'str') {
-    return `"${placeholder}"`;
-  }
-  if (param.kind === 'list') {
-    return `[${placeholder}]`;
-  }
-  if (param.kind === 'record') {
-    return `{ ${placeholder} }`;
-  }
-  return placeholder;
-}
-
-function isOptionalParam(param: Param<unknown, never>): boolean {
-  return 'optional' in param && param.optional === true;
-}
-
-function attributeNameReplacementEndOffset(context: AttributeNameCompletionContext): number {
-  return context.attribute.name()?.syntax.endOffset ?? context.offset;
-}
-
-function namedKeyReplacementEndOffset(context: AttributeNamedKeyCompletionContext): number {
-  const token = context.attribute.syntax.tokenAtOffset(context.offset).rightBiased();
-  if (token?.kind === 'Ident' && token.offset <= context.offset) {
-    return token.endOffset;
-  }
-  return context.offset;
-}
-
-function attributeSpec(
-  context: AttributeNamedKeyCompletionContext,
-  source: PslCompletionCandidateSource,
-): AttributeSpec<never, never> | undefined {
-  return attributeSpecForName(context, source, context.attributeName);
-}
-
-function attributeSpecForName(
-  context: AttributeNameCompletionContext | AttributeNamedKeyCompletionContext,
-  source: PslCompletionCandidateSource,
-  name: string,
-): AttributeSpec<never, never> | undefined {
-  return attributeSpecResolver(context, source)(name);
+  const required = requiredArgumentsSnippet(input.spec);
+  return required.length === 0 ? input.name : `${input.name}(${required})`;
 }
 
 function attributeSpecResolver(
-  context: AttributeNameCompletionContext | AttributeNamedKeyCompletionContext,
+  context: AttributeNameCompletionContext | AttributeArgumentCompletionContext,
   source: PslCompletionCandidateSource,
 ): (name: string) => AttributeSpec<never, never> | undefined {
   switch (context.kind) {
     case 'blockAttributeName':
-    case 'blockAttributeNamedKey': {
+    case 'blockAttributeNamedKey':
+    case 'blockAttributeArgumentSlot':
+    case 'blockAttributeValue': {
       const descriptor = findBlockDescriptor(source.pslBlockDescriptors, context.blockKeyword);
       return (name) => {
         const factory = descriptor?.attributes?.[name];
@@ -371,7 +314,9 @@ function attributeSpecResolver(
       };
     }
     case 'modelAttributeName':
-    case 'modelAttributeNamedKey': {
+    case 'modelAttributeNamedKey':
+    case 'modelAttributeArgumentSlot':
+    case 'modelAttributeValue': {
       if (source.authoringContributions === undefined) {
         return () => undefined;
       }
@@ -388,7 +333,9 @@ function attributeSpecResolver(
       return (name) => specs.model[name]?.(specContext);
     }
     case 'fieldAttributeName':
-    case 'fieldAttributeNamedKey': {
+    case 'fieldAttributeNamedKey':
+    case 'fieldAttributeArgumentSlot':
+    case 'fieldAttributeValue': {
       if (source.authoringContributions === undefined) {
         return () => undefined;
       }
@@ -413,58 +360,6 @@ function attributeSpecResolver(
         });
     }
   }
-}
-
-function existingAttributeNamedKeys(
-  attribute: FieldAttributeAst | ModelAttributeAst,
-  cursorOffset: number,
-): Set<string> {
-  const names = new Set<string>();
-  for (const arg of attribute.argList()?.args() ?? []) {
-    if (!arg.syntax.isOutside(cursorOffset)) {
-      continue;
-    }
-    const name = arg.name()?.name();
-    if (name !== undefined) {
-      names.add(name);
-    }
-  }
-  return names;
-}
-
-function modelSymbolForNode(
-  symbolTable: SymbolTable,
-  node: ModelDeclarationAst,
-): ModelSymbol | undefined {
-  const topLevelMatch = Object.values(symbolTable.topLevel.models).find((model) =>
-    sameSyntax(model.node.syntax, node.syntax),
-  );
-  if (topLevelMatch !== undefined) {
-    return topLevelMatch;
-  }
-  for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
-    const namespaceMatch = Object.values(namespace.models).find((model) =>
-      sameSyntax(model.node.syntax, node.syntax),
-    );
-    if (namespaceMatch !== undefined) {
-      return namespaceMatch;
-    }
-  }
-  return undefined;
-}
-
-function fieldSymbolForNode(
-  model: ModelSymbol,
-  node: FieldDeclarationAst,
-): FieldSymbol | undefined {
-  return Object.values(model.fields).find((field) => sameSyntax(field.node.syntax, node.syntax));
-}
-
-function sameSyntax(
-  left: { readonly offset: number; readonly endOffset: number },
-  right: { readonly offset: number; readonly endOffset: number },
-): boolean {
-  return left.offset === right.offset && left.endOffset === right.endOffset;
 }
 
 function provideDeclarationKeywordCompletionItems(

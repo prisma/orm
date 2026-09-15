@@ -285,12 +285,15 @@ describe('postgresScalarAuthoringTypes', () => {
     ['Bytes', 'pg/bytea@1'],
   ] as const;
 
-  it('pins every base scalar as a zero-arg type constructor with manifest-derived nativeType', () => {
+  it('pins every base scalar as a zero-arg type constructor with its native type', () => {
     expect(Object.keys(namespace).sort()).toEqual(expectedScalars.map(([name]) => name).sort());
     for (const [name, codecId] of expectedScalars) {
       expect(namespace[name]).toEqual({
         kind: 'typeConstructor',
-        output: { codecId, nativeType: codecLookup.targetTypesFor(codecId)?.[0] },
+        output: {
+          codecId,
+          nativeType: codecLookup.targetTypesFor(codecId)?.[0],
+        },
       });
     }
   });
@@ -328,6 +331,7 @@ describe('postgresNativeAuthoringTypes', () => {
       DateString: { codecId: 'pg/date-string@1', nativeType: 'date' },
       TimestampString: { codecId: 'pg/timestamp-string@1', nativeType: 'timestamp' },
       TimestamptzString: { codecId: 'pg/timestamptz-string@1', nativeType: 'timestamptz' },
+      TimestamptzJsDate: { codecId: 'pg/timestamptz-date@1', nativeType: 'timestamptz' },
       TimeString: { codecId: 'pg/time-string@1', nativeType: 'time' },
     });
   });

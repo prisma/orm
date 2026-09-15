@@ -9,10 +9,17 @@ import {
   assembleControlMutationDefaults,
 } from '@internal/framework-components/control';
 import {
+  type AttributeSpecNamespace,
+  blockAttribute,
+  bool,
   buildSymbolTable,
   fieldAttribute,
+  funcCall,
+  identifier,
   int,
+  list,
   modelAttribute,
+  oneOf,
   optional,
   type SymbolTable,
   str,
@@ -217,6 +224,86 @@ const resolveToSchemaWithAttributeContributions: ResolveInputs = async () => {
   };
 };
 
+async function recursiveCompletionResolution(): Promise<ConfigResolution> {
+  const sql = (await import(
+    new URL(
+      '../../../../2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts',
+      import.meta.url,
+    ).href
+  )) as { sqlAttributeSpecs: AttributeSpecNamespace };
+  const signature = {
+    named: {
+      value: funcCall('choose', {
+        named: {
+          mode: oneOf(identifier('First'), identifier('Second')),
+          enabled: optional(bool()),
+        },
+      }),
+      flags: list(bool()),
+    },
+  };
+  const probeField = fieldAttribute('probe', signature);
+  const probeModel = modelAttribute('probe', signature);
+  const probeBlock = blockAttribute('probe', signature);
+  const descriptors: AuthoringPslBlockDescriptorNamespace = {
+    policy: {
+      kind: 'pslBlock',
+      keyword: 'policy',
+      discriminator: 'completion-policy',
+      name: { required: true },
+      parameters: {},
+      attributes: { probe: () => probeBlock },
+    },
+  };
+  const resolution = resolutionForInputs([schemaPath], undefined, descriptors);
+  return {
+    ...resolution,
+    controlStack: {
+      ...resolution.controlStack,
+      authoringContributions: assembleAuthoringContributions([
+        { id: 'sql-family', authoring: { attributeSpecs: sql.sqlAttributeSpecs } },
+        {
+          id: 'contributed-attributes',
+          authoring: {
+            attributeSpecs: { field: { probe: () => probeField }, model: {} },
+            modelAttributes: {
+              completion: {
+                probe: {
+                  kind: 'modelAttribute',
+                  attribute: 'probe',
+                  spec: () => probeModel,
+                  lower: () => undefined,
+                },
+              },
+            },
+          },
+        },
+      ]),
+      controlMutationDefaults: assembleControlMutationDefaults([]),
+    },
+    interpretation: {
+      context: completionInterpretationContext,
+      source: {
+        ...completionInterpretationSource,
+        interpret: () =>
+          notOk({
+            summary: 'Incomplete authoring buffer',
+            diagnostics: [
+              {
+                code: 'PSL_TEST_INTERPRETATION_FAILED',
+                message: 'Incomplete authoring buffer',
+                span: {
+                  start: { offset: 0, line: 1, column: 1 },
+                  end: { offset: 1, line: 1, column: 2 },
+                },
+              },
+            ],
+          }),
+      },
+    },
+  };
+}
+
 function resolveToSchemaWithFormatter(formatter: FormatOptions): ResolveInputs {
   return async () => resolutionForInputs([schemaPath], formatter);
 }
@@ -265,7 +352,7 @@ const pullDiagnosticsWithRefreshCapabilities: ClientCapabilities = {
 
 interface Harness {
   readonly client: ReturnType<typeof createConnection>;
-  readonly initialize: () => Promise<InitializeResult>;
+  readonly initialize: (initializationOptions?: unknown) => Promise<InitializeResult>;
   readonly waitForDiagnostics: (uri: string) => Promise<readonly Diagnostic[]>;
   readonly waitForDiagnosticsMatching: (
     uri: string,
@@ -456,8 +543,9 @@ function startHarness(
         }
         diagnosticRefreshWaiters.push(resolve);
       }),
-    initialize: async () => {
+    initialize: async (initializationOptions) => {
       const result = await client.sendRequest(InitializeRequest.type, {
+        initializationOptions,
         processId: process.pid,
         rootUri: pathToFileURL(root).toString(),
         capabilities,
@@ -689,7 +777,9 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       full: true,
       range: true,
     });
-    expect(result.capabilities.completionProvider).toEqual({ triggerCharacters: ['.', '@'] });
+    expect(result.capabilities.completionProvider).toEqual({
+      triggerCharacters: ['.', '@', '[', '(', '{', ':', ','],
+    });
   });
 
   it('returns model field type completions for configured PSL inputs', async () => {
@@ -940,6 +1030,206 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       ].join('\n'),
     );
   });
+
+  it('completes nested keys and values from updated buffers despite interpretation failure', async () => {
+    const resolution = await recursiveCompletionResolution();
+    harness = startHarness(async () => resolution);
+    await harness.initialize();
+    const initial = sourceWithCursor(
+      '// use prisma-next\nmodel User { id Int @probe(value: choose(|)) }',
+    );
+    openDocument(harness, schemaUri, initial.source);
+    const diagnostics = await harness.waitForDiagnostics(schemaUri);
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      'PSL_TEST_INTERPRETATION_FAILED',
+    );
+    expect(
+      completionItems(await requestCompletion(harness, schemaUri, initial.position)).map(
+        (item) => item.label,
+      ),
+    ).toEqual(['mode', 'enabled']);
+    const changed = sourceWithCursor(
+      '// use prisma-next\nmodel User { id Int @probe(value: choose(mode: Fi|rst)) }',
+    );
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: changed.source }],
+    });
+    await settle();
+    const values = completionItems(await requestCompletion(harness, schemaUri, changed.position));
+    expect(values.map((item) => item.label)).toEqual(['First', 'Second']);
+    expect(applyCompletionItem(changed.source, completionItemByLabel(values, 'Second'))).toBe(
+      '// use prisma-next\nmodel User { id Int @probe(value: choose(mode: Second)) }',
+    );
+  }, 5_000);
+
+  it.each([
+    ['model User { id Int @probe(flags: [, |]) }', ['true', 'false']],
+    ['model User { id Int\n @@probe(value: choose(mode: |)) }', ['First', 'Second']],
+    ['policy Rule { @@probe(value: choose(mode: |)) }', ['First', 'Second']],
+    ['model User { id Int @probe(value: choose(mode: |', ['First', 'Second']],
+  ])(
+    'completes configured collection and contributed owner values: %s',
+    async (body, expected) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution);
+      await harness.initialize();
+      const completion = sourceWithCursor(`// use prisma-next\n${body}`);
+      openDocument(harness, schemaUri, completion.source);
+      await harness.waitForDiagnostics(schemaUri);
+      expect(
+        completionItems(await requestCompletion(harness, schemaUri, completion.position)).map(
+          (item) => item.label,
+        ),
+      ).toEqual(expected);
+    },
+    5_000,
+  );
+
+  it.each([false, true])(
+    'respects snippet capability for nested function edits: %s',
+    async (snippets) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippets ? snippetCompletionCapabilities : {});
+      await harness.initialize();
+      const completion = sourceWithCursor(
+        '// use prisma-next\nmodel User { id Int @probe(value: ch|) // keep\n}',
+      );
+      openDocument(harness, schemaUri, completion.source);
+      await harness.waitForDiagnostics(schemaUri);
+      const item = completionItemByLabel(
+        completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+        'choose',
+      );
+      expect(item.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
+      const inserted = snippets ? `choose(mode: ${emptySnippetPlaceholder1})` : 'choose';
+      expect(applyCompletionItem(completion.source, item)).toBe(
+        `// use prisma-next\nmodel User { id Int @probe(value: ${inserted}) // keep\n}`,
+      );
+    },
+    5_000,
+  );
+
+  it.each([false, true])(
+    'negotiates named-key value stops for snippet support: %s',
+    async (snippets) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippets ? snippetCompletionCapabilities : {});
+      await harness.initialize();
+      const completion = sourceWithCursor(
+        '// use prisma-8\nmodel User { id Int @probe(value: choose(mo|de)) }',
+      );
+      openDocument(harness, schemaUri, completion.source);
+      await harness.waitForDiagnostics(schemaUri);
+      const item = completionItemByLabel(
+        completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+        'mode',
+      );
+      expect(item.textEdit?.newText).toBe(`mode: ${snippets ? emptySnippetPlaceholder1 : ''}`);
+      expect(item.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
+      expect(item.command).toBeUndefined();
+      expect(applyCompletionItem(completion.source, item)).toBe(
+        `// use prisma-8\nmodel User { id Int @probe(value: choose(mode: ${snippets ? emptySnippetPlaceholder1 : ''})) }`,
+      );
+    },
+    5_000,
+  );
+
+  it.each([
+    [undefined, false],
+    [null, false],
+    [true, false],
+    ['true', false],
+    [{}, false],
+    [{ completion: null }, false],
+    [{ completion: true }, false],
+    [{ completion: { supportsTriggerSuggestCommand: 'true' } }, false],
+    [{ completion: { supportsTriggerSuggestCommand: false } }, false],
+    [{ completion: { supportsTriggerSuggestCommand: true } }, true],
+  ])(
+    'requires explicit trigger-suggest opt-in: %j',
+    async (initializationOptions, enabled) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution);
+      await harness.initialize(initializationOptions);
+      const completion = sourceWithCursor(
+        '// use prisma-8\nmodel User { id Int @probe(value: choose(|)) }',
+      );
+      openDocument(harness, schemaUri, completion.source);
+      await harness.waitForDiagnostics(schemaUri);
+      const item = completionItemByLabel(
+        completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+        'mode',
+      );
+      expect(item.textEdit?.newText).toBe('mode: ');
+      expect(item.command).toEqual(
+        enabled
+          ? { title: 'Suggest argument values', command: 'editor.action.triggerSuggest' }
+          : undefined,
+      );
+    },
+    5_000,
+  );
+
+  it.each([false, true])(
+    'only retriggers new named-key value slots, snippets=%s',
+    async (snippets) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippets ? snippetCompletionCapabilities : {});
+      await harness.initialize({ completion: { supportsTriggerSuggestCommand: true } });
+      for (const [args, label, retrigger] of [
+        ['value: choose(mo|de)', 'mode', true],
+        ['value: choose(mo|de: First)', 'mode', false],
+        ['value: choose(mode: |)', 'First', false],
+        ['value: |', 'choose', false],
+      ] as const) {
+        const completion = sourceWithCursor(
+          `// use prisma-8\nmodel User { id Int @probe(${args}) }`,
+        );
+        openDocument(harness, schemaUri, completion.source);
+        await harness.waitForDiagnostics(schemaUri);
+        const item = completionItemByLabel(
+          completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+          label,
+        );
+        expect(item.command).toEqual(
+          retrigger
+            ? { title: 'Suggest argument values', command: 'editor.action.triggerSuggest' }
+            : undefined,
+        );
+        if (retrigger)
+          expect(item.textEdit?.newText).toBe(`mode: ${snippets ? emptySnippetPlaceholder1 : ''}`);
+      }
+    },
+    5_000,
+  );
+
+  it('uses actual SQL relation grammar and current-buffer referenced model fields', async () => {
+    const resolution = await recursiveCompletionResolution();
+    harness = startHarness(async () => resolution);
+    await harness.initialize();
+    const source = (field: string) =>
+      `// use prisma-next\nmodel Target { topOnly Int }\nnamespace remote { model Target { ${field} Int } }\nmodel Owner { ownOnly Int\n relation remote.Target @relation(references: [|]) }`;
+    const initial = sourceWithCursor(source('remoteOnly'));
+    openDocument(harness, schemaUri, initial.source);
+    await harness.waitForDiagnostics(schemaUri);
+    expect(
+      completionItems(await requestCompletion(harness, schemaUri, initial.position)).map(
+        (item) => item.label,
+      ),
+    ).toEqual(['remoteOnly']);
+    const changed = sourceWithCursor(source('renamedRemote'));
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: changed.source }],
+    });
+    await settle();
+    const items = completionItems(await requestCompletion(harness, schemaUri, changed.position));
+    expect(items.map((item) => item.label)).toEqual(['renamedRemote']);
+    expect(applyCompletionItem(changed.source, completionItemByLabel(items, 'renamedRemote'))).toBe(
+      changed.source.replace('references: []', 'references: [renamedRemote]'),
+    );
+  }, 5_000);
 
   it('returns declaration keyword completions with plain-text edits by default', async () => {
     harness = startHarness(resolveToSchemaWithPslBlockDescriptors);
@@ -2533,6 +2823,71 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
         ? ok({} as never)
         : notOk({ summary: 'Schema has 1 error', diagnostics: [unresolvedDiagnostic] });
   }
+
+  it('recovers from an interpreter exception on a same-version pull and logs its original stack', async () => {
+    const error = new Error('private interpreter detail');
+    const { resolveInputs, spy } = interpretationResolution(() => ok({} as never));
+    spy.mockImplementationOnce(() => {
+      throw error;
+    });
+    harness = startHarness(resolveInputs, pullDiagnosticsCapabilities);
+    const logs: string[] = [];
+    harness.client.onNotification(LogMessageNotification.type, (params) => {
+      if (params.type === MessageType.Error) logs.push(params.message);
+    });
+    await harness.initialize();
+    openDocument(harness, schemaUri, duplicateModelSource);
+    const { parseDiagnostics, symbolTableDiagnostics } =
+      parseAndSymbolTableDiagnostics(duplicateModelSource);
+    const parserItems = toPublishedDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]);
+    expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).toEqual([
+      ...parserItems,
+      {
+        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+        code: 'PRISMA_NEXT_INTERPRETATION_FAILED',
+        message:
+          'Semantic diagnostics are unavailable because of an internal error. A subsequent diagnostic request or edit will retry.',
+        severity: DiagnosticSeverity.Error,
+        source: 'prisma',
+      },
+    ]);
+    expect(logs).toEqual([`PSL interpretation failed for ${schemaUri}: ${error.stack}`]);
+    expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).toEqual(parserItems);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([false, true])('recovers diagnostics after edits for pull=%s', async (pull) => {
+    const interpret = fixAwareInterpret();
+    const { resolveInputs } = interpretationResolution((input, context) => {
+      if (input.sourceFile.text.includes('// crash')) throw new Error('interpreter failed');
+      return interpret(input, context);
+    });
+    harness = startHarness(resolveInputs, pull ? pullDiagnosticsCapabilities : {});
+    await harness.initialize();
+    openDocument(harness, schemaUri, `${cleanSchema}// crash`);
+    const failed = pull
+      ? fullReportItems(await requestPullDiagnostics(harness, schemaUri))
+      : await harness.waitForDiagnostics(schemaUri);
+    expect(failed.map((item) => item.code)).toEqual(['PRISMA_NEXT_INTERPRETATION_FAILED']);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: cleanSchema }],
+    });
+    const recovered = pull
+      ? fullReportItems(await requestPullDiagnostics(harness, schemaUri))
+      : await harness.waitForDiagnosticsMatching(schemaUri, (items) =>
+          items.some((item) => item.code === expectedUnresolved.code),
+        );
+    expect(recovered).toEqual([expectedUnresolved]);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 3 },
+      contentChanges: [{ text: fixedSchema }],
+    });
+    const fixed = pull
+      ? fullReportItems(await requestPullDiagnostics(harness, schemaUri))
+      : await harness.waitForDiagnosticsMatching(schemaUri, (items) => items.length === 0);
+    expect(fixed).toEqual([]);
+  });
 
   it('pull serves the interpreter diagnostic at its mapped range and clears it after a fix', async () => {
     const { resolveInputs } = interpretationResolution(fixAwareInterpret());

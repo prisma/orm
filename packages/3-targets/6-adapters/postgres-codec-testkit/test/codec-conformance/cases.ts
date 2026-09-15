@@ -236,6 +236,14 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: Temporal.PlainTime.from('03:04:05.123456'),
     typeParams: { precision: 6 },
   },
+  {
+    codecId: 'pg/timestamptz-date@1',
+    label: 'millisecond precision at UTC',
+    value: new Date('2026-01-02T03:04:05.123Z'),
+    typeParams: { precision: 3 },
+    valueEquality: (left, right) =>
+      left instanceof Date && right instanceof Date && left.getTime() === right.getTime(),
+  },
   // The `*-string` codecs' application value is PostgreSQL's own rendering, so each case is written
   // the way the server writes it — space separator, two-digit offset, microseconds. That is now
   // what the projection returns too, which is the whole point of the text cast: one spelling,
@@ -516,6 +524,13 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     label: 'null',
     value: undefined,
     typeParams: { precision: 6 },
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/timestamptz-date@1',
+    label: 'null',
+    value: undefined,
+    typeParams: { precision: 3 },
     nullValue: true,
   },
   {

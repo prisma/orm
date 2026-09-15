@@ -41,7 +41,12 @@ import {
   referencedFieldRef,
   str,
 } from '@internal/psl-parser';
-import type { FieldAttributeAst, ModelAttributeAst, SourceFile } from '@internal/psl-parser/syntax';
+import type {
+  AstNode,
+  FieldAttributeAst,
+  ModelAttributeAst,
+  SourceFile,
+} from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { notOk } from '@internal/utils/result';
 
@@ -151,8 +156,24 @@ export function interpretFieldAttribute<Out>(input: {
   return result.value;
 }
 
-const mapModelSpec = modelAttribute('map', { positional: [{ key: 'name', type: str() }] });
-const mapFieldSpec = fieldAttribute('map', { positional: [{ key: 'name', type: str() }] });
+function validateMappedName(
+  value: { readonly name: string },
+  ctx: AttributeCtx,
+  attributeNode: AstNode,
+): readonly PslDiagnostic[] {
+  return value.name === ''
+    ? [leafDiagnostic(ctx, attributeNode, 'Mapped name must not be empty')]
+    : [];
+}
+
+const mapModelSpec = modelAttribute('map', {
+  positional: [{ key: 'name', type: str() }],
+  refine: validateMappedName,
+});
+const mapFieldSpec = fieldAttribute('map', {
+  positional: [{ key: 'name', type: str() }],
+  refine: validateMappedName,
+});
 
 type DefaultArgValue = string | number | boolean | (string | number | boolean)[] | TypedFuncCall;
 

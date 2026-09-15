@@ -101,6 +101,7 @@ import {
   PG_VARBIT_CODEC_ID,
   PG_VARCHAR_CODEC_ID,
 } from './codec-ids';
+import { pgTimestamptzDateDescriptor } from './date-codecs';
 import { postgresError } from './errors';
 import { DEFAULT_NAMESPACE_ID } from './namespace-ids';
 import { PostgresNativeEnum } from './postgres-native-enum';
@@ -320,7 +321,9 @@ export class PgTextCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return json as string;
+    return blindCast<string, 'identity string codecs serialize JSON in their wire string form'>(
+      json,
+    );
   }
 }
 
@@ -558,7 +561,9 @@ export class PgInt4Codec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return json as number;
+    return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
+      json,
+    );
   }
 }
 
@@ -605,7 +610,9 @@ export class PgInt2Codec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return json as number;
+    return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
+      json,
+    );
   }
 }
 
@@ -768,7 +775,9 @@ export class PgFloat4Codec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return json as number;
+    return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
+      json,
+    );
   }
 }
 
@@ -815,7 +824,9 @@ export class PgFloat8Codec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): number {
-    return json as number;
+    return blindCast<number, 'identity numeric codecs serialize JSON in their wire number form'>(
+      json,
+    );
   }
 }
 
@@ -862,7 +873,7 @@ export class PgBoolCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): boolean {
-    return json as boolean;
+    return blindCast<boolean, 'boolean columns serialize JSON in their wire boolean form'>(json);
   }
 }
 
@@ -1035,7 +1046,9 @@ export class PgTimetzCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return json as string;
+    return blindCast<string, 'identity string codecs serialize JSON in their wire string form'>(
+      json,
+    );
   }
 }
 
@@ -1083,7 +1096,9 @@ export class PgBitCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return json as string;
+    return blindCast<string, 'identity string codecs serialize JSON in their wire string form'>(
+      json,
+    );
   }
 }
 
@@ -1130,7 +1145,9 @@ export class PgVarbitCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    return json as string;
+    return blindCast<string, 'identity string codecs serialize JSON in their wire string form'>(
+      json,
+    );
   }
 }
 
@@ -1615,6 +1632,7 @@ export const codecDescriptors = definePostgresCodecs([
   pgDateStringDescriptor,
   pgTimestampStringDescriptor,
   pgTimestamptzStringDescriptor,
+  pgTimestamptzDateDescriptor,
   pgTimeStringDescriptor,
   pgTimetzDescriptor,
   pgBoolDescriptor,

@@ -51,6 +51,68 @@ function expectDiagnosticForSchema(
 }
 
 describe('interpretPslDocumentToSqlContract diagnostics', () => {
+  it.each([
+    { declaration: 'name String @map("")', attribute: '@map("")', column: 15 },
+    { declaration: '@@map("")', attribute: '@@map("")', column: 3 },
+  ])(
+    'rejects empty mapped names in $declaration with an attribute span',
+    ({ declaration, attribute, column }) => {
+      const schema = `model User {\n  id Int @id\n  ${declaration}\n}`;
+      const result = interpretPslDocumentToSqlContract({
+        ...baseInput,
+        ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      const offset = schema.indexOf(attribute);
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+            message: 'Mapped name must not be empty',
+            sourceId: 'schema.prisma',
+            span: {
+              start: { offset, line: 3, column },
+              end: {
+                offset: offset + attribute.length,
+                line: 3,
+                column: column + attribute.length,
+              },
+            },
+          }),
+        ]),
+      );
+    },
+  );
+
+  it.each(['display_name', ' '])('accepts nonempty mapped names %j', (name) => {
+    const schema = `model User {\n  id Int @id\n  name String @map("${name}")\n  @@map("${name}")\n}`;
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('retains other field diagnostics alongside an empty mapped name', () => {
+    const schema = 'model User {\n  id Int @id\n  name String @map("")\n  bad MissingType\n}';
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message: 'Mapped name must not be empty',
+        }),
+        expect.objectContaining({ code: 'PSL_UNSUPPORTED_FIELD_TYPE' }),
+      ]),
+    );
+  });
+
   it('returns diagnostics when target context is missing', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `model User {
