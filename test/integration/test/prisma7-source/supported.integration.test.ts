@@ -1,9 +1,10 @@
 /**
  * The end-to-end proof for the Prisma 7 contract source on Postgres: the SQL
  * Prisma 7.10.0 generated for the supported schema is applied unchanged, the
- * schema is interpreted, and `db verify` (lenient, the default) reports
- * nothing. See `fixtures/prisma7-source/supported-verify/README.md` for the three
- * edits that make the schema interpretable and the full schema's error case.
+ * schema is interpreted, and strict `db verify` reports only what Prisma 7
+ * creates for `@ignore` and `@@ignore` constructs. See
+ * `fixtures/prisma7-source/supported-verify/README.md` for the three edits that
+ * make the schema interpretable and the full schema's error case.
  */
 import { readFileSync } from 'node:fs';
 import postgresAdapter from '@internal/adapter-postgres/control';
@@ -51,7 +52,7 @@ function load(schemaPath: string) {
 
 describe('Prisma 7 supported schema against the database Prisma 7 built', () => {
   it(
-    'verifies with zero findings',
+    'verifies strictly with only the ignored constructs as extras',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
         await withClient(connectionString, (client) => client.query(migrationSql));
@@ -61,9 +62,19 @@ describe('Prisma 7 supported schema against the database Prisma 7 built', () => 
         const serialized = new PostgresContractSerializer().serializeContract(
           loaded.value as Contract<SqlStorage>,
         );
-        const result = await runSchemaVerify(connectionString, serialized);
-        expect(result.schema.issues.map((issue) => issue.path).sort()).toEqual([]);
-        expect(result.ok).toBe(true);
+        const lenient = await runSchemaVerify(connectionString, serialized);
+        expect(lenient.schema.issues).toEqual([]);
+        expect(lenient.ok).toBe(true);
+
+        const strict = await runSchemaVerify(connectionString, serialized, { strict: true });
+        expect(strict.schema.issues.map((issue) => issue.path).sort()).toEqual([
+          ['database', 'public', 'LegacyThing'],
+          ['database', 'public', 'LegacyThing', 'column:id'],
+          ['database', 'public', 'LegacyThing', 'primary-key'],
+          ['database', 'public', 'Post', 'column:legacyOwnerId'],
+          ['database', 'public', 'Post', 'foreign-key:legacyOwnerId->public.User(id)'],
+          ['database', 'public', 'User', 'column:legacy'],
+        ]);
       });
     },
     timeouts.spinUpPpgDev,
