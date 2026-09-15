@@ -947,6 +947,7 @@ function readField(args: ReadFieldArgs): void {
           field,
           modelName: model.symbol.name,
           nativeType: resolved.descriptor.nativeType,
+          typeParams: resolved.descriptor.typeParams,
           codecId: resolved.descriptor.codecId,
           enumMembers:
             enumDeclaration === undefined

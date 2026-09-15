@@ -30,6 +30,7 @@ export interface LowerPrisma7DefaultInput {
   readonly field: FieldSymbol;
   readonly modelName: string;
   readonly nativeType: string;
+  readonly typeParams: Readonly<Record<string, unknown>> | undefined;
   readonly codecId: string;
   /** Storage value per member name when the field is typed by a Prisma 7 enum. */
   readonly enumMembers: ReadonlyMap<string, string> | undefined;
@@ -87,8 +88,14 @@ export function lowerPrisma7Default(
   }
 
   const rawLiteral = rawSqlLiteral(expression, input);
+  if (rawLiteral === 'unreadable') {
+    return unknown('holds a value this contract source does not read.', attribute.span);
+  }
   if (rawLiteral !== undefined) {
-    return { storage: { kind: 'function', expression: rawLiteral }, onCreate: undefined };
+    return {
+      storage: { kind: 'function', expression: rawLiteral.expression },
+      onCreate: undefined,
+    };
   }
 
   const scalar = scalarValue(expression, input, unknown);
@@ -159,22 +166,41 @@ function isTemporalNativeType(nativeType: string): nativeType is TemporalNativeT
   return TEMPORAL_NATIVE_TYPES.has(nativeType);
 }
 
+function rawSqlText(text: string, nativeType: 'bytea' | TemporalNativeType): string | undefined {
+  const value = nativeType === 'bytea' ? base64ToHex(text) : storedTemporalText(text, nativeType);
+  return value === undefined ? undefined : `'${value.replace(/'/g, "''")}'`;
+}
+
 /**
- * A `Bytes` or `DateTime` string literal is carried as the SQL literal of the
- * default Postgres stores (`'\x68656c6c6f'`, `'2024-01-02 03:04:05'`) rather than
+ * A `Bytes` or `DateTime` default is carried as the SQL literal of the default
+ * Postgres stores (`'\x68656c6c6f'`, `'2024-01-02 03:04:05'`), and a list default
+ * as an `ARRAY[...]` of those literals cast to the column type, rather than
  * through the column codec, whose JSON form (base64, a Temporal value) is not
  * what introspection reads back; verify parses both sides with the same parser.
  */
 function rawSqlLiteral(
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
-): string | undefined {
+): { readonly expression: string } | 'unreadable' | undefined {
   const { nativeType } = input;
   if (nativeType !== 'bytea' && !isTemporalNativeType(nativeType)) return undefined;
-  const text = StringLiteralExprAst.cast(expression.syntax)?.value();
-  if (text === undefined) return undefined;
-  const value = nativeType === 'bytea' ? base64ToHex(text) : storedTemporalText(text, nativeType);
-  return value === undefined ? undefined : `'${value.replace(/'/g, "''")}'`;
+  const array = input.field.list ? ArrayLiteralAst.cast(expression.syntax) : undefined;
+  if (array === undefined) {
+    const text = StringLiteralExprAst.cast(expression.syntax)?.value();
+    if (text === undefined) return undefined;
+    const literal = rawSqlText(text, nativeType);
+    return literal === undefined ? 'unreadable' : { expression: literal };
+  }
+  const literals: string[] = [];
+  for (const element of array.elements()) {
+    const text = StringLiteralExprAst.cast(element.syntax)?.value();
+    const literal = text === undefined ? undefined : rawSqlText(text, nativeType);
+    if (literal === undefined) return 'unreadable';
+    literals.push(literal);
+  }
+  const precision = input.typeParams?.['precision'];
+  const typeName = `${nativeType.toUpperCase()}${typeof precision === 'number' ? `(${precision})` : ''}`;
+  return { expression: `ARRAY[${literals.join(', ')}]::${typeName}[]` };
 }
 
 function blindListValue(
@@ -230,7 +256,6 @@ function elementValue(
         return undefined;
       }
     }
-    if (input.nativeType === 'bytea') return base64ToHex(text);
     return text;
   }
   return BooleanLiteralExprAst.cast(expression.syntax)?.value();
