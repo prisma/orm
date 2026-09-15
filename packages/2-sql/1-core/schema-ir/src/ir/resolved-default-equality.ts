@@ -6,9 +6,10 @@ import { canonicalStringify } from '@internal/utils/canonical-stringify';
  * `columnDefaultsEqual` normalized branch: kinds must match; literal values are normalized (Date
  * and temporal-typed strings to ISO instants, with a timestamp that has no zone read as UTC; a
  * 64-bit-integer native type's safe-integer number to its decimal-text spelling; a numeric native
- * type's number or decimal text to its digits without zeros that do not change the value; a list
- * element by element under its element type) then compared canonically (JSON objects match their
- * canonical string form); function expressions compare case- and whitespace-insensitively.
+ * type's number to its decimal text, and when the type has a modifier, its decimal text to its
+ * digits without zeros that do not change the value; a list element by element under its element
+ * type) then compared canonically (JSON objects match their canonical string form); function
+ * expressions compare case- and whitespace-insensitively.
  *
  * `nativeType` provides the normalization context (the actual side's resolved native type in a diff
  * comparison). A target that reads a raw expression as a literal does so before this comparison,
@@ -51,12 +52,11 @@ function isInt64NativeType(nativeType?: string): boolean {
   return normalized === 'int8' || normalized === 'bigint';
 }
 
-function isDecimalNativeType(nativeType?: string): boolean {
-  return (
-    nativeType !== undefined && /^(?:numeric|decimal)(?:\(\d+(?:,\s*\d+)?\))?$/i.test(nativeType)
-  );
-}
-
+/**
+ * A numeric type with a modifier (`numeric(10,2)`) stores every value at its scale, so zeros that
+ * do not change the value do not count. Without one, the value keeps the scale it was written with.
+ */
+const DECIMAL_NATIVE_TYPE = /^(?:numeric|decimal)(\(\d+(?:,\s*\d+)?\))?$/i;
 const DECIMAL_NUMERAL = /^(-?)(\d+)(?:\.(\d+))?$/;
 
 function decimalDigits(value: string | number): string | number {
@@ -99,8 +99,9 @@ function normalizeLiteralValue(value: unknown, nativeType?: string): unknown {
   if (typeof value === 'number' && Number.isSafeInteger(value) && isInt64NativeType(nativeType)) {
     return String(value);
   }
-  if ((typeof value === 'number' || typeof value === 'string') && isDecimalNativeType(nativeType)) {
-    return decimalDigits(value);
+  const decimalType = nativeType === undefined ? null : DECIMAL_NATIVE_TYPE.exec(nativeType);
+  if ((typeof value === 'number' || typeof value === 'string') && decimalType !== null) {
+    return decimalType[1] === undefined ? String(value) : decimalDigits(value);
   }
   return value;
 }

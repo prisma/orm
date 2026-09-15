@@ -166,13 +166,29 @@ describe('resolvedDefaultsEqual', () => {
       }).toEqual({ numberFirst: true, textFirst: true });
     });
 
-    it('ignores zeros that do not change the value', () => {
+    it('ignores zeros that do not change the value under a type with a scale', () => {
       expect({
         trailing: resolvedDefaultsEqual(literal('1.5'), literal('1.50'), nativeType),
         whole: resolvedDefaultsEqual(literal(10), literal('10.000'), nativeType),
         leading: resolvedDefaultsEqual(literal('0.5'), literal('00.5'), nativeType),
         negativeZero: resolvedDefaultsEqual(literal('0'), literal('-0.0'), nativeType),
-      }).toEqual({ trailing: true, whole: true, leading: true, negativeZero: true });
+        scaleZero: resolvedDefaultsEqual(literal('2'), literal('2.0'), 'numeric(10,0)'),
+      }).toEqual({
+        trailing: true,
+        whole: true,
+        leading: true,
+        negativeZero: true,
+        scaleZero: true,
+      });
+    });
+
+    it('compares the decimal text exactly under a type without a scale, which stores it as written', () => {
+      expect({
+        trailingText: resolvedDefaultsEqual(literal('1.5'), literal('1.50'), 'numeric'),
+        trailingNumber: resolvedDefaultsEqual(literal(1.5), literal('1.50'), 'numeric'),
+        decimal: resolvedDefaultsEqual(literal('10'), literal('10.0'), 'decimal'),
+        same: resolvedDefaultsEqual(literal('1.50'), literal('1.50'), 'numeric'),
+      }).toEqual({ trailingText: false, trailingNumber: false, decimal: false, same: true });
     });
 
     it('compares every digit of the decimal text', () => {
@@ -219,7 +235,12 @@ describe('resolvedDefaultsEqual', () => {
       expect({
         element: resolvedDefaultsEqual(literal(['1', '2']), literal(['1', '3']), 'int8[]'),
         length: resolvedDefaultsEqual(literal(['1']), literal(['1', '2']), 'int8[]'),
-      }).toEqual({ element: false, length: false });
+        unscaledTrailingZero: resolvedDefaultsEqual(
+          literal(['1.5']),
+          literal(['1.50']),
+          'numeric[]',
+        ),
+      }).toEqual({ element: false, length: false, unscaledTrailingZero: false });
     });
 
     it('leaves the elements alone without a list native type', () => {

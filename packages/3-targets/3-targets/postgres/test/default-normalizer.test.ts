@@ -554,6 +554,9 @@ describe('parsePostgresDefault numeric columns', () => {
     { raw: '1.50', nativeType: 'numeric(65,30)' },
     { raw: '10', nativeType: 'numeric(65,30)' },
     { raw: '12.34', nativeType: 'numeric' },
+    { raw: '1.50', nativeType: 'numeric' },
+    { raw: '1.5', nativeType: 'numeric(10,2)' },
+    { raw: '2.0', nativeType: 'numeric(10,0)' },
   ])('reads $raw as that decimal text for $nativeType', ({ raw, nativeType }) => {
     expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value: raw });
   });
