@@ -54,7 +54,7 @@ Not assigned to this slice.
 
 ## Compatibility
 
-Pre-existing inferred contracts keep verifying after the default-normaliser fixes: a contract that declares `@default(dbgenerated("'confidential'::auth.oauth_client_type"))` (the shipped Supabase contract, `packages/3-extensions/supabase/src/contract/contract.prisma`) compares equal to the literal `confidential` introspection now reads, because `resolvedDefaultsEqual` treats a raw expression that is a cast string literal as the string it spells; the Supabase suite and the introspect, infer, and supabase integration tests pass with no contract file regenerated.
+Pre-existing inferred contracts keep verifying after the default-normaliser fixes. The shipped Supabase contract (`packages/3-extensions/supabase/src/contract/contract.prisma`) declares `@default(dbgenerated("'confidential'::auth.oauth_client_type"))`, and introspection now reads that column's default as the literal `confidential`. The contract side reads the same: when `db verify` builds the expected schema from a contract, the Postgres target's `resolveDefault` hook, `postgresResolveDefault`, runs each raw default expression through `parsePostgresDefault`, the parser introspection uses. That parser reads a quoted literal cast to a schema-qualified type as the literal, so both sides hold `confidential` before `resolvedDefaultsEqual` compares them. With that hook disabled, the Supabase reference fixture verify test and the adapter's live verify tests for an enum default declared as a raw cast both fail; with it, they pass with no contract file regenerated.
 
 ## Slice 2 follow-up
 

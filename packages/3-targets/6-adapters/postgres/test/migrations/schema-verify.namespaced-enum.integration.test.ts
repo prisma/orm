@@ -25,14 +25,19 @@ interface EnumTableCase {
   readonly table: string;
   readonly enumName: string;
   readonly typeName: string;
-  /** A default on `action`: declared on the contract as given, created live as `DEFAULT 'CREATE'`. */
+  /** The enum's members, `CREATE` and `DELETE` when omitted. */
+  readonly members?: readonly [string, ...string[]];
+  /** A default on `action`: declared on the contract as given, created live as the first member. */
   readonly contractDefault?:
     | { readonly kind: 'literal'; readonly value: string }
     | { readonly kind: 'function'; readonly expression: string };
 }
 
+const defaultMembers = ['CREATE', 'DELETE'] as const;
+
 /** One table whose `action` column is typed by a native enum, in the given schema. */
 function buildContract(input: EnumTableCase): Contract<SqlStorage> {
+  const members = input.members ?? defaultMembers;
   const qualifiedType =
     input.schema === 'public' ? input.typeName : `${input.schema}.${input.typeName}`;
   return {
@@ -74,10 +79,10 @@ function buildContract(input: EnumTableCase): Contract<SqlStorage> {
             native_enum: {
               [input.enumName]: new PostgresNativeEnum({
                 typeName: input.typeName,
-                members: ['CREATE', 'DELETE'],
+                members: [...members],
               }),
             },
-            valueSet: { [input.enumName]: { kind: 'valueSet', values: ['CREATE', 'DELETE'] } },
+            valueSet: { [input.enumName]: { kind: 'valueSet', values: [...members] } },
           },
         }),
       },
@@ -94,6 +99,7 @@ async function verifyEnumTable(
   driver: PostgresControlDriver,
   input: EnumTableCase,
 ): Promise<readonly (readonly string[])[]> {
+  const members = input.members ?? defaultMembers;
   const quotedType = `"${input.schema}"."${input.typeName}"`;
   // `resetDatabase` clears `public` only; a schema created by an earlier case
   // (and the type inside it) would otherwise survive into this one.
@@ -102,8 +108,9 @@ async function verifyEnumTable(
     await driver.query(`CREATE SCHEMA "${input.schema}"`);
   }
   await driver.query(`DROP TYPE IF EXISTS ${quotedType} CASCADE`);
-  await driver.query(`CREATE TYPE ${quotedType} AS ENUM ('CREATE', 'DELETE')`);
-  const liveDefault = input.contractDefault === undefined ? '' : " DEFAULT 'CREATE'";
+  const memberList = members.map((member) => `'${member}'`).join(', ');
+  await driver.query(`CREATE TYPE ${quotedType} AS ENUM (${memberList})`);
+  const liveDefault = input.contractDefault === undefined ? '' : ` DEFAULT '${members[0]}'`;
   await driver.query(
     `CREATE TABLE "${input.schema}"."${input.table}" (id int PRIMARY KEY, action ${quotedType} NOT NULL${liveDefault})`,
   );
@@ -164,6 +171,20 @@ describe('a native enum outside public verifies clean', { concurrent: false }, (
       enumName: 'AuditAction',
       typeName: 'AuditAction',
       contractDefault: { kind: 'function', expression: '\'CREATE\'::audit."AuditAction"' },
+    });
+    expect(paths).toEqual([]);
+  });
+
+  it('reports zero findings for an enum default declared as a raw cast to an unquoted schema-qualified type', {
+    timeout: testTimeout,
+  }, async () => {
+    const paths = await verifyEnumTable(driver!, {
+      schema: 'auth',
+      table: 'oauth_clients',
+      enumName: 'OauthClientType',
+      typeName: 'oauth_client_type',
+      members: ['confidential', 'public'],
+      contractDefault: { kind: 'function', expression: "'confidential'::auth.oauth_client_type" },
     });
     expect(paths).toEqual([]);
   });

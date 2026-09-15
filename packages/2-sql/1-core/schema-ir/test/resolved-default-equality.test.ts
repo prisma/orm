@@ -16,6 +16,14 @@ describe('resolvedDefaultsEqual', () => {
       expect(resolvedDefaultsEqual(literal('now'), fn('now()'))).toBe(false);
     });
 
+    it('a raw expression never equals a literal, even one it spells', () => {
+      const expression = fn("'confidential'::auth.oauth_client_type");
+      expect({
+        expressionFirst: resolvedDefaultsEqual(expression, literal('confidential'), 'text'),
+        literalFirst: resolvedDefaultsEqual(literal('confidential'), expression, 'text'),
+      }).toEqual({ expressionFirst: false, literalFirst: false });
+    });
+
     it('a kind outside the union compares unequal rather than throwing', () => {
       const rogue = { kind: 'sequence', value: 1 } as unknown as ColumnDefault;
 
@@ -188,62 +196,5 @@ describe('resolvedDefaultsEqual zoneless timestamp literals', () => {
         'timestamptz',
       ),
     ).toBe(false);
-  });
-});
-
-describe('resolvedDefaultsEqual raw string literal expressions', () => {
-  // A contract written before introspection read schema-qualified enum casts as
-  // literals declares `@default(dbgenerated("'confidential'::auth.oauth_client_type"))`
-  // (packages/3-extensions/supabase/src/contract/contract.prisma). Introspection
-  // now reads that column's default as the literal `confidential`; the two
-  // must still compare equal, in either direction.
-  const supabaseSpelling = "'confidential'::auth.oauth_client_type";
-
-  it('a raw expression that is a cast string literal equals the literal it spells', () => {
-    expect(
-      resolvedDefaultsEqual(
-        fn(supabaseSpelling),
-        literal('confidential'),
-        'auth.oauth_client_type',
-      ),
-    ).toBe(true);
-    expect(
-      resolvedDefaultsEqual(
-        literal('confidential'),
-        fn(supabaseSpelling),
-        'auth.oauth_client_type',
-      ),
-    ).toBe(true);
-  });
-
-  it('unescapes a doubled quote and ignores an uncast spelling difference', () => {
-    expect(resolvedDefaultsEqual(fn("'it''s'"), literal("it's"), 'text')).toBe(true);
-  });
-
-  it('a raw expression that is not a string literal still never equals a literal', () => {
-    expect(resolvedDefaultsEqual(fn('now()'), literal('now'), 'text')).toBe(false);
-    expect(resolvedDefaultsEqual(fn("'a'::text"), literal('b'), 'text')).toBe(false);
-  });
-
-  it('an expression that starts with a string literal but goes on is not that literal', () => {
-    expect(resolvedDefaultsEqual(fn("'a'::text || 'b'"), literal('a'), 'text')).toBe(false);
-    expect(resolvedDefaultsEqual(fn("'a'::text || 'b'::text"), literal('a'), 'text')).toBe(false);
-    expect(resolvedDefaultsEqual(fn("upper('a')"), literal('a'), 'text')).toBe(false);
-  });
-
-  it('accepts the cast type shapes Postgres reports', () => {
-    expect(resolvedDefaultsEqual(fn('\'x\'::"MyEnum"'), literal('x'), 'MyEnum')).toBe(true);
-    expect(resolvedDefaultsEqual(fn('\'x\'::sch."MyEnum"'), literal('x'), 'sch.MyEnum')).toBe(true);
-    expect(resolvedDefaultsEqual(fn('\'x\'::"my schema".t'), literal('x'), 't')).toBe(true);
-    expect(resolvedDefaultsEqual(fn("'x'::character varying(20)"), literal('x'), 'text')).toBe(
-      true,
-    );
-    expect(
-      resolvedDefaultsEqual(
-        fn("'2024-01-01 00:00:00'::timestamp without time zone"),
-        literal('2024-01-01T00:00:00.000Z'),
-        'timestamp',
-      ),
-    ).toBe(true);
   });
 });
