@@ -12,7 +12,7 @@ import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { prisma7Schema } from '@internal/sql-contract-prisma7/provider';
+import { prisma7Contract } from '@internal/sql-contract-prisma7/provider';
 import postgres from '@internal/target-postgres/control';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -110,7 +110,7 @@ describe('Prisma 7 relations against the database Prisma 7 built', () => {
       await withDevDatabase(async ({ connectionString }) => {
         await withClient(connectionString, (client) => client.query(migrationSql));
 
-        const config = prisma7Schema(schemaPath, { binding: prisma7PostgresBinding });
+        const config = prisma7Contract(schemaPath, { binding: prisma7PostgresBinding });
         const loaded = await config.source.load(sourceContext());
         expect(loaded.ok).toBe(true);
         if (!loaded.ok) return;

@@ -5,7 +5,7 @@ import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-bindin
 import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
-import { prisma7Schema } from '../src/provider';
+import { prisma7Contract } from '../src/provider';
 import { postgresSourceContext } from './support';
 
 const postgres = { binding: prisma7PostgresBinding };
@@ -27,15 +27,15 @@ function scratchDir(name: string): string {
   return dir;
 }
 
-describe('prisma7Schema', () => {
+describe('prisma7Contract', () => {
   it('declares the prisma7 format and the input path', () => {
-    expect(prisma7Schema('prisma/schema.prisma', postgres)).toMatchObject({
+    expect(prisma7Contract('prisma/schema.prisma', postgres)).toMatchObject({
       source: { format: 'prisma7', inputs: ['prisma/schema.prisma'] },
     });
   });
 
   it('writes contract.json beside the schema file or directory, whatever either is named', () => {
-    const outputOf = (path: string) => prisma7Schema(path, postgres).output;
+    const outputOf = (path: string) => prisma7Contract(path, postgres).output;
     expect(outputOf('prisma/schema.prisma')).toBe('prisma/contract.json');
     expect(outputOf('prisma/schema-single.prisma')).toBe('prisma/contract.json');
     expect(outputOf('prisma/schema')).toBe('prisma/contract.json');
@@ -45,7 +45,7 @@ describe('prisma7Schema', () => {
 
   it('lets options.output override the default', () => {
     expect(
-      prisma7Schema('prisma/schema.prisma', { ...postgres, output: 'out/c.json' }).output,
+      prisma7Contract('prisma/schema.prisma', { ...postgres, output: 'out/c.json' }).output,
     ).toBe('out/c.json');
   });
 
@@ -65,7 +65,7 @@ describe('prisma7Schema', () => {
     writeFileSync(join(dir, 'nested', 'deep', 'd.prisma'), 'model Deep {\n  id Int\n}\n');
     writeFileSync(join(dir, 'nested', 'deep', 'readme.md'), 'model NotPrisma {\n  id Int\n}\n');
 
-    const config = prisma7Schema('prisma/schema', postgres);
+    const config = prisma7Contract('prisma/schema', postgres);
     const result = await config.source.load(postgresSourceContext([dir]));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -82,7 +82,7 @@ describe('prisma7Schema', () => {
     mkdirSync(join(dir, 'models'));
     writeFileSync(join(dir, 'models', 'broken.prisma'), 'model Broken {\n  id Int\n');
 
-    const config = prisma7Schema('prisma/schema', postgres);
+    const config = prisma7Contract('prisma/schema', postgres);
     const result = await config.source.load(postgresSourceContext([dir]));
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -99,7 +99,7 @@ describe('prisma7Schema', () => {
     writeFileSync(join(dir, 'schema.prisma'), 'datasource db {\n  provider = "postgresql"\n}\n');
     writeFileSync(join(dir, 'broken.prisma'), 'model Broken {\n  id Int\n');
 
-    const config = prisma7Schema('prisma/schema', postgres);
+    const config = prisma7Contract('prisma/schema', postgres);
     const result = await config.source.load(postgresSourceContext([dir]));
     expect(result.ok).toBe(false);
     if (result.ok) return;
@@ -119,7 +119,7 @@ describe('prisma7Schema', () => {
     );
     mkdirSync(join(dir, 'extra.prisma'));
 
-    const config = prisma7Schema('prisma/schema', postgres);
+    const config = prisma7Contract('prisma/schema', postgres);
     const result = await config.source.load(postgresSourceContext([dir]));
     expect(result.ok).toBe(true);
   });
@@ -137,7 +137,7 @@ describe('prisma7Schema', () => {
     symlinkSync(join(shared, 'b.prisma'), join(dir, 'b.prisma'));
     symlinkSync(join(shared, 'models'), join(dir, 'linked'));
 
-    const config = prisma7Schema('prisma/schema', postgres);
+    const config = prisma7Contract('prisma/schema', postgres);
     const result = await config.source.load(postgresSourceContext([dir]));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -152,7 +152,7 @@ describe('prisma7Schema', () => {
     const dir = scratchDir('empty');
     writeFileSync(join(dir, 'notes.txt'), 'not a schema\n');
 
-    const config = prisma7Schema('prisma/schema', postgres);
+    const config = prisma7Contract('prisma/schema', postgres);
     const result = await config.source.load(postgresSourceContext([dir]));
     expect(result).toMatchObject({
       ok: false,
@@ -175,7 +175,7 @@ describe('prisma7Schema', () => {
       schemaFile,
       'datasource db {\n  provider = "postgresql"\n}\n\nmodel A {\n  id Int @id\n}\n',
     );
-    const config = prisma7Schema('prisma/schema.prisma', {
+    const config = prisma7Contract('prisma/schema.prisma', {
       binding: {
         ...prisma7PostgresBinding,
         createNamespace: () => {
@@ -207,7 +207,7 @@ describe('prisma7Schema', () => {
       'datasource db {\n  provider = "postgresql"\n}\n\nmodel A {\n  id   Int    @id\n  name String @default("x")\n}\n',
     );
     const context = postgresSourceContext([schemaFile]);
-    const result = await prisma7Schema('prisma/schema.prisma', postgres).source.load({
+    const result = await prisma7Contract('prisma/schema.prisma', postgres).source.load({
       ...context,
       codecLookup: withTextDefaultsEncodedAsNull(context.codecLookup),
     });
@@ -233,7 +233,7 @@ describe('prisma7Schema', () => {
       schemaFile,
       'datasource db {\n  provider = "postgresql"\n}\n\nmodel A {\n  id Int @id\n}\n',
     );
-    const config = prisma7Schema('prisma/schema.prisma', {
+    const config = prisma7Contract('prisma/schema.prisma', {
       binding: {
         ...prisma7PostgresBinding,
         createNamespace: () => {
@@ -247,7 +247,7 @@ describe('prisma7Schema', () => {
   });
 
   it('returns PRISMA7_SCHEMA_READ_FAILED when the input does not exist', async () => {
-    const config = prisma7Schema('prisma/missing.prisma', postgres);
+    const config = prisma7Contract('prisma/missing.prisma', postgres);
     const result = await config.source.load(
       postgresSourceContext([join(scratchDir('missing'), 'missing.prisma')]),
     );

@@ -10,7 +10,7 @@ import postgres from '@internal/target-postgres/control';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { dirname, join } from 'pathe';
-import { prisma7Schema } from '../src/provider';
+import { prisma7Contract } from '../src/provider';
 
 export const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -37,7 +37,7 @@ export function postgresSourceContext(resolvedInputs: readonly string[]): Contra
 /** Loads `fixtures/<caseName>/schema.prisma` through the provider, as `contract emit` does. */
 export function loadFixtureSchema(caseName: string) {
   const schemaPath = join(fixturesDir, caseName, 'schema.prisma');
-  return prisma7Schema(schemaPath, { binding: prisma7PostgresBinding }).source.load(
+  return prisma7Contract(schemaPath, { binding: prisma7PostgresBinding }).source.load(
     postgresSourceContext([schemaPath]),
   );
 }

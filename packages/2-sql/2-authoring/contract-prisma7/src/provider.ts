@@ -20,7 +20,7 @@ import { prisma7Diagnostic } from './diagnostics';
 import { interpretPrisma7Documents, type Prisma7Document } from './interpreter';
 import type { Prisma7TargetBinding } from './target-binding';
 
-export interface Prisma7SchemaOptions {
+export interface Prisma7ContractOptions {
   readonly binding: Prisma7TargetBinding;
   readonly output?: string;
   readonly defaultControlPolicy?: ControlPolicy;
@@ -87,7 +87,10 @@ function validateInterpretedContract(contract: Contract): void {
   validateModelStorageReferences(sqlContract);
 }
 
-export function prisma7Schema(schemaPath: string, options: Prisma7SchemaOptions): ContractConfig {
+export function prisma7Contract(
+  schemaPath: string,
+  options: Prisma7ContractOptions,
+): ContractConfig {
   return {
     source: {
       format: 'prisma7',
@@ -96,7 +99,7 @@ export function prisma7Schema(schemaPath: string, options: Prisma7SchemaOptions)
         const [absolutePath] = context.resolvedInputs;
         if (absolutePath === undefined) {
           throw new InternalError(
-            'prisma7Schema: context.resolvedInputs is empty. The CLI config loader should populate it positional-matched with source.inputs.',
+            'prisma7Contract: context.resolvedInputs is empty. The CLI config loader should populate it positional-matched with source.inputs.',
           );
         }
         let files: SchemaFile[];

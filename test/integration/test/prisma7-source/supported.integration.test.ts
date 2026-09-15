@@ -12,7 +12,7 @@ import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { createControlStack } from '@internal/framework-components/control';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import { prisma7Schema } from '@internal/sql-contract-prisma7/provider';
+import { prisma7Contract } from '@internal/sql-contract-prisma7/provider';
 import postgres from '@internal/target-postgres/control';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
@@ -44,7 +44,7 @@ function sourceContext(schemaPath: string) {
 }
 
 function load(schemaPath: string) {
-  return prisma7Schema(schemaPath, { binding: prisma7PostgresBinding }).source.load(
+  return prisma7Contract(schemaPath, { binding: prisma7PostgresBinding }).source.load(
     sourceContext(schemaPath),
   );
 }

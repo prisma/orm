@@ -6,7 +6,7 @@ import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-bindin
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
 import { basename, dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
-import { prisma7Schema } from '../src/provider';
+import { prisma7Contract } from '../src/provider';
 import { postgresSourceContext } from './support';
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
@@ -125,7 +125,7 @@ describe('Prisma 7 fixtures', () => {
       const schemaPath = existsSync(directory)
         ? directory
         : join(fixturesDir, caseName, 'schema.prisma');
-      const config = prisma7Schema(schemaPath, { binding: prisma7PostgresBinding });
+      const config = prisma7Contract(schemaPath, { binding: prisma7PostgresBinding });
       const result = await config.source.load(postgresSourceContext([schemaPath]));
       const diagnosticsPath = expectedPath(caseName, 'expected-diagnostics.json');
       const contractPath = expectedPath(caseName, 'expected-contract.json');
