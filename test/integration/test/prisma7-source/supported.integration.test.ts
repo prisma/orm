@@ -7,6 +7,7 @@
  * make the schema interpretable and the full schema's error case.
  */
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import postgresAdapter from '@internal/adapter-postgres/control';
 import type { Contract } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/control';
@@ -22,7 +23,7 @@ import { dirname, join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { runSchemaVerify } from '../family.schema-verify.helpers';
 
-const fixturesDir = join(dirname(new URL(import.meta.url).pathname), '../fixtures/prisma7-source');
+const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), '../fixtures/prisma7-source');
 const migrationSql = readFileSync(join(fixturesDir, 'supported/migration.sql'), 'utf8');
 
 function sourceContext(schemaPath: string) {
