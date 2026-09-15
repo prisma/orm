@@ -14,7 +14,7 @@ model Scalars {
   boolean      Boolean
   booleanOpt   Boolean?
   booleanList  Boolean[]
-  int          Int
+  int          Int        @id
   intOpt       Int?
   intList      Int[]
   bigInt       BigInt

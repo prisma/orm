@@ -86,7 +86,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "8905a6f91af8a090acd8a091ec6f653a714b3ed48a2be74c27a0a20b3cbfce9d",
+    "storageHash": "2039d31ee9387d557d92d735c77f38faf6211a30116def1e7a1ec3e784f47961",
     "namespaces": {
       "public": {
         "id": "public",
@@ -113,7 +113,10 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": []
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
             },
             "Keep": {
               "columns": {
@@ -125,7 +128,10 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": []
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["Id"]
+              }
             }
           }
         }

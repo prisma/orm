@@ -123,7 +123,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "04748a101ddf3b3bbb74bad44bca6250540a5e2a963c370f75ed862b7504a52f",
+    "storageHash": "e9e8943dccdeb6d3d102d35a84b8fdf0aefdeebd6e81c6f34b45aea056f4132c",
     "namespaces": {
       "audit": {
         "id": "audit",
@@ -154,7 +154,10 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": []
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
             }
           },
           "native_enum": {
@@ -231,7 +234,10 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": []
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
             }
           },
           "native_enum": {

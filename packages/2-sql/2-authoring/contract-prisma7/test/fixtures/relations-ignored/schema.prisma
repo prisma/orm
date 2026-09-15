@@ -6,7 +6,7 @@ model User {
   id          Int     @id
   posts       Post[]
   legacyOwned Post[]  @relation("LegacyOwner") @ignore
-  things      Thing[]
+  things      Thing[] @ignore
 }
 
 model Post {

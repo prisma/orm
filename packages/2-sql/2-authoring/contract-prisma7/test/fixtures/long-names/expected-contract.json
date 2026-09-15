@@ -167,6 +167,37 @@
               }
             }
           },
+          "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123": {
+            "storage": {
+              "table": "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "col": {
+                  "column": "col"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "col": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          },
           "AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing": {
             "storage": {
               "table": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryL",
@@ -244,6 +275,10 @@
       "namespace": "public",
       "model": "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing"
     },
+    "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123": {
+      "namespace": "public",
+      "model": "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123"
+    },
     "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryL": {
       "namespace": "public",
       "model": "AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing"
@@ -254,7 +289,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "bad94fa423b4285846b02747ddf7b8826d3e0a9f573004189883700f5507c0be",
+    "storageHash": "40c7273dadf53f2f415c2a8199295cc80705b6f10cd7f96ce607ad50b5cf4aea",
     "namespaces": {
       "public": {
         "id": "public",
@@ -358,6 +393,32 @@
               },
               "uniques": [],
               "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "col": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123_c_idx",
+                  "unique": false,
+                  "columns": ["col"]
+                }
+              ],
               "foreignKeys": [],
               "primaryKey": {
                 "columns": ["id"]

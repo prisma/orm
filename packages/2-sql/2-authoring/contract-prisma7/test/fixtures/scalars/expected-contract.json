@@ -331,7 +331,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "081debbc8cb15fab1f2a154e04f5b6d97c5845d7bf374f98d67c8bf500de6530",
+    "storageHash": "52081c9cfa6d9e814bd9e21caf6696a6352faa7785c542fc0bc033ca54243f50",
     "namespaces": {
       "public": {
         "id": "public",
@@ -517,7 +517,10 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": []
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["int"]
+              }
             }
           }
         }

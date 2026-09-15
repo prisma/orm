@@ -28,3 +28,10 @@ model AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing {
   id     Int  @id
   firsts AVeryLongModelNameThatKeepsGoingAndGoingForeverX[]
 }
+
+model Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123 {
+  id  Int    @id
+  col String
+
+  @@index([col])
+}

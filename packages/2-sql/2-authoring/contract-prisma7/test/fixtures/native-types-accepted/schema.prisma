@@ -9,7 +9,7 @@ model NativeTypes {
   uuid            String    @db.Uuid
   inet            String    @db.Inet
   boolean         Boolean   @db.Boolean
-  integer         Int       @db.Integer
+  integer         Int       @id @db.Integer
   smallInt        Int       @db.SmallInt
   bigInt          BigInt    @db.BigInt
   real            Float     @db.Real

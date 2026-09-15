@@ -1,5 +1,12 @@
 datasource db {
-  provider = "postgresql"
+  provider   = "postgresql"
+  extensions = [citext]
+}
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 model Account {

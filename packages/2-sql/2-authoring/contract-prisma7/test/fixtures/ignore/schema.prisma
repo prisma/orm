@@ -3,16 +3,16 @@ datasource db {
 }
 
 model User {
-  id      Int
+  id      Int     @id
   email   String
   legacy  String? @ignore
-  things  LegacyThing[]
+  things  LegacyThing[] @ignore
 }
 
 model LegacyThing {
-  id     Int
+  id     Int  @id
   userId Int
-  user   User
+  user   User @relation(fields: [userId], references: [id])
 
   @@ignore
 }
