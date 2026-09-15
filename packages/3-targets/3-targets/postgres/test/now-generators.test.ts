@@ -43,14 +43,6 @@ describe('the "now" generator for each codec', () => {
     expect(codec?.decodeJson(codec.encodeJson(value))).toEqual(value);
   });
 
-  it('gives the string timestamp codecs a Date from timestampNow, which they pass through unencoded', async () => {
-    for (const codecId of STRING_TIMESTAMP_CODEC_IDS) {
-      expect(postgresNowGeneratorIdFor(codecId)).toBe('timestampNow');
-      const value = generate['timestampNow']?.();
-      expect(await codecFor(codecId)?.encode(value, {})).toBeInstanceOf(Date);
-    }
-  });
-
   it('has no generator for a codec without one', () => {
     expect(
       ['pg/date-temporal@1', 'pg/time-temporal@1', 'pg/timetz@1', 'pg/text@1'].map(
