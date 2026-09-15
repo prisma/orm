@@ -55,6 +55,7 @@ import { withTempDir } from '../utils/cli-test-helpers';
 import {
   type EngineCommandResult,
   type JourneyContext,
+  parseJsonOutput,
   runContractEmit,
   runContractInfer,
   runDbVerify,
@@ -130,9 +131,17 @@ interface VerifyIssue {
   readonly actual?: { readonly nullable?: boolean };
 }
 
-interface SourceDiagnostic {
-  readonly code: string;
-  readonly span?: { readonly start: { readonly line: number } };
+interface SchemaVerifyResult {
+  readonly schema: { readonly issues: readonly VerifyIssue[] };
+}
+
+interface SourceLoadError {
+  readonly meta?: {
+    readonly diagnostics?: readonly {
+      readonly code: string;
+      readonly span?: { readonly start: { readonly line: number } };
+    }[];
+  };
 }
 
 function byPath(left: VerifyIssue, right: VerifyIssue): number {
@@ -145,11 +154,6 @@ function readContractPsl(ctx: JourneyContext): string {
 
 function output(run: EngineCommandResult): string {
   return `${stripAnsi(run.stderr)}\n${stripAnsi(run.stdout)}`;
-}
-
-function resultEnvelope(run: EngineCommandResult): Record<string, unknown> | undefined {
-  const terminal = run.json.at(-1);
-  return terminal !== undefined && terminal.kind === 'result' ? terminal.envelope : undefined;
 }
 
 async function inferInto(ctx: JourneyContext): Promise<string> {
@@ -233,13 +237,8 @@ withTempDir(({ createTempDir }) => {
           expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
 
           const verify = await runDbVerify(ctx, ['--schema-only', '--strict', '--json']);
-          const verifyResult = resultEnvelope(verify)?.['result'] as
-            | { readonly schema?: { readonly issues?: readonly VerifyIssue[] } }
-            | undefined;
-          expect(
-            [...(verifyResult?.schema?.issues ?? [])].sort(byPath),
-            `db verify\n${output(verify)}`,
-          ).toEqual(
+          const { schema } = parseJsonOutput<SchemaVerifyResult>(verify);
+          expect([...schema.issues].sort(byPath), `db verify\n${output(verify)}`).toEqual(
             LIST_COLUMNS.map((column) => ({
               path: ['database', 'public', 'list_defaults', `column:${column}`],
               expected: expect.objectContaining({ nullable: false }),
@@ -281,10 +280,7 @@ withTempDir(({ createTempDir }) => {
 
           const emit = await runContractEmit(ctx, ['--json']);
           expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(2);
-          const error = resultEnvelope(emit)?.['error'] as
-            | { readonly meta?: { readonly diagnostics?: readonly SourceDiagnostic[] } }
-            | undefined;
-          expect(error?.meta?.diagnostics).toEqual([
+          expect(parseJsonOutput<SourceLoadError>(emit).meta?.diagnostics).toEqual([
             expect.objectContaining({
               code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
               span: expect.objectContaining({ start: expect.objectContaining({ line: 6 }) }),
