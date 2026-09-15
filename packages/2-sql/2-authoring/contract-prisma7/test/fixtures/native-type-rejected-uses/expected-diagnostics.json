@@ -34,5 +34,11 @@
     "file": "schema.prisma",
     "line": 19,
     "message": "Field \"Post.authorEmail\": native type \"@db.Citext\" has no Prisma 8 codec, and relation field \"Post.author\" uses the field, so model \"Post\" cannot use this contract source until the column type changes; @ignore does not help, because Prisma 7 still creates the foreign key over the column. Changing the field's type is a column type change on Prisma 7's next migration."
+  },
+  {
+    "code": "PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 31,
+    "message": "Field \"Comment.authorHandle\": native type \"@db.Citext\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too; because the field is required and its column has no default, neither client can then insert rows. Changing the field's type instead changes the column type on Prisma 7's next migration."
   }
 ]

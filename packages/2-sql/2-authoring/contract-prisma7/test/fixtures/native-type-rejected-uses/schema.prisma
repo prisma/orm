@@ -19,3 +19,15 @@ model Post {
   authorEmail String  @db.Citext
   author      Account @relation(fields: [authorEmail], references: [email])
 }
+
+model Author {
+  id       Int       @id
+  handle   String    @unique
+  comments Comment[] @ignore
+}
+
+model Comment {
+  id           Int    @id
+  authorHandle String @db.Citext
+  author       Author @relation(fields: [authorHandle], references: [handle]) @ignore
+}

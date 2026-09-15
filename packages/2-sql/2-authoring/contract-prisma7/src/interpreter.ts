@@ -763,6 +763,7 @@ function keysUsingField(field: FieldSymbol, model: ModelDeclaration): readonly F
     }
   }
   for (const other of Object.values(model.symbol.fields)) {
+    if (other.attributes.some((attribute) => attribute.name === 'ignore')) continue;
     const relation = other.attributes.find((attribute) => attribute.name === 'relation');
     const parsed =
       relation === undefined
