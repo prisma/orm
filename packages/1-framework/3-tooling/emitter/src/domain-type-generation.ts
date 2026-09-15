@@ -38,10 +38,12 @@ export function serializeValue(value: unknown): string {
     return `readonly [${items}]`;
   }
   if (typeof value === 'object') {
-    const entries: string[] = [];
-    for (const [k, v] of Object.entries(value)) {
-      entries.push(`readonly ${serializeObjectKey(k)}: ${serializeValue(v)}`);
-    }
+    // Key order carries no meaning in a literal type, and the same contract
+    // reaches here in authoring order from the source and in canonical order
+    // from contract.json. Sorting makes both render the same text.
+    const entries = Object.entries(value)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+      .map(([k, v]) => `readonly ${serializeObjectKey(k)}: ${serializeValue(v)}`);
     return `{ ${entries.join('; ')} }`;
   }
   return 'unknown';
