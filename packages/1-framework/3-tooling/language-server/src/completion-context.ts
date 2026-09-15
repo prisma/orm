@@ -248,6 +248,20 @@ const UNSUPPORTED: UnsupportedPslCompletionContext = { kind: 'unsupported' };
 export function classifyPslCompletionContext(
   input: ClassifyPslCompletionContextInput,
 ): PslCompletionContext {
+  return classifyPslContext(input, false);
+}
+
+export function classifyPslSignatureContext(
+  input: ClassifyPslCompletionContextInput,
+): AttributeArgumentCompletionContext | undefined {
+  const context = classifyPslContext(input, true);
+  return 'attributeName' in context ? context : undefined;
+}
+
+function classifyPslContext(
+  input: ClassifyPslCompletionContextInput,
+  signatureHelp: boolean,
+): PslCompletionContext {
   const root = input.document.syntax;
   const offset = input.sourceFile.offsetAt(input.position);
   const at = root.tokenAtOffset(offset);
@@ -271,6 +285,7 @@ export function classifyPslCompletionContext(
     offset,
     node: attributeAnchor(at),
     replacementStartOffset,
+    signatureHelp,
   };
   const attributeContext =
     classifyFieldAttribute(attributeClassifierInput) ??
@@ -498,6 +513,7 @@ function blockBodyContainsOffset(block: BracedBlock | undefined, offset: number)
 }
 
 interface AttributeClassifierInput {
+  readonly signatureHelp: boolean;
   readonly offset: number;
   readonly node: SyntaxNode | undefined;
   readonly replacementStartOffset: number;
@@ -614,6 +630,7 @@ interface AttributeContextFactory {
 }
 
 interface AttributeCursor extends CompletionReplacement {
+  readonly signatureHelp: boolean;
   readonly attributeName: string;
   readonly preceding: SyntaxToken | undefined;
   readonly factory: AttributeContextFactory;
@@ -646,6 +663,7 @@ function classifyAttributePosition(
       replacementStartOffset: replaceToken ? token.offset : input.offset,
       replacementEndOffset: replaceToken ? token.endOffset : input.offset,
       attributeName,
+      signatureHelp: input.signatureHelp,
       preceding: anchor === undefined ? undefined : skipTriviaToken(anchor, 'prev'),
       factory,
     },
@@ -710,7 +728,7 @@ function classifyArguments(
   }
   const colon = active.colon();
   if (colon !== undefined) {
-    if (cursor.offset <= colon.offset)
+    if (!cursor.signatureHelp && cursor.offset <= colon.offset)
       return cursor.factory.namedKey({ ...position, existingNamedKeys, hasColon: true });
     const name = active.name()?.name();
     return name === undefined
@@ -740,6 +758,15 @@ function classifyExpression(
   expression: ExpressionAst | undefined,
   path: readonly AttributeArgumentPathStep[],
 ): PslCompletionContext {
+  if (
+    cursor.signatureHelp &&
+    expression !== undefined &&
+    (cursor.offset <= expression.syntax.offset ||
+      (cursor.offset >= expression.syntax.endOffset &&
+        !recoveredContainerContainsCursor(expression, cursor.offset)))
+  ) {
+    return cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'scalar' });
+  }
   if (expression instanceof ArrayLiteralAst) return classifyList(cursor, expression, path);
   if (expression instanceof ObjectLiteralExprAst) return classifyRecord(cursor, expression, path);
   if (expression instanceof FunctionCallAst) {
@@ -758,7 +785,7 @@ function classifyExpression(
       ? cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'functionName' })
       : UNSUPPORTED;
   }
-  return expression?.syntax.isOutside(cursor.offset) === true
+  return !cursor.signatureHelp && expression?.syntax.isOutside(cursor.offset) === true
     ? UNSUPPORTED
     : cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'scalar' });
 }
@@ -785,7 +812,7 @@ function classifyList(
       return classifyExpression(cursor, element, elementPath);
     }
   }
-  return followsSeparator(cursor, ['LBracket', 'Comma'])
+  return cursor.signatureHelp || followsSeparator(cursor, ['LBracket', 'Comma'])
     ? classifyExpression(cursor, undefined, elementPath)
     : UNSUPPORTED;
 }
@@ -808,7 +835,9 @@ function classifyRecord(
       return classifyExpression(cursor, field.value(), [...path, { kind: 'recordValue' }]);
     }
   }
-  return UNSUPPORTED;
+  return cursor.signatureHelp
+    ? cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'scalar' })
+    : UNSUPPORTED;
 }
 
 function isValueToken(token: SyntaxToken | undefined): token is SyntaxToken {

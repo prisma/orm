@@ -1,15 +1,12 @@
-import type {
-  ArgType,
-  AttributeSpec,
-  InspectableArgType,
-  Param,
-  PositionalParam,
-} from '@internal/psl-parser';
+import type { ArgType, AttributeSpec } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
-import { blindCast } from '@internal/utils/casts';
 import { type CompletionItem, CompletionItemKind, InsertTextFormat } from 'vscode-languageserver';
+import {
+  type ArgumentSignature,
+  directArgType,
+  resolveGrammar,
+} from './attribute-argument-grammar';
 import type {
-  AttributeArgumentPathStep,
   AttributeArgumentPosition,
   AttributeArgumentSlotPosition,
   AttributeNamedKeyPosition,
@@ -28,13 +25,6 @@ interface ValueCompletionInput<Position extends AttributeArgumentPosition>
   extends CompletionInput<Position> {
   readonly fieldNames: (kind: 'fieldRef' | 'referencedFieldRef') => readonly string[];
 }
-
-interface ArgumentSignature {
-  readonly positional?: readonly PositionalParam<unknown, never>[];
-  readonly named?: Readonly<Record<string, Param<unknown, never>>>;
-}
-
-type Grammar = ArgumentSignature | ArgType<unknown, never>;
 
 export function provideAttributeNamedKeyCompletionItems(
   input: CompletionInput<AttributeNamedKeyPosition>,
@@ -69,49 +59,6 @@ export function provideAttributeValueCompletionItems(
       'kind' in grammar ? valueItems(input, grammar, input.context.syntax) : [],
     ),
   );
-}
-
-function directArgType(param: ArgType<unknown, never>): InspectableArgType<never> {
-  return blindCast<
-    InspectableArgType<never>,
-    'Completion inspects registry combinators whose constructors retain kind-specific metadata; public ArgType erases that metadata, and completion never invokes parse.'
-  >(param);
-}
-
-function resolveGrammar(
-  signature: ArgumentSignature,
-  path: readonly AttributeArgumentPathStep[],
-): readonly Grammar[] {
-  let grammars: readonly Grammar[] = [signature];
-  for (const step of path) {
-    grammars = grammars.flatMap((grammar) => advanceGrammar(grammar, step));
-  }
-  return grammars;
-}
-
-function advanceGrammar(grammar: Grammar, step: AttributeArgumentPathStep): readonly Grammar[] {
-  const type = 'kind' in grammar ? directArgType(grammar) : undefined;
-  if (type?.kind === 'oneOf') {
-    return type.alternatives.flatMap((alternative) => advanceGrammar(alternative, step));
-  }
-  switch (step.kind) {
-    case 'positionalArgument': {
-      if ('kind' in grammar) return [];
-      const param = grammar.positional?.[step.index]?.type;
-      return param === undefined ? [] : [param];
-    }
-    case 'namedArgument': {
-      if ('kind' in grammar) return [];
-      const param = grammar.named?.[step.name]?.type;
-      return param === undefined ? [] : [param];
-    }
-    case 'listElement':
-      return type?.kind === 'list' ? [type.of] : [];
-    case 'recordValue':
-      return type?.kind === 'record' ? [type.of] : [];
-    case 'functionCall':
-      return type?.kind === 'funcCall' && type.name === step.name ? [type.signature] : [];
-  }
 }
 
 function namedKeyItems(
