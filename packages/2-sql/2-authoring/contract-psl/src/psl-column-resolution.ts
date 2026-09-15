@@ -2,6 +2,7 @@ import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ColumnDefault,
   ExecutionMutationDefaultPhases,
+  JsonValue,
   ValueSetRef,
 } from '@internal/contract/types';
 import type {
@@ -22,7 +23,7 @@ import {
   isAuthoringTypeConstructorDescriptor,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
+import type { AnyCodecDescriptor, Codec, CodecLookup } from '@internal/framework-components/codec';
 import type {
   ControlMutationDefaultRegistry,
   MutationDefaultGeneratorDescriptor,
@@ -30,12 +31,13 @@ import type {
 import type {
   FieldSymbol,
   ModelSymbol,
+  NumLiteral,
   PslSpan,
   ResolvedTypeConstructorCall,
   SymbolTable,
 } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
-
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
 import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
@@ -704,6 +706,7 @@ export function lowerDefaultForField(input: {
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly codecLookup: CodecLookup | undefined;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): {
   readonly defaultValue?: ColumnDefault;
@@ -730,9 +733,16 @@ export function lowerDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const value = interpreted.value;
+  const codec = input.codecLookup?.get(input.columnDescriptor.codecId);
+  const literalValue = (literal: string | boolean | NumLiteral): JsonValue =>
+    typeof literal === 'object' ? numberLiteralDefault(literal, codec) : literal;
 
   if (Array.isArray(value)) {
-    return { defaultValue: { kind: 'literal', value: [...value] } };
+    return { defaultValue: { kind: 'literal', value: value.map(literalValue) } };
+  }
+
+  if (typeof value === 'object' && 'text' in value) {
+    return { defaultValue: { kind: 'literal', value: literalValue(value) } };
   }
 
   if (typeof value === 'object') {
@@ -792,6 +802,30 @@ export function lowerDefaultForField(input: {
   }
 
   return { defaultValue: { kind: 'literal', value } };
+}
+
+/**
+ * A number literal is lowered to the value its column codec reads. A codec that reads a JSON number
+ * gets the number. A codec that reads only text, because a JS number would round the digits, gets
+ * what it decodes from the literal exactly as written.
+ */
+function numberLiteralDefault(literal: NumLiteral, codec: Codec | undefined): JsonValue {
+  const number = Number(literal.text);
+  if (codec === undefined || tryDecodeJson(codec, number) !== undefined) return number;
+  const fromText = tryDecodeJson(codec, literal.text);
+  if (fromText === undefined) return number;
+  return blindCast<
+    JsonValue,
+    'the contract build passes a literal default to the codec encodeJson, which takes the value the codec decodes'
+  >(fromText.value);
+}
+
+function tryDecodeJson(codec: Codec, json: JsonValue): { readonly value: unknown } | undefined {
+  try {
+    return { value: codec.decodeJson(json) };
+  } catch {
+    return undefined;
+  }
 }
 
 export function resolveColumnDescriptor(

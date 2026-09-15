@@ -1,0 +1,175 @@
+import postgresAdapter from '@internal/adapter-postgres/control';
+import type { Contract } from '@internal/contract/types';
+import postgresDriver from '@internal/driver-postgres/control';
+import sql, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
+import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
+import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
+import type { SqlStorage } from '@internal/sql-contract/types';
+import postgres from '@internal/target-postgres/control';
+import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import { timeouts, withDevDatabase } from '@repo/test-utils';
+import { describe, expect, it } from 'vitest';
+import { runSchemaVerify } from '../family.schema-verify.helpers';
+import {
+  authorSqlContractFromPsl,
+  findStorageColumn,
+  postgresFrameworkComponents,
+} from '../scalar-lists/psl-list-authoring';
+
+const schema = `types {
+  Money = Numeric(65, 30)
+  Price = Numeric(10, 2)
+}
+
+model NumberDefault {
+  id                  Int      @id
+  long                Money    @default(12345678901234567890.123456789)
+  tiny                Money    @default(0.000000000000000001)
+  negative            Money    @default(-1.25)
+  whole               Money    @default(10)
+  scaledTrailingZeros Price    @default(1.50)
+  bareTrailingZeros   Decimal  @default(1.50)
+  bareLong            Decimal  @default(12345678901234567890.123456789)
+  big                 BigInt   @default(9007199254740993)
+  smallestBig         BigInt   @default(-9223372036854775808)
+  safeBig             BigInt   @default(42)
+  decimals            Money[]  @default([12345678901234567890.123456789, -0.000000000000000001, 1.50])
+  bigs                BigInt[] @default([9007199254740993, -1])
+  count               Int      @default(-5)
+  ratio               Float    @default(1.5)
+}`;
+
+const controlStack = createControlStack({
+  family: sql,
+  target: postgres,
+  adapter: postgresAdapter,
+  driver: postgresDriver,
+  extensions: [],
+});
+
+async function applyContract(connectionString: string, contract: Contract<SqlStorage>) {
+  const familyInstance = sql.create(controlStack);
+  const driver = await postgresDriver.create(connectionString);
+  try {
+    const planResult = postgres.createPlanner(postgresAdapter.create(controlStack)).plan({
+      contract,
+      schema: await familyInstance.introspect({ driver }),
+      policy: INIT_ADDITIVE_POLICY,
+      fromContract: null,
+      frameworkComponents: postgresFrameworkComponents,
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+    if (planResult.kind !== 'success') {
+      throw new Error(`planner failed: ${JSON.stringify(planResult)}`);
+    }
+    const { plan } = planResult;
+    const runResult = await postgres.createRunner(familyInstance).execute({
+      driver,
+      perSpaceOptions: [
+        {
+          space: APP_SPACE_ID,
+          plan,
+          migrationEdges: [
+            buildFabricatedMigrationEdge({
+              currentMarkerStorageHash: plan.origin?.storageHash,
+              destinationStorageHash: plan.destination.storageHash,
+              operationCount: plan.operations.length,
+            }),
+          ],
+          driver,
+          destinationContract: contract,
+          policy: INIT_ADDITIVE_POLICY,
+          frameworkComponents: postgresFrameworkComponents,
+        },
+      ],
+    });
+    if (!runResult.ok) {
+      throw new Error(`runner failed: ${JSON.stringify(runResult.failure)}`);
+    }
+  } finally {
+    await driver.close();
+  }
+}
+
+describe('PSL number defaults keep every digit', () => {
+  it(
+    'emits decimal and big integer defaults as written, applies them, and verifies strictly, while rounded ones mismatch',
+    async () => {
+      const authored = await authorSqlContractFromPsl(schema);
+      expect(authored.diagnostics).toEqual([]);
+      const contract = authored.contract;
+      if (contract === undefined) throw new Error('authoring produced no contract');
+
+      const defaultOf = (column: string) => findStorageColumn(contract, column)?.['default'];
+      expect({
+        long: defaultOf('long'),
+        tiny: defaultOf('tiny'),
+        negative: defaultOf('negative'),
+        whole: defaultOf('whole'),
+        scaledTrailingZeros: defaultOf('scaledTrailingZeros'),
+        bareTrailingZeros: defaultOf('bareTrailingZeros'),
+        bareLong: defaultOf('bareLong'),
+        big: defaultOf('big'),
+        smallestBig: defaultOf('smallestBig'),
+        safeBig: defaultOf('safeBig'),
+        decimals: defaultOf('decimals'),
+        bigs: defaultOf('bigs'),
+        count: defaultOf('count'),
+        ratio: defaultOf('ratio'),
+      }).toEqual({
+        long: { kind: 'literal', value: '12345678901234567890.123456789' },
+        tiny: { kind: 'literal', value: '0.000000000000000001' },
+        negative: { kind: 'literal', value: '-1.25' },
+        whole: { kind: 'literal', value: '10' },
+        scaledTrailingZeros: { kind: 'literal', value: '1.50' },
+        bareTrailingZeros: { kind: 'literal', value: '1.50' },
+        bareLong: { kind: 'literal', value: '12345678901234567890.123456789' },
+        big: { kind: 'literal', value: '9007199254740993' },
+        smallestBig: { kind: 'literal', value: '-9223372036854775808' },
+        safeBig: { kind: 'literal', value: '42' },
+        decimals: {
+          kind: 'literal',
+          value: ['12345678901234567890.123456789', '-0.000000000000000001', '1.50'],
+        },
+        bigs: { kind: 'literal', value: ['9007199254740993', '-1'] },
+        count: { kind: 'literal', value: -5 },
+        ratio: { kind: 'literal', value: 1.5 },
+      });
+
+      const rounded = await authorSqlContractFromPsl(
+        schema
+          .replace('@default(12345678901234567890.123456789)', '@default(12345678901234567000)')
+          .replace('Decimal  @default(1.50)', 'Decimal  @default(1.5)')
+          .replace('@default(9007199254740993)', '@default(9007199254740992)'),
+      );
+      const roundedContract = rounded.contract;
+      if (roundedContract === undefined) throw new Error('authoring produced no contract');
+
+      const serializer = new PostgresContractSerializer();
+      await withDevDatabase(async ({ connectionString }) => {
+        await applyContract(connectionString, contract);
+
+        const result = await runSchemaVerify(
+          connectionString,
+          serializer.serializeContract(contract),
+          { strict: true },
+        );
+        expect(result.schema.issues).toEqual([]);
+        expect(result.ok).toBe(true);
+
+        const roundedResult = await runSchemaVerify(
+          connectionString,
+          serializer.serializeContract(roundedContract),
+          { strict: true },
+        );
+        expect(roundedResult.schema.issues.map((issue) => issue.path.join('/')).sort()).toEqual([
+          'database/public/numberDefault/column:bareTrailingZeros/default',
+          'database/public/numberDefault/column:big/default',
+          'database/public/numberDefault/column:long/default',
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});

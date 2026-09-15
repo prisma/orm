@@ -17,6 +17,7 @@ import type {
   InferAttr,
   ModelAttributeCtx,
   ModelSymbol,
+  NumLiteral,
   PslSpan,
   RejectingArgType,
   SymbolTable,
@@ -34,7 +35,7 @@ import {
   list,
   modelAttribute,
   nodePslSpan,
-  num,
+  numLiteral,
   oneOf,
   optional,
   record,
@@ -175,13 +176,18 @@ const mapFieldSpec = fieldAttribute('map', {
   refine: validateMappedName,
 });
 
-type DefaultArgValue = string | number | boolean | (string | number | boolean)[] | TypedFuncCall;
+type DefaultArgValue =
+  | string
+  | NumLiteral
+  | boolean
+  | (string | NumLiteral | boolean)[]
+  | TypedFuncCall;
 
 function scalarDefaultArms(
   isList: boolean,
   registry: ControlMutationDefaultRegistry,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
-  const literal = () => oneOf(str(), num(), bool());
+  const literal = () => oneOf(str(), numLiteral(), bool());
   const funcArms = [...registry.entries()].map(([name, entry]) =>
     funcCall(
       name,
@@ -191,7 +197,7 @@ function scalarDefaultArms(
       >(entry.signature),
     ),
   );
-  return isList ? [list(literal()), ...funcArms] : [str(), num(), bool(), ...funcArms];
+  return isList ? [list(literal()), ...funcArms] : [str(), numLiteral(), bool(), ...funcArms];
 }
 
 function noEnumMember(): RejectingArgType<never, AttributeCtx> {

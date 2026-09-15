@@ -599,6 +599,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             generatorDescriptorById,
             sourceId,
             defaultFunctionRegistry,
+            codecLookup,
             diagnostics,
           })
       : {};
