@@ -73,6 +73,20 @@ describe('findDefaultTimeoutBudgets', () => {
     assert.deepEqual(findDefaultTimeoutBudgets('    teardownTimeout: timeouts.default,\n'), []);
   });
 
+  it('ignores a mention inside a comment or a string', () => {
+    assert.deepEqual(
+      findDefaultTimeoutBudgets(
+        [
+          '// testTimeout: timeouts.default is forbidden here',
+          '/* hookTimeout: timeouts.default */',
+          "const note = 'testTimeout: timeouts.default';",
+          '    testTimeout: timeouts.vitestPackageDefault,',
+        ].join('\n'),
+      ),
+      [],
+    );
+  });
+
   it('recognises a value wrapped onto the next line', () => {
     assert.deepEqual(
       findDefaultTimeoutBudgets('  test: {\n    hookTimeout:\n      timeouts.default,\n  },\n'),

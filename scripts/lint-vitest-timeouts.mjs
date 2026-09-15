@@ -25,10 +25,29 @@ const BUDGET = /(?<=^|[\s{,])['"]?(testTimeout|hookTimeout)['"]?\s*:\s*\(?\s*tim
 /** Every extension vitest loads a config from. */
 const CONFIG_GLOBS = ['js', 'mjs', 'cjs', 'ts', 'cts', 'mts'].map((ext) => `*vitest.config.${ext}`);
 
+/**
+ * Comments and string contents, replaced by spaces of the same length so a
+ * mention of the pattern in prose cannot match and every offset still maps to
+ * the original line. A quoted property key survives as its quotes.
+ */
+const NON_CODE = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|(['"`])(?:\\.|(?!\1)[^\\\n])*\1/g;
+
+function maskNonCode(source) {
+  return source.replace(NON_CODE, (text, quote) => {
+    if (quote === undefined) {
+      return text.replace(/[^\n]/g, ' ');
+    }
+    const inner = text.slice(1, -1);
+    return /^(testTimeout|hookTimeout)$/.test(inner)
+      ? text
+      : `${quote}${' '.repeat(inner.length)}${quote}`;
+  });
+}
+
 /** The lines of a vitest config that budget tests or hooks with `timeouts.default`. */
 export function findDefaultTimeoutBudgets(source) {
   const findings = [];
-  for (const match of source.matchAll(BUDGET)) {
+  for (const match of maskNonCode(source).matchAll(BUDGET)) {
     const line = source.slice(0, match.index).split('\n').length;
     findings.push({ line, setting: match[1] });
   }
