@@ -1,4 +1,5 @@
 export { buildEntityTypesByDiscriminator } from '../interpreter';
+export { numberLiteralDefault } from '../number-literal-default';
 export {
   type ColumnDescriptor,
   type ResolveFieldTypeResult,
