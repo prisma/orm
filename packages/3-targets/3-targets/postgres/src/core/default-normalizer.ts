@@ -18,10 +18,9 @@ const FALSE_PATTERN = /^false$/i;
 const NUMERIC_PATTERN = /^-?\d+(\.\d+)?$/;
 
 /**
- * A cast target type: a builtin of one or more words, where any word may carry
- * a modifier (`timestamp(3) without time zone`, `numeric(65,30)`), or a quoted
- * identifier (`"AuditAction"`); either may be qualified by a possibly quoted
- * schema (`audit."AuditAction"`, `"my schema".t`).
+ * A cast target type: a builtin of one or more words, where any word may carry a modifier
+ * (`timestamp(3) without time zone`, `numeric(65,30)`), or a quoted identifier (`"AuditAction"`);
+ * either may be qualified by a possibly quoted schema (`audit."AuditAction"`, `"my schema".t`).
  */
 const TYPE_NAME = String.raw`(?:(?:"(?:[^"]|"")+"|\w+)\.)?(?:"(?:[^"]|"")+"|\w+(?:\(\d+(?:,\s*\d+)?\))?(?:\s+\w+(?:\(\d+(?:,\s*\d+)?\))?)*)`;
 const QUOTED_LITERAL_PATTERN = new RegExp(`^'((?:[^']|'')*)'(?:::(${TYPE_NAME}))?$`);
@@ -89,8 +88,8 @@ type LiteralToken =
   | { readonly kind: 'string'; readonly text: string };
 
 /**
- * A numeral cast to a number type. A cast to an integer type rounds a fraction,
- * so that numeral is not the value.
+ * A numeral cast to a number type. A cast to an integer type rounds a fraction, so that numeral is
+ * not the value.
  */
 function castNumber(numeral: string, castType: string | undefined): LiteralToken | undefined {
   if (castType === undefined) return { kind: 'number', numeral };
@@ -100,10 +99,9 @@ function castNumber(numeral: string, castType: string | undefined): LiteralToken
 }
 
 /**
- * Reads a literal by its cast type: `'-1'::integer` and `(1)::bigint` are numbers,
- * `'a'::text` is a string. A parenthesised cast is read only from number to number:
- * `('now'::text)::date` is evaluated on insert. Anything else, such as an operator
- * or a function call, is not a literal.
+ * Reads a literal by its cast type: `'-1'::integer` and `(1)::bigint` are numbers, `'a'::text` is a
+ * string. A parenthesised cast is read only from number to number: `('now'::text)::date` is
+ * evaluated on insert. Anything else, such as an operator or a function call, is not a literal.
  */
 function readLiteralToken(expression: string): LiteralToken | undefined {
   const quoted = QUOTED_LITERAL_PATTERN.exec(expression);
@@ -125,8 +123,8 @@ function readLiteralToken(expression: string): LiteralToken | undefined {
 }
 
 /**
- * `int8` and `numeric` defaults are decimal text, the JSON form of their codecs,
- * so no digit is lost to a JavaScript number.
+ * `int8` and `numeric` defaults are decimal text, the JSON form of their codecs, so no digit is
+ * lost to a JavaScript number.
  */
 function numberValue(numeral: string, nativeType: string | undefined): JsonValue | undefined {
   if (nativeType !== undefined && DECIMAL_TEXT_TYPE_PATTERN.test(nativeType)) return numeral;
@@ -242,9 +240,9 @@ function parseArrayLiteralBody(
 }
 
 /**
- * Splits an `ARRAY[...]` element list on the commas outside quotes and
- * parentheses, so `numeric(65,30)` and `'a,b'` stay inside one element. A
- * doubled quote inside an element is a literal quote, so it never closes one.
+ * Splits an `ARRAY[...]` element list on the commas outside quotes and parentheses, so
+ * `numeric(65,30)` and `'a,b'` stay inside one element. A doubled quote inside an element is a
+ * literal quote, so it never closes one.
  */
 function splitConstructorElements(body: string): readonly string[] {
   const elements: string[] = [];
@@ -272,9 +270,9 @@ function splitConstructorElements(body: string): readonly string[] {
 }
 
 /**
- * Reads one `ARRAY[...]` element: NULL, a boolean, or a literal read by its
- * cast type. Anything else, such as a function call, means the constructor is
- * not a literal and the caller keeps the raw expression.
+ * Reads one `ARRAY[...]` element: NULL, a boolean, or a literal read by its cast type. Anything
+ * else, such as a function call, means the constructor is not a literal and the caller keeps the
+ * raw expression.
  */
 function parseConstructorElement(element: string, elementType: string): JsonValue | undefined {
   if (NULL_PATTERN.test(element)) return null;
@@ -312,7 +310,7 @@ function unwrapOuterArrayCasts(expression: string): string {
  * keeping the introspection layer focused on faithful data capture.
  *
  * @param rawDefault - Raw default expression from information_schema.columns.column_default
- * @param nativeType - Native column type, used for type-aware parsing (array, bigint, JSON)
+ * @param nativeType - Native column type, used for type-aware parsing (array, int8, numeric, JSON)
  * @returns Normalized ColumnDefault or undefined if the expression cannot be parsed
  */
 export function parsePostgresDefault(
