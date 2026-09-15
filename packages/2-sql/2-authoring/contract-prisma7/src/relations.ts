@@ -223,6 +223,7 @@ export function lowerRelations(
   const invalidFkPairings: InvalidFkPairing[] = [];
   const foreignKeys = new Map<string, ForeignKeyNode[]>();
   const junctions = new Map<string, ModelNode>();
+  const reportedJunctionNames = new Set<string>();
   const addForeignKey = (modelName: string, node: ForeignKeyNode): void => {
     const existing = foreignKeys.get(modelName) ?? [];
     foreignKeys.set(modelName, existing);
@@ -425,6 +426,26 @@ export function lowerRelations(
             field.span,
           ),
         );
+        continue;
+      }
+      const junctionName = effectiveRelationName(
+        relationField.attribute,
+        model.modelName,
+        target.modelName,
+      );
+      const namesake = models.get(junctionName);
+      if (namesake !== undefined) {
+        if (!reportedJunctionNames.has(junctionName)) {
+          reportedJunctionNames.add(junctionName);
+          diagnostics.push(
+            prisma7Diagnostic(
+              'PRISMA7_JUNCTION_NAME_COLLISION',
+              `${label} is an implicit many-to-many relation whose junction model would be named "${junctionName}", but model "${junctionName}" already has that name. Rename model "${junctionName}" and keep its table with @@map("${namesake.tableName}"); Prisma 7's next migration is then empty.`,
+              model.sourceId,
+              field.span,
+            ),
+          );
+        }
         continue;
       }
       const junction = synthesizeJunction(
