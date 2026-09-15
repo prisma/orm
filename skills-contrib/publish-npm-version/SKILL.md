@@ -82,14 +82,13 @@ If either precondition is unmet, stop and surface the issue. Do **not** try to a
 
 5. **Sanity-check the diff.** Confirm:
 
-   - Every modified file is either a `package.json` or `pnpm-lock.yaml`.
+   - Every modified file is a `package.json`, `pnpm-lock.yaml`, `skills/prisma-8/SKILL.md`, or one of the version-stamped `contract.json` / `contract.d.ts` artefacts named below.
    - The `package.json` diffs are exactly `version` field changes plus internal `workspace:<old> → workspace:<new>` specifier bumps (no other fields).
    - The `pnpm-lock.yaml` diff is exactly `specifier: workspace:<old> → workspace:<new>` lines (no resolution churn for external packages).
    - `skills/prisma-8/SKILL.md` changed only its `library_version` stamp (the bump script writes it).
+   - The tracked `contract.json` / `contract.d.ts` artefacts that carry an extension pack's version stamp (today: `examples/supabase/src/` and the fixtures under `packages/3-extensions/supabase/test/fixtures/`) changed only that stamp. The bump script restamps them because the extension writes its own package version into every contract it emits; `fixtures:check` would otherwise diff them, and `check:upgrade-coverage` treats a stamp-only artefact change as part of the release sweep, so no upgrade-recipe entry is needed for it.
 
-   Two more files always need a follow-up commit, and CI fails without them. The Supabase extension stamps its own package version into every contract it emits, so `examples/supabase/src/contract.{json,d.ts}` and the three fixture pairs under `packages/3-extensions/supabase/test/fixtures/` still carry the old version and the `Fixtures` job diffs them; move the `version` string in those eight files to `<version>` (the only change an emit would make). Then the `check:upgrade-coverage` PR-mode check requires this PR to declare that re-emit: add a `reemit-supabase-extension-version` entry to `skills/prisma-8/upgrading/app/upgrades/<prev>-to-<version>/instructions.md`, copying the shape of the previous transition's entry. Commit both together after the bump commit.
-
-6. **Commit.** Stage `package.json` files and `pnpm-lock.yaml` together in a single commit:
+6. **Commit.** Stage every file from step 5 (`package.json` files, `pnpm-lock.yaml`, `skills/prisma-8/SKILL.md`, and the restamped contract artefacts) together in a single commit:
 
    ```text
    chore(release): bump to <version>

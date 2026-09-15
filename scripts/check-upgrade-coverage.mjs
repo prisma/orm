@@ -410,7 +410,22 @@ function isTranslationIrrelevant(repoRoot, prev, head, path, ignoreOwnVersion = 
     const blankSchema = (text) => text.replace(/"\$schema"\s*:\s*"[^"]*"/g, '"$schema":""');
     return blankSchema(before) === blankSchema(after);
   }
+  // An emitted contract artefact whose only change is an extension pack's
+  // version stamp (the value that follows an extension entry's `targetId`)
+  // is the release bump's own regeneration, not a shape a consumer must
+  // translate. `set-version.ts` writes that stamp on every bump.
+  if (CONTRACT_ARTEFACT_NAMES.has(basename(path))) {
+    return blankExtensionVersionStamps(before) === blankExtensionVersionStamps(after);
+  }
   return false;
+}
+
+const CONTRACT_ARTEFACT_NAMES = new Set(['contract.json', 'contract.d.ts']);
+
+export function blankExtensionVersionStamps(text) {
+  return text
+    .replace(/("targetId":\s*"[^"]*",\s*"version":\s*")[^"]*(")/g, '$1$2')
+    .replace(/(readonly targetId:\s*'[^']*';\s*readonly version:\s*')[^']*(')/g, '$1$2');
 }
 
 function diffPaths(repoRoot, prev, head, pathspecs) {

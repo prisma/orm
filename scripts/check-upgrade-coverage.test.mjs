@@ -1247,6 +1247,55 @@ describe('check-upgrade-coverage — release sweep per-PR declaration', () => {
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
   });
 
+  it('a sweep that only restamps an extension version in emitted contract artefacts needs no fresh declaration', () => {
+    const artefactJson = (v) =>
+      `{"extensions":{"supabase":{"id":"supabase","kind":"extension","targetId":"postgres",\n"version":"${v}"}}}\n`;
+    const artefactDts = (v) =>
+      `readonly supabase: {\n  readonly targetId: 'postgres';\n  readonly version: '${v}';\n};\n`;
+    writePackageJson('8.0.0-rc.3');
+    writeRepoFile('examples/demo/src/contract.json', artefactJson('8.0.0-rc.3'));
+    writeRepoFile('examples/demo/src/contract.d.ts', artefactDts('8.0.0-rc.3'));
+    writeRepoFile(
+      'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.3-to-8.0.0-rc.4/instructions.md',
+      '---\nfrom: "8.0.0-rc.3"\nto: "8.0.0-rc.4"\nchanges: []\n---\n',
+    );
+    commitAll('prev');
+    const prev = git('rev-parse', 'HEAD');
+
+    writePackageJson('8.0.0-rc.4');
+    writeRepoFile('examples/demo/src/contract.json', artefactJson('8.0.0-rc.4'));
+    writeRepoFile('examples/demo/src/contract.d.ts', artefactDts('8.0.0-rc.4'));
+    commitAll('bump to 8.0.0-rc.4 with restamped artefacts');
+
+    const result = runScript(['--prev', prev, '--head', 'HEAD']);
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+  });
+
+  it('a contract artefact whose shape changed beyond the stamp still demands the declaration', () => {
+    writePackageJson('8.0.0-rc.3');
+    writeRepoFile(
+      'examples/demo/src/contract.json',
+      '{"models":{},"extensions":{"supabase":{"targetId":"postgres","version":"8.0.0-rc.3"}}}\n',
+    );
+    writeRepoFile(
+      'skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.3-to-8.0.0-rc.4/instructions.md',
+      '---\nfrom: "8.0.0-rc.3"\nto: "8.0.0-rc.4"\nchanges: []\n---\n',
+    );
+    commitAll('prev');
+    const prev = git('rev-parse', 'HEAD');
+
+    writePackageJson('8.0.0-rc.4');
+    writeRepoFile(
+      'examples/demo/src/contract.json',
+      '{"models":{"User":{}},"extensions":{"supabase":{"targetId":"postgres","version":"8.0.0-rc.4"}}}\n',
+    );
+    commitAll('bump with a model added');
+
+    const result = runScript(['--prev', prev, '--head', 'HEAD']);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /per-pr-declaration/);
+  });
+
   it('a sweep with a real substrate change still demands the declaration', () => {
     writePackageJson('8.0.0-rc.3');
     writeRepoFile('examples/demo/package.json', '{"name":"demo","version":"8.0.0-rc.3"}\n');
