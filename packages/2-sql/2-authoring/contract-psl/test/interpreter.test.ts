@@ -813,6 +813,32 @@ model OrderItem {
         indexes: [{ columns: ['body'] }],
       });
     });
+
+    it('explains sort annotations in @@index field lists instead of "Expected a field name"', () => {
+      const document = symbolTableInputFromParseArgs({
+        schema: `model Item {
+  id Int @id
+  createdAt DateTime
+  @@index([createdAt(sort: Desc)])
+}`,
+        sourceId: 'schema.prisma',
+      });
+
+      const result = interpretPslDocumentToSqlContract({
+        ...document,
+        controlMutationDefaults: builtinControlMutationDefaults,
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(
+        result.failure.diagnostics.some(
+          (d) =>
+            d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX' &&
+            /sort/i.test(d.message) &&
+            d.message !== 'Expected a field name',
+        ),
+      ).toBe(true);
+    });
   });
 
   describe('per-target namespace resolution', () => {
