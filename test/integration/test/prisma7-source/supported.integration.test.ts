@@ -81,7 +81,7 @@ describe('Prisma 7 supported schema against the database Prisma 7 built', () => 
     timeouts.spinUpPpgDev,
   );
 
-  it('rejects the full supported schema for the two forms Prisma 8 cannot spell', async () => {
+  it('rejects an optional generated field and @updatedAt with @default in the full supported schema', async () => {
     const loaded = await load(join(fixturesDir, 'supported/schema.prisma'));
     expect(loaded.ok).toBe(false);
     if (loaded.ok) return;

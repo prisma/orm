@@ -35,7 +35,7 @@ function readingContract(updatedAt: StorageColumn, defaults: readonly ExecutionM
 
 const updatedAtRef = { namespace: UNBOUND_NAMESPACE_ID, table: 'reading', column: 'updatedAt' };
 
-describe('validateSqlContractFully and execution defaults (verification item 3)', () => {
+describe('validateSqlContractFully and execution defaults', () => {
   it('accepts a column with a storage default and generators on create and update', () => {
     const column = new StorageColumn({
       nativeType: 'timestamp',

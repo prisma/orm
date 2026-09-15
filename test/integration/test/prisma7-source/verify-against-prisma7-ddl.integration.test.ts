@@ -4,7 +4,7 @@
  *
  * The applied SQL is copied statement by statement from
  * test/integration/test/fixtures/prisma7-source/supported/migration.sql, which
- * prisma@7.10.0 generated; only the statements each item needs are kept. The
+ * prisma@7.10.0 generated; each test keeps only the statements it needs. The
  * expected side is authored with Prisma 8's own TypeScript contract builder and
  * verified through the same family verify path `db verify` runs.
  */
@@ -28,7 +28,7 @@ const prisma7Timestamp3 = {
   typeParams: { precision: 3 },
 } as const;
 
-describe('Prisma 7 verification items', () => {
+describe('db verify against the DDL Prisma 7 generates', () => {
   const { getConnectionString } = useDevDatabase();
 
   async function applySql(statements: readonly string[]): Promise<void> {
@@ -41,7 +41,7 @@ describe('Prisma 7 verification items', () => {
   }
 
   it(
-    'item 1: autoincrement() verifies against a Prisma 7 SERIAL column with zero findings',
+    'autoincrement() verifies against a Prisma 7 SERIAL column with zero findings',
     async () => {
       await applySql([
         `CREATE TABLE "Tag" (
@@ -77,7 +77,7 @@ describe('Prisma 7 verification items', () => {
   );
 
   it(
-    'item 2: now() on timestamp(3) verifies against a Prisma 7 DEFAULT CURRENT_TIMESTAMP column with zero findings',
+    'now() on timestamp(3) verifies against a Prisma 7 DEFAULT CURRENT_TIMESTAMP column with zero findings',
     async () => {
       await applySql([
         `CREATE TABLE "Timestamps" (
@@ -131,7 +131,7 @@ describe('Prisma 7 verification items', () => {
   );
 
   it(
-    'item 7: lenient verify reports zero findings for an undeclared table, column, and foreign key',
+    'lenient verify reports zero findings for an undeclared table, column, and foreign key',
     async () => {
       await applySql([
         `CREATE TABLE "User" (

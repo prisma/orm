@@ -1,6 +1,6 @@
 # Prisma 7 supported schema, verifiable form
 
-`schema.prisma` is `../supported/schema.prisma` with three attributes removed, because the Prisma 7 contract source rejects the original forms by decision (option (a), 2026-09-13): an ORM-generated value on an optional field and `@updatedAt` combined with `@default` cannot be spelled in Prisma 8 yet.
+`schema.prisma` is `../supported/schema.prisma` with three attributes removed, because the Prisma 7 contract source rejects the original forms: Prisma 8 cannot yet express an ORM-generated value on an optional field, or `@updatedAt` combined with `@default`.
 
 - `Timestamps.updatedAtOpt DateTime? @updatedAt` became `DateTime?` (no generator; the column stays nullable, as `../supported/migration.sql` creates it).
 - `Timestamps.updatedAtNow DateTime @default(now()) @updatedAt` became `DateTime @default(now())` (the SQL carries `DEFAULT CURRENT_TIMESTAMP`, which is exactly that default).
