@@ -10,7 +10,7 @@ import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { orm } from '../src/orm';
-import { createMockRuntime, getTestAggregates, type MockRuntime } from './helpers';
+import { createMockRuntime, getTestAggregates, getTestContext, type MockRuntime } from './helpers';
 
 function model(table: string, fieldColumns: Record<string, string>) {
   const fields: Record<string, { type: { kind: string; codecId: string } }> = {};
@@ -100,6 +100,7 @@ function setup(): { db: TwoNamespaceOrm; runtime: MockRuntime } {
       context: blindCast<ExecutionContext<Contract<SqlStorage>>, 'stub execution context'>({
         contract: twoNamespaceContract,
         applyMutationDefaults: () => [],
+        contractCodecs: getTestContext().contractCodecs,
         codecDescriptors: { descriptorFor: () => ({ traits: ['equality'] }) },
         // The real registry: what a `max` over each namespace's column resolves
         // to is the target's answer, which is the whole subject of these cases.
