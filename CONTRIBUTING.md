@@ -34,7 +34,7 @@ Optional, only needed for specific test suites:
 
 ```bash
 git clone https://github.com/prisma/orm.git
-cd prisma
+cd orm
 
 corepack enable                      # if you haven't already
 pnpm install --frozen-lockfile
