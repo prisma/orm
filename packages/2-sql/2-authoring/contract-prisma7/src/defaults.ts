@@ -198,6 +198,8 @@ function blindListValue(
   >(values);
 }
 
+const WHOLE_NUMBER_SCALARS: ReadonlySet<string> = new Set(['Int', 'BigInt']);
+
 function tryDecodeJson(codec: Codec, json: JsonValue): { readonly value: unknown } | undefined {
   try {
     return { value: codec.decodeJson(json) };
@@ -236,7 +238,10 @@ function rejectedNumberReason(
 ): string | undefined {
   const text = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
   if (text === undefined || numberDefault(text, input.codec) !== undefined) return undefined;
-  return `holds ${text}, which is not a valid ${input.field.typeName} value.`;
+  const { typeName } = input.field;
+  return WHOLE_NUMBER_SCALARS.has(typeName)
+    ? `holds ${text}, which is not an integer; a ${typeName} default must be a whole number.`
+    : `holds ${text}, which is not a valid ${typeName} value.`;
 }
 
 function elementValue(
