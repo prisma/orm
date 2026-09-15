@@ -1,0 +1,211 @@
+import { type SqlColumnIRInput, SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import { ifDefined } from '@internal/utils/defined';
+import { describe, expect, it } from 'vitest';
+import { parsePostgresDefault } from '../../../src/core/default-normalizer';
+import { printPslFromFlat } from '../fixtures';
+
+/**
+ * A column as the control adapter introspects it: `rawDefault` is what Postgres printed for a column
+ * Prisma 7.10.0 created, and the resolved default is read by the target's own parser.
+ */
+function introspected(
+  name: string,
+  nativeType: string,
+  rawDefault: string,
+  shape: { readonly many?: true } = {},
+): SqlColumnIRInput {
+  const resolvedNativeType = shape.many ? `${nativeType}[]` : nativeType;
+  return {
+    name,
+    nativeType,
+    nullable: shape.many === true,
+    default: rawDefault,
+    ...ifDefined('many', shape.many),
+    resolvedNativeType,
+    ...ifDefined('resolvedDefault', parsePostgresDefault(rawDefault, resolvedNativeType)),
+  };
+}
+
+function printTable(name: string, columns: readonly SqlColumnIRInput[]): string {
+  return printPslFromFlat(
+    new SqlSchemaIR({
+      tables: {
+        [name]: {
+          name,
+          columns: Object.fromEntries(
+            [{ name: 'id', nativeType: 'int4', nullable: false }, ...columns].map((column) => [
+              column.name,
+              column,
+            ]),
+          ),
+          primaryKey: { columns: ['id'] },
+          foreignKeys: [],
+          uniques: [],
+          indexes: [],
+        },
+      },
+    }),
+  );
+}
+
+describe('printPsl literal defaults', () => {
+  describe('given scalar number columns Prisma 7 created', () => {
+    it('prints each default as the literal its codec accepts, with every digit and no exponent', () => {
+      const output = printTable('number_defaults', [
+        introspected('negInt', 'int4', "'-1'::integer"),
+        introspected('negSmallInt', 'int2', "'-2'::integer"),
+        introspected('negFloat', 'float8', "'-1.5'::numeric"),
+        introspected('tinyFloat', 'float8', '0.0000001'),
+        introspected('negReal', 'float4', "'-2.5'::numeric"),
+        introspected('negDecimal', 'numeric(65,30)', "'-0.5'::numeric"),
+        introspected('longDecimal', 'numeric(65,30)', '12345678901234567890.123456789'),
+        introspected('tinyDecimal', 'numeric(65,30)', '0.000000000000000001'),
+        introspected('scaleDecimal', 'numeric(65,30)', '1.50'),
+        introspected('scaledDecimal', 'numeric(10,2)', "'-1.25'::numeric"),
+        introspected('safeBigInt', 'int8', '5'),
+        introspected('negSafeBigInt', 'int8', "'-5'::integer"),
+      ]);
+
+      expect(output).toMatchInlineSnapshot(`
+        "// use prisma-8
+        // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
+
+        model NumberDefaults {
+          id            Int             @id
+          negInt        Int             @default(-1)
+          negSmallInt   SmallInt        @default(-2)
+          negFloat      Float           @default(-1.5)
+          tinyFloat     Float           @default(0.0000001)
+          negReal       Real            @default(-2.5)
+          negDecimal    Numeric(65, 30) @default("-0.5")
+          longDecimal   Numeric(65, 30) @default("12345678901234567890.123456789")
+          tinyDecimal   Numeric(65, 30) @default("0.000000000000000001")
+          scaleDecimal  Numeric(65, 30) @default("1.50")
+          scaledDecimal Numeric(10, 2)  @default("-1.25")
+          safeBigInt    BigInt          @default(5)
+          negSafeBigInt BigInt          @default(-5)
+
+          @@map("number_defaults")
+        }
+        "
+      `);
+    });
+
+    it('prints a default that has no PSL literal as dbgenerated with the expression Postgres printed', () => {
+      const output = printTable('raw_defaults', [
+        introspected('negBigInt', 'int8', "'-9007199254740993'::bigint"),
+        introspected('hugeBigInt', 'int8', "'9007199254740993'::bigint"),
+        introspected('stamp', 'timestamp(3)', "'2024-01-01 00:00:00'::timestamp without time zone"),
+        introspected('day', 'date', "'2024-01-01'::date"),
+      ]);
+
+      expect(output).toMatchInlineSnapshot(`
+        "// use prisma-8
+        // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
+
+        model RawDefaults {
+          id         Int          @id
+          negBigInt  BigInt       @default(dbgenerated("'-9007199254740993'::bigint"))
+          hugeBigInt BigInt       @default(dbgenerated("'9007199254740993'::bigint"))
+          stamp      Timestamp(3) @default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))
+          day        Date         @default(dbgenerated("'2024-01-01'::date"))
+
+          @@map("raw_defaults")
+        }
+        "
+      `);
+    });
+  });
+
+  describe('given list columns Prisma 7 created', () => {
+    it('prints each element as the literal its codec accepts', () => {
+      const output = printTable('list_defaults', [
+        introspected('negInts', 'int4', "ARRAY['-1'::integer, 2]", { many: true }),
+        introspected('negSmallInts', 'int2', "ARRAY[('-1'::integer)::smallint, (2)::smallint]", {
+          many: true,
+        }),
+        introspected('bigInts', 'int8', 'ARRAY[(1)::bigint, (2)::bigint]', { many: true }),
+        introspected('negBigInts', 'int8', "ARRAY[('-1'::integer)::bigint, (2)::bigint]", {
+          many: true,
+        }),
+        introspected('emptyBigInts', 'int8', 'ARRAY[]::bigint[]', { many: true }),
+        introspected(
+          'negFloats',
+          'float8',
+          "ARRAY[('-1.5'::numeric)::double precision, (2)::double precision]",
+          { many: true },
+        ),
+        introspected(
+          'longDecimals',
+          'numeric(65,30)',
+          'ARRAY[12345678901234567890.123456789::numeric(65,30), 0.000000000000000001::numeric(65,30)]',
+          { many: true },
+        ),
+        introspected(
+          'scaledDecimals',
+          'numeric(10,2)',
+          "ARRAY['-1.25'::numeric(10,2), (2)::numeric(10,2)]",
+          { many: true },
+        ),
+        introspected(
+          'emptyVarchars',
+          'character varying(32)',
+          '(ARRAY[]::character varying[])::character varying(32)[]',
+          { many: true },
+        ),
+      ]);
+
+      expect(output).toMatchInlineSnapshot(`
+        "// use prisma-8
+        // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
+
+        model ListDefaults {
+          id             Int               @id
+          negInts        Int[]             @default([-1, 2]) @noCheck(elementNotNull)
+          negSmallInts   SmallInt[]        @default([-1, 2]) @noCheck(elementNotNull)
+          bigInts        BigInt[]          @default([1, 2]) @noCheck(elementNotNull)
+          negBigInts     BigInt[]          @default([-1, 2]) @noCheck(elementNotNull)
+          emptyBigInts   BigInt[]          @default([]) @noCheck(elementNotNull)
+          negFloats      Float[]           @default([-1.5, 2]) @noCheck(elementNotNull)
+          longDecimals   Numeric(65, 30)[] @default(["12345678901234567890.123456789", "0.000000000000000001"]) @noCheck(elementNotNull)
+          scaledDecimals Numeric(10, 2)[]  @default(["-1.25", "2"]) @noCheck(elementNotNull)
+          emptyVarchars  VarChar(32)[]     @default([]) @noCheck(elementNotNull)
+
+          @@map("list_defaults")
+        }
+        "
+      `);
+    });
+
+    it('prints a default with an element that has no PSL literal as dbgenerated with the expression Postgres printed', () => {
+      const output = printTable('raw_list_defaults', [
+        introspected(
+          'hugeBigInts',
+          'int8',
+          "ARRAY['9007199254740993'::bigint, '-9007199254740993'::bigint]",
+          { many: true },
+        ),
+        introspected(
+          'timestamps',
+          'timestamp(3)',
+          "ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]",
+          { many: true },
+        ),
+      ]);
+
+      expect(output).toMatchInlineSnapshot(`
+        "// use prisma-8
+        // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
+
+        model RawListDefaults {
+          id          Int            @id
+          hugeBigInts BigInt[]       @default(dbgenerated("ARRAY['9007199254740993'::bigint, '-9007199254740993'::bigint]")) @noCheck(elementNotNull)
+          timestamps  Timestamp(3)[] @default(dbgenerated("ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]")) @noCheck(elementNotNull)
+
+          @@map("raw_list_defaults")
+        }
+        "
+      `);
+    });
+  });
+});

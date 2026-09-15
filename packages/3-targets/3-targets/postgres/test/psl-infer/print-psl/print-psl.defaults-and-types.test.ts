@@ -441,38 +441,4 @@ describe('printPsl', () => {
       "
     `);
   });
-
-  it('renders raw bigint defaults as numbers', () => {
-    const schemaIR = new SqlSchemaIR({
-      tables: {
-        counter: {
-          name: 'counter',
-          columns: {
-            id: {
-              name: 'id',
-              nativeType: 'int8',
-              nullable: false,
-              default: '9223372036854775807',
-            },
-          },
-          primaryKey: { columns: ['id'] },
-          foreignKeys: [],
-          uniques: [],
-          indexes: [],
-        },
-      },
-    });
-    const result = printPslFromSql(schemaIR);
-    expect(result).toMatchInlineSnapshot(`
-      "// use prisma-8
-      // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
-
-      model Counter {
-        id BigInt @id @default(9223372036854776000)
-
-        @@map("counter")
-      }
-      "
-    `);
-  });
 });

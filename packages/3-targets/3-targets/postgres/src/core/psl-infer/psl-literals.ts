@@ -67,22 +67,94 @@ export function escapePslString(value: string): string {
 }
 
 /**
- * Formats a resolved literal-default array as PSL literal-list syntax
- * (`[1, 2, 3]`, `["a", "b"]`, `[]`). PSL's list-literal grammar only accepts
- * string/number/boolean elements, so any other element (e.g. `null`, a
- * nested array/object) makes the value unrepresentable and this returns
- * `undefined`.
+ * Prints one default value as the PSL literal its field's codec accepts at `contract emit`, or
+ * returns `undefined` when that codec accepts no PSL literal for the value.
  */
-export function formatPslListLiteralValue(elements: readonly unknown[]): string | undefined {
+export type PslDefaultValueFormat = (value: unknown) => string | undefined;
+
+const INTEGER_TEXT = /^-?\d+$/;
+const DECIMAL_TEXT = /^-?\d+(?:\.\d+)?$/;
+
+/** PSL has no exponent syntax, so the decimal point moves to where the exponent puts it. */
+function plainNumeral(value: number): string {
+  const [coefficient = '', exponent] = String(value).split('e');
+  if (exponent === undefined) return coefficient;
+  const sign = coefficient.startsWith('-') ? '-' : '';
+  const [whole = '', fraction = ''] = coefficient.slice(sign.length).split('.');
+  const digits = `${whole}${fraction}`;
+  const point = whole.length + Number(exponent);
+  if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${sign}${digits}${'0'.repeat(point - digits.length)}`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+}
+
+export const formatPslValue: PslDefaultValueFormat = (value) => {
+  if (typeof value === 'string') return `"${escapePslString(value)}"`;
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  return undefined;
+};
+
+const formatNumber: PslDefaultValueFormat = (value) =>
+  typeof value === 'number' && Number.isFinite(value) ? plainNumeral(value) : undefined;
+
+/**
+ * `pg/int8@1` reads a PSL number only within the safe integer range. Past it the literal is
+ * rounded before the codec sees it, and a PSL string is not a `bigint`.
+ */
+const formatSafeInteger: PslDefaultValueFormat = (value) => {
+  const integer = typeof value === 'string' && INTEGER_TEXT.test(value) ? Number(value) : value;
+  return typeof integer === 'number' && Number.isSafeInteger(integer) ? String(integer) : undefined;
+};
+
+/**
+ * `pg/numeric@1` stores decimal text. A PSL number reaches it as a JavaScript number, which
+ * loses digits, and `db init` cannot read a stored number back.
+ */
+const formatDecimalText: PslDefaultValueFormat = (value) => {
+  const text = typeof value === 'number' && Number.isFinite(value) ? plainNumeral(value) : value;
+  return typeof text === 'string' && DECIMAL_TEXT.test(text) ? `"${text}"` : undefined;
+};
+
+/**
+ * The temporal codecs encode Temporal values, which no PSL literal is. A JSON codec reads a PSL
+ * string as a JSON string, so an object default would become text.
+ */
+const noLiteral: PslDefaultValueFormat = () => undefined;
+
+const DEFAULT_VALUE_FORMATS: ReadonlyMap<string, PslDefaultValueFormat> = new Map([
+  ['Int', formatNumber],
+  ['SmallInt', formatNumber],
+  ['Float', formatNumber],
+  ['Real', formatNumber],
+  ['BigInt', formatSafeInteger],
+  ['Numeric', formatDecimalText],
+  ['Date', noLiteral],
+  ['Time', noLiteral],
+  ['Timetz', noLiteral],
+  ['Timestamp', noLiteral],
+  ['Timestamptz', noLiteral],
+  ['Json', noLiteral],
+  ['Jsonb', noLiteral],
+]);
+
+/** The default value format for a field of a PSL type the Postgres type map resolves. */
+export function pslDefaultValueFormat(typeName: string): PslDefaultValueFormat {
+  return DEFAULT_VALUE_FORMATS.get(typeName) ?? formatPslValue;
+}
+
+/**
+ * Formats a resolved list default as PSL literal-list syntax (`[1, 2]`, `["a"]`, `[]`), or returns
+ * `undefined` when any element has no literal, such as `null` or a value `format` refuses.
+ */
+export function formatPslListLiteralValue(
+  elements: readonly unknown[],
+  format: PslDefaultValueFormat,
+): string | undefined {
   const parts: string[] = [];
   for (const element of elements) {
-    if (typeof element === 'string') {
-      parts.push(`"${escapePslString(element)}"`);
-    } else if (typeof element === 'number' || typeof element === 'boolean') {
-      parts.push(String(element));
-    } else {
-      return undefined;
-    }
+    const part = format(element);
+    if (part === undefined) return undefined;
+    parts.push(part);
   }
   return `[${parts.join(', ')}]`;
 }
