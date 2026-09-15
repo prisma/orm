@@ -49,3 +49,19 @@ describe('Bytes[] and DateTime[] list defaults', () => {
     });
   });
 });
+
+describe('dbgenerated() with no expression', () => {
+  it('describes an optional or list column with no default, as Prisma 7 creates it', async () => {
+    const { columns } = await loadFixtureTable('dbgenerated-without-expression-optional', 'T');
+    expect({ a: columns['a'], list: columns['list'] }).toEqual({
+      a: { nativeType: 'text', codecId: 'pg/text@1', nullable: true },
+      list: {
+        nativeType: 'text',
+        codecId: 'pg/text@1',
+        nullable: true,
+        many: true,
+        noCheck: ['elementNotNull'],
+      },
+    });
+  });
+});

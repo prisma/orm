@@ -46,6 +46,7 @@ describe('Prisma 7 fixtures', () => {
       'bigint-default-not-integer',
       'datetime-defaults',
       'dbgenerated-without-expression',
+      'dbgenerated-without-expression-optional',
       'defaults',
       'enum-default-member',
       'enum-namespace-mismatch',

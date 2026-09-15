@@ -271,10 +271,13 @@ function lowerFunction(
   const span = input.attribute.span;
   const callArgs = [...call.args()];
   if (fn === 'dbgenerated' && callArgs.length === 0) {
+    if (input.field.optional || input.field.list) {
+      return { storage: undefined, onCreate: undefined };
+    }
     input.diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_UNKNOWN_DEFAULT',
-        `${label}: @default(dbgenerated()) with no expression is not supported yet; without a default, Prisma 8 requires the value on create. Either remove the @default, which leaves the database unchanged but makes both clients require the value on create, or write the column's database default as @default(dbgenerated("<expression>")), which Prisma 7's next migration sets on the column.`,
+        `${label}: @default(dbgenerated()) with no expression is not supported yet on a required field, because without a column default Prisma 8 requires the value on create. Either remove the @default, which makes Prisma 7's next migration drop the column default (ALTER COLUMN ... DROP DEFAULT) and both clients require the value on create, or write the column's database default as @default(dbgenerated("<expression>")), which Prisma 7's next migration sets on the column.`,
         input.sourceId,
         span,
       ),

@@ -39,7 +39,7 @@ The package itself is target-neutral: the Postgres facade supplies the target pa
 | Explicit relations | Foreign keys with `onDelete` `restrict` (any foreign key field required) or `setNull` (every field optional) and `onUpdate` `cascade` unless given; paired through `@internal/sql-contract-psl/resolution`. |
 | Implicit many-to-many | Junction `_AToB` or `_Name`: columns `A` and `B`, primary key `(A, B)`, index `_AToB_B_index`, cascading foreign keys. |
 | `@ignore`, `@@ignore` | Omitted, together with relations over them. An `@ignore`d field that a key, an index, or a relation uses is an error. |
-| `view`, `Unsupported(...)`, unmapped `@db.*`, `relationMode = "prisma"`, generators on optional fields, `@updatedAt` with `@default`, index arguments, an `@ignore`d field that a key, index, or relation uses, `SetNull` or `SetDefault` over a required field that cannot take it, a JSON `null` default, `dbgenerated()` with no expression, a model named like an implicit junction | Hard errors (table below). |
+| `view`, `Unsupported(...)`, unmapped `@db.*`, `relationMode = "prisma"`, generators on optional fields, `@updatedAt` with `@default`, index arguments, an `@ignore`d field that a key, index, or relation uses, `SetNull` or `SetDefault` over a required field that cannot take it, a JSON `null` default, `dbgenerated()` with no expression on a required field, a model named like an implicit junction | Hard errors (table below). |
 
 ## Diagnostics
 
@@ -59,7 +59,7 @@ Codes are prefixed `PRISMA7_`:
 | `PRISMA7_JUNCTION_NAME_COLLISION` | A model has the name of an implicit many-to-many junction model (`PostToTag`, or the relation name). |
 | `PRISMA7_UNKNOWN_ATTRIBUTE` | An attribute Prisma 7 for Postgres does not have, or one this source does not read (`@@fulltext`, `@shardKey`, ...). |
 | `PRISMA7_TABLE_COLLISION` | Two models map to the same table in the same schema; reported on every model in the group. |
-| `PRISMA7_UNKNOWN_DEFAULT` | A `@default` value this source cannot read: an unknown function, an enum member on a non-enum field, a non-member, a non-integer `BigInt` literal, a malformed JSON or base64 literal, or `dbgenerated()` with no expression, which is not supported yet. |
+| `PRISMA7_UNKNOWN_DEFAULT` | A `@default` value this source cannot read: an unknown function, an enum member on a non-enum field, a non-member, a non-integer `BigInt` literal, a malformed JSON or base64 literal, or `dbgenerated()` with no expression on a required field, which is not supported yet. On an optional or list field it is a column with no default. |
 | `PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED` | A `Json` default of `"null"`, or a `Json[]` default holding it: the JSON value null cannot be told apart from SQL `NULL` in the contract. |
 | `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` | An ORM-side generator or `@updatedAt` on an optional field. |
 | `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` | `@updatedAt` combined with `@default`. |
