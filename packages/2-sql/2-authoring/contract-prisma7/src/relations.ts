@@ -299,25 +299,25 @@ export function lowerRelations(
           );
           continue;
         }
-        const anyNullable = attribute.fields.some(
+        const nullability = attribute.fields.map(
           (name) => model.columns.get(name)?.nullable === true,
         );
-        if (anyNullable !== field.optional) {
+        const anyNullable = nullability.includes(true);
+        if (anyNullable && !field.optional) {
           rejectFkSide(
             model,
             relationField,
             unresolved(
               label,
-              anyNullable
-                ? 'must be optional because one of its fields is optional.'
-                : 'must be required because every one of its fields is required.',
+              'must be optional because one of its fields is optional.',
               model.sourceId,
               field.span,
             ),
           );
           continue;
         }
-        const onDelete = attribute.onDelete ?? (anyNullable ? 'setNull' : 'restrict');
+        const onDelete =
+          attribute.onDelete ?? (nullability.includes(false) ? 'restrict' : 'setNull');
         const onUpdate = attribute.onUpdate ?? 'cascade';
         addForeignKey(model.modelName, {
           columns: localColumns,
@@ -340,7 +340,7 @@ export function lowerRelations(
           targetTableName: target.tableName,
           targetNamespaceId: target.namespaceId,
           relationName: effectiveRelationName(attribute, model.modelName, target.modelName),
-          nullable: field.optional,
+          nullable: anyNullable,
           localColumns,
           referencedColumns,
         });
