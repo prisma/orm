@@ -18,6 +18,7 @@ import {
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { prisma7Diagnostic } from './diagnostics';
+import { storedTemporalText, type TemporalNativeType } from './temporal-literals';
 
 export interface LoweredPrisma7Default {
   readonly storage: ColumnDefault | undefined;
@@ -146,8 +147,7 @@ function scalarValue(
   return unknown('holds a value this contract source does not read.', span);
 }
 
-const RAW_LITERAL_TYPES: ReadonlySet<string> = new Set([
-  'bytea',
+const TEMPORAL_NATIVE_TYPES: ReadonlySet<string> = new Set<TemporalNativeType>([
   'timestamp',
   'timestamptz',
   'date',
@@ -155,20 +155,25 @@ const RAW_LITERAL_TYPES: ReadonlySet<string> = new Set([
   'timetz',
 ]);
 
+function isTemporalNativeType(nativeType: string): nativeType is TemporalNativeType {
+  return TEMPORAL_NATIVE_TYPES.has(nativeType);
+}
+
 /**
- * A `Bytes` or `DateTime` string literal is carried as the SQL literal Prisma 7
- * writes (`'\x68656c6c6f'`, `'2024-01-01T00:00:00.000Z'`) rather than through
- * the column codec, whose JSON form (base64, a Temporal instant) is not what
- * introspection reads back; verify parses both sides with the same parser.
+ * A `Bytes` or `DateTime` string literal is carried as the SQL literal of the
+ * default Postgres stores (`'\x68656c6c6f'`, `'2024-01-02 03:04:05'`) rather than
+ * through the column codec, whose JSON form (base64, a Temporal value) is not
+ * what introspection reads back; verify parses both sides with the same parser.
  */
 function rawSqlLiteral(
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
 ): string | undefined {
-  if (!RAW_LITERAL_TYPES.has(input.nativeType)) return undefined;
+  const { nativeType } = input;
+  if (nativeType !== 'bytea' && !isTemporalNativeType(nativeType)) return undefined;
   const text = StringLiteralExprAst.cast(expression.syntax)?.value();
   if (text === undefined) return undefined;
-  const value = input.nativeType === 'bytea' ? base64ToHex(text) : text;
+  const value = nativeType === 'bytea' ? base64ToHex(text) : storedTemporalText(text, nativeType);
   return value === undefined ? undefined : `'${value.replace(/'/g, "''")}'`;
 }
 

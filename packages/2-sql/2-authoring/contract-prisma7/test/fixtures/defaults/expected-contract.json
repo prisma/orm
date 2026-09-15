@@ -233,7 +233,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "00b0dfa2b8177c077787d7d8b481dcc860c4c8a1e5c6bc467a5f97f189a12661",
+    "storageHash": "74f9eeb6d90aae810c5f343d3fdc8631c96e21f518e00fbbc623c9de00cb4839",
     "namespaces": {
       "public": {
         "id": "public",
@@ -360,7 +360,7 @@
                   },
                   "default": {
                     "kind": "function",
-                    "expression": "'2024-01-01T00:00:00.000Z'"
+                    "expression": "'2024-01-01 00:00:00'"
                   }
                 },
                 "jsonLiteral": {
