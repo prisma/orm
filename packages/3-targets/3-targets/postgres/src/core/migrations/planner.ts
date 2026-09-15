@@ -55,6 +55,7 @@ import {
 import type { PostgresOpFactoryCall } from './op-factory-call';
 import {
   CreatePostgresRlsPolicyCall,
+  DropColumnCall,
   DropPostgresRlsPolicyCall,
   RenameCheckConstraintCall,
   RenameIndexCall,
@@ -350,12 +351,14 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         resolvePostgresCallControlPolicySubject(call, options.contract),
       resolveFactoryName: (call) => call.factoryName,
     });
-    const calls = [
+    // RLS policy drops must precede column drops on the same table: Postgres
+    // rejects DROP COLUMN while a policy depends on the column (2BP01).
+    const calls = orderPolicyDropsBeforeColumnDrops([
       ...result.value.calls,
       ...indexRenamePartition.kept,
       ...schemaDiffPartition.kept,
       ...fieldEventPartition.kept,
-    ];
+    ]);
     // Byte-identical suppression warnings (the same subject suppressed by
     // more than one partition) collapse to one; distinct subjects — e.g. a
     // table-level suppression beside a policy-level one naming its
@@ -860,6 +863,54 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
  * combined tree diff, routed to `planPostgresSchemaDiff` instead of
  * `planIssues`.
  */
+/**
+ * Hoists an RLS policy drop ahead of the first column drop on the same
+ * table when it currently sits behind it. Postgres refuses `DROP COLUMN`
+ * while a policy depends on the column (2BP01); a policy drop only needs
+ * its table to exist, so the hoist is always safe. Calls that are already
+ * correctly ordered keep their exact positions.
+ */
+function orderPolicyDropsBeforeColumnDrops(
+  calls: readonly PostgresOpFactoryCall[],
+): PostgresOpFactoryCall[] {
+  const tableKey = (schemaName: string, tableName: string) => `${schemaName}.${tableName}`;
+  const firstColumnDrop = new Map<string, number>();
+  calls.forEach((call, index) => {
+    if (call instanceof DropColumnCall) {
+      const key = tableKey(call.schemaName, call.tableName);
+      if (!firstColumnDrop.has(key)) {
+        firstColumnDrop.set(key, index);
+      }
+    }
+  });
+  const insertBefore = new Map<number, PostgresOpFactoryCall[]>();
+  const skipped = new Set<number>();
+  calls.forEach((call, index) => {
+    if (!(call instanceof DropPostgresRlsPolicyCall)) {
+      return;
+    }
+    const target = firstColumnDrop.get(tableKey(call.schemaName, call.tableName));
+    if (target !== undefined && index > target) {
+      skipped.add(index);
+      insertBefore.set(target, [...(insertBefore.get(target) ?? []), call]);
+    }
+  });
+  if (skipped.size === 0) {
+    return [...calls];
+  }
+  const output: PostgresOpFactoryCall[] = [];
+  calls.forEach((call, index) => {
+    const pending = insertBefore.get(index);
+    if (pending !== undefined) {
+      output.push(...pending);
+    }
+    if (!skipped.has(index)) {
+      output.push(call);
+    }
+  });
+  return output;
+}
+
 function isPolicyDiffIssue(issue: SchemaDiffIssue<SqlSchemaDiffNode>): boolean {
   const node = issue.expected ?? issue.actual;
   return node !== undefined && PostgresPolicySchemaNode.is(node);
