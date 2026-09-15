@@ -54,7 +54,7 @@ export function ignoredFieldReferenced(input: {
   const one = input.fieldNames.length === 1;
   return prisma7Diagnostic(
     'PRISMA7_IGNORED_FIELD_REFERENCED',
-    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${input.usedBy} uses ${one ? 'it' : 'them'}, and Prisma 7 still creates the ${input.constraint} that includes ${one ? 'its column' : 'their columns'}. Remove @ignore from ${fields}; Prisma 7's next migration is then empty.`,
+    `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${input.usedBy} uses ${one ? 'it' : 'them'}, and Prisma 7 still creates the ${input.constraint} that includes ${one ? 'its column' : 'their columns'}. Remove @ignore from ${fields}; Prisma 7's next migration is then empty, and ${one ? 'the field appears' : 'the fields appear'} in the Prisma 7 client again.`,
     input.sourceId,
     input.span,
   );

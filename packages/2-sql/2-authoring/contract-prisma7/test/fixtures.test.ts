@@ -103,6 +103,7 @@ describe('Prisma 7 fixtures', () => {
       'unknown-attribute',
       'unknown-default',
       'unsupported-type',
+      'unsupported-type-model-ignored',
       'updated-at',
       'updated-at-optional',
       'updated-at-with-default',

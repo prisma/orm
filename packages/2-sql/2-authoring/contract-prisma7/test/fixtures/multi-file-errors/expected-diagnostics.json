@@ -9,6 +9,6 @@
     "code": "PRISMA7_UNSUPPORTED_TYPE",
     "file": "b-models.prisma",
     "line": 3,
-    "message": "Field \"User.search\" has type \"Unsupported(...)\", which has no Prisma 8 codec, so a model with this field cannot use this contract source yet. Prisma 7 rejects @ignore on an Unsupported field, and removing the field drops its column on Prisma 7's next migration."
+    "message": "Field \"User.search\" has type \"Unsupported(...)\", which has no Prisma 8 codec, so model \"User\" cannot use this contract source while it has the field. Prisma 7 rejects @ignore on an Unsupported field, and removing the field drops its column on Prisma 7's next migration. Adding @@ignore to model \"User\" keeps the model out of the contract: Prisma 7's next migration is empty, but the model disappears from the Prisma 7 client too, and any relation field that points to it needs @ignore."
   }
 ]
