@@ -10,7 +10,6 @@ import {
   APP_SPACE_ID,
   type MigrationOperationPolicy,
 } from '@internal/framework-components/control';
-import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/types';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
 import { PostgresNativeEnum, postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -122,7 +121,76 @@ const listDefaults: readonly ListDefaultCase[] = [
   },
 ];
 
+interface EnumList {
+  readonly column: string;
+  readonly entityName: string;
+  readonly typeName: string;
+  readonly members: readonly string[];
+}
+
+const publicSchema = 'public';
 const auditSchema = 'audit';
+
+const publicEnumLists: readonly EnumList[] = [
+  { column: 'sortOrders', entityName: 'SortOrder', typeName: 'order', members: ['asc', 'desc'] },
+  { column: 'spacedNames', entityName: 'Spaced', typeName: 'my enum', members: ['a b', 'c'] },
+  { column: 'quotedNames', entityName: 'Quoted', typeName: 'my"enum', members: ['x', 'y'] },
+];
+
+const auditEnumList: EnumList = {
+  column: 'actions',
+  entityName: 'AuditAction',
+  typeName: 'AuditAction',
+  members: ['CREATE', 'DELETE'],
+};
+
+function enumListColumns(
+  schema: string,
+  enumLists: readonly EnumList[],
+  withDefaults: boolean,
+): Record<string, StorageColumnInput> {
+  return Object.fromEntries(
+    enumLists.map((enumList): [string, StorageColumnInput] => {
+      const nativeType =
+        schema === publicSchema ? enumList.typeName : `${schema}.${enumList.typeName}`;
+      return [
+        enumList.column,
+        {
+          nativeType,
+          codecId: 'pg/enum@1',
+          nullable: true,
+          many: true,
+          noCheck: ['elementNotNull'],
+          typeParams: { typeName: nativeType },
+          valueSet: {
+            plane: 'storage',
+            entityKind: 'valueSet',
+            namespaceId: schema,
+            entityName: enumList.entityName,
+          },
+          ...(withDefaults ? { default: { kind: 'literal', value: [...enumList.members] } } : {}),
+        },
+      ];
+    }),
+  );
+}
+
+function enumEntries(enumLists: readonly EnumList[]) {
+  return {
+    native_enum: Object.fromEntries(
+      enumLists.map((enumList) => [
+        enumList.entityName,
+        new PostgresNativeEnum({ typeName: enumList.typeName, members: [...enumList.members] }),
+      ]),
+    ),
+    valueSet: Object.fromEntries(
+      enumLists.map((enumList) => [
+        enumList.entityName,
+        { kind: 'valueSet', values: [...enumList.members] },
+      ]),
+    ),
+  };
+}
 
 function auditNamespace(withDefaults: boolean) {
   return postgresCreateNamespace({
@@ -132,23 +200,7 @@ function auditNamespace(withDefaults: boolean) {
         AuditLog: {
           columns: {
             id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
-            actions: {
-              nativeType: 'audit.AuditAction',
-              codecId: 'pg/enum@1',
-              nullable: true,
-              many: true,
-              noCheck: ['elementNotNull'],
-              typeParams: { typeName: 'audit.AuditAction' },
-              valueSet: {
-                plane: 'storage',
-                entityKind: 'valueSet',
-                namespaceId: auditSchema,
-                entityName: 'AuditAction',
-              },
-              ...(withDefaults
-                ? { default: { kind: 'literal', value: ['CREATE', 'DELETE'] } }
-                : {}),
-            },
+            ...enumListColumns(auditSchema, [auditEnumList], withDefaults),
           },
           primaryKey: { columns: ['id'] },
           uniques: [],
@@ -156,13 +208,7 @@ function auditNamespace(withDefaults: boolean) {
           foreignKeys: [],
         },
       },
-      native_enum: {
-        AuditAction: new PostgresNativeEnum({
-          typeName: 'AuditAction',
-          members: ['CREATE', 'DELETE'],
-        }),
-      },
-      valueSet: { AuditAction: { kind: 'valueSet', values: ['CREATE', 'DELETE'] } },
+      ...enumEntries([auditEnumList]),
     },
   });
 }
@@ -200,14 +246,15 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
     storage: new SqlStorage({
       storageHash: coreHash(hash),
       namespaces: {
-        [UNBOUND_NAMESPACE_ID]: postgresCreateNamespace({
-          id: UNBOUND_NAMESPACE_ID,
+        [publicSchema]: postgresCreateNamespace({
+          id: asNamespaceId(publicSchema),
           entries: {
             table: {
               Lists: {
                 columns: {
                   id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
                   ...columns,
+                  ...enumListColumns(publicSchema, publicEnumLists, withDefaults),
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -215,6 +262,7 @@ function buildContract(withDefaults: boolean): Contract<SqlStorage> {
                 foreignKeys: [],
               },
             },
+            ...enumEntries(publicEnumLists),
           },
         }),
         [auditSchema]: auditNamespace(withDefaults),

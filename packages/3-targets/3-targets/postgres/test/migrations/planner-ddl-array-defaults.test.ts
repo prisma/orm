@@ -1,6 +1,10 @@
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
-import { renderDefaultLiteral } from '../../src/core/migrations/planner-ddl-builders';
+import {
+  buildColumnDefaultSql,
+  buildColumnTypeSql,
+  renderDefaultLiteral,
+} from '../../src/core/migrations/planner-ddl-builders';
 
 function arrayColumn(nativeType: string): StorageColumn {
   return {
@@ -53,17 +57,31 @@ describe('renderDefaultLiteral array columns', () => {
   );
 
   it.each([
-    { nativeType: 'audit.AuditAction[]', cast: '"audit"."AuditAction"[]' },
-    { nativeType: 'AuditAction', cast: '"AuditAction"[]' },
-    { nativeType: 'auth.oauth_client_type', cast: '"auth"."oauth_client_type"[]' },
-    { nativeType: 'user_role', cast: 'user_role[]' },
-    { nativeType: '"audit"."AuditAction"[]', cast: '"audit"."AuditAction"[]' },
-    { nativeType: 'character varying(32)', cast: 'character varying(32)[]' },
-  ])('casts a $nativeType list to $cast', ({ nativeType, cast }) => {
-    expect(renderDefaultLiteral(['CREATE'], arrayColumn(nativeType))).toBe(
-      `ARRAY['CREATE']::${cast}`,
-    );
-  });
+    { typeName: 'order', cast: '"order"[]' },
+    { typeName: 'my enum', cast: '"my enum"[]' },
+    { typeName: 'my"enum', cast: '"my""enum"[]' },
+    { typeName: 'user_role', cast: '"user_role"[]' },
+    { typeName: 'audit.AuditAction', cast: '"audit"."AuditAction"[]' },
+  ])(
+    'casts a list of the enum $typeName to the column type, quoted as DDL writes it',
+    ({ typeName, cast }) => {
+      const enumList: StorageColumn = {
+        nativeType: typeName,
+        codecId: 'pg/enum@1',
+        nullable: true,
+        many: true,
+        typeParams: { typeName },
+      } as StorageColumn;
+      const columnTypeSql = buildColumnTypeSql(enumList, new Map(), {}, false);
+
+      expect(
+        buildColumnDefaultSql(
+          { kind: 'literal', value: ['asc'] },
+          { many: true, nativeType: columnTypeSql },
+        ),
+      ).toBe(`DEFAULT ARRAY['asc']::${cast}`);
+    },
+  );
 
   it('renders an ARRAY[...] expression without a cast when no native type is known', () => {
     expect(renderDefaultLiteral(['a'], arrayColumn(''))).toBe("ARRAY['a']");

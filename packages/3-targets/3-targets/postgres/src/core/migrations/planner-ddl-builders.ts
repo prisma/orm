@@ -49,7 +49,10 @@ function assertSafeDefaultExpression(expression: string): void {
  *   like ALTER COLUMN TYPE where pseudo-types are invalid.
  */
 export function buildColumnTypeSql(
-  column: StorageColumn,
+  column: Pick<
+    StorageColumn,
+    'nativeType' | 'codecId' | 'many' | 'typeParams' | 'typeRef' | 'default'
+  >,
   codecHooks: ReadonlyMap<string, CodecControlHooks>,
   storageTypes: Record<string, StorageTypeInstance> = {},
   allowPseudoTypes = true,
@@ -192,7 +195,8 @@ export function renderDefaultLiteral(
  * An `ARRAY[...]` of quoted elements has type `text[]`, which Postgres does not assign to a list of
  * numbers, decimals, timestamps or enums, so the constructor is cast to the list type. Each element
  * is the text Postgres reads for its type: an `int8` or `numeric` value as decimal text, a temporal
- * value as ISO text. `nativeType` may be the element type or the list type.
+ * value as ISO text. `nativeType` is the element type or the list type, written as SQL, so a
+ * user-defined type name arrives already quoted.
  */
 function renderArrayLiteralDefault(elements: unknown[], nativeType: string): string {
   if (elements.length === 0) {
@@ -200,23 +204,5 @@ function renderArrayLiteralDefault(elements: unknown[], nativeType: string): str
   }
   const rendered = `ARRAY[${elements.map((el) => renderDefaultLiteral(el)).join(', ')}]`;
   if (nativeType === '') return rendered;
-  const elementType = nativeType.endsWith('[]') ? nativeType.slice(0, -2) : nativeType;
-  return `${rendered}::${elementTypeSql(elementType)}[]`;
-}
-
-/**
- * A builtin type name is lowercase words, any of which may carry a modifier: `int8`,
- * `numeric(65,30)`, `character varying(32)`.
- */
-const BUILTIN_TYPE_NAME =
-  /^[a-z_][a-z0-9_]*(?:\(\d+(?:,\s*\d+)?\))?(?: [a-z_][a-z0-9_]*(?:\(\d+(?:,\s*\d+)?\))?)*$/;
-
-/**
- * Any other type name, such as the native enum `audit.AuditAction`, is quoted per segment, since
- * Postgres folds an unquoted name to lowercase. A name that is already quoted is used as it is.
- */
-function elementTypeSql(elementType: string): string {
-  return elementType.includes('"') || BUILTIN_TYPE_NAME.test(elementType)
-    ? elementType
-    : quoteQualifiedName(elementType);
+  return `${rendered}::${nativeType.endsWith('[]') ? nativeType : `${nativeType}[]`}`;
 }

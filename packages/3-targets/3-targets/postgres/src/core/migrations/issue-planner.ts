@@ -696,6 +696,7 @@ function mapColumnDefaultNodeIssue(
   schemaName: string,
   tableName: string,
   columnName: string,
+  codecHooks: ReadonlyMap<string, CodecControlHooks>,
 ): Result<readonly PostgresOpFactoryCall[], SqlPlannerConflict> {
   if (issueOutcome(issue) === 'not-expected') {
     return ok([new DropDefaultCall(schemaName, tableName, columnName)]);
@@ -706,7 +707,7 @@ function mapColumnDefaultNodeIssue(
     SqlColumnDefaultIR,
     'a not-found/not-equal column-default issue always carries the expected default node'
   >(issue.expected);
-  const defaultSql = renderColumnDefaultSql(defaultNode);
+  const defaultSql = renderColumnDefaultSql(defaultNode, codecHooks);
   if (!defaultSql) return ok([]);
   return ok([
     new SetDefaultCall(
@@ -935,7 +936,7 @@ export function mapNodeIssueToCall(
           ),
         );
       }
-      return mapColumnDefaultNodeIssue(issue, schemaName, tableName, columnName);
+      return mapColumnDefaultNodeIssue(issue, schemaName, tableName, columnName, ctx.codecHooks);
     }
     case RelationalSchemaNodeKind.primaryKey:
       return mapPrimaryKeyNodeIssue(issue, schemaName, tableName);

@@ -29,30 +29,44 @@ function columnLike(
   StorageColumn,
   'nativeType' | 'codecId' | 'nullable' | 'many' | 'typeParams' | 'typeRef' | 'default'
 > {
-  if (column.codecRef === undefined || column.codecBaseNativeType === undefined) {
+  return {
+    ...columnTypeLike(`column "${column.name}"`, column),
+    nullable: column.nullable,
+    ...ifDefined('default', column.resolvedDefault),
+  };
+}
+
+type ColumnCodecIdentity = Pick<
+  SqlColumnIR,
+  'codecRef' | 'codecBaseNativeType' | 'codecNamedType' | 'many'
+>;
+
+function columnTypeLike(
+  owner: string,
+  identity: ColumnCodecIdentity,
+): Pick<StorageColumn, 'nativeType' | 'codecId' | 'many' | 'typeParams' | 'typeRef'> {
+  if (identity.codecRef === undefined || identity.codecBaseNativeType === undefined) {
     throw new InternalError(
-      `columnLike: expected column "${column.name}" carries no codec identity — the expected tree must be derived via contractToSchemaIR for planning`,
+      `columnTypeLike: expected ${owner} carries no codec identity — the expected tree must be derived via contractToSchemaIR for planning`,
     );
   }
   return {
-    nativeType: column.codecBaseNativeType,
-    codecId: column.codecRef.codecId,
-    nullable: column.nullable,
+    nativeType: identity.codecBaseNativeType,
+    codecId: identity.codecRef.codecId,
     // `column.many` is unset on contract-derived columns (array-ness rides
     // on the `nativeType` `[]` suffix there instead) — `codecRef.many`
     // carries it. Hand-built/introspected columns set `column.many` directly.
-    ...ifDefined('many', column.many ?? column.codecRef.many),
+    ...ifDefined('many', identity.many ?? identity.codecRef.many),
     ...ifDefined(
       'typeParams',
-      column.codecRef.typeParams !== undefined
+      identity.codecRef.typeParams !== undefined
         ? blindCast<
             Record<string, unknown>,
             'CodecRef.typeParams is JsonValue-shaped; the DDL builders only ever read it as the Record the contract column originally carried'
-          >(column.codecRef.typeParams)
+          >(identity.codecRef.typeParams)
         : undefined,
     ),
-    ...(column.codecNamedType ? { typeRef: '<resolved>' } : {}),
-    ...ifDefined('default', column.resolvedDefault),
+    ...(identity.codecNamedType ? { typeRef: '<resolved>' } : {}),
   };
 }
 
@@ -107,12 +121,17 @@ export function resolveColumnTemporaryDefault(
 
 /**
  * The column's `SET DEFAULT` clause SQL, resolved from a column-default
- * diff node. `''` when the node carries no resolved default.
+ * diff node. `''` when the node carries no resolved default. A list default
+ * is cast to the column type as the column's DDL writes it.
  */
-export function renderColumnDefaultSql(defaultNode: SqlColumnDefaultIR): string {
+export function renderColumnDefaultSql(
+  defaultNode: SqlColumnDefaultIR,
+  codecHooks: ReadonlyMap<string, CodecControlHooks>,
+): string {
   if (defaultNode.resolved === undefined) return '';
+  const typeLike = columnTypeLike('column default', defaultNode);
   return buildColumnDefaultSql(defaultNode.resolved, {
-    nativeType: defaultNode.nativeTypeContext ?? '',
-    ...ifDefined('many', defaultNode.many),
+    nativeType: buildColumnTypeSql(typeLike, codecHooks, {}, false),
+    ...ifDefined('many', typeLike.many),
   });
 }
