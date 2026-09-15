@@ -59,6 +59,7 @@ describe('Prisma 7 fixtures', () => {
       'implicit-many-to-many',
       'index-argument-unsupported',
       'indexes',
+      'json-null-default',
       'junction-composite-id',
       'junction-name-collision',
       'keys',

@@ -1,0 +1,7 @@
+[
+  {
+    "code": "PRISMA7_CONTRACT_INVALID",
+    "file": "schema.prisma",
+    "message": "This schema gives a contract that Prisma 8 rejects, and the Prisma 7 contract source has no specific diagnostic for the cause: Namespace \"public\" table \"T\" column \"required\" is NOT NULL but has a literal null default"
+  }
+]

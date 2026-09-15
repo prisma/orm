@@ -1,5 +1,6 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { prisma7Schema } from '../src/provider';
@@ -147,6 +148,35 @@ describe('prisma7Schema', () => {
             code: 'PRISMA7_SCHEMA_READ_FAILED',
             sourceId: 'prisma/schema',
             message: 'The schema directory "prisma/schema" contains no .prisma file.',
+          },
+        ],
+      },
+    });
+  });
+
+  it('returns a structured error thrown while the contract is built as PRISMA7_CONTRACT_INVALID at the input path', async () => {
+    const dir = scratchDir('contract-invalid');
+    const schemaFile = join(dir, 'schema.prisma');
+    writeFileSync(
+      schemaFile,
+      'datasource db {\n  provider = "postgresql"\n}\n\nmodel A {\n  id Int @id\n}\n',
+    );
+    const config = prisma7Schema('prisma/schema.prisma', {
+      ...postgresPrisma7Options,
+      createNamespace: () => {
+        throw structuredError('CONTRACT.VALIDATION_FAILED', 'the target rejected the namespace');
+      },
+    });
+    const result = await config.source.load(postgresSourceContext([schemaFile]));
+    expect(result).toMatchObject({
+      ok: false,
+      failure: {
+        diagnostics: [
+          {
+            code: 'PRISMA7_CONTRACT_INVALID',
+            sourceId: 'prisma/schema.prisma',
+            message:
+              'This schema gives a contract that Prisma 8 rejects, and the Prisma 7 contract source has no specific diagnostic for the cause: the target rejected the namespace',
           },
         ],
       },

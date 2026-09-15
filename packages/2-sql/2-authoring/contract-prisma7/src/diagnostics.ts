@@ -18,7 +18,8 @@ export type Prisma7DiagnosticCode =
   | 'PRISMA7_INDEX_ARGUMENT_UNSUPPORTED'
   | 'PRISMA7_IGNORED_FIELD_REFERENCED'
   | 'PRISMA7_UNKNOWN_ATTRIBUTE'
-  | 'PRISMA7_SCHEMA_READ_FAILED';
+  | 'PRISMA7_SCHEMA_READ_FAILED'
+  | 'PRISMA7_CONTRACT_INVALID';
 
 export function prisma7Diagnostic(
   code: Prisma7DiagnosticCode,

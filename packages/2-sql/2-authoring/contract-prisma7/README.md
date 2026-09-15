@@ -63,6 +63,7 @@ Codes are prefixed `PRISMA7_`:
 | `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` | `@updatedAt` combined with `@default`. |
 | `PRISMA7_IGNORED_FIELD_REFERENCED` | An `@ignore`d field that `@id`, `@unique`, `@@id`, `@@unique`, `@@index`, or a relation's `fields:` uses; Prisma 7 still creates the primary key, index, or foreign key over its column. |
 | `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED` | An index argument Prisma 8 cannot carry (`sort`, `length`, `ops`, an unknown type) or a field that is not a column. |
+| `PRISMA7_CONTRACT_INVALID` | The interpreted contract failed a check `contract emit` runs, or building it threw a structured error, for a cause no specific diagnostic covers. Reported at the input path, so `load` never throws for a user's schema. |
 | `PRISMA7_SCHEMA_READ_FAILED` | The input path could not be read, or a schema directory holds no `.prisma` file. |
 
 Unknown top-level blocks keep the parser's `PSL_UNSUPPORTED_TOP_LEVEL_BLOCK` code.
