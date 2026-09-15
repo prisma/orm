@@ -7,5 +7,5 @@
     "resolveJsonModule": true
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
-  "exclude": ["dist"]
+  "exclude": ["dist", "test/fixture-app/fixtures"]
 }

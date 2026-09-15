@@ -1,0 +1,24 @@
+A Prisma 7 user can now run `prisma orm init` in their existing project and come out set up for Prisma 8 beside Prisma 7, with `prisma/schema.prisma` as the Prisma 8 contract source. Until now the public upgrade guide asked for about fifteen hand edits before the first Prisma 8 command would run; every one of them was mechanical and identical across projects. Init does them under one consent, and stops where the guide's judgment work begins.
+
+## Changes
+
+- **Detection** (`packages/1-framework/3-tooling/cli/src/commands/init/prisma7-detect.ts`, tooling layer): init evaluates `prisma.config.*` with the same loader the CLI uses and identifies a Prisma 7 config by the missing `$prismaConfig` marker, the check behind `CONFIG.VERSION_MARKER_MISSING`. It reads only `schema` from it. The provider comes from the schema's `datasource` block; the Prisma 7 CLI version from `package.json` or the installed package. `@internal/config-loader` gains `evaluateConfigModule`, which returns a config file's raw default export without validation.
+- **Inputs** (`src/orm/init-inputs.ts`): a new flag, `--from-prisma7-schema <path>`, and, without it, one interactive question when a Prisma 7 project is found. The question has no default, so `--yes` and non-interactive sessions never answer it. Prisma 7 inputs only fill defaults; `--target` overrides the provider. `--from-prisma7-schema` with `--schema-path` or `--authoring` is an error. Mongo and other providers, an unreadable or colliding config, and a path with no `datasource` block are refused before any write, each with its own error code.
+- **Side-by-side setup** (`src/commands/init/prisma7-side-by-side.ts`, `src/orm/init-scaffold.ts`): when an earlier `prisma` CLI is declared, init asks the existing token consent (`--confirm <dir>` non-interactively) and then renames `prisma.config.<ext>` to `prisma7.config.<ext>`, rewrites its `prisma/config` import to `@prisma/prisma7/config`, rewrites scripts that invoke the `prisma` binary to `prisma7`, and installs `@prisma/prisma7@7` plus, when `@prisma/client` is declared below the 7 line, `@prisma/client@7`. The rename is planned before any write and refused if the target exists. Prisma 7 since 7.10.0 discovers `prisma7.config.*` first, so nothing else in the project changes.
+- **Scaffold**: no starter schema. `prisma.config.ts` writes `contract: prisma7Schema('prisma/schema.prisma', { output: 'src/prisma/contract.json' })`; `db.ts` and the emitted artifacts go under `src/prisma/`, the same layout as a fresh init, and `prisma/` is never written to. `prisma-8.md` describes the transition loop instead of a starter sample.
+- **Output** (`src/commands/init/output.ts`, `src/orm/init-blocks.ts`): `authoring: 'prisma7'`, a `filesRenamed` list, and a `prisma7` block in the `--json` document; the next steps are the transition routine: set `DATABASE_URL`, `prisma db sign`, move routes one at a time, re-run `prisma contract emit` and `prisma db sign` after each `prisma7 migrate dev`, `prisma7 generate` when the client moved, and the guide's cutover section.
+- **Docs**: `packages/1-framework/3-tooling/cli/README.md` gains a `prisma orm init` section; `docs/reference/error-reference.md` gains the six new codes.
+- **Tests**: a checked-in Prisma 7 fixture project under `test/fixture-app/fixtures/prisma7-project/` (its manifest stored as `package.json.fixture` so it is not a workspace importer), 90 new tests across detection, inputs, scaffold, install, and output, including a byte-identical check on `prisma/` before and after the run.
+
+## Why
+
+Init installs `prisma@latest`, which in an untouched Prisma 7 project replaces the Prisma 7 CLI, so the guide's "set Prisma 7 aside" edits have to happen before the install or `prisma migrate dev` runs Prisma 8 afterwards. Doing them inside init under one consent is what lets the whole thing be one run instead of "do section 1 by hand, then run init".
+
+Init never connects to the database beyond the opt-in `--probe-db` version check and never signs. A database may not be reachable when init runs, and init's job is to set up what Prisma 8 needs to operate in the project, the way `git init` does, not to migrate the application. `db sign` is the first printed next step.
+
+The connection line in the new config is `process.env['DATABASE_URL']`, as init writes today. Carrying the Prisma 7 config's own `datasource.url` expression across is deferred.
+
+## Not in this PR
+
+- The end-to-end test that runs the real `contract emit` and `prisma db sign` against a dev database built from the fixture's Prisma 7 migrations. It needs `prisma7Schema` from `@prisma/orm-postgres/config`, which lands in #30287. Until then the init tests use the injected emit and a test-only shim of that export; the shim is marked for removal.
+- Mongo. A `mongodb` provider is refused with `CLI.INIT_PRISMA7_MONGO_UNSUPPORTED` until the Mongo Prisma 7 source exists.

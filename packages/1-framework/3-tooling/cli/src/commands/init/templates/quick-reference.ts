@@ -72,3 +72,33 @@ function requirementsBlock(target: TargetId, pkgRun: string): string {
     `- The CLI never connects to your database without explicit consent. Pass \`--probe-db\` to \`${pkgRun} orm init\` if you want \`init\` to verify the server version itself.`,
   ].join('\n');
 }
+
+export const prisma7Variables = [
+  'schemaPath',
+  'outputDir',
+  'dbImportPath',
+  'pkgRun',
+  'pkg',
+  'configEntrypoint',
+  'requirements',
+] as const;
+
+/** The quick reference for a project whose contract source is its Prisma 7 schema. */
+export function prisma7QuickReferenceMd(
+  target: TargetId,
+  schemaPath: string,
+  outputDir: string,
+  pkgRun: string,
+  resolveImportSpecifier: ImportSpecifierResolver = keepInternalSpecifiers,
+): string {
+  const vars: Record<(typeof prisma7Variables)[number], string> = {
+    schemaPath,
+    outputDir,
+    dbImportPath: `./${outputDir}/db`,
+    pkgRun,
+    pkg: targetPackageName(target, resolveImportSpecifier),
+    configEntrypoint: targetEntrypoint(target, 'config', resolveImportSpecifier),
+    requirements: requirementsBlock(target, pkgRun),
+  };
+  return renderTemplate('quick-reference-prisma7.md', prisma7Variables, vars);
+}
