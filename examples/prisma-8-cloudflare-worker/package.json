@@ -27,8 +27,8 @@
     "temporal-polyfill": "^1.0.4"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "0.20.3",
-    "@cloudflare/workers-types": "5.20260804.1",
+    "@cloudflare/vitest-pool-workers": "0.22.0",
+    "@cloudflare/workers-types": "5.20260904.1",
     "@prisma/cli-engine": "0.4.0",
     "@repo/tsconfig": "workspace:8.0.0-rc.11",
     "@types/node": "catalog:",
@@ -36,7 +36,7 @@
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "^4.1.10",
-    "wrangler": "4.119.0"
+    "wrangler": "4.129.0"
   },
   "version": "8.0.0-rc.11"
 }
