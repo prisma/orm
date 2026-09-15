@@ -12,6 +12,8 @@ export type Prisma7DiagnosticCode =
   | 'PRISMA7_JUNCTION_ID_UNSUPPORTED'
   | 'PRISMA7_JUNCTION_NAME_COLLISION'
   | 'PRISMA7_TABLE_COLLISION'
+  | 'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED'
+  | 'PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED'
   | 'PRISMA7_UNKNOWN_DEFAULT'
   | 'PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED'
   | 'PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED'
@@ -30,8 +32,8 @@ export function prisma7Diagnostic(
   return { code, message, sourceId, ...(span !== undefined ? { span } : {}) };
 }
 
-function quotedList(names: readonly string[]): string {
-  const quoted = names.map((name) => `"${name}"`);
+export function fieldList(modelName: string, fieldNames: readonly string[]): string {
+  const quoted = fieldNames.map((name) => `"${modelName}.${name}"`);
   const last = quoted.pop();
   return quoted.length === 0 ? `${last}` : `${quoted.join(', ')} and ${last}`;
 }
@@ -44,7 +46,7 @@ export function ignoredFieldReferenced(input: {
   readonly sourceId: string;
   readonly span: PslSpan;
 }): ContractSourceDiagnostic {
-  const fields = quotedList(input.fieldNames.map((name) => `${input.modelName}.${name}`));
+  const fields = fieldList(input.modelName, input.fieldNames);
   const one = input.fieldNames.length === 1;
   return prisma7Diagnostic(
     'PRISMA7_IGNORED_FIELD_REFERENCED',

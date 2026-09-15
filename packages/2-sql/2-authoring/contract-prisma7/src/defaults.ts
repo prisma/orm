@@ -13,6 +13,7 @@ import {
   FunctionCallAst,
   IdentifierAst,
   NumberLiteralExprAst,
+  printSyntax,
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
@@ -100,6 +101,18 @@ function scalarValue(
   unknown: (reason: string, span: PslSpan) => undefined,
 ): ColumnDefaultLiteralInputValue | undefined {
   const span = input.attribute.span;
+  const isJson = input.nativeType === 'json' || input.nativeType === 'jsonb';
+  const jsonNull = (holds: string): undefined => {
+    input.diagnostics.push(
+      prisma7Diagnostic(
+        'PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED',
+        `Field "${input.modelName}.${input.field.name}": @default(${printSyntax(expression.syntax).trim()}) ${holds} the JSON value null, which the contract cannot tell apart from SQL NULL. Remove the @default or give it another JSON value; either changes the column default on Prisma 7's next migration.`,
+        input.sourceId,
+        span,
+      ),
+    );
+    return undefined;
+  };
   const array = ArrayLiteralAst.cast(expression.syntax);
   if (array !== undefined) {
     const values: ColumnDefaultLiteralInputValue[] = [];
@@ -113,9 +126,11 @@ function scalarValue(
       }
       values.push(value);
     }
+    if (isJson && values.includes(null)) return jsonNull('holds');
     return blindListValue(values);
   }
   const value = elementValue(expression, input);
+  if (isJson && value === null) return jsonNull('is');
   if (value !== undefined) return value;
   const bigintReason = nonIntegerBigintReason(expression, input);
   if (bigintReason !== undefined) return unknown(bigintReason, span);

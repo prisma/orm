@@ -54,11 +54,13 @@ Codes are prefixed `PRISMA7_`:
 | `PRISMA7_NATIVE_TYPE_UNSUPPORTED` | A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, or any unknown spelling). |
 | `PRISMA7_ENUM_NAMESPACE_MISMATCH` | A field uses an enum declared in a different `@@schema`; a Postgres enum type lives in one schema and Prisma 8 columns reference the enum of their own namespace. |
 | `PRISMA7_RELATION_UNRESOLVED` | A relation field that cannot be paired: no matching side, an ambiguous unnamed pair, a singular back-relation over a non-unique foreign key, a `fields`/`references` mismatch, or a required relation field over an optional foreign key field. |
+| `PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED` | `SetNull` on a relation over a required field, or `SetDefault` over a required field with no default. |
 | `PRISMA7_JUNCTION_ID_UNSUPPORTED` | An implicit many-to-many relation on a model without a single-field `@id` (a composite id, for example). Prisma 7 forbids it too. |
 | `PRISMA7_JUNCTION_NAME_COLLISION` | A model has the name of an implicit many-to-many junction model (`PostToTag`, or the relation name). |
 | `PRISMA7_UNKNOWN_ATTRIBUTE` | An attribute Prisma 7 for Postgres does not have, or one this source does not read (`@@fulltext`, `@shardKey`, ...). |
 | `PRISMA7_TABLE_COLLISION` | Two models map to the same table in the same schema; reported on every model in the group. |
 | `PRISMA7_UNKNOWN_DEFAULT` | A `@default` value this source cannot read: an unknown function, an enum member on a non-enum field, a non-member, a non-integer `BigInt` literal, a malformed JSON or base64 literal, or `dbgenerated()` with no expression, which is not supported yet. |
+| `PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED` | A `Json` default of `"null"`, or a `Json[]` default holding it: the JSON value null cannot be told apart from SQL `NULL` in the contract. |
 | `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` | An ORM-side generator or `@updatedAt` on an optional field. |
 | `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` | `@updatedAt` combined with `@default`. |
 | `PRISMA7_IGNORED_FIELD_REFERENCED` | An `@ignore`d field that `@id`, `@unique`, `@@id`, `@@unique`, `@@index`, or a relation's `fields:` uses; Prisma 7 still creates the primary key, index, or foreign key over its column. |

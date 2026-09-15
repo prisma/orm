@@ -22,7 +22,7 @@ import type {
   ModelNode,
   RelationNode,
 } from '@internal/sql-contract-ts/contract-builder';
-import { ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
+import { fieldList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { prisma7ConstraintName } from './indexes';
 
 export interface RelationAttribute {
@@ -214,6 +214,59 @@ function effectiveRelationName(
   return `${first}To${second}`;
 }
 
+/**
+ * Prisma 7 accepts `SetNull` over a required field and `SetDefault` over a
+ * required field with no default, and writes them into the foreign key; the
+ * contract rejects both, because the action would fail the first time it runs.
+ */
+function referentialActionRejections(input: {
+  readonly model: RelationModel;
+  readonly label: string;
+  readonly fieldNames: readonly string[];
+  readonly actions: Readonly<Record<'onDelete' | 'onUpdate', ReferentialAction>>;
+  readonly span: PslSpan;
+}): ContractSourceDiagnostic[] {
+  const { model, label, fieldNames, span } = input;
+  const fieldsWhere = (predicate: (column: FieldNode) => boolean): readonly string[] =>
+    fieldNames.filter((name) => {
+      const column = model.columns.get(name);
+      return column !== undefined && predicate(column);
+    });
+  const rejections: ContractSourceDiagnostic[] = [];
+  for (const [key, action] of Object.entries(input.actions)) {
+    if (action === 'setNull') {
+      const required = fieldsWhere((column) => !column.nullable);
+      if (required.length === 0) continue;
+      const fields = fieldList(model.modelName, required);
+      rejections.push(
+        prisma7Diagnostic(
+          'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
+          `${label}: ${key}: SetNull sets the foreign key fields to null, but ${fields} ${required.length === 1 ? 'is' : 'are'} required, so Prisma 8 cannot describe this foreign key. Make those fields and the relation field optional, which drops NOT NULL on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration.`,
+          model.sourceId,
+          span,
+        ),
+      );
+    }
+    if (action === 'setDefault') {
+      const withoutDefault = fieldsWhere(
+        (column) => !column.nullable && column.default === undefined,
+      );
+      if (withoutDefault.length === 0) continue;
+      const fields = fieldList(model.modelName, withoutDefault);
+      const one = withoutDefault.length === 1;
+      rejections.push(
+        prisma7Diagnostic(
+          'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
+          `${label}: ${key}: SetDefault sets the foreign key fields to their defaults, but ${fields} ${one ? 'is' : 'are'} required and ${one ? 'has' : 'have'} no default, so Prisma 8 cannot describe this foreign key. Add a @default to ${fields}, which sets the column default on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration.`,
+          model.sourceId,
+          span,
+        ),
+      );
+    }
+  }
+  return rejections;
+}
+
 export function lowerRelations(
   models: ReadonlyMap<string, RelationModel>,
   diagnostics: ContractSourceDiagnostic[],
@@ -237,9 +290,9 @@ export function lowerRelations(
   const rejectFkSide = (
     model: RelationModel,
     relationField: RelationField,
-    diagnostic: ContractSourceDiagnostic,
+    ...rejections: readonly ContractSourceDiagnostic[]
   ): void => {
-    diagnostics.push(diagnostic);
+    diagnostics.push(...rejections);
     invalidFkPairings.push({
       pairKey: fkRelationPairKey(model.modelName, relationField.targetModelName),
       relationName: effectiveRelationName(
@@ -337,6 +390,17 @@ export function lowerRelations(
         const onDelete =
           attribute.onDelete ?? (nullability.includes(false) ? 'restrict' : 'setNull');
         const onUpdate = attribute.onUpdate ?? 'cascade';
+        const actionRejections = referentialActionRejections({
+          model,
+          label,
+          fieldNames: attribute.fields,
+          actions: { onDelete, onUpdate },
+          span: attribute.span,
+        });
+        if (actionRejections.length > 0) {
+          rejectFkSide(model, relationField, ...actionRejections);
+          continue;
+        }
         addForeignKey(model.modelName, {
           columns: localColumns,
           references: {
