@@ -3,8 +3,10 @@
  * `prisma.config.ts` points `defineConfig` from the Postgres config entry at
  * `prisma7Schema('./schema.prisma')` runs `contract emit`, `db sign`, and
  * `db verify` through the real command family against a database built by the
- * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. A schema with a
- * `view` fails `contract emit` with one diagnostic and writes nothing.
+ * SQL Prisma 7.10.0 generated, with exit 0 and zero findings. `db verify
+ * --strict` reports only what Prisma 7 creates for `@ignore` and `@@ignore`
+ * constructs. A schema with a `view` fails `contract emit` with one diagnostic
+ * and writes nothing.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -176,6 +178,24 @@ withTempDir(({ createTempDir }) => {
           schema: { strict: false },
         });
         expect(output(verify)).not.toMatch(/✖ (?:missing|extra|mismatch):/);
+
+        const strictVerify = await runDbVerify(ctx, ['--json', '--strict']);
+        expect(strictVerify.exitCode, `db verify --strict\n${output(strictVerify)}`).toBe(4);
+        const strictResult = strictVerify.presented?.data as {
+          readonly schema: { readonly issues: readonly { readonly path: readonly string[] }[] };
+          readonly unclaimed: readonly string[];
+        };
+        expect({
+          issues: strictResult.schema.issues.map((issue) => issue.path).sort(),
+          unclaimed: strictResult.unclaimed,
+        }).toEqual({
+          issues: [
+            ['database', 'public', 'Post', 'column:legacyOwnerId'],
+            ['database', 'public', 'Post', 'foreign-key:legacyOwnerId->public.User(id)'],
+            ['database', 'public', 'User', 'column:legacy'],
+          ],
+          unclaimed: ['LegacyThing'],
+        });
       },
       timeouts.spinUpPpgDev,
     );
