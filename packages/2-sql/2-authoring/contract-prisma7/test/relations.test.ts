@@ -32,3 +32,16 @@ describe('@ignore on a relation field', () => {
     }).toEqual({ models: ['Post', 'Profile', 'Tag', 'User'], userRelations: [] });
   });
 });
+
+describe('one relation name on implicit many-to-many relations in two schemas', () => {
+  it('lowers a junction table in each schema, wired to its own pair of models', async () => {
+    const targets = async (namespaceId: string) =>
+      (await loadFixtureTable('relation-name-in-two-schemas', '_X', namespaceId)).foreignKeys.map(
+        (fk) => (fk['target'] as { namespaceId: string; tableName: string }).tableName,
+      );
+    expect({ one: await targets('one'), two: await targets('two') }).toEqual({
+      one: ['A', 'B'],
+      two: ['C', 'D'],
+    });
+  });
+});

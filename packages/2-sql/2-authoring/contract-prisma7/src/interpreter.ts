@@ -414,8 +414,8 @@ export function interpretPrisma7Documents(
       ...(relations !== undefined ? { relations } : {}),
     });
   }
-  for (const junction of lowered.junctions) {
-    const relations = lowered.relations.get(junction.modelName);
+  for (const [key, junction] of lowered.junctions) {
+    const relations = lowered.relations.get(key);
     modelNodes.push(relations === undefined ? junction : { ...junction, relations });
   }
 

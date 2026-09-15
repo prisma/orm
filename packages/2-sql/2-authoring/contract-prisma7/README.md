@@ -39,7 +39,7 @@ The package itself is target-neutral: the Postgres facade supplies the target pa
 | Explicit relations | Foreign keys with `onDelete` `restrict` (any foreign key field required) or `setNull` (every field optional) and `onUpdate` `cascade` unless given; paired through `@internal/sql-contract-psl/resolution`. |
 | Implicit many-to-many | Junction `_AToB` or `_Name`: columns `A` and `B`, primary key `(A, B)`, index `_AToB_B_index`, cascading foreign keys. |
 | `@ignore`, `@@ignore` | Omitted, together with relations over them. An `@ignore`d field that a key, an index, or a relation uses is an error. |
-| `view`, `Unsupported(...)`, unmapped `@db.*`, `relationMode = "prisma"`, generators on optional fields, `@updatedAt` with `@default`, index arguments, an `@ignore`d field that a key, index, or relation uses, `SetNull` or `SetDefault` over a required field that cannot take it, a JSON `null` default, `dbgenerated()` with no expression on a required field, a model named like an implicit junction or mapped to its table, one relation name on implicit many-to-many relations between different models | Hard errors (table below). |
+| `view`, `Unsupported(...)`, unmapped `@db.*`, `relationMode = "prisma"`, generators on optional fields, `@updatedAt` with `@default`, index arguments, an `@ignore`d field that a key, index, or relation uses, `SetNull` or `SetDefault` over a required field that cannot take it, a JSON `null` default, `dbgenerated()` with no expression on a required field, a model named like an implicit junction or mapped to its table, one relation name on implicit many-to-many relations between different models in the same schema | Hard errors (table below). |
 
 ## Diagnostics
 
@@ -57,7 +57,7 @@ Codes are prefixed `PRISMA7_`:
 | `PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED` | `SetNull` on a relation over a required field, or `SetDefault` over a required field with no column default. |
 | `PRISMA7_JUNCTION_ID_UNSUPPORTED` | An implicit many-to-many relation on a model without a single-field `@id` (a composite id, for example). Prisma 7 forbids it too. |
 | `PRISMA7_JUNCTION_NAME_COLLISION` | A model has the name of an implicit many-to-many junction model (`PostToTag`, or the relation name). |
-| `PRISMA7_RELATION_NAME_SHARED` | Two or more implicit many-to-many relations use the same relation name; Prisma 7 creates one table for all of them, wired to only one. |
+| `PRISMA7_RELATION_NAME_SHARED` | Two or more implicit many-to-many relations in the same schema use the same relation name; Prisma 7 creates one table for all of them, wired to only one. The same name in two schemas is fine: Prisma 7 creates a table in each. |
 | `PRISMA7_UNKNOWN_ATTRIBUTE` | An attribute Prisma 7 for Postgres does not have, or one this source does not read (`@@fulltext`, `@shardKey`, ...). |
 | `PRISMA7_TABLE_COLLISION` | Two models map to the same table in the same schema, reported on every model in the group; or a model maps to the table of an implicit many-to-many relation, reported on the model's `@@map` and on the relation field. |
 | `PRISMA7_UNKNOWN_DEFAULT` | A `@default` value this source cannot read: an unknown function, an enum member on a non-enum field, a non-member, a non-integer `BigInt` literal, a malformed JSON or base64 literal, or `dbgenerated()` with no expression on a required field, which is not supported yet. On an optional or list field it is a column with no default. |

@@ -71,7 +71,7 @@ export const RELATION_PAIRING_CODES: ReadonlySet<string> = new Set([
 ]);
 
 export interface RelationLowering {
-  readonly junctions: readonly ModelNode[];
+  readonly junctions: ReadonlyMap<string, ModelNode>;
   readonly foreignKeys: ReadonlyMap<string, readonly ForeignKeyNode[]>;
   readonly relations: ReadonlyMap<string, readonly RelationNode[]>;
 }
@@ -223,8 +223,8 @@ function orderJunctionSides(
   return requesterFirst ? [requester, partner] : [partner, requester];
 }
 
-function junctionPairKey(name: string): string {
-  return `_${name}`;
+function junctionKey(namespaceId: string, name: string): string {
+  return JSON.stringify([namespaceId, name]);
 }
 
 /**
@@ -569,9 +569,16 @@ export function lowerRelations(
     }
   }
 
-  for (const [name, requests] of groupBy(junctionRequests, (request) => request.name)) {
+  const requestsByJunction = groupBy(junctionRequests, (request) =>
+    junctionKey(
+      orderJunctionSides(request.requester, request.partner)[0].model.namespaceId,
+      request.name,
+    ),
+  );
+  for (const requests of requestsByJunction.values()) {
     const [first] = requests;
     if (first === undefined) continue;
+    const name = first.name;
     const [sideA] = orderJunctionSides(first.requester, first.partner);
     const tableName = prisma7ConstraintName(`_${name}`, '');
     const sideLabel = (side: JunctionSide): string =>
@@ -623,9 +630,8 @@ export function lowerRelations(
     for (const { requester, partner } of requests) {
       const junction = synthesizeJunction(requester, partner, diagnostics);
       if (junction === undefined) continue;
-      const key = junctionPairKey(junction.name);
-      if (!junctions.has(key)) {
-        junctions.set(key, junction.node);
+      if (!junctions.has(junction.key)) {
+        junctions.set(junction.key, junction.node);
         fkRelationMetadata.push(...junction.foreignKeys);
       }
       candidates.push({
@@ -655,9 +661,9 @@ export function lowerRelations(
     }
     modelUniqueColumnSets.set(model.modelName, sets);
   }
-  for (const junction of junctions.values()) {
-    modelIdColumns.set(junction.modelName, ['A', 'B']);
-    modelUniqueColumnSets.set(junction.modelName, [['A', 'B']]);
+  for (const key of junctions.keys()) {
+    modelIdColumns.set(key, ['A', 'B']);
+    modelUniqueColumnSets.set(key, [['A', 'B']]);
   }
   // The shared helper reports every diagnostic against one sourceId, so the
   // candidates are paired one declaring file at a time: a diagnostic then
@@ -698,11 +704,11 @@ export function lowerRelations(
       [...nodes].sort((left, right) => left.fieldName.localeCompare(right.fieldName)),
     );
   }
-  return { junctions: [...junctions.values()], foreignKeys, relations };
+  return { junctions, foreignKeys, relations };
 }
 
 interface SynthesizedJunction {
-  readonly name: string;
+  readonly key: string;
   readonly node: ModelNode;
   readonly foreignKeys: readonly FkRelationMetadata[];
   /** The relation name the requesting side's back-relation candidate pairs on. */
@@ -766,6 +772,7 @@ function synthesizeJunction(
 
   const tableName = prisma7ConstraintName(`_${name}`, '');
   const namespaceId = sideA.model.namespaceId;
+  const key = junctionKey(namespaceId, name);
   const foreignKey = (column: 'A' | 'B', side: JunctionSide, id: FieldNode): ForeignKeyNode => ({
     columns: [column],
     references: {
@@ -779,7 +786,7 @@ function synthesizeJunction(
     index: false,
   });
   const metadata = (column: 'A' | 'B', side: JunctionSide, id: FieldNode): FkRelationMetadata => ({
-    declaringModelName: name,
+    declaringModelName: key,
     declaringFieldName: column.toLowerCase(),
     declaringTableName: tableName,
     declaringNamespaceId: namespaceId,
@@ -801,7 +808,7 @@ function synthesizeJunction(
     name: undefined,
   };
   return {
-    name,
+    key,
     node: {
       modelName: name,
       tableName,

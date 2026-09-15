@@ -96,6 +96,7 @@ describe('Prisma 7 fixtures', () => {
       'relation-ambiguous',
       'relation-argument-invalid',
       'relation-mode',
+      'relation-name-in-two-schemas',
       'relation-name-shared',
       'relation-nullability',
       'relation-unresolved',
