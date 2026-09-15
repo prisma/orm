@@ -99,15 +99,15 @@ What the project needs around that file:
 
 During the transition Prisma 7 keeps owning the database and its migrations. Prisma 8 reads the schema and verifies it against what Prisma 7 built; it does not migrate. After every Prisma 7 migration, run `prisma contract emit` and then `prisma db sign` so the recorded contract matches the database again; `prisma db verify` reports nothing when they match. A database last migrated on Prisma 5 or earlier must migrate on Prisma 7 first: since Prisma 6.0.0 the implicit many-to-many junction tables carry a primary key on `(A, B)` instead of a unique index, and the source describes that shape.
 
-The source interprets every construct Prisma 7 creates in Postgres: scalars and `@db.*` native types, `@map` and `@@map`, `@@schema`, enums as native enum types (with member `@map`), `@ignore` and `@@ignore`, defaults and ORM-side generators, `@updatedAt`, `@id`, `@unique`, `@@unique`, `@@index`, explicit and implicit relations. Anything it cannot express is a hard error with the file, line, and the edit that unblocks it:
+The source interprets every construct Prisma 7 creates in Postgres: scalars and `@db.*` native types, `@map` and `@@map`, `@@schema`, enums as native enum types (with member `@map`), `@ignore` and `@@ignore`, defaults and ORM-side generators, `@updatedAt`, `@id`, `@unique`, `@@unique`, `@@index`, explicit and implicit relations. Anything it cannot express is a hard error with the file, line, and what to change. Prisma 7 still owns the database, so every edit below is a Prisma 7 schema change that Prisma 7's next migration applies; the table says what that migration does where it does anything:
 
-| Code | What it means | The edit that unblocks it |
+| Code | What it means | What to change |
 |---|---|---|
 | `PRISMA7_PROVIDER_MISMATCH` | No `datasource` block, or its `provider` is not `postgresql`. | Use this source only with a Postgres schema. |
-| `PRISMA7_RELATION_MODE_UNSUPPORTED` | `relationMode = "prisma"`. | Remove it or set `relationMode = "foreignKeys"`; Prisma 8 verifies real foreign keys. |
+| `PRISMA7_RELATION_MODE_UNSUPPORTED` | `relationMode = "prisma"`. | Remove it or set `relationMode = "foreignKeys"`. Prisma 7's next migration then adds the foreign keys, and fails if any existing row breaks one. |
 | `PRISMA7_VIEW_UNSUPPORTED` | A `view` block. | Remove the view; Prisma 8 has no views. |
-| `PRISMA7_UNSUPPORTED_TYPE` | `Unsupported("...")`, or an unknown type. | Remove the field or `@ignore` it. |
-| `PRISMA7_NATIVE_TYPE_UNSUPPORTED` | A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`). | Change the column type, or `@ignore` the field. |
+| `PRISMA7_UNSUPPORTED_TYPE` | `Unsupported("...")`, or an unknown type. | A model with an `Unsupported` field cannot use this source yet: Prisma 7 rejects `@ignore` on the field, and removing the field drops its column on Prisma 7's next migration. Correct an unknown type name. |
+| `PRISMA7_NATIVE_TYPE_UNSUPPORTED` | A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`). | Add `@ignore` to the field; Prisma 7's next migration is empty. Changing the field's type instead changes the column type on Prisma 7's next migration. |
 | `PRISMA7_ENUM_NAMESPACE_MISMATCH` | A field uses an enum declared under a different `@@schema`. | Declare the enum in the model's schema, or move the model. |
 | `PRISMA7_RELATION_UNRESOLVED` | A relation field that cannot be paired, is ambiguous, or disagrees with its foreign key fields. | Name both sides with `@relation("name")`, add the missing `fields`/`references`, or match the `?` to the fields. |
 | `PRISMA7_JUNCTION_ID_UNSUPPORTED` | An implicit many-to-many relation on a model without a single-field `@id`. | Give the model a single-field `@id`, or write the junction model out. |

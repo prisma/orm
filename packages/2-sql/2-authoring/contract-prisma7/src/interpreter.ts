@@ -431,7 +431,7 @@ function checkDatasource(
     diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_RELATION_MODE_UNSUPPORTED',
-        'relationMode = "prisma" is not supported; Prisma 8 verifies foreign keys in the database. Remove relationMode or set it to "foreignKeys".',
+        'relationMode = "prisma" is not supported: the contract declares the foreign keys its relations need, and in this mode Prisma 7 creates none. Removing relationMode, or setting it to "foreignKeys", makes Prisma 7\'s next migration add those foreign keys, and that migration fails if any existing row breaks one.',
         datasource.sourceId,
         parameterSpan(block, 'relationMode'),
       ),
@@ -738,7 +738,7 @@ function readField(args: {
     diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_UNSUPPORTED_TYPE',
-        `${label} has type "${field.typeConstructor.path.join('.')}(...)", which has no Prisma 8 codec. Remove the field or map it to a supported type.`,
+        `${label} has type "${field.typeConstructor.path.join('.')}(...)", which has no Prisma 8 codec, so a model with this field cannot use this contract source yet. Prisma 7 rejects @ignore on an Unsupported field, and removing the field drops its column on Prisma 7's next migration.`,
         sourceId,
         field.typeConstructor.span,
       ),
@@ -800,7 +800,7 @@ function readField(args: {
         diagnostics.push(
           prisma7Diagnostic(
             'PRISMA7_NATIVE_TYPE_UNSUPPORTED',
-            `${label}: native type "@db.${nativeType.name}" has no Prisma 8 codec. Change the column type or keep the column out of the contract with @ignore.`,
+            `${label}: native type "@db.${nativeType.name}" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract; Prisma 7's next migration is then empty. Changing the field's type instead changes the column type on Prisma 7's next migration.`,
             sourceId,
             nativeType.attribute.span,
           ),

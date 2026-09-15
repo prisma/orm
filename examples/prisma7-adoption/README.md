@@ -52,7 +52,7 @@ In your own project the first import is `import { definePrismaConfig } from 'pri
 Two rules to know before you start:
 
 - A database last migrated on Prisma 5 or earlier must migrate on Prisma 7 first. Since Prisma 6.0.0 the implicit many-to-many junction tables (`_PostToTag` here) carry a primary key on `(A, B)` instead of a unique index, and the source describes that shape; on an older database `db sign` reports the difference.
-- Every construct the source cannot express is a hard error with the file, line, and the edit that unblocks it, never a silent change. The list is in the `prisma7Schema` section of the [`@prisma/orm-postgres` README](../../packages/3-extensions/postgres/README.md). In this schema nothing needs editing.
+- Every construct the source cannot express is a hard error with the file, line, and what to change, never a silent change. Prisma 7 still owns the database, so any such edit is a Prisma 7 schema change that its next migration applies. The list, with what each edit does to the database, is in the `prisma7Schema` section of the [`@prisma/orm-postgres` README](../../packages/3-extensions/postgres/README.md). In this schema nothing needs editing.
 
 ### 3. Move routes one at a time
 

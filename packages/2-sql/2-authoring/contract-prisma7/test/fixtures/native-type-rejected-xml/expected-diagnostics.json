@@ -3,6 +3,6 @@
     "code": "PRISMA7_NATIVE_TYPE_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 7,
-    "message": "Field \"Rejected.value\": native type \"@db.Xml\" has no Prisma 8 codec. Change the column type or keep the column out of the contract with @ignore."
+    "message": "Field \"Rejected.value\": native type \"@db.Xml\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract; Prisma 7's next migration is then empty. Changing the field's type instead changes the column type on Prisma 7's next migration."
   }
 ]
