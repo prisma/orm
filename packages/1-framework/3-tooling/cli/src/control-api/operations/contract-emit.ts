@@ -1,11 +1,12 @@
 import { mkdir } from 'node:fs/promises';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
-import type { CliErrorDiagnostic } from '@internal/errors/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
+import type { Diagnostic } from '@internal/utils/structured-error';
+import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import { dirname, join } from 'pathe';
 import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
 import { queueEmitByOutput } from '../../utils/emit-queue';
@@ -50,7 +51,7 @@ function failedToResolveContractSource(
   fix: string,
   meta?: Record<string, unknown>,
   cause?: unknown,
-  diagnostics?: readonly CliErrorDiagnostic[],
+  diagnostics?: readonly Diagnostic[],
 ) {
   return errorRuntime('CONTRACT.SOURCE_LOAD_FAILED', 'Failed to resolve contract source', {
     why,
@@ -85,18 +86,18 @@ function formatLocation({ sourceId, line, character }: DiagnosticLocation): stri
 }
 
 /**
- * The finding the CLI prints under the error, one per source diagnostic: the
- * location first, then the source's own code, then its message, because the
- * terminal renderer shows a finding's summary and nothing of its `where`.
+ * The finding the CLI prints under the error, one per source diagnostic. The
+ * summary starts with the location and the source's code because the terminal
+ * renderer shows a finding's summary and nothing of its `where`. A source code
+ * that is not yet dotted is wrapped as `CONTRACT.SOURCE_DIAGNOSTIC`.
  */
-function sourceDiagnosticToFinding(raw: unknown): CliErrorDiagnostic | undefined {
+function sourceDiagnosticToFinding(raw: unknown): Diagnostic | undefined {
   if (!isRecord(raw)) return undefined;
   const code = typeof raw['code'] === 'string' ? raw['code'] : 'diagnostic';
   const message = typeof raw['message'] === 'string' ? raw['message'] : '';
   const location = diagnosticLocation(raw);
   const formatted = formatLocation(location);
-  return {
-    code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+  const finding = {
     severity: 'error',
     summary: `${formatted === undefined ? '' : `${formatted} `}${code}: ${message}`,
     nextActions: [],
@@ -106,12 +107,14 @@ function sourceDiagnosticToFinding(raw: unknown): CliErrorDiagnostic | undefined
         ? undefined
         : { path: location.sourceId, ...ifDefined('line', location.line) },
     ),
-    meta: { code },
-  };
+  } as const;
+  return isStructuredErrorCode(code)
+    ? { code, ...finding }
+    : { code: 'CONTRACT.SOURCE_DIAGNOSTIC', ...finding, meta: { code } };
 }
 
-function sourceDiagnosticsToFindings(diagnostics: readonly unknown[]): CliErrorDiagnostic[] {
-  const findings: CliErrorDiagnostic[] = [];
+function sourceDiagnosticsToFindings(diagnostics: readonly unknown[]): Diagnostic[] {
+  const findings: Diagnostic[] = [];
   for (const raw of diagnostics) {
     const finding = sourceDiagnosticToFinding(raw);
     if (finding !== undefined) findings.push(finding);
