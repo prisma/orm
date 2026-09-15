@@ -22,7 +22,7 @@ import type {
   ModelNode,
   RelationNode,
 } from '@internal/sql-contract-ts/contract-builder';
-import { fieldList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
+import { andList, fieldList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { prisma7ConstraintName } from './indexes';
 
 export interface RelationAttribute {
@@ -574,6 +574,30 @@ export function lowerRelations(
     if (first === undefined) continue;
     const [sideA] = orderJunctionSides(first.requester, first.partner);
     const tableName = prisma7ConstraintName(`_${name}`, '');
+    const sideLabel = (side: JunctionSide): string =>
+      `${side.model.modelName}.${side.field.field.name}`;
+    const pairs = new Map<string, JunctionRequest>();
+    for (const request of requests) {
+      const key = [sideLabel(request.requester), sideLabel(request.partner)].sort().join('|');
+      if (!pairs.has(key)) pairs.set(key, request);
+    }
+    if (pairs.size > 1) {
+      const pairRequests = [...pairs.values()];
+      for (const request of pairRequests) {
+        const others = pairRequests
+          .filter((other) => other !== request)
+          .map((other) => `"${sideLabel(other.requester)}"`);
+        diagnostics.push(
+          prisma7Diagnostic(
+            'PRISMA7_RELATION_NAME_SHARED',
+            `Relation field "${sideLabel(request.requester)}" is an implicit many-to-many relation named "${name}", and so ${others.length === 1 ? 'is relation field' : 'are relation fields'} ${andList(others)}; Prisma 7 creates one table "${tableName}" for them, wired to only one of the relations (its foreign keys show which). Give each relation its own name with @relation("<name>") on both fields: renaming a relation that "${tableName}" does not reference makes Prisma 7's next migration create its own table, while renaming the one it references moves "${tableName}"'s foreign keys to another relation, which fails on rows whose ids that relation's models lack and attaches the rest to the wrong records.`,
+            request.requester.model.sourceId,
+            request.requester.field.field.span,
+          ),
+        );
+      }
+      continue;
+    }
     const tableOwner = [...models.values()].find(
       (other) => other.tableName === tableName && other.namespaceId === sideA.model.namespaceId,
     );
