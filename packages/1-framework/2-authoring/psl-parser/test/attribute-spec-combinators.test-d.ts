@@ -35,15 +35,27 @@ test('inspectable lists and records expose ArgType children', () => {
   expectTypeOf<RecordMetadata['of']>().toEqualTypeOf<ArgType<unknown, never>>();
 });
 
+test('identifier requires semantic value documentation', () => {
+  // @ts-expect-error identifier values require documentation
+  identifier('Undocumented');
+  // @ts-expect-error the options object must document the value
+  identifier('Undocumented', {});
+});
+
 test('identifier pins its name as the output literal type', () => {
-  const action = identifier('NoAction');
+  const action = identifier('NoAction', {
+    documentation: 'An accepted identifier in this test grammar.',
+  });
 
   expectTypeOf<OutOf<typeof action>>().toEqualTypeOf<'NoAction'>();
   expectTypeOf(action.name).toEqualTypeOf<'NoAction'>();
 });
 
 test('oneOf infers the union of its alternatives output types', () => {
-  const action = oneOf(identifier('NoAction'), identifier('Cascade'));
+  const action = oneOf(
+    identifier('NoAction', { documentation: 'An accepted identifier in this test grammar.' }),
+    identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+  );
 
   expectTypeOf<OutOf<typeof action>>().toEqualTypeOf<'NoAction' | 'Cascade'>();
   expectTypeOf(action.alternatives[0].name).toEqualTypeOf<'NoAction'>();
@@ -308,7 +320,11 @@ test('list infers an array of its element type', () => {
 });
 
 test('combinators narrow by kind to inspectable metadata', () => {
-  const arg = oneOf(str('hashed'), num(-1), list(identifier('Cascade')));
+  const arg = oneOf(
+    str('hashed'),
+    num(-1),
+    list(identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' })),
+  );
 
   if (arg.kind === 'oneOf') {
     expectTypeOf<OutOf<(typeof arg.alternatives)[number]>>().toEqualTypeOf<

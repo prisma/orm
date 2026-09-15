@@ -94,6 +94,7 @@ export interface IdentifierArgType<
 > extends ArgTypeOutput<Name, Ctx> {
   readonly kind: 'identifier';
   readonly name: Name;
+  readonly documentation: string;
 }
 
 export interface IntArgType<Ctx extends AttributeCtx = AttributeCtx>

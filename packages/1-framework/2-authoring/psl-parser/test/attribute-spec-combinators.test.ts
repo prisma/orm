@@ -134,10 +134,24 @@ describe('str', () => {
 });
 
 describe('identifier', () => {
+  it('retains value documentation without changing exact-case parsing', () => {
+    const action = identifier('Cascade', {
+      documentation: 'Propagates the change to referencing rows.',
+    });
+    expect(action).toMatchObject({
+      name: 'Cascade',
+      label: 'Cascade',
+      documentation: 'Propagates the change to referencing rows.',
+    });
+    const { expr, ctx } = argOf('cascade');
+    expect(action.parse(expr, ctx).ok).toBe(false);
+  });
   it('matches a bare identifier equal to the pinned name', () => {
     const { expr, ctx } = argOf('Cascade');
 
-    const result = identifier('Cascade').parse(expr, ctx);
+    const result = identifier('Cascade', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe('Cascade');
@@ -146,7 +160,9 @@ describe('identifier', () => {
   it('rejects a bare identifier with a different name', () => {
     const { expr, ctx } = argOf('Cascade');
 
-    const result = identifier('NoAction').parse(expr, ctx);
+    const result = identifier('NoAction', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -158,7 +174,9 @@ describe('identifier', () => {
   it('rejects a quoted string with the same characters', () => {
     const { expr, ctx } = argOf('"Cascade"');
 
-    const result = identifier('Cascade').parse(expr, ctx);
+    const result = identifier('Cascade', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -167,7 +185,9 @@ describe('identifier', () => {
   it('rejects a number token', () => {
     const { expr, ctx } = argOf('1');
 
-    const result = identifier('Cascade').parse(expr, ctx);
+    const result = identifier('Cascade', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -505,7 +525,10 @@ describe('oneOf', () => {
   it('matches whichever alternative accepts the argument', () => {
     const { expr, ctx } = argOf('SetNull');
 
-    const result = oneOf(identifier('Cascade'), identifier('SetNull')).parse(expr, ctx);
+    const result = oneOf(
+      identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+      identifier('SetNull', { documentation: 'An accepted identifier in this test grammar.' }),
+    ).parse(expr, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe('SetNull');
@@ -544,7 +567,10 @@ describe('oneOf', () => {
   it('emits a single aggregate diagnostic anchored to the arg node when every alternative fails', () => {
     const { expr, ctx } = argOf('WeirdAction');
 
-    const result = oneOf(identifier('Cascade'), identifier('SetNull')).parse(expr, ctx);
+    const result = oneOf(
+      identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+      identifier('SetNull', { documentation: 'An accepted identifier in this test grammar.' }),
+    ).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {

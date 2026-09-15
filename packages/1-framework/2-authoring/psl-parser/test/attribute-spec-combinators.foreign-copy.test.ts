@@ -52,7 +52,12 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
     ['int', int(), '3', 3],
     ['num', num(), '2.5', 2.5],
     ['bool', bool(), 'true', true],
-    ['identifier', identifier('Cascade'), 'Cascade', 'Cascade'],
+    [
+      'identifier',
+      identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+      'Cascade',
+      'Cascade',
+    ],
     ['entityRef', entityRef(), 'User', 'User'],
     ['fieldRef', fieldRef(), 'id', 'id'],
     ['json', json(), '"{\\"a\\":1}"', { a: 1 }],

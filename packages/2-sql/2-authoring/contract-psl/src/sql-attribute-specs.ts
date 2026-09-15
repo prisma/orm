@@ -217,10 +217,13 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
 
 function enumDefaultArms(
   members: readonly string[],
+  enumName: string,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   const [first, ...rest] = members;
   if (first === undefined) return [noEnumMember()];
-  return [identifier(first), ...rest.map((name) => identifier(name))];
+  const member = (name: string) =>
+    identifier(name, { documentation: `The \`${name}\` member of enum \`${enumName}\`.` });
+  return [member(first), ...rest.map(member)];
 }
 
 function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
@@ -228,7 +231,7 @@ function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
   const valueArms =
     members === undefined
       ? scalarDefaultArms(ctx.field.list, ctx.controlMutationDefaults)
-      : enumDefaultArms(members);
+      : enumDefaultArms(members, ctx.field.typeName);
   return fieldAttribute('default', {
     documentation: 'Supplies a default value when this field is omitted from a mutation.',
     positional: [
@@ -253,7 +256,15 @@ const uniqueFieldSpec = fieldAttribute('unique', {
   named: { map: { type: optional(str()), documentation: 'The database unique-constraint name.' } },
 });
 
-const noCheckKindArgument = () => oneOf(identifier('membership'), identifier('elementNotNull'));
+const noCheckKindArgument = () =>
+  oneOf(
+    identifier('membership', {
+      documentation: 'Waives the generated check that values belong to the declared domain enum.',
+    }),
+    identifier('elementNotNull', {
+      documentation: 'Waives the generated check that scalar-list elements are non-null.',
+    }),
+  );
 
 /**
  * `@noCheck` waives generated CHECK constraints on one column: bare for every
@@ -469,10 +480,21 @@ const controlModelSpec = modelAttribute('control', {
       documentation:
         'The storage control policy: `managed`, `tolerated`, `external`, or `observed`.',
       type: oneOf(
-        identifier('managed'),
-        identifier('tolerated'),
-        identifier('external'),
-        identifier('observed'),
+        identifier('managed', {
+          documentation:
+            'Verifies the declared shape strictly and allows migrations to create, alter, or drop the storage object.',
+        }),
+        identifier('tolerated', {
+          documentation:
+            'Verifies declared columns while allowing extra columns. Migrations may create missing storage, but never alter or drop existing storage.',
+        }),
+        identifier('external', {
+          documentation: 'Verifies declared storage without creating, altering, or dropping it.',
+        }),
+        identifier('observed', {
+          documentation:
+            'Reports storage differences as warnings rather than verification failures and never emits migration operations.',
+        }),
       ),
     },
   ],
@@ -525,11 +547,26 @@ function relationInvariants(
 
 const referentialActionArgument = () =>
   oneOf(
-    identifier('NoAction'),
-    identifier('Restrict'),
-    identifier('Cascade'),
-    identifier('SetNull'),
-    identifier('SetDefault'),
+    identifier('NoAction', {
+      documentation:
+        'Rejects a change that would violate the foreign key when the constraint is checked; checking may be deferred when supported and configured.',
+    }),
+    identifier('Restrict', {
+      documentation:
+        'Rejects deleting or updating a referenced row while referencing rows remain, without deferring the check.',
+    }),
+    identifier('Cascade', {
+      documentation:
+        'Propagates deletion or key updates of a referenced row to its referencing rows.',
+    }),
+    identifier('SetNull', {
+      documentation:
+        'Sets referencing foreign-key fields to null when the referenced row is deleted or its key changes. The fields must allow null.',
+    }),
+    identifier('SetDefault', {
+      documentation:
+        'Sets referencing foreign-key fields to their defaults when the referenced row is deleted or its key changes. The resulting values must satisfy the foreign key.',
+    }),
   );
 
 const relationFieldSpec = fieldAttribute('relation', {

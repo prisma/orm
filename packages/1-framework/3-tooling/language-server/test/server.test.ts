@@ -251,7 +251,14 @@ async function recursiveCompletionResolution(): Promise<ConfigResolution> {
           documentation: 'Chooses between the first and second modes.',
           named: {
             mode: {
-              type: oneOf(identifier('First'), identifier('Second')),
+              type: oneOf(
+                identifier('First', {
+                  documentation: 'An accepted identifier in this test grammar.',
+                }),
+                identifier('Second', {
+                  documentation: 'An accepted identifier in this test grammar.',
+                }),
+              ),
               documentation: 'The selected mode.',
             },
             enabled: { type: optional(bool()), documentation: 'Whether the choice is enabled.' },
@@ -908,7 +915,11 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
             parameters: [
               {
                 label: 'mode: First | Second',
-                documentation: { kind: MarkupKind.Markdown, value: 'The selected mode.' },
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value:
+                    'The selected mode.\n\nAllowed values:\n- `First`: An accepted identifier in this test grammar.\n- `Second`: An accepted identifier in this test grammar.',
+                },
               },
               {
                 label: 'enabled?: boolean',

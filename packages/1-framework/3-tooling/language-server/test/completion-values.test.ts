@@ -45,7 +45,10 @@ const rejecting: RejectingArgType<never, AttributeCtx> = {
   message: 'No available values',
   parse: rejectedParse,
 };
-const direction = oneOf(identifier('Asc'), identifier('Desc'));
+const direction = oneOf(
+  identifier('Asc', { documentation: 'An accepted identifier in this test grammar.' }),
+  identifier('Desc', { documentation: 'An accepted identifier in this test grammar.' }),
+);
 const ordered = funcCall('ordered', {
   documentation: 'Orders boolean values in a selected direction.',
   positional: [{ key: 'direction', type: direction, documentation: 'The ordering direction.' }],
@@ -60,17 +63,29 @@ const signature = {
   positional: [
     {
       key: 'value',
-      type: oneOf(identifier('First'), identifier('Second')),
+      type: oneOf(
+        identifier('First', { documentation: 'An accepted identifier in this test grammar.' }),
+        identifier('Second', { documentation: 'An accepted identifier in this test grammar.' }),
+      ),
       documentation: 'The first or second positional choice.',
     },
   ],
   named: {
     mode: {
-      type: oneOf(identifier('Asc'), identifier('Desc'), identifier('Asc')),
+      type: oneOf(
+        identifier('Asc', { documentation: 'An accepted identifier in this test grammar.' }),
+        identifier('Desc', { documentation: 'An accepted identifier in this test grammar.' }),
+        identifier('Asc', { documentation: 'An accepted identifier in this test grammar.' }),
+      ),
       documentation: 'The ascending or descending mode.',
     },
     fixed: {
-      type: oneOf(str('quoted"value'), num(-1), bool(), identifier('Fixed')),
+      type: oneOf(
+        str('quoted"value'),
+        num(-1),
+        bool(),
+        identifier('Fixed', { documentation: 'An accepted identifier in this test grammar.' }),
+      ),
       documentation: 'A fixed literal or boolean value.',
     },
     flags: { type: list(bool()), documentation: 'A list of boolean flags.' },
@@ -118,7 +133,13 @@ const signature = {
       documentation: 'A function whose alternatives share a name.',
     },
     all: {
-      type: oneOf(str(), identifier('Alpha'), bool(), num(), identifier('Alpha')),
+      type: oneOf(
+        str(),
+        identifier('Alpha', { documentation: 'An accepted identifier in this test grammar.' }),
+        bool(),
+        num(),
+        identifier('Alpha', { documentation: 'An accepted identifier in this test grammar.' }),
+      ),
       documentation: 'A scalar value with enumerated completion candidates.',
     },
     none: {
@@ -128,7 +149,11 @@ const signature = {
     rejected: { type: rejecting, documentation: 'A value that always fails interpretation.' },
     recordValues: { type: record(bool()), documentation: 'Boolean values keyed by name.' },
     unionLists: {
-      type: oneOf(list(identifier('A')), list(identifier('B')), list(identifier('A'))),
+      type: oneOf(
+        list(identifier('A', { documentation: 'An accepted identifier in this test grammar.' })),
+        list(identifier('B', { documentation: 'An accepted identifier in this test grammar.' })),
+        list(identifier('A', { documentation: 'An accepted identifier in this test grammar.' })),
+      ),
       documentation: 'A list of `A` or `B` identifiers.',
     },
     format: {

@@ -207,7 +207,10 @@ const sortSig = {
   documentation: 'Selects an index field with an explicit sort direction.',
   named: {
     sort: {
-      type: oneOf(identifier('Asc'), identifier('Desc')),
+      type: oneOf(
+        identifier('Asc', { documentation: 'Sort ascending.' }),
+        identifier('Desc', { documentation: 'Sort descending.' }),
+      ),
       documentation: 'The index order for this field: `Asc` or `Desc`.',
     },
   },
