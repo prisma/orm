@@ -292,7 +292,9 @@ function buildIndexModelSpec(
         key: 'fields',
         type: list(fieldElement, { allowEmpty: false }),
         documentation:
-          'The nonempty list of indexed fields, optionally with sort directions or a wildcard scope.',
+          name === 'unique'
+            ? 'The nonempty list of indexed fields, optionally with sort directions. Wildcard scopes are not supported.'
+            : 'The nonempty list of indexed fields, optionally with sort directions or a wildcard scope.',
       },
     ],
     named: {

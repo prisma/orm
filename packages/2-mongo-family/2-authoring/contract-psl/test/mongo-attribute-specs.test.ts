@@ -130,6 +130,19 @@ describe('mongoAttributeSpecs', () => {
     );
   });
 
+  it('documents wildcard fields only for non-unique indexes', () => {
+    const { model } = contexts();
+    expect({
+      index: mongoAttributeSpecs.model.index(model).positional[0]?.documentation,
+      unique: mongoAttributeSpecs.model.unique(model).positional[0]?.documentation,
+    }).toEqual({
+      index:
+        'The nonempty list of indexed fields, optionally with sort directions or a wildcard scope.',
+      unique:
+        'The nonempty list of indexed fields, optionally with sort directions. Wildcard scopes are not supported.',
+    });
+  });
+
   it('exposes model-specific index field alternatives from the actual factory', () => {
     const { model } = contexts();
     const fields = listMetadata<string | unknown, ModelAttributeCtx>(
