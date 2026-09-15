@@ -131,27 +131,26 @@ it(
       expect(await terminal.query(runtime, { id: 99 })).toBeNull();
       const count = executions.length;
       const compileCount = beforeCompile.mock.calls.length;
-      await expect(
-        db.prepare({ value: { codecId: 'pg/int4@1', nullable: true } }, (p) =>
-          db.orm.public.User.where({
-            toWhereExpr: () =>
-              ExistsExpr.exists(
-                SelectAst.from(TableSource.named('users'))
-                  .withProjection([ProjectionItem.of('id', ColumnRef.of('users', 'id'))])
-                  .withWhere(
-                    CastExpr.as(
-                      BinaryExpr.gt(ColumnRef.of('users', 'invited_by_id'), p.value.buildAst()),
-                      'boolean',
-                    ),
+      const authored = await db.prepare({ value: { codecId: 'pg/int4@1', nullable: true } }, (p) =>
+        db.orm.public.User.where({
+          toWhereExpr: () =>
+            ExistsExpr.exists(
+              SelectAst.from(TableSource.named('users'))
+                .withProjection([ProjectionItem.of('id', ColumnRef.of('users', 'id'))])
+                .withWhere(
+                  CastExpr.as(
+                    BinaryExpr.gt(ColumnRef.of('users', 'invited_by_id'), p.value.buildAst()),
+                    'boolean',
                   ),
-              ),
-          })
-            .select('id')
-            .prepared.all(),
-        ),
-      ).rejects.toThrow(/nullable prepared parameter/i);
+                ),
+            ),
+        })
+          .select('id')
+          .prepared.all(),
+      );
       expect(executions).toHaveLength(count);
-      expect(beforeCompile.mock.calls.length).toBe(compileCount);
+      expect(beforeCompile.mock.calls.length).toBe(compileCount + 1);
+      expect(await authored.query(runtime, { value: null })).toEqual([]);
       const nullableStart = executions.length;
       const nullableLowerCount = lower.mock.calls.length;
       const nullableCallback = vi.fn();
@@ -232,7 +231,7 @@ it(
           .select('id')
           .prepared.all(),
       );
-      expect(await scalar.query(runtime, { value: null })).toEqual([{ id: 3 }]);
+      expect(await scalar.query(runtime, { value: null })).toEqual([]);
       expect(await scalar.query(runtime, { value: 9 })).toEqual([{ id: 1 }, { id: 2 }]);
       const raw = await db.prepare({ value: { codecId: 'pg/int4@1', nullable: true } }, (p) =>
         db.orm.public.User.where({

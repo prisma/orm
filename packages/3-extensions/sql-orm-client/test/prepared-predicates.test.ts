@@ -32,9 +32,11 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { Expression } from '@internal/sql-relational-core/expression';
 import { describe, expect, it } from 'vitest';
+import { shorthandToWhereExpr } from '../src/filters';
+import { COMPARISON_METHODS_META } from '../src/types';
 import { bindWhereExpr } from '../src/where-binding';
 import { createCollectionFor } from './collection-fixtures';
-import { getTestContract } from './helpers';
+import { getTestContext, getTestContract } from './helpers';
 
 function parameter<C extends string, N extends boolean>(
   name: string,
@@ -250,13 +252,7 @@ describe('scalar-subquery comparison context at compilation', () => {
   it.each(scalarOperands)('prepares nullable %s before execution', (_name, expr) => {
     const { collection, runtime } = createCollectionFor('User');
     const query = collection.where({ toWhereExpr: () => expr }).select('id');
-    if (expr.kind === 'binary' && expr.op === 'in') {
-      expect(() => query.prepared.all()).toThrow(/nullable prepared parameter/i);
-    } else {
-      expect(query.prepared.all().plan.ast).toMatchObject({
-        where: { op: 'isNotDistinctFrom' },
-      });
-    }
+    expect(query.prepared.all().plan.ast).toMatchObject({ where: expr });
     expect(runtime.executions).toEqual([]);
   });
   it.each(independentContexts)('preserves %s', (_name, expr) => {
@@ -273,37 +269,54 @@ describe('structured nullable prepared comparisons', () => {
   it.each([
     ['eq', 'isNotDistinctFrom'],
     ['neq', 'isDistinctFrom'],
-  ] as const)('normalizes nullable operands on either side of %s', (op, normalized) => {
+  ] as const)('creates nullable %s before binding', (op, normalized) => {
+    const comparison = COMPARISON_METHODS_META[op].create(column, { codecId: 'pg/int4@1' });
+    expect(comparison(optional)).toEqual(new BinaryExpr(normalized, column, optional.buildAst()));
+    expect(comparison(id)).toEqual(new BinaryExpr(op, column, id.buildAst()));
+    expect(comparison(null)).toEqual(
+      op === 'eq' ? NullCheckExpr.isNull(column) : NullCheckExpr.isNotNull(column),
+    );
+  });
+  it.each(['gt', 'lt', 'gte', 'lte', 'like'] as const)(
+    'rejects nullable operands when creating %s',
+    (op) => {
+      const comparison = COMPARISON_METHODS_META[op].create(column, { codecId: 'pg/int4@1' });
+      expect(() => comparison(optional)).toThrow(/nullable prepared parameter/i);
+    },
+  );
+  it.each(['in', 'notIn'] as const)('rejects nullable elements when creating %s', (op) => {
+    const comparison = COMPARISON_METHODS_META[op].create(column, { codecId: 'pg/int4@1' });
+    expect(() => comparison([id, optional])).toThrow(/nullable prepared parameter/i);
+  });
+  it('creates null-safe shorthand equality before binding', () => {
+    expect(shorthandToWhereExpr(getTestContext(), 'public', 'User', { id: optional })).toEqual(
+      new BinaryExpr('isNotDistinctFrom', column, optional.buildAst()),
+    );
+  });
+  it.each(['eq', 'neq'] as const)('preserves explicitly authored %s', (op) => {
     for (const [left, right] of [
       [column, optional.buildAst()],
       [optional.buildAst(), column],
     ] as const) {
       const result = bindWhereExpr(contract, new BinaryExpr(op, left, right));
-      expect(result).toEqual(new BinaryExpr(normalized, left, right));
+      expect(result).toEqual(new BinaryExpr(op, left, right));
       expect(bindWhereExpr(contract, result)).toEqual(result);
     }
   });
-  it.each(wrappers)('normalizes equality inside %s', (_name, wrap) => {
+  it.each(wrappers)('preserves explicit equality inside %s', (_name, wrap) => {
     expect(bindWhereExpr(contract, wrap(invalid()))).toBeDefined();
   });
   it.each(['gt', 'lt', 'gte', 'lte', 'like', 'in', 'notIn'] as const)(
-    'rejects both operands of %s',
+    'preserves explicitly authored %s',
     (op) => {
-      expect(() =>
-        bindWhereExpr(contract, new BinaryExpr(op, optional.buildAst(), id.buildAst())),
-      ).toThrow(/nullable prepared parameter/i);
-      expect(() =>
-        bindWhereExpr(
-          contract,
-          new BinaryExpr(op, column, ListExpression.of([id.buildAst(), optional.buildAst()])),
-        ),
-      ).toThrow(/nullable prepared parameter/i);
+      const expr = new BinaryExpr(op, column, optional.buildAst());
+      expect(bindWhereExpr(contract, expr)).toEqual(expr);
     },
   );
-  it('normalizes nullable structured operands but leaves raw payloads opaque', () => {
+  it('preserves structured operands and leaves raw payloads opaque', () => {
     expect(
       bindWhereExpr(contract, BinaryExpr.eq(column, CastExpr.as(optional.buildAst(), 'int4'))),
-    ).toMatchObject({ op: 'isNotDistinctFrom' });
+    ).toMatchObject({ op: 'eq' });
     const opaque = raw(invalid());
     expect(bindWhereExpr(contract, opaque)).toBe(opaque);
     expect(
@@ -311,16 +324,16 @@ describe('structured nullable prepared comparisons', () => {
     ).toBeDefined();
     expect(
       bindWhereExpr(contract, BinaryExpr.eq(raw(optional.buildAst()), optional.buildAst())),
-    ).toMatchObject({ op: 'isNotDistinctFrom' });
+    ).toMatchObject({ op: 'eq' });
     expect(bindWhereExpr(contract, NullCheckExpr.isNull(optional.buildAst()))).toBeDefined();
   });
-  it('normalizes structured ToWhereExpr during compilation before runtime query', () => {
+  it('preserves structured ToWhereExpr operators during compilation', () => {
     const { collection, runtime } = createCollectionFor('User');
     const query = collection
       .where({ toWhereExpr: () => CastExpr.as(invalid(), 'boolean') })
       .select('id');
     expect(query.prepared.all().plan.ast).toMatchObject({
-      where: { kind: 'cast', expr: { op: 'isNotDistinctFrom' } },
+      where: { kind: 'cast', expr: { op: 'eq' } },
     });
     expect(runtime.executions).toEqual([]);
   });

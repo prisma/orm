@@ -59,7 +59,6 @@ export interface ExpressionSource {
 }
 
 export interface ExpressionRewriter {
-  binary?(expr: BinaryExpr): AnyExpression;
   columnRef?(expr: ColumnRef): AnyExpression;
   identifierRef?(expr: IdentifierRef): AnyExpression;
   paramRef?(expr: ParamRef): ParamRef | LiteralExpr;
@@ -1267,12 +1266,11 @@ export class BinaryExpr extends Expression {
   }
 
   override rewrite(rewriter: ExpressionRewriter): AnyExpression {
-    const rewritten = new BinaryExpr(
+    return new BinaryExpr(
       this.op,
       rewriteComparable(this.left, rewriter),
       rewriteComparable(this.right, rewriter),
     );
-    return rewriter.binary?.(rewritten) ?? rewritten;
   }
 
   override fold<T>(folder: ExpressionFolder<T>): T {

@@ -10,7 +10,6 @@ import type {
 } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
-  BinaryExpr,
   type BinaryOp,
   type CodecRef,
   type CodecTrait,
@@ -25,6 +24,7 @@ import type { Expression } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { ComputeColumnJsType, RuntimeScope } from '@internal/sql-relational-core/types';
 import type { RowSelection } from './collection-internal-types';
+import { predicateComparison } from './predicate-comparison';
 import { predicateExpression } from './predicate-expression';
 
 export interface IncludeScalar<Result> extends RowSelection<Result> {
@@ -351,13 +351,13 @@ function scalarComparisonMethod(op: BinaryOp) {
     if (value === null && (op === 'eq' || op === 'neq')) {
       return op === 'eq' ? NullCheckExpr.isNull(left) : NullCheckExpr.isNotNull(left);
     }
-    return new BinaryExpr(op, left, param(codec, value));
+    return predicateComparison(op, left, param(codec, value));
   }) satisfies MethodFactory;
 }
 
 function listComparisonMethod(op: BinaryOp) {
   return ((left, codec) => (values: readonly unknown[]) =>
-    new BinaryExpr(op, left, paramList(codec, values))) satisfies MethodFactory;
+    predicateComparison(op, left, paramList(codec, values))) satisfies MethodFactory;
 }
 
 /**
