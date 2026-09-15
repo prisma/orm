@@ -106,19 +106,18 @@ type ContractBase = Omit<
             readonly Post: {
               readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
+                    readonly authorId: { readonly bsonType: readonly ['null', 'string'] };
+                    readonly content: { readonly bsonType: readonly ['null', 'string'] };
                     readonly createdAt: { readonly bsonType: 'date' };
-                    readonly updatedAt: { readonly bsonType: 'date' };
                     readonly published: { readonly bsonType: 'bool' };
                     readonly title: { readonly bsonType: 'string' };
-                    readonly content: { readonly bsonType: readonly ['null', 'string'] };
-                    readonly authorId: { readonly bsonType: readonly ['null', 'string'] };
+                    readonly updatedAt: { readonly bsonType: 'date' };
                   };
-                  readonly additionalProperties: false;
                   readonly required: readonly [
                     '_id',
                     'createdAt',
@@ -127,34 +126,35 @@ type ContractBase = Omit<
                     'updatedAt',
                   ];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
             readonly User: {
-              readonly kind: 'mongo-collection';
               readonly indexes: readonly [
                 {
+                  readonly keys: readonly [{ readonly direction: 1; readonly field: 'email' }];
                   readonly kind: 'mongo-index';
-                  readonly keys: readonly [{ readonly field: 'email'; readonly direction: 1 }];
                   readonly unique: true;
                 },
               ];
+              readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
-                    readonly email: { readonly bsonType: 'string' };
                     readonly age: { readonly bsonType: 'int' };
+                    readonly email: { readonly bsonType: 'string' };
                     readonly name: { readonly bsonType: readonly ['null', 'string'] };
                   };
-                  readonly additionalProperties: false;
                   readonly required: readonly ['_id', 'age', 'email'];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
           };

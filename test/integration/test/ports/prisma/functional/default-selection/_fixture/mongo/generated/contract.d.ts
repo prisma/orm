@@ -93,25 +93,25 @@ type ContractBase = Omit<
         readonly entries: {
           readonly collection: {
             readonly Model: {
-              readonly kind: 'mongo-collection';
               readonly indexes: readonly [
                 {
+                  readonly keys: readonly [{ readonly direction: 1; readonly field: 'otherId' }];
                   readonly kind: 'mongo-index';
-                  readonly keys: readonly [{ readonly field: 'otherId'; readonly direction: 1 }];
                   readonly unique: true;
                 },
               ];
+              readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
-                    readonly value: { readonly bsonType: 'string' };
-                    readonly otherId: { readonly bsonType: 'objectId' };
-                    readonly list: {
-                      readonly bsonType: 'array';
-                      readonly items: { readonly bsonType: 'string' };
+                    readonly composite: {
+                      readonly additionalProperties: false;
+                      readonly bsonType: 'object';
+                      readonly properties: { readonly value: { readonly bsonType: 'string' } };
+                      readonly required: readonly ['value'];
                     };
                     readonly enum: {
                       readonly bsonType: 'string';
@@ -124,14 +124,13 @@ type ContractBase = Omit<
                         readonly enum: readonly ['A', 'B'];
                       };
                     };
-                    readonly composite: {
-                      readonly bsonType: 'object';
-                      readonly properties: { readonly value: { readonly bsonType: 'string' } };
-                      readonly additionalProperties: false;
-                      readonly required: readonly ['value'];
+                    readonly list: {
+                      readonly bsonType: 'array';
+                      readonly items: { readonly bsonType: 'string' };
                     };
+                    readonly otherId: { readonly bsonType: 'objectId' };
+                    readonly value: { readonly bsonType: 'string' };
                   };
-                  readonly additionalProperties: false;
                   readonly required: readonly [
                     '_id',
                     'composite',
@@ -142,22 +141,23 @@ type ContractBase = Omit<
                     'value',
                   ];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
             readonly Other: {
               readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: { readonly _id: { readonly bsonType: 'objectId' } };
-                  readonly additionalProperties: false;
                   readonly required: readonly ['_id'];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
           };

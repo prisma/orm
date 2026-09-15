@@ -1308,8 +1308,8 @@ type ContractBase = Omit<
             readonly discriminator: { readonly field: 'type' };
             readonly variants: {
               readonly Bug: { readonly value: 'bug' };
-              readonly Feature: { readonly value: 'feature' };
               readonly Epic: { readonly value: 'epic' };
+              readonly Feature: { readonly value: 'feature' };
             };
           };
           readonly TaskComment: {

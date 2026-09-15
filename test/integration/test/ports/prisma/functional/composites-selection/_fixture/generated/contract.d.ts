@@ -91,57 +91,57 @@ type ContractBase = Omit<
             readonly user: {
               readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
                     readonly profile: {
+                      readonly additionalProperties: false;
                       readonly bsonType: 'object';
                       readonly properties: {
-                        readonly name: {
-                          readonly bsonType: 'object';
-                          readonly properties: {
-                            readonly firstName: { readonly bsonType: 'string' };
-                            readonly lastName: { readonly bsonType: 'string' };
-                          };
-                          readonly additionalProperties: false;
-                          readonly required: readonly ['firstName', 'lastName'];
-                        };
                         readonly alternateName: {
                           readonly oneOf: readonly [
                             { readonly bsonType: 'null' },
                             {
+                              readonly additionalProperties: false;
                               readonly bsonType: 'object';
                               readonly properties: {
                                 readonly firstName: { readonly bsonType: 'string' };
                                 readonly lastName: { readonly bsonType: 'string' };
                               };
-                              readonly additionalProperties: false;
                               readonly required: readonly ['firstName', 'lastName'];
                             },
                           ];
                         };
-                        readonly url: { readonly bsonType: 'string' };
                         readonly favoriteThings: {
                           readonly bsonType: 'array';
                           readonly items: {
+                            readonly additionalProperties: false;
                             readonly bsonType: 'object';
                             readonly properties: { readonly name: { readonly bsonType: 'string' } };
-                            readonly additionalProperties: false;
                             readonly required: readonly ['name'];
                           };
                         };
+                        readonly name: {
+                          readonly additionalProperties: false;
+                          readonly bsonType: 'object';
+                          readonly properties: {
+                            readonly firstName: { readonly bsonType: 'string' };
+                            readonly lastName: { readonly bsonType: 'string' };
+                          };
+                          readonly required: readonly ['firstName', 'lastName'];
+                        };
+                        readonly url: { readonly bsonType: 'string' };
                       };
-                      readonly additionalProperties: false;
                       readonly required: readonly ['favoriteThings', 'name', 'url'];
                     };
                   };
-                  readonly additionalProperties: false;
                   readonly required: readonly ['_id', 'profile'];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
           };

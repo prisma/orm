@@ -650,11 +650,11 @@ type ContractBase = Omit<
                   readonly typeParams: {
                     readonly expression: '{ age: number, name: string }';
                     readonly jsonIr: {
+                      readonly domain: 'object';
                       readonly required: readonly [
                         { readonly key: 'age'; readonly value: 'number' },
                         { readonly key: 'name'; readonly value: 'string' },
                       ];
-                      readonly domain: 'object';
                     };
                   };
                 };
@@ -1044,11 +1044,11 @@ type ContractBase = Omit<
                   readonly typeParams: {
                     readonly expression: '{ age: number, name: string }';
                     readonly jsonIr: {
+                      readonly domain: 'object';
                       readonly required: readonly [
                         { readonly key: 'age'; readonly value: 'number' },
                         { readonly key: 'name'; readonly value: 'string' },
                       ];
-                      readonly domain: 'object';
                     };
                   };
                 };
@@ -1483,12 +1483,12 @@ type ContractBase = Omit<
     readonly mutations: {
       readonly defaults: readonly [
         {
+          readonly onCreate: { readonly id: 'uuidv7'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'event';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'uuidv7' };
         },
       ];
     };

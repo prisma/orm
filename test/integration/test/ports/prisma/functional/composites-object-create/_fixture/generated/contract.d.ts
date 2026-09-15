@@ -105,80 +105,80 @@ type ContractBase = Omit<
             readonly comments_optional: {
               readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
-                    readonly country: { readonly bsonType: readonly ['null', 'string'] };
                     readonly content: {
                       readonly oneOf: readonly [
                         { readonly bsonType: 'null' },
                         {
+                          readonly additionalProperties: false;
                           readonly bsonType: 'object';
                           readonly properties: {
                             readonly text: { readonly bsonType: 'string' };
                             readonly upvotes: {
                               readonly bsonType: 'array';
                               readonly items: {
+                                readonly additionalProperties: false;
                                 readonly bsonType: 'object';
                                 readonly properties: {
-                                  readonly vote: { readonly bsonType: 'bool' };
                                   readonly userId: { readonly bsonType: 'string' };
+                                  readonly vote: { readonly bsonType: 'bool' };
                                 };
-                                readonly additionalProperties: false;
                                 readonly required: readonly ['userId', 'vote'];
                               };
                             };
                           };
-                          readonly additionalProperties: false;
                           readonly required: readonly ['text', 'upvotes'];
                         },
                       ];
                     };
+                    readonly country: { readonly bsonType: readonly ['null', 'string'] };
                   };
-                  readonly additionalProperties: false;
                   readonly required: readonly ['_id'];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
             readonly comments_required: {
               readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
-                    readonly country: { readonly bsonType: readonly ['null', 'string'] };
                     readonly content: {
+                      readonly additionalProperties: false;
                       readonly bsonType: 'object';
                       readonly properties: {
                         readonly text: { readonly bsonType: 'string' };
                         readonly upvotes: {
                           readonly bsonType: 'array';
                           readonly items: {
+                            readonly additionalProperties: false;
                             readonly bsonType: 'object';
                             readonly properties: {
-                              readonly vote: { readonly bsonType: 'bool' };
                               readonly userId: { readonly bsonType: 'string' };
+                              readonly vote: { readonly bsonType: 'bool' };
                             };
-                            readonly additionalProperties: false;
                             readonly required: readonly ['userId', 'vote'];
                           };
                         };
                       };
-                      readonly additionalProperties: false;
                       readonly required: readonly ['text', 'upvotes'];
                     };
+                    readonly country: { readonly bsonType: readonly ['null', 'string'] };
                   };
-                  readonly additionalProperties: false;
                   readonly required: readonly ['_id', 'content'];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
           };

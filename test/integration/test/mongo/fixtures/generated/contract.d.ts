@@ -161,21 +161,21 @@ type ContractBase = Omit<
           readonly collection: {
             readonly tasks: MongoCollection;
             readonly users: {
-              readonly kind: 'mongo-collection';
               readonly indexes: readonly [
                 {
+                  readonly keys: readonly [{ readonly direction: 1; readonly field: 'email' }];
                   readonly kind: 'mongo-index';
-                  readonly keys: readonly [{ readonly field: 'email'; readonly direction: 1 }];
                   readonly unique: true;
                 },
               ];
+              readonly kind: 'mongo-collection';
               readonly options: {
-                readonly kind: 'mongo-collection-options';
                 readonly collation: {
                   readonly kind: 'mongo-collation-options';
                   readonly locale: 'en';
                   readonly strength: 2;
                 };
+                readonly kind: 'mongo-collection-options';
               };
             };
           };

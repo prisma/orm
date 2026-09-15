@@ -88,41 +88,41 @@ type ContractBase = Omit<
             readonly comment_required_list: {
               readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
-                    readonly country: { readonly bsonType: readonly ['null', 'string'] };
                     readonly contents: {
                       readonly bsonType: 'array';
                       readonly items: {
+                        readonly additionalProperties: false;
                         readonly bsonType: 'object';
                         readonly properties: {
                           readonly text: { readonly bsonType: 'string' };
                           readonly upvotes: {
                             readonly bsonType: 'array';
                             readonly items: {
+                              readonly additionalProperties: false;
                               readonly bsonType: 'object';
                               readonly properties: {
-                                readonly vote: { readonly bsonType: 'bool' };
                                 readonly userId: { readonly bsonType: 'string' };
+                                readonly vote: { readonly bsonType: 'bool' };
                               };
-                              readonly additionalProperties: false;
                               readonly required: readonly ['userId', 'vote'];
                             };
                           };
                         };
-                        readonly additionalProperties: false;
                         readonly required: readonly ['text', 'upvotes'];
                       };
                     };
+                    readonly country: { readonly bsonType: readonly ['null', 'string'] };
                   };
-                  readonly additionalProperties: false;
                   readonly required: readonly ['_id', 'contents'];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
           };
