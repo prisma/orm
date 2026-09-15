@@ -149,7 +149,7 @@ describe('representation-explicit spellings stay out of introspection', () => {
     ['timestamp with time zone', 'TimestamptzString'],
     ['time', 'Time'],
     ['time without time zone', 'Time'],
-  ])('resolves %s to the bare %s, never a *String spelling', (nativeType, pslName) => {
+  ])('resolves %s to %s (timestamptz variants use TimestamptzString)', (nativeType, pslName) => {
     expect(map.resolve(nativeType)).toMatchObject({ pslType: { name: pslName } });
   });
 
@@ -159,7 +159,7 @@ describe('representation-explicit spellings stay out of introspection', () => {
     });
   });
 
-  it('never produces a *String name for any native type it knows except timestamptz', () => {
+  it('never produces a *String name for any native type it knows except timestamptz variants (timestamptz, timestamp with time zone, timestamptz(6))', () => {
     const natives = [
       'date',
       'timestamp',
