@@ -1,0 +1,17 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String @id
+  nullable  Post[] @relation("SetNullOptionalRelation")
+  generated Post[] @relation("SetDefaultGenerator")
+}
+
+model Post {
+  id        Int    @id
+  a         String
+  nullable  User?  @relation("SetNullOptionalRelation", fields: [a], references: [id], onDelete: SetNull)
+  b         String @default(uuid())
+  generated User   @relation("SetDefaultGenerator", fields: [b], references: [id], onDelete: SetDefault)
+}

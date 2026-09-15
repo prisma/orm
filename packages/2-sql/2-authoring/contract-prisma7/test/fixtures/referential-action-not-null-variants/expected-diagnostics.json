@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "Relation field \"Post.nullable\": onDelete: SetNull sets the foreign key fields to null, but \"Post.a\" is required, so Prisma 8 cannot describe this foreign key. Make \"Post.a\" optional, which drops NOT NULL on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration."
+  },
+  {
+    "code": "PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 16,
+    "message": "Relation field \"Post.generated\": onDelete: SetDefault sets the foreign key fields to their column defaults, but \"Post.b\" is required and has no column default (a client-side generator such as uuid() does not give the column one), so Prisma 8 cannot describe this foreign key. Give \"Post.b\" a column default, such as a literal or @default(dbgenerated(\"<expression>\")), which sets it on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration."
+  }
+]

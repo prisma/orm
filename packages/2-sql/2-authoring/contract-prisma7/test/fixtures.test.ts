@@ -87,6 +87,7 @@ describe('Prisma 7 fixtures', () => {
       'provider-missing',
       'referential-action-defaults',
       'referential-action-not-null',
+      'referential-action-not-null-variants',
       'referential-integrity',
       'relation-ambiguous',
       'relation-argument-invalid',

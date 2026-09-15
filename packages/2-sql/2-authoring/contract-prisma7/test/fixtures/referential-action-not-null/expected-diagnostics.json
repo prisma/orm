@@ -3,24 +3,24 @@
     "code": "PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 18,
-    "message": "Relation field \"Post.deleteNull\": onDelete: SetNull sets the foreign key fields to null, but \"Post.a\" is required, so Prisma 8 cannot describe this foreign key. Make those fields and the relation field optional, which drops NOT NULL on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration."
+    "message": "Relation field \"Post.deleteNull\": onDelete: SetNull sets the foreign key fields to null, but \"Post.a\" is required, so Prisma 8 cannot describe this foreign key. Make \"Post.a\" and \"Post.deleteNull\" optional, which drops NOT NULL on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration."
   },
   {
     "code": "PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 20,
-    "message": "Relation field \"Post.updateNull\": onUpdate: SetNull sets the foreign key fields to null, but \"Post.b\" is required, so Prisma 8 cannot describe this foreign key. Make those fields and the relation field optional, which drops NOT NULL on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration."
+    "message": "Relation field \"Post.updateNull\": onUpdate: SetNull sets the foreign key fields to null, but \"Post.b\" is required, so Prisma 8 cannot describe this foreign key. Make \"Post.b\" and \"Post.updateNull\" optional, which drops NOT NULL on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration."
   },
   {
     "code": "PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 22,
-    "message": "Relation field \"Post.deleteDef\": onDelete: SetDefault sets the foreign key fields to their defaults, but \"Post.c\" is required and has no default, so Prisma 8 cannot describe this foreign key. Add a @default to \"Post.c\", which sets the column default on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration."
+    "message": "Relation field \"Post.deleteDef\": onDelete: SetDefault sets the foreign key fields to their column defaults, but \"Post.c\" is required and has no column default, so Prisma 8 cannot describe this foreign key. Give \"Post.c\" a column default, such as a literal or @default(dbgenerated(\"<expression>\")), which sets it on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration."
   },
   {
     "code": "PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED",
     "file": "schema.prisma",
     "line": 24,
-    "message": "Relation field \"Post.updateDef\": onUpdate: SetDefault sets the foreign key fields to their defaults, but \"Post.d\" is required and has no default, so Prisma 8 cannot describe this foreign key. Add a @default to \"Post.d\", which sets the column default on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration."
+    "message": "Relation field \"Post.updateDef\": onUpdate: SetDefault sets the foreign key fields to their column defaults, but \"Post.d\" is required and has no column default, so Prisma 8 cannot describe this foreign key. Give \"Post.d\" a column default, such as a literal or @default(dbgenerated(\"<expression>\")), which sets it on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration."
   }
 ]

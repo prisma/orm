@@ -221,12 +221,15 @@ function effectiveRelationName(
  */
 function referentialActionRejections(input: {
   readonly model: RelationModel;
+  readonly relationField: FieldSymbol;
   readonly label: string;
   readonly fieldNames: readonly string[];
   readonly actions: Readonly<Record<'onDelete' | 'onUpdate', ReferentialAction>>;
   readonly span: PslSpan;
 }): ContractSourceDiagnostic[] {
-  const { model, label, fieldNames, span } = input;
+  const { model, relationField, label, fieldNames, span } = input;
+  const replaceAction =
+    "or choose another action, which replaces the foreign key on Prisma 7's next migration.";
   const fieldsWhere = (predicate: (column: FieldNode) => boolean): readonly string[] =>
     fieldNames.filter((name) => {
       const column = model.columns.get(name);
@@ -241,7 +244,7 @@ function referentialActionRejections(input: {
       rejections.push(
         prisma7Diagnostic(
           'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
-          `${label}: ${key}: SetNull sets the foreign key fields to null, but ${fields} ${required.length === 1 ? 'is' : 'are'} required, so Prisma 8 cannot describe this foreign key. Make those fields and the relation field optional, which drops NOT NULL on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration.`,
+          `${label}: ${key}: SetNull sets the foreign key fields to null, but ${fields} ${required.length === 1 ? 'is' : 'are'} required, so Prisma 8 cannot describe this foreign key. Make ${fields}${relationField.optional ? '' : ` and "${model.modelName}.${relationField.name}"`} optional, which drops NOT NULL on Prisma 7's next migration, ${replaceAction}`,
           model.sourceId,
           span,
         ),
@@ -254,10 +257,15 @@ function referentialActionRejections(input: {
       if (withoutDefault.length === 0) continue;
       const fields = fieldList(model.modelName, withoutDefault);
       const one = withoutDefault.length === 1;
+      const generatorNote = withoutDefault.some(
+        (name) => model.columns.get(name)?.executionDefaults?.onCreate !== undefined,
+      )
+        ? ' (a client-side generator such as uuid() does not give the column one)'
+        : '';
       rejections.push(
         prisma7Diagnostic(
           'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
-          `${label}: ${key}: SetDefault sets the foreign key fields to their defaults, but ${fields} ${one ? 'is' : 'are'} required and ${one ? 'has' : 'have'} no default, so Prisma 8 cannot describe this foreign key. Add a @default to ${fields}, which sets the column default on Prisma 7's next migration, or choose another action, which replaces the foreign key on Prisma 7's next migration.`,
+          `${label}: ${key}: SetDefault sets the foreign key fields to their column defaults, but ${fields} ${one ? 'is' : 'are'} required and ${one ? 'has' : 'have'} no column default${generatorNote}, so Prisma 8 cannot describe this foreign key. Give ${fields} a column default, such as a literal or @default(dbgenerated("<expression>")), which sets it on Prisma 7's next migration, ${replaceAction}`,
           model.sourceId,
           span,
         ),
@@ -392,6 +400,7 @@ export function lowerRelations(
         const onUpdate = attribute.onUpdate ?? 'cascade';
         const actionRejections = referentialActionRejections({
           model,
+          relationField: field,
           label,
           fieldNames: attribute.fields,
           actions: { onDelete, onUpdate },
