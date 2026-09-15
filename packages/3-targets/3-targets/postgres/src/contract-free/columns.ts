@@ -29,7 +29,7 @@ export const jsonb = (opts?: ColOpts): ColumnDescriptor => desc(PG_JSONB_CODEC_I
 export const textArray = (opts?: ColOpts): ColumnDescriptor => desc(PG_TEXT_ARRAY_CODEC_ID, opts);
 export const timestamptz = (opts?: ColOpts): ColumnDescriptor =>
   desc(PG_TIMESTAMPTZ_STRING_CODEC_ID, opts);
-export const timestamptzDate = (opts?: ColOpts): ColumnDescriptor =>
+export const timestamptzJsDate = (opts?: ColOpts): ColumnDescriptor =>
   desc(PG_TIMESTAMPTZ_DATE_CODEC_ID, opts);
 
 /**

@@ -35,10 +35,10 @@ describe('postgres defineContract wrap', () => {
         Event: m('Event', {
           fields: {
             id: f.id.uuidv4String(),
-            at: f.temporal.timestamptzDate(),
-            precise: f.temporal.timestamptzDate(3, 'now', 'now'),
-            created: f.temporal.createdAtDate(),
-            updated: f.temporal.updatedAtDate(),
+            at: f.temporal.timestamptzJsDate(),
+            precise: f.temporal.timestamptzJsDate(3, 'now', 'now'),
+            created: f.temporal.createdAtJsDate(),
+            updated: f.temporal.updatedAtJsDate(),
           },
         }),
       },
@@ -72,8 +72,8 @@ describe('postgres defineContract wrap', () => {
         Event: m('Event', {
           fields: {
             id: f.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
-            at: f.temporal.timestamptzDate(),
-            maybe: f.temporal.timestamptzDate(6).optional(),
+            at: f.temporal.timestamptzJsDate(),
+            maybe: f.temporal.timestamptzJsDate(6).optional(),
           },
         }),
       },

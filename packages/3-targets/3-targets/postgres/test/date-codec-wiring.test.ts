@@ -43,12 +43,15 @@ describe('Postgres Date codec wiring', () => {
 
   it('provides opt-in Date field presets with the Date-valued clock', () => {
     expect(postgresAuthoringFieldPresets).not.toHaveProperty('dateTimeDate');
+    for (const name of ['timestamptzDate', 'createdAtDate', 'updatedAtDate']) {
+      expect(postgresAuthoringFieldPresets.temporal).not.toHaveProperty(name);
+    }
     const input = { codecId, nativeType: 'timestamptz' };
     const convenience = temporalAuthoringPresets(input);
     expect(postgresAuthoringFieldPresets.temporal).toMatchObject({
-      timestamptzDate: temporalCodecPresetWithPrecision(input),
-      createdAtDate: convenience.createdAt,
-      updatedAtDate: convenience.updatedAt,
+      timestamptzJsDate: temporalCodecPresetWithPrecision(input),
+      createdAtJsDate: convenience.createdAt,
+      updatedAtJsDate: convenience.updatedAt,
     });
     expect(postgresAuthoringFieldPresets.dateTime.output.codecId).toBe('pg/timestamptz-temporal@1');
     expect(postgresAuthoringFieldPresets.temporal.timestamptz.output.codecId).toBe(

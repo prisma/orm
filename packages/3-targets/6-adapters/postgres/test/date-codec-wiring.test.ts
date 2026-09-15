@@ -7,15 +7,17 @@ const codecId = 'pg/timestamptz-date@1';
 
 describe('Postgres Date adapter wiring', () => {
   it('exports the Date column descriptor', () => {
-    expect(columnTypes).toHaveProperty('timestamptzDateColumn', {
+    expect(columnTypes).not.toHaveProperty('timestamptzDateColumn');
+    expect(columnTypes).toHaveProperty('timestamptzJsDateColumn', {
       codecId,
       nativeType: 'timestamptz',
     });
   });
 
-  it('offers only precision-bearing TimestamptzDate without changing defaults', () => {
+  it('offers only precision-bearing TimestamptzJsDate without changing defaults', () => {
     expect(postgresAuthoringTypes).not.toHaveProperty('DateTimeDate');
-    expect(postgresAuthoringTypes).toHaveProperty('TimestamptzDate', {
+    expect(postgresAuthoringTypes).not.toHaveProperty('TimestamptzDate');
+    expect(postgresAuthoringTypes).toHaveProperty('TimestamptzJsDate', {
       kind: 'typeConstructor',
       args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
       output: {

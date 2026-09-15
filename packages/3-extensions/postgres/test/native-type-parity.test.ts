@@ -103,7 +103,8 @@ const numericOut = { codecId: 'pg/numeric@1', nativeType: 'numeric' } as const;
 
 const parityCases: readonly ParityCase[] = [
   ...[undefined, 0, 3, 6].map((precision): ParityCase => {
-    const spelling = precision === undefined ? 'TimestamptzDate' : `TimestamptzDate(${precision})`;
+    const spelling =
+      precision === undefined ? 'TimestamptzJsDate' : `TimestamptzJsDate(${precision})`;
     return {
       title: spelling,
       bare: spelling,
@@ -346,11 +347,11 @@ describe('native types as bare scalar types — parity with the live bare-type p
   it('lowers the Date updatedAt shorthand identically to explicit Date clock phases', () => {
     const shorthand = emit(`model sample {
       id Int @id
-      at temporal.updatedAtDate()
+      at temporal.updatedAtJsDate()
     }`);
     const explicit = emit(`model sample {
       id Int @id
-      at temporal.timestamptzDate(onCreate: now, onUpdate: now)
+      at temporal.timestamptzJsDate(onCreate: now, onUpdate: now)
     }`);
     expect(shorthand.ok).toBe(true);
     expect(explicit.ok).toBe(true);
@@ -367,7 +368,7 @@ describe('native types as bare scalar types — parity with the live bare-type p
   it('lowers a Date creation preset to a database now default', () => {
     const result = emit(`model sample {
       id Int @id
-      at temporal.createdAtDate()
+      at temporal.createdAtJsDate()
     }`);
     expect(result.ok).toBe(true);
     if (!result.ok) return;

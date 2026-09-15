@@ -740,15 +740,15 @@ export const postgresAuthoringFieldPresets = {
     },
   },
   temporal: {
-    createdAtDate: /* @__PURE__ */ temporalAuthoringPresets({
+    createdAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
       codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
       nativeType: 'timestamptz',
     }).createdAt,
-    updatedAtDate: /* @__PURE__ */ temporalAuthoringPresets({
+    updatedAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
       codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
       nativeType: 'timestamptz',
     }).updatedAt,
-    timestamptzDate: /* @__PURE__ */ temporalCodecPresetWithPrecision({
+    timestamptzJsDate: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
       nativeType: 'timestamptz',
     }),

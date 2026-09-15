@@ -126,7 +126,7 @@ export const timestamptzTemporalColumn = {
   nativeType: 'timestamptz',
 } as const satisfies ColumnTypeDescriptor;
 
-export const timestamptzDateColumn = {
+export const timestamptzJsDateColumn = {
   codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
   nativeType: 'timestamptz',
 } as const satisfies ColumnTypeDescriptor;

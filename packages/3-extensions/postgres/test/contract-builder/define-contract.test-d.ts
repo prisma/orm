@@ -12,9 +12,12 @@ test('limits Date authoring to the temporal presets', () => {
   defineContract({}, ({ field: f }) => {
     expectTypeOf(f).not.toBeAny();
     expectTypeOf(f).not.toHaveProperty('dateTimeDate');
-    expectTypeOf(f.temporal).toHaveProperty('timestamptzDate');
-    expectTypeOf(f.temporal).toHaveProperty('createdAtDate');
-    expectTypeOf(f.temporal).toHaveProperty('updatedAtDate');
+    expectTypeOf(f.temporal).not.toHaveProperty('timestamptzDate');
+    expectTypeOf(f.temporal).not.toHaveProperty('createdAtDate');
+    expectTypeOf(f.temporal).not.toHaveProperty('updatedAtDate');
+    expectTypeOf(f.temporal).toHaveProperty('timestamptzJsDate');
+    expectTypeOf(f.temporal).toHaveProperty('createdAtJsDate');
+    expectTypeOf(f.temporal).toHaveProperty('updatedAtJsDate');
     return {};
   });
 });

@@ -299,7 +299,7 @@ export const postgresNativeAuthoringTypes = {
       typeParams: { precision: { kind: 'arg', index: 0 } },
     },
   },
-  TimestamptzDate: {
+  TimestamptzJsDate: {
     kind: 'typeConstructor',
     args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
     output: {

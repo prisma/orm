@@ -31,7 +31,7 @@ export {
   text,
   textArray,
   timestamptz,
-  timestamptzDate,
+  timestamptzJsDate,
 } from '../contract-free/columns';
 export {
   buildControlTableBootstrapQueries,
