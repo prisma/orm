@@ -55,7 +55,9 @@ import {
 import type { PostgresOpFactoryCall } from './op-factory-call';
 import {
   CreatePostgresRlsPolicyCall,
+  DropColumnCall,
   DropPostgresRlsPolicyCall,
+  DropTableCall,
   RenameCheckConstraintCall,
   RenameIndexCall,
   RenamePostgresRlsPolicyCall,
@@ -351,9 +353,8 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
       resolveFactoryName: (call) => call.factoryName,
     });
     const calls = [
-      ...result.value.calls,
+      ...splicePolicyDropsBeforeEntityDrops(result.value.calls, schemaDiffPartition.kept),
       ...indexRenamePartition.kept,
-      ...schemaDiffPartition.kept,
       ...fieldEventPartition.kept,
     ];
     // Byte-identical suppression warnings (the same subject suppressed by
@@ -863,6 +864,34 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
 function isPolicyDiffIssue(issue: SchemaDiffIssue<SqlSchemaDiffNode>): boolean {
   const node = issue.expected ?? issue.actual;
   return node !== undefined && PostgresPolicySchemaNode.is(node);
+}
+
+/**
+ * Splices RLS policy drops ahead of structural entity drops. Postgres refuses
+ * to drop a column (or table) while a policy still references it (2BP01), so
+ * a `dropColumn` planned before its `dropPolicy` fails at apply time. Policy
+ * creates and renames stay after the structural block: creates must see the
+ * columns they reference, and renames preserve policies rather than removing
+ * them. With no entity drop present the input order is kept untouched.
+ */
+function splicePolicyDropsBeforeEntityDrops(
+  structural: readonly PostgresOpFactoryCall[],
+  schemaDiff: readonly PostgresOpFactoryCall[],
+): readonly PostgresOpFactoryCall[] {
+  const policyDrops = schemaDiff.filter(
+    (call): call is DropPostgresRlsPolicyCall => call instanceof DropPostgresRlsPolicyCall,
+  );
+  const anchor =
+    policyDrops.length === 0
+      ? -1
+      : structural.findIndex(
+          (call) => call instanceof DropTableCall || call instanceof DropColumnCall,
+        );
+  if (anchor === -1) {
+    return [...structural, ...schemaDiff];
+  }
+  const rest = schemaDiff.filter((call) => !(call instanceof DropPostgresRlsPolicyCall));
+  return [...structural.slice(0, anchor), ...policyDrops, ...structural.slice(anchor), ...rest];
 }
 
 /**

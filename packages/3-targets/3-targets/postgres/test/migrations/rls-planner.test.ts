@@ -391,6 +391,66 @@ describe('RLS planner policy edit (missing + extra via generic pipeline)', () =>
   });
 });
 
+describe('RLS planner drop ordering against column drops', () => {
+  function schemaWithPublishedColumn(policies: readonly PostgresRlsPolicy[]) {
+    return new PostgresDatabaseSchemaNode({
+      namespaces: {
+        public: new PostgresNamespaceSchemaNode({
+          schemaName: 'public',
+          tables: {
+            [TABLE_NAME]: new PostgresTableSchemaNode({
+              name: TABLE_NAME,
+              columns: {
+                id: { name: 'id', nativeType: 'int4', nullable: false },
+                user_id: { name: 'user_id', nativeType: 'int4', nullable: false },
+                published: { name: 'published', nativeType: 'bool', nullable: false },
+              },
+              foreignKeys: [],
+              uniques: [],
+              indexes: [],
+              policies: policies.map(policyNode),
+              rlsEnabled: true,
+            }),
+          },
+        }),
+      },
+      roles: [],
+      existingSchemas: ['public'],
+      pgVersion: 'unknown',
+    });
+  }
+
+  it('emits DROP POLICY before DROP COLUMN when the policy references the column', async () => {
+    const contract = buildContractWith([makePolicy('p_read_11111111')]);
+    const planner = createPostgresMigrationPlanner(stubLowerer);
+    const schema = schemaWithPublishedColumn([
+      makeActualPolicy('p_read_11111111'),
+      makeActualPolicy('p_pub_22222222', TABLE_NAME, '(published = true)'),
+    ]);
+
+    const result = planner.plan({
+      contract,
+      schema,
+      policy: DB_UPDATE_POLICY,
+      fromContract: null,
+      frameworkComponents: [],
+      spaceId: APP_SPACE_ID,
+      snapshotsImportPath: '../../snapshots',
+    });
+
+    expect(result.kind).toBe('success');
+    if (result.kind !== 'success') return;
+
+    const ops = await Promise.all(result.plan.operations);
+    const opIds = ops.map((op) => op.id);
+    const dropPolicyId = `rlsPolicy.public.${TABLE_NAME}.p_pub_22222222.drop`;
+    const dropColumnId = `dropColumn.${TABLE_NAME}.published`;
+    expect(opIds).toContain(dropPolicyId);
+    expect(opIds).toContain(dropColumnId);
+    expect(opIds.indexOf(dropPolicyId)).toBeLessThan(opIds.indexOf(dropColumnId));
+  });
+});
+
 describe('RLS planner roles produce zero ops (AC-6)', () => {
   // Roles are existence-verify only (provisioning is a project non-goal), so a
   // role diff issue must add NO migration op — never CREATE/DROP ROLE, and
