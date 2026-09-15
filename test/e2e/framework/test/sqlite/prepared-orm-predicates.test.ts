@@ -120,8 +120,9 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
     expect(await terminal.query(runtime, { id: 2 })).toEqual({ id: 2 });
     expect(await terminal.query(runtime, { id: 99 })).toBeNull();
     const count = executions.length;
-    await expect(
-      db.prepare({ value: { codecId: 'sqlite/integer@1', nullable: true } }, (p) =>
+    const authored = await db.prepare(
+      { value: { codecId: 'sqlite/integer@1', nullable: true } },
+      (p) =>
         db.orm.User.where({
           toWhereExpr: () =>
             ExistsExpr.exists(
@@ -135,11 +136,14 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
                 ),
             ),
         })
+          .orderBy((user) => user.id.asc())
           .select('id')
           .prepared.all(),
-      ),
-    ).rejects.toThrow(/nullable prepared parameter/i);
+    );
     expect(executions).toHaveLength(count);
+    expect(await authored.query(runtime, { value: null })).toEqual([]);
+    expect(await authored.query(runtime, { value: 9 })).toEqual([]);
+    expect(await authored.query(runtime, { value: 7 })).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
     const nullableStart = executions.length;
     const nullableLowerCount = lower.mock.calls.length;
     const nullableCallback = vi.fn();
@@ -220,7 +224,7 @@ it('prepares ORM predicates and pagination through the public SQLite facade with
           .select('id')
           .prepared.all(),
     );
-    expect(await scalar.query(runtime, { value: null })).toEqual([{ id: 3 }]);
+    expect(await scalar.query(runtime, { value: null })).toEqual([]);
     expect(await scalar.query(runtime, { value: 9 })).toEqual([{ id: 1 }, { id: 2 }]);
     const raw = await db.prepare({ value: { codecId: 'sqlite/integer@1', nullable: true } }, (p) =>
       db.orm.User.where({
