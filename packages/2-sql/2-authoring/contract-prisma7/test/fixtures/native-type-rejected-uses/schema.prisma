@@ -31,3 +31,15 @@ model Comment {
   authorHandle String @db.Citext
   author       Author @relation(fields: [authorHandle], references: [handle]) @ignore
 }
+
+model Reader {
+  id      Int      @id
+  handle  String   @unique
+  reviews Review[]
+}
+
+model Review {
+  id           Int    @id
+  readerHandle String @db.Citext
+  reader       Reader @relation(fields: [readerHandle], references: [handle])
+}
