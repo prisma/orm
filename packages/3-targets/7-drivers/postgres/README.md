@@ -89,7 +89,7 @@ Buffered and cursor query paths pass `temporalTextTypes` to `pg`. That policy re
 - [ADR 159 — Driver Terminology and Lifecycle](../../../../docs/architecture%20docs/adrs/ADR%20159%20-%20Driver%20Terminology%20and%20Lifecycle.md)
 - [ADR 005 — Thin Core Fat Targets](../../../../docs/architecture%20docs/adrs/ADR%20005%20-%20Thin%20Core%20Fat%20Targets.md)
 - [ADR 016 — Adapter SPI for Lowering](../../../../docs/architecture%20docs/adrs/ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md)
-- [ADR 249 — Target-owned Postgres list framing](../../../../docs/architecture%20docs/adrs/ADR%20249%20-%20Target-owned%20Postgres%20list%20framing.md)
+- [ADR 251 — Target-owned Postgres list framing](../../../../docs/architecture%20docs/adrs/ADR%20251%20-%20Target-owned%20Postgres%20list%20framing.md)
 
 ## Usage
 
