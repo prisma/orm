@@ -120,21 +120,39 @@ describe('QueryPlanCache', () => {
       expect(cache.batchCacheSize).toBe(1)
     })
 
-    it('evicts oldest batch entry when at capacity', () => {
-      const cache = new QueryPlanCache(2)
-      const makeResponse = (id: number) => ({
+    it('evicts oldest batch entry when at capacity (tracking total queries)', () => {
+      const cache = new QueryPlanCache(4) // Max 4 queries total
+
+      const makeResponse = (id: number, count: number) => ({
         type: 'multi' as const,
-        plans: [{ type: 'value' as const, args: id }],
+        plans: Array(count).fill({ type: 'value' as const, args: id }),
       })
 
-      cache.setBatch('key1', makeResponse(1))
-      cache.setBatch('key2', makeResponse(2))
-      cache.setBatch('key3', makeResponse(3))
+      cache.setBatch('key1', makeResponse(1, 2)) // Total: 2
+      cache.setBatch('key2', makeResponse(2, 1)) // Total: 3
+      cache.setBatch('key3', makeResponse(3, 2)) // Total: 5 (exceeds 4, evicts key1 -> Total: 3)
 
       expect(cache.getBatch('key1')).toBeUndefined()
       expect(cache.getBatch('key2')).toBeDefined()
       expect(cache.getBatch('key3')).toBeDefined()
       expect(cache.batchCacheSize).toBe(2)
+    })
+
+    it('does not cache a batch if its queries exceed maxSize', () => {
+      const cache = new QueryPlanCache(2)
+
+      const response = {
+        type: 'multi' as const,
+        plans: [
+          { type: 'value' as const, args: null },
+          { type: 'value' as const, args: null },
+          { type: 'value' as const, args: null },
+        ],
+      }
+      cache.setBatch('massiveKey', response)
+
+      expect(cache.getBatch('massiveKey')).toBeUndefined()
+      expect(cache.batchCacheSize).toBe(0)
     })
 
     it('refreshes batch entry on get (LRU behavior)', () => {
