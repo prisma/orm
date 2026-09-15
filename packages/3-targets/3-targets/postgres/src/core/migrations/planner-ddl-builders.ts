@@ -166,7 +166,7 @@ export function renderDefaultLiteral(
   const isJsonColumn = column?.nativeType === 'json' || column?.nativeType === 'jsonb';
 
   if (column?.many && Array.isArray(value)) {
-    return renderArrayLiteralDefault(value);
+    return renderArrayLiteralDefault(value, column.nativeType);
   }
 
   if (value instanceof Date) {
@@ -188,10 +188,17 @@ export function renderDefaultLiteral(
   return `'${escapeLiteral(json)}'`;
 }
 
-function renderArrayLiteralDefault(elements: unknown[]): string {
+/**
+ * An `ARRAY[...]` of quoted elements has type `text[]`, which Postgres does not assign to a list of
+ * numbers, decimals, timestamps or enums, so the constructor is cast to the list type. Each element
+ * is the text Postgres reads for its type: an `int8` or `numeric` value as decimal text, a temporal
+ * value as ISO text. `nativeType` may be the element type or the list type.
+ */
+function renderArrayLiteralDefault(elements: unknown[], nativeType: string): string {
   if (elements.length === 0) {
     return "'{}'";
   }
-  const rendered = elements.map((el) => renderDefaultLiteral(el)).join(', ');
-  return `ARRAY[${rendered}]`;
+  const rendered = `ARRAY[${elements.map((el) => renderDefaultLiteral(el)).join(', ')}]`;
+  if (nativeType === '') return rendered;
+  return `${rendered}::${nativeType.endsWith('[]') ? nativeType : `${nativeType}[]`}`;
 }

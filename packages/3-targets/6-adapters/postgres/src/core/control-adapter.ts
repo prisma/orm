@@ -68,6 +68,7 @@ import type {
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { postgresError } from '@internal/target-postgres/errors';
 import { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
+import { renderDefaultLiteral } from '@internal/target-postgres/planner-ddl-builders';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
 import {
   PostgresDatabaseSchemaNode,
@@ -1691,18 +1692,6 @@ function pgIsTextLikeNativeType(nativeType: string): boolean {
   );
 }
 
-function pgRenderArrayElement(el: unknown): string {
-  if (el === null) return 'NULL';
-  if (typeof el === 'number' || typeof el === 'boolean') return String(el);
-  if (typeof el === 'string') return `'${escapeLiteral(el)}'`;
-  return `'${escapeLiteral(JSON.stringify(el))}'`;
-}
-
-function pgRenderArrayLiteral(elements: unknown[]): string {
-  if (elements.length === 0) return "'{}'";
-  return `ARRAY[${elements.map(pgRenderArrayElement).join(', ')}]`;
-}
-
 function pgInlineLiteral(wire: unknown, nativeType: string): string {
   if (wire === null) return 'NULL';
   if (typeof wire === 'boolean') return wire ? 'true' : 'false';
@@ -1737,9 +1726,6 @@ function pgInlineLiteral(wire: unknown, nativeType: string): string {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
     return `'\\x${hex}'::${nativeType}`;
-  }
-  if (Array.isArray(wire) && nativeType.endsWith('[]')) {
-    return pgRenderArrayLiteral(wire);
   }
   if (typeof wire === 'object') {
     const quoted = `'${escapeLiteral(JSON.stringify(wire))}'`;
@@ -1781,6 +1767,9 @@ async function pgRenderDdlColumnDefault(
       return '';
     }
     return `DEFAULT (${def.expression})`;
+  }
+  if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
+    return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType })}`;
   }
   if (codecRef !== undefined) {
     const codec = codecLookup.get(codecRef.codecId);

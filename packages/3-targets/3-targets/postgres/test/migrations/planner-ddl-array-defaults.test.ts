@@ -16,15 +16,44 @@ describe('renderDefaultLiteral array columns', () => {
     expect(renderDefaultLiteral([], arrayColumn('text[]'))).toBe("'{}'");
   });
 
-  it('renders a string array default as an ARRAY[...] expression', () => {
-    expect(renderDefaultLiteral(['a', 'b'], arrayColumn('text[]'))).toBe("ARRAY['a', 'b']");
+  it('renders a string array default as an ARRAY[...] expression cast to the column type', () => {
+    expect(renderDefaultLiteral(['a', 'b'], arrayColumn('text[]'))).toBe("ARRAY['a', 'b']::text[]");
   });
 
   it('renders Date array elements as ISO timestamp literals, not JSON blobs', () => {
     const d = new Date('2026-01-02T03:04:05.000Z');
     expect(renderDefaultLiteral([d], arrayColumn('timestamptz[]'))).toBe(
-      "ARRAY['2026-01-02T03:04:05.000Z']",
+      "ARRAY['2026-01-02T03:04:05.000Z']::timestamptz[]",
     );
+  });
+
+  it.each([
+    {
+      value: ['1', '-2', '9007199254740993'],
+      nativeType: 'int8',
+      sql: "ARRAY['1', '-2', '9007199254740993']::int8[]",
+    },
+    {
+      value: ['1.5', '-2.25'],
+      nativeType: 'numeric(65,30)',
+      sql: "ARRAY['1.5', '-2.25']::numeric(65,30)[]",
+    },
+    { value: ['1.50'], nativeType: 'numeric', sql: "ARRAY['1.50']::numeric[]" },
+    {
+      value: ['2024-01-01T00:00:00'],
+      nativeType: 'timestamp(3)',
+      sql: "ARRAY['2024-01-01T00:00:00']::timestamp(3)[]",
+    },
+  ])(
+    'casts the text elements of a $nativeType list to the list type',
+    ({ value, nativeType, sql }) => {
+      expect(renderDefaultLiteral(value, arrayColumn(nativeType))).toBe(sql);
+      expect(renderDefaultLiteral(value, arrayColumn(`${nativeType}[]`))).toBe(sql);
+    },
+  );
+
+  it('renders an ARRAY[...] expression without a cast when no native type is known', () => {
+    expect(renderDefaultLiteral(['a'], arrayColumn(''))).toBe("ARRAY['a']");
   });
 
   it('renders a null literal default on a many column as NULL', () => {
