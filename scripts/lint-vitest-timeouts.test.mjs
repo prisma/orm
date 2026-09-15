@@ -73,6 +73,13 @@ describe('findDefaultTimeoutBudgets', () => {
     assert.deepEqual(findDefaultTimeoutBudgets('    teardownTimeout: timeouts.default,\n'), []);
   });
 
+  it('recognises a value wrapped onto the next line', () => {
+    assert.deepEqual(
+      findDefaultTimeoutBudgets('  test: {\n    hookTimeout:\n      timeouts.default,\n  },\n'),
+      [{ line: 2, setting: 'hookTimeout' }],
+    );
+  });
+
   it('recognises a quoted key and a parenthesised value', () => {
     assert.deepEqual(
       findDefaultTimeoutBudgets(

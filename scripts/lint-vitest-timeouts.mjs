@@ -20,7 +20,7 @@ import { join } from 'node:path';
 
 const GIT_ROOT = process.cwd();
 
-const BUDGET_LINE = /^\s*['"]?(testTimeout|hookTimeout)['"]?\s*:\s*\(?\s*timeouts\.default\b/;
+const BUDGET = /(?<=^|[\s{,])['"]?(testTimeout|hookTimeout)['"]?\s*:\s*\(?\s*timeouts\.default\b/g;
 
 /** Every extension vitest loads a config from. */
 const CONFIG_GLOBS = ['js', 'mjs', 'cjs', 'ts', 'cts', 'mts'].map((ext) => `*vitest.config.${ext}`);
@@ -28,12 +28,10 @@ const CONFIG_GLOBS = ['js', 'mjs', 'cjs', 'ts', 'cts', 'mts'].map((ext) => `*vit
 /** The lines of a vitest config that budget tests or hooks with `timeouts.default`. */
 export function findDefaultTimeoutBudgets(source) {
   const findings = [];
-  source.split('\n').forEach((line, index) => {
-    const match = BUDGET_LINE.exec(line);
-    if (match) {
-      findings.push({ line: index + 1, setting: match[1] });
-    }
-  });
+  for (const match of source.matchAll(BUDGET)) {
+    const line = source.slice(0, match.index).split('\n').length;
+    findings.push({ line, setting: match[1] });
+  }
   return findings;
 }
 

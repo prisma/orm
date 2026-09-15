@@ -799,8 +799,13 @@ class ControlClientImpl implements ControlClient {
     contract: Contract,
     resolveImportSpecifier: ImportSpecifierResolver,
   ): ReturnType<typeof emitContractArtifacts> {
+    const familyInstance = this.familyInstance;
+    if (!familyInstance) {
+      throw new InternalError('Family instance was not initialized. This is a bug.');
+    }
     return emitContractArtifacts(contract, this.stack!, this.options.family.emission, {
       serializeContract: (c) => this.options.target.contractSerializer.serializeContract(c),
+      deserializeContract: (json) => familyInstance.deserializeContract(json),
       resolveImportSpecifier,
       ...ifDefined('supportsNamespaces', this.options.target.supportsNamespaces),
     });
