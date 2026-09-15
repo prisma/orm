@@ -13,10 +13,12 @@ import {
   FunctionCallAst,
   IdentifierAst,
   NumberLiteralExprAst,
+  printSyntax,
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { prisma7Diagnostic } from './diagnostics';
+import { storedTemporalText, type TemporalNativeType } from './temporal-literals';
 
 export interface LoweredPrisma7Default {
   readonly storage: ColumnDefault | undefined;
@@ -28,6 +30,7 @@ export interface LowerPrisma7DefaultInput {
   readonly field: FieldSymbol;
   readonly modelName: string;
   readonly nativeType: string;
+  readonly typeParams: Readonly<Record<string, unknown>> | undefined;
   readonly codecId: string;
   /** Storage value per member name when the field is typed by a Prisma 7 enum. */
   readonly enumMembers: ReadonlyMap<string, string> | undefined;
@@ -41,6 +44,18 @@ type LiteralValue = string | number | boolean;
 function base64ToHex(base64: string): string | undefined {
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64) || base64.length % 4 !== 0) return undefined;
   return `\\x${Buffer.from(base64, 'base64').toString('hex')}`;
+}
+
+const CLIENT_SIDE_GENERATORS: ReadonlySet<string> = new Set(['uuid', 'cuid', 'ulid', 'nanoid']);
+
+export function givesColumnDefault(attribute: ResolvedAttribute | undefined): boolean {
+  const expression = attribute?.args.find((arg) => arg.kind === 'positional')?.expression;
+  if (expression === undefined) return false;
+  const call = FunctionCallAst.cast(expression.syntax);
+  if (call === undefined) return true;
+  const fn = call.path().join('.');
+  if (CLIENT_SIDE_GENERATORS.has(fn)) return false;
+  return fn !== 'dbgenerated' || [...call.args()].length > 0;
 }
 
 /** Positional argument keys per Prisma 7 default function, matching the target registry's signatures. */
@@ -85,8 +100,14 @@ export function lowerPrisma7Default(
   }
 
   const rawLiteral = rawSqlLiteral(expression, input);
+  if (rawLiteral === 'unreadable') {
+    return unknown('holds a value this contract source does not read.', attribute.span);
+  }
   if (rawLiteral !== undefined) {
-    return { storage: { kind: 'function', expression: rawLiteral }, onCreate: undefined };
+    return {
+      storage: { kind: 'function', expression: rawLiteral.expression },
+      onCreate: undefined,
+    };
   }
 
   const scalar = scalarValue(expression, input, unknown);
@@ -100,6 +121,18 @@ function scalarValue(
   unknown: (reason: string, span: PslSpan) => undefined,
 ): ColumnDefaultLiteralInputValue | undefined {
   const span = input.attribute.span;
+  const isJson = input.nativeType === 'json' || input.nativeType === 'jsonb';
+  const jsonNull = (holds: string): undefined => {
+    input.diagnostics.push(
+      prisma7Diagnostic(
+        'PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED',
+        `Field "${input.modelName}.${input.field.name}": @default(${printSyntax(expression.syntax).trim()}) ${holds} the JSON value null, which the contract cannot tell apart from SQL NULL. Remove the @default or give it another JSON value; either changes the column default on Prisma 7's next migration.`,
+        input.sourceId,
+        span,
+      ),
+    );
+    return undefined;
+  };
   const array = ArrayLiteralAst.cast(expression.syntax);
   if (array !== undefined) {
     const values: ColumnDefaultLiteralInputValue[] = [];
@@ -113,9 +146,11 @@ function scalarValue(
       }
       values.push(value);
     }
+    if (isJson && values.includes(null)) return jsonNull('holds');
     return blindListValue(values);
   }
   const value = elementValue(expression, input);
+  if (isJson && value === null) return jsonNull('is');
   if (value !== undefined) return value;
   const bigintReason = nonIntegerBigintReason(expression, input);
   if (bigintReason !== undefined) return unknown(bigintReason, span);
@@ -131,8 +166,7 @@ function scalarValue(
   return unknown('holds a value this contract source does not read.', span);
 }
 
-const RAW_LITERAL_TYPES: ReadonlySet<string> = new Set([
-  'bytea',
+const TEMPORAL_NATIVE_TYPES: ReadonlySet<string> = new Set<TemporalNativeType>([
   'timestamp',
   'timestamptz',
   'date',
@@ -140,21 +174,45 @@ const RAW_LITERAL_TYPES: ReadonlySet<string> = new Set([
   'timetz',
 ]);
 
+function isTemporalNativeType(nativeType: string): nativeType is TemporalNativeType {
+  return TEMPORAL_NATIVE_TYPES.has(nativeType);
+}
+
+function rawSqlText(text: string, nativeType: 'bytea' | TemporalNativeType): string | undefined {
+  const value = nativeType === 'bytea' ? base64ToHex(text) : storedTemporalText(text, nativeType);
+  return value === undefined ? undefined : `'${value.replace(/'/g, "''")}'`;
+}
+
 /**
- * A `Bytes` or `DateTime` string literal is carried as the SQL literal Prisma 7
- * writes (`'\x68656c6c6f'`, `'2024-01-01T00:00:00.000Z'`) rather than through
- * the column codec, whose JSON form (base64, a Temporal instant) is not what
- * introspection reads back; verify parses both sides with the same parser.
+ * A `Bytes` or `DateTime` default is carried as the SQL literal of the default
+ * Postgres stores (`'\x68656c6c6f'`, `'2024-01-02 03:04:05'`), and a list default
+ * as an `ARRAY[...]` of those literals cast to the column type, rather than
+ * through the column codec, whose JSON form (base64, a Temporal value) is not
+ * what introspection reads back; verify parses both sides with the same parser.
  */
 function rawSqlLiteral(
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
-): string | undefined {
-  if (!RAW_LITERAL_TYPES.has(input.nativeType)) return undefined;
-  const text = StringLiteralExprAst.cast(expression.syntax)?.value();
-  if (text === undefined) return undefined;
-  const value = input.nativeType === 'bytea' ? base64ToHex(text) : text;
-  return value === undefined ? undefined : `'${value.replace(/'/g, "''")}'`;
+): { readonly expression: string } | 'unreadable' | undefined {
+  const { nativeType } = input;
+  if (nativeType !== 'bytea' && !isTemporalNativeType(nativeType)) return undefined;
+  const array = input.field.list ? ArrayLiteralAst.cast(expression.syntax) : undefined;
+  if (array === undefined) {
+    const text = StringLiteralExprAst.cast(expression.syntax)?.value();
+    if (text === undefined) return undefined;
+    const literal = rawSqlText(text, nativeType);
+    return literal === undefined ? 'unreadable' : { expression: literal };
+  }
+  const literals: string[] = [];
+  for (const element of array.elements()) {
+    const text = StringLiteralExprAst.cast(element.syntax)?.value();
+    const literal = text === undefined ? undefined : rawSqlText(text, nativeType);
+    if (literal === undefined) return 'unreadable';
+    literals.push(literal);
+  }
+  const precision = input.typeParams?.['precision'];
+  const typeName = `${nativeType.toUpperCase()}${typeof precision === 'number' ? `(${precision})` : ''}`;
+  return { expression: `ARRAY[${literals.join(', ')}]::${typeName}[]` };
 }
 
 function blindListValue(
@@ -210,7 +268,6 @@ function elementValue(
         return undefined;
       }
     }
-    if (input.nativeType === 'bytea') return base64ToHex(text);
     return text;
   }
   return BooleanLiteralExprAst.cast(expression.syntax)?.value();
@@ -224,6 +281,21 @@ function lowerFunction(
 ): LoweredPrisma7Default | undefined {
   const fn = call.path().join('.');
   const span = input.attribute.span;
+  const callArgs = [...call.args()];
+  if (fn === 'dbgenerated' && callArgs.length === 0) {
+    if (input.field.optional || input.field.list) {
+      return { storage: undefined, onCreate: undefined };
+    }
+    input.diagnostics.push(
+      prisma7Diagnostic(
+        'PRISMA7_UNKNOWN_DEFAULT',
+        `${label}: @default(dbgenerated()) with no expression is not supported yet on a required field, because without a column default Prisma 8 requires the value on create. Either remove the @default, which makes Prisma 7's next migration drop the column default (ALTER COLUMN ... DROP DEFAULT) and both clients require the value on create, or write the column's database default as @default(dbgenerated("<expression>")), which Prisma 7's next migration sets on the column.`,
+        input.sourceId,
+        span,
+      ),
+    );
+    return undefined;
+  }
   const keys = FUNCTION_ARGUMENT_KEYS[fn];
   const entry = input.controlMutationDefaults.defaultFunctionRegistry.get(fn);
   if (keys === undefined || entry === undefined) {
@@ -234,7 +306,7 @@ function lowerFunction(
   }
   const args: Record<string, unknown> = {};
   let index = 0;
-  for (const arg of call.args()) {
+  for (const arg of callArgs) {
     const key = arg.name()?.name() ?? keys[index];
     const value = arg.value();
     const literal = value === undefined ? undefined : literalArgument(value);

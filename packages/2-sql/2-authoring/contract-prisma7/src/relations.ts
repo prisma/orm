@@ -22,7 +22,7 @@ import type {
   ModelNode,
   RelationNode,
 } from '@internal/sql-contract-ts/contract-builder';
-import { prisma7Diagnostic } from './diagnostics';
+import { andList, fieldList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { prisma7ConstraintName } from './indexes';
 
 export interface RelationAttribute {
@@ -45,18 +45,33 @@ export interface RelationField {
 export interface RelationModel {
   readonly modelName: string;
   readonly tableName: string;
+  /** The model's `@@map` attribute, or the model when it has none. */
+  readonly tableSpan: PslSpan;
   readonly namespaceId: string;
   readonly sourceId: string;
   readonly columns: ReadonlyMap<string, FieldNode>;
-  /** Field names of scalars skipped with `@ignore`; a relation over one is dropped silently. */
   readonly ignoredFields: ReadonlySet<string>;
+  /** Relation fields marked `@ignore`; their back-relations are omitted with them. */
+  readonly ignoredRelationFields: readonly RelationField[];
+  /** Fields whose type or attributes were reported; keys and relations over them report nothing more. */
+  readonly rejectedFields: ReadonlySet<string>;
   readonly idFields: readonly string[];
   readonly uniqueFieldSets: readonly (readonly string[])[];
   readonly relationFields: readonly RelationField[];
 }
 
+/** The codes `applyBackrelationCandidates` reports, each shown as `PRISMA7_RELATION_UNRESOLVED`. */
+export const RELATION_PAIRING_CODES: ReadonlySet<string> = new Set([
+  'PSL_ORPHANED_BACKRELATION',
+  'PSL_AMBIGUOUS_BACKRELATION',
+  'PSL_NON_UNIQUE_BACKRELATION',
+  'PSL_REQUIRED_ONE_TO_ONE_BACKRELATION',
+  'PSL_JUNCTION_ID_NOT_FK_COVERING',
+  'PSL_JUNCTION_TARGET_FK_NOT_ID',
+]);
+
 export interface RelationLowering {
-  readonly junctions: readonly ModelNode[];
+  readonly junctions: ReadonlyMap<string, ModelNode>;
   readonly foreignKeys: ReadonlyMap<string, readonly ForeignKeyNode[]>;
   readonly relations: ReadonlyMap<string, readonly RelationNode[]>;
 }
@@ -80,12 +95,22 @@ function stringValue(expression: ResolvedAttributeArg['expression']): string | u
     : StringLiteralExprAst.cast(expression.syntax)?.value();
 }
 
+const PRISMA7_REFERENTIAL_ACTIONS: ReadonlySet<string> = new Set([
+  'Cascade',
+  'Restrict',
+  'NoAction',
+  'SetNull',
+  'SetDefault',
+]);
+
 function actionValue(
   expression: ResolvedAttributeArg['expression'],
 ): ReferentialAction | undefined {
   const token =
     expression === undefined ? undefined : IdentifierAst.cast(expression.syntax)?.name();
-  return token === undefined ? undefined : normalizeReferentialAction(token);
+  return token !== undefined && PRISMA7_REFERENTIAL_ACTIONS.has(token)
+    ? normalizeReferentialAction(token)
+    : undefined;
 }
 
 export function parseRelationAttribute(
@@ -171,8 +196,35 @@ interface JunctionSide {
   readonly field: RelationField;
 }
 
-function junctionPairKey(name: string): string {
-  return `_${name}`;
+interface JunctionRequest {
+  readonly requester: JunctionSide;
+  readonly partner: JunctionSide;
+  readonly name: string;
+}
+
+function groupBy<T>(items: readonly T[], keyOf: (item: T) => string): Map<string, T[]> {
+  const groups = new Map<string, T[]>();
+  for (const item of items) {
+    const group = groups.get(keyOf(item)) ?? [];
+    groups.set(keyOf(item), group);
+    group.push(item);
+  }
+  return groups;
+}
+
+function orderJunctionSides(
+  requester: JunctionSide,
+  partner: JunctionSide,
+): readonly [JunctionSide, JunctionSide] {
+  const requesterFirst =
+    requester.model === partner.model
+      ? requester.field.field.name < partner.field.field.name
+      : requester.model.modelName < partner.model.modelName;
+  return requesterFirst ? [requester, partner] : [partner, requester];
+}
+
+function junctionKey(namespaceId: string, name: string): string {
+  return JSON.stringify([namespaceId, name]);
 }
 
 /**
@@ -192,6 +244,93 @@ function effectiveRelationName(
   return `${first}To${second}`;
 }
 
+/**
+ * Prisma 7 accepts `SetNull` over a required field and `SetDefault` over a
+ * required field with no default, and writes them into the foreign key; the
+ * contract rejects both, because the action would fail the first time it runs.
+ */
+function referentialActionRejections(input: {
+  readonly model: RelationModel;
+  readonly relationField: FieldSymbol;
+  readonly label: string;
+  readonly fieldNames: readonly string[];
+  readonly actions: Readonly<Record<'onDelete' | 'onUpdate', ReferentialAction>>;
+  readonly span: PslSpan;
+}): ContractSourceDiagnostic[] {
+  const { model, relationField, label, fieldNames, span } = input;
+  const anotherAction =
+    "choose another action, which replaces the foreign key on Prisma 7's next migration and leaves the Prisma 7 client unchanged.";
+  const fieldsWhere = (predicate: (column: FieldNode) => boolean): readonly string[] =>
+    fieldNames.filter((name) => {
+      const column = model.columns.get(name);
+      return column !== undefined && predicate(column);
+    });
+  const rejections: ContractSourceDiagnostic[] = [];
+  for (const [key, action] of Object.entries(input.actions)) {
+    if (action === 'setNull') {
+      const required = fieldsWhere((column) => !column.nullable);
+      if (required.length === 0) continue;
+      const fields = fieldList(model.modelName, required);
+      rejections.push(
+        prisma7Diagnostic(
+          'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
+          `${label}: ${key}: SetNull sets the foreign key fields to null, but ${fields} ${required.length === 1 ? 'is' : 'are'} required, so Prisma 8 cannot describe this foreign key. Make ${fields}${relationField.optional ? '' : ` and "${model.modelName}.${relationField.name}"`} optional, which drops NOT NULL on Prisma 7's next migration and makes ${required.length === 1 && relationField.optional ? 'it' : 'them'} nullable in the Prisma 7 client, or ${anotherAction}`,
+          model.sourceId,
+          span,
+        ),
+      );
+    }
+    if (action === 'setDefault') {
+      const withoutDefault = fieldsWhere(
+        (column) => !column.nullable && column.default === undefined,
+      );
+      if (withoutDefault.length === 0) continue;
+      const fields = fieldList(model.modelName, withoutDefault);
+      const one = withoutDefault.length === 1;
+      const generated = withoutDefault.filter(
+        (name) => model.columns.get(name)?.executionDefaults?.onCreate !== undefined,
+      );
+      const plain = withoutDefault.filter((name) => !generated.includes(name));
+      const generatorNote =
+        generated.length > 0
+          ? ' (a client-side generator such as uuid() does not give the column one)'
+          : '';
+      const example =
+        'a column default, such as a literal or @default(dbgenerated("<expression>"))';
+      const plainFields = fieldList(model.modelName, plain);
+      const generatedFields = fieldList(model.modelName, generated);
+      const edit =
+        generated.length === 0
+          ? `Give ${plainFields} ${example}`
+          : plain.length === 0
+            ? `Replace the @default on ${generatedFields} with ${example}, because a field takes only one @default`
+            : `Give ${plainFields} ${example}, and replace the @default on ${generatedFields} with one, because a field takes only one @default`;
+      const effects = [
+        `Prisma 7's next migration sets ${one ? 'it' : 'them'}`,
+        ...(plain.length > 0
+          ? [
+              `${plainFields} ${plain.length === 1 ? 'becomes' : 'become'} optional when creating records with the Prisma 7 client`,
+            ]
+          : []),
+        ...(generated.length > 0
+          ? [
+              `the Prisma 7 client stops generating ${generated.length === 1 ? 'a value' : 'values'} for ${generatedFields}`,
+            ]
+          : []),
+      ];
+      rejections.push(
+        prisma7Diagnostic(
+          'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
+          `${label}: ${key}: SetDefault sets the foreign key fields to their column defaults, but ${fields} ${one ? 'is' : 'are'} required and ${one ? 'has' : 'have'} no column default${generatorNote}, so Prisma 8 cannot describe this foreign key. ${edit}: ${andList(effects)}. Or ${anotherAction}`,
+          model.sourceId,
+          span,
+        ),
+      );
+    }
+  }
+  return rejections;
+}
+
 export function lowerRelations(
   models: ReadonlyMap<string, RelationModel>,
   diagnostics: ContractSourceDiagnostic[],
@@ -201,6 +340,8 @@ export function lowerRelations(
   const invalidFkPairings: InvalidFkPairing[] = [];
   const foreignKeys = new Map<string, ForeignKeyNode[]>();
   const junctions = new Map<string, ModelNode>();
+  const reportedJunctionNames = new Set<string>();
+  const junctionRequests: JunctionRequest[] = [];
   const addForeignKey = (modelName: string, node: ForeignKeyNode): void => {
     const existing = foreignKeys.get(modelName) ?? [];
     foreignKeys.set(modelName, existing);
@@ -214,9 +355,9 @@ export function lowerRelations(
   const rejectFkSide = (
     model: RelationModel,
     relationField: RelationField,
-    diagnostic: ContractSourceDiagnostic,
+    ...rejections: readonly ContractSourceDiagnostic[]
   ): void => {
-    diagnostics.push(diagnostic);
+    diagnostics.push(...rejections);
     invalidFkPairings.push({
       pairKey: fkRelationPairKey(model.modelName, relationField.targetModelName),
       relationName: effectiveRelationName(
@@ -237,7 +378,22 @@ export function lowerRelations(
       if (isFkSide(relationField)) {
         const attribute = relationField.attribute;
         if (attribute === undefined || attribute.fields === undefined) continue;
-        if (attribute.fields.some((name) => model.ignoredFields.has(name))) continue;
+        const ignoredScalars = attribute.fields.filter((name) => model.ignoredFields.has(name));
+        if (ignoredScalars.length > 0) {
+          rejectFkSide(
+            model,
+            relationField,
+            ignoredFieldReferenced({
+              modelName: model.modelName,
+              fieldNames: ignoredScalars,
+              usedBy: `relation field "${model.modelName}.${field.name}"`,
+              constraint: 'foreign key',
+              sourceId: model.sourceId,
+              span: attribute.span,
+            }),
+          );
+          continue;
+        }
         if (attribute.references === undefined) {
           rejectFkSide(
             model,
@@ -249,6 +405,15 @@ export function lowerRelations(
               attribute.span,
             ),
           );
+          continue;
+        }
+        if (
+          attribute.fields.some((name) => model.rejectedFields.has(name)) ||
+          attribute.references.some(
+            (name) => target.ignoredFields.has(name) || target.rejectedFields.has(name),
+          )
+        ) {
+          rejectFkSide(model, relationField);
           continue;
         }
         const localColumns = columnNames(model, attribute.fields);
@@ -279,26 +444,38 @@ export function lowerRelations(
           );
           continue;
         }
-        const anyNullable = attribute.fields.some(
+        const nullability = attribute.fields.map(
           (name) => model.columns.get(name)?.nullable === true,
         );
-        if (anyNullable !== field.optional) {
+        const anyNullable = nullability.includes(true);
+        if (anyNullable && !field.optional) {
           rejectFkSide(
             model,
             relationField,
             unresolved(
               label,
-              anyNullable
-                ? 'must be optional because one of its fields is optional.'
-                : 'must be required because every one of its fields is required.',
+              'must be optional because one of its fields is optional.',
               model.sourceId,
               field.span,
             ),
           );
           continue;
         }
-        const onDelete = attribute.onDelete ?? (anyNullable ? 'setNull' : 'restrict');
+        const onDelete =
+          attribute.onDelete ?? (nullability.includes(false) ? 'restrict' : 'setNull');
         const onUpdate = attribute.onUpdate ?? 'cascade';
+        const actionRejections = referentialActionRejections({
+          model,
+          relationField: field,
+          label,
+          fieldNames: attribute.fields,
+          actions: { onDelete, onUpdate },
+          span: attribute.span,
+        });
+        if (actionRejections.length > 0) {
+          rejectFkSide(model, relationField, ...actionRejections);
+          continue;
+        }
         addForeignKey(model.modelName, {
           columns: localColumns,
           references: {
@@ -320,13 +497,20 @@ export function lowerRelations(
           targetTableName: target.tableName,
           targetNamespaceId: target.namespaceId,
           relationName: effectiveRelationName(attribute, model.modelName, target.modelName),
-          nullable: field.optional,
+          nullable: anyNullable,
           localColumns,
           referencedColumns,
         });
         continue;
       }
 
+      if (
+        target.ignoredRelationFields.some(
+          (other) => other.targetModelName === model.modelName && sameName(other, relationField),
+        )
+      ) {
+        continue;
+      }
       const fkSides = target.relationFields.filter(
         (other) =>
           other.targetModelName === model.modelName &&
@@ -383,22 +567,104 @@ export function lowerRelations(
         );
         continue;
       }
-      const junction = synthesizeJunction(
-        { model, field: relationField },
-        { model: target, field: partner },
-        diagnostics,
+      const junctionName = effectiveRelationName(
+        relationField.attribute,
+        model.modelName,
+        target.modelName,
       );
+      const namesake = models.get(junctionName);
+      if (namesake !== undefined) {
+        if (!reportedJunctionNames.has(junctionName)) {
+          reportedJunctionNames.add(junctionName);
+          diagnostics.push(
+            prisma7Diagnostic(
+              'PRISMA7_JUNCTION_NAME_COLLISION',
+              `${label} is an implicit many-to-many relation whose junction model would be named "${junctionName}", but model "${junctionName}" already has that name. Rename model "${junctionName}" and keep its table with @@map("${namesake.tableName}"); Prisma 7's next migration is then empty.`,
+              model.sourceId,
+              field.span,
+            ),
+          );
+        }
+        continue;
+      }
+      junctionRequests.push({
+        requester: { model, field: relationField },
+        partner: { model: target, field: partner },
+        name: junctionName,
+      });
+    }
+  }
+
+  const requestsByJunction = groupBy(junctionRequests, (request) =>
+    junctionKey(
+      orderJunctionSides(request.requester, request.partner)[0].model.namespaceId,
+      request.name,
+    ),
+  );
+  for (const requests of requestsByJunction.values()) {
+    const [first] = requests;
+    if (first === undefined) continue;
+    const name = first.name;
+    const [sideA] = orderJunctionSides(first.requester, first.partner);
+    const tableName = prisma7ConstraintName(`_${name}`, '');
+    const sideLabel = (side: JunctionSide): string =>
+      `${side.model.modelName}.${side.field.field.name}`;
+    const pairs = new Map<string, JunctionRequest>();
+    for (const request of requests) {
+      const key = [sideLabel(request.requester), sideLabel(request.partner)].sort().join('|');
+      if (!pairs.has(key)) pairs.set(key, request);
+    }
+    if (pairs.size > 1) {
+      const pairRequests = [...pairs.values()];
+      for (const request of pairRequests) {
+        const others = pairRequests
+          .filter((other) => other !== request)
+          .map((other) => `"${sideLabel(other.requester)}"`);
+        diagnostics.push(
+          prisma7Diagnostic(
+            'PRISMA7_RELATION_NAME_SHARED',
+            `Relation field "${sideLabel(request.requester)}" is an implicit many-to-many relation named "${name}", and so ${others.length === 1 ? 'is relation field' : 'are relation fields'} ${andList(others)}; Prisma 7 creates one table "${tableName}" for them, wired to only one of the relations (its foreign keys show which). Give each relation its own name with @relation("<name>") on both fields: renaming a relation that "${tableName}" does not reference makes Prisma 7's next migration create its own table, while renaming the one it references moves "${tableName}"'s foreign keys to another relation, which fails on rows whose ids that relation's models lack and attaches the rest to the wrong records.`,
+            request.requester.model.sourceId,
+            request.requester.field.field.span,
+          ),
+        );
+      }
+      continue;
+    }
+    const tableOwner = [...models.values()].find(
+      (other) => other.tableName === tableName && other.namespaceId === sideA.model.namespaceId,
+    );
+    if (tableOwner !== undefined) {
+      const relationField = `${first.requester.model.modelName}.${first.requester.field.field.name}`;
+      const message = `Model "${tableOwner.modelName}" and the implicit many-to-many relation "${relationField}" both use table "${tableOwner.namespaceId}"."${tableName}"; Prisma 7 creates the relation's table there and never creates the model's. Rename the model's table with @@map, which makes Prisma 7's next migration create it, or give the relation its own name with @relation("<name>") on both fields, which makes Prisma 7's next migration rebuild "${tableName}" as the model's table and create an empty table for the relation, losing the relation's rows.`;
+      diagnostics.push(
+        prisma7Diagnostic(
+          'PRISMA7_TABLE_COLLISION',
+          message,
+          tableOwner.sourceId,
+          tableOwner.tableSpan,
+        ),
+        prisma7Diagnostic(
+          'PRISMA7_TABLE_COLLISION',
+          message,
+          first.requester.model.sourceId,
+          first.requester.field.field.span,
+        ),
+      );
+      continue;
+    }
+    for (const { requester, partner } of requests) {
+      const junction = synthesizeJunction(requester, partner, diagnostics);
       if (junction === undefined) continue;
-      const key = junctionPairKey(junction.name);
-      if (!junctions.has(key)) {
-        junctions.set(key, junction.node);
+      if (!junctions.has(junction.key)) {
+        junctions.set(junction.key, junction.node);
         fkRelationMetadata.push(...junction.foreignKeys);
       }
       candidates.push({
-        modelName: model.modelName,
-        tableName: model.tableName,
-        field,
-        targetModelName: target.modelName,
+        modelName: requester.model.modelName,
+        tableName: requester.model.tableName,
+        field: requester.field.field,
+        targetModelName: partner.model.modelName,
         isList: true,
         relationName: junction.candidateRelationName,
       });
@@ -421,9 +687,9 @@ export function lowerRelations(
     }
     modelUniqueColumnSets.set(model.modelName, sets);
   }
-  for (const junction of junctions.values()) {
-    modelIdColumns.set(junction.modelName, ['A', 'B']);
-    modelUniqueColumnSets.set(junction.modelName, [['A', 'B']]);
+  for (const key of junctions.keys()) {
+    modelIdColumns.set(key, ['A', 'B']);
+    modelUniqueColumnSets.set(key, [['A', 'B']]);
   }
   // The shared helper reports every diagnostic against one sourceId, so the
   // candidates are paired one declaring file at a time: a diagnostic then
@@ -451,7 +717,7 @@ export function lowerRelations(
   }
   for (const diagnostic of pairingDiagnostics) {
     diagnostics.push(
-      diagnostic.code.startsWith('PSL_') && diagnostic.code.endsWith('_BACKRELATION')
+      RELATION_PAIRING_CODES.has(diagnostic.code)
         ? { ...diagnostic, code: 'PRISMA7_RELATION_UNRESOLVED' }
         : diagnostic,
     );
@@ -464,11 +730,11 @@ export function lowerRelations(
       [...nodes].sort((left, right) => left.fieldName.localeCompare(right.fieldName)),
     );
   }
-  return { junctions: [...junctions.values()], foreignKeys, relations };
+  return { junctions, foreignKeys, relations };
 }
 
 interface SynthesizedJunction {
-  readonly name: string;
+  readonly key: string;
   readonly node: ModelNode;
   readonly foreignKeys: readonly FkRelationMetadata[];
   /** The relation name the requesting side's back-relation candidate pairs on. */
@@ -485,6 +751,13 @@ function singleIdColumn(
   requester: JunctionSide,
   diagnostics: ContractSourceDiagnostic[],
 ): FieldNode | undefined {
+  if (
+    side.model.idFields.some(
+      (name) => side.model.ignoredFields.has(name) || side.model.rejectedFields.has(name),
+    )
+  ) {
+    return undefined;
+  }
   const [idField, ...rest] = side.model.idFields;
   const column = idField === undefined ? undefined : side.model.columns.get(idField);
   if (column === undefined || rest.length > 0) {
@@ -515,11 +788,8 @@ function synthesizeJunction(
   partner: JunctionSide,
   diagnostics: ContractSourceDiagnostic[],
 ): SynthesizedJunction | undefined {
-  const selfRelation = requester.model === partner.model;
-  const requesterFirst = selfRelation
-    ? requester.field.field.name < partner.field.field.name
-    : requester.model.modelName < partner.model.modelName;
-  const [sideA, sideB] = requesterFirst ? [requester, partner] : [partner, requester];
+  const [sideA, sideB] = orderJunctionSides(requester, partner);
+  const requesterFirst = sideA === requester;
   const name =
     requester.field.attribute?.name ?? `${sideA.model.modelName}To${sideB.model.modelName}`;
   const idA = singleIdColumn(sideA, requester, diagnostics);
@@ -528,6 +798,7 @@ function synthesizeJunction(
 
   const tableName = prisma7ConstraintName(`_${name}`, '');
   const namespaceId = sideA.model.namespaceId;
+  const key = junctionKey(namespaceId, name);
   const foreignKey = (column: 'A' | 'B', side: JunctionSide, id: FieldNode): ForeignKeyNode => ({
     columns: [column],
     references: {
@@ -541,7 +812,7 @@ function synthesizeJunction(
     index: false,
   });
   const metadata = (column: 'A' | 'B', side: JunctionSide, id: FieldNode): FkRelationMetadata => ({
-    declaringModelName: name,
+    declaringModelName: key,
     declaringFieldName: column.toLowerCase(),
     declaringTableName: tableName,
     declaringNamespaceId: namespaceId,
@@ -563,7 +834,7 @@ function synthesizeJunction(
     name: undefined,
   };
   return {
-    name,
+    key,
     node: {
       modelName: name,
       tableName,

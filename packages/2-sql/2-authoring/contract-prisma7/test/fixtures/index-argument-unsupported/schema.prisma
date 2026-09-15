@@ -10,4 +10,5 @@ model Post {
   @@index([title(sort: Desc)])
   @@index([body(length: 10)])
   @@index([title], ops: raw("text_pattern_ops"))
+  @@index([body], type: constructor)
 }

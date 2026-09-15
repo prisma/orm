@@ -76,7 +76,8 @@ export function parseIndexAttribute(
       case 'type': {
         const token =
           expression === undefined ? undefined : IdentifierAst.cast(expression.syntax)?.name();
-        type = token === undefined ? undefined : INDEX_TYPES[token];
+        type =
+          token !== undefined && Object.hasOwn(INDEX_TYPES, token) ? INDEX_TYPES[token] : undefined;
         if (type === undefined) {
           return unsupported(
             `type "${token ?? ''}" is not an index type Prisma 8 supports.`,

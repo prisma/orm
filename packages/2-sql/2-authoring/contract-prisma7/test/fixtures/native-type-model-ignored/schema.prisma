@@ -1,0 +1,22 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id       Int     @id
+  nickname String? @db.Citext
+  currency String  @db.Citext @default("usd")
+  balance  Decimal @db.Money
+  email    String  @unique @db.Citext
+  region   String  @db.Citext
+  posts    Post[]  @ignore
+
+  @@index([region])
+  @@ignore
+}
+
+model Post {
+  id          Int     @id
+  authorEmail String  @db.Citext @ignore
+  author      Account @relation(fields: [authorEmail], references: [email]) @ignore
+}

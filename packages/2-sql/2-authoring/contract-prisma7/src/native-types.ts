@@ -12,8 +12,11 @@ export interface Prisma7TypeMapping {
 export interface Prisma7TypeMap {
   /** Prisma 7 scalar name to the constructor Prisma 7 uses for it by default. */
   readonly scalars: Readonly<Record<string, Prisma7TypeMapping>>;
-  /** `@db.X` spelling to the constructor name; the attribute's own arguments pass through. */
-  readonly nativeTypes: Readonly<Record<string, string>>;
+  /**
+   * `@db.X` spelling to the constructor Prisma 7 uses for it. The attribute's
+   * own arguments replace `args`; `args` are what the column gets without any.
+   */
+  readonly nativeTypes: Readonly<Record<string, Prisma7TypeMapping>>;
 }
 
 export function prisma7ScalarMapping(
@@ -28,8 +31,9 @@ export function prisma7NativeTypeMapping(
   nativeType: string,
   args: readonly string[],
 ): Prisma7TypeMapping | undefined {
-  const constructorName = Object.hasOwn(typeMap.nativeTypes, nativeType)
+  const mapping = Object.hasOwn(typeMap.nativeTypes, nativeType)
     ? typeMap.nativeTypes[nativeType]
     : undefined;
-  return constructorName === undefined ? undefined : { constructorName, args };
+  if (mapping === undefined) return undefined;
+  return args.length === 0 ? mapping : { constructorName: mapping.constructorName, args };
 }

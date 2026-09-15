@@ -1,0 +1,305 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Lists": {
+            "storage": {
+              "table": "Lists",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "bl": {
+                  "column": "bl"
+                },
+                "blEmpty": {
+                  "column": "blEmpty"
+                },
+                "dl": {
+                  "column": "dl"
+                },
+                "dlEmpty": {
+                  "column": "dlEmpty"
+                },
+                "tzl": {
+                  "column": "tzl"
+                },
+                "datel": {
+                  "column": "datel"
+                },
+                "timel": {
+                  "column": "timel"
+                },
+                "timetzl": {
+                  "column": "timetzl"
+                },
+                "ts6l": {
+                  "column": "ts6l"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "bl": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bytea@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "blEmpty": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bytea@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "dl": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": true,
+                "many": true
+              },
+              "dlEmpty": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": true,
+                "many": true
+              },
+              "tzl": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": true,
+                "many": true
+              },
+              "datel": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/date-temporal@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "timel": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/time-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": true,
+                "many": true
+              },
+              "timetzl": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timetz@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": true,
+                "many": true
+              },
+              "ts6l": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": true,
+                "many": true
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Lists": {
+      "namespace": "public",
+      "model": "Lists"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "a82077bff82ee9b25e523d35b995e7d0b141226c4807c02143c1f32b28fa26f0",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Lists": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "bl": {
+                  "nativeType": "bytea",
+                  "codecId": "pg/bytea@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "default": {
+                    "kind": "function",
+                    "expression": "ARRAY['\\x68656c6c6f', '\\x776f726c64']::BYTEA[]"
+                  }
+                },
+                "blEmpty": {
+                  "nativeType": "bytea",
+                  "codecId": "pg/bytea@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "default": {
+                    "kind": "function",
+                    "expression": "ARRAY[]::BYTEA[]"
+                  }
+                },
+                "dl": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "ARRAY['2024-01-01 00:00:00', '2024-01-02 03:04:05.123']::TIMESTAMP(3)[]"
+                  }
+                },
+                "dlEmpty": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "ARRAY[]::TIMESTAMP(3)[]"
+                  }
+                },
+                "tzl": {
+                  "nativeType": "timestamptz",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "ARRAY['2024-01-02 03:04:05+00']::TIMESTAMPTZ(6)[]"
+                  }
+                },
+                "datel": {
+                  "nativeType": "date",
+                  "codecId": "pg/date-temporal@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "default": {
+                    "kind": "function",
+                    "expression": "ARRAY['2024-01-02']::DATE[]"
+                  }
+                },
+                "timel": {
+                  "nativeType": "time",
+                  "codecId": "pg/time-temporal@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "ARRAY['12:34:56']::TIME(6)[]"
+                  }
+                },
+                "timetzl": {
+                  "nativeType": "timetz",
+                  "codecId": "pg/timetz@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "ARRAY['12:34:56+00']::TIMETZ(6)[]"
+                  }
+                },
+                "ts6l": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "ARRAY['2024-01-02 03:04:05.123456']::TIMESTAMP(6)[]"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
