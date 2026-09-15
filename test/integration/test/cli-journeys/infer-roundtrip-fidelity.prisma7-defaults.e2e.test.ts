@@ -1,7 +1,8 @@
 /**
  * Infer -> Emit -> Verify for column defaults as Prisma 7 writes them.
  *
- * The tables are what `prisma migrate diff --from-empty --script` from Prisma 7.10.0 writes for:
+ * Every table but `sql_defaults` is what `prisma migrate diff --from-empty --script` from Prisma
+ * 7.10.0 writes for the models below. `sql_defaults` holds defaults Prisma 7 cannot write, in SQL.
  *
  * ```prisma
  * model NumberDefaults {
@@ -15,11 +16,13 @@
  *   longDecimal   Decimal  @default(12345678901234567890.123456789)
  *   tinyDecimal   Decimal  @default(0.000000000000000001)
  *   scaleDecimal  Decimal  @default(1.50)
+ *   wholeDecimal  Decimal  @default(10)
  *   scaledDecimal Decimal  @default(-1.25) @db.Decimal(10, 2)
  *   negSafeBigInt BigInt   @default(-5)
  *   negBigInt     BigInt   @default(-9007199254740993)
  *   hugeBigInt    BigInt   @default(9007199254740993)
  *   stamp         DateTime @default("2024-01-01T00:00:00.000Z")
+ *   jsonNull      Json?    @default("null")
  *   @@map("number_defaults")
  * }
  *
@@ -46,7 +49,7 @@
  * }
  * ```
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { withClient } from '@repo/test-utils';
 import stripAnsi from 'strip-ansi';
@@ -58,7 +61,9 @@ import {
   parseJsonOutput,
   runContractEmit,
   runContractInfer,
+  runDbInit,
   runDbVerify,
+  runDbVerifyWithDb,
   setupJourney,
   timeouts,
   useDevDatabase,
@@ -76,11 +81,13 @@ CREATE TABLE "number_defaults" (
     "longDecimal" DECIMAL(65,30) NOT NULL DEFAULT 12345678901234567890.123456789,
     "tinyDecimal" DECIMAL(65,30) NOT NULL DEFAULT 0.000000000000000001,
     "scaleDecimal" DECIMAL(65,30) NOT NULL DEFAULT 1.50,
+    "wholeDecimal" DECIMAL(65,30) NOT NULL DEFAULT 10,
     "scaledDecimal" DECIMAL(10,2) NOT NULL DEFAULT -1.25,
     "negSafeBigInt" BIGINT NOT NULL DEFAULT -5,
     "negBigInt" BIGINT NOT NULL DEFAULT -9007199254740993,
     "hugeBigInt" BIGINT NOT NULL DEFAULT 9007199254740993,
     "stamp" TIMESTAMP(3) NOT NULL DEFAULT '2024-01-01 00:00:00 +00:00',
+    "jsonNull" JSONB DEFAULT 'null',
 
     CONSTRAINT "number_defaults_pkey" PRIMARY KEY ("id")
 );
@@ -99,6 +106,20 @@ CREATE TABLE "list_defaults" (
     "emptyVarchars" VARCHAR(32)[] DEFAULT ARRAY[]::VARCHAR(32)[],
 
     CONSTRAINT "list_defaults_pkey" PRIMARY KEY ("id")
+);
+`;
+
+const SQL_DEFAULTS_SQL = `
+CREATE TABLE "sql_defaults" (
+    "id" INTEGER NOT NULL,
+    "textNull" VARCHAR(32) DEFAULT NULL::character varying,
+    "floatNaN" DOUBLE PRECISION NOT NULL DEFAULT 'NaN',
+    "floatNegInf" DOUBLE PRECISION NOT NULL DEFAULT '-Infinity',
+    "realNaN" REAL NOT NULL DEFAULT 'NaN',
+    "decimalNaN" NUMERIC NOT NULL DEFAULT 'NaN',
+    "timeWithZone" TIMETZ NOT NULL DEFAULT '12:34:56+00',
+
+    CONSTRAINT "sql_defaults_pkey" PRIMARY KEY ("id")
 );
 `;
 
@@ -123,6 +144,21 @@ const LIST_COLUMNS = [
   'longDecimals',
   'scaledDecimals',
   'emptyVarchars',
+] as const;
+
+/**
+ * `db init` cannot create these defaults, on `main` too. It renders a `BigInt[]` or `Numeric[]`
+ * default by reading the whole list with the element codec, and a `dbgenerated` timestamp default
+ * through a codec that needs a global `Temporal`.
+ */
+const DB_INIT_UNSUPPORTED_FIELDS = [
+  'bigInts',
+  'negBigInts',
+  'emptyBigInts',
+  'negDecimals',
+  'longDecimals',
+  'scaledDecimals',
+  'stamp',
 ] as const;
 
 interface VerifyIssue {
@@ -156,6 +192,13 @@ function output(run: EngineCommandResult): string {
   return `${stripAnsi(run.stderr)}\n${stripAnsi(run.stdout)}`;
 }
 
+function withoutFields(psl: string, fields: readonly string[]): string {
+  return psl
+    .split('\n')
+    .filter((line) => !fields.includes(line.trim().split(/\s+/)[0] ?? ''))
+    .join('\n');
+}
+
 async function inferInto(ctx: JourneyContext): Promise<string> {
   const infer = await runContractInfer(ctx);
   expect(infer.exitCode, `contract infer\n${output(infer)}`).toBe(0);
@@ -166,8 +209,12 @@ withTempDir(({ createTempDir }) => {
   describe('Journey: infer -> emit -> verify of defaults as Prisma 7 writes them', () => {
     describe('given scalar defaults, and list defaults whose every element has a PSL literal', () => {
       const db = useDevDatabase({
-        onReady: (cs) => withClient(cs, (client) => client.query(NUMBER_AND_LIST_DEFAULTS_SQL)),
+        onReady: (cs) =>
+          withClient(cs, (client) =>
+            client.query(`${NUMBER_AND_LIST_DEFAULTS_SQL}${SQL_DEFAULTS_SQL}`),
+          ),
       });
+      const emptyDb = useDevDatabase();
 
       it(
         'infer prints each default as the literal its codec accepts, or as dbgenerated when a scalar has none',
@@ -209,13 +256,27 @@ withTempDir(({ createTempDir }) => {
               longDecimal   Numeric(65, 30) @default("12345678901234567890.123456789")
               tinyDecimal   Numeric(65, 30) @default("0.000000000000000001")
               scaleDecimal  Numeric(65, 30) @default("1.50")
+              wholeDecimal  Numeric(65, 30) @default("10")
               scaledDecimal Numeric(10, 2)  @default("-1.25")
               negSafeBigInt BigInt          @default(-5)
               negBigInt     BigInt          @default(dbgenerated("'-9007199254740993'::bigint"))
               hugeBigInt    BigInt          @default(dbgenerated("'9007199254740993'::bigint"))
               stamp         Timestamp(3)    @default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))
+              jsonNull      Jsonb?          @default(dbgenerated("'null'::jsonb"))
 
               @@map("number_defaults")
+            }
+
+            model SqlDefaults {
+              id           Int          @id(map: "sql_defaults_pkey")
+              textNull     VarChar(32)? @default(dbgenerated("NULL::character varying"))
+              floatNaN     Float        @default("NaN")
+              floatNegInf  Float        @default("-Infinity")
+              realNaN      Real         @default("NaN")
+              decimalNaN   Numeric      @default("NaN")
+              timeWithZone Timetz       @default("12:34:56+00")
+
+              @@map("sql_defaults")
             }
             "
           `);
@@ -245,6 +306,36 @@ withTempDir(({ createTempDir }) => {
               actual: expect.objectContaining({ nullable: true }),
             })).sort(byPath),
           );
+        },
+        timeouts.spinUpPpgDev,
+      );
+
+      it(
+        'db init creates the inferred defaults in an empty database, and strict verify then finds nothing',
+        async () => {
+          const ctx = setupJourney({
+            connectionString: db.connectionString,
+            createTempDir,
+            contractMode: 'psl',
+          });
+          const psl = withoutFields(await inferInto(ctx), DB_INIT_UNSUPPORTED_FIELDS);
+          writeFileSync(join(ctx.testDir, 'contract.prisma'), psl, 'utf-8');
+
+          const emit = await runContractEmit(ctx);
+          expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
+
+          const init = await runDbInit(ctx, ['--db', emptyDb.connectionString]);
+          expect(init.exitCode, `db init\n${output(init)}`).toBe(0);
+
+          const verify = await runDbVerifyWithDb(ctx, emptyDb.connectionString, [
+            '--schema-only',
+            '--strict',
+            '--json',
+          ]);
+          expect(
+            parseJsonOutput<SchemaVerifyResult>(verify).schema.issues,
+            `db verify\n${output(verify)}`,
+          ).toEqual([]);
         },
         timeouts.spinUpPpgDev,
       );
