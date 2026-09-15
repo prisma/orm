@@ -62,6 +62,7 @@ import {
   type TextEdit,
 } from 'vscode-languageserver/node';
 import type { ConfigResolution } from '../src/config-resolution';
+import { guardedConnection } from '../src/guarded-connection';
 import type { DocumentArtifacts } from '../src/project-artifacts';
 import { resolveSchemaInputs } from '../src/schema-inputs';
 import { semanticTokensLegend } from '../src/semantic-tokens';
@@ -301,9 +302,13 @@ function startHarness(
   );
   const server = createServer(serverConnection);
 
-  const client = createConnection(
-    new StreamMessageReader(serverToClient),
-    new StreamMessageWriter(clientToServer),
+  // Guarded like the server: a client send whose write fails after dispose
+  // must not become an unhandled rejection in the test process.
+  const client = guardedConnection(
+    createConnection(
+      new StreamMessageReader(serverToClient),
+      new StreamMessageWriter(clientToServer),
+    ),
   );
 
   const pending = new Map<string, (diagnostics: readonly Diagnostic[]) => void>();
@@ -2451,6 +2456,38 @@ describe('language server disposal', { timeout: timeouts.databaseOperation }, ()
     await assertNoUnhandledRejection((load) =>
       load.reject(new Error('config load failed after dispose')),
     );
+  });
+
+  it('does not reject when a client notification is still being written at dispose', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      harness = startHarness(resolveToSchema);
+      await harness.initialize();
+      openDocument(harness, schemaUri, duplicateModelSource);
+      await harness.waitForDiagnostics(schemaUri);
+
+      // The write is queued behind the writer's own semaphore, so ending the
+      // transport in the same tick fails it after the connection is disposed:
+      // jsonrpc then reports the failed write through the connection's console,
+      // which is one more send on a disposed connection.
+      harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+        textDocument: { uri: schemaUri, version: 2 },
+        contentChanges: [{ text: duplicateModelSource }],
+      });
+      harness.dispose();
+      harness = undefined;
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 });
 
