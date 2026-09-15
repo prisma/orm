@@ -1,11 +1,6 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import type {
-  ColumnDefault,
-  ColumnDefaultLiteralInputValue,
-  ExecutionMutationDefaultValue,
-  JsonValue,
-} from '@internal/contract/types';
-import type { Codec } from '@internal/framework-components/codec';
+import type { ExecutionMutationDefaultValue, JsonValue } from '@internal/contract/types';
+import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ControlMutationDefaults } from '@internal/framework-components/control';
 import type { FieldSymbol, PslSpan, ResolvedAttribute } from '@internal/psl-parser';
 import type { ExpressionAst } from '@internal/psl-parser/syntax';
@@ -18,12 +13,17 @@ import {
   printSyntax,
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
+import { numberLiteralDefault } from '@internal/sql-contract-psl/resolution';
+import type {
+  AuthoredColumnDefault,
+  AuthoredColumnDefaultLiteralValue,
+} from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { prisma7Diagnostic } from './diagnostics';
 import type { Prisma7LiteralDefaultForm } from './target-binding';
 
 export interface LoweredPrisma7Default {
-  readonly storage: ColumnDefault | undefined;
+  readonly storage: AuthoredColumnDefault | undefined;
   readonly onCreate: ExecutionMutationDefaultValue | undefined;
 }
 
@@ -32,8 +32,7 @@ export interface LowerPrisma7DefaultInput {
   readonly field: FieldSymbol;
   readonly modelName: string;
   readonly codecId: string;
-  /** The column's codec, which decides how a number literal is carried. */
-  readonly codec: Codec | undefined;
+  readonly codecLookup: CodecLookup;
   readonly literalForm: Prisma7LiteralDefaultForm | undefined;
   /** Storage value per member name when the field is typed by a Prisma 7 enum. */
   readonly enumMembers: ReadonlyMap<string, string> | undefined;
@@ -120,7 +119,7 @@ function scalarValue(
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
   unknown: (reason: string, span: PslSpan) => undefined,
-): ColumnDefaultLiteralInputValue | undefined {
+): AuthoredColumnDefaultLiteralValue | undefined {
   const span = input.attribute.span;
   const isJson = input.literalForm?.kind === 'json';
   const jsonNull = (holds: string): undefined => {
@@ -136,7 +135,7 @@ function scalarValue(
   };
   const array = ArrayLiteralAst.cast(expression.syntax);
   if (array !== undefined) {
-    const values: ColumnDefaultLiteralInputValue[] = [];
+    const values: AuthoredColumnDefaultLiteralValue[] = [];
     for (const element of array.elements()) {
       const value = elementValue(element, input);
       if (value === undefined) {
@@ -148,7 +147,7 @@ function scalarValue(
       values.push(value);
     }
     if (isJson && values.includes(null)) return jsonNull('holds');
-    return blindListValue(values);
+    return values;
   }
   const value = elementValue(expression, input);
   if (isJson && value === null) return jsonNull('is');
@@ -189,15 +188,6 @@ function sqlExpressionDefault(
   return { expression: form.list(literals) };
 }
 
-function blindListValue(
-  values: readonly ColumnDefaultLiteralInputValue[],
-): ColumnDefaultLiteralInputValue {
-  return blindCast<
-    ColumnDefaultLiteralInputValue,
-    'a list of literal default values is itself a literal default value'
-  >(values);
-}
-
 /** The Prisma 7 scalars whose number defaults must be whole numbers, as each is named in a message. */
 const WHOLE_NUMBER_SCALARS: Readonly<Record<string, string>> = {
   Int: 'an Int',
@@ -205,37 +195,6 @@ const WHOLE_NUMBER_SCALARS: Readonly<Record<string, string>> = {
 };
 
 const WHOLE_NUMBER_TEXT = /^-?\d+$/;
-
-function tryDecodeJson(codec: Codec, json: JsonValue): { readonly value: unknown } | undefined {
-  try {
-    return { value: codec.decodeJson(json) };
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * A number literal is carried as the value its column codec reads. A codec that
- * reads a JSON number gets the number. A codec that reads only text, because a
- * JS number would round the digits, gets what it decodes from the literal
- * exactly as written.
- */
-function numberDefault(
-  text: string,
-  codec: Codec | undefined,
-): { readonly value: ColumnDefaultLiteralInputValue } | undefined {
-  const number = Number(text);
-  if (codec === undefined || tryDecodeJson(codec, number) !== undefined) return { value: number };
-  const fromText = tryDecodeJson(codec, text);
-  return fromText === undefined
-    ? undefined
-    : {
-        value: blindCast<
-          ColumnDefaultLiteralInputValue,
-          'the contract build passes a literal default to the codec encodeJson, which takes the value the codec decodes'
-        >(fromText.value),
-      };
-}
 
 /** The number literal the column codec reads neither as a number nor as text, such as `1.5` for a `BigInt`, which Prisma 7 rejects too. */
 function rejectedNumberReason(
@@ -257,28 +216,26 @@ function rejectedNumberReason(
 function numberValue(
   text: string,
   input: LowerPrisma7DefaultInput,
-): { readonly value: ColumnDefaultLiteralInputValue } | undefined {
+): AuthoredColumnDefaultLiteralValue | undefined {
   if (Object.hasOwn(WHOLE_NUMBER_SCALARS, input.field.typeName) && !WHOLE_NUMBER_TEXT.test(text)) {
     return undefined;
   }
-  return numberDefault(text, input.codec);
+  return numberLiteralDefault(text, input.codecId, input.codecLookup);
 }
 
 function elementValue(
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
-): ColumnDefaultLiteralInputValue | undefined {
+): AuthoredColumnDefaultLiteralValue | undefined {
   const member = IdentifierAst.cast(expression.syntax)?.name();
   if (member !== undefined) return input.enumMembers?.get(member);
   const number = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
-  if (number !== undefined) return numberValue(number, input)?.value;
+  if (number !== undefined) return numberValue(number, input);
   const text = StringLiteralExprAst.cast(expression.syntax)?.value();
   if (text !== undefined) {
     if (input.literalForm?.kind === 'json') {
       try {
-        return blindCast<ColumnDefaultLiteralInputValue, 'JSON.parse yields a JSON value'>(
-          JSON.parse(text),
-        );
+        return blindCast<JsonValue, 'JSON.parse yields a JSON value'>(JSON.parse(text));
       } catch {
         return undefined;
       }

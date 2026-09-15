@@ -1,5 +1,8 @@
+import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
+import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
-import { loadFixtureTable } from './support';
+import { prisma7Contract } from '../src/provider';
+import { fixturesDir, loadFixtureTable, postgresSourceContext } from './support';
 
 describe('DateTime string defaults', () => {
   it('carry the default Postgres stores for each native type, not the text Prisma 7 writes', async () => {
@@ -96,5 +99,52 @@ describe('Decimal and BigInt number defaults', () => {
       bigLong: { kind: 'literal', value: '9007199254740993' },
       bigList: { kind: 'literal', value: ['9007199254740993', '-1'] },
     });
+  });
+
+  it('drop leading zeros and the sign of zero and keep trailing zeros, as Prisma 7 writes the SQL default', async () => {
+    const { columns } = await loadFixtureTable('number-default-spellings', 'Spellings');
+    expect(
+      Object.fromEntries(
+        Object.entries(columns).flatMap(([name, column]) =>
+          column['default'] === undefined ? [] : [[name, column['default']]],
+        ),
+      ),
+    ).toEqual({
+      leadingZeros: { kind: 'literal', value: '7' },
+      negativeZero: { kind: 'literal', value: '0' },
+      leadingZeroFraction: { kind: 'literal', value: '0.10' },
+      bareLeadingZeros: { kind: 'literal', value: '7' },
+      bareNegativeZero: { kind: 'literal', value: '0' },
+      bareLeadingZeroFraction: { kind: 'literal', value: '0.10' },
+      long: { kind: 'literal', value: '12345678901234567890.123456789' },
+      tiny: { kind: 'literal', value: '0.000000000000000001' },
+      zerosBare: { kind: 'literal', value: '1.50' },
+      zerosScaled: { kind: 'literal', value: '1.50' },
+      bigLong: { kind: 'literal', value: '9007199254740993' },
+      bigNegativeZero: { kind: 'literal', value: '0' },
+      bigLeadingZeros: { kind: 'literal', value: '7' },
+      mixed: {
+        kind: 'literal',
+        value: ['7', '0', '0.10', '12345678901234567890.123456789', '0.000000000000000001', '1.50'],
+      },
+      bigMixed: { kind: 'literal', value: ['9007199254740993', '0', '7'] },
+    });
+  });
+});
+
+describe('Number defaults on String, Bytes, DateTime and Boolean fields', () => {
+  it('are rejected, as Prisma 7 rejects them', async () => {
+    const schemaPath = join(fixturesDir, 'number-default-spellings', 'other-types.prisma');
+    const result = await prisma7Contract(schemaPath, {
+      binding: prisma7PostgresBinding,
+    }).source.load(postgresSourceContext([schemaPath]));
+    expect(
+      result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.message),
+    ).toEqual([
+      'Field "OtherTypes.name": @default holds 5, which is not a valid String value.',
+      'Field "OtherTypes.payload": @default holds 1234, which is not a valid Bytes value.',
+      'Field "OtherTypes.at": @default holds 0, which is not a valid DateTime value.',
+      'Field "OtherTypes.flag": @default holds 1, which is not a valid Boolean value.',
+    ]);
   });
 });
