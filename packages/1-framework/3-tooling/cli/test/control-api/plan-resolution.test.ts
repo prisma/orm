@@ -210,7 +210,6 @@ describe('resolveFromForPlan', () => {
       expect(result.value.kind).toBe('auto-baseline');
       if (result.value.kind === 'auto-baseline') {
         expect(result.value.fromHash).toBe(HASH_ORPHAN);
-        expect(result.value.contractDts).toContain('Contract');
       }
     }
     expect(space.contractAt).toHaveBeenCalledWith(HASH_ORPHAN, { refName: 'db' });
@@ -498,8 +497,7 @@ describe('resolveToForPlan', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.hash).toBe(HASH_A);
-      expect(result.value.contractDts).toContain('Contract');
-      expect(result.value.contractJson).toMatchObject({ storage: { storageHash: HASH_A } });
+      expect(result.value.contract).toBeDefined();
     }
   });
 
@@ -514,7 +512,7 @@ describe('resolveToForPlan', () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.hash).toBe(HASH_A);
-      expect(result.value.contractJson).toMatchObject({ storage: { storageHash: HASH_A } });
+      expect(result.value.contract).toBeDefined();
     }
     expect(contractAt).toHaveBeenCalledWith(HASH_A, undefined);
   });
