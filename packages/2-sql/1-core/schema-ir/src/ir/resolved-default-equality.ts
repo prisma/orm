@@ -69,17 +69,21 @@ function decimalDigits(value: string | number): string | number {
 }
 
 /**
- * A timestamp spelled without a zone, as Postgres reports a `timestamp
- * without time zone` default: `2024-01-01 00:00:00`, `2024-01-01T00:00:00.5`.
- * `Date` would read that as host-local time, so it is pinned to UTC first —
- * the value is a wall-clock time and the contract spells the same wall time
- * as an ISO instant.
+ * A timestamp as Postgres prints it, with or without an offset: `2024-01-01 00:00:00`,
+ * `0001-01-01 00:00:00+00`, `2024-01-02 03:04:05+05:30`. It is rebuilt as an ISO string before
+ * `Date` reads it, because `Date` reads this spelling without a zone as host-local time and reads a
+ * year below 100 as 19xx or 20xx. A value without a zone is a wall-clock time, and the contract
+ * spells the same wall time as an ISO instant, so it is read as UTC.
  */
-const ZONELESS_TIMESTAMP = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)$/;
+const POSTGRES_TIMESTAMP =
+  /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(?:([+-]\d{2})(?::?(\d{2}))?)?$/;
 
 function parseTemporal(value: string): Date {
-  const zoneless = ZONELESS_TIMESTAMP.exec(value);
-  return zoneless === null ? new Date(value) : new Date(`${zoneless[1]}T${zoneless[2]}Z`);
+  const timestamp = POSTGRES_TIMESTAMP.exec(value);
+  if (timestamp === null) return new Date(value);
+  const [, date, time, offsetHours, offsetMinutes = '00'] = timestamp;
+  const zone = offsetHours === undefined ? 'Z' : `${offsetHours}:${offsetMinutes}`;
+  return new Date(`${date}T${time}${zone}`);
 }
 
 function normalizeLiteralValue(value: unknown, nativeType?: string): unknown {

@@ -110,6 +110,41 @@ describe('resolvedDefaultsEqual', () => {
         true,
       );
     });
+
+    it('reads the year of a timestamp Postgres prints with an offset, below year 100 too', () => {
+      expect({
+        sameInstant: resolvedDefaultsEqual(
+          literal('0001-01-01T00:00:00Z'),
+          literal('0001-01-01 00:00:00+00'),
+          'timestamptz(6)',
+        ),
+        otherCentury: resolvedDefaultsEqual(
+          literal('1950-01-01T00:00:00Z'),
+          literal('0050-01-01 00:00:00+00'),
+          'timestamptz(6)',
+        ),
+        halfHourOffset: resolvedDefaultsEqual(
+          literal('2024-01-01T21:34:05Z'),
+          literal('2024-01-02 03:04:05+05:30'),
+          'timestamptz(6)',
+        ),
+      }).toEqual({ sameInstant: true, otherCentury: false, halfHourOffset: true });
+    });
+
+    it('compares a timestamp before year one by its text', () => {
+      expect({
+        same: resolvedDefaultsEqual(
+          literal('0001-12-31 23:30:00+00 BC'),
+          literal('0001-12-31 23:30:00+00 BC'),
+          'timestamptz(6)',
+        ),
+        yearOne: resolvedDefaultsEqual(
+          literal('0001-12-31 23:30:00+00 BC'),
+          literal('0001-12-31 23:30:00+00'),
+          'timestamptz(6)',
+        ),
+      }).toEqual({ same: true, yearOne: false });
+    });
   });
 
   describe('int64 literals', () => {
