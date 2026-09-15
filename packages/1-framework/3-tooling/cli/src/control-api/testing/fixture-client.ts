@@ -13,6 +13,7 @@ import { APP_SPACE_ID } from '@internal/framework-components/control';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import { ok } from '@internal/utils/result';
 import type { ExecuteDbVerifyResult } from '../operations/db-verify';
+import type { RenderContractDtsOptions, RenderContractDtsResult } from '../render-contract-dts';
 import type {
   ControlClient,
   DbInitOptions,
@@ -25,8 +26,6 @@ import type {
   IntrospectOptions,
   MigrateOptions,
   MigrateResult,
-  RenderContractDtsOptions,
-  RenderContractDtsResult,
   SchemaVerifyOptions,
   SignOptions,
   VerifyOptions,

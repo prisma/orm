@@ -5,7 +5,8 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
-import type { ControlClient, RenderContractDtsFailure } from '../types';
+import type { RenderContractDtsFailure } from '../render-contract-dts';
+import type { ControlClient } from '../types';
 
 /** A contract snapshot's two halves: the JSON and the declarations rendered from it. */
 export interface ContractIR {

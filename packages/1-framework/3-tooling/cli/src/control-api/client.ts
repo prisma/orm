@@ -40,6 +40,7 @@ import { executeDbUpdate } from './operations/db-update';
 import { type ExecuteDbVerifyResult, executeDbVerify } from './operations/db-verify';
 import { executeMigrate } from './operations/migrate';
 
+import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
 import type {
   ControlActionName,
   ControlClient,
@@ -55,8 +56,6 @@ import type {
   MigrateOptions,
   MigrateResult,
   OnControlProgress,
-  RenderContractDtsOptions,
-  RenderContractDtsResult,
   SchemaVerifyOptions,
   SignOptions,
   VerifyOptions,

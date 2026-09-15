@@ -13,7 +13,7 @@ import {
   executeRefAdvancement,
   preflightRefAdvancement,
 } from '../../src/control-api/operations/ref-advancement';
-import type { RenderContractDtsResult } from '../../src/control-api/types';
+import type { RenderContractDtsResult } from '../../src/control-api/render-contract-dts';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const HASH_A = `${'a'.repeat(64)}`;
