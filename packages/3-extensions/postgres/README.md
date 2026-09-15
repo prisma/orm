@@ -121,7 +121,7 @@ The source interprets every construct Prisma 7 creates in Postgres: scalars and 
 | `PRISMA7_IGNORED_FIELD_REFERENCED` | An `@ignore`d field that a key, an index, or a relation's `fields:` uses. | Remove `@ignore` from the field: Prisma 7's next migration is empty, and the field appears in the Prisma 7 client again. |
 | `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED` | `sort`, `length`, `ops`, or an index type Prisma 8 does not have. | Remove the argument; Prisma 8 indexes carry none. |
 | `PRISMA7_UNKNOWN_ATTRIBUTE` | An attribute Prisma 7 for Postgres does not have. | Remove it. |
-| `PRISMA7_CONTRACT_INVALID` | The schema gives a contract Prisma 8 rejects, for a cause the source has no specific diagnostic for. | The message names the cause; report the schema, because the source should reject it with a precise diagnostic. |
+| `PRISMA7_CONTRACT_INVALID` | The schema gives a contract Prisma 8 rejects, for a cause the source has no specific diagnostic for. | This is a bug in Prisma ORM: report it with the schema. The message names the cause. |
 | `PRISMA7_SCHEMA_READ_FAILED` | The path could not be read, or the schema directory holds no `.prisma` file. | Fix the path. |
 
 Two things `db verify` gained alongside this source benefit every Prisma 8 project: it now recognises three more default spellings introspection reports (an enum literal cast to a type in another schema, a zoneless `timestamp` literal, and an `ARRAY[...]` list default), and it now compares a schema-qualified mixed-case type name such as `audit."AuditAction"` correctly.

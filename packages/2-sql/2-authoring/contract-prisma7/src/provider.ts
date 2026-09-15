@@ -204,7 +204,7 @@ export function prisma7Schema(schemaPath: string, options: Prisma7SchemaOptions)
             diagnostics: [
               prisma7Diagnostic(
                 'PRISMA7_CONTRACT_INVALID',
-                `This schema gives a contract that Prisma 8 rejects, and the Prisma 7 contract source has no specific diagnostic for the cause: ${error.message}`,
+                `This schema gives a contract that Prisma 8 rejects, and the Prisma 7 contract source has no specific diagnostic for the cause: ${error.message.replace(/\.$/, '')}. This is a bug in Prisma ORM; please report it with this schema.`,
                 schemaPath,
                 undefined,
               ),

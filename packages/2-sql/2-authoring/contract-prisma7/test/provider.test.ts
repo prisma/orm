@@ -1,10 +1,22 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import type { CodecLookup } from '@internal/framework-components/codec';
 import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { prisma7Schema } from '../src/provider';
 import { postgresPrisma7Options, postgresSourceContext } from './support';
+
+function withTextDefaultsEncodedAsNull(lookup: CodecLookup): CodecLookup {
+  const get = (id: string) => {
+    const codec = lookup.get(id);
+    if (id !== 'pg/text@1' || codec === undefined) return codec;
+    return Object.assign(Object.create(Object.getPrototypeOf(codec)), codec, {
+      encodeJson: () => null,
+    });
+  };
+  return Object.assign(Object.create(Object.getPrototypeOf(lookup)), lookup, { get });
+}
 
 function scratchDir(name: string): string {
   const dir = join(tmpdir(), `prisma7-provider-${name}-${process.pid}-${Date.now()}`);
@@ -176,11 +188,56 @@ describe('prisma7Schema', () => {
             code: 'PRISMA7_CONTRACT_INVALID',
             sourceId: 'prisma/schema.prisma',
             message:
-              'This schema gives a contract that Prisma 8 rejects, and the Prisma 7 contract source has no specific diagnostic for the cause: the target rejected the namespace',
+              'This schema gives a contract that Prisma 8 rejects, and the Prisma 7 contract source has no specific diagnostic for the cause: the target rejected the namespace. This is a bug in Prisma ORM; please report it with this schema.',
           },
         ],
       },
     });
+  });
+
+  it('returns a contract that fails the checks contract emit runs as PRISMA7_CONTRACT_INVALID at the input path', async () => {
+    const dir = scratchDir('contract-check-failed');
+    const schemaFile = join(dir, 'schema.prisma');
+    writeFileSync(
+      schemaFile,
+      'datasource db {\n  provider = "postgresql"\n}\n\nmodel A {\n  id   Int    @id\n  name String @default("x")\n}\n',
+    );
+    const context = postgresSourceContext([schemaFile]);
+    const result = await prisma7Schema('prisma/schema.prisma', postgresPrisma7Options).source.load({
+      ...context,
+      codecLookup: withTextDefaultsEncodedAsNull(context.codecLookup),
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      failure: {
+        diagnostics: [
+          {
+            code: 'PRISMA7_CONTRACT_INVALID',
+            sourceId: 'prisma/schema.prisma',
+            message:
+              'This schema gives a contract that Prisma 8 rejects, and the Prisma 7 contract source has no specific diagnostic for the cause: Namespace "public" table "A" column "name" is NOT NULL but has a literal null default. This is a bug in Prisma ORM; please report it with this schema.',
+          },
+        ],
+      },
+    });
+  });
+
+  it('rethrows an error that is not structured, because it is a bug rather than a problem in the schema', async () => {
+    const dir = scratchDir('unstructured-error');
+    const schemaFile = join(dir, 'schema.prisma');
+    writeFileSync(
+      schemaFile,
+      'datasource db {\n  provider = "postgresql"\n}\n\nmodel A {\n  id Int @id\n}\n',
+    );
+    const config = prisma7Schema('prisma/schema.prisma', {
+      ...postgresPrisma7Options,
+      createNamespace: () => {
+        throw new TypeError('broken namespace factory');
+      },
+    });
+    await expect(config.source.load(postgresSourceContext([schemaFile]))).rejects.toThrow(
+      'broken namespace factory',
+    );
   });
 
   it('returns PRISMA7_SCHEMA_READ_FAILED when the input does not exist', async () => {
