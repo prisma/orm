@@ -77,6 +77,7 @@ describe('Prisma 7 fixtures', () => {
       'preview-features-ignored',
       'provider-mismatch',
       'provider-missing',
+      'referential-integrity',
       'relation-ambiguous',
       'relation-argument-invalid',
       'relation-mode',

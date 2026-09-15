@@ -20,7 +20,7 @@ prisma db sign         # verifies against the Prisma 7 database, records the mar
 - **Package** `packages/2-sql/2-authoring/contract-prisma7` (`@internal/sql-contract-prisma7`), shaped like `contract-psl`: `prisma7Schema(path, options)` returns a `ContractConfig` whose `source.load` reads the file or directory, parses each file with `parse()`, runs the Prisma 7 interpreter, and returns `ok(contract)` or `notOk({ summary, diagnostics })`.
 - **Config**: `defineConfig` in `packages/3-extensions/postgres/src/config/define-config.ts` accepts `contract: string | ContractConfig`. `prisma7Schema` is re-exported from `@prisma/orm-postgres/config`.
 - **Relation pairing** reuses `indexFkRelations` and `applyBackrelationCandidates` from `contract-psl/src/psl-relation-resolution.ts`, after replacing the `FieldSymbol` field on `ModelBackrelationCandidate` with a structural `{ name, optional, span }`.
-- **Provider check**: the `datasource` block's `provider` must be `postgresql` (or `postgres`); anything else is `PRISMA7_PROVIDER_MISMATCH`. `relationMode = "prisma"` is `PRISMA7_RELATION_MODE_UNSUPPORTED`.
+- **Provider check**: the `datasource` block's `provider` must be `postgresql` (or `postgres`); anything else is `PRISMA7_PROVIDER_MISMATCH`. `relationMode = "prisma"` is `PRISMA7_RELATION_MODE_UNSUPPORTED`, and so is the older `referentialIntegrity = "prisma"`, which Prisma 7.10.0 still accepts with a deprecation warning and treats the same way: it creates no foreign keys (fixture `referential-integrity`).
 
 ## Rule table
 

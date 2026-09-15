@@ -104,7 +104,7 @@ The source interprets every construct Prisma 7 creates in Postgres: scalars and 
 | Code | What it means | What to change |
 |---|---|---|
 | `PRISMA7_PROVIDER_MISMATCH` | No `datasource` block, or its `provider` is not `postgresql`. | Use this source only with a Postgres schema. |
-| `PRISMA7_RELATION_MODE_UNSUPPORTED` | `relationMode = "prisma"`. | Remove it or set `relationMode = "foreignKeys"`. Prisma 7's next migration then adds the foreign keys, and fails if any existing row breaks one. |
+| `PRISMA7_RELATION_MODE_UNSUPPORTED` | `relationMode = "prisma"`, or the older `referentialIntegrity = "prisma"`. | Remove it or set `relationMode = "foreignKeys"`. Prisma 7's next migration then adds the foreign keys, and fails if any existing row breaks one. |
 | `PRISMA7_VIEW_UNSUPPORTED` | A `view` block. | Remove the view; Prisma 8 has no views. |
 | `PRISMA7_UNSUPPORTED_TYPE` | `Unsupported("...")`, or an unknown type. | A model with an `Unsupported` field cannot use this source yet: Prisma 7 rejects `@ignore` on the field, and removing the field drops its column on Prisma 7's next migration. Correct an unknown type name. |
 | `PRISMA7_NATIVE_TYPE_UNSUPPORTED` | A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`). | Add `@ignore` to the field; Prisma 7's next migration is empty. Changing the field's type instead changes the column type on Prisma 7's next migration. |

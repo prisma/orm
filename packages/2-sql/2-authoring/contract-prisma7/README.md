@@ -48,7 +48,7 @@ Codes are prefixed `PRISMA7_`:
 | Code | Meaning |
 |---|---|
 | `PRISMA7_PROVIDER_MISMATCH` | No `datasource` block, or its `provider` is not `postgresql` / `postgres`. |
-| `PRISMA7_RELATION_MODE_UNSUPPORTED` | `relationMode = "prisma"`. |
+| `PRISMA7_RELATION_MODE_UNSUPPORTED` | `relationMode = "prisma"`, or the older `referentialIntegrity = "prisma"`. |
 | `PRISMA7_VIEW_UNSUPPORTED` | A `view` block. |
 | `PRISMA7_UNSUPPORTED_TYPE` | `Unsupported("...")` or an unknown field type. |
 | `PRISMA7_NATIVE_TYPE_UNSUPPORTED` | A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, or any unknown spelling). |

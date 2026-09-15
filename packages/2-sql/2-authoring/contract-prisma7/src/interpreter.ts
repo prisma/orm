@@ -427,13 +427,19 @@ function checkDatasource(
       ),
     );
   }
-  if (scalarValue(block, 'relationMode') === 'prisma') {
+  const relationModeEdits = {
+    relationMode: 'Removing relationMode, or setting it to "foreignKeys"',
+    referentialIntegrity:
+      'Removing referentialIntegrity, or replacing it with relationMode = "foreignKeys"',
+  };
+  for (const [property, edit] of Object.entries(relationModeEdits)) {
+    if (scalarValue(block, property) !== 'prisma') continue;
     diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_RELATION_MODE_UNSUPPORTED',
-        'relationMode = "prisma" is not supported: the contract declares the foreign keys its relations need, and in this mode Prisma 7 creates none. Removing relationMode, or setting it to "foreignKeys", makes Prisma 7\'s next migration add those foreign keys, and that migration fails if any existing row breaks one.',
+        `${property} = "prisma" is not supported: the contract declares the foreign keys its relations need, and in this mode Prisma 7 creates none. ${edit}, makes Prisma 7's next migration add those foreign keys, and that migration fails if any existing row breaks one.`,
         datasource.sourceId,
-        parameterSpan(block, 'relationMode'),
+        parameterSpan(block, property),
       ),
     );
   }
