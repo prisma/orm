@@ -25,6 +25,36 @@ function expectUnsupported(markedSource: string): void {
 }
 
 describe('classifyPslCompletionContext', () => {
+  it.each([
+    {
+      args: 'flag: true,| collection: []',
+      path: [],
+      positionalIndex: 0,
+      keys: ['flag', 'collection'],
+    },
+    {
+      args: 'call: nested("a",| flag: true)',
+      path: [
+        { kind: 'namedArgument', name: 'call' },
+        { kind: 'functionCall', name: 'nested' },
+      ],
+      positionalIndex: 1,
+      keys: ['flag'],
+    },
+  ])(
+    'preserves completion slots before existing named arguments: $args',
+    ({ args, path, positionalIndex, keys }) => {
+      expect(classify(`model Example { value String @probe(${args}) }`)).toMatchObject({
+        kind: 'fieldAttributeArgumentSlot',
+        attributeName: 'probe',
+        path,
+        positionalIndex,
+        existingNamedKeys: keys,
+        hasColon: false,
+      });
+    },
+  );
+
   it('classifies blank document-level declaration keyword positions', () => {
     const context = classify('|');
 

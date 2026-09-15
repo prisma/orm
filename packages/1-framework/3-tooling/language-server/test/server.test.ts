@@ -822,6 +822,9 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     { args: '|', parameter: 0, trigger: '(' },
     { args: '"user", name: |', parameter: 1, trigger: ',' },
     { args: 'priority: |1, name: "visible", target: "user"', parameter: 2, trigger: undefined },
+    { args: 'name: "visible",| priority: 1', parameter: 2, trigger: ',' },
+    { args: 'name: "visible", |priority: 1', parameter: 2, trigger: undefined },
+    { args: 'name: "visible",| priority: 1', parameter: 2, trigger: undefined },
   ])(
     'serves documented signature help through trigger and explicit requests: $args',
     async ({ args, parameter, trigger }) => {
@@ -872,6 +875,8 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
 
   it.each([
     'model User { id Int @probe(value: choose(mode: First, enabled: |)) }',
+    'model User { id Int @probe(value: choose(mode: First,| enabled: true)) }',
+    'model User { id Int @probe(value: choose(mode: First, |enabled: true)) }',
     'model User { id Int\n @@probe(value: choose(mode: First, enabled: |)) }',
     'policy Rule { @@probe(value: choose(mode: First, enabled: |)) }',
     'model User { id Int @probe(value: choose(mode: First, enabled: |',

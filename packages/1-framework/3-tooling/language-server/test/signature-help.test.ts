@@ -176,6 +176,35 @@ describe('providePslSignatureHelp', () => {
     },
   );
 
+  it.each(['| ', ' |'])('matches the next named argument across comma whitespace: %s', (gap) => {
+    expect(
+      selected(`model Example {\n value String @probe(flag: true,${gap}collection: [])\n}`),
+    ).toEqual({
+      label: attributeLabel,
+      documentation: markdown('**Extension** attribute.'),
+      activeParameter: 3,
+      parameter: {
+        label: 'collection: nested()[]',
+        documentation: markdown('Nested calls in a list.'),
+      },
+    });
+  });
+
+  it.each(['| ', ' |'])('matches a nested named argument across comma whitespace: %s', (gap) => {
+    expect(
+      selected(`model Example {\n value String @probe(call: nested("a",${gap}flag: true))\n}`),
+    ).toEqual({
+      label: 'nested(value: string, flag?: boolean)',
+      documentation: markdown('**Nested** function.'),
+      activeParameter: 1,
+      parameter: { label: 'flag?: boolean', documentation: markdown('Nested flag.') },
+    });
+  });
+
+  it.each(['| ', ' |'])('suppresses unknown nested calls across comma whitespace: %s', (gap) => {
+    expect(field(`call: unknown("a",${gap}flag: true)`)).toBeNull();
+  });
+
   it.each([
     'model Example {\n value String @probe(value: |"a")\n}',
     'model Example {\n value String\n @@probe(value: |"a")\n}',

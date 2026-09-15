@@ -17,6 +17,7 @@ import {
   ModelAttributeAst,
   ModelDeclarationAst,
   NamespaceDeclarationAst,
+  nonTriviaSibling,
   ObjectLiteralExprAst,
   type Position,
   type QualifiedNameAst,
@@ -701,12 +702,17 @@ function classifyArguments(
   let positionalIndex = 0;
   let active: AttributeArgAst | undefined;
   const existingNamedKeys: string[] = [];
+  const nextArgument =
+    cursor.signatureHelp && cursor.preceding?.kind === 'Comma'
+      ? nonTriviaSibling(cursor.preceding, 'next')
+      : undefined;
   for (const arg of container.args()) {
     const name = arg.name()?.name();
     const selected =
-      arg.syntax.offset <= cursor.offset &&
-      (containsCursor(arg.syntax, cursor) ||
-        recoveredContainerContainsCursor(arg.value(), cursor.offset));
+      nextArgument?.offset === arg.syntax.offset ||
+      (arg.syntax.offset <= cursor.offset &&
+        (containsCursor(arg.syntax, cursor) ||
+          recoveredContainerContainsCursor(arg.value(), cursor.offset)));
     if (active === undefined && selected) {
       active = arg;
     } else {
