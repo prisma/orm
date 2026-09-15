@@ -97,6 +97,37 @@ const callerSettings: OutputSettings = {
   intervalStyle: 'sql_standard',
 };
 
+const localSettings: OutputSettings = {
+  timeZone: 'Asia/Kathmandu',
+  dateStyle: 'German, DMY',
+  intervalStyle: 'iso_8601',
+};
+
+async function setLocalSettings(driver: PostgresControlDriver): Promise<void> {
+  await driver.query(`SET LOCAL TIME ZONE '${localSettings.timeZone}'`);
+  await driver.query(`SET LOCAL DateStyle = '${localSettings.dateStyle}'`);
+  await driver.query(`SET LOCAL IntervalStyle = '${localSettings.intervalStyle}'`);
+}
+
+const driverFailure = 'the driver failed while introspection read check constraints';
+
+/** A driver that fails the check constraint query, after introspection has pinned the settings. */
+function failingOnCheckConstraints(
+  inner: PostgresControlDriver,
+  failure: 'driver' | 'database',
+): PostgresControlDriver {
+  return {
+    familyId: inner.familyId,
+    targetId: inner.targetId,
+    query: async (sql: string, params?: readonly unknown[]) => {
+      if (!sql.includes('pg_get_expr(c.conbin')) return inner.query(sql, params);
+      if (failure === 'driver') throw new Error(driverFailure);
+      return inner.query('SELECT 1/0');
+    },
+    close: async () => {},
+  } as unknown as PostgresControlDriver;
+}
+
 describe('introspection in a session with its own output settings', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createTestDatabase>>;
   let driver: PostgresControlDriver | undefined;
@@ -175,32 +206,77 @@ describe('introspection in a session with its own output settings', { concurrent
     timeout: testTimeout,
   }, async () => {
     await driver!.query('BEGIN');
-    await driver!.query("SET LOCAL TIME ZONE 'Asia/Kathmandu'");
-    await driver!.query("SET LOCAL DateStyle = 'German, DMY'");
-    await driver!.query("SET LOCAL IntervalStyle = 'iso_8601'");
+    await setLocalSettings(driver!);
 
     await familyInstance.introspect({ driver: driver!, contract: stampsContract() });
 
     const inTransaction = await outputSettings(driver!);
     await driver!.query('ROLLBACK');
-    expect(inTransaction).toEqual({
-      timeZone: 'Asia/Kathmandu',
-      dateStyle: 'German, DMY',
-      intervalStyle: 'iso_8601',
-    });
+    expect(inTransaction).toEqual(localSettings);
   });
 
   it('leaves the session settings in place after the caller commits a transaction that set local ones', {
     timeout: testTimeout,
   }, async () => {
     await driver!.query('BEGIN');
-    await driver!.query("SET LOCAL TIME ZONE 'Asia/Kathmandu'");
-    await driver!.query("SET LOCAL DateStyle = 'German, DMY'");
-    await driver!.query("SET LOCAL IntervalStyle = 'iso_8601'");
+    await setLocalSettings(driver!);
 
     await familyInstance.introspect({ driver: driver!, contract: stampsContract() });
     await driver!.query('COMMIT');
 
+    expect(await outputSettings(driver!)).toEqual(callerSettings);
+  });
+
+  it.each([
+    { failure: 'driver', message: driverFailure },
+    { failure: 'database', message: 'division by zero' },
+  ] as const)(
+    'passes on a $failure error that stops introspection and restores the caller settings',
+    {
+      timeout: testTimeout,
+    },
+    async ({ failure, message }) => {
+      const introspection = familyInstance.introspect({
+        driver: failingOnCheckConstraints(driver!, failure),
+        contract: stampsContract(),
+      });
+
+      await expect(introspection).rejects.toThrow(message);
+      expect(await outputSettings(driver!)).toEqual(callerSettings);
+    },
+  );
+
+  it('passes on a driver error that stops introspection inside a transaction and restores the local settings', {
+    timeout: testTimeout,
+  }, async () => {
+    await driver!.query('BEGIN');
+    await setLocalSettings(driver!);
+
+    const introspection = familyInstance.introspect({
+      driver: failingOnCheckConstraints(driver!, 'driver'),
+      contract: stampsContract(),
+    });
+
+    await expect(introspection).rejects.toThrow(driverFailure);
+    const inTransaction = await outputSettings(driver!);
+    await driver!.query('ROLLBACK');
+    expect(inTransaction).toEqual(localSettings);
+    expect(await outputSettings(driver!)).toEqual(callerSettings);
+  });
+
+  it('passes on a database error that stops introspection inside a transaction, and the rollback restores the settings', {
+    timeout: testTimeout,
+  }, async () => {
+    await driver!.query('BEGIN');
+    await setLocalSettings(driver!);
+
+    const introspection = familyInstance.introspect({
+      driver: failingOnCheckConstraints(driver!, 'database'),
+      contract: stampsContract(),
+    });
+
+    await expect(introspection).rejects.toThrow('division by zero');
+    await driver!.query('ROLLBACK');
     expect(await outputSettings(driver!)).toEqual(callerSettings);
   });
 });
