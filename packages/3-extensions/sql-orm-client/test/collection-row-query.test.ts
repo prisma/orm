@@ -2,6 +2,7 @@ import { createHook } from 'node:async_hooks';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import type { Preparable } from '@internal/sql-relational-core/plan';
 import { afterEach, describe, expect, expectTypeOf, it, vi } from 'vitest';
+import * as collectionContract from '../src/collection-contract';
 import { describeCollectionRows } from '../src/collection-dispatch';
 import * as collectionRuntime from '../src/collection-runtime';
 import { createCollectionFor } from './collection-fixtures';
@@ -16,6 +17,37 @@ function source(rows: Record<string, unknown>[]) {
 
 describe('collection row query', () => {
   afterEach(() => vi.restoreAllMocks());
+
+  it('ignores inherited field and column mappings in prepared child decoders', async () => {
+    const { collection } = createCollectionFor('User');
+    const state = collection
+      .select('name')
+      .include('posts', (posts) => posts.select('title')).state;
+    const fieldMap = collectionContract.getFieldToColumnMap;
+    const columnMap = collectionContract.getColumnToFieldMap;
+    vi.spyOn(collectionContract, 'getFieldToColumnMap').mockImplementation(
+      (contract, namespace, model) =>
+        model === 'Post'
+          ? Object.setPrototypeOf({}, { title: 'user_id' })
+          : fieldMap(contract, namespace, model),
+    );
+    vi.spyOn(collectionContract, 'getColumnToFieldMap').mockImplementation(
+      (contract, namespace, model) =>
+        model === 'Post'
+          ? Object.setPrototypeOf({ user_id: 'userId' }, { title: Object.prototype.toString })
+          : columnMap(contract, namespace, model),
+    );
+    const query = describeCollectionRows({
+      context: collection.ctx.context,
+      state,
+      tableName: collection.tableName,
+      modelName: collection.modelName,
+      namespaceId: 'public',
+    });
+    expect(await query.consume(source([{ name: 'A', posts: [{ title: 'P' }] }]))).toEqual([
+      { name: 'A', posts: [{ title: 'P' }] },
+    ]);
+  });
 
   it('fuses fixed prepared child selections and falls back for unexpected row shapes', async () => {
     const original = collectionRuntime.createStorageRowMapper;

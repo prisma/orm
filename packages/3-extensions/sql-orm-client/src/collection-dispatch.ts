@@ -278,7 +278,9 @@ function createPreparedIncludedRowDecoder(
   const fieldToColumn = getFieldToColumnMap(contract, namespace, model);
   const columnToField = getColumnToFieldMap(contract, namespace, model);
   const fields = include.nested.selectedFields ?? Object.keys(fieldToColumn);
-  const columns = fields.map((field) => fieldToColumn[field] ?? field);
+  const columns = fields.map((field) =>
+    Object.hasOwn(fieldToColumn, field) ? (fieldToColumn[field] ?? field) : field,
+  );
   const aliases = include.nested.includes.map((child) => child.relationName);
   const table = contract.storage.namespaces[namespace]?.entries.table?.[include.relatedTableName];
   if (aliases.some((alias) => table?.columns[alias] !== undefined)) return undefined;
@@ -288,7 +290,7 @@ function createPreparedIncludedRowDecoder(
     const binding = deferResolution(() => bindingFor(key));
     return {
       key,
-      field: columnToField[key] ?? key,
+      field: Object.hasOwn(columnToField, key) ? (columnToField[key] ?? key) : key,
       decode(value: unknown) {
         if (value === null || value === undefined) return value;
         const resolved = binding();
