@@ -141,6 +141,17 @@ describe('enum member attributes', () => {
         },
       ]);
     });
+
+    it('reports an attribute after an enum member inside a namespace block as an invalid block entry', () => {
+      const result = parse('namespace auth {\n  enum Role {\n    USER @map("user")\n  }\n}');
+      expect(result.diagnostics).toEqual([
+        {
+          code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+          message: 'Invalid block entry',
+          range: { start: { line: 2, character: 9 }, end: { line: 2, character: 10 } },
+        },
+      ]);
+    });
   });
 });
 
