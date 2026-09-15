@@ -1,6 +1,7 @@
 import { mkdir } from 'node:fs/promises';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
+import type { CliErrorDiagnostic } from '@internal/errors/control';
 import { createControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
 import { ifDefined } from '@internal/utils/defined';
@@ -49,13 +50,73 @@ function failedToResolveContractSource(
   fix: string,
   meta?: Record<string, unknown>,
   cause?: unknown,
+  diagnostics?: readonly CliErrorDiagnostic[],
 ) {
   return errorRuntime('CONTRACT.SOURCE_LOAD_FAILED', 'Failed to resolve contract source', {
     why,
     fix,
+    ...ifDefined('diagnostics', diagnostics),
     ...ifDefined('meta', meta),
     ...ifDefined('cause', cause),
   });
+}
+
+interface DiagnosticLocation {
+  readonly sourceId: string | undefined;
+  readonly line: number | undefined;
+  readonly character: number | undefined;
+}
+
+function diagnosticLocation(diagnostic: Record<string, unknown>): DiagnosticLocation {
+  const sourceId = typeof diagnostic['sourceId'] === 'string' ? diagnostic['sourceId'] : undefined;
+  const span = isRecord(diagnostic['span']) ? diagnostic['span'] : undefined;
+  const start = span && isRecord(span['start']) ? span['start'] : undefined;
+  const line = start && typeof start['line'] === 'number' ? start['line'] : undefined;
+  // biome-ignore lint/plugin/no-family-vocabulary: a text position in the source file; the span calls it column
+  const character = start && typeof start['column'] === 'number' ? start['column'] : undefined;
+  return { sourceId, line, character };
+}
+
+function formatLocation({ sourceId, line, character }: DiagnosticLocation): string | undefined {
+  if (sourceId === undefined) return undefined;
+  return line !== undefined && character !== undefined
+    ? `${sourceId}:${line}:${character}`
+    : sourceId;
+}
+
+/**
+ * The finding the CLI prints under the error, one per source diagnostic: the
+ * location first, then the source's own code, then its message, because the
+ * terminal renderer shows a finding's summary and nothing of its `where`.
+ */
+function sourceDiagnosticToFinding(raw: unknown): CliErrorDiagnostic | undefined {
+  if (!isRecord(raw)) return undefined;
+  const code = typeof raw['code'] === 'string' ? raw['code'] : 'diagnostic';
+  const message = typeof raw['message'] === 'string' ? raw['message'] : '';
+  const location = diagnosticLocation(raw);
+  const formatted = formatLocation(location);
+  return {
+    code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+    severity: 'error',
+    summary: `${formatted === undefined ? '' : `${formatted} `}${code}: ${message}`,
+    nextActions: [],
+    ...ifDefined(
+      'where',
+      location.sourceId === undefined
+        ? undefined
+        : { path: location.sourceId, ...ifDefined('line', location.line) },
+    ),
+    meta: { code },
+  };
+}
+
+function sourceDiagnosticsToFindings(diagnostics: readonly unknown[]): CliErrorDiagnostic[] {
+  const findings: CliErrorDiagnostic[] = [];
+  for (const raw of diagnostics) {
+    const finding = sourceDiagnosticToFinding(raw);
+    if (finding !== undefined) findings.push(finding);
+  }
+  return findings;
 }
 
 type ValidatedProviderResult =
@@ -63,18 +124,8 @@ type ValidatedProviderResult =
   | { readonly ok: false; readonly error: ReturnType<typeof errorRuntime> };
 
 function diagnosticLocationSuffix(diagnostic: Record<string, unknown>): string {
-  const sourceId = typeof diagnostic['sourceId'] === 'string' ? diagnostic['sourceId'] : undefined;
-  const span = isRecord(diagnostic['span']) ? diagnostic['span'] : undefined;
-  const start = span && isRecord(span['start']) ? span['start'] : undefined;
-  const line = start && typeof start['line'] === 'number' ? start['line'] : undefined;
-  const column = start && typeof start['column'] === 'number' ? start['column'] : undefined;
-  if (sourceId && line !== undefined && column !== undefined) {
-    return ` (${sourceId}:${line}:${column})`;
-  }
-  if (sourceId) {
-    return ` (${sourceId})`;
-  }
-  return '';
+  const formatted = formatLocation(diagnosticLocation(diagnostic));
+  return formatted === undefined ? '' : ` (${formatted})`;
 }
 
 function mapDiagnosticsToIssues(
@@ -132,12 +183,14 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
     ok: false,
     error: failedToResolveContractSource(
       String(failure['summary']),
-      'Fix contract source diagnostics and return ok(Contract).',
+      'Edit the schema where each finding points, then run contract emit again.',
       {
         diagnostics: failure['diagnostics'],
         issues: mapDiagnosticsToIssues(failure['diagnostics']),
         ...ifDefined('providerMeta', failure['meta']),
       },
+      undefined,
+      sourceDiagnosticsToFindings(failure['diagnostics']),
     ),
   };
 }

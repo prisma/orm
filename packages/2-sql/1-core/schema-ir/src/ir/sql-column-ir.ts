@@ -152,6 +152,9 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
         // flag. Either source works for the default node's array-literal
         // rendering.
         ...ifDefined('many', this.many ?? this.codecRef?.many),
+        ...ifDefined('codecRef', this.codecRef),
+        ...ifDefined('codecBaseNativeType', this.codecBaseNativeType),
+        ...ifDefined('codecNamedType', this.codecNamedType),
       }),
     ];
   }

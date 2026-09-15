@@ -1,4 +1,4 @@
-export type { CliErrorConflict, CliErrorEnvelope } from '../control';
+export type { CliErrorConflict, CliErrorDiagnostic, CliErrorEnvelope } from '../control';
 export {
   CliStructuredError,
   errorConfigEvaluationFailed,

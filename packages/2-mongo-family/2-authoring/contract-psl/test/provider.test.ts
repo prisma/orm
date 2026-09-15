@@ -1,7 +1,10 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { ContractSourceContext } from '@internal/config/config-types';
-import { emptyCodecLookup } from '@internal/framework-components/codec';
+import type { JsonValue } from '@internal/contract/types';
+import { enumType, member } from '@internal/contract-authoring';
+import type { PslExtensionBlock } from '@internal/framework-components/authoring';
+import { type Codec, emptyCodecLookup } from '@internal/framework-components/codec';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mongoContract } from '../src/exports/provider';
@@ -15,6 +18,36 @@ const mongoScalarAuthoringTypes = {
     kind: 'typeConstructor',
     output: { codecId: 'mongo/objectId@1', nativeType: 'objectId' },
   },
+} as const;
+
+const stringCodec: Codec = {
+  id: 'mongo/string@1',
+  encode: async (value: unknown) => value,
+  decode: async (wire: unknown) => wire,
+  encodeJson: (value) => value as JsonValue,
+  decodeJson: (json) => json,
+};
+
+const enumEntityType = {
+  kind: 'entity',
+  discriminator: 'enum',
+  output: {
+    factory: (block: PslExtensionBlock) =>
+      enumType(
+        block.name,
+        { codecId: stringCodec.id, nativeType: 'string' },
+        ...Object.keys(block.parameters).map((name) => member(name)),
+      ),
+  },
+} as const;
+
+const enumBlockDescriptor = {
+  kind: 'pslBlock',
+  keyword: 'enum',
+  discriminator: 'enum',
+  name: { required: true },
+  parameters: {},
+  variadicParameters: true,
 } as const;
 
 function createMongoTestContext(overrides?: Partial<ContractSourceContext>): ContractSourceContext {
@@ -134,6 +167,60 @@ describe('mongoContract provider helper', () => {
         absoluteSchemaPath: expect.stringMatching(/missing\.prisma$/),
         cause: expect.any(String),
       },
+    });
+  });
+
+  it('fails with an invalid block entry diagnostic at an enum member attribute and produces no contract', async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), 'mongo-psl-provider-'));
+    tempDirs.push(tempDir);
+    const schemaPath = join(tempDir, 'schema.prisma');
+    await writeFile(
+      schemaPath,
+      `enum Role {
+  USER  @map("user")
+  ADMIN
+}
+
+model User {
+  id   ObjectId @id @map("_id")
+  role Role
+}
+`,
+      'utf-8',
+    );
+
+    const baseContributions = createMongoTestContext().authoringContributions;
+    const contract = mongoContract('./schema.prisma');
+    const result = await contract.source.load(
+      createMongoTestContext({
+        resolvedInputs: [schemaPath],
+        codecLookup: {
+          ...emptyCodecLookup,
+          get: (id) => (id === stringCodec.id ? stringCodec : undefined),
+        },
+        authoringContributions: {
+          ...baseContributions,
+          entityTypes: { enum: enumEntityType },
+          pslBlockDescriptors: { enum: enumBlockDescriptor },
+        },
+      }),
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure).toEqual({
+      summary: 'Schema has 1 error',
+      diagnostics: [
+        {
+          code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+          message: 'Invalid block entry',
+          sourceId: './schema.prisma',
+          span: {
+            start: { offset: 20, line: 2, column: 9 },
+            end: { offset: 21, line: 2, column: 10 },
+          },
+        },
+      ],
     });
   });
 });

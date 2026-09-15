@@ -217,6 +217,47 @@ describe('PostgresCreateTable DDL lowering', () => {
     expect(lowered.sql).not.toContain('::');
   });
 
+  it('renders a list literal default as an ARRAY[...] expression cast to the column type', async () => {
+    const ast = new PostgresCreateTable({
+      table: 'lists',
+      columns: [
+        col('ids', 'int8[]', {
+          default: lit(['1', '-2', '9007199254740993']),
+          codecRef: { codecId: 'pg/int8@1', many: true },
+        }),
+        col('amounts', 'numeric(10,2)[]', {
+          default: lit(['1.5', '-2.25']),
+          codecRef: {
+            codecId: 'pg/numeric@1',
+            typeParams: { precision: 10, scale: 2 },
+            many: true,
+          },
+        }),
+        col('stamps', 'timestamp(3)[]', {
+          default: lit(['2024-01-01T00:00:00']),
+          codecRef: {
+            codecId: 'pg/timestamp-temporal@1',
+            typeParams: { precision: 3 },
+            many: true,
+          },
+        }),
+        col('tags', 'text[]', { default: lit([]), codecRef: { codecId: 'pg/text@1', many: true } }),
+      ],
+    });
+    const adapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+    const lowered = await adapter.lowerToExecuteRequest(ast, { contract: {} as PostgresContract });
+    expect(lowered.sql).toContain(
+      `"ids" int8[] DEFAULT ARRAY['1', '-2', '9007199254740993']::int8[]`,
+    );
+    expect(lowered.sql).toContain(
+      `"amounts" numeric(10,2)[] DEFAULT ARRAY['1.5', '-2.25']::numeric(10,2)[]`,
+    );
+    expect(lowered.sql).toContain(
+      `"stamps" timestamp(3)[] DEFAULT ARRAY['2024-01-01T00:00:00']::timestamp(3)[]`,
+    );
+    expect(lowered.sql).toContain(`"tags" text[] DEFAULT '{}'`);
+  });
+
   it('column with both default and notNull renders DEFAULT before NOT NULL, neither dropped', async () => {
     const ast = new PostgresCreateTable({
       table: 't',

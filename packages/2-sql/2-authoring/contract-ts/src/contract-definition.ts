@@ -1,5 +1,6 @@
 import type {
   ColumnDefault,
+  ColumnDefaultLiteralInputValue,
   ControlPolicy,
   ExecutionMutationDefaultPhases,
 } from '@internal/contract/types';
@@ -36,12 +37,25 @@ export type AttachedEntities = Readonly<
   Record<string, Readonly<Record<string, Readonly<Record<string, unknown>>>>>
 >;
 
+/**
+ * A literal default as an authoring surface builds it. The contract build encodes it through the
+ * column codec into a {@link ColumnDefault}, so it may hold a `bigint`, which JSON cannot.
+ */
+export type AuthoredColumnDefaultLiteralValue =
+  | ColumnDefaultLiteralInputValue
+  | bigint
+  | readonly AuthoredColumnDefaultLiteralValue[];
+
+export type AuthoredColumnDefault =
+  | ColumnDefault
+  | { readonly kind: 'literal'; readonly value: AuthoredColumnDefaultLiteralValue };
+
 export interface FieldNode {
   readonly fieldName: string;
   readonly columnName: string;
   readonly descriptor: ColumnTypeDescriptor;
   readonly nullable: boolean;
-  readonly default?: ColumnDefault;
+  readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
   readonly many?: boolean;
   /**
@@ -182,7 +196,7 @@ export interface ValueObjectFieldNode {
   readonly columnName: string;
   readonly valueObjectName: string;
   readonly nullable: boolean;
-  readonly default?: ColumnDefault;
+  readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
   readonly many?: boolean;
 }

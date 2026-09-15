@@ -413,6 +413,10 @@ Schema verification found that the live database schema does not satisfy the con
 
 The TypeScript contract module imports something outside the contract-source import allowlist; contract sources must stay pure so they can be bundled and evaluated deterministically. Raised by the CLI while loading a TS contract source. Payload: `allowlist`, `disallowed`.
 
+### CONTRACT.SOURCE_DIAGNOSTIC
+
+One finding a contract source reported while `contract emit` loaded it: an unsupported construct in a Prisma schema, a parse error, an unreadable file. Never raised on its own; carried, one per source diagnostic, in the `diagnostics` list of a `CONTRACT.SOURCE_LOAD_FAILED` error, printed under it in the terminal and serialized as the envelope's `diagnostics` in JSON. `summary` is `<file>:<line>:<column> <source code>: <message>` (the location is omitted when the source gave none), so the source's own code, for example `PRISMA7_VIEW_UNSUPPORTED` or `PSL_UNSUPPORTED_FIELD_TYPE`, and the edit that unblocks it are in the text. `where` carries `path` and `line`. Payload: `code` (the source's own diagnostic code). Fix: edit the schema at each location the findings name, then run `prisma contract emit` again.
+
 ### CONTRACT.SOURCE_LOAD_FAILED
 
 Loading the contract source failed: bundling or evaluating the TypeScript contract module (esbuild bundle error, or the module threw on import), the contract source provider returning a failure or a malformed result during `contract emit`, or `format` failing to read the PSL source file. The underlying failure is attached as `cause` where one exists. Payload: `path`, `stage` (`bundle` or `import`) at the TS-loader site; `diagnostics`, `issues`, `providerMeta` at the emit provider site; none at the format read site.

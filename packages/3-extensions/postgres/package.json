@@ -26,6 +26,7 @@
     "@internal/family-sql": "workspace:8.0.0-rc.11",
     "@internal/framework-components": "workspace:8.0.0-rc.11",
     "@internal/sql-contract": "workspace:8.0.0-rc.11",
+    "@internal/sql-contract-prisma7": "workspace:8.0.0-rc.11",
     "@internal/sql-contract-psl": "workspace:8.0.0-rc.11",
     "@internal/sql-contract-ts": "workspace:8.0.0-rc.11",
     "@internal/sql-builder": "workspace:8.0.0-rc.11",

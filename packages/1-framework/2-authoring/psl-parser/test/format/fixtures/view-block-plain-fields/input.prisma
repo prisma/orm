@@ -1,0 +1,4 @@
+view ActiveUsers {
+  id    Int
+  email String
+}

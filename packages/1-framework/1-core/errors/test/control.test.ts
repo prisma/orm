@@ -108,6 +108,31 @@ describe('CliStructuredError', () => {
     expect(envelope.fix).toBeUndefined();
   });
 
+  describe('diagnostics', () => {
+    const diagnostic = {
+      code: 'CONTRACT.SOURCE_DIAGNOSTIC' as const,
+      severity: 'error' as const,
+      summary: 'schema.prisma:9:1 PSL_VIEW_UNSUPPORTED: views are not supported',
+      nextActions: [],
+      where: { path: 'schema.prisma', line: 9 },
+    };
+
+    it('carries accompanying findings onto the envelope', () => {
+      const error = new CliStructuredError('CONTRACT.SOURCE_LOAD_FAILED', 'Test error', {
+        diagnostics: [diagnostic],
+      });
+
+      expect(error.diagnostics).toEqual([diagnostic]);
+      expect(error.toEnvelope().diagnostics).toEqual([diagnostic]);
+    });
+
+    it('omits the field when there are none', () => {
+      const error = new CliStructuredError('CONTRACT.SOURCE_LOAD_FAILED', 'Test error');
+
+      expect(Object.keys(error.toEnvelope())).not.toContain('diagnostics');
+    });
+  });
+
   describe('nextActions', () => {
     const nextActions: readonly NextAction[] = [
       { kind: 'run-command', label: 'Create the config', command: '{bin} orm init' },

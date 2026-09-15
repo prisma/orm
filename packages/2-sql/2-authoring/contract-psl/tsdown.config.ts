@@ -5,5 +5,6 @@ export default defineConfig({
     'attribute-specs': 'src/exports/attribute-specs.ts',
     index: 'src/exports/index.ts',
     provider: 'src/exports/provider.ts',
+    resolution: 'src/exports/resolution.ts',
   },
 });

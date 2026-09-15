@@ -127,6 +127,16 @@ export interface FixedNumArgType<T extends number = number, Ctx extends Attribut
   readonly value: T;
 }
 
+export interface NumLiteral {
+  readonly text: string;
+}
+
+export interface NumLiteralArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<NumLiteral, Ctx> {
+  readonly kind: 'num';
+  readonly value: undefined;
+}
+
 export type NumArgType<
   T extends number = number,
   Ctx extends AttributeCtx = AttributeCtx,
@@ -205,6 +215,7 @@ export type InspectableArgType<Ctx extends AttributeCtx> =
   | ListArgType<unknown, Ctx>
   | FixedNumArgType<number, Ctx>
   | UnrestrictedNumArgType<Ctx>
+  | NumLiteralArgType<Ctx>
   | OneOfArgType<readonly [AnyArgType, ...AnyArgType[]], Ctx>
   | RecordArgType<unknown, Ctx>
   | ReferencedFieldRefArgType<FieldAttributeCtx & Ctx>

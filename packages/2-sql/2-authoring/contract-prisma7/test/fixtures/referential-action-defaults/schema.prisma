@@ -1,0 +1,37 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Parent {
+  a        Int
+  b        Int
+  mixed    MixedChild[]
+  optional OptionalChild[]
+
+  @@id([a, b])
+}
+
+model MixedChild {
+  id     Int     @id
+  pa     Int?
+  pb     Int
+  parent Parent? @relation(fields: [pa, pb], references: [a, b])
+}
+
+model OptionalChild {
+  id     Int     @id
+  pa     Int?
+  pb     Int?
+  parent Parent? @relation(fields: [pa, pb], references: [a, b])
+}
+
+model User {
+  id    Int    @id
+  posts Post[]
+}
+
+model Post {
+  id       Int   @id
+  authorId Int
+  author   User? @relation(fields: [authorId], references: [id])
+}

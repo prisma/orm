@@ -85,6 +85,7 @@
     "./planner-schema-lookup": "./dist/planner-schema-lookup.mjs",
     "./planner-sql-checks": "./dist/planner-sql-checks.mjs",
     "./planner-target-details": "./dist/planner-target-details.mjs",
+    "./prisma7-binding": "./dist/prisma7-binding.mjs",
     "./render-ops": "./dist/render-ops.mjs",
     "./render-typescript": "./dist/render-typescript.mjs",
     "./rls-canonicalize": "./dist/rls-canonicalize.mjs",

@@ -14,7 +14,6 @@
  */
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { PslPrinterOptions } from '@internal/family-sql/psl-infer';
-import { parseRawDefault } from '@internal/family-sql/psl-infer';
 import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
@@ -43,6 +42,7 @@ import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
 } from '../../../src/core/authoring';
+import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { isPostgresSchema, postgresCreateNamespace } from '../../../src/core/postgres-schema';
 import { buildPslDocumentAst } from '../../../src/core/psl-infer/infer-psl-contract';
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
@@ -290,7 +290,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
   const printerOptions: PslPrinterOptions = {
     typeMap: createPostgresTypeMap(new Set()),
     defaultMapping: createPostgresDefaultMapping(),
-    parseRawDefault,
+    parseRawDefault: parsePostgresDefault,
   };
 
   const foreignKeyExtras = {

@@ -22,6 +22,23 @@ export interface CliErrorEnvelope {
   readonly why?: string;
   readonly fix?: string;
   readonly nextActions: readonly NextAction[];
+  readonly diagnostics?: readonly CliErrorDiagnostic[];
+  readonly where?: { readonly path?: string; readonly line?: number };
+  readonly meta?: Record<string, unknown>;
+  readonly docsUrl?: string;
+}
+
+/**
+ * One finding reported alongside an error, so a command can fail with
+ * everything it found instead of only the first thing. The same fields as the
+ * envelope minus `ok` and `fix`; the CLI prints each one under the error.
+ */
+export interface CliErrorDiagnostic {
+  readonly code: `${string}.${string}`;
+  readonly severity: 'error' | 'warn' | 'info';
+  readonly summary: string;
+  readonly why?: string;
+  readonly nextActions: readonly NextAction[];
   readonly where?: { readonly path?: string; readonly line?: number };
   readonly meta?: Record<string, unknown>;
   readonly docsUrl?: string;
@@ -53,6 +70,7 @@ export class CliStructuredError extends Error implements StructuredError {
   declare readonly why?: string;
   declare readonly fix?: string;
   declare readonly nextActions?: readonly NextAction[];
+  declare readonly diagnostics?: readonly CliErrorDiagnostic[];
   declare readonly where?: { readonly path?: string; readonly line?: number };
   declare readonly meta?: Record<string, unknown>;
   declare readonly docsUrl?: string;
@@ -65,6 +83,7 @@ export class CliStructuredError extends Error implements StructuredError {
       readonly why?: string;
       readonly fix?: string;
       readonly nextActions?: readonly NextAction[];
+      readonly diagnostics?: readonly CliErrorDiagnostic[];
       readonly where?: { readonly path?: string; readonly line?: number };
       readonly meta?: Record<string, unknown>;
       readonly docsUrl?: string;
@@ -83,6 +102,7 @@ export class CliStructuredError extends Error implements StructuredError {
       ...ifDefined('why', options?.why),
       ...ifDefined('fix', fix),
       ...ifDefined('nextActions', options?.nextActions),
+      ...ifDefined('diagnostics', options?.diagnostics),
       ...ifDefined('where', where),
       ...ifDefined('meta', options?.meta),
       ...ifDefined('docsUrl', options?.docsUrl),
@@ -104,6 +124,7 @@ export class CliStructuredError extends Error implements StructuredError {
       ...ifDefined('why', this.why),
       ...ifDefined('fix', this.fix),
       nextActions: this.nextActions ?? [],
+      ...ifDefined('diagnostics', this.diagnostics),
       ...ifDefined('where', this.where),
       ...ifDefined('meta', this.meta),
       ...ifDefined('docsUrl', this.docsUrl),

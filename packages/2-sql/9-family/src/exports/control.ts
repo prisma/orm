@@ -86,6 +86,7 @@ export type {
   StorageTypePlanResult,
 } from '../core/migrations/types';
 export {
+  TIMESTAMP_NOW_GENERATOR_ID,
   temporalAuthoringPresets,
   temporalCodecPreset,
   temporalCodecPresetWithPrecision,

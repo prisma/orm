@@ -202,12 +202,16 @@ const COMMON_FACADE_REEXPORTS: readonly ShellReexportMapping[] = [
  * itself — which the SQL facades were assumed not to have, until the SQL
  * migration-planner harnesses turned out to need the driver's control
  * descriptor to build a control stack by hand. Two subpaths per facade.
+ *
+ * `targetSubpaths` limits the target forward where the target package exports
+ * something the facade's own code imports but no application does.
  */
 function facadeReexports(options: {
   readonly family: string;
   readonly familyPack: string;
   readonly runtime: string;
   readonly target: string;
+  readonly targetSubpaths?: readonly string[];
   readonly adapter: string;
   readonly driver: string;
   readonly queryBuilders: readonly ShellReexportMapping[];
@@ -217,7 +221,12 @@ function facadeReexports(options: {
     { package: options.family, entry: 'family-contract' },
     { package: options.familyPack, entry: 'family', root: false },
     { package: options.runtime, entry: 'family-runtime' },
-    { package: options.target, entry: 'target', root: false },
+    {
+      package: options.target,
+      entry: 'target',
+      root: false,
+      ...(options.targetSubpaths === undefined ? {} : { subpaths: options.targetSubpaths }),
+    },
     { package: options.adapter, entry: 'adapter' },
     { package: options.driver, entry: 'driver' },
     ...options.queryBuilders,
@@ -405,9 +414,16 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           entry: 'schema-ir',
         },
         {
+          dir: 'packages/2-sql/2-authoring/contract-prisma7',
+          name: '@internal/sql-contract-prisma7',
+          entry: 'contract-prisma7',
+          subpaths: ['provider'],
+        },
+        {
           dir: 'packages/2-sql/2-authoring/contract-psl',
           name: '@internal/sql-contract-psl',
           entry: 'contract-psl',
+          subpaths: ['.', 'attribute-specs', 'provider'],
         },
         {
           dir: 'packages/2-sql/2-authoring/contract-ts',
@@ -604,6 +620,42 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
         familyPack: '@internal/family-sql',
         runtime: '@internal/sql-runtime',
         target: '@internal/target-postgres',
+        // Every target subpath except `prisma7-binding`, which only the
+        // facade's `prisma7Schema` imports. A test fails when a target export
+        // is missing here.
+        targetSubpaths: [
+          'aggregates',
+          'codec-descriptor',
+          'codec-ids',
+          'codec-types',
+          'codecs',
+          'contract-free',
+          'control',
+          'data-transform',
+          'ddl',
+          'default-normalizer',
+          'diff-database-schema',
+          'errors',
+          'issue-planner',
+          'migration',
+          'native-type-normalizer',
+          'op-factory-call',
+          'pack',
+          'planner',
+          'planner-ddl-builders',
+          'planner-identity-values',
+          'planner-produced-postgres-migration',
+          'planner-schema-lookup',
+          'planner-sql-checks',
+          'planner-target-details',
+          'render-ops',
+          'render-typescript',
+          'rls-canonicalize',
+          'runtime',
+          'schema-ir-annotations',
+          'sql-utils',
+          'types',
+        ],
         adapter: '@internal/adapter-postgres',
         driver: '@internal/driver-postgres',
         queryBuilders: SQL_QUERY_REEXPORTS,

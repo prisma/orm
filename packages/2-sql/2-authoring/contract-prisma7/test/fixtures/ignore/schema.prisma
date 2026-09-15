@@ -1,0 +1,18 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id      Int
+  email   String
+  legacy  String? @ignore
+  things  LegacyThing[]
+}
+
+model LegacyThing {
+  id     Int
+  userId Int
+  user   User
+
+  @@ignore
+}

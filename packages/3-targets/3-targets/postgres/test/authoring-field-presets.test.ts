@@ -113,7 +113,7 @@ describe('postgres temporal per-codec presets', () => {
       timestamp: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamp-temporal@1',
         nativeType: 'timestamp',
-        generatorId: 'instantNow',
+        generatorId: 'plainDateTimeNow',
       }),
       timestamptz: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamptz-temporal@1',
@@ -130,6 +130,27 @@ describe('postgres temporal per-codec presets', () => {
       }),
     });
   });
+
+  it.each([
+    ['timestamp', 'plainDateTimeNow'],
+    ['timestamptz', 'instantNow'],
+  ] as const)(
+    'temporal.%s answers `now` with the %s generator, the representation its codec encodes',
+    (helper, generatorId) => {
+      expect(postgresAuthoringFieldPresets.temporal[helper].output.executionDefaults).toEqual({
+        onCreate: {
+          kind: 'select',
+          index: 1,
+          cases: { now: { kind: 'generator', id: generatorId } },
+        },
+        onUpdate: {
+          kind: 'select',
+          index: 2,
+          cases: { now: { kind: 'generator', id: generatorId } },
+        },
+      });
+    },
+  );
 
   it('backs updatedAt and timestamptz with the same codec, so the convenience form is a shorthand', () => {
     expect(postgresAuthoringFieldPresets.temporal.updatedAt.output.codecId).toBe(

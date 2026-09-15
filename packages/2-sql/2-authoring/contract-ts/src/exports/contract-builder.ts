@@ -18,6 +18,8 @@ export {
 } from '../contract-builder';
 export type {
   AttachedEntities,
+  AuthoredColumnDefault,
+  AuthoredColumnDefaultLiteralValue,
   CheckNode,
   ContractDefinition,
   FieldNode,

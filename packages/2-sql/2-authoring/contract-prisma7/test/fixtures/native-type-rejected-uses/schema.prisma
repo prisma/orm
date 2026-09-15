@@ -1,0 +1,45 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id       Int     @id
+  nickname String? @db.Citext
+  currency String  @db.Citext @default("usd")
+  balance  Decimal @db.Money
+  email    String  @unique @db.Citext
+  region   String  @db.Citext
+  posts    Post[]
+
+  @@index([region])
+}
+
+model Post {
+  id          Int     @id
+  authorEmail String  @db.Citext
+  author      Account @relation(fields: [authorEmail], references: [email])
+}
+
+model Author {
+  id       Int       @id
+  handle   String    @unique
+  comments Comment[] @ignore
+}
+
+model Comment {
+  id           Int    @id
+  authorHandle String @db.Citext
+  author       Author @relation(fields: [authorHandle], references: [handle]) @ignore
+}
+
+model Reader {
+  id      Int      @id
+  handle  String   @unique
+  reviews Review[]
+}
+
+model Review {
+  id           Int    @id
+  readerHandle String @db.Citext
+  reader       Reader @relation(fields: [readerHandle], references: [handle])
+}

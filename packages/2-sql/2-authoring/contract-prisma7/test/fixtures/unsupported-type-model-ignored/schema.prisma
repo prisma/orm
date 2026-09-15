@@ -1,0 +1,17 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id    Int    @id
+  posts Post[] @ignore
+}
+
+model Post {
+  id       Int                      @id
+  search   Unsupported("tsvector")?
+  authorId Int
+  author   User                     @relation(fields: [authorId], references: [id])
+
+  @@ignore
+}

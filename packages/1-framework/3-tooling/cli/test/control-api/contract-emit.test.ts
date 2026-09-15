@@ -194,6 +194,55 @@ describe('executeContractEmit', () => {
     });
   });
 
+  it('turns every source diagnostic into a finding naming its code, file, and line', async () => {
+    const source = createSourceProvider(async () => ({
+      ok: false,
+      failure: {
+        summary: 'Prisma 7 schema interpretation failed',
+        diagnostics: [
+          {
+            code: 'PRISMA7_VIEW_UNSUPPORTED',
+            message: 'View "ActiveUsers" is not supported; Prisma 8 has no views.',
+            sourceId: 'prisma/schema.prisma',
+            span: {
+              start: { offset: 80, line: 9, column: 1 },
+              end: { offset: 90, line: 9, column: 11 },
+            },
+          },
+          { code: 'PRISMA7_SCHEMA_READ_FAILED', message: 'ENOENT', sourceId: 'prisma/schema' },
+          { code: 'PSL_PARSE_ERROR', message: 'Unexpected token' },
+        ],
+      },
+    }));
+
+    await expect(
+      executeContractEmitWithMock(
+        emitOptions(mockConfigWithContract({ source, output: './src/prisma/contract.json' })),
+      ),
+    ).rejects.toMatchObject({
+      code: 'CONTRACT.SOURCE_LOAD_FAILED',
+      why: 'Prisma 7 schema interpretation failed',
+      fix: 'Edit the schema where each finding points, then run contract emit again.',
+      diagnostics: [
+        {
+          code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+          severity: 'error',
+          summary:
+            'prisma/schema.prisma:9:1 PRISMA7_VIEW_UNSUPPORTED: View "ActiveUsers" is not supported; Prisma 8 has no views.',
+          nextActions: [],
+          where: { path: 'prisma/schema.prisma', line: 9 },
+          meta: { code: 'PRISMA7_VIEW_UNSUPPORTED' },
+        },
+        {
+          code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+          summary: 'prisma/schema PRISMA7_SCHEMA_READ_FAILED: ENOENT',
+          where: { path: 'prisma/schema' },
+        },
+        { code: 'CONTRACT.SOURCE_DIAGNOSTIC', summary: 'PSL_PARSE_ERROR: Unexpected token' },
+      ],
+    });
+  });
+
   it('passes deserializeContract output to emit, not the pre-hydration envelope', async () => {
     const outputJsonPath = join(tmpDir, 'src/prisma/contract.json');
     const plainEnvelope = createMockContract();

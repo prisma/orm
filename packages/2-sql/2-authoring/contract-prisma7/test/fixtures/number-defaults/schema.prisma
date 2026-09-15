@@ -1,0 +1,17 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Decimals {
+  id              Int       @id
+  long            Decimal   @default(12345678901234567890.123456789)
+  tiny            Decimal   @default(0.000000000000000001)
+  negative        Decimal   @default(-1.5)
+  whole           Decimal   @default(42)
+  zerosBare       Decimal   @default(1.50) @db.Decimal
+  zerosScaled     Decimal   @default(1.50) @db.Decimal(10, 2)
+  zerosDefault    Decimal   @default(1.50)
+  list            Decimal[] @default([1.50, -2, 0.000000000000000001])
+  bigLong         BigInt    @default(9007199254740993)
+  bigList         BigInt[]  @default([9007199254740993, -1])
+}

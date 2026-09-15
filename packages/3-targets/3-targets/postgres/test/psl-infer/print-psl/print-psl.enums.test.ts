@@ -9,7 +9,6 @@
  * native enums until the adoption dispatch wires real data through.
  */
 import type { EnumInfo, PslPrinterOptions } from '@internal/family-sql/psl-infer';
-import { parseRawDefault } from '@internal/family-sql/psl-infer';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { printPsl } from '@internal/psl-printer';
@@ -17,6 +16,7 @@ import type { SqlTableIRInput } from '@internal/sql-schema-ir/types';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
 import { describe, expect, it } from 'vitest';
 import { postgresAuthoringPslBlockDescriptors } from '../../../src/core/authoring';
+import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { buildPslDocumentAst } from '../../../src/core/psl-infer/infer-psl-contract';
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
 import { createPostgresTypeMap } from '../../../src/core/psl-infer/postgres-type-map';
@@ -36,7 +36,7 @@ function printWithEnums(
   const options: PslPrinterOptions = {
     typeMap: createPostgresTypeMap(enumInfo.typeNames),
     defaultMapping: createPostgresDefaultMapping(),
-    parseRawDefault,
+    parseRawDefault: parsePostgresDefault,
     enumInfo,
   };
   const ast = buildPslDocumentAst(new SqlSchemaIR({ tables }), options, {
