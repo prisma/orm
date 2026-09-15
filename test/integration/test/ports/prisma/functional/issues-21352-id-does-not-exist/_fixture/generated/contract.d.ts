@@ -250,12 +250,12 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly Relation1: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly email: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
     readonly Relation2: {
-      readonly field: CodecTypes['pg/text@1']['output'];
       readonly email: CodecTypes['pg/text@1']['output'];
+      readonly field: CodecTypes['pg/text@1']['output'];
     };
     readonly User1: { readonly email: CodecTypes['pg/text@1']['output'] };
     readonly User2: { readonly id: CodecTypes['pg/text@1']['output'] };
@@ -264,12 +264,12 @@ export type FieldOutputTypes = {
 export type FieldInputTypes = {
   readonly public: {
     readonly Relation1: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly email: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
     readonly Relation2: {
-      readonly field: CodecTypes['pg/text@1']['input'];
       readonly email: CodecTypes['pg/text@1']['input'];
+      readonly field: CodecTypes['pg/text@1']['input'];
     };
     readonly User1: { readonly email: CodecTypes['pg/text@1']['input'] };
     readonly User2: { readonly id: CodecTypes['pg/text@1']['input'] };
@@ -305,36 +305,36 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type public_Relation1 = {
+    email: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/text@1']['output'];
+    user: public_User1;
+    readonly [RelationKeys]?: 'user';
+  };
+  export type public_Relation2 = {
+    email: CodecTypes['pg/text@1']['output'];
+    field: CodecTypes['pg/text@1']['output'];
+    user: public_User2;
+    readonly [RelationKeys]?: 'user';
+  };
   export type public_User1 = {
     email: CodecTypes['pg/text@1']['output'];
     relation1: public_Relation1[];
     readonly [RelationKeys]?: 'relation1';
-  };
-  export type public_Relation1 = {
-    id: CodecTypes['pg/text@1']['output'];
-    email: CodecTypes['pg/text@1']['output'];
-    user: public_User1;
-    readonly [RelationKeys]?: 'user';
   };
   export type public_User2 = {
     id: CodecTypes['pg/text@1']['output'];
     relation2: public_Relation2[];
     readonly [RelationKeys]?: 'relation2';
   };
-  export type public_Relation2 = {
-    field: CodecTypes['pg/text@1']['output'];
-    email: CodecTypes['pg/text@1']['output'];
-    user: public_User2;
-    readonly [RelationKeys]?: 'user';
-  };
 }
 
 export declare const models: {
   public: {
-    User1: Models.public_User1;
     Relation1: Models.public_Relation1;
-    User2: Models.public_User2;
     Relation2: Models.public_Relation2;
+    User1: Models.public_User1;
+    User2: Models.public_User2;
   };
 };
 
@@ -358,12 +358,12 @@ type ContractBase = Omit<
           readonly table: {
             readonly relation1: {
               columns: {
-                readonly id: {
+                readonly email: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly email: {
+                readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -396,12 +396,12 @@ type ContractBase = Omit<
             };
             readonly relation2: {
               columns: {
-                readonly field: {
+                readonly email: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly email: {
+                readonly field: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -469,10 +469,10 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly user1: { readonly namespace: 'public' & NamespaceId; readonly model: 'User1' };
     readonly relation1: { readonly namespace: 'public' & NamespaceId; readonly model: 'Relation1' };
-    readonly user2: { readonly namespace: 'public' & NamespaceId; readonly model: 'User2' };
     readonly relation2: { readonly namespace: 'public' & NamespaceId; readonly model: 'Relation2' };
+    readonly user1: { readonly namespace: 'public' & NamespaceId; readonly model: 'User1' };
+    readonly user2: { readonly namespace: 'public' & NamespaceId; readonly model: 'User2' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -480,11 +480,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly Relation1: {
             readonly fields: {
-              readonly id: {
+              readonly email: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly email: {
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -507,18 +507,18 @@ type ContractBase = Omit<
               readonly table: 'relation1';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly email: { readonly column: 'email' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
           readonly Relation2: {
             readonly fields: {
-              readonly field: {
+              readonly email: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly email: {
+              readonly field: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -541,8 +541,8 @@ type ContractBase = Omit<
               readonly table: 'relation2';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly field: { readonly column: 'field' };
                 readonly email: { readonly column: 'email' };
+                readonly field: { readonly column: 'field' };
               };
             };
           };

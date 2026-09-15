@@ -1,4 +1,4 @@
-import type { CrossReference } from '@internal/contract/types';
+import type { Contract, CrossReference } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
 import { timeouts } from '@repo/test-utils';
@@ -501,6 +501,52 @@ describe('emitter integration', () => {
       );
 
       expect(result.contractDts).not.toContain('readonly enum:');
+    },
+    timeouts.typeScriptCompilation,
+  );
+});
+
+describe('declarations follow the canonical JSON', () => {
+  function contractWithModels(order: readonly string[]) {
+    const models: Record<string, unknown> = {};
+    for (const name of order) {
+      models[name] = {
+        fields: {
+          id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+        },
+        relations: {},
+        storage: { namespaceId: '__unbound__', table: name.toLowerCase(), namespace: 'public' },
+      };
+    }
+    return createTestContract({ models });
+  }
+
+  it(
+    'generates the same contract.d.ts whichever order the models were authored in',
+    async () => {
+      const hydrate = (json: Record<string, unknown>) => json as unknown as Contract;
+      const authoredZebraFirst = await emit(
+        contractWithModels(['Zebra', 'Apple']),
+        {},
+        createMockSpi(),
+        {
+          deserializeContract: hydrate,
+        },
+      );
+      const authoredAppleFirst = await emit(
+        contractWithModels(['Apple', 'Zebra']),
+        {},
+        createMockSpi(),
+        {
+          deserializeContract: hydrate,
+        },
+      );
+
+      expect(authoredZebraFirst.contractJson).toBe(authoredAppleFirst.contractJson);
+      expect(authoredZebraFirst.contractDts).toBe(authoredAppleFirst.contractDts);
+      expect(authoredZebraFirst.contractDts.indexOf('Apple')).toBeLessThan(
+        authoredZebraFirst.contractDts.indexOf('Zebra'),
+      );
     },
     timeouts.typeScriptCompilation,
   );

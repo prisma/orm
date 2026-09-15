@@ -3869,6 +3869,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      postgres-array:
+        specifier: 2.0.0
+        version: 2.0.0
     devDependencies:
       '@internal/psl-printer':
         specifier: workspace:8.0.0-rc.11
@@ -4305,6 +4308,9 @@ importers:
       pg-mem:
         specifier: ^3.0.5
         version: 3.0.14
+      pg-types:
+        specifier: 2.2.0
+        version: 2.2.0
       tsdown:
         specifier: 'catalog:'
         version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
@@ -4994,6 +5000,9 @@ importers:
       pg-cursor:
         specifier: ^2.21.0
         version: 2.21.0(pg@8.22.0)
+      postgres-array:
+        specifier: 2.0.0
+        version: 2.0.0
     devDependencies:
       '@internal/adapter-postgres':
         specifier: workspace:8.0.0-rc.11

@@ -313,14 +313,6 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_User = {
-    id: CodecTypes['pg/int4@1']['output'];
-    name: CodecTypes['pg/text@1']['output'] | null;
-    userId: CodecTypes['pg/int4@1']['output'];
-    userId2: CodecTypes['pg/int4@1']['output'];
-    posts: public_Post[];
-    readonly [RelationKeys]?: 'posts';
-  };
   export type public_Post = {
     id: CodecTypes['pg/int4@1']['output'];
     title: CodecTypes['pg/text@1']['output'] | null;
@@ -329,12 +321,20 @@ export namespace Models {
     author: public_User | null;
     readonly [RelationKeys]?: 'author';
   };
+  export type public_User = {
+    id: CodecTypes['pg/int4@1']['output'];
+    name: CodecTypes['pg/text@1']['output'] | null;
+    userId: CodecTypes['pg/int4@1']['output'];
+    userId2: CodecTypes['pg/int4@1']['output'];
+    posts: public_Post[];
+    readonly [RelationKeys]?: 'posts';
+  };
 }
 
 export declare const models: {
   public: {
-    User: Models.public_User;
     Post: Models.public_Post;
+    User: Models.public_User;
   };
 };
 
@@ -443,8 +443,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
     readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
+    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
   };
   readonly domain: {
     readonly namespaces: {

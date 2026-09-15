@@ -91,6 +91,20 @@ describe('SQLite adapter', () => {
     expect(adapter.profile.capabilities['sql']).not.toMatchObject({ scalarList: true });
   });
 
+  it.each([
+    ['eq', '='],
+    ['neq', '!='],
+    ['isNotDistinctFrom', 'IS'],
+    ['isDistinctFrom', 'IS NOT'],
+  ] as const)('lowers %s without changing ordinary equality', (op, sqlOperator) => {
+    const ast = SelectAst.from(TableSource.named('user'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+      .withWhere(new BinaryExpr(op, ColumnRef.of('user', 'id'), ParamRef.of(null)));
+    expect(adapter.lower(ast, { contract }).sql).toBe(
+      `SELECT "user"."id" AS "id" FROM "user" WHERE "user"."id" ${sqlOperator} ?`,
+    );
+  });
+
   describe('SELECT', () => {
     it('renders simple select', () => {
       const ast = SelectAst.from(TableSource.named('user')).withProjection([

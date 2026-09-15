@@ -25,14 +25,6 @@ export type ProfileHash =
 
 export type CodecTypes = MongoCodecTypes;
 
-export type CommentContentUpvotesOutput = {
-  readonly vote: CodecTypes['mongo/bool@1']['output'];
-  readonly userId: CodecTypes['mongo/string@1']['output'];
-};
-export type CommentContentUpvotesInput = {
-  readonly vote: CodecTypes['mongo/bool@1']['input'];
-  readonly userId: CodecTypes['mongo/string@1']['input'];
-};
 export type CommentContentOutput = {
   readonly text: CodecTypes['mongo/string@1']['output'];
   readonly upvotes: ReadonlyArray<CommentContentUpvotesOutput>;
@@ -41,12 +33,20 @@ export type CommentContentInput = {
   readonly text: CodecTypes['mongo/string@1']['input'];
   readonly upvotes: ReadonlyArray<CommentContentUpvotesInput>;
 };
+export type CommentContentUpvotesOutput = {
+  readonly userId: CodecTypes['mongo/string@1']['output'];
+  readonly vote: CodecTypes['mongo/bool@1']['output'];
+};
+export type CommentContentUpvotesInput = {
+  readonly userId: CodecTypes['mongo/string@1']['input'];
+  readonly vote: CodecTypes['mongo/bool@1']['input'];
+};
 export type FieldOutputTypes = {
   readonly __unbound__: {
     readonly CommentRequiredList: {
       readonly _id: CodecTypes['mongo/objectId@1']['output'];
-      readonly country: CodecTypes['mongo/string@1']['output'] | null;
       readonly contents: ReadonlyArray<CommentContentOutput>;
+      readonly country: CodecTypes['mongo/string@1']['output'] | null;
     };
   };
 };
@@ -54,8 +54,8 @@ export type FieldInputTypes = {
   readonly __unbound__: {
     readonly CommentRequiredList: {
       readonly _id: CodecTypes['mongo/objectId@1']['input'];
-      readonly country: CodecTypes['mongo/string@1']['input'] | null;
       readonly contents: ReadonlyArray<CommentContentInput>;
+      readonly country: CodecTypes['mongo/string@1']['input'] | null;
     };
   };
 };
@@ -63,8 +63,8 @@ export type FieldInputTypes = {
 export namespace Models {
   export type unbound_CommentRequiredList = {
     _id: CodecTypes['mongo/objectId@1']['output'];
-    country: CodecTypes['mongo/string@1']['output'] | null;
     contents: ReadonlyArray<CommentContentOutput>;
+    country: CodecTypes['mongo/string@1']['output'] | null;
     readonly [RelationKeys]?: never;
   };
 }
@@ -88,41 +88,41 @@ type ContractBase = Omit<
             readonly comment_required_list: {
               readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
-                    readonly country: { readonly bsonType: readonly ['null', 'string'] };
                     readonly contents: {
                       readonly bsonType: 'array';
                       readonly items: {
+                        readonly additionalProperties: false;
                         readonly bsonType: 'object';
                         readonly properties: {
                           readonly text: { readonly bsonType: 'string' };
                           readonly upvotes: {
                             readonly bsonType: 'array';
                             readonly items: {
+                              readonly additionalProperties: false;
                               readonly bsonType: 'object';
                               readonly properties: {
-                                readonly vote: { readonly bsonType: 'bool' };
                                 readonly userId: { readonly bsonType: 'string' };
+                                readonly vote: { readonly bsonType: 'bool' };
                               };
-                              readonly additionalProperties: false;
                               readonly required: readonly ['userId', 'vote'];
                             };
                           };
                         };
-                        readonly additionalProperties: false;
                         readonly required: readonly ['text', 'upvotes'];
                       };
                     };
+                    readonly country: { readonly bsonType: readonly ['null', 'string'] };
                   };
-                  readonly additionalProperties: false;
                   readonly required: readonly ['_id', 'contents'];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
           };
@@ -151,14 +151,14 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/objectId@1' };
               };
-              readonly country: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
               readonly contents: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'valueObject'; readonly name: 'CommentContent' };
                 readonly many: true;
+              };
+              readonly country: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
               };
             };
             readonly relations: Record<string, never>;
@@ -166,18 +166,6 @@ type ContractBase = Omit<
           };
         };
         readonly valueObjects: {
-          readonly CommentContentUpvotes: {
-            readonly fields: {
-              readonly vote: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
-              };
-              readonly userId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-              };
-            };
-          };
           readonly CommentContent: {
             readonly fields: {
               readonly text: {
@@ -194,6 +182,18 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly CommentContentUpvotes: {
+            readonly fields: {
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+              };
+              readonly vote: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
+              };
+            };
+          };
         };
       };
     };
@@ -202,18 +202,6 @@ type ContractBase = Omit<
   readonly extensions: {};
   readonly meta: {};
   readonly valueObjects: {
-    readonly CommentContentUpvotes: {
-      readonly fields: {
-        readonly vote: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
-        };
-        readonly userId: {
-          readonly nullable: false;
-          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
-        };
-      };
-    };
     readonly CommentContent: {
       readonly fields: {
         readonly text: {
@@ -224,6 +212,18 @@ type ContractBase = Omit<
           readonly nullable: false;
           readonly type: { readonly kind: 'valueObject'; readonly name: 'CommentContentUpvotes' };
           readonly many: true;
+        };
+      };
+    };
+    readonly CommentContentUpvotes: {
+      readonly fields: {
+        readonly userId: {
+          readonly nullable: false;
+          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/string@1' };
+        };
+        readonly vote: {
+          readonly nullable: false;
+          readonly type: { readonly kind: 'scalar'; readonly codecId: 'mongo/bool@1' };
         };
       };
     };

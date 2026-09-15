@@ -250,16 +250,16 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly FeatureFlag: {
-      readonly key: CodecTypes['pg/text@1']['output'];
       readonly enabled: CodecTypes['pg/bool@1']['output'];
+      readonly key: CodecTypes['pg/text@1']['output'];
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly FeatureFlag: {
-      readonly key: CodecTypes['pg/text@1']['input'];
       readonly enabled: CodecTypes['pg/bool@1']['input'];
+      readonly key: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -282,8 +282,8 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_FeatureFlag = {
-    key: CodecTypes['pg/text@1']['output'];
     enabled: CodecTypes['pg/bool@1']['output'];
+    key: CodecTypes['pg/text@1']['output'];
     readonly [RelationKeys]?: never;
   };
 }
@@ -314,14 +314,14 @@ type ContractBase = Omit<
           readonly table: {
             readonly feature_flag: {
               columns: {
-                readonly key: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly enabled: {
                   readonly nativeType: 'bool';
                   readonly codecId: 'pg/bool@1';
+                  readonly nullable: false;
+                };
+                readonly key: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
               };
@@ -352,13 +352,13 @@ type ContractBase = Omit<
         readonly models: {
           readonly FeatureFlag: {
             readonly fields: {
-              readonly key: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly enabled: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
+              };
+              readonly key: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: Record<string, never>;
@@ -366,8 +366,8 @@ type ContractBase = Omit<
               readonly table: 'feature_flag';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly key: { readonly column: 'key' };
                 readonly enabled: { readonly column: 'enabled' };
+                readonly key: { readonly column: 'key' };
               };
             };
           };

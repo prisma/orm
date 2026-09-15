@@ -255,14 +255,14 @@ export type FieldOutputTypes = {
     };
     readonly User: { readonly id: CodecTypes['pg/int4@1']['output'] };
     readonly UserToObjective: {
-      readonly userId: CodecTypes['pg/int4@1']['output'];
       readonly objectiveId: CodecTypes['pg/int4@1']['output'];
+      readonly userId: CodecTypes['pg/int4@1']['output'];
     };
     readonly Vote: {
-      readonly userId: CodecTypes['pg/int4@1']['output'];
-      readonly objectiveId: CodecTypes['pg/int4@1']['output'];
-      readonly followerId: CodecTypes['pg/int4@1']['output'];
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly followerId: CodecTypes['pg/int4@1']['output'];
+      readonly objectiveId: CodecTypes['pg/int4@1']['output'];
+      readonly userId: CodecTypes['pg/int4@1']['output'];
     };
   };
 };
@@ -274,14 +274,14 @@ export type FieldInputTypes = {
     };
     readonly User: { readonly id: CodecTypes['pg/int4@1']['input'] };
     readonly UserToObjective: {
-      readonly userId: CodecTypes['pg/int4@1']['input'];
       readonly objectiveId: CodecTypes['pg/int4@1']['input'];
+      readonly userId: CodecTypes['pg/int4@1']['input'];
     };
     readonly Vote: {
-      readonly userId: CodecTypes['pg/int4@1']['input'];
-      readonly objectiveId: CodecTypes['pg/int4@1']['input'];
-      readonly followerId: CodecTypes['pg/int4@1']['input'];
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly followerId: CodecTypes['pg/int4@1']['input'];
+      readonly objectiveId: CodecTypes['pg/int4@1']['input'];
+      readonly userId: CodecTypes['pg/int4@1']['input'];
     };
   };
 };
@@ -325,31 +325,31 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_User = {
-    id: CodecTypes['pg/int4@1']['output'];
-    userToObjectives: public_UserToObjective[];
-    votes: public_Vote[];
-    readonly [RelationKeys]?: 'userToObjectives' | 'votes';
-  };
   export type public_Objective = {
     id: CodecTypes['pg/int4@1']['output'];
     name: CodecTypes['pg/text@1']['output'];
     userToObjectives: public_UserToObjective[];
     readonly [RelationKeys]?: 'userToObjectives';
   };
+  export type public_User = {
+    id: CodecTypes['pg/int4@1']['output'];
+    userToObjectives: public_UserToObjective[];
+    votes: public_Vote[];
+    readonly [RelationKeys]?: 'userToObjectives' | 'votes';
+  };
   export type public_UserToObjective = {
-    userId: CodecTypes['pg/int4@1']['output'];
     objectiveId: CodecTypes['pg/int4@1']['output'];
+    userId: CodecTypes['pg/int4@1']['output'];
     objective: public_Objective;
     user: public_User;
     votes: public_Vote[];
     readonly [RelationKeys]?: 'objective' | 'user' | 'votes';
   };
   export type public_Vote = {
-    userId: CodecTypes['pg/int4@1']['output'];
-    objectiveId: CodecTypes['pg/int4@1']['output'];
-    followerId: CodecTypes['pg/int4@1']['output'];
     createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    followerId: CodecTypes['pg/int4@1']['output'];
+    objectiveId: CodecTypes['pg/int4@1']['output'];
+    userId: CodecTypes['pg/int4@1']['output'];
     user: public_User;
     userObjective: public_UserToObjective;
     readonly [RelationKeys]?: 'user' | 'userObjective';
@@ -358,8 +358,8 @@ export namespace Models {
 
 export declare const models: {
   public: {
-    User: Models.public_User;
     Objective: Models.public_Objective;
+    User: Models.public_User;
     UserToObjective: Models.public_UserToObjective;
     Vote: Models.public_Vote;
   };
@@ -424,12 +424,12 @@ type ContractBase = Omit<
             };
             readonly userToObjective: {
               columns: {
-                readonly userId: {
+                readonly objectiveId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly objectiveId: {
+                readonly userId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -439,15 +439,15 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'userToObjective_userId_idx_a489d58a';
-                  readonly prefix: 'userToObjective_userId_idx';
-                  readonly columns: readonly ['userId'];
-                  readonly unique: false;
-                },
-                {
                   readonly name: 'userToObjective_objectiveId_idx_c2dde538';
                   readonly prefix: 'userToObjective_objectiveId_idx';
                   readonly columns: readonly ['objectiveId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'userToObjective_userId_idx_a489d58a';
+                  readonly prefix: 'userToObjective_userId_idx';
+                  readonly columns: readonly ['userId'];
                   readonly unique: false;
                 },
               ];
@@ -480,7 +480,13 @@ type ContractBase = Omit<
             };
             readonly vote: {
               columns: {
-                readonly userId: {
+                readonly createdAt: {
+                  readonly nativeType: 'timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
+                };
+                readonly followerId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -490,31 +496,25 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly followerId: {
+                readonly userId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
-                };
-                readonly createdAt: {
-                  readonly nativeType: 'timestamptz';
-                  readonly codecId: 'pg/timestamptz-temporal@1';
-                  readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                 };
               };
               primaryKey: { readonly columns: readonly ['userId', 'objectiveId'] };
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'vote_userId_idx_a489d58a';
-                  readonly prefix: 'vote_userId_idx';
-                  readonly columns: readonly ['userId'];
-                  readonly unique: false;
-                },
-                {
                   readonly name: 'vote_objectiveId_followerId_idx_84a17adf';
                   readonly prefix: 'vote_objectiveId_followerId_idx';
                   readonly columns: readonly ['objectiveId', 'followerId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'vote_userId_idx_a489d58a';
+                  readonly prefix: 'vote_userId_idx';
+                  readonly columns: readonly ['userId'];
                   readonly unique: false;
                 },
               ];
@@ -556,8 +556,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
     readonly objective: { readonly namespace: 'public' & NamespaceId; readonly model: 'Objective' };
+    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
     readonly userToObjective: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'UserToObjective';
@@ -637,11 +637,11 @@ type ContractBase = Omit<
           };
           readonly UserToObjective: {
             readonly fields: {
-              readonly userId: {
+              readonly objectiveId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly objectiveId: {
+              readonly userId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
@@ -681,14 +681,21 @@ type ContractBase = Omit<
               readonly table: 'userToObjective';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly userId: { readonly column: 'userId' };
                 readonly objectiveId: { readonly column: 'objectiveId' };
+                readonly userId: { readonly column: 'userId' };
               };
             };
           };
           readonly Vote: {
             readonly fields: {
-              readonly userId: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly followerId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
@@ -696,16 +703,9 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly followerId: {
+              readonly userId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
-              readonly createdAt: {
-                readonly nullable: false;
-                readonly type: {
-                  readonly kind: 'scalar';
-                  readonly codecId: 'pg/timestamptz-temporal@1';
-                };
               };
             };
             readonly relations: {
@@ -735,10 +735,10 @@ type ContractBase = Omit<
               readonly table: 'vote';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly userId: { readonly column: 'userId' };
-                readonly objectiveId: { readonly column: 'objectiveId' };
-                readonly followerId: { readonly column: 'followerId' };
                 readonly createdAt: { readonly column: 'createdAt' };
+                readonly followerId: { readonly column: 'followerId' };
+                readonly objectiveId: { readonly column: 'objectiveId' };
+                readonly userId: { readonly column: 'userId' };
               };
             };
           };

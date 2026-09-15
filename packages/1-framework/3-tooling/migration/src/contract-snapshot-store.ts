@@ -156,22 +156,6 @@ export async function readContractSnapshotJsonTolerant(
   }
 }
 
-export async function readContractSnapshotDts(
-  migrationsDir: string,
-  storageHash: string,
-): Promise<string> {
-  const dtsPath = join(contractSnapshotDir(migrationsDir, storageHash), CONTRACT_DTS_FILE);
-
-  try {
-    return await readFile(dtsPath, 'utf-8');
-  } catch (error) {
-    if (hasErrnoCode(error, 'ENOENT')) {
-      throw errorContractSnapshotMissing(storageHash, dtsPath);
-    }
-    throw error;
-  }
-}
-
 export function snapshotsImportPathFrom(packageDir: string, migrationsDir: string): string {
   const storeDir = join(migrationsDir, CONTRACT_SNAPSHOTS_DIRNAME);
   return relative(packageDir, storeDir).split('\\').join('/');

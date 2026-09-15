@@ -251,20 +251,20 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly TestModel: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly d10_0: Numeric<10, 0> | null;
       readonly d20_10: Numeric<20, 10> | null;
       readonly d38_30: Numeric<38, 30> | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly TestModel: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly d10_0: CodecTypes['pg/numeric@1']['input'] | null;
       readonly d20_10: CodecTypes['pg/numeric@1']['input'] | null;
       readonly d38_30: CodecTypes['pg/numeric@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -291,10 +291,10 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_TestModel = {
-    id: CodecTypes['pg/text@1']['output'];
     d10_0: Numeric<10, 0> | null;
     d20_10: Numeric<20, 10> | null;
     d38_30: Numeric<38, 30> | null;
+    id: CodecTypes['pg/text@1']['output'];
     readonly [RelationKeys]?: never;
   };
 }
@@ -325,11 +325,6 @@ type ContractBase = Omit<
           readonly table: {
             readonly testModel: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly d10_0: {
                   readonly nativeType: 'numeric';
                   readonly codecId: 'pg/numeric@1';
@@ -347,6 +342,11 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/numeric@1';
                   readonly nullable: true;
                   readonly typeRef: 'Decimal38_30';
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -393,10 +393,6 @@ type ContractBase = Omit<
         readonly models: {
           readonly TestModel: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly d10_0: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/numeric@1' };
@@ -409,16 +405,20 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/numeric@1' };
               };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
             };
             readonly relations: Record<string, never>;
             readonly storage: {
               readonly table: 'testModel';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly d10_0: { readonly column: 'd10_0' };
                 readonly d20_10: { readonly column: 'd20_10' };
                 readonly d38_30: { readonly column: 'd38_30' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
@@ -450,12 +450,12 @@ type ContractBase = Omit<
     readonly mutations: {
       readonly defaults: readonly [
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'testModel';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
         },
       ];
     };

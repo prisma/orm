@@ -251,16 +251,16 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly Resource: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly date: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly Resource: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly date: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -283,8 +283,8 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_Resource = {
-    id: CodecTypes['pg/text@1']['output'];
     date: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    id: CodecTypes['pg/text@1']['output'];
     readonly [RelationKeys]?: never;
   };
 }
@@ -315,14 +315,14 @@ type ContractBase = Omit<
           readonly table: {
             readonly resource: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly date: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
               };
@@ -350,10 +350,6 @@ type ContractBase = Omit<
         readonly models: {
           readonly Resource: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly date: {
                 readonly nullable: false;
                 readonly type: {
@@ -361,14 +357,18 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamptz-temporal@1';
                 };
               };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
             };
             readonly relations: Record<string, never>;
             readonly storage: {
               readonly table: 'resource';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly date: { readonly column: 'date' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
@@ -400,12 +400,12 @@ type ContractBase = Omit<
     readonly mutations: {
       readonly defaults: readonly [
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'resource';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
         },
       ];
     };

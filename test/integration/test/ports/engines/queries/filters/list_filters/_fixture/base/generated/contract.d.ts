@@ -250,28 +250,28 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly TestModel: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly string: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
-      readonly int: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
       readonly bInt: ReadonlyArray<CodecTypes['pg/int8@1']['output']>;
-      readonly float: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
-      readonly bytes: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
       readonly bool: ReadonlyArray<CodecTypes['pg/bool@1']['output']>;
+      readonly bytes: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
       readonly dt: ReadonlyArray<CodecTypes['pg/timestamptz-temporal@1']['output']>;
+      readonly float: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly int: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
+      readonly string: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly TestModel: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly string: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
-      readonly int: ReadonlyArray<CodecTypes['pg/int4@1']['input']>;
       readonly bInt: ReadonlyArray<CodecTypes['pg/int8@1']['input']>;
-      readonly float: ReadonlyArray<CodecTypes['pg/float8@1']['input']>;
-      readonly bytes: ReadonlyArray<CodecTypes['pg/bytea@1']['input']>;
       readonly bool: ReadonlyArray<CodecTypes['pg/bool@1']['input']>;
+      readonly bytes: ReadonlyArray<CodecTypes['pg/bytea@1']['input']>;
       readonly dt: ReadonlyArray<CodecTypes['pg/timestamptz-temporal@1']['input']>;
+      readonly float: ReadonlyArray<CodecTypes['pg/float8@1']['input']>;
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly int: ReadonlyArray<CodecTypes['pg/int4@1']['input']>;
+      readonly string: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
     };
   };
 };
@@ -306,14 +306,14 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_TestModel = {
-    id: CodecTypes['pg/int4@1']['output'];
-    string: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
-    int: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
     bInt: ReadonlyArray<CodecTypes['pg/int8@1']['output']>;
-    float: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
-    bytes: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
     bool: ReadonlyArray<CodecTypes['pg/bool@1']['output']>;
+    bytes: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
     dt: ReadonlyArray<CodecTypes['pg/timestamptz-temporal@1']['output']>;
+    float: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
+    id: CodecTypes['pg/int4@1']['output'];
+    int: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
+    string: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     readonly [RelationKeys]?: never;
   };
 }
@@ -344,34 +344,9 @@ type ContractBase = Omit<
           readonly table: {
             readonly testModel: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
-                readonly string: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly int: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly bInt: {
                   readonly nativeType: 'int8';
                   readonly codecId: 'pg/int8@1';
-                  readonly nullable: false;
-                };
-                readonly float: {
-                  readonly nativeType: 'float8';
-                  readonly codecId: 'pg/float8@1';
-                  readonly nullable: false;
-                };
-                readonly bytes: {
-                  readonly nativeType: 'bytea';
-                  readonly codecId: 'pg/bytea@1';
                   readonly nullable: false;
                 };
                 readonly bool: {
@@ -379,9 +354,34 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
                 };
+                readonly bytes: {
+                  readonly nativeType: 'bytea';
+                  readonly codecId: 'pg/bytea@1';
+                  readonly nullable: false;
+                };
                 readonly dt: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                };
+                readonly float: {
+                  readonly nativeType: 'float8';
+                  readonly codecId: 'pg/float8@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly int: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly string: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
               };
@@ -409,38 +409,19 @@ type ContractBase = Omit<
         readonly models: {
           readonly TestModel: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
-              readonly string: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly many: true;
-              };
-              readonly int: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-                readonly many: true;
-              };
               readonly bInt: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8@1' };
                 readonly many: true;
               };
-              readonly float: {
+              readonly bool: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
                 readonly many: true;
               };
               readonly bytes: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bytea@1' };
-                readonly many: true;
-              };
-              readonly bool: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
                 readonly many: true;
               };
               readonly dt: {
@@ -451,20 +432,39 @@ type ContractBase = Omit<
                 };
                 readonly many: true;
               };
+              readonly float: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+                readonly many: true;
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly int: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+                readonly many: true;
+              };
+              readonly string: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: true;
+              };
             };
             readonly relations: Record<string, never>;
             readonly storage: {
               readonly table: 'testModel';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
-                readonly string: { readonly column: 'string' };
-                readonly int: { readonly column: 'int' };
                 readonly bInt: { readonly column: 'bInt' };
-                readonly float: { readonly column: 'float' };
-                readonly bytes: { readonly column: 'bytes' };
                 readonly bool: { readonly column: 'bool' };
+                readonly bytes: { readonly column: 'bytes' };
                 readonly dt: { readonly column: 'dt' };
+                readonly float: { readonly column: 'float' };
+                readonly id: { readonly column: 'id' };
+                readonly int: { readonly column: 'int' };
+                readonly string: { readonly column: 'string' };
               };
             };
           };

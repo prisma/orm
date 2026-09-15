@@ -83,6 +83,25 @@ When URL binding is used, pool timeouts are configurable via `poolOptions`:
 - `poolOptions.connectionTimeoutMillis` (default `20_000`)
 - `poolOptions.idleTimeoutMillis` (default `30_000`)
 
+### Prepared SQL and ORM rows
+
+Use `db.prepare(declaration, params => ...)` to prepare SQL queries or ORM row reads once and execute them with different parameter values.
+
+```ts
+const byId = await db.prepare({ id: 'pg/int4@1' }, (params) =>
+  db.sql.public.users.select('id').where((f, fns) => fns.eq(f.id, params.id)).build(),
+);
+const all = await db.prepare({}, () => db.orm.public.User.select('id').prepared.all());
+const first = await db.prepare({}, () => db.orm.public.User.select('id').prepared.first());
+
+const rows = all.query(db.runtime(), {});
+for await (const row of rows) console.log(row.id);
+const rowOrNull = await first.query(db.runtime(), {});
+const sqlRows = await byId.query(db.runtime(), { id: 1 });
+```
+
+Pass a compatible runtime, connection or transaction explicitly to `query(target, params, options?)`. ORM `all` returns a thenable async row stream; `first` returns a row-or-null promise. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for supported predicates, includes and pagination.
+
 ### `@internal/postgres/contract-builder`
 
 Re-exports the TypeScript contract authoring DSL (`defineContract`, `field`, `model`, `rel`, ...) so a generated `prisma/contract.ts` can author its contract using only this facade package. The `defineContract` export is a Postgres-specific wrapper that pre-binds `family` and `target` — callers do not pass those fields:

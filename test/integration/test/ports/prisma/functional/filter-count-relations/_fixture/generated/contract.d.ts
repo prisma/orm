@@ -254,20 +254,20 @@ export type FieldOutputTypes = {
       readonly title: CodecTypes['pg/text@1']['output'];
     };
     readonly Post: {
+      readonly authorId: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly published: CodecTypes['pg/bool@1']['output'];
       readonly upvotes: CodecTypes['pg/int4@1']['output'];
-      readonly authorId: CodecTypes['pg/text@1']['output'];
     };
     readonly User: {
-      readonly id: CodecTypes['pg/text@1']['output'];
-      readonly email: CodecTypes['pg/text@1']['output'];
-      readonly blocked: CodecTypes['pg/bool@1']['output'];
       readonly balance: CodecTypes['pg/int4@1']['output'];
+      readonly blocked: CodecTypes['pg/bool@1']['output'];
+      readonly email: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
     readonly UserGroup: {
-      readonly userId: CodecTypes['pg/text@1']['output'];
       readonly groupId: CodecTypes['pg/text@1']['output'];
+      readonly userId: CodecTypes['pg/text@1']['output'];
     };
   };
 };
@@ -278,20 +278,20 @@ export type FieldInputTypes = {
       readonly title: CodecTypes['pg/text@1']['input'];
     };
     readonly Post: {
+      readonly authorId: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly published: CodecTypes['pg/bool@1']['input'];
       readonly upvotes: CodecTypes['pg/int4@1']['input'];
-      readonly authorId: CodecTypes['pg/text@1']['input'];
     };
     readonly User: {
-      readonly id: CodecTypes['pg/text@1']['input'];
-      readonly email: CodecTypes['pg/text@1']['input'];
-      readonly blocked: CodecTypes['pg/bool@1']['input'];
       readonly balance: CodecTypes['pg/int4@1']['input'];
+      readonly blocked: CodecTypes['pg/bool@1']['input'];
+      readonly email: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
     readonly UserGroup: {
-      readonly userId: CodecTypes['pg/text@1']['input'];
       readonly groupId: CodecTypes['pg/text@1']['input'];
+      readonly userId: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -345,44 +345,44 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_User = {
-    id: CodecTypes['pg/text@1']['output'];
-    email: CodecTypes['pg/text@1']['output'];
-    blocked: CodecTypes['pg/bool@1']['output'];
-    balance: CodecTypes['pg/int4@1']['output'];
-    groups: public_Group[];
-    posts: public_Post[];
-    readonly [RelationKeys]?: 'groups' | 'posts';
-  };
   export type public_Group = {
     id: CodecTypes['pg/text@1']['output'];
     title: CodecTypes['pg/text@1']['output'];
     users: public_User[];
     readonly [RelationKeys]?: 'users';
   };
-  export type public_UserGroup = {
-    userId: CodecTypes['pg/text@1']['output'];
-    groupId: CodecTypes['pg/text@1']['output'];
-    group: public_Group;
-    user: public_User;
-    readonly [RelationKeys]?: 'group' | 'user';
-  };
   export type public_Post = {
+    authorId: CodecTypes['pg/text@1']['output'];
     id: CodecTypes['pg/text@1']['output'];
     published: CodecTypes['pg/bool@1']['output'];
     upvotes: CodecTypes['pg/int4@1']['output'];
-    authorId: CodecTypes['pg/text@1']['output'];
     author: public_User;
     readonly [RelationKeys]?: 'author';
+  };
+  export type public_User = {
+    balance: CodecTypes['pg/int4@1']['output'];
+    blocked: CodecTypes['pg/bool@1']['output'];
+    email: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/text@1']['output'];
+    groups: public_Group[];
+    posts: public_Post[];
+    readonly [RelationKeys]?: 'groups' | 'posts';
+  };
+  export type public_UserGroup = {
+    groupId: CodecTypes['pg/text@1']['output'];
+    userId: CodecTypes['pg/text@1']['output'];
+    group: public_Group;
+    user: public_User;
+    readonly [RelationKeys]?: 'group' | 'user';
   };
 }
 
 export declare const models: {
   public: {
-    User: Models.public_User;
     Group: Models.public_Group;
-    UserGroup: Models.public_UserGroup;
     Post: Models.public_Post;
+    User: Models.public_User;
+    UserGroup: Models.public_UserGroup;
   };
 };
 
@@ -424,6 +424,11 @@ type ContractBase = Omit<
             };
             readonly post: {
               columns: {
+                readonly authorId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
                 readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
@@ -437,11 +442,6 @@ type ContractBase = Omit<
                 readonly upvotes: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
-                readonly authorId: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
               };
@@ -472,14 +472,9 @@ type ContractBase = Omit<
             };
             readonly user: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly email: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
+                readonly balance: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
                 readonly blocked: {
@@ -491,9 +486,14 @@ type ContractBase = Omit<
                     readonly value: DefaultLiteralValue<'pg/bool@1', false>;
                   };
                 };
-                readonly balance: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
+                readonly email: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
               };
@@ -504,12 +504,12 @@ type ContractBase = Omit<
             };
             readonly userGroup: {
               columns: {
-                readonly userId: {
+                readonly groupId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly groupId: {
+                readonly userId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -519,15 +519,15 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'userGroup_userId_idx_a489d58a';
-                  readonly prefix: 'userGroup_userId_idx';
-                  readonly columns: readonly ['userId'];
-                  readonly unique: false;
-                },
-                {
                   readonly name: 'userGroup_groupId_idx_e2fb5578';
                   readonly prefix: 'userGroup_groupId_idx';
                   readonly columns: readonly ['groupId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'userGroup_userId_idx_a489d58a';
+                  readonly prefix: 'userGroup_userId_idx';
+                  readonly columns: readonly ['userId'];
                   readonly unique: false;
                 },
               ];
@@ -569,10 +569,10 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
     readonly group: { readonly namespace: 'public' & NamespaceId; readonly model: 'Group' };
-    readonly userGroup: { readonly namespace: 'public' & NamespaceId; readonly model: 'UserGroup' };
     readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
+    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
+    readonly userGroup: { readonly namespace: 'public' & NamespaceId; readonly model: 'UserGroup' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -617,6 +617,10 @@ type ContractBase = Omit<
           };
           readonly Post: {
             readonly fields: {
+              readonly authorId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
@@ -628,10 +632,6 @@ type ContractBase = Omit<
               readonly upvotes: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
-              readonly authorId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: {
@@ -649,30 +649,30 @@ type ContractBase = Omit<
               readonly table: 'post';
               readonly namespaceId: 'public';
               readonly fields: {
+                readonly authorId: { readonly column: 'authorId' };
                 readonly id: { readonly column: 'id' };
                 readonly published: { readonly column: 'published' };
                 readonly upvotes: { readonly column: 'upvotes' };
-                readonly authorId: { readonly column: 'authorId' };
               };
             };
           };
           readonly User: {
             readonly fields: {
-              readonly id: {
+              readonly balance: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly email: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
               readonly blocked: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
               };
-              readonly balance: {
+              readonly email: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: {
@@ -707,20 +707,20 @@ type ContractBase = Omit<
               readonly table: 'user';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
-                readonly email: { readonly column: 'email' };
-                readonly blocked: { readonly column: 'blocked' };
                 readonly balance: { readonly column: 'balance' };
+                readonly blocked: { readonly column: 'blocked' };
+                readonly email: { readonly column: 'email' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
           readonly UserGroup: {
             readonly fields: {
-              readonly userId: {
+              readonly groupId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly groupId: {
+              readonly userId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -752,8 +752,8 @@ type ContractBase = Omit<
               readonly table: 'userGroup';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly userId: { readonly column: 'userId' };
                 readonly groupId: { readonly column: 'groupId' };
+                readonly userId: { readonly column: 'userId' };
               };
             };
           };

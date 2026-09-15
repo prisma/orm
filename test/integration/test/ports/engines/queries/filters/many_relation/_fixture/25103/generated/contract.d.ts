@@ -250,18 +250,18 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly Audience: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly deletedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
     readonly Contact: { readonly id: CodecTypes['pg/text@1']['output'] };
     readonly Identity: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly contactId: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
     readonly Subscription: {
+      readonly audienceId: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly identityId: CodecTypes['pg/text@1']['output'];
-      readonly audienceId: CodecTypes['pg/text@1']['output'];
       readonly optedOutAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
     };
   };
@@ -269,18 +269,18 @@ export type FieldOutputTypes = {
 export type FieldInputTypes = {
   readonly public: {
     readonly Audience: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly deletedAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
     readonly Contact: { readonly id: CodecTypes['pg/text@1']['input'] };
     readonly Identity: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly contactId: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
     readonly Subscription: {
+      readonly audienceId: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly identityId: CodecTypes['pg/text@1']['input'];
-      readonly audienceId: CodecTypes['pg/text@1']['input'];
       readonly optedOutAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
     };
   };
@@ -325,41 +325,41 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type public_Audience = {
+    deletedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+    id: CodecTypes['pg/text@1']['output'];
+    subscriptions: public_Subscription[];
+    readonly [RelationKeys]?: 'subscriptions';
+  };
   export type public_Contact = {
     id: CodecTypes['pg/text@1']['output'];
     identities: public_Identity[];
     readonly [RelationKeys]?: 'identities';
   };
   export type public_Identity = {
-    id: CodecTypes['pg/text@1']['output'];
     contactId: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/text@1']['output'];
     contact: public_Contact;
     subscriptions: public_Subscription[];
     readonly [RelationKeys]?: 'contact' | 'subscriptions';
   };
   export type public_Subscription = {
+    audienceId: CodecTypes['pg/text@1']['output'];
     id: CodecTypes['pg/text@1']['output'];
     identityId: CodecTypes['pg/text@1']['output'];
-    audienceId: CodecTypes['pg/text@1']['output'];
     optedOutAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
     audience: public_Audience;
     identity: public_Identity;
     readonly [RelationKeys]?: 'audience' | 'identity';
   };
-  export type public_Audience = {
-    id: CodecTypes['pg/text@1']['output'];
-    deletedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
-    subscriptions: public_Subscription[];
-    readonly [RelationKeys]?: 'subscriptions';
-  };
 }
 
 export declare const models: {
   public: {
+    Audience: Models.public_Audience;
     Contact: Models.public_Contact;
     Identity: Models.public_Identity;
     Subscription: Models.public_Subscription;
-    Audience: Models.public_Audience;
   };
 };
 
@@ -383,15 +383,15 @@ type ContractBase = Omit<
           readonly table: {
             readonly audience: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly deletedAt: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -414,12 +414,12 @@ type ContractBase = Omit<
             };
             readonly identity: {
               columns: {
-                readonly id: {
+                readonly contactId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly contactId: {
+                readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -452,17 +452,17 @@ type ContractBase = Omit<
             };
             readonly subscription: {
               columns: {
+                readonly audienceId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
                 readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
                 readonly identityId: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly audienceId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -527,13 +527,13 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
+    readonly audience: { readonly namespace: 'public' & NamespaceId; readonly model: 'Audience' };
     readonly contact: { readonly namespace: 'public' & NamespaceId; readonly model: 'Contact' };
     readonly identity: { readonly namespace: 'public' & NamespaceId; readonly model: 'Identity' };
     readonly subscription: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'Subscription';
     };
-    readonly audience: { readonly namespace: 'public' & NamespaceId; readonly model: 'Audience' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -541,16 +541,16 @@ type ContractBase = Omit<
         readonly models: {
           readonly Audience: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly deletedAt: {
                 readonly nullable: true;
                 readonly type: {
                   readonly kind: 'scalar';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                 };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: {
@@ -570,8 +570,8 @@ type ContractBase = Omit<
               readonly table: 'audience';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly deletedAt: { readonly column: 'deletedAt' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
@@ -603,11 +603,11 @@ type ContractBase = Omit<
           };
           readonly Identity: {
             readonly fields: {
-              readonly id: {
+              readonly contactId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly contactId: {
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -641,22 +641,22 @@ type ContractBase = Omit<
               readonly table: 'identity';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly contactId: { readonly column: 'contactId' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
           readonly Subscription: {
             readonly fields: {
+              readonly audienceId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly identityId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly audienceId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -698,9 +698,9 @@ type ContractBase = Omit<
               readonly table: 'subscription';
               readonly namespaceId: 'public';
               readonly fields: {
+                readonly audienceId: { readonly column: 'audienceId' };
                 readonly id: { readonly column: 'id' };
                 readonly identityId: { readonly column: 'identityId' };
-                readonly audienceId: { readonly column: 'audienceId' };
                 readonly optedOutAt: { readonly column: 'optedOutAt' };
               };
             };

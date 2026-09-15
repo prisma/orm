@@ -298,24 +298,24 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_Resource = {
-    id: CodecTypes['pg/text@1']['output'];
-    occStamp: CodecTypes['pg/int4@1']['output'];
-    child: public_Child | null;
-    readonly [RelationKeys]?: 'child';
-  };
   export type public_Child = {
     id: CodecTypes['pg/text@1']['output'];
     parentId: CodecTypes['pg/text@1']['output'];
     parent: public_Resource;
     readonly [RelationKeys]?: 'parent';
   };
+  export type public_Resource = {
+    id: CodecTypes['pg/text@1']['output'];
+    occStamp: CodecTypes['pg/int4@1']['output'];
+    child: public_Child | null;
+    readonly [RelationKeys]?: 'child';
+  };
 }
 
 export declare const models: {
   public: {
-    Resource: Models.public_Resource;
     Child: Models.public_Child;
+    Resource: Models.public_Resource;
   };
 };
 
@@ -401,8 +401,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly resource: { readonly namespace: 'public' & NamespaceId; readonly model: 'Resource' };
     readonly child: { readonly namespace: 'public' & NamespaceId; readonly model: 'Child' };
+    readonly resource: { readonly namespace: 'public' & NamespaceId; readonly model: 'Resource' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -504,20 +504,20 @@ type ContractBase = Omit<
     readonly mutations: {
       readonly defaults: readonly [
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'child';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
         },
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'resource';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
         },
       ];
     };

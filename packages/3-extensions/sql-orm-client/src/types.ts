@@ -10,10 +10,10 @@ import type {
 } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
-  BinaryExpr,
   type BinaryOp,
   type CodecRef,
   type CodecTrait,
+  type LimitOffsetValue,
   ListExpression,
   NullCheckExpr,
   OrderByItem,
@@ -24,6 +24,8 @@ import type { Expression } from '@internal/sql-relational-core/expression';
 import type { ExecutionContext } from '@internal/sql-relational-core/query-lane-context';
 import type { ComputeColumnJsType, RuntimeScope } from '@internal/sql-relational-core/types';
 import type { RowSelection } from './collection-internal-types';
+import { predicateComparison } from './predicate-comparison';
+import { predicateExpression } from './predicate-expression';
 
 export interface IncludeScalar<Result> extends RowSelection<Result> {
   readonly kind: 'includeScalar';
@@ -88,8 +90,8 @@ export interface CollectionState {
   readonly distinct: readonly string[] | undefined;
   readonly distinctOn: readonly string[] | undefined;
   readonly selectedFields: readonly string[] | undefined;
-  readonly limit: number | undefined;
-  readonly offset: number | undefined;
+  readonly limit: LimitOffsetValue | undefined;
+  readonly offset: LimitOffsetValue | undefined;
   readonly variantName: string | undefined;
   /**
    * Annotations attached to this query at terminal-call time.
@@ -186,14 +188,19 @@ export interface CollectionContext<TContract extends Contract<SqlStorage>> {
   readonly context: ExecutionContext<TContract>;
 }
 
-export type ComparisonMethodFns<T> = {
-  eq(value: T): AnyExpression;
-  neq(value: T): AnyExpression;
+type PredicateOperand<T, CodecId extends string> =
+  | T
+  | Expression<{ codecId: CodecId; nullable: false; many?: never }>;
+
+export type ComparisonMethodFns<T, CodecId extends string = never> = {
+  eq(value: T | Expression<{ codecId: CodecId; nullable: boolean; many?: never }>): AnyExpression;
+  neq(value: T | Expression<{ codecId: CodecId; nullable: boolean; many?: never }>): AnyExpression;
   gt(value: T): AnyExpression;
   lt(value: T): AnyExpression;
   gte(value: T): AnyExpression;
   lte(value: T): AnyExpression;
-  like(pattern: string): AnyExpression;
+  // LIKE takes a non-null string pattern, even when the field type T is nullable.
+  like(pattern: PredicateOperand<string, CodecId>): AnyExpression;
   in(values: readonly T[]): AnyExpression;
   notIn(values: readonly T[]): AnyExpression;
   isNull(): AnyExpression;
@@ -207,10 +214,10 @@ export type ComparisonMethodFns<T> = {
  *
  * - `traits: []` → always available (isNull, isNotNull)
  */
-export type ComparisonMethods<T, Traits> = {
+export type ComparisonMethods<T, Traits, CodecId extends string = never> = {
   [K in keyof ComparisonMethodsMeta as [ComparisonMethodsMeta[K]['traits'][number]] extends [Traits]
     ? K
-    : never]: ComparisonMethodFns<T>[K];
+    : never]: ComparisonMethodFns<PredicateOperand<T, CodecId>, CodecId>[K];
 };
 
 type QueryOperationReturnTraits<
@@ -318,7 +325,9 @@ type FieldOperations<
       : unknown
     : unknown;
 
-function param(codec: CodecRef | undefined, value: unknown): ParamRef {
+function param(codec: CodecRef | undefined, value: unknown): AnyExpression {
+  const expression = predicateExpression(value);
+  if (expression !== undefined) return expression;
   if (codec === undefined) return ParamRef.of(value);
   return ParamRef.of(value, { codec });
 }
@@ -343,13 +352,13 @@ function scalarComparisonMethod(op: BinaryOp) {
     if (value === null && (op === 'eq' || op === 'neq')) {
       return op === 'eq' ? NullCheckExpr.isNull(left) : NullCheckExpr.isNotNull(left);
     }
-    return new BinaryExpr(op, left, param(codec, value));
+    return predicateComparison(op, left, param(codec, value));
   }) satisfies MethodFactory;
 }
 
 function listComparisonMethod(op: BinaryOp) {
   return ((left, codec) => (values: readonly unknown[]) =>
-    new BinaryExpr(op, left, paramList(codec, values))) satisfies MethodFactory;
+    predicateComparison(op, left, paramList(codec, values))) satisfies MethodFactory;
 }
 
 /**
@@ -451,7 +460,8 @@ type ScalarModelAccessor<
   }> &
     ComparisonMethods<
       FieldJsType<TContract, ModelName, K, NsId>,
-      FieldTraits<TContract, ModelName, K, NsId>
+      FieldTraits<TContract, ModelName, K, NsId>,
+      FieldCodecId<TContract, ModelName, K, NsId>
     > &
     FieldOperations<TContract, NsId, ModelName, K>;
 };
@@ -916,6 +926,13 @@ export type ShorthandWhereFilter<
 > = Partial<{
   [K in keyof DefaultModelRow<TContract, ModelName, NsId> & string]:
     | DefaultModelRow<TContract, ModelName, NsId>[K]
+    | ('equality' extends FieldTraits<TContract, ModelName, K, NsId>
+        ? Expression<{
+            codecId: FieldCodecId<TContract, ModelName, K, NsId>;
+            nullable: boolean;
+            many?: never;
+          }>
+        : never)
     | null
     | undefined;
 }>;

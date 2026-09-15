@@ -250,18 +250,18 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly User: {
+      readonly friendId: CodecTypes['pg/int4@1']['output'] | null;
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'] | null;
-      readonly friendId: CodecTypes['pg/int4@1']['output'] | null;
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly User: {
+      readonly friendId: CodecTypes['pg/int4@1']['input'] | null;
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'] | null;
-      readonly friendId: CodecTypes['pg/int4@1']['input'] | null;
     };
   };
 };
@@ -286,9 +286,9 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_User = {
+    friendId: CodecTypes['pg/int4@1']['output'] | null;
     id: CodecTypes['pg/int4@1']['output'];
     name: CodecTypes['pg/text@1']['output'] | null;
-    friendId: CodecTypes['pg/int4@1']['output'] | null;
     friend: public_User | null;
     friendOf: public_User | null;
     readonly [RelationKeys]?: 'friend' | 'friendOf';
@@ -321,6 +321,11 @@ type ContractBase = Omit<
           readonly table: {
             readonly user: {
               columns: {
+                readonly friendId: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
@@ -329,11 +334,6 @@ type ContractBase = Omit<
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
-                  readonly nullable: true;
-                };
-                readonly friendId: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
                   readonly nullable: true;
                 };
               };
@@ -374,6 +374,10 @@ type ContractBase = Omit<
         readonly models: {
           readonly User: {
             readonly fields: {
+              readonly friendId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
@@ -381,10 +385,6 @@ type ContractBase = Omit<
               readonly name: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly friendId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
             readonly relations: {
@@ -411,9 +411,9 @@ type ContractBase = Omit<
               readonly table: 'user';
               readonly namespaceId: 'public';
               readonly fields: {
+                readonly friendId: { readonly column: 'friendId' };
                 readonly id: { readonly column: 'id' };
                 readonly name: { readonly column: 'name' };
-                readonly friendId: { readonly column: 'friendId' };
               };
             };
           };

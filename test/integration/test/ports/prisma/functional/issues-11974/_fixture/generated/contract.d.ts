@@ -311,11 +311,12 @@ export namespace Models {
     upVotedUsers: public_User[];
     readonly [RelationKeys]?: 'downVotedUsers' | 'upVotedUsers';
   };
-  export type public_User = {
-    uid: CodecTypes['pg/text@1']['output'];
-    downVotedComments: public_Comment[];
-    upVotedComments: public_Comment[];
-    readonly [RelationKeys]?: 'downVotedComments' | 'upVotedComments';
+  export type public_DownVote = {
+    commentId: CodecTypes['pg/text@1']['output'];
+    userId: CodecTypes['pg/text@1']['output'];
+    comment: public_Comment;
+    user: public_User;
+    readonly [RelationKeys]?: 'comment' | 'user';
   };
   export type public_UpVote = {
     commentId: CodecTypes['pg/text@1']['output'];
@@ -324,21 +325,20 @@ export namespace Models {
     user: public_User;
     readonly [RelationKeys]?: 'comment' | 'user';
   };
-  export type public_DownVote = {
-    commentId: CodecTypes['pg/text@1']['output'];
-    userId: CodecTypes['pg/text@1']['output'];
-    comment: public_Comment;
-    user: public_User;
-    readonly [RelationKeys]?: 'comment' | 'user';
+  export type public_User = {
+    uid: CodecTypes['pg/text@1']['output'];
+    downVotedComments: public_Comment[];
+    upVotedComments: public_Comment[];
+    readonly [RelationKeys]?: 'downVotedComments' | 'upVotedComments';
   };
 }
 
 export declare const models: {
   public: {
     Comment: Models.public_Comment;
-    User: Models.public_User;
-    UpVote: Models.public_UpVote;
     DownVote: Models.public_DownVote;
+    UpVote: Models.public_UpVote;
+    User: Models.public_User;
   };
 };
 
@@ -510,9 +510,9 @@ type ContractBase = Omit<
   readonly targetFamily: 'sql';
   readonly roots: {
     readonly comment: { readonly namespace: 'public' & NamespaceId; readonly model: 'Comment' };
-    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
-    readonly upVote: { readonly namespace: 'public' & NamespaceId; readonly model: 'UpVote' };
     readonly downVote: { readonly namespace: 'public' & NamespaceId; readonly model: 'DownVote' };
+    readonly upVote: { readonly namespace: 'public' & NamespaceId; readonly model: 'UpVote' };
+    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
   };
   readonly domain: {
     readonly namespaces: {

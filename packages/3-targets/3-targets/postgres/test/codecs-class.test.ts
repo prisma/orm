@@ -256,6 +256,10 @@ describe('codecs-class', () => {
     it('decode passes through already-decoded values', async () => {
       expect(await codec.decode({ key: 'value' }, callCtx)).toEqual({ key: 'value' });
     });
+
+    it('rejects invalid JSON text with SyntaxError', async () => {
+      await expect(codec.decode('{invalid', callCtx)).rejects.toThrow(SyntaxError);
+    });
   });
 
   describe('pg/jsonb@1', () => {
@@ -275,6 +279,10 @@ describe('codecs-class', () => {
 
     it('decode passes through already-decoded values', async () => {
       expect(await codec.decode([1, 2, 3], callCtx)).toEqual([1, 2, 3]);
+    });
+
+    it('rejects invalid JSON text with SyntaxError', async () => {
+      await expect(codec.decode('{invalid', callCtx)).rejects.toThrow(SyntaxError);
     });
   });
 

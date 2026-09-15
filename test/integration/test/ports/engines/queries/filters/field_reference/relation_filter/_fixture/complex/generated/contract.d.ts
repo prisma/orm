@@ -309,11 +309,6 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_TestModel = {
-    id: CodecTypes['pg/int4@1']['output'];
-    toMany: public_OneToMany[];
-    readonly [RelationKeys]?: 'toMany';
-  };
   export type public_OneToMany = {
     id: CodecTypes['pg/int4@1']['output'];
     testId: CodecTypes['pg/int4@1']['output'] | null;
@@ -321,6 +316,11 @@ export namespace Models {
     test: public_TestModel | null;
     toOne: public_ToOne | null;
     readonly [RelationKeys]?: 'test' | 'toOne';
+  };
+  export type public_TestModel = {
+    id: CodecTypes['pg/int4@1']['output'];
+    toMany: public_OneToMany[];
+    readonly [RelationKeys]?: 'toMany';
   };
   export type public_ToOne = {
     id: CodecTypes['pg/int4@1']['output'];
@@ -333,8 +333,8 @@ export namespace Models {
 
 export declare const models: {
   public: {
-    TestModel: Models.public_TestModel;
     OneToMany: Models.public_OneToMany;
+    TestModel: Models.public_TestModel;
     ToOne: Models.public_ToOne;
   };
 };
@@ -459,8 +459,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly testModel: { readonly namespace: 'public' & NamespaceId; readonly model: 'TestModel' };
     readonly oneToMany: { readonly namespace: 'public' & NamespaceId; readonly model: 'OneToMany' };
+    readonly testModel: { readonly namespace: 'public' & NamespaceId; readonly model: 'TestModel' };
     readonly toOne: { readonly namespace: 'public' & NamespaceId; readonly model: 'ToOne' };
   };
   readonly domain: {

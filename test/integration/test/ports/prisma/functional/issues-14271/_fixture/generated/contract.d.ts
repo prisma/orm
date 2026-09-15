@@ -250,9 +250,9 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly BatteryLevel: {
+      readonly hubId: CodecTypes['pg/int4@1']['output'] | null;
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'];
-      readonly hubId: CodecTypes['pg/int4@1']['output'] | null;
     };
     readonly Hub: {
       readonly id: CodecTypes['pg/int4@1']['output'];
@@ -263,9 +263,9 @@ export type FieldOutputTypes = {
 export type FieldInputTypes = {
   readonly public: {
     readonly BatteryLevel: {
+      readonly hubId: CodecTypes['pg/int4@1']['input'] | null;
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'];
-      readonly hubId: CodecTypes['pg/int4@1']['input'] | null;
     };
     readonly Hub: {
       readonly id: CodecTypes['pg/int4@1']['input'];
@@ -301,25 +301,25 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type public_BatteryLevel = {
+    hubId: CodecTypes['pg/int4@1']['output'] | null;
+    id: CodecTypes['pg/int4@1']['output'];
+    name: CodecTypes['pg/text@1']['output'];
+    hub: public_Hub | null;
+    readonly [RelationKeys]?: 'hub';
+  };
   export type public_Hub = {
     id: CodecTypes['pg/int4@1']['output'];
     name: CodecTypes['pg/text@1']['output'];
     batteryLevels: public_BatteryLevel[];
     readonly [RelationKeys]?: 'batteryLevels';
   };
-  export type public_BatteryLevel = {
-    id: CodecTypes['pg/int4@1']['output'];
-    name: CodecTypes['pg/text@1']['output'];
-    hubId: CodecTypes['pg/int4@1']['output'] | null;
-    hub: public_Hub | null;
-    readonly [RelationKeys]?: 'hub';
-  };
 }
 
 export declare const models: {
   public: {
-    Hub: Models.public_Hub;
     BatteryLevel: Models.public_BatteryLevel;
+    Hub: Models.public_Hub;
   };
 };
 
@@ -343,6 +343,11 @@ type ContractBase = Omit<
           readonly table: {
             readonly batteryLevel: {
               columns: {
+                readonly hubId: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
@@ -356,11 +361,6 @@ type ContractBase = Omit<
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
-                };
-                readonly hubId: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: true;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -421,11 +421,11 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly hub: { readonly namespace: 'public' & NamespaceId; readonly model: 'Hub' };
     readonly batteryLevel: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'BatteryLevel';
     };
+    readonly hub: { readonly namespace: 'public' & NamespaceId; readonly model: 'Hub' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -433,6 +433,10 @@ type ContractBase = Omit<
         readonly models: {
           readonly BatteryLevel: {
             readonly fields: {
+              readonly hubId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
@@ -440,10 +444,6 @@ type ContractBase = Omit<
               readonly name: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly hubId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
             readonly relations: {
@@ -461,9 +461,9 @@ type ContractBase = Omit<
               readonly table: 'batteryLevel';
               readonly namespaceId: 'public';
               readonly fields: {
+                readonly hubId: { readonly column: 'hubId' };
                 readonly id: { readonly column: 'id' };
                 readonly name: { readonly column: 'name' };
-                readonly hubId: { readonly column: 'hubId' };
               };
             };
           };

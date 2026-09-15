@@ -251,8 +251,8 @@ export type FieldOutputTypes = {
   readonly public: {
     readonly Person: {
       readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly name: CodecTypes['pg/text@1']['output'];
       readonly managerId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly name: CodecTypes['pg/text@1']['output'];
       readonly partnerId: CodecTypes['pg/int4@1']['output'] | null;
     };
     readonly PersonConnection: {
@@ -261,8 +261,8 @@ export type FieldOutputTypes = {
       readonly weight: CodecTypes['pg/int4@1']['output'];
     };
     readonly PersonFollow: {
-      readonly followerId: CodecTypes['pg/int4@1']['output'];
       readonly followeeId: CodecTypes['pg/int4@1']['output'];
+      readonly followerId: CodecTypes['pg/int4@1']['output'];
     };
   };
 };
@@ -270,8 +270,8 @@ export type FieldInputTypes = {
   readonly public: {
     readonly Person: {
       readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly name: CodecTypes['pg/text@1']['input'];
       readonly managerId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly name: CodecTypes['pg/text@1']['input'];
       readonly partnerId: CodecTypes['pg/int4@1']['input'] | null;
     };
     readonly PersonConnection: {
@@ -280,8 +280,8 @@ export type FieldInputTypes = {
       readonly weight: CodecTypes['pg/int4@1']['input'];
     };
     readonly PersonFollow: {
-      readonly followerId: CodecTypes['pg/int4@1']['input'];
       readonly followeeId: CodecTypes['pg/int4@1']['input'];
+      readonly followerId: CodecTypes['pg/int4@1']['input'];
     };
   };
 };
@@ -327,8 +327,8 @@ export type StorageColumnInputTypes = {
 export namespace Models {
   export type public_Person = {
     id: CodecTypes['pg/int4@1']['output'];
-    name: CodecTypes['pg/text@1']['output'];
     managerId: CodecTypes['pg/int4@1']['output'] | null;
+    name: CodecTypes['pg/text@1']['output'];
     partnerId: CodecTypes['pg/int4@1']['output'] | null;
     followers: public_Person[];
     following: public_Person[];
@@ -348,13 +348,6 @@ export namespace Models {
       | 'partneredBy'
       | 'reports';
   };
-  export type public_PersonFollow = {
-    followerId: CodecTypes['pg/int4@1']['output'];
-    followeeId: CodecTypes['pg/int4@1']['output'];
-    followee: public_Person;
-    follower: public_Person;
-    readonly [RelationKeys]?: 'followee' | 'follower';
-  };
   export type public_PersonConnection = {
     sourceId: CodecTypes['pg/int4@1']['output'];
     targetId: CodecTypes['pg/int4@1']['output'];
@@ -363,13 +356,20 @@ export namespace Models {
     target: public_Person;
     readonly [RelationKeys]?: 'source' | 'target';
   };
+  export type public_PersonFollow = {
+    followeeId: CodecTypes['pg/int4@1']['output'];
+    followerId: CodecTypes['pg/int4@1']['output'];
+    followee: public_Person;
+    follower: public_Person;
+    readonly [RelationKeys]?: 'followee' | 'follower';
+  };
 }
 
 export declare const models: {
   public: {
     Person: Models.public_Person;
-    PersonFollow: Models.public_PersonFollow;
     PersonConnection: Models.public_PersonConnection;
+    PersonFollow: Models.public_PersonFollow;
   };
 };
 
@@ -398,15 +398,15 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly name: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly manager_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: true;
+                };
+                readonly name: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
                 readonly partner_id: {
                   readonly nativeType: 'int4';
@@ -514,12 +514,12 @@ type ContractBase = Omit<
             };
             readonly person_follows: {
               columns: {
-                readonly follower_id: {
+                readonly followee_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly followee_id: {
+                readonly follower_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -529,15 +529,15 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'person_follows_follower_id_idx_e343d705';
-                  readonly prefix: 'person_follows_follower_id_idx';
-                  readonly columns: readonly ['follower_id'];
-                  readonly unique: false;
-                },
-                {
                   readonly name: 'person_follows_followee_id_idx_c86a372f';
                   readonly prefix: 'person_follows_followee_id_idx';
                   readonly columns: readonly ['followee_id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'person_follows_follower_id_idx_e343d705';
+                  readonly prefix: 'person_follows_follower_id_idx';
+                  readonly columns: readonly ['follower_id'];
                   readonly unique: false;
                 },
               ];
@@ -580,13 +580,13 @@ type ContractBase = Omit<
   readonly targetFamily: 'sql';
   readonly roots: {
     readonly people: { readonly namespace: 'public' & NamespaceId; readonly model: 'Person' };
-    readonly person_follows: {
-      readonly namespace: 'public' & NamespaceId;
-      readonly model: 'PersonFollow';
-    };
     readonly person_connections: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'PersonConnection';
+    };
+    readonly person_follows: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'PersonFollow';
     };
   };
   readonly domain: {
@@ -599,13 +599,13 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly name: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly managerId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly partnerId: {
                 readonly nullable: true;
@@ -724,8 +724,8 @@ type ContractBase = Omit<
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly id: { readonly column: 'id' };
-                readonly name: { readonly column: 'name' };
                 readonly managerId: { readonly column: 'manager_id' };
+                readonly name: { readonly column: 'name' };
                 readonly partnerId: { readonly column: 'partner_id' };
               };
             };
@@ -783,11 +783,11 @@ type ContractBase = Omit<
           };
           readonly PersonFollow: {
             readonly fields: {
-              readonly followerId: {
+              readonly followeeId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly followeeId: {
+              readonly followerId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
@@ -822,8 +822,8 @@ type ContractBase = Omit<
               readonly table: 'person_follows';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly followerId: { readonly column: 'follower_id' };
                 readonly followeeId: { readonly column: 'followee_id' };
+                readonly followerId: { readonly column: 'follower_id' };
               };
             };
           };

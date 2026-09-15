@@ -111,7 +111,11 @@ export const timeouts = {
   },
 
   /**
-   * Default timeout for general tests that don't fit into specific categories.
+   * A short wait inside a test: polling a condition, a connection attempt that
+   * must give up quickly. Never a vitest `testTimeout` or `hookTimeout` — CI's
+   * multiplier makes it 200ms, which fails healthy tests; `pnpm
+   * lint:vitest-timeouts` rejects a config that budgets with it. Use
+   * `vitestPackageDefault` there.
    */
   get default(): number {
     return Math.round(BASE_TIMEOUTS.default * getMultiplier());

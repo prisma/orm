@@ -285,23 +285,23 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_User = {
-    id: CodecTypes['pg/text@1']['output'];
-    profile: public_Profile | null;
-    readonly [RelationKeys]?: 'profile';
-  };
   export type public_Profile = {
     id: CodecTypes['pg/text@1']['output'];
     userId: CodecTypes['pg/text@1']['output'];
     user: public_User;
     readonly [RelationKeys]?: 'user';
   };
+  export type public_User = {
+    id: CodecTypes['pg/text@1']['output'];
+    profile: public_Profile | null;
+    readonly [RelationKeys]?: 'profile';
+  };
 }
 
 export declare const models: {
   public: {
-    User: Models.public_User;
     Profile: Models.public_Profile;
+    User: Models.public_User;
   };
 };
 
@@ -378,8 +378,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly User: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
     readonly Profile: { readonly namespace: 'public' & NamespaceId; readonly model: 'Profile' };
+    readonly User: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
   };
   readonly domain: {
     readonly namespaces: {

@@ -5,7 +5,6 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import { getEmittedArtifactPaths } from '@internal/emitter';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import { loadContractSpaceAggregate } from '@internal/migration-tools/aggregate';
 import {
@@ -33,7 +32,9 @@ import {
 } from '../../utils/command-helpers';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
+import type { ControlClient } from '../types';
 import { refusePackageCorruptionOnAggregate } from './contract-space-aggregate-loader';
+import { renderSnapshotDeclarations } from './snapshot-declarations';
 
 export interface MigrationNewOptions {
   readonly config: PrismaNextConfig;
@@ -43,6 +44,8 @@ export interface MigrationNewOptions {
   readonly configPath?: string;
   readonly name?: string;
   readonly from?: string;
+  /** Renders the declarations of the destination snapshot from its `contract.json`. */
+  readonly client: Pick<ControlClient, 'renderContractDts'>;
 }
 
 export interface MigrationNewResult {
@@ -88,9 +91,10 @@ export async function executeMigrationNewCommand(
     throw error;
   }
 
+  let parsedContract: unknown;
   let toContract: Contract;
   try {
-    const parsedContract: unknown = JSON.parse(contractJsonContent);
+    parsedContract = JSON.parse(contractJsonContent);
     toContract = familyInstance.deserializeContract(parsedContract);
   } catch (error) {
     return notOk(
@@ -196,16 +200,20 @@ export async function executeMigrationNewCommand(
     // the command outright rather than after a half-scaffolded migration
     // directory is already on disk.
     const resolveSpecifier = createProjectSpecifierResolver(options.configPath);
+    const declarations = await renderSnapshotDeclarations({
+      client: options.client,
+      contractJson: parsedContract,
+      contractJsonPath: contractPathAbsolute,
+      resolveImportSpecifier: resolveSpecifier,
+    });
+    if (!declarations.ok) {
+      return notOk(declarations.failure);
+    }
 
     await writeMigrationPackage(packageDir, metadata, []);
-    const destinationArtifacts = getEmittedArtifactPaths(contractPathAbsolute);
-    const [contractJsonRaw, contractDts] = await Promise.all([
-      readFile(destinationArtifacts.jsonPath, 'utf-8'),
-      readFile(destinationArtifacts.dtsPath, 'utf-8'),
-    ]);
     await writeContractSnapshot(migrationsDir, toStorageHash, {
-      contractJson: JSON.parse(contractJsonRaw) as unknown,
-      contractDts,
+      contractJson: parsedContract,
+      contractDts: declarations.value,
     });
 
     const planner = migrations.createPlanner(controlAdapter);

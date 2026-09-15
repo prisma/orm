@@ -1,24 +1,33 @@
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
+import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
+import { notOk } from '@internal/utils/result';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
-import { afterEach, describe, expect, it } from 'vitest';
-import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { BIN_GROUPS } from '../../src/orm/cli';
 import {
+  contractJson,
   createOfflineProject,
+  OFFLINE_COMMANDS,
   type OfflineProject,
   offlineConfig,
+  RENDERED_CONTRACT_DTS,
   removeOfflineProjects,
+  renderContractDtsMock,
+  resetRenderContractDtsMock,
   seedMigrationPackage,
 } from './fixtures/offline-project';
 
 const HASH_TO = `c0ffee${'0'.repeat(58)}`;
 const HASH_FROM = `beef${'1'.repeat(60)}`;
 
+beforeEach(resetRenderContractDtsMock);
 afterEach(removeOfflineProjects);
 
 function harness(project: OfflineProject, overrides: Record<string, unknown> = {}) {
   return createTestCli({
-    commands: BIN_COMMANDS,
+    commands: OFFLINE_COMMANDS,
     groups: BIN_GROUPS,
     config: { orm: { ...offlineConfig({ project }), ...overrides } },
   });
@@ -265,5 +274,46 @@ describe('migration new', () => {
 
     expect(envelope?.nextActions.length).toBeGreaterThan(0);
     expect(envelope).not.toHaveProperty('fix');
+  });
+});
+
+describe('migration new destination snapshot', () => {
+  it('writes the destination snapshot with declarations rendered from the emitted contract', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+
+    const run = await harness(project).run(['migration', 'new', '--name', 'rendered', '--json'], {
+      cwd: project.dir,
+    });
+
+    expect(run.exitCode).toBe(0);
+    expect(renderContractDtsMock).toHaveBeenCalledWith({
+      contract: contractJson(HASH_TO),
+      resolveImportSpecifier: expect.any(Function),
+    });
+    const storeDir = contractSnapshotDir(project.migrationsDir, HASH_TO);
+    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(RENDERED_CONTRACT_DTS);
+  });
+
+  it('refuses before writing anything when the declarations cannot be rendered', async () => {
+    const project = await createOfflineProject({ storageHash: HASH_TO });
+    renderContractDtsMock.mockResolvedValue(
+      notOk({
+        code: 'RENDER_FAILED',
+        summary: 'Failed to render contract types',
+        why: 'relation author must declare nullability',
+      }),
+    );
+
+    const run = await harness(project).run(['migration', 'new', '--name', 'refused', '--json'], {
+      cwd: project.dir,
+    });
+
+    expect(run.exitCode).toBe(2);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: { ok: false, error: { code: 'CONTRACT.TYPES_RENDER_FAILED' } },
+    });
+    expect(existsSync(project.appMigrationsDir)).toBe(false);
+    expect(existsSync(contractSnapshotDir(project.migrationsDir, HASH_TO))).toBe(false);
   });
 });

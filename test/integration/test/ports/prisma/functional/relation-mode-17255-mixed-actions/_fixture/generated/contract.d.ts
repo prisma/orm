@@ -255,8 +255,8 @@ export type FieldOutputTypes = {
       readonly mainId: CodecTypes['pg/text@1']['output'];
     };
     readonly Main: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly aliceId: CodecTypes['pg/text@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
   };
 };
@@ -268,8 +268,8 @@ export type FieldInputTypes = {
       readonly mainId: CodecTypes['pg/text@1']['input'];
     };
     readonly Main: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly aliceId: CodecTypes['pg/text@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -301,13 +301,6 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_Main = {
-    id: CodecTypes['pg/text@1']['output'];
-    aliceId: CodecTypes['pg/text@1']['output'] | null;
-    alice: public_Alice | null;
-    bob: public_Bob | null;
-    readonly [RelationKeys]?: 'alice' | 'bob';
-  };
   export type public_Alice = {
     id: CodecTypes['pg/text@1']['output'];
     manyMains: public_Main[];
@@ -319,13 +312,20 @@ export namespace Models {
     main: public_Main;
     readonly [RelationKeys]?: 'main';
   };
+  export type public_Main = {
+    aliceId: CodecTypes['pg/text@1']['output'] | null;
+    id: CodecTypes['pg/text@1']['output'];
+    alice: public_Alice | null;
+    bob: public_Bob | null;
+    readonly [RelationKeys]?: 'alice' | 'bob';
+  };
 }
 
 export declare const models: {
   public: {
-    Main: Models.public_Main;
     Alice: Models.public_Alice;
     Bob: Models.public_Bob;
+    Main: Models.public_Main;
   };
 };
 
@@ -393,15 +393,15 @@ type ContractBase = Omit<
             };
             readonly main: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly aliceId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -440,9 +440,9 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly main: { readonly namespace: 'public' & NamespaceId; readonly model: 'Main' };
     readonly alice: { readonly namespace: 'public' & NamespaceId; readonly model: 'Alice' };
     readonly bob: { readonly namespace: 'public' & NamespaceId; readonly model: 'Bob' };
+    readonly main: { readonly namespace: 'public' & NamespaceId; readonly model: 'Main' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -504,12 +504,12 @@ type ContractBase = Omit<
           };
           readonly Main: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly aliceId: {
                 readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
@@ -540,8 +540,8 @@ type ContractBase = Omit<
               readonly table: 'main';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly aliceId: { readonly column: 'aliceId' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };

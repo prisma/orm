@@ -260,8 +260,8 @@ export type FieldOutputTypes = {
       readonly userId: CodecTypes['pg/int4@1']['output'];
     };
     readonly User: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly email: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
     };
   };
 };
@@ -278,8 +278,8 @@ export type FieldInputTypes = {
       readonly userId: CodecTypes['pg/int4@1']['input'];
     };
     readonly User: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly email: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
     };
   };
 };
@@ -326,16 +326,16 @@ export namespace Models {
     token: CodecTypes['pg/text@1']['output'];
     readonly [RelationKeys]?: never;
   };
-  export type public_User = {
-    id: CodecTypes['pg/int4@1']['output'];
-    email: CodecTypes['pg/text@1']['output'];
-    readonly [RelationKeys]?: never;
-  };
   export type public_Profile = {
     id: CodecTypes['pg/int4@1']['output'];
     userId: CodecTypes['pg/int4@1']['output'];
     user: auth_User;
     readonly [RelationKeys]?: 'user';
+  };
+  export type public_User = {
+    email: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
+    readonly [RelationKeys]?: never;
   };
 }
 
@@ -344,8 +344,8 @@ export declare const models: {
     User: Models.auth_User;
   };
   public: {
-    User: Models.public_User;
     Profile: Models.public_Profile;
+    User: Models.public_User;
   };
 };
 
@@ -433,14 +433,14 @@ type ContractBase = Omit<
             };
             readonly users: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly email: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
               };
@@ -460,9 +460,9 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly 'public.users': { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
-    readonly profile: { readonly namespace: 'public' & NamespaceId; readonly model: 'Profile' };
     readonly 'auth.users': { readonly namespace: 'auth' & NamespaceId; readonly model: 'User' };
+    readonly profile: { readonly namespace: 'public' & NamespaceId; readonly model: 'Profile' };
+    readonly 'public.users': { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -526,13 +526,13 @@ type ContractBase = Omit<
           };
           readonly User: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly email: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
             readonly relations: Record<string, never>;
@@ -540,8 +540,8 @@ type ContractBase = Omit<
               readonly table: 'users';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly email: { readonly column: 'email' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };

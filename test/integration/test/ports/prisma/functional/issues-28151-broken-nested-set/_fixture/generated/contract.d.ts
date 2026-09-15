@@ -251,8 +251,8 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly Post: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly authorId: CodecTypes['pg/text@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
     readonly User: { readonly id: CodecTypes['pg/text@1']['output'] };
   };
@@ -260,8 +260,8 @@ export type FieldOutputTypes = {
 export type FieldInputTypes = {
   readonly public: {
     readonly Post: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly authorId: CodecTypes['pg/text@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
     readonly User: { readonly id: CodecTypes['pg/text@1']['input'] };
   };
@@ -286,23 +286,23 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type public_Post = {
+    authorId: CodecTypes['pg/text@1']['output'] | null;
+    id: CodecTypes['pg/text@1']['output'];
+    author: public_User | null;
+    readonly [RelationKeys]?: 'author';
+  };
   export type public_User = {
     id: CodecTypes['pg/text@1']['output'];
     posts: public_Post[];
     readonly [RelationKeys]?: 'posts';
   };
-  export type public_Post = {
-    id: CodecTypes['pg/text@1']['output'];
-    authorId: CodecTypes['pg/text@1']['output'] | null;
-    author: public_User | null;
-    readonly [RelationKeys]?: 'author';
-  };
 }
 
 export declare const models: {
   public: {
-    User: Models.public_User;
     Post: Models.public_Post;
+    User: Models.public_User;
   };
 };
 
@@ -326,15 +326,15 @@ type ContractBase = Omit<
           readonly table: {
             readonly post: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly authorId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -386,8 +386,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
     readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
+    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -395,12 +395,12 @@ type ContractBase = Omit<
         readonly models: {
           readonly Post: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly authorId: {
                 readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
@@ -419,8 +419,8 @@ type ContractBase = Omit<
               readonly table: 'post';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly authorId: { readonly column: 'authorId' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
@@ -475,20 +475,20 @@ type ContractBase = Omit<
     readonly mutations: {
       readonly defaults: readonly [
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'post';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
         },
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'user';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
         },
       ];
     };

@@ -7,15 +7,14 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { sql as sqlBuilder } from '@internal/sql-builder/runtime';
 import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
-import { orm as ormBuilder } from '@internal/sql-orm-client';
+import { orm as ormBuilder, type PreparedFrom, prepareQuery } from '@internal/sql-orm-client';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
-import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
   BindSiteParams,
   Declaration,
   ExecutionContext,
   ParamsFromDeclaration,
-  PreparedFor,
   Runtime,
   SqlExecutionStackWithDriver,
   SqlMiddleware,
@@ -76,10 +75,14 @@ export interface SqliteClient<TContract extends Contract<SqlStorage>> {
   readonly stack: SqlExecutionStackWithDriver<SqliteTargetId>;
   connect(bindingInput?: { readonly path: string }): Promise<Runtime>;
   runtime(): Runtime;
-  prepare<D extends Declaration<CT>, Row, CT extends CodecTypesBase = ExtractCodecTypes<TContract>>(
+  prepare<
+    D extends Declaration<CT>,
+    Q extends SqlQueryPlan | Preparable<unknown, unknown>,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
     declaration: D,
-    callback: (sql: UnboundSql<TContract>, params: BindSiteParams<D>) => SqlQueryPlan<Row>,
-  ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>>;
+    callback: (params: BindSiteParams<D>) => Q,
+  ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>>;
   transaction<R>(fn: (tx: SqliteTransactionContext<TContract>) => PromiseLike<R>): Promise<R>;
   close(): Promise<void>;
   [Symbol.asyncDispose](): Promise<void>;
@@ -115,10 +118,17 @@ function resolveContract<TContract extends Contract<SqlStorage>>(
 ): TContract {
   const serializer = new SqlContractSerializer();
   if ('contractJson' in options && options.contractJson !== undefined) {
-    return serializer.deserializeContract(options.contractJson) as TContract;
+    return blindCast<
+      TContract,
+      'validated contract JSON corresponds to the caller supplied contract type'
+    >(serializer.deserializeContract(options.contractJson));
   }
-  const contract = (options as SqliteOptionsWithContract<TContract>).contract;
-  return serializer.deserializeContract(serializer.serializeContract(contract)) as TContract;
+  const contract = options.contract;
+  assertDefined(contract, 'a contract or contractJson is required');
+  return blindCast<
+    TContract,
+    'serialized and validated contract retains the authored contract type'
+  >(serializer.deserializeContract(serializer.serializeContract(contract)));
 }
 
 export default function sqlite<TContract extends Contract<SqlStorage>>(
@@ -236,6 +246,17 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
     }),
   );
 
+  function prepare<
+    D extends Declaration<CT>,
+    Q extends SqlQueryPlan | Preparable<unknown, unknown>,
+    CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
+  >(
+    declaration: D,
+    callback: (params: BindSiteParams<D>) => Q,
+  ): Promise<PreparedFrom<ParamsFromDeclaration<D, CT>, Q>> {
+    return prepareQuery<D, Q, CT>(getRuntime(), declaration, callback);
+  }
+
   return {
     sql,
     orm,
@@ -282,16 +303,7 @@ export default function sqlite<TContract extends Contract<SqlStorage>>(
     runtime() {
       return getRuntime();
     },
-    prepare<
-      D extends Declaration<CT>,
-      Row,
-      CT extends CodecTypesBase = ExtractCodecTypes<TContract>,
-    >(
-      declaration: D,
-      callback: (sql: UnboundSql<TContract>, params: BindSiteParams<D>) => SqlQueryPlan<Row>,
-    ): Promise<PreparedFor<ParamsFromDeclaration<D, CT>, Row>> {
-      return getRuntime().prepare<D, Row, CT>(declaration, (params) => callback(sql, params));
-    },
+    prepare,
 
     transaction<R>(fn: (tx: SqliteTransactionContext<TContract>) => PromiseLike<R>): Promise<R> {
       let runtime: ReturnType<typeof getRuntime>;

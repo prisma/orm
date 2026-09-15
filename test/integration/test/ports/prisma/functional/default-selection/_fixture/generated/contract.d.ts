@@ -250,12 +250,12 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly Model: {
-      readonly id: CodecTypes['pg/text@1']['output'];
-      readonly value: CodecTypes['pg/text@1']['output'];
-      readonly otherId: CodecTypes['pg/text@1']['output'];
-      readonly list: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
       readonly enum: 'A' | 'B';
       readonly enumList: ReadonlyArray<'A' | 'B'>;
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly list: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
+      readonly otherId: CodecTypes['pg/text@1']['output'];
+      readonly value: CodecTypes['pg/text@1']['output'];
     };
     readonly Other: { readonly id: CodecTypes['pg/text@1']['output'] };
   };
@@ -263,12 +263,12 @@ export type FieldOutputTypes = {
 export type FieldInputTypes = {
   readonly public: {
     readonly Model: {
-      readonly id: CodecTypes['pg/text@1']['input'];
-      readonly value: CodecTypes['pg/text@1']['input'];
-      readonly otherId: CodecTypes['pg/text@1']['input'];
-      readonly list: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
       readonly enum: 'A' | 'B';
       readonly enumList: ReadonlyArray<'A' | 'B'>;
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly list: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
+      readonly otherId: CodecTypes['pg/text@1']['input'];
+      readonly value: CodecTypes['pg/text@1']['input'];
     };
     readonly Other: { readonly id: CodecTypes['pg/text@1']['input'] };
   };
@@ -302,12 +302,12 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_Model = {
-    id: CodecTypes['pg/text@1']['output'];
-    value: CodecTypes['pg/text@1']['output'];
-    otherId: CodecTypes['pg/text@1']['output'];
-    list: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     enum: 'A' | 'B';
     enumList: ReadonlyArray<'A' | 'B'>;
+    id: CodecTypes['pg/text@1']['output'];
+    list: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
+    otherId: CodecTypes['pg/text@1']['output'];
+    value: CodecTypes['pg/text@1']['output'];
     relation: public_Other;
     readonly [RelationKeys]?: 'relation';
   };
@@ -345,17 +345,17 @@ type ContractBase = Omit<
           readonly table: {
             readonly model: {
               columns: {
+                readonly enum: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly enumList: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
                 readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly value: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly otherId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -365,12 +365,12 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly enum: {
+                readonly otherId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly enumList: {
+                readonly value: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -430,23 +430,6 @@ type ContractBase = Omit<
         readonly models: {
           readonly Model: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly value: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly otherId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly list: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly many: true;
-              };
               readonly enum: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
@@ -455,6 +438,23 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
                 readonly many: true;
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly list: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: true;
+              };
+              readonly otherId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly value: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: {
@@ -475,12 +475,12 @@ type ContractBase = Omit<
               readonly table: 'model';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
-                readonly value: { readonly column: 'value' };
-                readonly otherId: { readonly column: 'otherId' };
-                readonly list: { readonly column: 'list' };
                 readonly enum: { readonly column: 'enum' };
                 readonly enumList: { readonly column: 'enumList' };
+                readonly id: { readonly column: 'id' };
+                readonly list: { readonly column: 'list' };
+                readonly otherId: { readonly column: 'otherId' };
+                readonly value: { readonly column: 'value' };
               };
             };
           };

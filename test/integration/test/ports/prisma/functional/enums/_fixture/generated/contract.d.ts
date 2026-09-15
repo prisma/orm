@@ -69,8 +69,8 @@ type ContractBase = Omit<
             readonly User: {
               readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
@@ -79,11 +79,11 @@ type ContractBase = Omit<
                       readonly enum: readonly ['FREE', 'PAID', 'CUSTOM'];
                     };
                   };
-                  readonly additionalProperties: false;
                   readonly required: readonly ['_id', 'plan'];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
           };

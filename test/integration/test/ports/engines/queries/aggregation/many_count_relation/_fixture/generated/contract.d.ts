@@ -259,8 +259,8 @@ export type FieldOutputTypes = {
       readonly title: CodecTypes['pg/text@1']['output'];
     };
     readonly PostCategory: {
-      readonly postId: CodecTypes['pg/int4@1']['output'];
       readonly categoryId: CodecTypes['pg/int4@1']['output'];
+      readonly postId: CodecTypes['pg/int4@1']['output'];
     };
   };
 };
@@ -276,8 +276,8 @@ export type FieldInputTypes = {
       readonly title: CodecTypes['pg/text@1']['input'];
     };
     readonly PostCategory: {
-      readonly postId: CodecTypes['pg/int4@1']['input'];
       readonly categoryId: CodecTypes['pg/int4@1']['input'];
+      readonly postId: CodecTypes['pg/int4@1']['input'];
     };
   };
 };
@@ -317,12 +317,10 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_Post = {
+  export type public_Category = {
     id: CodecTypes['pg/int4@1']['output'];
-    title: CodecTypes['pg/text@1']['output'];
-    categories: public_Category[];
-    comments: public_Comment[];
-    readonly [RelationKeys]?: 'categories' | 'comments';
+    posts: public_Post[];
+    readonly [RelationKeys]?: 'posts';
   };
   export type public_Comment = {
     id: CodecTypes['pg/int4@1']['output'];
@@ -330,14 +328,16 @@ export namespace Models {
     post: public_Post;
     readonly [RelationKeys]?: 'post';
   };
-  export type public_Category = {
+  export type public_Post = {
     id: CodecTypes['pg/int4@1']['output'];
-    posts: public_Post[];
-    readonly [RelationKeys]?: 'posts';
+    title: CodecTypes['pg/text@1']['output'];
+    categories: public_Category[];
+    comments: public_Comment[];
+    readonly [RelationKeys]?: 'categories' | 'comments';
   };
   export type public_PostCategory = {
-    postId: CodecTypes['pg/int4@1']['output'];
     categoryId: CodecTypes['pg/int4@1']['output'];
+    postId: CodecTypes['pg/int4@1']['output'];
     category: public_Category;
     post: public_Post;
     readonly [RelationKeys]?: 'category' | 'post';
@@ -346,9 +346,9 @@ export namespace Models {
 
 export declare const models: {
   public: {
-    Post: Models.public_Post;
-    Comment: Models.public_Comment;
     Category: Models.public_Category;
+    Comment: Models.public_Comment;
+    Post: Models.public_Post;
     PostCategory: Models.public_PostCategory;
   };
 };
@@ -442,12 +442,12 @@ type ContractBase = Omit<
             };
             readonly postCategory: {
               columns: {
-                readonly postId: {
+                readonly categoryId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly categoryId: {
+                readonly postId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -457,15 +457,15 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'postCategory_postId_idx_a7a72715';
-                  readonly prefix: 'postCategory_postId_idx';
-                  readonly columns: readonly ['postId'];
-                  readonly unique: false;
-                },
-                {
                   readonly name: 'postCategory_categoryId_idx_15c304f2';
                   readonly prefix: 'postCategory_categoryId_idx';
                   readonly columns: readonly ['categoryId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'postCategory_postId_idx_a7a72715';
+                  readonly prefix: 'postCategory_postId_idx';
+                  readonly columns: readonly ['postId'];
                   readonly unique: false;
                 },
               ];
@@ -507,9 +507,9 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
-    readonly comment: { readonly namespace: 'public' & NamespaceId; readonly model: 'Comment' };
     readonly category: { readonly namespace: 'public' & NamespaceId; readonly model: 'Category' };
+    readonly comment: { readonly namespace: 'public' & NamespaceId; readonly model: 'Comment' };
+    readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
     readonly postCategory: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'PostCategory';
@@ -633,11 +633,11 @@ type ContractBase = Omit<
           };
           readonly PostCategory: {
             readonly fields: {
-              readonly postId: {
+              readonly categoryId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly categoryId: {
+              readonly postId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
@@ -669,8 +669,8 @@ type ContractBase = Omit<
               readonly table: 'postCategory';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly postId: { readonly column: 'postId' };
                 readonly categoryId: { readonly column: 'categoryId' };
+                readonly postId: { readonly column: 'postId' };
               };
             };
           };

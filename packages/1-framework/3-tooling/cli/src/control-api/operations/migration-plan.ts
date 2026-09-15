@@ -5,7 +5,6 @@
 import { readFile } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
-import { getEmittedArtifactPaths } from '@internal/emitter';
 import {
   createControlStack,
   hasOperationPreview,
@@ -44,6 +43,7 @@ import {
 import { toExtensionInputs } from '../../utils/extension-pack-inputs';
 import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
+import type { ControlClient } from '../types';
 import {
   buildContractSpaceAggregate,
   loadContractSpaceAggregateForCli,
@@ -53,6 +53,7 @@ import {
   runContractSpaceSeedPhase,
 } from './contract-space-seed-phase';
 import { resolveFromForPlan, resolveToForPlan } from './plan-resolution';
+import { renderSnapshotDeclarations } from './snapshot-declarations';
 
 function isEnoent(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
@@ -67,6 +68,8 @@ export interface MigrationPlanOptions {
   readonly name?: string;
   readonly from?: string;
   readonly to?: string;
+  /** Renders the declarations of the destination snapshot from its `contract.json`. */
+  readonly client: Pick<ControlClient, 'renderContractDts'>;
 }
 
 type PlannerSuccess = {
@@ -295,11 +298,11 @@ async function executeMigrationPlanCommandInner(
   const familyInstance = config.family.create(stack);
   const controlAdapter = config.adapter.create(stack);
 
+  let emittedContractJson: unknown;
   let toContract: Contract;
   try {
-    toContract = familyInstance.deserializeContract(
-      castAs<unknown>(JSON.parse(contractJsonContent)),
-    );
+    emittedContractJson = castAs<unknown>(JSON.parse(contractJsonContent));
+    toContract = familyInstance.deserializeContract(emittedContractJson);
   } catch (error) {
     return notOk(
       errorContractValidationFailed(
@@ -319,19 +322,13 @@ async function executeMigrationPlanCommandInner(
   }
   let toStorageHash: string = rawStorageHash;
 
-  // When `--to <ref>` resolves a non-default destination, these carry its raw
-  // artifacts so the planned package's destination snapshot store entry is
-  // written from the resolved target rather than copied from the emitted
-  // `contract.json`.
-  let toArtifacts: { contractJson: unknown; contractDts: string } | null = null;
+  // A destination named by `--to` resolves through the snapshot store, so its
+  // entry already exists; only the emitted contract needs a snapshot written.
+  let destinationInStore = false;
 
   let fromContract: Contract | null = null;
   let fromHash: string | null = null;
-  let snapshotStartContract: {
-    readonly fromHash: string;
-    readonly contractJson: unknown;
-    readonly contractDts: string;
-  } | null = null;
+  let fromContractInStore = false;
   let isAutoBaseline = false;
   let fromDefaulted = false;
 
@@ -367,20 +364,12 @@ async function executeMigrationPlanCommandInner(
     case 'ref':
       fromHash = resolutionResult.value.fromHash;
       fromContract = resolutionResult.value.fromContract;
-      snapshotStartContract = {
-        fromHash: resolutionResult.value.fromHash,
-        contractJson: resolutionResult.value.contractJson,
-        contractDts: resolutionResult.value.contractDts,
-      };
+      fromContractInStore = true;
       break;
     case 'auto-baseline':
       fromHash = resolutionResult.value.fromHash;
       fromContract = resolutionResult.value.fromContract;
-      snapshotStartContract = {
-        fromHash: resolutionResult.value.fromHash,
-        contractJson: resolutionResult.value.contractJson,
-        contractDts: resolutionResult.value.contractDts,
-      };
+      fromContractInStore = true;
       isAutoBaseline = true;
       break;
   }
@@ -398,16 +387,30 @@ async function executeMigrationPlanCommandInner(
     }
     toContract = toResolution.value.contract;
     toStorageHash = toResolution.value.hash;
-    toArtifacts = {
-      contractJson: toResolution.value.contractJson,
-      contractDts: toResolution.value.contractDts,
-    };
+    destinationInStore = true;
   }
 
   // Before the seed phase, which is the first thing here that writes: an
   // unreadable or contradictory project manifest fails the command outright
   // rather than after artifacts are already on disk.
   const resolveImportSpecifier = createProjectSpecifierResolver(options.configPath);
+
+  // Likewise the destination snapshot's declarations: rendered now, written
+  // with the planned package later. A plan whose source already is the
+  // destination writes no new snapshot, so it renders nothing.
+  let destinationDeclarations: string | null = null;
+  if (!destinationInStore && fromHash !== toStorageHash) {
+    const rendered = await renderSnapshotDeclarations({
+      client: options.client,
+      contractJson: emittedContractJson,
+      contractJsonPath: contractPathAbsolute,
+      resolveImportSpecifier,
+    });
+    if (!rendered.ok) {
+      return notOk(rendered.failure);
+    }
+    destinationDeclarations = rendered.value;
+  }
 
   // Phase 1 — seed: unconditionally re-emit per-space pinned artifacts
   // (contract.json / contract.d.ts / refs/head.json) and materialise any
@@ -478,37 +481,20 @@ async function executeMigrationPlanCommandInner(
     [config.target, config.adapter, ...(config.extensions ?? [])],
   );
 
-  // Write the planned package's destination contract into the snapshot store.
-  // With `--to`, the resolved target's raw artifacts are written; otherwise
-  // the emitted `contract.json` / `contract.d.ts` are read from disk.
   async function writeDestinationSnapshot(destHash: string): Promise<void> {
-    if (toArtifacts !== null) {
-      await writeContractSnapshot(migrationsDir, destHash, {
-        contractJson: toArtifacts.contractJson,
-        contractDts: toArtifacts.contractDts,
-      });
+    if (destinationDeclarations === null) {
       return;
     }
-    const destinationArtifacts = getEmittedArtifactPaths(contractPathAbsolute);
-    const [contractJsonRaw, contractDts] = await Promise.all([
-      readFile(destinationArtifacts.jsonPath, 'utf-8'),
-      readFile(destinationArtifacts.dtsPath, 'utf-8'),
-    ]);
     await writeContractSnapshot(migrationsDir, destHash, {
-      contractJson: castAs<unknown>(JSON.parse(contractJsonRaw)),
-      contractDts,
+      contractJson: emittedContractJson,
+      contractDts: destinationDeclarations,
     });
   }
 
   try {
     const planner = migrations.createPlanner(controlAdapter);
 
-    if (
-      isAutoBaseline &&
-      fromHash !== null &&
-      fromContract !== null &&
-      snapshotStartContract !== null
-    ) {
+    if (isAutoBaseline && fromHash !== null && fromContract !== null && fromContractInStore) {
       const baselineTimestamp = new Date();
       const deltaTimestamp = new Date(baselineTimestamp.getTime() + 60_000);
       const baselineDirName = formatMigrationDirName(baselineTimestamp, 'baseline');
@@ -538,10 +524,6 @@ async function executeMigrationPlanCommandInner(
         baselineTimestamp,
         baselineLeg.value,
       );
-      await writeContractSnapshot(migrationsDir, fromHash, {
-        contractJson: snapshotStartContract.contractJson,
-        contractDts: snapshotStartContract.contractDts,
-      });
 
       if (fromHash === toStorageHash) {
         const baselineOps = baselineLeg.value.hasPlaceholders ? [] : baselineLeg.value.plannedOps;
@@ -609,10 +591,6 @@ async function executeMigrationPlanCommandInner(
         deltaLeg.value,
       );
       await writeDestinationSnapshot(toStorageHash);
-      await writeContractSnapshot(migrationsDir, fromHash, {
-        contractJson: snapshotStartContract.contractJson,
-        contractDts: snapshotStartContract.contractDts,
-      });
 
       const deltaOps = deltaLeg.value.hasPlaceholders ? [] : deltaLeg.value.plannedOps;
       if (deltaLeg.value.hasPlaceholders) {
@@ -684,12 +662,6 @@ async function executeMigrationPlanCommandInner(
       deltaLeg.value,
     );
     await writeDestinationSnapshot(toStorageHash);
-    if (snapshotStartContract !== null) {
-      await writeContractSnapshot(migrationsDir, snapshotStartContract.fromHash, {
-        contractJson: snapshotStartContract.contractJson,
-        contractDts: snapshotStartContract.contractDts,
-      });
-    }
 
     if (deltaLeg.value.hasPlaceholders) {
       const result: MigrationPlanResult = {

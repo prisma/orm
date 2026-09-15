@@ -251,8 +251,8 @@ export type FieldOutputTypes = {
   readonly public: {
     readonly Meter: {
       readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly peak: CodecTypes['pg/int8number@1']['output'];
       readonly lifetime: CodecTypes['pg/unboundedint@1']['output'];
+      readonly peak: CodecTypes['pg/int8number@1']['output'];
     };
     readonly Sample: {
       readonly id: CodecTypes['pg/int4@1']['output'];
@@ -265,8 +265,8 @@ export type FieldInputTypes = {
   readonly public: {
     readonly Meter: {
       readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly peak: CodecTypes['pg/int8number@1']['input'];
       readonly lifetime: CodecTypes['pg/unboundedint@1']['input'];
+      readonly peak: CodecTypes['pg/int8number@1']['input'];
     };
     readonly Sample: {
       readonly id: CodecTypes['pg/int4@1']['input'];
@@ -307,8 +307,8 @@ export type StorageColumnInputTypes = {
 export namespace Models {
   export type public_Meter = {
     id: CodecTypes['pg/int4@1']['output'];
-    peak: CodecTypes['pg/int8number@1']['output'];
     lifetime: CodecTypes['pg/unboundedint@1']['output'];
+    peak: CodecTypes['pg/int8number@1']['output'];
     samples: public_Sample[];
     readonly [RelationKeys]?: 'samples';
   };
@@ -353,14 +353,14 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly peak: {
-                  readonly nativeType: 'int8';
-                  readonly codecId: 'pg/int8number@1';
-                  readonly nullable: false;
-                };
                 readonly lifetime: {
                   readonly nativeType: 'numeric';
                   readonly codecId: 'pg/unboundedint@1';
+                  readonly nullable: false;
+                };
+                readonly peak: {
+                  readonly nativeType: 'int8';
+                  readonly codecId: 'pg/int8number@1';
                   readonly nullable: false;
                 };
               };
@@ -442,13 +442,13 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly peak: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8number@1' };
-              };
               readonly lifetime: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/unboundedint@1' };
+              };
+              readonly peak: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8number@1' };
               };
             };
             readonly relations: {
@@ -469,8 +469,8 @@ type ContractBase = Omit<
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly id: { readonly column: 'id' };
-                readonly peak: { readonly column: 'peak' };
                 readonly lifetime: { readonly column: 'lifetime' };
+                readonly peak: { readonly column: 'peak' };
               };
             };
           };

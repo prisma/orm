@@ -250,32 +250,32 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly PostOneToMany: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly authorId: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
     readonly PostOptionalOneToMany: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly authorId: CodecTypes['pg/text@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
     readonly UserOneToMany: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly enabled: CodecTypes['pg/bool@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly PostOneToMany: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly authorId: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
     readonly PostOptionalOneToMany: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly authorId: CodecTypes['pg/text@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
     readonly UserOneToMany: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly enabled: CodecTypes['pg/bool@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -313,32 +313,32 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_UserOneToMany = {
-    id: CodecTypes['pg/text@1']['output'];
-    enabled: CodecTypes['pg/bool@1']['output'] | null;
-    postOptionals: public_PostOptionalOneToMany[];
-    posts: public_PostOneToMany[];
-    readonly [RelationKeys]?: 'postOptionals' | 'posts';
-  };
   export type public_PostOneToMany = {
-    id: CodecTypes['pg/text@1']['output'];
     authorId: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/text@1']['output'];
     author: public_UserOneToMany;
     readonly [RelationKeys]?: 'author';
   };
   export type public_PostOptionalOneToMany = {
-    id: CodecTypes['pg/text@1']['output'];
     authorId: CodecTypes['pg/text@1']['output'] | null;
+    id: CodecTypes['pg/text@1']['output'];
     author: public_UserOneToMany | null;
     readonly [RelationKeys]?: 'author';
+  };
+  export type public_UserOneToMany = {
+    enabled: CodecTypes['pg/bool@1']['output'] | null;
+    id: CodecTypes['pg/text@1']['output'];
+    postOptionals: public_PostOptionalOneToMany[];
+    posts: public_PostOneToMany[];
+    readonly [RelationKeys]?: 'postOptionals' | 'posts';
   };
 }
 
 export declare const models: {
   public: {
-    UserOneToMany: Models.public_UserOneToMany;
     PostOneToMany: Models.public_PostOneToMany;
     PostOptionalOneToMany: Models.public_PostOptionalOneToMany;
+    UserOneToMany: Models.public_UserOneToMany;
   };
 };
 
@@ -362,12 +362,12 @@ type ContractBase = Omit<
           readonly table: {
             readonly postOneToMany: {
               columns: {
-                readonly id: {
+                readonly authorId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly authorId: {
+                readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -400,15 +400,15 @@ type ContractBase = Omit<
             };
             readonly postOptionalOneToMany: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly authorId: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -438,15 +438,15 @@ type ContractBase = Omit<
             };
             readonly userOneToMany: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly enabled: {
                   readonly nativeType: 'bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -465,10 +465,6 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly userOneToMany: {
-      readonly namespace: 'public' & NamespaceId;
-      readonly model: 'UserOneToMany';
-    };
     readonly postOneToMany: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'PostOneToMany';
@@ -477,6 +473,10 @@ type ContractBase = Omit<
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'PostOptionalOneToMany';
     };
+    readonly userOneToMany: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'UserOneToMany';
+    };
   };
   readonly domain: {
     readonly namespaces: {
@@ -484,11 +484,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly PostOneToMany: {
             readonly fields: {
-              readonly id: {
+              readonly authorId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly authorId: {
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -511,19 +511,19 @@ type ContractBase = Omit<
               readonly table: 'postOneToMany';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly authorId: { readonly column: 'authorId' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
           readonly PostOptionalOneToMany: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly authorId: {
                 readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
@@ -545,20 +545,20 @@ type ContractBase = Omit<
               readonly table: 'postOptionalOneToMany';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly authorId: { readonly column: 'authorId' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };
           readonly UserOneToMany: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly enabled: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: {
@@ -589,8 +589,8 @@ type ContractBase = Omit<
               readonly table: 'userOneToMany';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly enabled: { readonly column: 'enabled' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };

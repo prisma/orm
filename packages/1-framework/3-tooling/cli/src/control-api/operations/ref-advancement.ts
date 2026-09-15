@@ -1,12 +1,11 @@
 import { writeContractSnapshot } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
 import { validateRefName, writeRef } from '@internal/migration-tools/refs';
-import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
-import { CliStructuredError, errorContractValidationFailed } from '../../utils/cli-errors';
+import { CliStructuredError } from '../../utils/cli-errors';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
-import type { RenderContractDtsFailure } from '../render-contract-dts';
 import type { ControlClient } from '../types';
+import { renderSnapshotDeclarations } from './snapshot-declarations';
 
 /** A contract snapshot's two halves: the JSON and the declarations rendered from it. */
 export interface ContractIR {
@@ -37,25 +36,6 @@ export function computeRefAdvancementName(options: {
   return null;
 }
 
-function errorContractDtsRenderFailed(
-  contractJsonPath: string,
-  failure: RenderContractDtsFailure,
-): CliStructuredError {
-  const why = failure.why ?? failure.summary;
-  if (failure.code === 'CONTRACT_VALIDATION_FAILED') {
-    return errorContractValidationFailed(
-      `Contract at ${contractJsonPath} failed to deserialize: ${why}`,
-      { where: { path: contractJsonPath }, ...ifDefined('cause', failure.cause) },
-    );
-  }
-  return new CliStructuredError('CONTRACT.TYPES_RENDER_FAILED', 'Failed to render contract types', {
-    why: `The types for the contract at ${contractJsonPath} could not be rendered: ${why}`,
-    fix: 'Run {bin} contract emit to see why the contract does not emit, fix it, then advance the ref again.',
-    where: { path: contractJsonPath },
-    ...ifDefined('cause', failure.cause),
-  });
-}
-
 /**
  * Everything `executeRefAdvancement` needs, produced before a command does the
  * work that precedes the ref write: the ref name is validated and the
@@ -83,14 +63,16 @@ export async function preflightRefAdvancement(args: {
     }
     throw error;
   }
-  const rendered = await args.client.renderContractDts({
-    contract: args.contractJson,
+  const rendered = await renderSnapshotDeclarations({
+    client: args.client,
+    contractJson: args.contractJson,
+    contractJsonPath: args.contractJsonPath,
     resolveImportSpecifier,
   });
   if (!rendered.ok) {
-    return notOk(errorContractDtsRenderFailed(args.contractJsonPath, rendered.failure));
+    return rendered;
   }
-  return ok({ contract: args.contractJson, contractDts: rendered.value.contractDts });
+  return ok({ contract: args.contractJson, contractDts: rendered.value });
 }
 
 export async function executeRefAdvancement(

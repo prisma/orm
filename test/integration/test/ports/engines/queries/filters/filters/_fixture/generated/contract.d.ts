@@ -250,48 +250,48 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly ParkingLot: {
-      readonly id: CodecTypes['pg/text@1']['output'];
-      readonly unique: CodecTypes['pg/int4@1']['output'];
       readonly area: CodecTypes['pg/text@1']['output'] | null;
-      readonly size: CodecTypes['pg/float8@1']['output'] | null;
       readonly capacity: CodecTypes['pg/int4@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
+      readonly size: CodecTypes['pg/float8@1']['output'] | null;
+      readonly unique: CodecTypes['pg/int4@1']['output'];
     };
     readonly User: {
       readonly id: CodecTypes['pg/text@1']['output'];
-      readonly unique: CodecTypes['pg/int4@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'] | null;
       readonly optional: CodecTypes['pg/text@1']['output'] | null;
+      readonly unique: CodecTypes['pg/int4@1']['output'];
       readonly vehicle_id: CodecTypes['pg/text@1']['output'] | null;
     };
     readonly Vehicle: {
-      readonly id: CodecTypes['pg/text@1']['output'];
-      readonly unique: CodecTypes['pg/int4@1']['output'];
       readonly brand: CodecTypes['pg/text@1']['output'] | null;
+      readonly id: CodecTypes['pg/text@1']['output'];
       readonly parked: CodecTypes['pg/bool@1']['output'] | null;
+      readonly unique: CodecTypes['pg/int4@1']['output'];
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly ParkingLot: {
-      readonly id: CodecTypes['pg/text@1']['input'];
-      readonly unique: CodecTypes['pg/int4@1']['input'];
       readonly area: CodecTypes['pg/text@1']['input'] | null;
-      readonly size: CodecTypes['pg/float8@1']['input'] | null;
       readonly capacity: CodecTypes['pg/int4@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
+      readonly size: CodecTypes['pg/float8@1']['input'] | null;
+      readonly unique: CodecTypes['pg/int4@1']['input'];
     };
     readonly User: {
       readonly id: CodecTypes['pg/text@1']['input'];
-      readonly unique: CodecTypes['pg/int4@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'] | null;
       readonly optional: CodecTypes['pg/text@1']['input'] | null;
+      readonly unique: CodecTypes['pg/int4@1']['input'];
       readonly vehicle_id: CodecTypes['pg/text@1']['input'] | null;
     };
     readonly Vehicle: {
-      readonly id: CodecTypes['pg/text@1']['input'];
-      readonly unique: CodecTypes['pg/int4@1']['input'];
       readonly brand: CodecTypes['pg/text@1']['input'] | null;
+      readonly id: CodecTypes['pg/text@1']['input'];
       readonly parked: CodecTypes['pg/bool@1']['input'] | null;
+      readonly unique: CodecTypes['pg/int4@1']['input'];
     };
   };
 };
@@ -345,38 +345,38 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type public_ParkingLot = {
+    area: CodecTypes['pg/text@1']['output'] | null;
+    capacity: CodecTypes['pg/int4@1']['output'] | null;
+    id: CodecTypes['pg/text@1']['output'];
+    size: CodecTypes['pg/float8@1']['output'] | null;
+    unique: CodecTypes['pg/int4@1']['output'];
+    readonly [RelationKeys]?: never;
+  };
   export type public_User = {
     id: CodecTypes['pg/text@1']['output'];
-    unique: CodecTypes['pg/int4@1']['output'];
     name: CodecTypes['pg/text@1']['output'] | null;
     optional: CodecTypes['pg/text@1']['output'] | null;
+    unique: CodecTypes['pg/int4@1']['output'];
     vehicle_id: CodecTypes['pg/text@1']['output'] | null;
     ride: public_Vehicle | null;
     readonly [RelationKeys]?: 'ride';
   };
   export type public_Vehicle = {
-    id: CodecTypes['pg/text@1']['output'];
-    unique: CodecTypes['pg/int4@1']['output'];
     brand: CodecTypes['pg/text@1']['output'] | null;
+    id: CodecTypes['pg/text@1']['output'];
     parked: CodecTypes['pg/bool@1']['output'] | null;
+    unique: CodecTypes['pg/int4@1']['output'];
     owner: public_User | null;
     readonly [RelationKeys]?: 'owner';
-  };
-  export type public_ParkingLot = {
-    id: CodecTypes['pg/text@1']['output'];
-    unique: CodecTypes['pg/int4@1']['output'];
-    area: CodecTypes['pg/text@1']['output'] | null;
-    size: CodecTypes['pg/float8@1']['output'] | null;
-    capacity: CodecTypes['pg/int4@1']['output'] | null;
-    readonly [RelationKeys]?: never;
   };
 }
 
 export declare const models: {
   public: {
+    ParkingLot: Models.public_ParkingLot;
     User: Models.public_User;
     Vehicle: Models.public_Vehicle;
-    ParkingLot: Models.public_ParkingLot;
   };
 };
 
@@ -400,30 +400,30 @@ type ContractBase = Omit<
           readonly table: {
             readonly parkingLot: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly unique: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly area: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
-                  readonly nullable: true;
-                };
-                readonly size: {
-                  readonly nativeType: 'float8';
-                  readonly codecId: 'pg/float8@1';
                   readonly nullable: true;
                 };
                 readonly capacity: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly size: {
+                  readonly nativeType: 'float8';
+                  readonly codecId: 'pg/float8@1';
+                  readonly nullable: true;
+                };
+                readonly unique: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -438,11 +438,6 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly unique: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly name: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
@@ -452,6 +447,11 @@ type ContractBase = Omit<
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
+                };
+                readonly unique: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
                 };
                 readonly vehicle_id: {
                   readonly nativeType: 'text';
@@ -482,25 +482,25 @@ type ContractBase = Omit<
             };
             readonly vehicle: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly unique: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly brand: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
+                readonly id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
                 readonly parked: {
                   readonly nativeType: 'bool';
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: true;
+                };
+                readonly unique: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -519,12 +519,12 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
-    readonly vehicle: { readonly namespace: 'public' & NamespaceId; readonly model: 'Vehicle' };
     readonly parkingLot: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'ParkingLot';
     };
+    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
+    readonly vehicle: { readonly namespace: 'public' & NamespaceId; readonly model: 'Vehicle' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -532,24 +532,24 @@ type ContractBase = Omit<
         readonly models: {
           readonly ParkingLot: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly unique: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly area: {
                 readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly capacity: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly size: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
               };
-              readonly capacity: {
-                readonly nullable: true;
+              readonly unique: {
+                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
@@ -558,11 +558,11 @@ type ContractBase = Omit<
               readonly table: 'parkingLot';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
-                readonly unique: { readonly column: 'unique' };
                 readonly area: { readonly column: 'area' };
-                readonly size: { readonly column: 'size' };
                 readonly capacity: { readonly column: 'capacity' };
+                readonly id: { readonly column: 'id' };
+                readonly size: { readonly column: 'size' };
+                readonly unique: { readonly column: 'unique' };
               };
             };
           };
@@ -572,10 +572,6 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly unique: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly name: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
@@ -583,6 +579,10 @@ type ContractBase = Omit<
               readonly optional: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly unique: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
               readonly vehicle_id: {
                 readonly nullable: true;
@@ -608,30 +608,30 @@ type ContractBase = Omit<
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly id: { readonly column: 'id' };
-                readonly unique: { readonly column: 'unique' };
                 readonly name: { readonly column: 'name' };
                 readonly optional: { readonly column: 'optional' };
+                readonly unique: { readonly column: 'unique' };
                 readonly vehicle_id: { readonly column: 'vehicle_id' };
               };
             };
           };
           readonly Vehicle: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly unique: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly brand: {
                 readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly parked: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
+              };
+              readonly unique: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
             readonly relations: {
@@ -649,10 +649,10 @@ type ContractBase = Omit<
               readonly table: 'vehicle';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
-                readonly unique: { readonly column: 'unique' };
                 readonly brand: { readonly column: 'brand' };
+                readonly id: { readonly column: 'id' };
                 readonly parked: { readonly column: 'parked' };
+                readonly unique: { readonly column: 'unique' };
               };
             };
           };

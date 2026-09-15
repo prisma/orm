@@ -67,27 +67,27 @@ type ContractBase = Omit<
         readonly entries: {
           readonly collection: {
             readonly users: {
-              readonly kind: 'mongo-collection';
               readonly indexes: readonly [
                 {
+                  readonly keys: readonly [{ readonly direction: 1; readonly field: 'firstName' }];
                   readonly kind: 'mongo-index';
-                  readonly keys: readonly [{ readonly field: 'firstName'; readonly direction: 1 }];
                   readonly unique: true;
                 },
               ];
+              readonly kind: 'mongo-collection';
               readonly validator: {
-                readonly kind: 'mongo-validator';
                 readonly jsonSchema: {
+                  readonly additionalProperties: false;
                   readonly bsonType: 'object';
                   readonly properties: {
                     readonly _id: { readonly bsonType: 'objectId' };
                     readonly firstName: { readonly bsonType: 'string' };
                   };
-                  readonly additionalProperties: false;
                   readonly required: readonly ['_id', 'firstName'];
                 };
-                readonly validationLevel: 'strict';
+                readonly kind: 'mongo-validator';
                 readonly validationAction: 'error';
+                readonly validationLevel: 'strict';
               };
             };
           };

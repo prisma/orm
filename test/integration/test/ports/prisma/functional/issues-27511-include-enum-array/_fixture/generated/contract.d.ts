@@ -310,13 +310,6 @@ export namespace Models {
     roles: public_workspace_member_role[];
     readonly [RelationKeys]?: 'roles';
   };
-  export type public_workspace_role = {
-    id: Varchar<30>;
-    name: CodecTypes['pg/text@1']['output'];
-    permissions: ReadonlyArray<'HELLO' | 'WORLD'>;
-    members: public_workspace_member_role[];
-    readonly [RelationKeys]?: 'members';
-  };
   export type public_workspace_member_role = {
     memberId: CodecTypes['pg/text@1']['output'];
     roleId: CodecTypes['pg/text@1']['output'];
@@ -324,13 +317,20 @@ export namespace Models {
     role: public_workspace_role;
     readonly [RelationKeys]?: 'member' | 'role';
   };
+  export type public_workspace_role = {
+    id: Varchar<30>;
+    name: CodecTypes['pg/text@1']['output'];
+    permissions: ReadonlyArray<'HELLO' | 'WORLD'>;
+    members: public_workspace_member_role[];
+    readonly [RelationKeys]?: 'members';
+  };
 }
 
 export declare const models: {
   public: {
     workspace_member: Models.public_workspace_member;
-    workspace_role: Models.public_workspace_role;
     workspace_member_role: Models.public_workspace_member_role;
+    workspace_role: Models.public_workspace_role;
   };
 };
 
@@ -467,13 +467,13 @@ type ContractBase = Omit<
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'workspace_member';
     };
-    readonly workspace_role: {
-      readonly namespace: 'public' & NamespaceId;
-      readonly model: 'workspace_role';
-    };
     readonly workspace_member_role: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'workspace_member_role';
+    };
+    readonly workspace_role: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'workspace_role';
     };
   };
   readonly domain: {

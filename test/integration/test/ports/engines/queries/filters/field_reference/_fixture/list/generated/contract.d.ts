@@ -250,56 +250,56 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly TestModel: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly string: CodecTypes['pg/text@1']['output'] | null;
-      readonly string_list: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
-      readonly string_list2: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
-      readonly int: CodecTypes['pg/int4@1']['output'] | null;
-      readonly int_list: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
-      readonly int_list2: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
       readonly bInt: CodecTypes['pg/int8@1']['output'] | null;
       readonly bInt_list: ReadonlyArray<CodecTypes['pg/int8@1']['output']>;
       readonly bInt_list2: ReadonlyArray<CodecTypes['pg/int8@1']['output']>;
-      readonly float: CodecTypes['pg/float8@1']['output'] | null;
-      readonly float_list: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
-      readonly float_list2: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
-      readonly bytes: CodecTypes['pg/bytea@1']['output'] | null;
-      readonly bytes_list: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
-      readonly bytes_list2: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
       readonly bool: CodecTypes['pg/bool@1']['output'] | null;
       readonly bool_list: ReadonlyArray<CodecTypes['pg/bool@1']['output']>;
       readonly bool_list2: ReadonlyArray<CodecTypes['pg/bool@1']['output']>;
+      readonly bytes: CodecTypes['pg/bytea@1']['output'] | null;
+      readonly bytes_list: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
+      readonly bytes_list2: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
       readonly dt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly dt_list: ReadonlyArray<CodecTypes['pg/timestamptz-temporal@1']['output']>;
       readonly dt_list2: ReadonlyArray<CodecTypes['pg/timestamptz-temporal@1']['output']>;
+      readonly float: CodecTypes['pg/float8@1']['output'] | null;
+      readonly float_list: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
+      readonly float_list2: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly int: CodecTypes['pg/int4@1']['output'] | null;
+      readonly int_list: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
+      readonly int_list2: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
+      readonly string: CodecTypes['pg/text@1']['output'] | null;
+      readonly string_list: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
+      readonly string_list2: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly TestModel: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly string: CodecTypes['pg/text@1']['input'] | null;
-      readonly string_list: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
-      readonly string_list2: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
-      readonly int: CodecTypes['pg/int4@1']['input'] | null;
-      readonly int_list: ReadonlyArray<CodecTypes['pg/int4@1']['input']>;
-      readonly int_list2: ReadonlyArray<CodecTypes['pg/int4@1']['input']>;
       readonly bInt: CodecTypes['pg/int8@1']['input'] | null;
       readonly bInt_list: ReadonlyArray<CodecTypes['pg/int8@1']['input']>;
       readonly bInt_list2: ReadonlyArray<CodecTypes['pg/int8@1']['input']>;
-      readonly float: CodecTypes['pg/float8@1']['input'] | null;
-      readonly float_list: ReadonlyArray<CodecTypes['pg/float8@1']['input']>;
-      readonly float_list2: ReadonlyArray<CodecTypes['pg/float8@1']['input']>;
-      readonly bytes: CodecTypes['pg/bytea@1']['input'] | null;
-      readonly bytes_list: ReadonlyArray<CodecTypes['pg/bytea@1']['input']>;
-      readonly bytes_list2: ReadonlyArray<CodecTypes['pg/bytea@1']['input']>;
       readonly bool: CodecTypes['pg/bool@1']['input'] | null;
       readonly bool_list: ReadonlyArray<CodecTypes['pg/bool@1']['input']>;
       readonly bool_list2: ReadonlyArray<CodecTypes['pg/bool@1']['input']>;
+      readonly bytes: CodecTypes['pg/bytea@1']['input'] | null;
+      readonly bytes_list: ReadonlyArray<CodecTypes['pg/bytea@1']['input']>;
+      readonly bytes_list2: ReadonlyArray<CodecTypes['pg/bytea@1']['input']>;
       readonly dt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly dt_list: ReadonlyArray<CodecTypes['pg/timestamptz-temporal@1']['input']>;
       readonly dt_list2: ReadonlyArray<CodecTypes['pg/timestamptz-temporal@1']['input']>;
+      readonly float: CodecTypes['pg/float8@1']['input'] | null;
+      readonly float_list: ReadonlyArray<CodecTypes['pg/float8@1']['input']>;
+      readonly float_list2: ReadonlyArray<CodecTypes['pg/float8@1']['input']>;
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly int: CodecTypes['pg/int4@1']['input'] | null;
+      readonly int_list: ReadonlyArray<CodecTypes['pg/int4@1']['input']>;
+      readonly int_list2: ReadonlyArray<CodecTypes['pg/int4@1']['input']>;
+      readonly string: CodecTypes['pg/text@1']['input'] | null;
+      readonly string_list: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
+      readonly string_list2: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
     };
   };
 };
@@ -362,28 +362,28 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_TestModel = {
-    id: CodecTypes['pg/int4@1']['output'];
-    string: CodecTypes['pg/text@1']['output'] | null;
-    string_list: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
-    string_list2: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
-    int: CodecTypes['pg/int4@1']['output'] | null;
-    int_list: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
-    int_list2: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
     bInt: CodecTypes['pg/int8@1']['output'] | null;
     bInt_list: ReadonlyArray<CodecTypes['pg/int8@1']['output']>;
     bInt_list2: ReadonlyArray<CodecTypes['pg/int8@1']['output']>;
-    float: CodecTypes['pg/float8@1']['output'] | null;
-    float_list: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
-    float_list2: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
-    bytes: CodecTypes['pg/bytea@1']['output'] | null;
-    bytes_list: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
-    bytes_list2: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
     bool: CodecTypes['pg/bool@1']['output'] | null;
     bool_list: ReadonlyArray<CodecTypes['pg/bool@1']['output']>;
     bool_list2: ReadonlyArray<CodecTypes['pg/bool@1']['output']>;
+    bytes: CodecTypes['pg/bytea@1']['output'] | null;
+    bytes_list: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
+    bytes_list2: ReadonlyArray<CodecTypes['pg/bytea@1']['output']>;
     dt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
     dt_list: ReadonlyArray<CodecTypes['pg/timestamptz-temporal@1']['output']>;
     dt_list2: ReadonlyArray<CodecTypes['pg/timestamptz-temporal@1']['output']>;
+    float: CodecTypes['pg/float8@1']['output'] | null;
+    float_list: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
+    float_list2: ReadonlyArray<CodecTypes['pg/float8@1']['output']>;
+    id: CodecTypes['pg/int4@1']['output'];
+    int: CodecTypes['pg/int4@1']['output'] | null;
+    int_list: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
+    int_list2: ReadonlyArray<CodecTypes['pg/int4@1']['output']>;
+    string: CodecTypes['pg/text@1']['output'] | null;
+    string_list: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
+    string_list2: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     readonly [RelationKeys]?: never;
   };
 }
@@ -414,41 +414,6 @@ type ContractBase = Omit<
           readonly table: {
             readonly testModel: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
-                readonly string: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: true;
-                };
-                readonly string_list: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly string_list2: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly int: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: true;
-                };
-                readonly int_list: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
-                readonly int_list2: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly bInt: {
                   readonly nativeType: 'int8';
                   readonly codecId: 'pg/int8@1';
@@ -462,36 +427,6 @@ type ContractBase = Omit<
                 readonly bInt_list2: {
                   readonly nativeType: 'int8';
                   readonly codecId: 'pg/int8@1';
-                  readonly nullable: false;
-                };
-                readonly float: {
-                  readonly nativeType: 'float8';
-                  readonly codecId: 'pg/float8@1';
-                  readonly nullable: true;
-                };
-                readonly float_list: {
-                  readonly nativeType: 'float8';
-                  readonly codecId: 'pg/float8@1';
-                  readonly nullable: false;
-                };
-                readonly float_list2: {
-                  readonly nativeType: 'float8';
-                  readonly codecId: 'pg/float8@1';
-                  readonly nullable: false;
-                };
-                readonly bytes: {
-                  readonly nativeType: 'bytea';
-                  readonly codecId: 'pg/bytea@1';
-                  readonly nullable: true;
-                };
-                readonly bytes_list: {
-                  readonly nativeType: 'bytea';
-                  readonly codecId: 'pg/bytea@1';
-                  readonly nullable: false;
-                };
-                readonly bytes_list2: {
-                  readonly nativeType: 'bytea';
-                  readonly codecId: 'pg/bytea@1';
                   readonly nullable: false;
                 };
                 readonly bool: {
@@ -509,6 +444,21 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/bool@1';
                   readonly nullable: false;
                 };
+                readonly bytes: {
+                  readonly nativeType: 'bytea';
+                  readonly codecId: 'pg/bytea@1';
+                  readonly nullable: true;
+                };
+                readonly bytes_list: {
+                  readonly nativeType: 'bytea';
+                  readonly codecId: 'pg/bytea@1';
+                  readonly nullable: false;
+                };
+                readonly bytes_list2: {
+                  readonly nativeType: 'bytea';
+                  readonly codecId: 'pg/bytea@1';
+                  readonly nullable: false;
+                };
                 readonly dt: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
@@ -522,6 +472,56 @@ type ContractBase = Omit<
                 readonly dt_list2: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                };
+                readonly float: {
+                  readonly nativeType: 'float8';
+                  readonly codecId: 'pg/float8@1';
+                  readonly nullable: true;
+                };
+                readonly float_list: {
+                  readonly nativeType: 'float8';
+                  readonly codecId: 'pg/float8@1';
+                  readonly nullable: false;
+                };
+                readonly float_list2: {
+                  readonly nativeType: 'float8';
+                  readonly codecId: 'pg/float8@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly int: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                };
+                readonly int_list: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly int_list2: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                };
+                readonly string: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly string_list: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly string_list2: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
               };
@@ -549,38 +549,6 @@ type ContractBase = Omit<
         readonly models: {
           readonly TestModel: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
-              readonly string: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly string_list: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly many: true;
-              };
-              readonly string_list2: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-                readonly many: true;
-              };
-              readonly int: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
-              readonly int_list: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-                readonly many: true;
-              };
-              readonly int_list2: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-                readonly many: true;
-              };
               readonly bInt: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8@1' };
@@ -595,18 +563,18 @@ type ContractBase = Omit<
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int8@1' };
                 readonly many: true;
               };
-              readonly float: {
+              readonly bool: {
                 readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
               };
-              readonly float_list: {
+              readonly bool_list: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
                 readonly many: true;
               };
-              readonly float_list2: {
+              readonly bool_list2: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
                 readonly many: true;
               };
               readonly bytes: {
@@ -621,20 +589,6 @@ type ContractBase = Omit<
               readonly bytes_list2: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bytea@1' };
-                readonly many: true;
-              };
-              readonly bool: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
-              };
-              readonly bool_list: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
-                readonly many: true;
-              };
-              readonly bool_list2: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
                 readonly many: true;
               };
               readonly dt: {
@@ -660,34 +614,80 @@ type ContractBase = Omit<
                 };
                 readonly many: true;
               };
+              readonly float: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+              };
+              readonly float_list: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+                readonly many: true;
+              };
+              readonly float_list2: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/float8@1' };
+                readonly many: true;
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly int: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly int_list: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+                readonly many: true;
+              };
+              readonly int_list2: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+                readonly many: true;
+              };
+              readonly string: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly string_list: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: true;
+              };
+              readonly string_list2: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: true;
+              };
             };
             readonly relations: Record<string, never>;
             readonly storage: {
               readonly table: 'testModel';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
-                readonly string: { readonly column: 'string' };
-                readonly string_list: { readonly column: 'string_list' };
-                readonly string_list2: { readonly column: 'string_list2' };
-                readonly int: { readonly column: 'int' };
-                readonly int_list: { readonly column: 'int_list' };
-                readonly int_list2: { readonly column: 'int_list2' };
                 readonly bInt: { readonly column: 'bInt' };
                 readonly bInt_list: { readonly column: 'bInt_list' };
                 readonly bInt_list2: { readonly column: 'bInt_list2' };
-                readonly float: { readonly column: 'float' };
-                readonly float_list: { readonly column: 'float_list' };
-                readonly float_list2: { readonly column: 'float_list2' };
-                readonly bytes: { readonly column: 'bytes' };
-                readonly bytes_list: { readonly column: 'bytes_list' };
-                readonly bytes_list2: { readonly column: 'bytes_list2' };
                 readonly bool: { readonly column: 'bool' };
                 readonly bool_list: { readonly column: 'bool_list' };
                 readonly bool_list2: { readonly column: 'bool_list2' };
+                readonly bytes: { readonly column: 'bytes' };
+                readonly bytes_list: { readonly column: 'bytes_list' };
+                readonly bytes_list2: { readonly column: 'bytes_list2' };
                 readonly dt: { readonly column: 'dt' };
                 readonly dt_list: { readonly column: 'dt_list' };
                 readonly dt_list2: { readonly column: 'dt_list2' };
+                readonly float: { readonly column: 'float' };
+                readonly float_list: { readonly column: 'float_list' };
+                readonly float_list2: { readonly column: 'float_list2' };
+                readonly id: { readonly column: 'id' };
+                readonly int: { readonly column: 'int' };
+                readonly int_list: { readonly column: 'int_list' };
+                readonly int_list2: { readonly column: 'int_list2' };
+                readonly string: { readonly column: 'string' };
+                readonly string_list: { readonly column: 'string_list' };
+                readonly string_list2: { readonly column: 'string_list2' };
               };
             };
           };

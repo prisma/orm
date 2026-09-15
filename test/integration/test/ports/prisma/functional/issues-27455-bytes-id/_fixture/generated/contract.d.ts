@@ -254,8 +254,8 @@ export type FieldOutputTypes = {
       readonly name: CodecTypes['pg/text@1']['output'];
     };
     readonly AccommodationTimeTable: {
-      readonly id: CodecTypes['pg/bytea@1']['output'];
       readonly accommodationId: CodecTypes['pg/bytea@1']['output'];
+      readonly id: CodecTypes['pg/bytea@1']['output'];
     };
   };
 };
@@ -266,8 +266,8 @@ export type FieldInputTypes = {
       readonly name: CodecTypes['pg/text@1']['input'];
     };
     readonly AccommodationTimeTable: {
-      readonly id: CodecTypes['pg/bytea@1']['input'];
       readonly accommodationId: CodecTypes['pg/bytea@1']['input'];
+      readonly id: CodecTypes['pg/bytea@1']['input'];
     };
   };
 };
@@ -304,8 +304,8 @@ export namespace Models {
     readonly [RelationKeys]?: 'timeTables';
   };
   export type public_AccommodationTimeTable = {
-    id: CodecTypes['pg/bytea@1']['output'];
     accommodationId: CodecTypes['pg/bytea@1']['output'];
+    id: CodecTypes['pg/bytea@1']['output'];
     accommodation: public_Accommodation;
     readonly [RelationKeys]?: 'accommodation';
   };
@@ -356,12 +356,12 @@ type ContractBase = Omit<
             };
             readonly accommodationTimeTable: {
               columns: {
-                readonly id: {
+                readonly accommodationId: {
                   readonly nativeType: 'bytea';
                   readonly codecId: 'pg/bytea@1';
                   readonly nullable: false;
                 };
-                readonly accommodationId: {
+                readonly id: {
                   readonly nativeType: 'bytea';
                   readonly codecId: 'pg/bytea@1';
                   readonly nullable: false;
@@ -451,11 +451,11 @@ type ContractBase = Omit<
           };
           readonly AccommodationTimeTable: {
             readonly fields: {
-              readonly id: {
+              readonly accommodationId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bytea@1' };
               };
-              readonly accommodationId: {
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bytea@1' };
               };
@@ -478,8 +478,8 @@ type ContractBase = Omit<
               readonly table: 'accommodationTimeTable';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly accommodationId: { readonly column: 'accommodationId' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };

@@ -301,12 +301,6 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_TestModel = {
-    id: CodecTypes['pg/int4@1']['output'];
-    str: CodecTypes['pg/text@1']['output'];
-    children: public_Child[];
-    readonly [RelationKeys]?: 'children';
-  };
   export type public_Child = {
     id: CodecTypes['pg/int4@1']['output'];
     str: CodecTypes['pg/text@1']['output'];
@@ -314,12 +308,18 @@ export namespace Models {
     test: public_TestModel;
     readonly [RelationKeys]?: 'test';
   };
+  export type public_TestModel = {
+    id: CodecTypes['pg/int4@1']['output'];
+    str: CodecTypes['pg/text@1']['output'];
+    children: public_Child[];
+    readonly [RelationKeys]?: 'children';
+  };
 }
 
 export declare const models: {
   public: {
-    TestModel: Models.public_TestModel;
     Child: Models.public_Child;
+    TestModel: Models.public_TestModel;
   };
 };
 
@@ -413,8 +413,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly testModel: { readonly namespace: 'public' & NamespaceId; readonly model: 'TestModel' };
     readonly child: { readonly namespace: 'public' & NamespaceId; readonly model: 'Child' };
+    readonly testModel: { readonly namespace: 'public' & NamespaceId; readonly model: 'TestModel' };
   };
   readonly domain: {
     readonly namespaces: {

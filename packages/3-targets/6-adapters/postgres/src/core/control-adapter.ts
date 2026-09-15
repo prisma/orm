@@ -4,7 +4,7 @@ import type {
   LedgerEntryRecord,
 } from '@internal/contract/types';
 import {
-  parseMarkerRowSafely,
+  errorMarkerRowCorrupt,
   rethrowMarkerReadError,
   withMarkerReadErrorHandling,
 } from '@internal/errors/execution';
@@ -31,6 +31,7 @@ import type {
   SqlExecuteRequest,
 } from '@internal/sql-relational-core/ast';
 import { isDdlNode } from '@internal/sql-relational-core/ast';
+import type { ColumnDescriptor, ExcludedProxy } from '@internal/sql-relational-core/contract-free';
 import { namingOfLiveName } from '@internal/sql-schema-ir/naming';
 import type {
   PrimaryKeyInput,
@@ -46,9 +47,11 @@ import {
   buildControlTableBootstrapQueries,
   buildSignMarkerBootstrapQueries,
 } from '@internal/target-postgres/contract-free';
+import { parsePostgresListText } from '@internal/target-postgres/control';
 import type {
   AddColumnAction,
   AlterTableActionVisitor,
+  AnyAlterTableAction,
   DropDefaultAction,
   PostgresAlterIndexRename,
   PostgresAlterPolicyRename,
@@ -97,6 +100,40 @@ import type { PostgresCodecRegistry, PostgresContract } from './types';
 
 const POSTGRES_MARKER_TABLE = 'prisma_contract.marker';
 const POSTGRES_LEDGER_TABLE = 'prisma_contract.ledger';
+
+function markerRowDecodeWhy(detail: string): string {
+  return `Invalid contract marker row: ${detail}`;
+}
+
+function decodePostgresMarkerRow(row: unknown, space: string): Record<string, unknown> {
+  if (typeof row !== 'object' || row === null) {
+    const cause = new TypeError(`expected object marker row, got ${typeof row}`);
+    throw errorMarkerRowCorrupt({
+      why: markerRowDecodeWhy(cause.message),
+      space,
+      markerLocation: POSTGRES_MARKER_TABLE,
+      cause,
+    });
+  }
+  const record = blindCast<
+    { readonly invariants: unknown } & Record<string, unknown>,
+    'Postgres marker rows are object-shaped at this boundary'
+  >(row);
+  try {
+    return {
+      ...record,
+      invariants: parsePostgresListText(record.invariants),
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw errorMarkerRowCorrupt({
+      why: markerRowDecodeWhy(message),
+      space,
+      markerLocation: POSTGRES_MARKER_TABLE,
+      cause: error,
+    });
+  }
+}
 
 type PostgresLedgerRow = {
   readonly space: string;
@@ -270,13 +307,15 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
 
     const out = new Map<string, ContractMarkerRecord>();
     for (const row of rows) {
-      out.set(
-        row.space,
-        parseMarkerRowSafely(row, parseContractMarkerRow, {
+      try {
+        const decodedRow = decodePostgresMarkerRow(row, row.space);
+        out.set(row.space, parseContractMarkerRow(decodedRow));
+      } catch (error) {
+        rethrowMarkerReadError(error, {
           space: row.space,
           markerLocation: POSTGRES_MARKER_TABLE,
-        }),
-      );
+        });
+      }
     }
     return out;
   }
@@ -400,7 +439,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
           invariants: destination.invariants ?? [],
         })
         .onConflict(marker.space)
-        .doUpdate((excluded) => ({
+        .doUpdate((excluded: ExcludedProxy<MarkerUpsertSchema>) => ({
           core_hash: excluded.core_hash,
           profile_hash: excluded.profile_hash,
           contract_json: excluded.contract_json,
@@ -559,7 +598,12 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     const result = await execute(lower, driver, fetch);
     const row = result[0];
     if (!row) return { kind: 'absent' as const };
-    return { kind: 'present' as const, record: parseContractMarkerRow(row) };
+    try {
+      const decodedRow = decodePostgresMarkerRow(row, space);
+      return { kind: 'present' as const, record: parseContractMarkerRow(decodedRow) };
+    } catch (error) {
+      rethrowMarkerReadError(error, { space, markerLocation: POSTGRES_MARKER_TABLE });
+    }
   }
 
   /**
@@ -875,7 +919,8 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       element_def: string | null;
       index_position: number;
       amname: string | null;
-      reloptions: string[] | null;
+      // `pg_index.reloptions` is raw Postgres array text, not a JS array.
+      reloptions: string | null;
     }>(
       // `ix.indkey` is an int2vector of column numbers in the order the
       // columns appear in the index definition. Unnest it WITH ORDINALITY
@@ -1112,10 +1157,10 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       }
       const foreignKeys: readonly SqlForeignKeyIRInput[] = Array.from(foreignKeysMap.values()).map(
         (fk) => ({
-          columns: Object.freeze([...fk.columns]) as readonly string[],
+          columns: freezeStringArray(fk.columns),
           referencedTable: fk.referencedTable,
           referencedSchema: fk.referencedSchema,
-          referencedColumns: Object.freeze([...fk.referencedColumns]) as readonly string[],
+          referencedColumns: freezeStringArray(fk.referencedColumns),
           name: fk.name,
           ...ifDefined('onDelete', mapReferentialAction(fk.deleteRule)),
           ...ifDefined('onUpdate', mapReferentialAction(fk.updateRule)),
@@ -1145,7 +1190,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
         }
       }
       const uniques: readonly SqlUniqueIRInput[] = Array.from(uniquesMap.values()).map((uq) => ({
-        columns: Object.freeze([...uq.columns]) as readonly string[],
+        columns: freezeStringArray(uq.columns),
         name: uq.name,
         dependsOn: postgresColumnDependsOn(schema, tableName, uq.columns),
       }));
@@ -1264,7 +1309,8 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
       tablename: string;
       policyname: string;
       cmd: string;
-      roles: string[];
+      // `pg_policies.roles` is raw Postgres array text, not a JS array.
+      roles: string;
       qual: string | null;
       with_check: string | null;
       permissive: string;
@@ -1361,14 +1407,15 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
 }
 
 /**
- * Normalises a `name[]` column value from `pg_policies.roles`.
+ * Normalises a `name[]` column value from Postgres catalog views such as
+ * `pg_policies.roles` and aggregate queries over `pg_enum.enumlabel`.
  *
- * The `pg` client's type-parser registry handles `text[]` (OID 1009) but not
- * `name[]` (OID 1003). When the parser is absent the raw Postgres text-array
- * literal (`{role1,role2}`) is returned as a string instead of a JS array.
- * This function accepts either form and returns a plain string array.
+ * Control-plane queries use the Postgres driver's raw-text parser policy for
+ * array OIDs, so this helper accepts raw Postgres array literals only. A native
+ * JS array at this boundary means the caller bypassed target-owned framing and
+ * is rejected rather than normalized as a second representation.
  *
- * The string branch honors Postgres array-literal quoting: an element
+ * The parser honors Postgres array-literal quoting: an element
  * containing a comma, quote, backslash, brace, or significant whitespace is
  * emitted double-quoted with `\"` / `\\` escapes, and unquoted elements are
  * whitespace-trimmed — so a label like `in progress` or `say "hi"` parses to
@@ -1376,68 +1423,12 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
  */
 export function parsePgNameArray(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value.map(String);
+    throw new TypeError(`expected raw text for a Postgres array, got ${typeof value}`);
   }
   if (typeof value !== 'string') {
     return [];
   }
-  const trimmed = value.trim();
-  if (!trimmed.startsWith('{') || !trimmed.endsWith('}')) {
-    return [];
-  }
-  const inner = trimmed.slice(1, -1);
-  if (inner === '') {
-    return [];
-  }
-
-  const elements: string[] = [];
-  let current = '';
-  let inQuotes = false;
-  let wasQuoted = false;
-  const pushCurrent = () => {
-    elements.push(wasQuoted ? current : current.trim());
-    current = '';
-    wasQuoted = false;
-  };
-  let i = 0;
-  while (i < inner.length) {
-    const char = inner.charAt(i);
-    if (inQuotes) {
-      if (char === '\\') {
-        current += inner[i + 1] ?? '';
-        i += 2;
-        continue;
-      }
-      if (char === '"') {
-        inQuotes = false;
-        i++;
-        continue;
-      }
-      current += char;
-      i++;
-      continue;
-    }
-    if (char === '"') {
-      inQuotes = true;
-      wasQuoted = true;
-      i++;
-      continue;
-    }
-    if (char === ',') {
-      pushCurrent();
-      i++;
-      continue;
-    }
-    current += char;
-    i++;
-  }
-  // A still-open quote means the literal was malformed (e.g. `{"unterminated}`);
-  // reject rather than emit the partial value.
-  if (inQuotes) {
-    return [];
-  }
-  pushCurrent();
-  return elements;
+  return parsePostgresListText(value).map((entry: unknown) => String(entry));
 }
 
 /**
@@ -1466,13 +1457,21 @@ function mapPgCmd(cmd: string): RlsPolicyOperation {
  * is present. Used by `PostgresControlAdapter.introspect` to decide
  * between the multi-namespace walk and the single-schema fallback.
  */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function freezeStringArray(values: readonly string[]): readonly string[] {
+  return Object.freeze([...values]);
+}
+
 function extractContractNamespaceIds(contract: unknown): readonly string[] {
-  if (contract === null || typeof contract !== 'object') return [];
-  const storage = (contract as { storage?: unknown }).storage;
-  if (storage === null || typeof storage !== 'object') return [];
-  const namespaces = (storage as { namespaces?: unknown }).namespaces;
-  if (namespaces === null || typeof namespaces !== 'object') return [];
-  return Object.keys(namespaces as Record<string, unknown>);
+  if (!isRecord(contract)) return [];
+  const storage = contract['storage'];
+  if (!isRecord(storage)) return [];
+  const namespaces = storage['namespaces'];
+  if (!isRecord(namespaces)) return [];
+  return Object.keys(namespaces);
 }
 
 function normalizeFormattedType(formattedType: string, dataType: string, udtName: string): string {
@@ -1545,15 +1544,19 @@ const PG_REFERENTIAL_ACTION_MAP: Record<PgReferentialActionRule, SqlReferentialA
  * Returns undefined for 'NO ACTION' (the database default) to keep the IR sparse.
  * Throws for unrecognized rules to prevent silent data loss.
  */
+function isPgReferentialActionRule(rule: string): rule is PgReferentialActionRule {
+  return Object.hasOwn(PG_REFERENTIAL_ACTION_MAP, rule);
+}
+
 function mapReferentialAction(rule: string): SqlReferentialAction | undefined {
-  const mapped = PG_REFERENTIAL_ACTION_MAP[rule as PgReferentialActionRule];
-  if (mapped === undefined) {
+  if (!isPgReferentialActionRule(rule)) {
     throw adapterError(
       'CONTRACT.INTROSPECTION_UNSUPPORTED',
       `Unknown PostgreSQL referential action rule: "${rule}". Expected one of: NO ACTION, RESTRICT, CASCADE, SET NULL, SET DEFAULT.`,
       { meta: { rule } },
     );
   }
+  const mapped = PG_REFERENTIAL_ACTION_MAP[rule];
   if (mapped === 'noAction') return undefined;
   return mapped;
 }
@@ -1612,14 +1615,24 @@ function postgresColumnDependsOn(
  * Returns `undefined` when the input is null/empty (no WITH clause).
  */
 export function parsePgReloptions(
-  reloptions: readonly string[] | null,
+  reloptions: unknown,
   indexName: string,
 ): Record<string, string> | undefined {
-  if (!reloptions || reloptions.length === 0) {
+  if (Array.isArray(reloptions)) {
+    throw new TypeError(`expected raw text for a Postgres array, got ${typeof reloptions}`);
+  }
+  if (reloptions === null || reloptions === undefined) {
+    return undefined;
+  }
+  if (typeof reloptions !== 'string') {
+    return undefined;
+  }
+  const entries = parsePostgresListText(reloptions).map((entry: unknown) => String(entry));
+  if (entries.length === 0) {
     return undefined;
   }
   const result: Record<string, string> = {};
-  for (const entry of reloptions) {
+  for (const entry of entries) {
     const eq = entry.indexOf('=');
     if (eq === -1) {
       throw adapterError(
@@ -1835,7 +1848,7 @@ async function pgRenderCreateTable(
     ? `${quoteIdentifier(node.schema)}.${quoteIdentifier(node.table)}`
     : quoteIdentifier(node.table);
   const columnDefs = await Promise.all(
-    node.columns.map((col) => pgRenderDdlColumn(col, codecLookup)),
+    node.columns.map((col: DdlColumn) => pgRenderDdlColumn(col, codecLookup)),
   );
   const constraintDefs =
     node.constraints !== undefined ? node.constraints.map(pgRenderDdlConstraint) : [];
@@ -1858,7 +1871,7 @@ function pgRenderCreateType(node: PostgresCreateType): SqlExecuteRequest {
   const typeRef = node.schema
     ? `${quoteIdentifier(node.schema)}.${quoteIdentifier(node.name)}`
     : quoteIdentifier(node.name);
-  const values = node.values.map((value) => `'${escapeLiteral(value)}'`).join(', ');
+  const values = node.values.map((value: string) => `'${escapeLiteral(value)}'`).join(', ');
   return {
     sql: `CREATE TYPE ${typeRef} AS ENUM (${values})`,
     params: [],
@@ -1891,12 +1904,26 @@ async function pgRenderAlterTable(
       return Promise.resolve(`ALTER COLUMN ${quoteIdentifier(action.columnName)} DROP DEFAULT`);
     },
   };
-  const actionSqls = await Promise.all(node.actions.map((a) => a.accept(actionVisitor)));
+  const actionSqls = await Promise.all(
+    node.actions.map((action: AnyAlterTableAction) => action.accept(actionVisitor)),
+  );
   return {
     sql: `ALTER TABLE ${tableRef} ${actionSqls.join(', ')}`,
     params: [],
   };
 }
+
+type MarkerUpsertSchema = {
+  readonly space: ColumnDescriptor;
+  readonly core_hash: ColumnDescriptor;
+  readonly profile_hash: ColumnDescriptor;
+  readonly contract_json: ColumnDescriptor;
+  readonly canonical_version: ColumnDescriptor;
+  readonly updated_at: ColumnDescriptor;
+  readonly app_tag: ColumnDescriptor;
+  readonly meta: ColumnDescriptor;
+  readonly invariants: ColumnDescriptor;
+};
 
 const POLICY_OPERATION_SQL: Record<RlsPolicyOperation, string> = {
   select: 'SELECT',

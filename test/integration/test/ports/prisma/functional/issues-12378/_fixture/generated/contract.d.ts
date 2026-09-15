@@ -251,8 +251,8 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly User: {
-      readonly id: CodecTypes['pg/text@1']['output'];
       readonly email: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/text@1']['output'];
       readonly name: CodecTypes['pg/text@1']['output'] | null;
     };
     readonly UsersOnWorkspaces: {
@@ -268,8 +268,8 @@ export type FieldOutputTypes = {
 export type FieldInputTypes = {
   readonly public: {
     readonly User: {
-      readonly id: CodecTypes['pg/text@1']['input'];
       readonly email: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/text@1']['input'];
       readonly name: CodecTypes['pg/text@1']['input'] | null;
     };
     readonly UsersOnWorkspaces: {
@@ -319,17 +319,11 @@ export type StorageColumnInputTypes = {
 
 export namespace Models {
   export type public_User = {
-    id: CodecTypes['pg/text@1']['output'];
     email: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/text@1']['output'];
     name: CodecTypes['pg/text@1']['output'] | null;
     workspaces: public_UsersOnWorkspaces[];
     readonly [RelationKeys]?: 'workspaces';
-  };
-  export type public_Workspace = {
-    id: CodecTypes['pg/text@1']['output'];
-    name: CodecTypes['pg/text@1']['output'];
-    users: public_UsersOnWorkspaces[];
-    readonly [RelationKeys]?: 'users';
   };
   export type public_UsersOnWorkspaces = {
     userId: CodecTypes['pg/text@1']['output'];
@@ -338,13 +332,19 @@ export namespace Models {
     workspace: public_Workspace;
     readonly [RelationKeys]?: 'user' | 'workspace';
   };
+  export type public_Workspace = {
+    id: CodecTypes['pg/text@1']['output'];
+    name: CodecTypes['pg/text@1']['output'];
+    users: public_UsersOnWorkspaces[];
+    readonly [RelationKeys]?: 'users';
+  };
 }
 
 export declare const models: {
   public: {
     User: Models.public_User;
-    Workspace: Models.public_Workspace;
     UsersOnWorkspaces: Models.public_UsersOnWorkspaces;
+    Workspace: Models.public_Workspace;
   };
 };
 
@@ -368,12 +368,12 @@ type ContractBase = Omit<
           readonly table: {
             readonly user: {
               columns: {
-                readonly id: {
+                readonly email: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly email: {
+                readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
@@ -475,11 +475,11 @@ type ContractBase = Omit<
   readonly targetFamily: 'sql';
   readonly roots: {
     readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
-    readonly workspace: { readonly namespace: 'public' & NamespaceId; readonly model: 'Workspace' };
     readonly usersOnWorkspaces: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'UsersOnWorkspaces';
     };
+    readonly workspace: { readonly namespace: 'public' & NamespaceId; readonly model: 'Workspace' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -487,11 +487,11 @@ type ContractBase = Omit<
         readonly models: {
           readonly User: {
             readonly fields: {
-              readonly id: {
+              readonly email: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly email: {
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -517,8 +517,8 @@ type ContractBase = Omit<
               readonly table: 'user';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly email: { readonly column: 'email' };
+                readonly id: { readonly column: 'id' };
                 readonly name: { readonly column: 'name' };
               };
             };
@@ -627,20 +627,20 @@ type ContractBase = Omit<
     readonly mutations: {
       readonly defaults: readonly [
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'user';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
         },
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'workspace';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
         },
       ];
     };

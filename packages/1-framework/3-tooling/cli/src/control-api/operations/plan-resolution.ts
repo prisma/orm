@@ -29,20 +29,8 @@ export function looksLikeFullHash(input: string): boolean {
 export type FromResolution =
   | { kind: 'greenfield'; fromHash: null; fromContract: null; defaulted: boolean }
   | { kind: 'graph-node'; fromHash: string; fromContract: Contract }
-  | {
-      kind: 'ref';
-      fromHash: string;
-      fromContract: Contract;
-      contractDts: string;
-      contractJson: unknown;
-    }
-  | {
-      kind: 'auto-baseline';
-      fromHash: string;
-      fromContract: Contract;
-      contractDts: string;
-      contractJson: unknown;
-    };
+  | { kind: 'ref'; fromHash: string; fromContract: Contract }
+  | { kind: 'auto-baseline'; fromHash: string; fromContract: Contract };
 
 export interface ResolveFromForPlanInput {
   readonly optionsFrom?: string | undefined;
@@ -83,20 +71,8 @@ export function assertFromIsGraphNode(
 }
 
 type RefContractResolution =
-  | {
-      kind: 'ref';
-      hash: string;
-      contract: Contract;
-      contractJson: unknown;
-      contractDts: string;
-    }
-  | {
-      kind: 'graph-node';
-      hash: string;
-      contract: Contract;
-      contractJson: unknown;
-      contractDts: string;
-    };
+  | { kind: 'ref'; hash: string; contract: Contract }
+  | { kind: 'graph-node'; hash: string; contract: Contract };
 
 async function resolveContractRef(
   parsed: ContractRef,
@@ -114,8 +90,6 @@ async function resolveContractRef(
         kind: 'ref',
         hash: at.hash,
         contract: at.contract,
-        contractJson: at.contractJson,
-        contractDts: at.contractDts,
       });
     }
 
@@ -123,8 +97,6 @@ async function resolveContractRef(
       kind: 'graph-node',
       hash: at.hash,
       contract: at.contract,
-      contractJson: at.contractJson,
-      contractDts: at.contractDts,
     });
   } catch (error) {
     return mapContractAtError(
@@ -156,14 +128,12 @@ async function resolveFromPolicy(
     });
   }
 
-  const { hash, contract, contractJson, contractDts } = resolution.value;
+  const { hash, contract } = resolution.value;
   if (graphIsEmpty(input.space)) {
     return ok({
       kind: 'auto-baseline',
       fromHash: hash,
       fromContract: contract,
-      contractDts,
-      contractJson,
     });
   }
 
@@ -181,8 +151,6 @@ async function resolveFromPolicy(
     kind: 'ref',
     fromHash: hash,
     fromContract: contract,
-    contractDts,
-    contractJson,
   });
 }
 
@@ -240,8 +208,6 @@ export interface ResolveToForPlanInput {
 export interface ResolvedContractRef {
   readonly hash: string;
   readonly contract: Contract;
-  readonly contractJson: unknown;
-  readonly contractDts: string;
 }
 
 export async function resolveToForPlan(
@@ -278,6 +244,6 @@ export async function resolveToForPlan(
     return resolution;
   }
 
-  const { hash, contract, contractJson, contractDts } = resolution.value;
-  return ok({ hash, contract, contractJson, contractDts });
+  const { hash, contract } = resolution.value;
+  return ok({ hash, contract });
 }

@@ -125,6 +125,8 @@ jobs:
         run: pnpm lint:consumer-internal-imports
       - name: Lint the legacy product name
         run: pnpm lint:legacy-name
+      - name: Lint vitest timeout budgets
+        run: pnpm lint:vitest-timeouts
 
       - name: Lint publishability matches the directory layout
         run: pnpm lint:publishability

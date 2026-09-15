@@ -255,8 +255,8 @@ export type FieldOutputTypes = {
       readonly string2: ReadonlyArray<CodecTypes['pg/text@1']['output']>;
     };
     readonly TestModel: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly childId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly id: CodecTypes['pg/int4@1']['output'];
     };
   };
 };
@@ -268,8 +268,8 @@ export type FieldInputTypes = {
       readonly string2: ReadonlyArray<CodecTypes['pg/text@1']['input']>;
     };
     readonly TestModel: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly childId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly id: CodecTypes['pg/int4@1']['input'];
     };
   };
 };
@@ -301,12 +301,6 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_TestModel = {
-    id: CodecTypes['pg/int4@1']['output'];
-    childId: CodecTypes['pg/int4@1']['output'] | null;
-    child: public_Child | null;
-    readonly [RelationKeys]?: 'child';
-  };
   export type public_Child = {
     id: CodecTypes['pg/int4@1']['output'];
     string1: CodecTypes['pg/text@1']['output'];
@@ -314,12 +308,18 @@ export namespace Models {
     test: public_TestModel | null;
     readonly [RelationKeys]?: 'test';
   };
+  export type public_TestModel = {
+    childId: CodecTypes['pg/int4@1']['output'] | null;
+    id: CodecTypes['pg/int4@1']['output'];
+    child: public_Child | null;
+    readonly [RelationKeys]?: 'child';
+  };
 }
 
 export declare const models: {
   public: {
-    TestModel: Models.public_TestModel;
     Child: Models.public_Child;
+    TestModel: Models.public_TestModel;
   };
 };
 
@@ -366,15 +366,15 @@ type ContractBase = Omit<
             };
             readonly testModel: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly childId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -406,8 +406,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly testModel: { readonly namespace: 'public' & NamespaceId; readonly model: 'TestModel' };
     readonly child: { readonly namespace: 'public' & NamespaceId; readonly model: 'Child' };
+    readonly testModel: { readonly namespace: 'public' & NamespaceId; readonly model: 'TestModel' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -455,12 +455,12 @@ type ContractBase = Omit<
           };
           readonly TestModel: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly childId: {
                 readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
@@ -482,8 +482,8 @@ type ContractBase = Omit<
               readonly table: 'testModel';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly childId: { readonly column: 'childId' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };

@@ -259,9 +259,9 @@ export type FieldOutputTypes = {
       readonly name: CodecTypes['pg/text@1']['output'];
     };
     readonly StudentClass: {
+      readonly classId: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/text@1']['output'];
       readonly studentId: CodecTypes['pg/text@1']['output'];
-      readonly classId: CodecTypes['pg/text@1']['output'];
     };
   };
 };
@@ -276,9 +276,9 @@ export type FieldInputTypes = {
       readonly name: CodecTypes['pg/text@1']['input'];
     };
     readonly StudentClass: {
+      readonly classId: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/text@1']['input'];
       readonly studentId: CodecTypes['pg/text@1']['input'];
-      readonly classId: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -318,22 +318,22 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_Student = {
-    id: CodecTypes['pg/text@1']['output'];
-    name: CodecTypes['pg/text@1']['output'];
-    StudentClass: public_StudentClass[];
-    readonly [RelationKeys]?: 'StudentClass';
-  };
   export type public_Class = {
     id: CodecTypes['pg/text@1']['output'];
     name: CodecTypes['pg/text@1']['output'];
     StudentClass: public_StudentClass[];
     readonly [RelationKeys]?: 'StudentClass';
   };
+  export type public_Student = {
+    id: CodecTypes['pg/text@1']['output'];
+    name: CodecTypes['pg/text@1']['output'];
+    StudentClass: public_StudentClass[];
+    readonly [RelationKeys]?: 'StudentClass';
+  };
   export type public_StudentClass = {
+    classId: CodecTypes['pg/text@1']['output'];
     id: CodecTypes['pg/text@1']['output'];
     studentId: CodecTypes['pg/text@1']['output'];
-    classId: CodecTypes['pg/text@1']['output'];
     class: public_Class;
     student: public_Student;
     readonly [RelationKeys]?: 'class' | 'student';
@@ -342,8 +342,8 @@ export namespace Models {
 
 export declare const models: {
   public: {
-    Student: Models.public_Student;
     Class: Models.public_Class;
+    Student: Models.public_Student;
     StudentClass: Models.public_StudentClass;
   };
 };
@@ -404,6 +404,11 @@ type ContractBase = Omit<
             };
             readonly studentClass: {
               columns: {
+                readonly classId: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
                 readonly id: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
@@ -414,25 +419,20 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly classId: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
               };
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'studentClass_studentId_idx_bf255322';
-                  readonly prefix: 'studentClass_studentId_idx';
-                  readonly columns: readonly ['studentId'];
-                  readonly unique: false;
-                },
-                {
                   readonly name: 'studentClass_classId_idx_0089e5e7';
                   readonly prefix: 'studentClass_classId_idx';
                   readonly columns: readonly ['classId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'studentClass_studentId_idx_bf255322';
+                  readonly prefix: 'studentClass_studentId_idx';
+                  readonly columns: readonly ['studentId'];
                   readonly unique: false;
                 },
               ];
@@ -474,8 +474,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly student: { readonly namespace: 'public' & NamespaceId; readonly model: 'Student' };
     readonly class: { readonly namespace: 'public' & NamespaceId; readonly model: 'Class' };
+    readonly student: { readonly namespace: 'public' & NamespaceId; readonly model: 'Student' };
     readonly studentClass: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'StudentClass';
@@ -553,15 +553,15 @@ type ContractBase = Omit<
           };
           readonly StudentClass: {
             readonly fields: {
+              readonly classId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
               readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly studentId: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly classId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
@@ -596,9 +596,9 @@ type ContractBase = Omit<
               readonly table: 'studentClass';
               readonly namespaceId: 'public';
               readonly fields: {
+                readonly classId: { readonly column: 'classId' };
                 readonly id: { readonly column: 'id' };
                 readonly studentId: { readonly column: 'studentId' };
-                readonly classId: { readonly column: 'classId' };
               };
             };
           };
@@ -630,12 +630,12 @@ type ContractBase = Omit<
     readonly mutations: {
       readonly defaults: readonly [
         {
+          readonly onCreate: { readonly id: 'cuid2'; readonly kind: 'generator' };
           readonly ref: {
+            readonly column: 'id';
             readonly namespace: 'public';
             readonly table: 'studentClass';
-            readonly column: 'id';
           };
-          readonly onCreate: { readonly kind: 'generator'; readonly id: 'cuid2' };
         },
       ];
     };

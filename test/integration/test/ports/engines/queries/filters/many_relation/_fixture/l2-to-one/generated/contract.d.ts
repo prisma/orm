@@ -259,8 +259,8 @@ export type FieldOutputTypes = {
       readonly postId: CodecTypes['pg/int4@1']['output'];
     };
     readonly Post: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly blog_id: CodecTypes['pg/int4@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
     };
   };
 };
@@ -276,8 +276,8 @@ export type FieldInputTypes = {
       readonly postId: CodecTypes['pg/int4@1']['input'];
     };
     readonly Post: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly blog_id: CodecTypes['pg/int4@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
     };
   };
 };
@@ -323,13 +323,6 @@ export namespace Models {
     posts: public_Post[];
     readonly [RelationKeys]?: 'posts';
   };
-  export type public_Post = {
-    id: CodecTypes['pg/int4@1']['output'];
-    blog_id: CodecTypes['pg/int4@1']['output'];
-    blog: public_Blog;
-    comment: public_Comment | null;
-    readonly [RelationKeys]?: 'blog' | 'comment';
-  };
   export type public_Comment = {
     id: CodecTypes['pg/int4@1']['output'];
     popularity: CodecTypes['pg/int4@1']['output'];
@@ -337,13 +330,20 @@ export namespace Models {
     post: public_Post;
     readonly [RelationKeys]?: 'post';
   };
+  export type public_Post = {
+    blog_id: CodecTypes['pg/int4@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
+    blog: public_Blog;
+    comment: public_Comment | null;
+    readonly [RelationKeys]?: 'blog' | 'comment';
+  };
 }
 
 export declare const models: {
   public: {
     Blog: Models.public_Blog;
-    Post: Models.public_Post;
     Comment: Models.public_Comment;
+    Post: Models.public_Post;
   };
 };
 
@@ -421,12 +421,12 @@ type ContractBase = Omit<
             };
             readonly post: {
               columns: {
-                readonly id: {
+                readonly blog_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly blog_id: {
+                readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -469,8 +469,8 @@ type ContractBase = Omit<
   readonly targetFamily: 'sql';
   readonly roots: {
     readonly blog: { readonly namespace: 'public' & NamespaceId; readonly model: 'Blog' };
-    readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
     readonly comment: { readonly namespace: 'public' & NamespaceId; readonly model: 'Comment' };
+    readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -544,11 +544,11 @@ type ContractBase = Omit<
           };
           readonly Post: {
             readonly fields: {
-              readonly id: {
+              readonly blog_id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly blog_id: {
+              readonly id: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
@@ -580,8 +580,8 @@ type ContractBase = Omit<
               readonly table: 'post';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly blog_id: { readonly column: 'blog_id' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };

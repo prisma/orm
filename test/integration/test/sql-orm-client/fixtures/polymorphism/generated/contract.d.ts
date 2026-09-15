@@ -255,13 +255,13 @@ export type FieldOutputTypes = {
     };
     readonly Admin: { readonly role: CodecTypes['pg/text@1']['output'] };
     readonly Bug: {
-      readonly severity: CodecTypes['pg/text@1']['output'];
       readonly assigneeId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly severity: CodecTypes['pg/text@1']['output'];
     };
     readonly Epic: { readonly scope: CodecTypes['pg/text@1']['output'] };
     readonly Feature: {
-      readonly priority: CodecTypes['pg/int4@1']['output'];
       readonly assigneeId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly priority: CodecTypes['pg/int4@1']['output'];
     };
     readonly Person: {
       readonly id: CodecTypes['pg/int4@1']['output'];
@@ -274,27 +274,27 @@ export type FieldOutputTypes = {
     readonly Regular: { readonly plan: CodecTypes['pg/text@1']['output'] | null };
     readonly Task: {
       readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly title: CodecTypes['pg/text@1']['output'];
-      readonly type: CodecTypes['pg/text@1']['output'];
       readonly projectId: CodecTypes['pg/int4@1']['output'] | null;
       readonly reporterId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly title: CodecTypes['pg/text@1']['output'];
+      readonly type: CodecTypes['pg/text@1']['output'];
     };
     readonly TaskComment: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly body: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly taskId: CodecTypes['pg/int4@1']['output'] | null;
     };
     readonly Ticket: {
       readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly subject: CodecTypes['pg/text@1']['output'];
       readonly ownerId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly subject: CodecTypes['pg/text@1']['output'];
     };
     readonly User: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly name: CodecTypes['pg/text@1']['output'];
-      readonly email: CodecTypes['pg/text@1']['output'];
-      readonly kind: CodecTypes['pg/text@1']['output'];
       readonly accountId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly email: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
+      readonly kind: CodecTypes['pg/text@1']['output'];
+      readonly name: CodecTypes['pg/text@1']['output'];
     };
   };
 };
@@ -306,13 +306,13 @@ export type FieldInputTypes = {
     };
     readonly Admin: { readonly role: CodecTypes['pg/text@1']['input'] };
     readonly Bug: {
-      readonly severity: CodecTypes['pg/text@1']['input'];
       readonly assigneeId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly severity: CodecTypes['pg/text@1']['input'];
     };
     readonly Epic: { readonly scope: CodecTypes['pg/text@1']['input'] };
     readonly Feature: {
-      readonly priority: CodecTypes['pg/int4@1']['input'];
       readonly assigneeId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly priority: CodecTypes['pg/int4@1']['input'];
     };
     readonly Person: {
       readonly id: CodecTypes['pg/int4@1']['input'];
@@ -325,27 +325,27 @@ export type FieldInputTypes = {
     readonly Regular: { readonly plan: CodecTypes['pg/text@1']['input'] | null };
     readonly Task: {
       readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly title: CodecTypes['pg/text@1']['input'];
-      readonly type: CodecTypes['pg/text@1']['input'];
       readonly projectId: CodecTypes['pg/int4@1']['input'] | null;
       readonly reporterId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly title: CodecTypes['pg/text@1']['input'];
+      readonly type: CodecTypes['pg/text@1']['input'];
     };
     readonly TaskComment: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly body: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly taskId: CodecTypes['pg/int4@1']['input'] | null;
     };
     readonly Ticket: {
       readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly subject: CodecTypes['pg/text@1']['input'];
       readonly ownerId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly subject: CodecTypes['pg/text@1']['input'];
     };
     readonly User: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly name: CodecTypes['pg/text@1']['input'];
-      readonly email: CodecTypes['pg/text@1']['input'];
-      readonly kind: CodecTypes['pg/text@1']['input'];
       readonly accountId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly email: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
+      readonly kind: CodecTypes['pg/text@1']['input'];
+      readonly name: CodecTypes['pg/text@1']['input'];
     };
   };
 };
@@ -457,39 +457,30 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_Task = {
+  export type public_Account = {
     id: CodecTypes['pg/int4@1']['output'];
-    title: CodecTypes['pg/text@1']['output'];
-    type: 'bug' | 'feature' | 'epic';
-    projectId: CodecTypes['pg/int4@1']['output'] | null;
-    reporterId: CodecTypes['pg/int4@1']['output'] | null;
-    comments: public_TaskComment[];
-    project: public_Project | null;
-    reporter: public_Person | null;
-    readonly [RelationKeys]?: 'comments' | 'project' | 'reporter';
+    name: CodecTypes['pg/text@1']['output'];
+    members: public_AnyUser[];
+    readonly [RelationKeys]?: 'members';
+  };
+  export type public_Admin = {
+    accountId: CodecTypes['pg/int4@1']['output'] | null;
+    email: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
+    kind: 'admin';
+    name: CodecTypes['pg/text@1']['output'];
+    role: CodecTypes['pg/text@1']['output'];
+    account: public_Account | null;
+    readonly [RelationKeys]?: 'account';
   };
   export type public_Bug = {
     id: CodecTypes['pg/int4@1']['output'];
+    projectId: CodecTypes['pg/int4@1']['output'] | null;
+    reporterId: CodecTypes['pg/int4@1']['output'] | null;
     title: CodecTypes['pg/text@1']['output'];
     type: 'bug';
-    projectId: CodecTypes['pg/int4@1']['output'] | null;
-    reporterId: CodecTypes['pg/int4@1']['output'] | null;
+    assigneeId: CodecTypes['pg/int4@1']['output'] | null;
     severity: CodecTypes['pg/text@1']['output'];
-    assigneeId: CodecTypes['pg/int4@1']['output'] | null;
-    comments: public_TaskComment[];
-    project: public_Project | null;
-    reporter: public_Person | null;
-    assignee: public_Person | null;
-    readonly [RelationKeys]?: 'comments' | 'project' | 'reporter' | 'assignee';
-  };
-  export type public_Feature = {
-    id: CodecTypes['pg/int4@1']['output'];
-    title: CodecTypes['pg/text@1']['output'];
-    type: 'feature';
-    projectId: CodecTypes['pg/int4@1']['output'] | null;
-    reporterId: CodecTypes['pg/int4@1']['output'] | null;
-    priority: CodecTypes['pg/int4@1']['output'];
-    assigneeId: CodecTypes['pg/int4@1']['output'] | null;
     comments: public_TaskComment[];
     project: public_Project | null;
     reporter: public_Person | null;
@@ -498,63 +489,29 @@ export namespace Models {
   };
   export type public_Epic = {
     id: CodecTypes['pg/int4@1']['output'];
-    title: CodecTypes['pg/text@1']['output'];
-    type: 'epic';
     projectId: CodecTypes['pg/int4@1']['output'] | null;
     reporterId: CodecTypes['pg/int4@1']['output'] | null;
+    title: CodecTypes['pg/text@1']['output'];
+    type: 'epic';
     scope: CodecTypes['pg/text@1']['output'];
     comments: public_TaskComment[];
     project: public_Project | null;
     reporter: public_Person | null;
     readonly [RelationKeys]?: 'comments' | 'project' | 'reporter';
   };
-  export type public_User = {
+  export type public_Feature = {
     id: CodecTypes['pg/int4@1']['output'];
-    name: CodecTypes['pg/text@1']['output'];
-    email: CodecTypes['pg/text@1']['output'];
-    kind: 'admin' | 'regular';
-    accountId: CodecTypes['pg/int4@1']['output'] | null;
-    account: public_Account | null;
-    readonly [RelationKeys]?: 'account';
-  };
-  export type public_Admin = {
-    id: CodecTypes['pg/int4@1']['output'];
-    name: CodecTypes['pg/text@1']['output'];
-    email: CodecTypes['pg/text@1']['output'];
-    kind: 'admin';
-    accountId: CodecTypes['pg/int4@1']['output'] | null;
-    role: CodecTypes['pg/text@1']['output'];
-    account: public_Account | null;
-    readonly [RelationKeys]?: 'account';
-  };
-  export type public_Regular = {
-    id: CodecTypes['pg/int4@1']['output'];
-    name: CodecTypes['pg/text@1']['output'];
-    email: CodecTypes['pg/text@1']['output'];
-    kind: 'regular';
-    accountId: CodecTypes['pg/int4@1']['output'] | null;
-    plan: CodecTypes['pg/text@1']['output'] | null;
-    account: public_Account | null;
-    readonly [RelationKeys]?: 'account';
-  };
-  export type public_Account = {
-    id: CodecTypes['pg/int4@1']['output'];
-    name: CodecTypes['pg/text@1']['output'];
-    members: public_AnyUser[];
-    readonly [RelationKeys]?: 'members';
-  };
-  export type public_Project = {
-    id: CodecTypes['pg/int4@1']['output'];
-    name: CodecTypes['pg/text@1']['output'];
-    tasks: public_AnyTask[];
-    readonly [RelationKeys]?: 'tasks';
-  };
-  export type public_Ticket = {
-    id: CodecTypes['pg/int4@1']['output'];
-    subject: CodecTypes['pg/text@1']['output'];
-    ownerId: CodecTypes['pg/int4@1']['output'] | null;
-    owner: public_AnyUser | null;
-    readonly [RelationKeys]?: 'owner';
+    projectId: CodecTypes['pg/int4@1']['output'] | null;
+    reporterId: CodecTypes['pg/int4@1']['output'] | null;
+    title: CodecTypes['pg/text@1']['output'];
+    type: 'feature';
+    assigneeId: CodecTypes['pg/int4@1']['output'] | null;
+    priority: CodecTypes['pg/int4@1']['output'];
+    comments: public_TaskComment[];
+    project: public_Project | null;
+    reporter: public_Person | null;
+    assignee: public_Person | null;
+    readonly [RelationKeys]?: 'comments' | 'project' | 'reporter' | 'assignee';
   };
   export type public_Person = {
     id: CodecTypes['pg/int4@1']['output'];
@@ -562,31 +519,74 @@ export namespace Models {
     tasks: public_AnyTask[];
     readonly [RelationKeys]?: 'tasks';
   };
-  export type public_TaskComment = {
+  export type public_Project = {
     id: CodecTypes['pg/int4@1']['output'];
+    name: CodecTypes['pg/text@1']['output'];
+    tasks: public_AnyTask[];
+    readonly [RelationKeys]?: 'tasks';
+  };
+  export type public_Regular = {
+    accountId: CodecTypes['pg/int4@1']['output'] | null;
+    email: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
+    kind: 'regular';
+    name: CodecTypes['pg/text@1']['output'];
+    plan: CodecTypes['pg/text@1']['output'] | null;
+    account: public_Account | null;
+    readonly [RelationKeys]?: 'account';
+  };
+  export type public_Task = {
+    id: CodecTypes['pg/int4@1']['output'];
+    projectId: CodecTypes['pg/int4@1']['output'] | null;
+    reporterId: CodecTypes['pg/int4@1']['output'] | null;
+    title: CodecTypes['pg/text@1']['output'];
+    type: 'bug' | 'epic' | 'feature';
+    comments: public_TaskComment[];
+    project: public_Project | null;
+    reporter: public_Person | null;
+    readonly [RelationKeys]?: 'comments' | 'project' | 'reporter';
+  };
+  export type public_TaskComment = {
     body: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
     taskId: CodecTypes['pg/int4@1']['output'] | null;
     task: public_AnyTask | null;
     readonly [RelationKeys]?: 'task';
   };
-  export type public_AnyTask = public_Bug | public_Feature | public_Epic;
+  export type public_Ticket = {
+    id: CodecTypes['pg/int4@1']['output'];
+    ownerId: CodecTypes['pg/int4@1']['output'] | null;
+    subject: CodecTypes['pg/text@1']['output'];
+    owner: public_AnyUser | null;
+    readonly [RelationKeys]?: 'owner';
+  };
+  export type public_User = {
+    accountId: CodecTypes['pg/int4@1']['output'] | null;
+    email: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
+    kind: 'admin' | 'regular';
+    name: CodecTypes['pg/text@1']['output'];
+    account: public_Account | null;
+    readonly [RelationKeys]?: 'account';
+  };
+  export type public_AnyTask = public_Bug | public_Epic | public_Feature;
   export type public_AnyUser = public_Admin | public_Regular;
 }
 
 export declare const models: {
   public: {
-    Task: Models.public_Task;
-    Bug: Models.public_Bug;
-    Feature: Models.public_Feature;
-    Epic: Models.public_Epic;
-    User: Models.public_User;
-    Admin: Models.public_Admin;
-    Regular: Models.public_Regular;
     Account: Models.public_Account;
-    Project: Models.public_Project;
-    Ticket: Models.public_Ticket;
+    Admin: Models.public_Admin;
+    Bug: Models.public_Bug;
+    Epic: Models.public_Epic;
+    Feature: Models.public_Feature;
     Person: Models.public_Person;
+    Project: Models.public_Project;
+    Regular: Models.public_Regular;
+    Task: Models.public_Task;
     TaskComment: Models.public_TaskComment;
+    Ticket: Models.public_Ticket;
+    User: Models.public_User;
     AnyTask: Models.public_AnyTask;
     AnyUser: Models.public_AnyUser;
   };
@@ -665,6 +665,11 @@ type ContractBase = Omit<
             };
             readonly features: {
               columns: {
+                readonly feature_assignee_person_id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
@@ -674,11 +679,6 @@ type ContractBase = Omit<
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
-                };
-                readonly feature_assignee_person_id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: true;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -764,6 +764,11 @@ type ContractBase = Omit<
             };
             readonly task_comments: {
               columns: {
+                readonly body: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
@@ -772,11 +777,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'autoincrement()';
                   };
-                };
-                readonly body: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
                 };
                 readonly task_id: {
                   readonly nativeType: 'int4';
@@ -811,6 +811,11 @@ type ContractBase = Omit<
             };
             readonly tasks: {
               columns: {
+                readonly bug_assignee_person_id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
@@ -819,16 +824,6 @@ type ContractBase = Omit<
                     readonly kind: 'function';
                     readonly expression: 'autoincrement()';
                   };
-                };
-                readonly title: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly type: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
                 };
                 readonly project_id: {
                   readonly nativeType: 'int4';
@@ -845,10 +840,15 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
-                readonly bug_assignee_person_id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: true;
+                readonly title: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly type: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -905,15 +905,15 @@ type ContractBase = Omit<
                     readonly expression: 'autoincrement()';
                   };
                 };
-                readonly subject: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly owner_id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: true;
+                };
+                readonly subject: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -943,6 +943,16 @@ type ContractBase = Omit<
             };
             readonly users: {
               columns: {
+                readonly account_id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                };
+                readonly email: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
                 readonly id: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
@@ -952,32 +962,22 @@ type ContractBase = Omit<
                     readonly expression: 'autoincrement()';
                   };
                 };
-                readonly name: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
-                readonly email: {
-                  readonly nativeType: 'text';
-                  readonly codecId: 'pg/text@1';
-                  readonly nullable: false;
-                };
                 readonly kind: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly account_id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: true;
+                readonly name: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
                 };
-                readonly role: {
+                readonly plan: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
                 };
-                readonly plan: {
+                readonly role: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
@@ -1019,19 +1019,19 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly tasks: { readonly namespace: 'public' & NamespaceId; readonly model: 'Task' };
-    readonly users: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
     readonly accounts: { readonly namespace: 'public' & NamespaceId; readonly model: 'Account' };
+    readonly people: { readonly namespace: 'public' & NamespaceId; readonly model: 'Person' };
     readonly projects_tbl: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'Project';
     };
-    readonly tickets: { readonly namespace: 'public' & NamespaceId; readonly model: 'Ticket' };
-    readonly people: { readonly namespace: 'public' & NamespaceId; readonly model: 'Person' };
     readonly task_comments: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'TaskComment';
     };
+    readonly tasks: { readonly namespace: 'public' & NamespaceId; readonly model: 'Task' };
+    readonly tickets: { readonly namespace: 'public' & NamespaceId; readonly model: 'Ticket' };
+    readonly users: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -1084,13 +1084,13 @@ type ContractBase = Omit<
           };
           readonly Bug: {
             readonly fields: {
-              readonly severity: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly assigneeId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly severity: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: {
@@ -1111,8 +1111,8 @@ type ContractBase = Omit<
               readonly table: 'tasks';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly severity: { readonly column: 'severity' };
                 readonly assigneeId: { readonly column: 'bug_assignee_person_id' };
+                readonly severity: { readonly column: 'severity' };
               };
             };
             readonly base: { readonly namespace: 'public' & NamespaceId; readonly model: 'Task' };
@@ -1134,12 +1134,12 @@ type ContractBase = Omit<
           };
           readonly Feature: {
             readonly fields: {
-              readonly priority: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly assigneeId: {
                 readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly priority: {
+                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
@@ -1161,8 +1161,8 @@ type ContractBase = Omit<
               readonly table: 'features';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly priority: { readonly column: 'priority' };
                 readonly assigneeId: { readonly column: 'feature_assignee_person_id' };
+                readonly priority: { readonly column: 'priority' };
               };
             };
             readonly base: { readonly namespace: 'public' & NamespaceId; readonly model: 'Task' };
@@ -1248,14 +1248,6 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly title: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
-              readonly type: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly projectId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
@@ -1263,6 +1255,14 @@ type ContractBase = Omit<
               readonly reporterId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly type: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: {
@@ -1307,28 +1307,28 @@ type ContractBase = Omit<
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly id: { readonly column: 'id' };
-                readonly title: { readonly column: 'title' };
-                readonly type: { readonly column: 'type' };
                 readonly projectId: { readonly column: 'project_id' };
                 readonly reporterId: { readonly column: 'reporter_id' };
+                readonly title: { readonly column: 'title' };
+                readonly type: { readonly column: 'type' };
               };
             };
             readonly discriminator: { readonly field: 'type' };
             readonly variants: {
               readonly Bug: { readonly value: 'bug' };
-              readonly Feature: { readonly value: 'feature' };
               readonly Epic: { readonly value: 'epic' };
+              readonly Feature: { readonly value: 'feature' };
             };
           };
           readonly TaskComment: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly body: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
               readonly taskId: {
                 readonly nullable: true;
@@ -1350,8 +1350,8 @@ type ContractBase = Omit<
               readonly table: 'task_comments';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly body: { readonly column: 'body' };
+                readonly id: { readonly column: 'id' };
                 readonly taskId: { readonly column: 'task_id' };
               };
             };
@@ -1362,13 +1362,13 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly subject: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
-              };
               readonly ownerId: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly subject: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: {
@@ -1387,32 +1387,32 @@ type ContractBase = Omit<
               readonly namespaceId: 'public';
               readonly fields: {
                 readonly id: { readonly column: 'id' };
-                readonly subject: { readonly column: 'subject' };
                 readonly ownerId: { readonly column: 'owner_id' };
+                readonly subject: { readonly column: 'subject' };
               };
             };
           };
           readonly User: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
+              readonly accountId: {
+                readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
-              readonly name: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
               readonly email: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
               readonly kind: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly accountId: {
-                readonly nullable: true;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              readonly name: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
             };
             readonly relations: {
@@ -1433,11 +1433,11 @@ type ContractBase = Omit<
               readonly table: 'users';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
-                readonly name: { readonly column: 'name' };
-                readonly email: { readonly column: 'email' };
-                readonly kind: { readonly column: 'kind' };
                 readonly accountId: { readonly column: 'account_id' };
+                readonly email: { readonly column: 'email' };
+                readonly id: { readonly column: 'id' };
+                readonly kind: { readonly column: 'kind' };
+                readonly name: { readonly column: 'name' };
               };
             };
             readonly discriminator: { readonly field: 'kind' };

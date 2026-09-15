@@ -250,36 +250,36 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly Child: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
-      readonly char: Char<10>;
-      readonly vChar: Varchar<11>;
-      readonly text: CodecTypes['pg/text@1']['output'];
       readonly bit: Bit<4>;
-      readonly vBit: VarBit<5>;
-      readonly uuid: CodecTypes['pg/uuid@1']['output'];
+      readonly char: Char<10>;
+      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly ip: CodecTypes['pg/inet@1']['output'];
+      readonly text: CodecTypes['pg/text@1']['output'];
+      readonly uuid: CodecTypes['pg/uuid@1']['output'];
+      readonly vBit: VarBit<5>;
+      readonly vChar: Varchar<11>;
     };
     readonly Parent: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly childId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly id: CodecTypes['pg/int4@1']['output'];
     };
   };
 };
 export type FieldInputTypes = {
   readonly public: {
     readonly Child: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
-      readonly char: CodecTypes['pg/char@1']['input'];
-      readonly vChar: CodecTypes['pg/varchar@1']['input'];
-      readonly text: CodecTypes['pg/text@1']['input'];
       readonly bit: CodecTypes['pg/bit@1']['input'];
-      readonly vBit: CodecTypes['pg/varbit@1']['input'];
-      readonly uuid: CodecTypes['pg/uuid@1']['input'];
+      readonly char: CodecTypes['pg/char@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly ip: CodecTypes['pg/inet@1']['input'];
+      readonly text: CodecTypes['pg/text@1']['input'];
+      readonly uuid: CodecTypes['pg/uuid@1']['input'];
+      readonly vBit: CodecTypes['pg/varbit@1']['input'];
+      readonly vChar: CodecTypes['pg/varchar@1']['input'];
     };
     readonly Parent: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly childId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly id: CodecTypes['pg/int4@1']['input'];
     };
   };
 };
@@ -321,30 +321,30 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
-  export type public_Parent = {
-    id: CodecTypes['pg/int4@1']['output'];
-    childId: CodecTypes['pg/int4@1']['output'] | null;
-    child: public_Child | null;
-    readonly [RelationKeys]?: 'child';
-  };
   export type public_Child = {
-    id: CodecTypes['pg/int4@1']['output'];
-    char: Char<10>;
-    vChar: Varchar<11>;
-    text: CodecTypes['pg/text@1']['output'];
     bit: Bit<4>;
-    vBit: VarBit<5>;
-    uuid: CodecTypes['pg/uuid@1']['output'];
+    char: Char<10>;
+    id: CodecTypes['pg/int4@1']['output'];
     ip: CodecTypes['pg/inet@1']['output'];
+    text: CodecTypes['pg/text@1']['output'];
+    uuid: CodecTypes['pg/uuid@1']['output'];
+    vBit: VarBit<5>;
+    vChar: Varchar<11>;
     parent: public_Parent | null;
     readonly [RelationKeys]?: 'parent';
+  };
+  export type public_Parent = {
+    childId: CodecTypes['pg/int4@1']['output'] | null;
+    id: CodecTypes['pg/int4@1']['output'];
+    child: public_Child | null;
+    readonly [RelationKeys]?: 'child';
   };
 }
 
 export declare const models: {
   public: {
-    Parent: Models.public_Parent;
     Child: Models.public_Child;
+    Parent: Models.public_Parent;
   };
 };
 
@@ -368,10 +368,11 @@ type ContractBase = Omit<
           readonly table: {
             readonly Child: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
+                readonly bit: {
+                  readonly nativeType: 'bit';
+                  readonly codecId: 'pg/bit@1';
                   readonly nullable: false;
+                  readonly typeParams: { readonly length: 4 };
                 };
                 readonly char: {
                   readonly nativeType: 'character';
@@ -379,22 +380,25 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 10 };
                 };
-                readonly vChar: {
-                  readonly nativeType: 'character varying';
-                  readonly codecId: 'pg/varchar@1';
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
-                  readonly typeParams: { readonly length: 11 };
+                };
+                readonly ip: {
+                  readonly nativeType: 'inet';
+                  readonly codecId: 'pg/inet@1';
+                  readonly nullable: false;
                 };
                 readonly text: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: false;
                 };
-                readonly bit: {
-                  readonly nativeType: 'bit';
-                  readonly codecId: 'pg/bit@1';
+                readonly uuid: {
+                  readonly nativeType: 'uuid';
+                  readonly codecId: 'pg/uuid@1';
                   readonly nullable: false;
-                  readonly typeParams: { readonly length: 4 };
                 };
                 readonly vBit: {
                   readonly nativeType: 'bit varying';
@@ -402,15 +406,11 @@ type ContractBase = Omit<
                   readonly nullable: false;
                   readonly typeParams: { readonly length: 5 };
                 };
-                readonly uuid: {
-                  readonly nativeType: 'uuid';
-                  readonly codecId: 'pg/uuid@1';
+                readonly vChar: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'pg/varchar@1';
                   readonly nullable: false;
-                };
-                readonly ip: {
-                  readonly nativeType: 'inet';
-                  readonly codecId: 'pg/inet@1';
-                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 11 };
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -420,15 +420,15 @@ type ContractBase = Omit<
             };
             readonly Parent: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly childId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: true;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
                 };
               };
               primaryKey: { readonly columns: readonly ['id'] };
@@ -460,8 +460,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly Parent: { readonly namespace: 'public' & NamespaceId; readonly model: 'Parent' };
     readonly Child: { readonly namespace: 'public' & NamespaceId; readonly model: 'Child' };
+    readonly Parent: { readonly namespace: 'public' & NamespaceId; readonly model: 'Parent' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -469,9 +469,13 @@ type ContractBase = Omit<
         readonly models: {
           readonly Child: {
             readonly fields: {
-              readonly id: {
+              readonly bit: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/bit@1';
+                  readonly typeParams: { readonly length: 4 };
+                };
               };
               readonly char: {
                 readonly nullable: false;
@@ -481,25 +485,21 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly length: 10 };
                 };
               };
-              readonly vChar: {
+              readonly id: {
                 readonly nullable: false;
-                readonly type: {
-                  readonly kind: 'scalar';
-                  readonly codecId: 'pg/varchar@1';
-                  readonly typeParams: { readonly length: 11 };
-                };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly ip: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/inet@1' };
               };
               readonly text: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
-              readonly bit: {
+              readonly uuid: {
                 readonly nullable: false;
-                readonly type: {
-                  readonly kind: 'scalar';
-                  readonly codecId: 'pg/bit@1';
-                  readonly typeParams: { readonly length: 4 };
-                };
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/uuid@1' };
               };
               readonly vBit: {
                 readonly nullable: false;
@@ -509,13 +509,13 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly length: 5 };
                 };
               };
-              readonly uuid: {
+              readonly vChar: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/uuid@1' };
-              };
-              readonly ip: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/inet@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/varchar@1';
+                  readonly typeParams: { readonly length: 11 };
+                };
               };
             };
             readonly relations: {
@@ -536,25 +536,25 @@ type ContractBase = Omit<
               readonly table: 'Child';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
-                readonly char: { readonly column: 'char' };
-                readonly vChar: { readonly column: 'vChar' };
-                readonly text: { readonly column: 'text' };
                 readonly bit: { readonly column: 'bit' };
-                readonly vBit: { readonly column: 'vBit' };
-                readonly uuid: { readonly column: 'uuid' };
+                readonly char: { readonly column: 'char' };
+                readonly id: { readonly column: 'id' };
                 readonly ip: { readonly column: 'ip' };
+                readonly text: { readonly column: 'text' };
+                readonly uuid: { readonly column: 'uuid' };
+                readonly vBit: { readonly column: 'vBit' };
+                readonly vChar: { readonly column: 'vChar' };
               };
             };
           };
           readonly Parent: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly childId: {
                 readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
             };
@@ -576,8 +576,8 @@ type ContractBase = Omit<
               readonly table: 'Parent';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly childId: { readonly column: 'childId' };
+                readonly id: { readonly column: 'id' };
               };
             };
           };

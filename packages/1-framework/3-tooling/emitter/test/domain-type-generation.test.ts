@@ -1516,3 +1516,20 @@ describe('generateValueObjectsDescriptorType empty-field branch', () => {
     expect(result).toContain('readonly EmptyVO: { readonly fields: Record<string, never> }');
   });
 });
+
+describe('serializeValue object key order', () => {
+  it('sorts object keys, so the literal type does not depend on how the value was built', () => {
+    expect(serializeValue({ field: 'email', direction: 1 })).toBe(
+      serializeValue({ direction: 1, field: 'email' }),
+    );
+    expect(serializeValue({ field: 'email', direction: 1 })).toBe(
+      '{ readonly direction: 1; readonly field: "email" }',
+    );
+  });
+
+  it('keeps array order, which is meaningful', () => {
+    expect(serializeValue([{ b: 1 }, { a: 2 }])).toBe(
+      'readonly [{ readonly b: 1 }, { readonly a: 2 }]',
+    );
+  });
+});

@@ -567,6 +567,8 @@ function renderBinary(expr: BinaryExpr, ctx: SqliteRenderContext): string {
   const operatorMap: Record<BinaryExpr['op'], string> = {
     eq: '=',
     neq: '!=',
+    isNotDistinctFrom: 'IS',
+    isDistinctFrom: 'IS NOT',
     gt: '>',
     lt: '<',
     gte: '>=',
