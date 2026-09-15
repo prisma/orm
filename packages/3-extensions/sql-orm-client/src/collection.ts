@@ -1325,10 +1325,12 @@ class CollectionImpl<
       async consume(source) {
         const rows = await source.toArray();
         const row = rows[0] ?? {};
-        const result: Record<string, unknown> = {};
-        for (const { alias, resolved, codec } of results) {
-          result[alias] = row[alias] ?? emptyAggregateResult(resolved, codec);
-        }
+        const result = Object.fromEntries(
+          results.map(({ alias, resolved, codec }) => {
+            const value = Object.hasOwn(row, alias) ? row[alias] : undefined;
+            return [alias, value ?? emptyAggregateResult(resolved, codec)];
+          }),
+        );
         return blindCast<
           AggregateResult<Spec>,
           "aliases are the aggregateSpec's own keys; values decoded by the projection codecs the same spec resolved"
