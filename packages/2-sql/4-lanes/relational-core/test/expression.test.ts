@@ -92,14 +92,15 @@ describe('toExpr', () => {
 });
 
 describe('codecOf', () => {
-  it('reads codec from an Expression wrapper that carries codec metadata directly', () => {
-    const codec = { codecId: 'pg/text@1' };
-    const expr: Expression<{ codecId: 'pg/text@1'; nullable: false }> & {
+  it('preserves the full returnType codec instead of falling back to codecId', () => {
+    const codec = { codecId: 'pgvector/vector@1', typeParams: { length: 1536 } };
+    const expr: Expression<{
+      codecId: 'pgvector/vector@1';
+      nullable: false;
       codec: typeof codec;
-    } = {
-      returnType: { codecId: 'pg/text@1', nullable: false },
-      buildAst: () => IdentifierRef.of('email'),
-      codec,
+    }> = {
+      returnType: { codecId: 'pgvector/vector@1', nullable: false, codec },
+      buildAst: () => IdentifierRef.of('embedding'),
     };
     expect(codecOf(expr)).toEqual(codec);
   });

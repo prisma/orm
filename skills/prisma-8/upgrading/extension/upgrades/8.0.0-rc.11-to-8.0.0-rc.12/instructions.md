@@ -2,6 +2,8 @@
 from: 8.0.0-rc.11
 to: 8.0.0-rc.12
 changes:
+  - id: expression-codec-on-return-type
+    summary: Move custom expression wrapper codec metadata to returnType.codec and remove the separate ExpressionImpl codec argument.
   - id: shared-preparable-envelope
     summary: Type ORM preparation descriptions with the shared compositional Preparable protocol and pass their contained plan to SQL runtime.
   - id: params-only-sql-facade-prepare
@@ -11,6 +13,12 @@ changes:
   - id: preserve-orm-pagination-expressions
     summary: Preserve expression-valued limit and offset when consuming ORM CollectionState.
 ---
+
+## `expression-codec-on-return-type`
+
+For custom SQL `Expression` wrappers, move an existing top-level `codec` reference into `returnType.codec`, preserving the complete reference including `typeParams`. Read metadata through `codecOf(expression)` or `expression.returnType.codec`, not `expression.codec`. Keep the existing `returnType.codecId` and nullability; wrappers without an explicit reference continue to use the declared codec id fallback. Do not remove or relocate unrelated codec fields on AST nodes, storage declarations, runtime bindings or scope descriptors.
+
+For direct `ExpressionImpl` construction, change `new ExpressionImpl(ast, returnType, codec, projectionAst)` to `new ExpressionImpl(ast, { ...returnType, codec }, projectionAst)`. When the removed codec argument was `undefined`, keep `returnType` unchanged and move any fourth projection argument to the third position. Preserve projection-only lowering separately from predicate and ordering ASTs.
 
 ## `shared-preparable-envelope`
 

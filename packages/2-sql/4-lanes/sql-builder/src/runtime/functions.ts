@@ -187,7 +187,7 @@ function aggregate(
   const ast = new AggregateExpr(operation, inputAst);
   const projectionAst = resolved.lower?.({ expr: inputAst, inputCodec });
 
-  return new ExpressionImpl(ast, returnType, undefined, projectionAst);
+  return new ExpressionImpl(ast, returnType, projectionAst);
 }
 
 function createBuiltinFunctions(rawCodecInferer: RawCodecInferer) {
