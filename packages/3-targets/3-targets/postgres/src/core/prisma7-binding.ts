@@ -1,6 +1,5 @@
 import { postgresTargetDescriptorMeta } from './descriptor-meta';
-import { INSTANT_NOW_GENERATOR_ID } from './instant-now-generator';
-import { PLAIN_DATE_TIME_NOW_GENERATOR_ID } from './plain-date-time-now-generator';
+import { postgresNowGeneratorIdFor } from './now-generators';
 import { postgresCreateNamespace } from './postgres-schema';
 import { storedTemporalText, type TemporalNativeType } from './prisma7-temporal-defaults';
 import { prisma7PostgresTypeMap } from './prisma7-type-map';
@@ -55,10 +54,7 @@ export const prisma7PostgresBinding = {
   },
   /** `NAMEDATALEN - 1`. */
   identifierMaxBytes: 63,
-  updatedAtGeneratorId: (codecId: string): string =>
-    codecId === 'pg/timestamptz-temporal@1'
-      ? INSTANT_NOW_GENERATOR_ID
-      : PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+  updatedAtGeneratorId: postgresNowGeneratorIdFor,
   literalDefaultForm: ({
     nativeType,
     typeParams,

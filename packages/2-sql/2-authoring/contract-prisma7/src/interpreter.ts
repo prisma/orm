@@ -1031,6 +1031,19 @@ function readField(args: ReadFieldArgs): void {
     }
     return;
   }
+  const updatedAtGeneratorId =
+    updatedAt === undefined ? undefined : binding.updatedAtGeneratorId(resolved.descriptor.codecId);
+  if (updatedAt !== undefined && updatedAtGeneratorId === undefined) {
+    diagnostics.push(
+      prisma7Diagnostic(
+        'PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED',
+        `${label}: @updatedAt is not supported on this column, because Prisma 8 has no generator for column type "${resolved.descriptor.nativeType}" yet. Remove @updatedAt: Prisma 7's next migration is empty, but neither client then fills the value, so both require it on create and leave it unchanged on update.`,
+        sourceId,
+        updatedAt.span,
+      ),
+    );
+    return;
+  }
   if (updatedAt !== undefined && defaultAttribute !== undefined) {
     const written = attributeText(defaultAttribute);
     diagnostics.push(
@@ -1062,12 +1075,9 @@ function readField(args: ReadFieldArgs): void {
         });
   if (defaultAttribute !== undefined && lowered === undefined) return;
   const updatedAtGenerator =
-    updatedAt === undefined
+    updatedAtGeneratorId === undefined
       ? undefined
-      : {
-          kind: 'generator' as const,
-          id: binding.updatedAtGeneratorId(resolved.descriptor.codecId),
-        };
+      : { kind: 'generator' as const, id: updatedAtGeneratorId };
   const generator = updatedAtGenerator ?? lowered?.onCreate;
   const generatingAttribute = updatedAt ?? defaultAttribute;
   if (generator !== undefined && generatingAttribute !== undefined && field.optional) {

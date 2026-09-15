@@ -42,8 +42,8 @@ export interface Prisma7TargetBinding {
   readonly indexTypes: Readonly<Record<string, string>>;
   /** The longest identifier the database keeps, in bytes. Prisma 7 cuts the names it generates to fit. */
   readonly identifierMaxBytes: number;
-  /** The "now" generator `@updatedAt` lowers to for a column with this codec. */
-  readonly updatedAtGeneratorId: (codecId: string) => string;
+  /** The "now" generator `@updatedAt` lowers to for a column with this codec; `undefined` when the target has none. */
+  readonly updatedAtGeneratorId: (codecId: string) => string | undefined;
   /** How a literal `@default` on the column is read; `undefined` when the codec takes the written value. */
   readonly literalDefaultForm: (column: Prisma7ColumnType) => Prisma7LiteralDefaultForm | undefined;
 }

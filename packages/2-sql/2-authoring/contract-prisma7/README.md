@@ -33,13 +33,13 @@ The package itself is target-neutral: everything specific to a database comes fr
 | `@@schema("s")` | Namespace `s`; without it, the target's default namespace. |
 | Scalars and `@db.*` | The target binding's type map (`typeMap`), for example `DateTime` to `timestamp(3)` and `Json` to `jsonb`; lists are nullable array columns with no derived element check. |
 | `@default(...)` | Column defaults through the target's default function registry, literals, list literals, enum members; `uuid`, `ulid`, `nanoid`, `cuid` are execution generators (`cuid` maps to `cuid2`). |
-| `@updatedAt` | The "now" generator the target picks for the column's codec (Postgres: `plainDateTimeNow` for `timestamp`, `instantNow` for `@db.Timestamptz`) on create and update, no column default. |
+| `@updatedAt` | The "now" generator the target picks for the column's codec (Postgres: `plainDateTimeNow` for `timestamp`, `instantNow` for `@db.Timestamptz`) on create and update, no column default. A codec with no generator (Postgres: `@db.Date`, `@db.Time`, `@db.Timetz`) is an error. |
 | `@id`, `@@id` | Primary key. |
 | `@unique`, `@@unique`, `@@index` | Indexes named `{table}_{columns}_key` and `{table}_{columns}_idx` cut to 63 bytes as Prisma 7 cuts them, `map` overriding, `type` mapped. |
 | Explicit relations | Foreign keys with `onDelete` `restrict` (any foreign key field required) or `setNull` (every field optional) and `onUpdate` `cascade` unless given; paired through `@internal/sql-contract-psl/resolution`. |
 | Implicit many-to-many | Junction `_AToB` or `_Name`: columns `A` and `B`, primary key `(A, B)`, index `_AToB_B_index`, cascading foreign keys. |
 | `@ignore`, `@@ignore` | Omitted, together with relations over them. An `@ignore`d field that a key, an index, or a relation uses is an error. |
-| `view`, `Unsupported(...)`, unmapped `@db.*`, `relationMode = "prisma"`, generators on optional fields, `@updatedAt` with `@default`, index arguments, an `@ignore`d field that a key, index, or relation uses, `SetNull` or `SetDefault` over a required field that cannot take it, a JSON `null` default, `dbgenerated()` with no expression on a required field, a model named like an implicit junction or mapped to its table, one relation name on implicit many-to-many relations between different models in the same schema | Hard errors (table below). |
+| `view`, `Unsupported(...)`, unmapped `@db.*`, `relationMode = "prisma"`, generators on optional fields, `@updatedAt` with `@default` or on a column type with no generator, index arguments, an `@ignore`d field that a key, index, or relation uses, `SetNull` or `SetDefault` over a required field that cannot take it, a JSON `null` default, `dbgenerated()` with no expression on a required field, a model named like an implicit junction or mapped to its table, one relation name on implicit many-to-many relations between different models in the same schema | Hard errors (table below). |
 
 ## Diagnostics
 
@@ -64,6 +64,7 @@ Codes are prefixed `PRISMA7_`:
 | `PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED` | A `Json` default of `"null"`, or a `Json[]` default holding it: the JSON value null cannot be told apart from SQL `NULL` in the contract. |
 | `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` | An ORM-side generator or `@updatedAt` on an optional field. |
 | `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` | `@updatedAt` combined with `@default`. |
+| `PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED` | `@updatedAt` on a column whose codec has no "now" generator in the target, such as `@db.Date`. |
 | `PRISMA7_IGNORED_FIELD_REFERENCED` | An `@ignore`d field that `@id`, `@unique`, `@@id`, `@@unique`, `@@index`, or a relation's `fields:` uses; Prisma 7 still creates the primary key, index, or foreign key over its column. |
 | `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED` | An index argument Prisma 8 cannot carry (`sort`, `length`, `ops`, an unknown type) or a field that is not a column. |
 | `PRISMA7_CONTRACT_INVALID` | A structured error (one with a dotted code, such as the contract builder's `CONTRACT.*` or a codec's `RUNTIME.*`) was thrown while `load` built the contract, or the contract failed the domain, storage consistency, or model storage reference check `load` runs afterwards. It is reported at the input path and asks the user to report the schema as a Prisma bug. Any other error thrown inside `load`, such as an `InternalError` or a `TypeError`, still throws: it is a bug in Prisma ORM, not a problem in the schema (ADR 245). |
