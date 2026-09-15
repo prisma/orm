@@ -76,6 +76,15 @@ function resolveContract<TContract extends Contract<SqlStorage>>(
   return contractSerializer.deserializeContract(contractJson) as TContract;
 }
 
+/**
+ * Validates that the supplied PostgreSQL connection URL is a well-formed string
+ * starting with `postgres://` or `postgresql://`. Standard omission of user and
+ * host components (e.g. `postgresql:///mydb` for peer auth / Unix sockets) is accepted.
+ *
+ * @param url - Raw PostgreSQL connection URL string.
+ * @returns The trimmed, validated PostgreSQL connection URL string.
+ * @throws {PostgresError} If the URL is empty, unparseable, or uses an invalid scheme.
+ */
 function validateConnectionString(url: string): string {
   const trimmed = url.trim();
   if (trimmed.length === 0) {
@@ -83,6 +92,30 @@ function validateConnectionString(url: string): string {
       meta: { extension: 'postgres', reason: 'empty url' },
     });
   }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+      meta: { extension: 'postgres', reason: 'unparseable url' },
+    });
+  }
+
+  if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
+    throw postgresError(
+      'RUNTIME.BINDING_INVALID',
+      'Postgres URL must use postgres:// or postgresql://',
+      { meta: { extension: 'postgres', reason: 'wrong scheme', received: parsed.protocol } },
+    );
+  }
+
+  if (!/^postgres(?:ql)?:\/\//i.test(trimmed)) {
+    throw postgresError('RUNTIME.BINDING_INVALID', 'Postgres URL must be a valid URL', {
+      meta: { extension: 'postgres', reason: 'unparseable url' },
+    });
+  }
+
   return trimmed;
 }
 

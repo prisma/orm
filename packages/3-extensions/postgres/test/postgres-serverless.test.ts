@@ -177,4 +177,26 @@ describe('postgresServerless', () => {
     expect(runtime).toBeDefined();
     await runtime.close();
   });
+
+  it('allows connection strings with blank user and host (e.g. postgresql:///mydb)', async () => {
+    const db = postgresServerless({ contract, verifyMarker: false });
+
+    const runtime = await db.connect({ url: 'postgresql:///mydb' });
+    expect(runtime).toBeDefined();
+    await runtime.close();
+  });
+
+  it('throws RUNTIME.BINDING_INVALID on empty or invalid scheme URL', async () => {
+    const db = postgresServerless({ contract });
+
+    await expect(db.connect({ url: '' })).rejects.toThrow(
+      'Postgres URL must be a non-empty string',
+    );
+    await expect(db.connect({ url: 'mysql://localhost:3306/db' })).rejects.toThrow(
+      'Postgres URL must use postgres:// or postgresql://',
+    );
+    await expect(db.connect({ url: 'postgresql:mydb' })).rejects.toThrow(
+      'Postgres URL must be a valid URL',
+    );
+  });
 });
