@@ -592,7 +592,7 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     contract?: unknown,
     schema = 'public',
   ): Promise<PostgresDatabaseSchemaNode> {
-    return readInUtc(driver, async () => {
+    return readWithDefaultOutputSettings(driver, async () => {
       const declaredNamespaces = extractContractNamespaceIds(contract);
       const resolvedSchemas =
         declaredNamespaces.length > 0
@@ -1694,33 +1694,79 @@ function pgIsTextLikeNativeType(nativeType: string): boolean {
   );
 }
 
+interface OutputSettings {
+  readonly timeZone: string;
+  readonly dateStyle: string;
+  readonly intervalStyle: string;
+}
+
+/** Postgres's own defaults, the text the default parser reads: UTC, ISO dates, postgres intervals. */
+const INTROSPECTION_OUTPUT_SETTINGS: OutputSettings = {
+  timeZone: 'UTC',
+  dateStyle: 'ISO, MDY',
+  intervalStyle: 'postgres',
+};
+
+async function readOutputSettings(
+  driver: SqlControlDriverInstance<'postgres'>,
+): Promise<OutputSettings | undefined> {
+  const { rows } = await driver.query<OutputSettings>(
+    `SELECT current_setting('TimeZone') AS "timeZone",
+            current_setting('DateStyle') AS "dateStyle",
+            current_setting('IntervalStyle') AS "intervalStyle"`,
+  );
+  return rows[0];
+}
+
+async function applyOutputSettings(
+  driver: SqlControlDriverInstance<'postgres'>,
+  settings: OutputSettings,
+  local: boolean,
+): Promise<void> {
+  await driver.query(
+    `SELECT set_config('TimeZone', $1, $4),
+            set_config('DateStyle', $2, $4),
+            set_config('IntervalStyle', $3, $4)`,
+    [settings.timeZone, settings.dateStyle, settings.intervalStyle, local],
+  );
+}
+
+function sameOutputSettings(a: OutputSettings | undefined, b: OutputSettings): boolean {
+  return (
+    a?.timeZone === b.timeZone && a.dateStyle === b.dateStyle && a.intervalStyle === b.intervalStyle
+  );
+}
+
 /**
- * Runs `read` with the session time zone set to UTC, then restores the zone the session had.
- * Postgres prints a `timestamptz` value, such as a column default, in the session time zone, so
- * reading in UTC gives the same text whatever zone the server, the role, or the caller set. When
- * `read` fails, its error is the one thrown: inside the caller's transaction the failure aborts the
- * transaction, and the caller's rollback restores the zone.
+ * Runs `read` with the settings that shape printed values pinned to Postgres's defaults, then
+ * restores the caller's. Postgres prints a `timestamptz` default in the session time zone, and
+ * dates and intervals in the session styles, so pinning them gives the same text whatever the
+ * server, the role, or the caller set.
+ *
+ * The settings are first set locally. A local setting outlives its own statement only inside a
+ * transaction, so reading them back tells the two cases apart. Inside the caller's transaction they
+ * are set and restored locally, so the caller's session values return when it commits; outside
+ * one they are set and restored for the session. When `read` fails, its error is the one thrown;
+ * inside a transaction the failure aborts it, and the caller's rollback restores the settings.
  */
-async function readInUtc<T>(
+async function readWithDefaultOutputSettings<T>(
   driver: SqlControlDriverInstance<'postgres'>,
   read: () => Promise<T>,
 ): Promise<T> {
-  const { rows } = await driver.query<{ time_zone: string }>(
-    "SELECT current_setting('TimeZone') AS time_zone",
-  );
-  const timeZone = rows[0]?.time_zone;
-  if (timeZone === undefined) return read();
-  const setTimeZone = (zone: string) =>
-    driver.query("SELECT set_config('TimeZone', $1, false)", [zone]);
-  await setTimeZone('UTC');
+  const callerSettings = await readOutputSettings(driver);
+  if (callerSettings === undefined) return read();
+  await applyOutputSettings(driver, INTROSPECTION_OUTPUT_SETTINGS, true);
+  const local = sameOutputSettings(await readOutputSettings(driver), INTROSPECTION_OUTPUT_SETTINGS);
+  if (!local) await applyOutputSettings(driver, INTROSPECTION_OUTPUT_SETTINGS, false);
+  const restore = () => applyOutputSettings(driver, callerSettings, local);
   let result: T;
   try {
     result = await read();
   } catch (error) {
-    await setTimeZone(timeZone).catch(() => undefined);
+    await restore().catch(() => undefined);
     throw error;
   }
-  await setTimeZone(timeZone);
+  await restore();
   return result;
 }
 

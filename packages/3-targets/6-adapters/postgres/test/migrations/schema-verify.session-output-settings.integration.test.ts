@@ -28,9 +28,9 @@ function stampsContract(): Contract<SqlStorage> {
   return {
     target: 'postgres',
     targetFamily: 'sql',
-    profileHash: profileHash('session-time-zone'),
+    profileHash: profileHash('session-output-settings'),
     storage: new SqlStorage({
-      storageHash: coreHash('session-time-zone'),
+      storageHash: coreHash('session-output-settings'),
       namespaces: {
         [UNBOUND_NAMESPACE_ID]: postgresCreateNamespace({
           id: UNBOUND_NAMESPACE_ID,
@@ -51,6 +51,12 @@ function stampsContract(): Contract<SqlStorage> {
                     ...timestamptz,
                     default: { kind: 'function', expression: "'0001-12-31 23:30:00+00 BC'" },
                   },
+                  span: {
+                    nativeType: 'interval',
+                    codecId: 'pg/interval@1',
+                    nullable: false,
+                    default: { kind: 'function', expression: "'1 day 02:00:00'::interval" },
+                  },
                 },
                 primaryKey: { columns: ['id'] },
                 uniques: [],
@@ -70,14 +76,28 @@ function stampsContract(): Contract<SqlStorage> {
   };
 }
 
-async function sessionTimeZone(driver: PostgresControlDriver): Promise<string | undefined> {
-  const { rows } = await driver.query<{ time_zone: string }>(
-    "SELECT current_setting('TimeZone') AS time_zone",
-  );
-  return rows[0]?.time_zone;
+interface OutputSettings {
+  readonly timeZone: string;
+  readonly dateStyle: string;
+  readonly intervalStyle: string;
 }
 
-describe('introspection in a session outside UTC', { concurrent: false }, () => {
+async function outputSettings(driver: PostgresControlDriver): Promise<OutputSettings | undefined> {
+  const { rows } = await driver.query<OutputSettings>(
+    `SELECT current_setting('TimeZone') AS "timeZone",
+            current_setting('DateStyle') AS "dateStyle",
+            current_setting('IntervalStyle') AS "intervalStyle"`,
+  );
+  return rows[0];
+}
+
+const callerSettings: OutputSettings = {
+  timeZone: 'America/New_York',
+  dateStyle: 'SQL, DMY',
+  intervalStyle: 'sql_standard',
+};
+
+describe('introspection in a session with its own output settings', { concurrent: false }, () => {
   let database: Awaited<ReturnType<typeof createTestDatabase>>;
   let driver: PostgresControlDriver | undefined;
 
@@ -98,9 +118,13 @@ describe('introspection in a session outside UTC', { concurrent: false }, () => 
         "firstDay" TIMESTAMPTZ(6) NOT NULL DEFAULT '0001-01-01 00:00:00+00',
         "recent" TIMESTAMPTZ(6) NOT NULL DEFAULT '2024-06-01 12:00:00+00',
         "beforeYearOne" TIMESTAMPTZ(6) NOT NULL DEFAULT '0001-12-31 23:30:00+00 BC',
+        "span" INTERVAL NOT NULL DEFAULT '1 day 02:00:00',
         CONSTRAINT "Stamps_pkey" PRIMARY KEY ("id")
       )`,
     );
+    await driver.query("SET TIME ZONE 'America/New_York'");
+    await driver.query("SET DateStyle = 'SQL, DMY'");
+    await driver.query("SET IntervalStyle = 'sql_standard'");
   }, testTimeout);
 
   afterEach(async () => {
@@ -110,10 +134,9 @@ describe('introspection in a session outside UTC', { concurrent: false }, () => 
     }
   }, testTimeout);
 
-  it('reads timestamptz defaults as UTC text, and a contract holding that text verifies', {
+  it('reads defaults in UTC, ISO and postgres styles, and a contract holding that text verifies', {
     timeout: testTimeout,
   }, async () => {
-    await driver!.query("SET TIME ZONE 'America/New_York'");
     const contract = stampsContract();
 
     const schema = await familyInstance.introspect({ driver: driver!, contract });
@@ -124,10 +147,12 @@ describe('introspection in a session outside UTC', { concurrent: false }, () => 
       firstDay: columns?.['firstDay']?.default,
       recent: columns?.['recent']?.default,
       beforeYearOne: columns?.['beforeYearOne']?.default,
+      span: columns?.['span']?.default,
     }).toEqual({
       firstDay: "'0001-01-01 00:00:00+00'::timestamp with time zone",
       recent: "'2024-06-01 12:00:00+00'::timestamp with time zone",
       beforeYearOne: "'0001-12-31 23:30:00+00 BC'::timestamp with time zone",
+      span: "'1 day 02:00:00'::interval",
     });
     const result = familyInstance.verifySchema({
       contract,
@@ -138,26 +163,44 @@ describe('introspection in a session outside UTC', { concurrent: false }, () => 
     expect(result.schema.issues.map((issue) => issue.path.join('/'))).toEqual([]);
   });
 
-  it('leaves the time zone the caller set on the session', {
+  it('leaves the settings the caller set on the session', {
     timeout: testTimeout,
   }, async () => {
-    await driver!.query("SET TIME ZONE 'America/New_York'");
-
     await familyInstance.introspect({ driver: driver!, contract: stampsContract() });
 
-    expect(await sessionTimeZone(driver!)).toBe('America/New_York');
+    expect(await outputSettings(driver!)).toEqual(callerSettings);
   });
 
-  it('leaves the time zone the caller set inside its transaction', {
+  it('leaves the settings the caller set inside its transaction', {
     timeout: testTimeout,
   }, async () => {
     await driver!.query('BEGIN');
     await driver!.query("SET LOCAL TIME ZONE 'Asia/Kathmandu'");
+    await driver!.query("SET LOCAL DateStyle = 'German, DMY'");
+    await driver!.query("SET LOCAL IntervalStyle = 'iso_8601'");
 
     await familyInstance.introspect({ driver: driver!, contract: stampsContract() });
 
-    const inTransaction = await sessionTimeZone(driver!);
+    const inTransaction = await outputSettings(driver!);
     await driver!.query('ROLLBACK');
-    expect(inTransaction).toBe('Asia/Kathmandu');
+    expect(inTransaction).toEqual({
+      timeZone: 'Asia/Kathmandu',
+      dateStyle: 'German, DMY',
+      intervalStyle: 'iso_8601',
+    });
+  });
+
+  it('leaves the session settings in place after the caller commits a transaction that set local ones', {
+    timeout: testTimeout,
+  }, async () => {
+    await driver!.query('BEGIN');
+    await driver!.query("SET LOCAL TIME ZONE 'Asia/Kathmandu'");
+    await driver!.query("SET LOCAL DateStyle = 'German, DMY'");
+    await driver!.query("SET LOCAL IntervalStyle = 'iso_8601'");
+
+    await familyInstance.introspect({ driver: driver!, contract: stampsContract() });
+    await driver!.query('COMMIT');
+
+    expect(await outputSettings(driver!)).toEqual(callerSettings);
   });
 });
