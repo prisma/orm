@@ -5,6 +5,9 @@ to: 8.0.0-rc.12
 changes:
   - id: params-only-sql-facade-prepare
     summary: Replace injected SQL-builder preparation callbacks with params-only callbacks and lexical facade SQL access.
+  - id: postgres-target-owned-list-framing
+    summary: |
+      PostgreSQL list result decoding is target-owned; direct driver reads now expose raw array literals, and fixed-scale numeric arrays return database-normalized decimal text such as `"1.5000000000"`.
 ---
 
 ## `params-only-sql-facade-prepare`
@@ -26,3 +29,7 @@ const query = await db.prepare({ id: 'pg/int4@1' }, (params) =>
 ```
 
 Apply the same translation to SQLite's flat SQL facade (`sql.users` becomes `db.sql.users`), retaining its existing codec ids. Keep `.query(target, params, options?)` and SQL statistics `.execute(target, params, options?)` calls unchanged. Do not rewrite historical release notes, applied upgrade recipes, generated contracts or tests as part of this source translation.
+
+## `postgres-target-owned-list-framing`
+
+Review application code and snapshots that assert exact PostgreSQL list result spellings. Ordinary Prisma Next runtime reads still return JavaScript arrays, and builtin and enum lists now use the same raw-text-to-element-codec path. If you assert `Decimal[]` / `numeric[]` strings for fixed-scale columns, update those expectations to PostgreSQL's database-normalized scale: a `numeric(30,10)[]` element inserted as `1.5` reads as `"1.5000000000"`; scalar numeric decoding already follows this text-preserving policy. If you use lower-level Postgres driver direct-query rows, parse raw PostgreSQL array literal strings such as `'{a,b}'` instead of expecting registered builtin arrays to arrive as JavaScript arrays. Do not re-emit contracts solely for this change: codec ids, `typeParams`, and `CodecRef.many` stay unchanged.

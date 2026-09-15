@@ -9,6 +9,9 @@ changes:
     summary: Type ORM preparation descriptions with the shared compositional Preparable protocol and pass their contained plan to SQL runtime.
   - id: params-only-sql-facade-prepare
     summary: Replace injected SQL-builder preparation callbacks with params-only callbacks and lexical facade SQL access.
+  - id: postgres-list-element-codecs-receive-raw-strings
+    summary: |
+      PostgreSQL list decoding now parses array frames in the target and passes raw string elements to the scalar element codec; custom PostgreSQL codecs used in lists must accept those raw element spellings.
   - id: preserve-prepared-reference-nullability
     summary: Preserve declaration nullability when constructing or cloning PreparedParamRef AST nodes.
   - id: preserve-orm-pagination-expressions
@@ -54,3 +57,7 @@ const query = await db.prepare({ id: 'pg/int4@1' }, (params) =>
 ```
 
 Apply the same translation to SQLite's flat SQL facade (`sql.users` becomes `db.sql.users`), retaining its existing codec ids. Keep `.query(target, params, options?)` and SQL statistics `.execute(target, params, options?)` calls unchanged. Do not rewrite historical release notes, applied upgrade recipes, generated contracts or tests as part of this source translation.
+
+## `postgres-list-element-codecs-receive-raw-strings`
+
+Review PostgreSQL extension codecs whose descriptors can be used by `CodecRef.many` list columns. Inbound list framing is now target-owned: the target parses the Postgres array literal and invokes the scalar element codec for each non-null raw string element. Keep scalar direct-query compatibility as needed, but make the element `decode(wire, ctx)` accept the raw text spelling Postgres emits for that scalar value; the built-in numeric, boolean, integer, and float codecs accept both raw strings and native scalar wire values for this reason. Do not add a native-array fallback at the list-frame boundary, and do not add compatibility exports or codec-id aliases. `codecId`, `typeParams`, and emitted `CodecRef.many` shapes are unchanged.
