@@ -9,6 +9,7 @@ import { SqlStorage, type StorageColumnInput } from '@internal/sql-contract/type
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { applicationDomainOf } from '@repo/test-utils';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { createPostgresBuiltinCodecLookup } from '../../src/core/codec-lookup';
 import {
   createDriver,
   createTestDatabase,
@@ -21,7 +22,10 @@ import {
 
 interface DefaultCase {
   readonly column: string;
-  /** The column as `prisma migrate diff` from Prisma 7.10.0 writes it. */
+  /**
+   * The column definition. `prisma migrate diff` from Prisma 7.10.0 writes all of them except the
+   * text columns, whose number defaults are hand-written DDL.
+   */
   readonly ddl: string;
   readonly type: Omit<StorageColumnInput, 'default'>;
   readonly literal: ColumnDefaultLiteralInputValue;
@@ -32,11 +36,17 @@ const int2 = { nativeType: 'int2', codecId: 'pg/int2@1', nullable: false } as co
 const int4 = { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false } as const;
 const int8 = { nativeType: 'int8', codecId: 'pg/int8@1', nullable: false } as const;
 const float8 = { nativeType: 'float8', codecId: 'pg/float8@1', nullable: false } as const;
+const text = { nativeType: 'text', codecId: 'pg/text@1', nullable: false } as const;
 const decimal = {
   nativeType: 'numeric',
   codecId: 'pg/numeric@1',
   nullable: false,
   typeParams: { precision: 65, scale: 30 },
+} as const;
+const unscaledDecimal = {
+  nativeType: 'numeric',
+  codecId: 'pg/numeric@1',
+  nullable: false,
 } as const;
 const list = { nullable: true, many: true, noCheck: ['elementNotNull'] } as const;
 
@@ -81,7 +91,7 @@ const cases: readonly DefaultCase[] = [
     ddl: '"longDecimal" DECIMAL(65,30) NOT NULL DEFAULT 12345678901234567890.123456789',
     type: decimal,
     literal: '12345678901234567890.123456789',
-    differentLiteral: 12345678901234567000,
+    differentLiteral: '12345678901234567000',
   },
   {
     column: 'tinyDecimal',
@@ -89,6 +99,39 @@ const cases: readonly DefaultCase[] = [
     type: decimal,
     literal: '0.000000000000000001',
     differentLiteral: '0.000000000000000002',
+  },
+  {
+    column: 'unscaledDecimal',
+    ddl: '"unscaledDecimal" DECIMAL NOT NULL DEFAULT 1.50',
+    type: unscaledDecimal,
+    literal: '1.50',
+    differentLiteral: '1.5',
+  },
+  {
+    column: 'scaledDecimal',
+    ddl: '"scaledDecimal" DECIMAL(10,2) NOT NULL DEFAULT 1.5',
+    type: { ...decimal, typeParams: { precision: 10, scale: 2 } },
+    literal: '1.50',
+    differentLiteral: '1.51',
+  },
+  {
+    column: 'negText',
+    ddl: '"negText" TEXT NOT NULL DEFAULT -1',
+    type: text,
+    literal: '-1',
+    differentLiteral: '-2',
+  },
+  {
+    column: 'negVarchar',
+    ddl: '"negVarchar" VARCHAR(10) NOT NULL DEFAULT -1.5',
+    type: {
+      nativeType: 'character varying',
+      codecId: 'sql/varchar@1',
+      nullable: false,
+      typeParams: { length: 10 },
+    },
+    literal: '-1.5',
+    differentLiteral: '1.5',
   },
   {
     column: 'negInts',
@@ -119,6 +162,20 @@ const cases: readonly DefaultCase[] = [
     differentLiteral: ['2.5'],
   },
   {
+    column: 'unscaledDecimals',
+    ddl: '"unscaledDecimals" DECIMAL[] DEFAULT ARRAY[1.50]::DECIMAL[]',
+    type: { ...unscaledDecimal, ...list },
+    literal: ['1.50'],
+    differentLiteral: ['1.5'],
+  },
+  {
+    column: 'negTexts',
+    ddl: '"negTexts" TEXT[] DEFAULT ARRAY[-1, 2]',
+    type: { ...text, ...list },
+    literal: ['-1', '2'],
+    differentLiteral: ['-1', '3'],
+  },
+  {
     column: 'timestamps',
     ddl: `"timestamps" TIMESTAMP(3)[] DEFAULT ARRAY['2024-01-01 00:00:00 +00:00']::TIMESTAMP(3)[]`,
     type: {
@@ -127,8 +184,8 @@ const cases: readonly DefaultCase[] = [
       typeParams: { precision: 3 },
       ...list,
     },
-    literal: ['2024-01-01T00:00:00.000Z'],
-    differentLiteral: ['2024-01-02T00:00:00.000Z'],
+    literal: ['2024-01-01T00:00:00'],
+    differentLiteral: ['2024-01-02T00:00:00'],
   },
   {
     column: 'emptyVarchars',
@@ -146,14 +203,23 @@ const cases: readonly DefaultCase[] = [
 
 const table = 'Defaults';
 
+const codecs = createPostgresBuiltinCodecLookup();
+
+function readByCodec(codecId: string, value: ColumnDefaultLiteralInputValue): void {
+  const codec = codecs.get(codecId);
+  if (codec === undefined) throw new Error(`No codec ${codecId}`);
+  for (const element of Array.isArray(value) ? value : [value]) codec.decodeJson(element);
+}
+
 function buildContract(
   defaultOf: (defaultCase: DefaultCase) => ColumnDefaultLiteralInputValue,
 ): Contract<SqlStorage> {
   const columns = Object.fromEntries(
-    cases.map((defaultCase) => [
-      defaultCase.column,
-      { ...defaultCase.type, default: { kind: 'literal', value: defaultOf(defaultCase) } },
-    ]),
+    cases.map((defaultCase) => {
+      const value = defaultOf(defaultCase);
+      readByCodec(defaultCase.type.codecId, value);
+      return [defaultCase.column, { ...defaultCase.type, default: { kind: 'literal', value } }];
+    }),
   );
   return {
     target: 'postgres',
@@ -186,7 +252,7 @@ function buildContract(
   };
 }
 
-describe('schema verify of number and list defaults as Prisma 7 writes them', {
+describe('schema verify of number, decimal and list defaults Postgres prints with a cast', {
   concurrent: false,
 }, () => {
   let database: Awaited<ReturnType<typeof createTestDatabase>>;
