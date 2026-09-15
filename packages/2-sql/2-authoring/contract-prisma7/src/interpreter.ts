@@ -1034,15 +1034,16 @@ function readField(args: ReadFieldArgs): void {
   const updatedAtGeneratorId =
     updatedAt === undefined ? undefined : binding.updatedAtGeneratorId(resolved.descriptor.codecId);
   if (updatedAt !== undefined && updatedAtGeneratorId === undefined) {
-    const withoutUpdatedAt = givesColumnDefault(defaultAttribute)
-      ? ': the column default sets it on create, and updates leave it unchanged.'
-      : field.optional
-        ? ', so it stays empty unless a client writes it, and updates leave it unchanged.'
-        : ', so both require it on create and leave it unchanged on update.';
+    const withoutUpdatedAt =
+      defaultAttribute !== undefined && givesColumnDefault(defaultAttribute)
+        ? `. Its ${attributeText(defaultAttribute)} still sets the value on create, and neither client changes it on update.`
+        : field.optional
+          ? ', but neither client then fills the value, so it stays empty unless a client writes it, and updates leave it unchanged.'
+          : ', but neither client then fills the value, so both require it on create and leave it unchanged on update.';
     diagnostics.push(
       prisma7Diagnostic(
         'PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED',
-        `${label}: @updatedAt is not supported on this column, because Prisma 8 has no generator for column type "${resolved.descriptor.nativeType}" yet. Remove @updatedAt: Prisma 7's next migration is empty, but neither client then fills the value${withoutUpdatedAt}`,
+        `${label}: @updatedAt is not supported on this column, because Prisma 8 has no generator for column type "${resolved.descriptor.nativeType}" yet. Remove @updatedAt: Prisma 7's next migration is empty${withoutUpdatedAt}`,
         sourceId,
         updatedAt.span,
       ),
