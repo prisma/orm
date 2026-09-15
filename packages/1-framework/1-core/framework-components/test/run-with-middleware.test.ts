@@ -123,14 +123,14 @@ describe('runQueryWithMiddleware', () => {
 
   it('error path: driver throw triggers afterQuery(completed: false) for each middleware in order then rethrows', async () => {
     const events: string[] = [];
-    const observed: Array<{ label: string; completed: boolean; rowCount: number }> = [];
+    const observed: Array<{ label: string; result: AfterQueryResult }> = [];
     const driverError = new Error('driver boom');
 
     function mw(label: string): RuntimeMiddleware<MockExec> {
       return {
         name: label,
         async afterQuery(_plan, result) {
-          observed.push({ label, completed: result.completed, rowCount: result.rowCount });
+          observed.push({ label, result });
           events.push(`${label}:afterQuery`);
         },
       };
@@ -156,9 +156,59 @@ describe('runQueryWithMiddleware', () => {
 
     expect(events).toEqual(['A:afterQuery', 'B:afterQuery']);
     expect(observed).toEqual([
-      { label: 'A', completed: false, rowCount: 1 },
-      { label: 'B', completed: false, rowCount: 1 },
+      {
+        label: 'A',
+        result: {
+          completed: false,
+          rowCount: 1,
+          source: 'driver',
+          latencyMs: expect.any(Number),
+          error: driverError,
+        },
+      },
+      {
+        label: 'B',
+        result: {
+          completed: false,
+          rowCount: 1,
+          source: 'driver',
+          latencyMs: expect.any(Number),
+          error: driverError,
+        },
+      },
     ]);
+  });
+
+  it('error path: non-Error driver rejection is passed to afterQuery unchanged', async () => {
+    let observed: AfterQueryResult | undefined;
+    const rejection = { code: 'ETIMEDOUT' };
+
+    const mw: RuntimeMiddleware<MockExec> = {
+      name: 'observer',
+      async afterQuery(_plan, result) {
+        observed = result;
+      },
+    };
+
+    const failingDriver: () => AsyncIterable<Record<string, unknown>> = () => ({
+      [Symbol.asyncIterator]() {
+        return {
+          next(): Promise<IteratorResult<Record<string, unknown>>> {
+            return Promise.reject(rejection);
+          },
+        };
+      },
+    });
+
+    const result = runQueryWithMiddleware<MockExec, Record<string, unknown>>(
+      mockExec,
+      [mw],
+      mockCtx,
+      failingDriver,
+    );
+
+    await expect(result.toArray()).rejects.toBe(rejection);
+    expect(observed).toMatchObject({ completed: false, error: rejection });
   });
 
   it('error inside afterQuery during error path is swallowed and the original driver error is rethrown', async () => {

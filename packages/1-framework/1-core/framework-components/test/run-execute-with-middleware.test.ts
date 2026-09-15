@@ -100,6 +100,56 @@ describe('runExecuteWithMiddleware', () => {
     expect(afterExecute).toHaveBeenCalledTimes(1);
   });
 
+  it('passes the driver error to afterExecute with completed: false', async () => {
+    const driverError = new Error('driver failed');
+    let observed: AfterExecuteResult | undefined;
+    const middleware: RuntimeMiddleware<MockExec> = {
+      name: 'observer',
+      async afterExecute(_plan, result) {
+        observed = result;
+      },
+    };
+
+    await expect(
+      runExecuteWithMiddleware(exec, [middleware], makeCtx(), async () => {
+        throw driverError;
+      }),
+    ).rejects.toBe(driverError);
+
+    expect(observed).toEqual({
+      completed: false,
+      source: 'driver',
+      latencyMs: expect.any(Number),
+      error: driverError,
+    });
+  });
+
+  it('passes an interceptExecute error to afterExecute with source: middleware', async () => {
+    const interceptError = new Error('intercept failed');
+    let observed: AfterExecuteResult | undefined;
+    const middleware: RuntimeMiddleware<MockExec> = {
+      name: 'observer',
+      async interceptExecute() {
+        throw interceptError;
+      },
+      async afterExecute(_plan, result) {
+        observed = result;
+      },
+    };
+    const runDriver = vi.fn(async () => ({ affectedRows: 1 }));
+
+    await expect(runExecuteWithMiddleware(exec, [middleware], makeCtx(), runDriver)).rejects.toBe(
+      interceptError,
+    );
+
+    expect(runDriver).not.toHaveBeenCalled();
+    expect(observed).toMatchObject({
+      completed: false,
+      source: 'middleware',
+      error: interceptError,
+    });
+  });
+
   it('preserves the original driver error when afterExecute also fails', async () => {
     const driverError = new Error('driver failed');
     const middleware: RuntimeMiddleware<MockExec> = {

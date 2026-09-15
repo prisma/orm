@@ -111,10 +111,25 @@ interface AfterResultBase {
   readonly source: 'driver' | 'middleware';
 }
 
-export interface AfterQueryResult extends AfterResultBase {
-  readonly rowCount: number;
-  readonly completed: boolean;
+/**
+ * Failure member shared by the completion result unions. `error` is the
+ * value caught by the orchestrator — the driver, interceptor, or row-source
+ * throw — before it is rethrown to the caller. It is typed `unknown` because
+ * drivers are not required to throw `Error` instances.
+ */
+interface AfterResultFailure {
+  readonly completed: false;
+  readonly error: unknown;
 }
+
+export type AfterQueryResult = AfterResultBase & {
+  readonly rowCount: number;
+} & (
+    | {
+        readonly completed: true;
+      }
+    | AfterResultFailure
+  );
 
 export type AfterExecuteResult = AfterResultBase &
   (
@@ -122,9 +137,7 @@ export type AfterExecuteResult = AfterResultBase &
         readonly stats: RuntimeStatementStats;
         readonly completed: true;
       }
-    | {
-        readonly completed: false;
-      }
+    | AfterResultFailure
   );
 
 export interface QueryInterceptResult {
@@ -237,6 +250,19 @@ export interface RuntimeMiddleware<
     ctx: RuntimeMiddlewareContext,
   ): Promise<QueryInterceptResult | undefined>;
   onRow?(row: Record<string, unknown>, plan: TPlan, ctx: RuntimeMiddlewareContext): Promise<void>;
+  /**
+   * Fires once per query after the row stream terminates, on both the
+   * success and failure paths.
+   *
+   * On success, `result.completed` is `true`. On failure, `result.completed`
+   * is `false` and `result.error` carries the value thrown by the driver,
+   * an interceptor, or the row source — the same value the caller receives
+   * when the operation rethrows. Telemetry middleware uses it to record the
+   * concrete failure (e.g. `span.recordException(result.error)`).
+   *
+   * Errors thrown by this hook on the failure path are swallowed so they do
+   * not mask the original error. On the success path they propagate.
+   */
   afterQuery?(plan: TPlan, result: AfterQueryResult, ctx: RuntimeMiddlewareContext): Promise<void>;
   /**
    * Fires after the family runtime has produced a draft execution plan from
@@ -290,6 +316,20 @@ export interface RuntimeMiddleware<
     plan: TPlan,
     ctx: RuntimeMiddlewareContext,
   ): Promise<ExecuteInterceptResult | undefined>;
+  /**
+   * Fires once per execute after statistics are produced or the operation
+   * fails.
+   *
+   * On success, `result.completed` is `true` and `result.stats` carries the
+   * statement statistics. On failure, `result.completed` is `false` and
+   * `result.error` carries the value thrown by the driver or an interceptor
+   * — the same value the caller receives when the operation rethrows.
+   * Telemetry middleware uses it to record the concrete failure (e.g.
+   * `span.recordException(result.error)`).
+   *
+   * Errors thrown by this hook on the failure path are swallowed so they do
+   * not mask the original error. On the success path they propagate.
+   */
   afterExecute?(
     plan: TPlan,
     result: AfterExecuteResult,

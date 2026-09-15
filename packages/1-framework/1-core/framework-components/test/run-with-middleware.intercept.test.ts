@@ -496,6 +496,7 @@ describe('runQueryWithMiddleware — interceptQuery', () => {
         completed: false,
         source: 'middleware',
         rowCount: 0,
+        error: boom,
       });
     });
 
@@ -531,6 +532,7 @@ describe('runQueryWithMiddleware — interceptQuery', () => {
         completed: false,
         source: 'middleware',
         rowCount: 1, // one row was yielded before the throw
+        error: boom,
       });
     });
 
