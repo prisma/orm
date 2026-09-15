@@ -212,6 +212,26 @@ const storedByPostgres: readonly (readonly [
       timetz: '10:20:30.25+00',
     },
   ],
+  [
+    '0001-01-01T00:30:00+01:00',
+    {
+      timestamp: '0001-01-01 00:30:00',
+      timestamptz: '0001-12-31 23:30:00+00 BC',
+      date: '0001-01-01',
+      time: '00:30:00',
+      timetz: '00:30:00+01',
+    },
+  ],
+  [
+    '0001-01-01T00:00:00.5+00:01',
+    {
+      timestamp: '0001-01-01 00:00:00.5',
+      timestamptz: '0001-12-31 23:59:00.5+00 BC',
+      date: '0001-01-01',
+      time: '00:00:00.5',
+      timetz: '00:00:00.5+00:01',
+    },
+  ],
 ];
 
 describe('storedTemporalText', () => {

@@ -30,9 +30,12 @@ function offsetText(minutes: number): string {
  * The text of the column default Postgres stores for a Prisma 7 `DateTime`
  * default, which Prisma 7 writes as `'2024-01-02 03:04:05.123 +02:00'`:
  * `date` keeps the written date, `time` and `timestamp` the written wall-clock
- * time without the offset, `timetz` the time with the written offset, and
- * `timestamptz` the instant in UTC. Fractional seconds are rounded to
- * microseconds; the column's own precision does not change a stored default.
+ * time without the offset, and `timetz` the time with the written offset.
+ * `timestamptz` is carried in its UTC form, the text a session in UTC prints
+ * (`2024-01-02 01:04:05+00`, and `0001-12-31 23:30:00+00 BC` before year 1);
+ * a session in another time zone prints the same instant differently.
+ * Fractional seconds are rounded to microseconds; the column's own precision
+ * does not change a stored default.
  */
 export function storedTemporalText(
   text: string,
@@ -76,6 +79,9 @@ export function storedTemporalText(
   midnight.setUTCFullYear(Number(year), Number(month) - 1, Number(day));
   const utcShift = nativeType === 'timestamptz' ? offsetMinutesTotal * 60 : 0;
   const stamp = new Date(midnight.getTime() + (clockSeconds - utcShift) * 1000);
-  const wallClock = `${pad(stamp.getUTCFullYear(), 4)}-${pad(stamp.getUTCMonth() + 1)}-${pad(stamp.getUTCDate())} ${pad(stamp.getUTCHours())}:${pad(stamp.getUTCMinutes())}:${pad(stamp.getUTCSeconds())}${fractional}`;
-  return nativeType === 'timestamptz' ? `${wallClock}+00` : wallClock;
+  const astronomicalYear = stamp.getUTCFullYear();
+  const eraYear = astronomicalYear > 0 ? astronomicalYear : 1 - astronomicalYear;
+  const wallClock = `${pad(eraYear, 4)}-${pad(stamp.getUTCMonth() + 1)}-${pad(stamp.getUTCDate())} ${pad(stamp.getUTCHours())}:${pad(stamp.getUTCMinutes())}:${pad(stamp.getUTCSeconds())}${fractional}`;
+  const era = astronomicalYear > 0 ? '' : ' BC';
+  return nativeType === 'timestamptz' ? `${wallClock}+00${era}` : `${wallClock}${era}`;
 }
