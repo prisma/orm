@@ -1,13 +1,20 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import postgresAdapter from '@internal/adapter-postgres/control';
+import sqliteAdapter from '@internal/adapter-sqlite/control';
 import type { Contract } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql, { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import { APP_SPACE_ID, createControlStack } from '@internal/framework-components/control';
 import { buildFabricatedMigrationEdge } from '@internal/migration-tools/aggregate';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import { prismaContract } from '@internal/sql-contract-psl/provider';
 import postgres from '@internal/target-postgres/control';
 import { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import sqlitePackRef from '@internal/target-sqlite/pack';
 import { timeouts, withDevDatabase } from '@repo/test-utils';
+import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { runSchemaVerify } from '../family.schema-verify.helpers';
 import {
@@ -30,10 +37,14 @@ model NumberDefault {
   scaledTrailingZeros Price    @default(1.50)
   bareTrailingZeros   Decimal  @default(1.50)
   bareLong            Decimal  @default(12345678901234567890.123456789)
+  negativeZero        Decimal  @default(-0)
+  leadingZeros        Decimal  @default(007)
+  leadingZeroFraction Decimal  @default(00.10)
   big                 BigInt   @default(9007199254740993)
   smallestBig         BigInt   @default(-9223372036854775808)
   safeBig             BigInt   @default(42)
   decimals            Money[]  @default([12345678901234567890.123456789, -0.000000000000000001, 1.50])
+  bareDecimals        Decimal[] @default([1.50, -0, 007])
   bigs                BigInt[] @default([9007199254740993, -1])
   count               Int      @default(-5)
   ratio               Float    @default(1.5)
@@ -46,6 +57,25 @@ const controlStack = createControlStack({
   driver: postgresDriver,
   extensions: [],
 });
+
+const sqliteStack = createControlStack({ family: sql, target: sqlite, adapter: sqliteAdapter });
+
+async function authorSqliteContractFromPsl(pslSchema: string) {
+  const schemaPath = join(mkdtempSync(join(tmpdir(), 'psl-number-defaults-')), 'schema.prisma');
+  writeFileSync(schemaPath, pslSchema, 'utf-8');
+  return prismaContract(schemaPath, {
+    target: sqlitePackRef,
+    createNamespace: sqliteCreateNamespace,
+  }).source.load({
+    composedExtensions: [],
+    composedExtensionContracts: new Map(),
+    authoringContributions: sqliteStack.authoringContributions,
+    codecLookup: sqliteStack.codecLookup,
+    controlMutationDefaults: sqliteStack.controlMutationDefaults,
+    resolvedInputs: [schemaPath],
+    capabilities: sqliteStack.capabilities,
+  });
+}
 
 async function applyContract(connectionString: string, contract: Contract<SqlStorage>) {
   const familyInstance = sql.create(controlStack);
@@ -94,7 +124,7 @@ async function applyContract(connectionString: string, contract: Contract<SqlSto
 
 describe('PSL number defaults keep every digit', () => {
   it(
-    'emits decimal and big integer defaults as written, applies them, and verifies strictly, while rounded ones mismatch',
+    'emits decimal and big integer defaults with every digit, applies them, and verifies strictly, while rounded ones mismatch',
     async () => {
       const authored = await authorSqlContractFromPsl(schema);
       expect(authored.diagnostics).toEqual([]);
@@ -110,10 +140,14 @@ describe('PSL number defaults keep every digit', () => {
         scaledTrailingZeros: defaultOf('scaledTrailingZeros'),
         bareTrailingZeros: defaultOf('bareTrailingZeros'),
         bareLong: defaultOf('bareLong'),
+        negativeZero: defaultOf('negativeZero'),
+        leadingZeros: defaultOf('leadingZeros'),
+        leadingZeroFraction: defaultOf('leadingZeroFraction'),
         big: defaultOf('big'),
         smallestBig: defaultOf('smallestBig'),
         safeBig: defaultOf('safeBig'),
         decimals: defaultOf('decimals'),
+        bareDecimals: defaultOf('bareDecimals'),
         bigs: defaultOf('bigs'),
         count: defaultOf('count'),
         ratio: defaultOf('ratio'),
@@ -125,6 +159,9 @@ describe('PSL number defaults keep every digit', () => {
         scaledTrailingZeros: { kind: 'literal', value: '1.50' },
         bareTrailingZeros: { kind: 'literal', value: '1.50' },
         bareLong: { kind: 'literal', value: '12345678901234567890.123456789' },
+        negativeZero: { kind: 'literal', value: '0' },
+        leadingZeros: { kind: 'literal', value: '7' },
+        leadingZeroFraction: { kind: 'literal', value: '0.10' },
         big: { kind: 'literal', value: '9007199254740993' },
         smallestBig: { kind: 'literal', value: '-9223372036854775808' },
         safeBig: { kind: 'literal', value: '42' },
@@ -132,6 +169,7 @@ describe('PSL number defaults keep every digit', () => {
           kind: 'literal',
           value: ['12345678901234567890.123456789', '-0.000000000000000001', '1.50'],
         },
+        bareDecimals: { kind: 'literal', value: ['1.50', '0', '7'] },
         bigs: { kind: 'literal', value: ['9007199254740993', '-1'] },
         count: { kind: 'literal', value: -5 },
         ratio: { kind: 'literal', value: 1.5 },
@@ -172,4 +210,18 @@ describe('PSL number defaults keep every digit', () => {
     },
     timeouts.spinUpPpgDev,
   );
+});
+
+describe('PSL number defaults on codecs that do not hold numbers', () => {
+  it('fail emit on a Postgres bytea column, as before', async () => {
+    await expect(
+      authorSqlContractFromPsl('model Payload {\n  id Int @id\n  data Bytes @default(1234)\n}'),
+    ).rejects.toThrow('The first argument must be of type string');
+  });
+
+  it('fail emit on a SQLite datetime column, as before', async () => {
+    await expect(
+      authorSqliteContractFromPsl('model Event {\n  id Int @id\n  at DateTime @default(0)\n}'),
+    ).rejects.toThrow('toISOString is not a function');
+  });
 });

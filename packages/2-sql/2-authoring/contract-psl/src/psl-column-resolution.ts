@@ -37,7 +37,10 @@ import type {
   SymbolTable,
 } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
-import { blindCast } from '@internal/utils/casts';
+import type {
+  AuthoredColumnDefault,
+  AuthoredColumnDefaultLiteralValue,
+} from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
 import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
@@ -709,7 +712,7 @@ export function lowerDefaultForField(input: {
   readonly codecLookup: CodecLookup | undefined;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): {
-  readonly defaultValue?: ColumnDefault;
+  readonly defaultValue?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
 } {
   const node = findFieldAttributeNode(input.field, 'default');
@@ -733,9 +736,11 @@ export function lowerDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const value = interpreted.value;
-  const codec = input.codecLookup?.get(input.columnDescriptor.codecId);
-  const literalValue = (literal: string | boolean | NumLiteral): JsonValue =>
-    typeof literal === 'object' ? numberLiteralDefault(literal, codec) : literal;
+  const numberCodec = numberHoldingCodec(input.codecLookup, input.columnDescriptor.codecId);
+  const literalValue = (
+    literal: string | boolean | NumLiteral,
+  ): AuthoredColumnDefaultLiteralValue =>
+    typeof literal === 'object' ? numberLiteralDefault(literal, numberCodec) : literal;
 
   if (Array.isArray(value)) {
     return { defaultValue: { kind: 'literal', value: value.map(literalValue) } };
@@ -804,20 +809,40 @@ export function lowerDefaultForField(input: {
   return { defaultValue: { kind: 'literal', value } };
 }
 
-/**
- * A number literal is lowered to the value its column codec reads. A codec that reads a JSON number
- * gets the number. A codec that reads only text, because a JS number would round the digits, gets
- * what it decodes from the literal exactly as written.
- */
-function numberLiteralDefault(literal: NumLiteral, codec: Codec | undefined): JsonValue {
+function numberHoldingCodec(
+  codecLookup: CodecLookup | undefined,
+  codecId: string,
+): Codec | undefined {
+  const holdsNumbers = codecLookup?.descriptorFor?.(codecId)?.traits.includes('numeric') === true;
+  return holdsNumbers ? codecLookup?.get(codecId) : undefined;
+}
+
+function numberLiteralDefault(
+  literal: NumLiteral,
+  numberCodec: Codec | undefined,
+): AuthoredColumnDefaultLiteralValue {
   const number = Number(literal.text);
-  if (codec === undefined || tryDecodeJson(codec, number) !== undefined) return number;
-  const fromText = tryDecodeJson(codec, literal.text);
-  if (fromText === undefined) return number;
-  return blindCast<
-    JsonValue,
-    'the contract build passes a literal default to the codec encodeJson, which takes the value the codec decodes'
-  >(fromText.value);
+  if (numberCodec === undefined || tryDecodeJson(numberCodec, number) !== undefined) return number;
+  const decoded = tryDecodeJson(numberCodec, canonicalDecimalText(literal.text));
+  return decoded !== undefined && isNumberValue(decoded.value) ? decoded.value : number;
+}
+
+const DECIMAL_NUMERAL = /^(-?)0*(\d+)(\.\d+)?$/;
+
+/**
+ * Leading zeros and the sign of zero never change a decimal. Trailing zeros are kept, because a
+ * column without a scale keeps them.
+ */
+function canonicalDecimalText(text: string): string {
+  const numeral = DECIMAL_NUMERAL.exec(text);
+  if (numeral === null) return text;
+  const [, sign = '', whole = '', fraction = ''] = numeral;
+  const digits = `${whole}${fraction}`;
+  return /^[0.]+$/.test(digits) ? digits : `${sign}${digits}`;
+}
+
+function isNumberValue(value: unknown): value is string | number | bigint {
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'bigint';
 }
 
 function tryDecodeJson(codec: Codec, json: JsonValue): { readonly value: unknown } | undefined {
