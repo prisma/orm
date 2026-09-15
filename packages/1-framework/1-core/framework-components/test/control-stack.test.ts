@@ -1141,7 +1141,7 @@ describe('extractCodecLookup', () => {
     ({
       id,
       encode: async (v: unknown) => v,
-      decode: async (v: unknown) => v,
+      decode: (v: unknown) => v,
       encodeJson: (v: unknown) => v,
       decodeJson: (j: unknown) => j,
     }) as unknown as Codec;
@@ -1487,7 +1487,7 @@ describe('validateScalarTypeCodecIds', () => {
           ? {
               id,
               encode: async (v: unknown) => v,
-              decode: async (v: unknown) => v,
+              decode: (v: unknown) => v,
               encodeJson: (v: unknown) => v as JsonValue,
               decodeJson: (v: JsonValue) => v,
             }

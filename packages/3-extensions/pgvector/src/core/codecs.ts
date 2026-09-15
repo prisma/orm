@@ -123,7 +123,7 @@ export class PgVectorCodec extends CodecImpl<
     return `[${value.join(',')}]`;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<number[]> {
+  decode(wire: string, _ctx: CodecCallContext): number[] {
     if (typeof wire !== 'string') {
       throw pgVectorError('RUNTIME.DECODE_FAILED', 'Vector wire value must be a string', {
         meta: { codecId: VECTOR_CODEC_ID },

@@ -10,11 +10,11 @@ test('encode is required and Promise-returning', () => {
   expectTypeOf<EncodeReturn>().toExtend<Promise<unknown>>();
 });
 
-test('decode is required and Promise-returning', () => {
+test('decode is required and synchronous', () => {
   expectTypeOf<Codec>().toHaveProperty('decode');
   expectTypeOf<Codec['decode']>().toBeFunction();
   type DecodeReturn = ReturnType<Codec['decode']>;
-  expectTypeOf<DecodeReturn>().toExtend<Promise<unknown>>();
+  expectTypeOf<DecodeReturn>().toEqualTypeOf<unknown>();
 });
 
 test('encodeJson is required and synchronous', () => {
@@ -60,7 +60,7 @@ test('Codec carries four generics: encode TInput → TWire, decode TWire → TIn
   expectTypeOf<Parameters<StringTextCodec['encode']>[0]>().toEqualTypeOf<string>();
   expectTypeOf<ReturnType<StringTextCodec['encode']>>().toExtend<Promise<string>>();
   expectTypeOf<Parameters<StringTextCodec['decode']>[0]>().toEqualTypeOf<string>();
-  expectTypeOf<ReturnType<StringTextCodec['decode']>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<StringTextCodec['decode']>>().toEqualTypeOf<string>();
   expectTypeOf<Parameters<StringTextCodec['encodeJson']>[0]>().toEqualTypeOf<string>();
   expectTypeOf<ReturnType<StringTextCodec['decodeJson']>>().toEqualTypeOf<string>();
 });
@@ -70,5 +70,5 @@ test('TInput drives both write input and read output (no asymmetric output)', ()
   expectTypeOf<Parameters<WireSeparateFromInput['encode']>[0]>().toEqualTypeOf<string>();
   expectTypeOf<ReturnType<WireSeparateFromInput['encode']>>().toExtend<Promise<number>>();
   expectTypeOf<Parameters<WireSeparateFromInput['decode']>[0]>().toEqualTypeOf<number>();
-  expectTypeOf<ReturnType<WireSeparateFromInput['decode']>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<WireSeparateFromInput['decode']>>().toEqualTypeOf<string>();
 });

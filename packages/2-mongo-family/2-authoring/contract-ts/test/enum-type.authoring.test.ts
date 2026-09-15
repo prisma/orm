@@ -25,7 +25,7 @@ const identityDescriptor = (id: string): AnyCodecDescriptor => ({
     ({
       id,
       encode: async (v: unknown) => v,
-      decode: async (v: unknown) => v,
+      decode: (v: unknown) => v,
       encodeJson: (v: unknown) => v,
       decodeJson: (j: unknown) => j,
     }) as unknown as Codec,
@@ -273,7 +273,7 @@ describe('defineContract() — codec-encoded value set', () => {
       ({
         id: 'test/upper@1',
         encode: async (v: unknown) => v,
-        decode: async (v: unknown) => v,
+        decode: (v: unknown) => v,
         encodeJson: (v: unknown) => (v as string).toUpperCase(),
         decodeJson: (j: unknown) => j,
       }) as unknown as Codec,

@@ -4,13 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { pgGeometryColumn, postgisGeometryDescriptor } from '../src/core/codecs';
 import type { Geometry } from '../src/core/geojson';
 
-// The postgis codec authors `encode`/`decode` synchronously; codecs
-// route through `Promise`-returning methods at the boundary. The tests
-// below cast through the Promise-returning shape and `await` every
-// call so unit-level coverage stays aligned with the codec contract.
 type AsyncGeometryCodec = {
   readonly encode: (value: Geometry) => Promise<string>;
-  readonly decode: (wire: string) => Promise<Geometry>;
+  readonly decode: (wire: string) => Geometry;
   readonly encodeJson: (value: Geometry) => JsonValue;
   readonly decodeJson: (json: JsonValue) => Geometry;
 };
@@ -139,19 +135,19 @@ describe('postgis codecs', () => {
 
     it('rejects non-string wire input', async () => {
       const c = asAsyncCodec();
-      await expect(c.decode(123 as unknown as string)).rejects.toThrow(
+      expect(() => c.decode(123 as unknown as string)).toThrow(
         'Geometry wire value must be a string',
       );
     });
 
     it('rejects an odd-length hex string', async () => {
       const c = asAsyncCodec();
-      await expect(c.decode('0')).rejects.toThrow('odd-length hex string');
+      expect(() => c.decode('0')).toThrow('odd-length hex string');
     });
 
     it('rejects malformed hex bytes', async () => {
       const c = asAsyncCodec();
-      await expect(c.decode('ZZ')).rejects.toThrow('invalid hex byte');
+      expect(() => c.decode('ZZ')).toThrow('invalid hex byte');
     });
   });
 

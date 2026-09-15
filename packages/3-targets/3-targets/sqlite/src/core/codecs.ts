@@ -264,7 +264,7 @@ export class SqliteTextCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -305,7 +305,7 @@ export class SqliteIntegerCodec extends CodecImpl<
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: number, _ctx: CodecCallContext): number {
     return wire;
   }
   encodeJson(value: number): JsonValue {
@@ -346,7 +346,7 @@ export class SqliteRealCodec extends CodecImpl<
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: number, _ctx: CodecCallContext): number {
     return wire;
   }
   encodeJson(value: number): JsonValue {
@@ -396,7 +396,7 @@ export class SqliteBlobCodec extends CodecImpl<
   async encode(value: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
     return value;
   }
-  async decode(wire: Uint8Array, _ctx: CodecCallContext): Promise<Uint8Array> {
+  decode(wire: Uint8Array, _ctx: CodecCallContext): Uint8Array {
     return wire;
   }
   encodeJson(value: Uint8Array): JsonValue {
@@ -456,7 +456,7 @@ export class SqliteDatetimeCodec extends CodecImpl<
   async encode(value: Date, _ctx: CodecCallContext): Promise<string> {
     return value.toISOString();
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Date> {
+  decode(wire: string, _ctx: CodecCallContext): Date {
     return this.parseDate(wire);
   }
   encodeJson(value: Date): JsonValue {
@@ -504,7 +504,7 @@ export class SqliteJsonCodec extends CodecImpl<
   async encode(value: JsonValue, _ctx: CodecCallContext): Promise<string> {
     return JSON.stringify(value);
   }
-  async decode(wire: string | JsonValue, _ctx: CodecCallContext): Promise<JsonValue> {
+  decode(wire: string | JsonValue, _ctx: CodecCallContext): JsonValue {
     return typeof wire === 'string' ? (JSON.parse(wire) as JsonValue) : wire;
   }
   encodeJson(value: JsonValue): JsonValue {
@@ -554,7 +554,7 @@ export class SqliteBigintCodec extends CodecImpl<
    * integer — past ±(2^53 − 1) it has already rounded, and converting it would
    * mint a spuriously-exact `bigint` that need not equal the stored value.
    */
-  async decode(wire: number | bigint | string, _ctx: CodecCallContext): Promise<bigint> {
+  decode(wire: number | bigint | string, _ctx: CodecCallContext): bigint {
     if (typeof wire === 'number' && !Number.isSafeInteger(wire)) {
       throw sqliteError(
         'RUNTIME.DECODE_FAILED',
@@ -630,7 +630,7 @@ export class SqliteBigintNumberCodec extends CodecImpl<
    * `bigint`; a bigint (or decimal text) is range-checked exactly before any
    * conversion to `number`, so an out-of-range value throws rather than rounds.
    */
-  async decode(wire: number | bigint | string, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: number | bigint | string, _ctx: CodecCallContext): number {
     if (typeof wire === 'number') return safeIntegerNumber(wire, 'RUNTIME.DECODE_FAILED');
     if (typeof wire === 'string' && !DECIMAL_INTEGER.test(wire)) {
       throw sqliteError(

@@ -30,37 +30,37 @@ describe('pg/int8number@1', () => {
     });
 
     it('throws at 2^53 on every wire form', async () => {
-      await expect(codec.decode(9007199254740992, {})).rejects.toThrow(
+      expect(() => codec.decode(9007199254740992, {})).toThrow(
         'pg/int8number@1 value must be an integer within the safe integer range',
       );
-      await expect(codec.decode('9007199254740992', {})).rejects.toThrow(
+      expect(() => codec.decode('9007199254740992', {})).toThrow(
         'pg/int8number@1 value must be an integer within the safe integer range',
       );
-      await expect(codec.decode(9007199254740992n, {})).rejects.toThrow(
+      expect(() => codec.decode(9007199254740992n, {})).toThrow(
         'pg/int8number@1 value must be an integer within the safe integer range',
       );
     });
 
     it('throws at -(2^53)', async () => {
-      await expect(codec.decode(-9007199254740992n, {})).rejects.toThrow(
+      expect(() => codec.decode(-9007199254740992n, {})).toThrow(
         'pg/int8number@1 value must be an integer within the safe integer range',
       );
-      await expect(codec.decode('-9007199254740992', {})).rejects.toThrow(
+      expect(() => codec.decode('-9007199254740992', {})).toThrow(
         'pg/int8number@1 value must be an integer within the safe integer range',
       );
     });
 
     it('throws on decimal text a Number() coercion would silently round', async () => {
-      await expect(codec.decode('9007199254740993', {})).rejects.toThrow(
+      expect(() => codec.decode('9007199254740993', {})).toThrow(
         'pg/int8number@1 value must be an integer within the safe integer range',
       );
     });
 
     it('throws on non-integral wire values', async () => {
-      await expect(codec.decode(1.5, {})).rejects.toThrow(
+      expect(() => codec.decode(1.5, {})).toThrow(
         'pg/int8number@1 value must be an integer within the safe integer range',
       );
-      await expect(codec.decode('1.5', {})).rejects.toThrow(
+      expect(() => codec.decode('1.5', {})).toThrow(
         'pg/int8number@1 value must be a decimal integer',
       );
     });
@@ -221,16 +221,20 @@ describe('pg/int8@1 number wire values', () => {
   });
 
   it('rejects a number wire value past the safe range, which has already lost precision', async () => {
-    await expect(codec.decode(9007199254740992, {})).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      message:
-        'pg/int8@1 wire number must be an integer within the safe integer range, got 9007199254740992',
-      meta: { codecId: 'pg/int8@1', received: '9007199254740992' },
-    });
-    await expect(codec.decode(-9007199254740992, {})).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      meta: { codecId: 'pg/int8@1', received: '-9007199254740992' },
-    });
+    expect(() => codec.decode(9007199254740992, {})).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message:
+          'pg/int8@1 wire number must be an integer within the safe integer range, got 9007199254740992',
+        meta: { codecId: 'pg/int8@1', received: '9007199254740992' },
+      }),
+    );
+    expect(() => codec.decode(-9007199254740992, {})).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        meta: { codecId: 'pg/int8@1', received: '-9007199254740992' },
+      }),
+    );
   });
 });
 
@@ -253,32 +257,36 @@ describe('pg/unboundedint@1', () => {
     });
 
     it('rejects a number wire value past the safe range, which has already lost precision', async () => {
-      await expect(codec.decode(9007199254740992, {})).rejects.toMatchObject({
-        code: 'RUNTIME.DECODE_FAILED',
-        message:
-          'pg/unboundedint@1 wire number must be an integer within the safe integer range, got 9007199254740992',
-        meta: { codecId: 'pg/unboundedint@1', received: '9007199254740992' },
-      });
-      await expect(codec.decode(-9007199254740992, {})).rejects.toMatchObject({
-        code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'pg/unboundedint@1', received: '-9007199254740992' },
-      });
+      expect(() => codec.decode(9007199254740992, {})).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.DECODE_FAILED',
+          message:
+            'pg/unboundedint@1 wire number must be an integer within the safe integer range, got 9007199254740992',
+          meta: { codecId: 'pg/unboundedint@1', received: '9007199254740992' },
+        }),
+      );
+      expect(() => codec.decode(-9007199254740992, {})).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.DECODE_FAILED',
+          meta: { codecId: 'pg/unboundedint@1', received: '-9007199254740992' },
+        }),
+      );
     });
 
     it('rejects non-integral values', async () => {
-      await expect(codec.decode('1.5', {})).rejects.toThrow(
+      expect(() => codec.decode('1.5', {})).toThrow(
         'pg/unboundedint@1 value must be a decimal integer',
       );
-      await expect(codec.decode(1.5, {})).rejects.toThrow(
+      expect(() => codec.decode(1.5, {})).toThrow(
         'pg/unboundedint@1 value must be a decimal integer',
       );
     });
 
     it('rejects the non-finite numeric values', async () => {
-      await expect(codec.decode('NaN', {})).rejects.toThrow(
+      expect(() => codec.decode('NaN', {})).toThrow(
         'pg/unboundedint@1 value must be a decimal integer',
       );
-      await expect(codec.decode('Infinity', {})).rejects.toThrow(
+      expect(() => codec.decode('Infinity', {})).toThrow(
         'pg/unboundedint@1 value must be a decimal integer',
       );
     });

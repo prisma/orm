@@ -35,11 +35,11 @@ test('encode/decode call sites accept an explicit ctx (signal optional inside th
   type StringCodec = Codec<'demo/text@1', readonly [], string, string>;
   const encodeWithCtx = (c: StringCodec, v: string, ctx: CodecCallContext): Promise<string> =>
     c.encode(v, ctx);
-  const decodeWithCtx = (c: StringCodec, w: string, ctx: CodecCallContext): Promise<string> =>
+  const decodeWithCtx = (c: StringCodec, w: string, ctx: CodecCallContext): string =>
     c.decode(w, ctx);
   // An empty ctx is legal — `signal` is the only field today and is optional inside the context shape.
   const encodeWithEmptyCtx = (c: StringCodec, v: string): Promise<string> => c.encode(v, {});
-  const decodeWithEmptyCtx = (c: StringCodec, w: string): Promise<string> => c.decode(w, {});
+  const decodeWithEmptyCtx = (c: StringCodec, w: string): string => c.decode(w, {});
   void encodeWithCtx;
   void decodeWithCtx;
   void encodeWithEmptyCtx;
@@ -68,9 +68,9 @@ test('encode return type is unconditionally Promise<TWire> (no conditional types
   expectTypeOf<ReturnType<CodecB['encode']>>().toEqualTypeOf<Promise<number>>();
 });
 
-test('decode return type is unconditionally Promise<TInput> (no conditional types)', () => {
+test('decode return type is unconditionally TInput (no conditional types)', () => {
   type CodecA = Codec<'demo/a@1', readonly [], string, string>;
   type CodecB = Codec<'demo/b@1', readonly [], number, number>;
-  expectTypeOf<ReturnType<CodecA['decode']>>().toEqualTypeOf<Promise<string>>();
-  expectTypeOf<ReturnType<CodecB['decode']>>().toEqualTypeOf<Promise<number>>();
+  expectTypeOf<ReturnType<CodecA['decode']>>().toEqualTypeOf<string>();
+  expectTypeOf<ReturnType<CodecB['decode']>>().toEqualTypeOf<number>();
 });

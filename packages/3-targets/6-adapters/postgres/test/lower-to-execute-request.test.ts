@@ -30,7 +30,7 @@ const ctx = { contract: {} as PostgresContract };
 const transformingCodec = {
   id: 'test/transform@1',
   encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-  decode: async (wire: unknown) => wire,
+  decode: (wire: unknown) => wire,
   encodeJson: (value: unknown) => value,
   decodeJson: (json: unknown) => json,
 } as unknown as Codec;
@@ -214,7 +214,7 @@ const TEST_CODEC_ID = 'test/transform@1';
 const queryTransformingCodec = {
   id: TEST_CODEC_ID,
   encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-  decode: async (wire: unknown) => wire,
+  decode: (wire: unknown) => wire,
 } as unknown as Codec;
 
 const testRegistry: ContractCodecRegistry = {
@@ -289,7 +289,7 @@ class ExtTransformDescriptor extends CodecDescriptorImpl<void> {
       ({
         id: EXT_CODEC_ID,
         encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-        decode: async (wire: unknown) => wire,
+        decode: (wire: unknown) => wire,
         encodeJson: (v: unknown) => v as never,
         decodeJson: (v: unknown) => v as never,
       }) as unknown as Codec;

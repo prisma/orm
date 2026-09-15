@@ -12,7 +12,7 @@ function vectorCodecLookup(): CodecLookup {
   const vectorCodec = {
     id: 'pg/vector@1',
     encode: async (v: unknown) => v,
-    decode: async (w: unknown) => w,
+    decode: (w: unknown) => w,
     encodeJson: (v: unknown) => v as never,
     decodeJson: (j: unknown) => j as never,
   } as ReturnType<CodecLookup['get']>;

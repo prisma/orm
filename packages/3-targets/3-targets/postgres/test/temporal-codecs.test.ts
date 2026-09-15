@@ -147,7 +147,7 @@ describe('Temporal-backed temporal codecs', () => {
 
   describe('values Temporal cannot represent are reported, not silently coerced', () => {
     const unrepresentable: ReadonlyArray<
-      readonly [string, { decode: (w: string, c: object) => Promise<unknown> }, string, string]
+      readonly [string, { decode: (w: string, c: object) => unknown }, string, string]
     > = [
       ['date infinity', dateCodec, 'infinity', 'DateString'],
       ['date -infinity', dateCodec, '-infinity', 'DateString'],
@@ -180,11 +180,13 @@ describe('Temporal-backed temporal codecs', () => {
     it.each(unrepresentable)(
       'rejects %s and names the string type that reads it losslessly',
       async (_label, codec, wire, stringType) => {
-        await expect(codec.decode(wire, callCtx)).rejects.toMatchObject({
-          code: 'RUNTIME.DECODE_FAILED',
-          meta: { value: wire, stringType },
-        });
-        await expect(codec.decode(wire, callCtx)).rejects.toThrow(stringType);
+        expect(() => codec.decode(wire, callCtx)).toThrow(
+          expect.objectContaining({
+            code: 'RUNTIME.DECODE_FAILED',
+            meta: expect.objectContaining({ value: wire, stringType }),
+          }),
+        );
+        expect(() => codec.decode(wire, callCtx)).toThrow(stringType);
       },
     );
 
@@ -197,7 +199,7 @@ describe('Temporal-backed temporal codecs', () => {
     ] as const)(
       'explains that %s %s is a timeline sentinel rather than unparseable text',
       async (_kind, codec, wire) => {
-        await expect(codec.decode(wire, callCtx)).rejects.toThrow(
+        expect(() => codec.decode(wire, callCtx)).toThrow(
           `PostgreSQL's ${wire} is a sentinel with no position on the timeline`,
         );
       },

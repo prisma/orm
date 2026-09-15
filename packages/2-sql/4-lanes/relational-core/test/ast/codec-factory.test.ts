@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { defineTestCodec } from './test-codec';
 
-describe('defineTestCodec — query-time methods are Promise-returning', () => {
+describe('defineTestCodec — async encoding and synchronous decoding', () => {
   it('lifts a sync encode into a Promise-returning method', async () => {
     const c = defineTestCodec({
       typeId: 'demo/sync-encode@1',
@@ -14,7 +14,7 @@ describe('defineTestCodec — query-time methods are Promise-returning', () => {
     expect(await encoded).toBe('HELLO');
   });
 
-  it('lifts a sync decode into a Promise-returning method', async () => {
+  it('preserves synchronous decoding', () => {
     const c = defineTestCodec({
       typeId: 'demo/sync-decode@1',
       encode: (value: string) => value,
@@ -22,8 +22,7 @@ describe('defineTestCodec — query-time methods are Promise-returning', () => {
     });
 
     const decoded = c.decode('WORLD', {});
-    expect(decoded).toBeInstanceOf(Promise);
-    expect(await decoded).toBe('world');
+    expect(decoded).toBe('world');
   });
 
   it('accepts an async encode and produces a Promise-returning method', async () => {
@@ -38,29 +37,17 @@ describe('defineTestCodec — query-time methods are Promise-returning', () => {
     expect(await encoded).toBe('HELLO');
   });
 
-  it('accepts an async decode and produces a Promise-returning method', async () => {
+  it('propagates decode errors synchronously', () => {
+    const error = new Error('invalid wire value');
     const c = defineTestCodec({
-      typeId: 'demo/async-decode@1',
+      typeId: 'demo/throwing-decode@1',
       encode: (value: string) => value,
-      decode: async (wire: string) => wire.toLowerCase(),
+      decode: (_wire: string): string => {
+        throw error;
+      },
     });
 
-    const decoded = c.decode('WORLD', {});
-    expect(decoded).toBeInstanceOf(Promise);
-    expect(await decoded).toBe('world');
-  });
-
-  it('accepts a mix of sync encode + async decode', async () => {
-    const c = defineTestCodec({
-      typeId: 'demo/mixed-a@1',
-      encode: (value: string) => value,
-      decode: async (wire: string) => wire.toUpperCase(),
-    });
-
-    expect(c.encode!('a', {})).toBeInstanceOf(Promise);
-    expect(c.decode('a', {})).toBeInstanceOf(Promise);
-    expect(await c.encode!('a', {})).toBe('a');
-    expect(await c.decode('a', {})).toBe('A');
+    expect(() => c.decode('invalid', {})).toThrow(error);
   });
 
   it('accepts a mix of async encode + sync decode', async () => {
@@ -71,9 +58,8 @@ describe('defineTestCodec — query-time methods are Promise-returning', () => {
     });
 
     expect(c.encode!('a', {})).toBeInstanceOf(Promise);
-    expect(c.decode('a', {})).toBeInstanceOf(Promise);
     expect(await c.encode!('a', {})).toBe('A');
-    expect(await c.decode('a', {})).toBe('a');
+    expect(c.decode('a', {})).toBe('a');
   });
 
   it('passes encodeJson and decodeJson through as synchronous methods', () => {

@@ -35,7 +35,7 @@ export class PgDateStringCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -81,7 +81,7 @@ export class PgTimestampStringCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -139,7 +139,7 @@ export class PgTimestamptzStringCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -197,7 +197,7 @@ export class PgTimeStringCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {

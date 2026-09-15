@@ -98,13 +98,12 @@ describe('createTestRuntime target list decoding', () => {
 
     const listDecoderWireValues: unknown[] = [];
     const target = {
-      listDecoder:
-        () => async (wireValue: unknown, decodeElement: (value: unknown) => Promise<unknown>) => {
-          listDecoderWireValues.push(wireValue);
-          expect(typeof wireValue).toBe('string');
-          expect(wireValue).toBe('{a,b}');
-          return [await decodeElement('a'), await decodeElement('b')];
-        },
+      listDecoder: () => (wireValue: unknown, decodeElement: (value: unknown) => unknown) => {
+        listDecoderWireValues.push(wireValue);
+        expect(typeof wireValue).toBe('string');
+        expect(wireValue).toBe('{a,b}');
+        return [decodeElement('a'), decodeElement('b')];
+      },
     };
     const { driver } = createDriver();
     const runtime = createTestRuntime({

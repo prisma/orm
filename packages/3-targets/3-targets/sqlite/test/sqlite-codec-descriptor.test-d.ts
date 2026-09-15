@@ -45,7 +45,7 @@ class VectorCodec<N extends number> extends CodecImpl<
     return `[${value.join(',')}]`;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<ReadonlyArray<number>> {
+  decode(wire: string, _ctx: CodecCallContext): ReadonlyArray<number> {
     return wire.slice(1, -1).split(',').map(Number);
   }
 

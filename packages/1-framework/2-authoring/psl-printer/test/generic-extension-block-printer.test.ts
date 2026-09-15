@@ -60,7 +60,7 @@ class StubPolicyTextCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {
@@ -222,7 +222,7 @@ describe('generic extension-block printer (P2)', () => {
       async encode(value: number, _ctx: CodecCallContext): Promise<number> {
         return value;
       }
-      async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+      decode(wire: number, _ctx: CodecCallContext): number {
         return wire;
       }
       // A quoted "42" or a bare 42 both decode to the number 42 …

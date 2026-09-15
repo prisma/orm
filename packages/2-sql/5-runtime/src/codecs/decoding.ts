@@ -1,9 +1,5 @@
 import type { JsonValue } from '@internal/contract/types';
-import {
-  checkAborted,
-  raceAgainstAbort,
-  runtimeError,
-} from '@internal/framework-components/runtime';
+import { checkAborted, runtimeError } from '@internal/framework-components/runtime';
 import type {
   AnyQueryAst,
   Codec,
@@ -19,10 +15,10 @@ type ColumnRef = { table: string; column: string };
 
 export type ListDecoder = (
   wireValue: unknown,
-  decodeElement: (value: unknown) => Promise<unknown>,
-) => Promise<readonly unknown[]> | readonly unknown[];
+  decodeElement: (value: unknown) => unknown,
+) => readonly unknown[];
 
-export const sqlNativeArrayListDecoder: ListDecoder = async (wireValue, decodeElement) => {
+export const sqlNativeArrayListDecoder: ListDecoder = (wireValue, decodeElement) => {
   if (!Array.isArray(wireValue)) {
     throw new TypeError(
       `expected an array from the driver for many-typed column, got ${typeof wireValue}`,
@@ -30,7 +26,7 @@ export const sqlNativeArrayListDecoder: ListDecoder = async (wireValue, decodeEl
   }
   const decoded: unknown[] = [];
   for (const elem of wireValue) {
-    decoded.push(await decodeElement(elem));
+    decoded.push(decodeElement(elem));
   }
   return decoded;
 };
@@ -238,7 +234,7 @@ function decodeIncludeAggregate(alias: string, wireValue: unknown): IncludeAggre
 }
 
 /**
- * Decodes a single field. Single-armed: every cell takes the same path — `codec.decode → await → return plain value` — so sync- and async-authored codecs are indistinguishable to callers. JSON-Schema validation, when required, lives inside the resolved codec's `decode` body (e.g. `arktype-json` validates against its rehydrated schema and throws `RUNTIME.JSON_SCHEMA_VALIDATION_FAILED` from `decode` directly); there is
+ * Decodes a single field synchronously. JSON-Schema validation, when required, lives inside the resolved codec's `decode` body (e.g. `arktype-json` validates against its rehydrated schema and throws `RUNTIME.JSON_SCHEMA_VALIDATION_FAILED` from `decode` directly); there is
  * no separate validator-registry pass.
  *
  * The row-level `rowCtx` is repackaged into a per-cell `SqlCodecCallContext` whose `column = { table, name }` is a structural projection of the per-cell `ColumnRef = { table, column }` resolved from the AST-backed `DecodeContext` (the same resolution `wrapDecodeFailure` uses for envelope construction — one resolution per cell, two consumers). Cells the runtime cannot resolve to a single underlying column (aggregate
@@ -246,13 +242,13 @@ function decodeIncludeAggregate(alias: string, wireValue: unknown): IncludeAggre
  *
  * For `many`-flagged aliases this function delegates frame traversal to the selected `ListDecoder`, passing `null` elements through unchanged and mapping the same element codec over every non-null element. SQL runtimes without a target-owned contribution select `sqlNativeArrayListDecoder` explicitly before row decoding. Element-level failures surface through the existing `RUNTIME.DECODE_FAILED` envelope with the column/codec context from the parent cell.
  */
-async function decodeField(
+function decodeField(
   alias: string,
   wireValue: unknown,
   decodeCtx: DecodeContext,
   rowCtx: SqlCodecCallContext,
   listDecoder: ListDecoder,
-): Promise<unknown> {
+): unknown {
   if (wireValue === null) {
     return null;
   }
@@ -272,13 +268,13 @@ async function decodeField(
     cellCtx = rowCtxWithoutColumn;
   }
 
-  const decodeElement = async (elem: unknown): Promise<unknown> => {
+  const decodeElement = (elem: unknown): unknown => {
     if (elem === null || elem === undefined) {
       return null;
     }
 
     try {
-      return await codec.decode(elem, cellCtx);
+      return codec.decode(elem, cellCtx);
     } catch (error) {
       if (isStructuredError(error)) throw error;
       wrapDecodeFailure(error, alias, ref, codec, elem);
@@ -287,7 +283,7 @@ async function decodeField(
 
   if (decodeCtx.manyAliases.has(alias)) {
     try {
-      return await listDecoder(wireValue, decodeElement);
+      return listDecoder(wireValue, decodeElement);
     } catch (error) {
       if (isStructuredError(error)) throw error;
       wrapDecodeFailure(error, alias, ref, codec, wireValue);
@@ -295,7 +291,7 @@ async function decodeField(
   }
 
   try {
-    return await codec.decode(wireValue, cellCtx);
+    return codec.decode(wireValue, cellCtx);
   } catch (error) {
     // Any structured envelope (dotted `code` per `isStructuredError`) is
     // stable by construction — let it pass through unchanged. This covers
@@ -310,23 +306,13 @@ async function decodeField(
   }
 }
 
-/**
- * Decodes a row by dispatching all per-cell codec calls concurrently via `Promise.all`. Each cell follows the single-armed `decodeField` path. Structured envelopes thrown by codec bodies (anything passing `isStructuredError`) pass through unchanged; all other failures are wrapped in `RUNTIME.DECODE_FAILED` with `{ table, column, codec }` (or `{ alias, codec }` when no column ref is resolvable) and the original error attached on `cause`.
- *
- * When `rowCtx.signal` is provided:
- *
- * - **Already-aborted at entry** short-circuits with `RUNTIME.ABORTED` (`{ phase: 'decode' }`) before any `codec.decode` call is made.
- * - **Mid-flight aborts** race the per-cell `Promise.all` against the signal so the runtime returns promptly even when codec bodies ignore it. In-flight bodies that ignore the signal complete in the background (cooperative cancellation).
- * - Existing structured envelopes (any dotted-code error passing `isStructuredError`, e.g. `RUNTIME.DECODE_FAILED`) from codec bodies pass through unchanged (no double wrap).
- */
-export async function decodeRow(
+export function decodeRow(
   row: Record<string, unknown>,
   decodeCtx: DecodeContext,
   rowCtx: SqlCodecCallContext,
   listDecoder: ListDecoder,
-): Promise<Record<string, unknown>> {
+): Record<string, unknown> {
   checkAborted(rowCtx, 'decode');
-  const signal = rowCtx.signal;
 
   const aliases = decodeCtx.aliases ?? Object.keys(row);
 
@@ -352,32 +338,12 @@ export async function decodeRow(
     }
   }
 
-  const tasks: Promise<unknown>[] = [];
-  const includeIndices: { index: number; alias: string; value: unknown }[] = [];
-
-  for (let i = 0; i < aliases.length; i++) {
-    const alias = blindCast<string, 'decodeRow aliases are index-aligned'>(aliases[i]);
-    const wireValue = row[alias];
-
-    if (decodeCtx.includeAliases.has(alias)) {
-      includeIndices.push({ index: i, alias, value: wireValue });
-      tasks.push(Promise.resolve(undefined));
-      continue;
-    }
-
-    tasks.push(decodeField(alias, wireValue, decodeCtx, rowCtx, listDecoder));
-  }
-
-  const settled = await raceAgainstAbort(Promise.all(tasks), signal, 'decode');
-
-  for (const entry of includeIndices) {
-    settled[entry.index] = decodeIncludeAggregate(entry.alias, entry.value);
-  }
-
   const decoded: Record<string, unknown> = {};
-  for (let i = 0; i < aliases.length; i++) {
-    const alias = blindCast<string, 'decodeRow aliases are index-aligned'>(aliases[i]);
-    decoded[alias] = settled[i];
+  for (const alias of aliases) {
+    const wireValue = row[alias];
+    decoded[alias] = decodeCtx.includeAliases.has(alias)
+      ? decodeIncludeAggregate(alias, wireValue)
+      : decodeField(alias, wireValue, decodeCtx, rowCtx, listDecoder);
   }
   return decoded;
 }

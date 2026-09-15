@@ -15,8 +15,8 @@ export interface PostgresRuntimeTargetInstance extends RuntimeTargetInstance<'sq
 
 export type PostgresListDecoder = (
   wireValue: unknown,
-  decodeElement: (value: unknown) => Promise<unknown>,
-) => Promise<readonly unknown[]>;
+  decodeElement: (value: unknown) => unknown,
+) => readonly unknown[];
 
 /**
  * Target-postgres deliberately does NOT import `SqlRuntimeTargetDescriptor` from `@internal/sql-runtime`. The target package is a control-plane residence and must not pull the SQL execution-plane package into its dependency closure. The runtime descriptor here is shaped to satisfy the framework's `RuntimeTargetDescriptor` plus the structural `SqlStaticContributions` (`codecs:` returning a descriptor list) that

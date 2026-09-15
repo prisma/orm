@@ -257,8 +257,8 @@ describe('codecs-class', () => {
       expect(await codec.decode({ key: 'value' }, callCtx)).toEqual({ key: 'value' });
     });
 
-    it('rejects invalid JSON text with SyntaxError', async () => {
-      await expect(codec.decode('{invalid', callCtx)).rejects.toThrow(SyntaxError);
+    it('rejects invalid JSON text with SyntaxError', () => {
+      expect(() => codec.decode('{invalid', callCtx)).toThrow(SyntaxError);
     });
   });
 
@@ -281,8 +281,8 @@ describe('codecs-class', () => {
       expect(await codec.decode([1, 2, 3], callCtx)).toEqual([1, 2, 3]);
     });
 
-    it('rejects invalid JSON text with SyntaxError', async () => {
-      await expect(codec.decode('{invalid', callCtx)).rejects.toThrow(SyntaxError);
+    it('rejects invalid JSON text with SyntaxError', () => {
+      expect(() => codec.decode('{invalid', callCtx)).toThrow(SyntaxError);
     });
   });
 

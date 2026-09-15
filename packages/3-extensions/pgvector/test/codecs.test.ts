@@ -4,10 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { pgVectorColumn, pgVectorDescriptor } from '../src/core/codecs';
 import { VECTOR_CODEC_ID, VECTOR_MAX_DIM } from '../src/core/constants';
 
-// The pgvector codec authors `encode`/`decode` synchronously; codecs route through `Promise`-returning methods at the boundary. The tests below cast through the Promise-returning shape and `await` every call so unit-level coverage stays aligned with the codec contract: `Codec<Id, TTraits, TWire, TInput>` — encode/decode return Promise.
 type AsyncVectorCodec = {
   readonly encode: (value: number[]) => Promise<string>;
-  readonly decode: (wire: string) => Promise<number[]>;
+  readonly decode: (wire: string) => number[];
   readonly encodeJson: (value: number[]) => JsonValue;
   readonly decodeJson: (json: JsonValue) => number[];
 };
@@ -87,7 +86,7 @@ describe('pgvector codecs', () => {
       await expect(vectorCodec.encode(value)).rejects.toThrow(
         'Vector value must contain only finite numbers',
       );
-      await expect(vectorCodec.decode(wire)).rejects.toThrow(
+      expect(() => vectorCodec.decode(wire)).toThrow(
         'Vector value must contain only finite numbers',
       );
       expect(() => vectorCodec.encodeJson(value)).toThrow(
@@ -101,14 +100,14 @@ describe('pgvector codecs', () => {
 
   it('rejects when decoding invalid string format', async () => {
     const vectorCodec = asAsyncCodec(4);
-    await expect(vectorCodec.decode('not a vector format')).rejects.toThrow(
+    expect(() => vectorCodec.decode('not a vector format')).toThrow(
       'Invalid vector format: expected "[...]", got "not a vector format"',
     );
   });
 
   it('rejects when decoding non-string', async () => {
     const vectorCodec = asAsyncCodec(4);
-    await expect(vectorCodec.decode(123 as unknown as string)).rejects.toThrow(
+    expect(() => vectorCodec.decode(123 as unknown as string)).toThrow(
       'Vector wire value must be a string',
     );
   });
@@ -125,14 +124,12 @@ describe('pgvector codecs', () => {
 
   it('rejects decoding when wire length mismatches declared dimension', async () => {
     const vectorCodec = asAsyncCodec(3);
-    await expect(vectorCodec.decode('[1,2]')).rejects.toThrow(
-      'Vector length mismatch: expected 3, got 2',
-    );
+    expect(() => vectorCodec.decode('[1,2]')).toThrow('Vector length mismatch: expected 3, got 2');
   });
 
   it('rejects decoding when the wire payload contains a non-number token', async () => {
     const vectorCodec = asAsyncCodec(3);
-    await expect(vectorCodec.decode('[1,foo,3]')).rejects.toThrow(
+    expect(() => vectorCodec.decode('[1,foo,3]')).toThrow(
       /Invalid vector value: "foo" is not a number/,
     );
   });

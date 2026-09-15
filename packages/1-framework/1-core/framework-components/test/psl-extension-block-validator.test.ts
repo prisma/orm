@@ -63,7 +63,7 @@ class StubStringCodec extends CodecImpl<'stub/string@1', readonly ['textual'], s
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return value;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
   encodeJson(value: string): JsonValue {

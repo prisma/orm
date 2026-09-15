@@ -91,14 +91,6 @@ async function createPooledRuntime(pool: Pool) {
   return { runtime, pool, parents, included, codec };
 }
 
-function gate() {
-  let resolve = () => {};
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
-
 const expected = [
   { id: 1, name: 'Alice', children: [{ id: 10 }] },
   { id: 2, name: 'Bob', children: [{ id: 20 }] },
@@ -109,24 +101,16 @@ describe('integration/ORM buffered connection release', () => {
     'makes the size-one pool available while an included parent is decoding',
     async () => {
       await withPooledRuntime(async ({ pool, parents, included, codec }) => {
-        const entered = gate();
-        const resume = gate();
         const decode = codec.decode.bind(codec);
-        const spy = vi.spyOn(codec, 'decode').mockImplementationOnce(async (wire, context) => {
-          entered.resolve();
-          await resume.promise;
-          return decode(wire, context);
-        });
-        const first = Promise.resolve(included.all());
-        try {
-          await Promise.race([
-            entered.promise,
-            first.then(() => {
-              throw new Error('Query finished without entering the parent decoder');
-            }),
-          ]);
+        const spy = vi.spyOn(codec, 'decode').mockImplementationOnce((wire, context) => {
           expect(pool.totalCount).toBe(1);
           expect(pool.idleCount).toBe(1);
+          expect(pool.waitingCount).toBe(0);
+          return decode(wire, context);
+        });
+        try {
+          await expect(included.all()).resolves.toEqual(expected);
+          expect(spy).toHaveBeenCalledTimes(2);
           await expect(
             parents
               .select('id')
@@ -135,12 +119,7 @@ describe('integration/ORM buffered connection release', () => {
           ).resolves.toEqual([{ id: 1 }, { id: 2 }]);
           expect(pool.waitingCount).toBe(0);
         } finally {
-          resume.resolve();
-          try {
-            await expect(first).resolves.toEqual(expected);
-          } finally {
-            spy.mockRestore();
-          }
+          spy.mockRestore();
         }
       });
     },
@@ -178,7 +157,9 @@ describe('integration/ORM buffered connection release', () => {
       await withPooledRuntime(async ({ pool, parents, included, codec }) => {
         const released = vi.fn();
         pool.on('release', released);
-        const spy = vi.spyOn(codec, 'decode').mockRejectedValueOnce(new Error('Decoder failed'));
+        const spy = vi.spyOn(codec, 'decode').mockImplementationOnce(() => {
+          throw new Error('Decoder failed');
+        });
         try {
           await expect(included.all()).rejects.toThrow();
           expect(pool.idleCount).toBe(1);

@@ -789,7 +789,7 @@ describe('SqlRuntime', () => {
     const sentSecret = sentRequest?.params?.[0];
     expect(typeof sentSecret).toBe('string');
     expect(sentSecret).not.toBe('Alice');
-    await expect(decryptSecret(sentSecret as string, runtimeSecretSeed)).resolves.toBe('Alice');
+    expect(decryptSecret(sentSecret as string, runtimeSecretSeed)).toBe('Alice');
   });
 
   it('wraps async parameter encoding failures before the driver runs', async () => {

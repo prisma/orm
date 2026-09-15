@@ -43,7 +43,7 @@ export class PgDateTemporalCodec extends CodecImpl<
   async encode(value: Temporal.PlainDate, _ctx: CodecCallContext): Promise<string> {
     return pgDateTemporalEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainDate> {
+  decode(wire: string, _ctx: CodecCallContext): Temporal.PlainDate {
     return pgDateTemporalDecode(wire);
   }
   encodeJson(value: Temporal.PlainDate): JsonValue {
@@ -89,7 +89,7 @@ export class PgTimestampTemporalCodec extends CodecImpl<
   async encode(value: Temporal.PlainDateTime, _ctx: CodecCallContext): Promise<string> {
     return pgTimestampTemporalEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainDateTime> {
+  decode(wire: string, _ctx: CodecCallContext): Temporal.PlainDateTime {
     return pgTimestampTemporalDecode(wire);
   }
   encodeJson(value: Temporal.PlainDateTime): JsonValue {
@@ -145,7 +145,7 @@ export class PgTimestamptzTemporalCodec extends CodecImpl<
   async encode(value: Temporal.Instant, _ctx: CodecCallContext): Promise<string> {
     return pgTimestamptzTemporalEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.Instant> {
+  decode(wire: string, _ctx: CodecCallContext): Temporal.Instant {
     return pgTimestamptzTemporalDecode(wire);
   }
   encodeJson(value: Temporal.Instant): JsonValue {
@@ -201,7 +201,7 @@ export class PgTimeTemporalCodec extends CodecImpl<
   async encode(value: Temporal.PlainTime, _ctx: CodecCallContext): Promise<string> {
     return pgTimeTemporalEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Temporal.PlainTime> {
+  decode(wire: string, _ctx: CodecCallContext): Temporal.PlainTime {
     return pgTimeTemporalDecode(wire);
   }
   encodeJson(value: Temporal.PlainTime): JsonValue {

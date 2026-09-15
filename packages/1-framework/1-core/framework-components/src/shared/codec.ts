@@ -26,7 +26,7 @@ import type { CodecCallContext, CodecTrait } from './codec-types';
  *
  * Codec methods split into two groups:
  *
- * - **Query-time** methods (`encode`, `decode`) run per row/parameter at the IO boundary; they are required and Promise-returning. The per-family codec factory accepts sync or async author functions and lifts sync ones to Promise-shaped methods automatically.
+ * - **Query-time** methods (`encode`, `decode`) run per row/parameter at the IO boundary; encoding is Promise-returning, while decoding is strictly synchronous in this performance prototype.
  * - **JSON** methods (`encodeJson`, `decodeJson`) run when the contract is serialized or loaded. Runtimes may also use `decodeJson` for values embedded in database-produced JSON results. They stay synchronous so contract validation and client construction are synchronous.
  *
  * Target-family codec interfaces extend this base; family-specific concerns (e.g. the SQL `column?` per-call context) layer on through the `CodecCallContext` extension pattern.
@@ -43,8 +43,8 @@ export interface Codec<
   readonly __codecTraits?: TTraits;
   /** Converts a JS value to the wire format expected by the database driver. Always Promise-returning at the boundary. The {@link CodecCallContext} is supplied by the runtime on every call (allocated once per runtime operation, including `query()`, `PreparedStatement.query()`, and `execute()`); family layers may narrow the ctx to extend it (e.g. SQL adds `column`). Author-side single-arg `(value) => …` functions remain legal via TypeScript's bivariance for trailing parameters. */
   encode(value: TInput, ctx: CodecCallContext): Promise<TWire>;
-  /** Converts a wire value from the database driver into the JS application type. Always Promise-returning at the boundary. The {@link CodecCallContext} is supplied by the runtime on every call (allocated once per runtime operation, including `query()`, `PreparedStatement.query()`, and `execute()`); family layers may narrow the ctx to extend it (e.g. SQL adds `column`). Author-side single-arg `(wire) => …` functions remain legal via TypeScript's bivariance for trailing parameters. */
-  decode(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
+  /** Converts a wire value from the database driver into the JS application type synchronously. The {@link CodecCallContext} is supplied by the runtime on every call (allocated once per runtime operation, including `query()`, `PreparedStatement.query()`, and `execute()`); family layers may narrow the ctx to extend it (e.g. SQL adds `column`). Author-side single-arg `(wire) => …` functions remain legal via TypeScript's bivariance for trailing parameters. */
+  decode(wire: TWire, ctx: CodecCallContext): TInput;
   /** Converts a JS value to the target-defined JSON representation used for contract serialization. This must match the scalar shape produced by the target inside JSON values. Synchronous; called during contract emission. */
   encodeJson(value: TInput): JsonValue;
   /** Converts the target-defined JSON representation back to the JS input type. Synchronous; called during contract loading via `family.deserializeContract` and may be called by runtimes for embedded JSON values. */
@@ -74,7 +74,7 @@ export abstract class CodecImpl<
   }
 
   abstract encode(value: TInput, ctx: CodecCallContext): Promise<TWire>;
-  abstract decode(wire: TWire, ctx: CodecCallContext): Promise<TInput>;
+  abstract decode(wire: TWire, ctx: CodecCallContext): TInput;
   abstract encodeJson(value: TInput): JsonValue;
   abstract decodeJson(json: JsonValue): TInput;
 }

@@ -36,7 +36,7 @@ import {
 const textCodec: Codec = {
   id: 'pg/text@1',
   encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
+  decode: (w: unknown) => w,
   encodeJson: (value) => value as never,
   decodeJson(json) {
     if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
@@ -47,7 +47,7 @@ const textCodec: Codec = {
 const int4Codec: Codec = {
   id: 'pg/int4@1',
   encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
+  decode: (w: unknown) => w,
   encodeJson: (value) => value as never,
   decodeJson(json) {
     if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);

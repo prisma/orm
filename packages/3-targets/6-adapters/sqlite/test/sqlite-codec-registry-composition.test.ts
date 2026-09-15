@@ -63,7 +63,7 @@ class TestCodec extends CodecImpl<string, readonly ['equality'], string, string>
     return this.transform(value);
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
 

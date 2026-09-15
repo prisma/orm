@@ -209,12 +209,14 @@ describe('PostgreSQL aggregate defaults', { concurrent: false }, () => {
         const { wire, codec } = await aggregate('sum', 'pg/int8@1');
 
         expect(wire).toBe((MAX_SAFE + 1n).toString());
-        await expect(codec.decode(wire, {})).rejects.toMatchObject({
-          code: 'RUNTIME.DECODE_FAILED',
-          message:
-            'pg/int8number@1 value must be an integer within the safe integer range, got 9007199254740992',
-          meta: { codecId: 'pg/int8number@1', received: '9007199254740992' },
-        });
+        expect(() => codec.decode(wire, {})).toThrow(
+          expect.objectContaining({
+            code: 'RUNTIME.DECODE_FAILED',
+            message:
+              'pg/int8number@1 value must be an integer within the safe integer range, got 9007199254740992',
+            meta: { codecId: 'pg/int8number@1', received: '9007199254740992' },
+          }),
+        );
       });
     },
     timeouts.spinUpPpgDev,

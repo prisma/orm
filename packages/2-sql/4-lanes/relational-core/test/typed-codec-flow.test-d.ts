@@ -56,7 +56,7 @@ class TestVectorCodec extends CodecImpl<'test/vector@1', readonly ['equality'], 
   async encode(value: number[], _ctx: CodecCallContext): Promise<string> {
     return `[${value.join(',')}]`;
   }
-  async decode(_wire: string, _ctx: CodecCallContext): Promise<number[]> {
+  decode(_wire: string, _ctx: CodecCallContext): number[] {
     return [];
   }
   encodeJson(value: number[]): JsonValue {

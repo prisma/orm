@@ -52,20 +52,6 @@ function columnProjection(
   return ProjectionItem.of(alias, ColumnRef.of(table, column), { codecId });
 }
 
-function deferred<T>(): {
-  promise: Promise<T>;
-  resolve: (v: T) => void;
-  reject: (e: unknown) => void;
-} {
-  let resolve!: (v: T) => void;
-  let reject!: (e: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
 describe('decodeRow — SqlCodecCallContext threading', () => {
   it('forwards a per-cell ctx whose signal is the same instance as the row-level ctx (signal identity preserved)', async () => {
     const observed: AbortSignal[] = [];
@@ -88,7 +74,7 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
 
     const controller = new AbortController();
     const rowCtx: SqlCodecCallContext = { signal: controller.signal };
-    await decodeRow(
+    decodeRow(
       { a: 'A', b: 'B' },
       buildDecodeContext(p.ast, buildTestContractCodecs(registry)),
       rowCtx,
@@ -118,7 +104,7 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
       columnProjection('total', 'orders', 'total', 'test/observe-col@1'),
     ]);
 
-    await decodeRow(
+    decodeRow(
       { email: 'email', total: 'total' },
       buildDecodeContext(p.ast, buildTestContractCodecs(registry)),
       { signal: new AbortController().signal },
@@ -148,11 +134,9 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
       columnProjection('secret', 'user', 'secret', 'test/observe-projection@1'),
     ]);
 
-    await decodeRow(
-      { secret: 'wire' },
-      buildDecodeContext(p.ast, buildTestContractCodecs(registry)),
-      { signal: new AbortController().signal },
-    );
+    decodeRow({ secret: 'wire' }, buildDecodeContext(p.ast, buildTestContractCodecs(registry)), {
+      signal: new AbortController().signal,
+    });
 
     expect(observed?.column).toEqual({ table: 'user', name: 'secret' });
   });
@@ -182,11 +166,7 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
       column: { table: 'stale', name: 'stale' },
     };
 
-    await decodeRow(
-      { agg: '1' },
-      buildDecodeContext(p.ast, buildTestContractCodecs(registry)),
-      rowCtx,
-    );
+    decodeRow({ agg: '1' }, buildDecodeContext(p.ast, buildTestContractCodecs(registry)), rowCtx);
 
     expect(observed).toBeDefined();
     expect(observed?.column).toBeUndefined();
@@ -215,7 +195,7 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
       column: { table: 'stale', name: 'stale' },
     };
 
-    await decodeRow(
+    decodeRow(
       { computed: 'wire' },
       buildDecodeContext(p.ast, buildTestContractCodecs(registry)),
       rowCtx,
@@ -243,7 +223,7 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
 
     const p = buildPlan([columnProjection('x', 'users', 'x', 'test/single-arg-author@1')]);
 
-    const result = await decodeRow(
+    const result = decodeRow(
       { x: 'wire' },
       buildDecodeContext(p.ast, buildTestContractCodecs(registry)),
       {},
@@ -276,48 +256,18 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
     const reason = new Error('decode short-circuit');
     controller.abort(reason);
 
-    await expect(
+    expect(() =>
       decodeRow({ a: '1', b: '2' }, buildDecodeContext(p.ast, buildTestContractCodecs(registry)), {
         signal: controller.signal,
       }),
-    ).rejects.toMatchObject({
-      code: 'RUNTIME.ABORTED',
-      details: { phase: 'decode' },
-      cause: reason,
-    });
-    expect(callCount).toBe(0);
-  });
-
-  it('mid-decode abort surfaces RUNTIME.ABORTED { phase: decode } via abortable race', async () => {
-    const release = deferred<string>();
-    const registry = [
-      defineTestCodec({
-        typeId: 'test/blocking@1',
-        targetTypes: ['text'],
-        encode: (v: string) => v,
-        decode: (w: string) => release.promise.then((suffix) => `${w}:${suffix}`),
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'RUNTIME.ABORTED',
+        details: { phase: 'decode' },
+        cause: reason,
       }),
-    ];
-
-    const p = buildPlan([columnProjection('x', 'users', 'x', 'test/blocking@1')]);
-
-    const controller = new AbortController();
-    const reason = new Error('mid-decode abort');
-    const promise = decodeRow(
-      { x: 'wire' },
-      buildDecodeContext(p.ast, buildTestContractCodecs(registry)),
-      { signal: controller.signal },
     );
-
-    queueMicrotask(() => controller.abort(reason));
-
-    await expect(promise).rejects.toMatchObject({
-      code: 'RUNTIME.ABORTED',
-      details: { phase: 'decode' },
-      cause: reason,
-    });
-
-    release.resolve('done');
+    expect(callCount).toBe(0);
   });
 
   it('passes through RUNTIME.DECODE_FAILED unchanged when the codec body throws (no double-wrap)', async () => {
@@ -335,14 +285,16 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
 
     const p = buildPlan([columnProjection('x', 'users', 'x', 'test/explody@1')]);
 
-    await expect(
+    expect(() =>
       decodeRow({ x: 'wire' }, buildDecodeContext(p.ast, buildTestContractCodecs(registry)), {
         signal: new AbortController().signal,
       }),
-    ).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      cause,
-    });
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        cause,
+      }),
+    );
   });
 
   it('reuses the existing per-cell ColumnRef resolution: the column passed to the codec matches the table/name used by RUNTIME.DECODE_FAILED for the same cell', async () => {
@@ -362,11 +314,9 @@ describe('decodeRow — SqlCodecCallContext threading', () => {
 
     const p = buildPlan([columnProjection('email', 'users', 'email', 'test/recorder@1')]);
 
-    await decodeRow(
-      { email: 'wire' },
-      buildDecodeContext(p.ast, buildTestContractCodecs(registry)),
-      { signal: new AbortController().signal },
-    );
+    decodeRow({ email: 'wire' }, buildDecodeContext(p.ast, buildTestContractCodecs(registry)), {
+      signal: new AbortController().signal,
+    });
 
     // SqlColumnRef shape `{ table, name }` projected from the ColumnRef shape `{ table, column }` the resolver returns — same source, one resolution per cell.
     expect(observedColumns).toEqual([{ table: 'users', name: 'email' }]);

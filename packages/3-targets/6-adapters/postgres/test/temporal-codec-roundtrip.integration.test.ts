@@ -317,7 +317,7 @@ describe('Temporal codecs round-trip through PostgreSQL', () => {
     }
   });
 
-  it('forwards RUNTIME.TEMPORAL_UNAVAILABLE through the generic decode path with its code intact', async () => {
+  it('forwards RUNTIME.TEMPORAL_UNAVAILABLE through the generic decode path with its code intact', () => {
     const descriptor = postgresCodecDescriptorRegistry.descriptorFor(TIMESTAMPTZ.codecId);
     const codec = descriptor!.factory(TIMESTAMPTZ.typeParams)({ name: '<test>' });
     const tstzOnly = SelectAst.from(TABLE).withProjection([
@@ -328,17 +328,19 @@ describe('Temporal codecs round-trip through PostgreSQL', () => {
     const original = Reflect.get(globalThis, 'Temporal');
     Reflect.deleteProperty(globalThis, 'Temporal');
     try {
-      await expect(
+      expect(() =>
         decodeRow(
           { tstz: '2026-01-02 03:04:05.123456+00' },
           decodeCtx,
           {},
           postgresRuntimeTargetDescriptor.listDecoder(),
         ),
-      ).rejects.toMatchObject({
-        code: 'RUNTIME.TEMPORAL_UNAVAILABLE',
-        meta: { codecId: 'pg/timestamptz-temporal@1', operation: 'decode' },
-      });
+      ).toThrowError(
+        expect.objectContaining({
+          code: 'RUNTIME.TEMPORAL_UNAVAILABLE',
+          meta: { codecId: 'pg/timestamptz-temporal@1', operation: 'decode' },
+        }),
+      );
     } finally {
       Reflect.set(globalThis, 'Temporal', original);
     }

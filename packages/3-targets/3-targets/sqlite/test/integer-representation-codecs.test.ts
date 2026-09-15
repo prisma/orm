@@ -28,25 +28,31 @@ describe('sqlite/bigint@1 number wire values', () => {
   });
 
   it('rejects a number wire value past the safe range, which has already lost precision', async () => {
-    await expect(codec.decode(9007199254740992, {})).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      message:
-        'sqlite/bigint@1 wire number must be an integer within the safe integer range, got 9007199254740992',
-      meta: { codecId: 'sqlite/bigint@1', received: '9007199254740992' },
-    });
-    await expect(codec.decode(-9007199254740992, {})).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      meta: { codecId: 'sqlite/bigint@1', received: '-9007199254740992' },
-    });
+    expect(() => codec.decode(9007199254740992, {})).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message:
+          'sqlite/bigint@1 wire number must be an integer within the safe integer range, got 9007199254740992',
+        meta: { codecId: 'sqlite/bigint@1', received: '9007199254740992' },
+      }),
+    );
+    expect(() => codec.decode(-9007199254740992, {})).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        meta: { codecId: 'sqlite/bigint@1', received: '-9007199254740992' },
+      }),
+    );
   });
 
   it('rejects a non-integral number wire value with a structured error', async () => {
-    await expect(codec.decode(1.5, {})).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      message:
-        'sqlite/bigint@1 wire number must be an integer within the safe integer range, got 1.5',
-      meta: { codecId: 'sqlite/bigint@1', received: '1.5' },
-    });
+    expect(() => codec.decode(1.5, {})).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message:
+          'sqlite/bigint@1 wire number must be an integer within the safe integer range, got 1.5',
+        meta: { codecId: 'sqlite/bigint@1', received: '1.5' },
+      }),
+    );
   });
 
   // The same guard from the other side of the pair: this codec reads a
@@ -88,46 +94,48 @@ describe('sqlite/bigintnumber@1', () => {
     });
 
     it('throws at 2^53 on every wire form', async () => {
-      await expect(codec.decode(9007199254740992, {})).rejects.toThrow(
+      expect(() => codec.decode(9007199254740992, {})).toThrow(
         'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
       );
-      await expect(codec.decode('9007199254740992', {})).rejects.toThrow(
+      expect(() => codec.decode('9007199254740992', {})).toThrow(
         'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
       );
-      await expect(codec.decode(9007199254740992n, {})).rejects.toThrow(
+      expect(() => codec.decode(9007199254740992n, {})).toThrow(
         'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
       );
     });
 
     it('throws at -(2^53)', async () => {
-      await expect(codec.decode(-9007199254740992n, {})).rejects.toThrow(
+      expect(() => codec.decode(-9007199254740992n, {})).toThrow(
         'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
       );
-      await expect(codec.decode('-9007199254740992', {})).rejects.toThrow(
+      expect(() => codec.decode('-9007199254740992', {})).toThrow(
         'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
       );
     });
 
     it('throws on decimal text a Number() coercion would silently round', async () => {
-      await expect(codec.decode('9007199254740993', {})).rejects.toThrow(
+      expect(() => codec.decode('9007199254740993', {})).toThrow(
         'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
       );
     });
 
     it('throws on non-integral wire values', async () => {
-      await expect(codec.decode(1.5, {})).rejects.toThrow(
+      expect(() => codec.decode(1.5, {})).toThrow(
         'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
       );
-      await expect(codec.decode('1.5', {})).rejects.toThrow(
+      expect(() => codec.decode('1.5', {})).toThrow(
         'sqlite/bigintnumber@1 wire value must be a decimal string',
       );
     });
 
     it('raises a structured error carrying the codec id and the received value', async () => {
-      await expect(codec.decode(9007199254740992n, {})).rejects.toMatchObject({
-        code: 'RUNTIME.DECODE_FAILED',
-        meta: { codecId: 'sqlite/bigintnumber@1', received: '9007199254740992' },
-      });
+      expect(() => codec.decode(9007199254740992n, {})).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.DECODE_FAILED',
+          meta: { codecId: 'sqlite/bigintnumber@1', received: '9007199254740992' },
+        }),
+      );
     });
   });
 

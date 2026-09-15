@@ -33,7 +33,7 @@ describe('defineTestCodec() factory — SqlCodecCallContext arity', () => {
     expect(observed?.column).toEqual({ table: 'users', name: 'email' });
   });
 
-  it('forwards ctx (signal + column) to a `(value, ctx)` decode author', async () => {
+  it('forwards ctx (signal + column) to a `(value, ctx)` decode author', () => {
     let observed: SqlCodecCallContext | undefined;
     const c = defineTestCodec({
       typeId: 'demo/ctx-decode@1',
@@ -48,7 +48,7 @@ describe('defineTestCodec() factory — SqlCodecCallContext arity', () => {
       signal: controller.signal,
       column: { table: 'orders', name: 'total' },
     };
-    await c.decode('x', ctx);
+    expect(c.decode('x', ctx)).toBe('x');
     expect(observed).toBe(ctx);
     expect(observed?.signal).toBe(controller.signal);
     expect(observed?.column).toEqual({ table: 'orders', name: 'total' });
@@ -93,7 +93,7 @@ describe('defineTestCodec() factory — SqlCodecCallContext arity', () => {
     expect(await c.encode('x', { signal: new AbortController().signal })).toBe('enc:x');
   });
 
-  it('a column-aware decode author observes ctx.column shape `{ table, name }`', async () => {
+  it('a column-aware decode author observes ctx.column shape `{ table, name }`', () => {
     let observedColumn: SqlCodecCallContext['column'];
     const c = defineTestCodec({
       typeId: 'demo/column-aware@1',
@@ -103,7 +103,7 @@ describe('defineTestCodec() factory — SqlCodecCallContext arity', () => {
         return wire;
       },
     });
-    await c.decode('x', { column: { table: 'users', name: 'email' } });
+    expect(c.decode('x', { column: { table: 'users', name: 'email' } })).toBe('x');
     expect(observedColumn).toEqual({ table: 'users', name: 'email' });
   });
 });

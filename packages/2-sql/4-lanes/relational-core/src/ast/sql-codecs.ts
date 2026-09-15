@@ -59,7 +59,7 @@ export class SqlTextCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return sqlTextEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return sqlTextDecode(wire);
   }
   encodeJson(value: string): JsonValue {
@@ -97,7 +97,7 @@ export class SqlIntCodec extends CodecImpl<
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
     return sqlIntEncode(value);
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: number, _ctx: CodecCallContext): number {
     return sqlIntDecode(wire);
   }
   encodeJson(value: number): JsonValue {
@@ -135,7 +135,7 @@ export class SqlFloatCodec extends CodecImpl<
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
     return sqlFloatEncode(value);
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: number, _ctx: CodecCallContext): number {
     return sqlFloatDecode(wire);
   }
   encodeJson(value: number): JsonValue {
@@ -173,7 +173,7 @@ export class SqlCharCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return sqlCharEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return sqlCharDecode(wire);
   }
   encodeJson(value: string): JsonValue {
@@ -214,7 +214,7 @@ export class SqlVarcharCodec extends CodecImpl<
   async encode(value: string, _ctx: CodecCallContext): Promise<string> {
     return sqlVarcharEncode(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return sqlVarcharDecode(wire);
   }
   encodeJson(value: string): JsonValue {

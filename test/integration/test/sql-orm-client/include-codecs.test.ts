@@ -40,7 +40,7 @@ class IncludedTextCodec extends CodecImpl<
     return value;
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+  decode(wire: string, _ctx: CodecCallContext): string {
     return wire;
   }
 

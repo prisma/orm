@@ -128,7 +128,7 @@ describe('structured error codes', () => {
     const symbolCodec = {
       id: 'test/symbol@1',
       encode: async () => Symbol('wire'),
-      decode: async (wire: unknown) => wire,
+      decode: (wire: unknown) => wire,
       encodeJson: (value: unknown) => value,
       decodeJson: (json: unknown) => json,
     } as unknown as Codec;

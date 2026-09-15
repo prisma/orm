@@ -35,7 +35,7 @@ describe('value objects in contract definition builder', () => {
         return {
           id,
           encode: async (value: unknown) => value,
-          decode: async (wire: unknown) => wire,
+          decode: (wire: unknown) => wire,
           encodeJson: (value: unknown) => {
             if (!isMoneyValue(value)) {
               throw new Error('Expected a Money value');

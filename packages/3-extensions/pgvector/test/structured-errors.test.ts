@@ -46,9 +46,9 @@ describe('pgvector structured error codes', () => {
     });
   });
 
-  it('RUNTIME.DECODE_FAILED on decode of a malformed wire string', async () => {
+  it('RUNTIME.DECODE_FAILED on decode of a malformed wire string', () => {
     const codec = new PgVectorCodec(pgVectorDescriptor, 3);
-    const err = await catchAsyncError(() => codec.decode('not a vector', codecCtx));
+    const err = catchError(() => codec.decode('not a vector', codecCtx));
     expect(isStructuredError(err)).toBe(true);
     expect(err).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
@@ -57,9 +57,9 @@ describe('pgvector structured error codes', () => {
     });
   });
 
-  it('RUNTIME.DECODE_FAILED (not ENCODE_FAILED) on decode with a length mismatch', async () => {
+  it('RUNTIME.DECODE_FAILED (not ENCODE_FAILED) on decode with a length mismatch', () => {
     const codec = new PgVectorCodec(pgVectorDescriptor, 3);
-    const err = await catchAsyncError(() => codec.decode('[1,2]', codecCtx));
+    const err = catchError(() => codec.decode('[1,2]', codecCtx));
     expect(isStructuredError(err)).toBe(true);
     expect(err).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',

@@ -25,10 +25,12 @@ describe('SQLite codec JSON representations', () => {
   });
 
   it('rejects a malformed string wire with a structured decode error', async () => {
-    await expect(bigintCodec.decode('not-a-number', {})).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      message: 'sqlite/bigint@1 wire value must be a decimal string',
-      meta: { codecId: 'sqlite/bigint@1' },
-    });
+    expect(() => bigintCodec.decode('not-a-number', {})).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message: 'sqlite/bigint@1 wire value must be a decimal string',
+        meta: expect.objectContaining({ codecId: 'sqlite/bigint@1' }),
+      }),
+    );
   });
 });

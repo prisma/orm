@@ -97,7 +97,7 @@ export interface Codec<
   TInput = unknown,
 > extends BaseCodec<Id, TTraits, TWire, TInput> {
   encode(value: TInput, ctx: SqlCodecCallContext): Promise<TWire>;
-  decode(wire: TWire, ctx: SqlCodecCallContext): Promise<TInput>;
+  decode(wire: TWire, ctx: SqlCodecCallContext): TInput;
 }
 
 /**

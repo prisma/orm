@@ -14,8 +14,8 @@ export interface PostgresRuntime extends Runtime {}
 
 type PostgresListDecoder = (
   wireValue: unknown,
-  decodeElement: (value: unknown) => Promise<unknown>,
-) => Promise<readonly unknown[]>;
+  decodeElement: (value: unknown) => unknown,
+) => readonly unknown[];
 
 export class PostgresRuntimeImpl<
   TContract extends Contract<SqlStorage> = Contract<SqlStorage>,

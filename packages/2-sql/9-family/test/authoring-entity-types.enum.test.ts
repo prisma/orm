@@ -54,7 +54,7 @@ const PG_INT_CODEC_ID = 'pg/int@1';
 const pgTextCodec: Codec = {
   id: PG_TEXT_CODEC_ID,
   encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
+  decode: (w: unknown) => w,
   encodeJson: (value) => value as never,
   decodeJson(json) {
     if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
@@ -65,7 +65,7 @@ const pgTextCodec: Codec = {
 const pgIntCodec: Codec = {
   id: PG_INT_CODEC_ID,
   encode: async (v: unknown) => v,
-  decode: async (w: unknown) => w,
+  decode: (w: unknown) => w,
   encodeJson: (value) => value as never,
   decodeJson(json) {
     if (typeof json !== 'number') throw new Error(`expected number, got ${typeof json}`);

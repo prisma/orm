@@ -30,7 +30,9 @@ function stubCodec(id: string, encodeJson: (value: unknown) => JsonValue): Codec
     encodeJson: encodeJson as Codec['encodeJson'],
     decodeJson: ((json: JsonValue) => json) as Codec['decodeJson'],
     encode: (() => Promise.reject(new Error('unused'))) as Codec['encode'],
-    decode: (() => Promise.reject(new Error('unused'))) as Codec['decode'],
+    decode: () => {
+      throw new Error('unused');
+    },
   };
 }
 

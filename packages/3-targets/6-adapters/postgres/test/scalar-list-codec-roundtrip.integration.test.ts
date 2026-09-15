@@ -48,16 +48,16 @@ import { defineTestCodec } from './test-codec';
 const { queryOperations: _stripOps, ...postgresRuntimeAdapterDescriptor } =
   postgresRuntimeAdapterDescriptorFull;
 
-const nativeArrayListDecoder = async (
+const nativeArrayListDecoder = (
   wireValue: unknown,
-  decodeElement: (value: unknown) => Promise<unknown>,
-): Promise<readonly unknown[]> => {
+  decodeElement: (value: unknown) => unknown,
+): readonly unknown[] => {
   if (!Array.isArray(wireValue)) {
     throw new TypeError(
       `expected an array from the driver for many-typed column, got ${typeof wireValue}`,
     );
   }
-  return Promise.all(wireValue.map(decodeElement));
+  return wireValue.map(decodeElement);
 };
 
 // ---------------------------------------------------------------------------
@@ -488,7 +488,7 @@ describe('scalar-list codec round-trip (element-wise encode/decode)', { concurre
 // this test proves that contract without requiring a real DB fixture.
 
 describe('scalar-list decode — malformed element surfaces RUNTIME.DECODE_FAILED', () => {
-  it('wraps an element-level decode failure in RUNTIME.DECODE_FAILED with column/codec context', async () => {
+  it('wraps an element-level decode failure in RUNTIME.DECODE_FAILED with column/codec context', () => {
     const codec = defineTestCodec({
       typeId: 'test/strict-string@1',
       encode: (v: string) => v,
@@ -513,15 +513,17 @@ describe('scalar-list decode — malformed element surfaces RUNTIME.DECODE_FAILE
     const ctx = buildDecodeContext(ast, registry);
 
     // Third element is a number — should trigger the element-level decode failure path.
-    await expect(
+    expect(() =>
       decodeRow({ tags: ['ok', 'also-ok', 42] }, ctx, {}, nativeArrayListDecoder),
-    ).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      details: expect.objectContaining({
-        table: 'ListTest',
-        column: 'tags',
-        codec: 'test/strict-string@1',
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        details: expect.objectContaining({
+          table: 'ListTest',
+          column: 'tags',
+          codec: 'test/strict-string@1',
+        }),
       }),
-    });
+    );
   });
 });

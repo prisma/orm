@@ -196,7 +196,7 @@ describe('shared contract definition lowering', () => {
         return {
           id,
           encode: async (value: unknown) => value,
-          decode: async (wire: unknown) => wire,
+          decode: (wire: unknown) => wire,
           encodeJson: (value: unknown) =>
             value instanceof Date ? value.toISOString() : (value as string),
           decodeJson: (json: unknown) => new Date(json as string),

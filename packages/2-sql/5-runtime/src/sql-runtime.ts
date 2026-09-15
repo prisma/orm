@@ -414,12 +414,7 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
           if (next.done) {
             break;
           }
-          const decodedRow = await decodeRow(
-            next.value,
-            decodeContext,
-            codecCtx,
-            this.getListDecoder(),
-          );
+          const decodedRow = decodeRow(next.value, decodeContext, codecCtx, this.getListDecoder());
           yield blindCast<Row, 'decoded SQL rows match the query plan result type'>(decodedRow);
         }
       } finally {

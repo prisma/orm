@@ -4,6 +4,8 @@ to: 8.0.0-rc.12
 # contract.d.ts now orders every collection the way contract.json does; a re-emit reorders, nothing else.
 # Prepared include decoder specialization adds no consumer migration; retain existing entries below.
 changes:
+  - id: experimental-sync-codec-decoding
+    summary: For the non-mergeable sync-decoding benchmark branch only, return values synchronously from codec decode methods.
   - id: expression-codec-on-return-type
     summary: Move custom expression wrapper codec metadata to returnType.codec and remove the separate ExpressionImpl codec argument.
   - id: shared-preparable-envelope
@@ -18,6 +20,10 @@ changes:
   - id: preserve-orm-pagination-expressions
     summary: Preserve expression-valued limit and offset when consuming ORM CollectionState.
 ---
+
+## `experimental-sync-codec-decoding`
+
+Only when testing the sync-decoding benchmark branch, change codec `decode` methods from `async decode(...): Promise<T>` to `decode(...): T` and remove promise-lifting wrappers. Keep encoding asynchronous. Async-only decoders are unsupported by this experiment; do not adapt them by casting a promise to the decoded type. Update direct decoder assertions to expect returned values or synchronous throws rather than promise resolution or rejection. This experimental entry must not be published as release guidance.
 
 ## `expression-codec-on-return-type`
 

@@ -118,7 +118,7 @@ export class PostgisGeometryCodec extends CodecImpl<
     return encodeEWKT(value);
   }
 
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Geometry> {
+  decode(wire: string, _ctx: CodecCallContext): Geometry {
     if (typeof wire !== 'string') {
       throw postgisError('RUNTIME.DECODE_FAILED', 'Geometry wire value must be a string', {
         meta: { codecId: POSTGIS_GEOMETRY_CODEC_ID },

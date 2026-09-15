@@ -183,7 +183,9 @@ const pgEnumCodec = {
   id: PG_ENUM_CODEC_ID,
   descriptor: pgEnumDescriptor,
   encode: () => Promise.reject(new Error('unused')),
-  decode: () => Promise.reject(new Error('unused')),
+  decode: () => {
+    throw new Error('unused');
+  },
   encodeJson: (value) => value,
   decodeJson: (json) => json,
 } as Codec;

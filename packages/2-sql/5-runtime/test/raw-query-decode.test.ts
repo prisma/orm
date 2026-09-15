@@ -44,8 +44,8 @@ describe('raw-query decode context', () => {
 });
 
 describe('raw-query row decoding', () => {
-  it('decodes each column through the codec its spec declares', async () => {
-    const decoded = await decodeRow(
+  it('decodes each column synchronously through the codec its spec declares', () => {
+    const decoded = decodeRow(
       { id: 4, email: 'a@b.example' },
       buildDecodeContext(rowsAst, contractCodecs),
       {},
@@ -77,22 +77,24 @@ describe('raw-query row decoding', () => {
     expect(decoded).toEqual({ id: 40, email: 'decoded:a@b.example' });
   });
 
-  it('raises RUNTIME.RAW_ROW_COLUMN_MISSING when the result omits a declared column', async () => {
-    await expect(
+  it('raises RUNTIME.RAW_ROW_COLUMN_MISSING when the result omits a declared column', () => {
+    expect(() =>
       decodeRow(
         { id: 4 },
         buildDecodeContext(rowsAst, contractCodecs),
         {},
         sqlNativeArrayListDecoder,
       ),
-    ).rejects.toMatchObject({
-      code: 'RUNTIME.RAW_ROW_COLUMN_MISSING',
-      details: {
-        column: 'email',
-        declaredColumns: ['id', 'email'],
-        resultColumns: ['id'],
-      },
-    });
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'RUNTIME.RAW_ROW_COLUMN_MISSING',
+        details: {
+          column: 'email',
+          declaredColumns: ['id', 'email'],
+          resultColumns: ['id'],
+        },
+      }),
+    );
   });
 
   it('leaves an affected-count row untouched', async () => {

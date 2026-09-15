@@ -92,8 +92,7 @@ export interface MongoRuntime {
    *
    * Mongo's read path decodes rows via `resultShape` (per ADR 209). The
    * same `CodecCallContext` is forwarded into each `codec.decode(wire, ctx)`
-   * call, so async decoders that respect the signal get cancellation; the
-   * runtime itself does not currently emit a `phase: 'decode'` envelope.
+   * call synchronously; the runtime does not emit a `phase: 'decode'` envelope.
    */
   query<Row>(plan: MongoQueryPlan<Row>, options?: RuntimeExecuteOptions): AsyncIterableResult<Row>;
   execute(plan: MongoQueryPlan, options?: RuntimeExecuteOptions): Promise<RuntimeStatementStats>;
@@ -253,7 +252,7 @@ class MongoRuntimeImpl
             rawRow,
           );
         } else {
-          const decoded = await decodeMongoRow(
+          const decoded = decodeMongoRow(
             rawRow,
             exec.resultShape,
             self.#codecs,

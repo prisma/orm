@@ -191,7 +191,7 @@ export class ArktypeJsonCodecClass<TInferred> extends CodecImpl<
     return serializeWire(value);
   }
 
-  async decode(wire: string | JsonValue, _ctx: CodecCallContext): Promise<TInferred> {
+  decode(wire: string | JsonValue, _ctx: CodecCallContext): TInferred {
     return decodeWireValue<TInferred>(this.schema, wire);
   }
 

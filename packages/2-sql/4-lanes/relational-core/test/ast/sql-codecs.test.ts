@@ -32,7 +32,7 @@ describe('sql-codecs', () => {
 
     it('encodes and decodes string values', async () => {
       expect(await codec.encode('hello', callCtx)).toBe('hello');
-      expect(await codec.decode('hello', callCtx)).toBe('hello');
+      expect(codec.decode('hello', callCtx)).toBe('hello');
     });
 
     it('round-trips through JSON identity', () => {
@@ -50,7 +50,7 @@ describe('sql-codecs', () => {
 
     it('encodes and decodes number values', async () => {
       expect(await codec.encode(42, callCtx)).toBe(42);
-      expect(await codec.decode(42, callCtx)).toBe(42);
+      expect(codec.decode(42, callCtx)).toBe(42);
     });
 
     it('round-trips through JSON identity', () => {
@@ -68,7 +68,7 @@ describe('sql-codecs', () => {
 
     it('encodes and decodes number values', async () => {
       expect(await codec.encode(3.14, callCtx)).toBe(3.14);
-      expect(await codec.decode(3.14, callCtx)).toBe(3.14);
+      expect(codec.decode(3.14, callCtx)).toBe(3.14);
     });
 
     it('round-trips through JSON identity', () => {
@@ -107,9 +107,9 @@ describe('sql-codecs', () => {
       expect(await codec.encode('user_001', callCtx)).toBe('user_001');
     });
 
-    it('trims trailing spaces on decode', async () => {
-      expect(await codec.decode('user_001                            ', callCtx)).toBe('user_001');
-      expect(await codec.decode('user_001', callCtx)).toBe('user_001');
+    it('trims trailing spaces on decode', () => {
+      expect(codec.decode('user_001                            ', callCtx)).toBe('user_001');
+      expect(codec.decode('user_001', callCtx)).toBe('user_001');
     });
 
     it('round-trips through JSON identity', () => {
@@ -135,7 +135,7 @@ describe('sql-codecs', () => {
 
     it('encodes and decodes string values verbatim', async () => {
       expect(await codec.encode('hello', callCtx)).toBe('hello');
-      expect(await codec.decode('hello', callCtx)).toBe('hello');
+      expect(codec.decode('hello', callCtx)).toBe('hello');
     });
 
     it('round-trips through JSON identity', () => {

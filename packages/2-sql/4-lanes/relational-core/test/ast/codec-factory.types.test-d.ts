@@ -1,7 +1,7 @@
 import { expectTypeOf, test } from 'vitest';
 import { defineTestCodec } from './test-codec';
 
-test('factory accepts sync encode and decode and produces Promise-returning methods', () => {
+test('factory lifts sync encode and preserves sync decode', () => {
   const c = defineTestCodec({
     typeId: 'demo/sync@1',
     encode: (value: string) => value,
@@ -11,29 +11,16 @@ test('factory accepts sync encode and decode and produces Promise-returning meth
   expectTypeOf(c.encode).toBeFunction();
   expectTypeOf(c.decode).toBeFunction();
   expectTypeOf<ReturnType<NonNullable<typeof c.encode>>>().toExtend<Promise<string>>();
-  expectTypeOf<ReturnType<typeof c.decode>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.decode>>().toEqualTypeOf<string>();
 });
 
-test('factory accepts async encode and decode', () => {
-  const c = defineTestCodec({
-    typeId: 'demo/async@1',
-    encode: async (value: string) => value,
-    decode: async (wire: string) => wire,
-  });
-
-  expectTypeOf<ReturnType<NonNullable<typeof c.encode>>>().toExtend<Promise<string>>();
-  expectTypeOf<ReturnType<typeof c.decode>>().toExtend<Promise<string>>();
-});
-
-test('factory accepts mixed sync encode + async decode', () => {
-  const c = defineTestCodec({
-    typeId: 'demo/mixed-a@1',
+test('factory rejects async decode', () => {
+  defineTestCodec<'demo/async-decode@1', readonly [], string, string>({
+    typeId: 'demo/async-decode@1',
     encode: (value: string) => value,
+    // @ts-expect-error decode must return the input value synchronously.
     decode: async (wire: string) => wire,
   });
-
-  expectTypeOf<ReturnType<NonNullable<typeof c.encode>>>().toExtend<Promise<string>>();
-  expectTypeOf<ReturnType<typeof c.decode>>().toExtend<Promise<string>>();
 });
 
 test('factory accepts mixed async encode + sync decode', () => {
@@ -44,7 +31,7 @@ test('factory accepts mixed async encode + sync decode', () => {
   });
 
   expectTypeOf<ReturnType<NonNullable<typeof c.encode>>>().toExtend<Promise<string>>();
-  expectTypeOf<ReturnType<typeof c.decode>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof c.decode>>().toEqualTypeOf<string>();
 });
 
 test('factory rejects an omitted encode — the property is required', () => {

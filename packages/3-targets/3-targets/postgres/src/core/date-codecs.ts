@@ -105,7 +105,7 @@ export class PgTimestamptzDateCodec extends CodecImpl<
   async encode(value: Date, _ctx: CodecCallContext): Promise<string> {
     return encodeDate(value);
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<Date> {
+  decode(wire: string, _ctx: CodecCallContext): Date {
     return decodeDate(wire);
   }
   encodeJson(value: Date): JsonValue {

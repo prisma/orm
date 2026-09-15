@@ -172,12 +172,14 @@ describe('SQLite aggregate defaults', { concurrent: false }, () => {
     const pastRange = aggregate('sum', 'sqlite/integer@1');
 
     expect(pastRange.wire).toBe((MAX_SAFE + 1n).toString());
-    await expect(pastRange.codec.decode(pastRange.wire, {})).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      message:
-        'sqlite/bigintnumber@1 value must be an integer within the safe integer range, got 9007199254740992',
-      meta: { codecId: 'sqlite/bigintnumber@1', received: '9007199254740992' },
-    });
+    expect(() => pastRange.codec.decode(pastRange.wire, {})).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        message:
+          'sqlite/bigintnumber@1 value must be an integer within the safe integer range, got 9007199254740992',
+        meta: { codecId: 'sqlite/bigintnumber@1', received: '9007199254740992' },
+      }),
+    );
   });
 
   it('sums the same integers past 2^53 exactly through sumBigInt', async () => {

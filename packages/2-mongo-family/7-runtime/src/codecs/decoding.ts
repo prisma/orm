@@ -45,13 +45,13 @@ function wrapDecodeFailure(
   throw wrapped;
 }
 
-export async function decodeMongoRow(
+export function decodeMongoRow(
   row: unknown,
   shape: MongoResultShape,
   registry: MongoCodecLookup,
   collection: string,
   ctx: CodecCallContext = {},
-): Promise<unknown> {
+): unknown {
   if (shape.kind === 'unknown') {
     return row;
   }
@@ -60,9 +60,8 @@ export async function decodeMongoRow(
   }
   const rowObj = row as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  const tasks: Array<Promise<void>> = [];
 
-  function scheduleLeaf(
+  function decodeLeaf(
     path: string,
     codecId: string,
     wire: unknown,
@@ -73,15 +72,11 @@ export async function decodeMongoRow(
       assign(wire);
       return;
     }
-    tasks.push(
-      (async () => {
-        try {
-          assign(await codec.decode(wire, ctx));
-        } catch (error) {
-          wrapDecodeFailure(error, collection, path, codecId, wire);
-        }
-      })(),
-    );
+    try {
+      assign(codec.decode(wire, ctx));
+    } catch (error) {
+      wrapDecodeFailure(error, collection, path, codecId, wire);
+    }
   }
 
   function walkField(
@@ -102,7 +97,7 @@ export async function decodeMongoRow(
           assign(value);
           return;
         }
-        scheduleLeaf(path, fieldShape.codecId, value, assign);
+        decodeLeaf(path, fieldShape.codecId, value, assign);
         return;
       case 'document': {
         if (value === null || value === undefined) {
@@ -174,6 +169,5 @@ export async function decodeMongoRow(
     }
   }
 
-  await Promise.all(tasks);
   return out;
 }

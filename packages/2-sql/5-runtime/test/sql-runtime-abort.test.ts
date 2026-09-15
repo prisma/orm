@@ -320,29 +320,15 @@ describe('SqlRuntime operations with signals — abort semantics', () => {
     expect(collected).toEqual([{ id: 1 }]);
   });
 
-  it('codec forwarding ctx.signal observes downstream abort (HTTPS-style cancellation)', async () => {
-    let abortObservedByCodec = false;
-    const blockingDecodeStarted = deferred<void>();
-    const codecAbortObserved = deferred<void>();
+  it('forwards the query signal into synchronous decoding', async () => {
+    let observedSignal: AbortSignal | undefined;
 
     const observingCodec = defineTestCodec({
       typeId: 'test/observe-signal@1',
       targetTypes: ['text'],
       encode: (v: string) => v,
-      decode: async (w: string, ctx?: SqlCodecCallContext) => {
-        // Mimic an SDK that registers an abort listener on the supplied signal. The runtime threads the same AbortSignal into every codec call; codec authors who forward it observe true cancellation.
-        await new Promise<string>((_resolve, reject) => {
-          if (ctx?.signal) {
-            ctx.signal.addEventListener('abort', () => {
-              abortObservedByCodec = true;
-              codecAbortObserved.resolve();
-              reject(ctx.signal?.reason);
-            });
-          }
-          // Hold the decode open so the abort fires while we're inside it.
-          blockingDecodeStarted.resolve();
-          // Never resolves; the abort listener will reject this promise.
-        });
+      decode: (w: string, ctx?: SqlCodecCallContext) => {
+        observedSignal = ctx?.signal;
         return w;
       },
     });
@@ -361,62 +347,9 @@ describe('SqlRuntime operations with signals — abort semantics', () => {
     });
 
     const controller = new AbortController();
-    const collector = runtime.query(plan, { signal: controller.signal }).toArray();
+    const rows = await runtime.query(plan, { signal: controller.signal }).toArray();
 
-    await blockingDecodeStarted.promise;
-    controller.abort(new Error('forwarded'));
-    await codecAbortObserved.promise;
-
-    await expect(collector).rejects.toMatchObject({
-      code: 'RUNTIME.ABORTED',
-      details: { phase: 'decode' },
-    });
-    expect(abortObservedByCodec).toBe(true);
-  });
-
-  it('codec ignoring ctx.signal does not block runtime — RUNTIME.ABORTED still surfaces (cooperative cancellation)', async () => {
-    const decodeStarted = deferred<void>();
-    const release = deferred<string>();
-    const ignoringCodec = defineTestCodec({
-      typeId: 'test/ignore-signal@1',
-      targetTypes: ['text'],
-      encode: (v: string) => v,
-      decode: async (w: string) => {
-        // Signal we're inside the decode body and deliberately ignore ctx.signal.
-        decodeStarted.resolve();
-        const suffix = await release.promise;
-        return `${w}:${suffix}`;
-      },
-    });
-
-    const { stackInstance, context, driver } = createTestSetup([ignoringCodec]);
-    const runtime = createRuntime({
-      stackInstance,
-      context,
-      driver,
-      verifyMarker: false,
-    });
-
-    const plan = projectingExecutionPlan('name', 'users', 'name', 'test/ignore-signal@1');
-    driver.__executeMock.mockImplementationOnce(async function* () {
-      yield { name: 'alice' };
-    });
-
-    const controller = new AbortController();
-    const reason = new Error('runtime aborted while codec body still running');
-    const collector = runtime.query(plan, { signal: controller.signal }).toArray();
-
-    // Wait until the decode body has actually started (we're now mid-decode); then abort. The race in raceAgainstAbort surfaces RUNTIME.ABORTED with phase: 'decode', even though the codec body is still running and does not honour the signal.
-    await decodeStarted.promise;
-    controller.abort(reason);
-
-    await expect(collector).rejects.toMatchObject({
-      code: 'RUNTIME.ABORTED',
-      details: { phase: 'decode' },
-      cause: reason,
-    });
-
-    // The codec body completes in the background; cleanup so the test exits.
-    release.resolve('done');
+    expect(rows).toEqual([{ name: 'alice' }]);
+    expect(observedSignal).toBe(controller.signal);
   });
 });

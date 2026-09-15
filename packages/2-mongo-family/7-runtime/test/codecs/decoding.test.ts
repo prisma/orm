@@ -6,20 +6,6 @@ import { ObjectId } from 'mongodb';
 import { describe, expect, it, vi } from 'vitest';
 import { decodeMongoRow } from '../../src/codecs/decoding';
 
-function deferred<T>(): {
-  promise: Promise<T>;
-  resolve: (v: T) => void;
-  reject: (e: unknown) => void;
-} {
-  let resolve!: (v: T) => void;
-  let reject!: (e: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
 function registryWithDefaults(): MongoCodecRegistry {
   const registry = newMongoCodecRegistry();
   registry.register(
@@ -139,12 +125,12 @@ describe('decodeMongoRow', () => {
         },
       },
     };
-    await expect(
-      decodeMongoRow({ tags: ['ok', 'bad'] }, shapeThrow, registry, 'col'),
-    ).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      details: expect.objectContaining({ path: 'tags.1', collection: 'col' }),
-    });
+    expect(() => decodeMongoRow({ tags: ['ok', 'bad'] }, shapeThrow, registry, 'col')).toThrowError(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        details: expect.objectContaining({ path: 'tags.1', collection: 'col' }),
+      }),
+    );
   });
 
   it('top-level non-object rows pass through unchanged', async () => {
@@ -488,43 +474,38 @@ describe('decodeMongoRow', () => {
     }
   });
 
-  it('dispatches all leaf decodes for one row via a single Promise.all', async () => {
-    const dA = deferred<string>();
-    const dB = deferred<string>();
+  it('traverses every leaf synchronously before returning the row', () => {
     const callOrder: string[] = [];
     const registry = newMongoCodecRegistry();
     registry.register(
       mongoCodec({
-        typeId: 'slow-a@1',
+        typeId: 'sync-a@1',
         encode: (v: string) => v,
         decode: (w: string) => {
-          callOrder.push('a-start');
-          return dA.promise.then((s) => `${w}:${s}`);
+          callOrder.push('a');
+          return `${w}:A2`;
         },
       }),
     );
     registry.register(
       mongoCodec({
-        typeId: 'slow-b@1',
+        typeId: 'sync-b@1',
         encode: (v: string) => v,
         decode: (w: string) => {
-          callOrder.push('b-start');
-          return dB.promise.then((s) => `${w}:${s}`);
+          callOrder.push('b');
+          return `${w}:B2`;
         },
       }),
     );
     const shape: MongoResultShape = {
       kind: 'document',
       fields: {
-        a: { kind: 'leaf', codecId: 'slow-a@1', nullable: false },
-        b: { kind: 'leaf', codecId: 'slow-b@1', nullable: false },
+        a: { kind: 'leaf', codecId: 'sync-a@1', nullable: false },
+        b: { kind: 'leaf', codecId: 'sync-b@1', nullable: false },
       },
     };
-    const p = decodeMongoRow({ a: 'A', b: 'B' }, shape, registry, 'c');
-    expect(callOrder).toEqual(['a-start', 'b-start']);
-    dB.resolve('B2');
-    dA.resolve('A2');
-    const out = await p;
+    const out = decodeMongoRow({ a: 'A', b: 'B' }, shape, registry, 'c');
+    expect(callOrder).toEqual(['a', 'b']);
     expect(out).toEqual({ a: 'A:A2', b: 'B:B2' });
   });
 });

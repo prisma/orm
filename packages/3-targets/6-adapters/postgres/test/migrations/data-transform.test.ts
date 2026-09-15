@@ -219,7 +219,7 @@ const TEST_CODEC_ID = 'test/transform@1';
 const transformingCodec: Codec = {
   id: TEST_CODEC_ID,
   encode: async (value: unknown) => `ENC:${String(value).toUpperCase()}`,
-  decode: async (wire: unknown) => wire,
+  decode: (wire: unknown) => wire,
   encodeJson: (v) => v as never,
   decodeJson: (v) => v as never,
 };

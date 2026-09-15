@@ -5,6 +5,7 @@
 //
 // Guard against accidental production use. ============================================================================
 
+import { createDecipheriv, createHash } from 'node:crypto';
 import { defineTestCodec } from './test-codec';
 
 if (typeof process !== 'undefined' && process.env?.['NODE_ENV'] === 'production') {
@@ -12,20 +13,9 @@ if (typeof process !== 'undefined' && process.env?.['NODE_ENV'] === 'production'
 }
 
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
 
 function toBase64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64');
-}
-
-// Return a `Uint8Array<ArrayBuffer>` (not `Uint8Array<ArrayBufferLike>`) so the value
-// satisfies WebCrypto's `BufferSource` parameters, which require an `ArrayBuffer`-
-// backed view in newer DOM lib typings.
-function fromBase64(value: string): Uint8Array<ArrayBuffer> {
-  const decoded = Buffer.from(value, 'base64');
-  const out = new Uint8Array(decoded.byteLength);
-  out.set(decoded);
-  return out;
 }
 
 async function digestBytes(value: string): Promise<Uint8Array<ArrayBuffer>> {
@@ -54,7 +44,7 @@ export async function encryptSecret(value: string, seed: string): Promise<string
   return `${toBase64(iv)}:${toBase64(new Uint8Array(ciphertext))}`;
 }
 
-export async function decryptSecret(wire: string, seed: string): Promise<string> {
+export function decryptSecret(wire: string, seed: string): string {
   const [ivEncoded, ciphertextEncoded, extra] = wire.split(':');
   if (
     ivEncoded === undefined ||
@@ -66,17 +56,17 @@ export async function decryptSecret(wire: string, seed: string): Promise<string>
     throw new Error('invalid secret payload');
   }
 
-  const key = await importSeedKey(seed);
-  const plaintext = await globalThis.crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: fromBase64(ivEncoded) },
-    key,
-    fromBase64(ciphertextEncoded),
+  const key = createHash('sha256').update(`${seed}:key`).digest();
+  const ciphertext = Buffer.from(ciphertextEncoded, 'base64');
+  const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(ivEncoded, 'base64'));
+  decipher.setAuthTag(ciphertext.subarray(-16));
+  return Buffer.concat([decipher.update(ciphertext.subarray(0, -16)), decipher.final()]).toString(
+    'utf8',
   );
-  return textDecoder.decode(plaintext);
 }
 
 /**
- * Build a `Codec` whose query-time `encode` / `decode` are async crypto operations. Authors pass the underlying async functions directly to `defineTestCodec({...})`; the single-path runtime always awaits them, so the codec needs no async marker.
+ * Build a test codec with WebCrypto async encoding and synchronous Node crypto decoding.
  */
 export function createAsyncSecretCodec({
   seed,

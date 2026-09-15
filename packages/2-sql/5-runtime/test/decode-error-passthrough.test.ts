@@ -50,14 +50,14 @@ describe('decodeRow — runtime-envelope passthrough', () => {
       }),
     ];
 
-    await expect(
+    expect(() =>
       decodeRow(
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
         sqlNativeArrayListDecoder,
       ),
-    ).rejects.toBe(original);
+    ).toThrowError(expect.toSatisfy((error: unknown) => error === original));
   });
 
   it('rethrows codec-authored RUNTIME.ABORTED without wrapping', async () => {
@@ -73,14 +73,14 @@ describe('decodeRow — runtime-envelope passthrough', () => {
       }),
     ];
 
-    await expect(
+    expect(() =>
       decodeRow(
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
         sqlNativeArrayListDecoder,
       ),
-    ).rejects.toBe(original);
+    ).toThrowError(expect.toSatisfy((error: unknown) => error === original));
   });
 
   it('rethrows a plain structuredError DECODE_FAILED envelope without wrapping', async () => {
@@ -98,14 +98,14 @@ describe('decodeRow — runtime-envelope passthrough', () => {
       }),
     ];
 
-    await expect(
+    expect(() =>
       decodeRow(
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
         sqlNativeArrayListDecoder,
       ),
-    ).rejects.toBe(original);
+    ).toThrowError(expect.toSatisfy((error: unknown) => error === original));
   });
 
   it('rethrows a plain structuredError envelope from a many-element decode without wrapping', async () => {
@@ -127,14 +127,14 @@ describe('decodeRow — runtime-envelope passthrough', () => {
       }),
     ];
 
-    await expect(
+    expect(() =>
       decodeRow(
         { value: ['wire'] },
         buildDecodeContext(ast, buildTestContractCodecs(registry)),
         {},
         sqlNativeArrayListDecoder,
       ),
-    ).rejects.toBe(original);
+    ).toThrowError(expect.toSatisfy((error: unknown) => error === original));
   });
 
   it('wraps a foreign Error into RUNTIME.DECODE_FAILED with the original on cause', async () => {
@@ -150,21 +150,23 @@ describe('decodeRow — runtime-envelope passthrough', () => {
       }),
     ];
 
-    await expect(
+    expect(() =>
       decodeRow(
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
         sqlNativeArrayListDecoder,
       ),
-    ).rejects.toMatchObject({
-      code: 'RUNTIME.DECODE_FAILED',
-      cause: original,
-      details: expect.objectContaining({
-        table: 'users',
-        column: 'value',
-        codec: 'test/passthrough@1',
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'RUNTIME.DECODE_FAILED',
+        cause: original,
+        details: expect.objectContaining({
+          table: 'users',
+          column: 'value',
+          codec: 'test/passthrough@1',
+        }),
       }),
-    });
+    );
   });
 });

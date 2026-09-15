@@ -20,5 +20,5 @@ test('MongoCodecInput extracts the JS application type used for both write input
 
   expectTypeOf<MongoCodecInput<typeof text>>().toEqualTypeOf<string>();
   expectTypeOf<Parameters<typeof text.encode>[0]>().toEqualTypeOf<string>();
-  expectTypeOf<ReturnType<typeof text.decode>>().toExtend<Promise<string>>();
+  expectTypeOf<ReturnType<typeof text.decode>>().toEqualTypeOf<string>();
 });

@@ -50,7 +50,7 @@ describe('pg/timestamptz-date@1', () => {
     '2026-01-01 00:00:00+25',
     '2026-01-01 00:00:00+00:60',
   ])('rejects unrepresentable or unsupported text: %s', async (wire) => {
-    await expect(codec.decode(wire, {})).rejects.toThrow('pg/timestamptz-date@1');
+    expect(() => codec.decode(wire, {})).toThrow('pg/timestamptz-date@1');
     expect(() => codec.decodeJson(wire)).toThrow('pg/timestamptz-date@1');
   });
 
@@ -63,7 +63,7 @@ describe('pg/timestamptz-date@1', () => {
       '4715-01-01 00:00:00+00 BC',
     ])('rejects text before the UTC boundary: %s', async (wire) => {
       if (format === 'wire') {
-        await expect(codec.decode(wire, {})).rejects.toThrow(RangeError);
+        expect(() => codec.decode(wire, {})).toThrow(RangeError);
       } else {
         expect(() => codec.decodeJson(wire)).toThrow(RangeError);
       }

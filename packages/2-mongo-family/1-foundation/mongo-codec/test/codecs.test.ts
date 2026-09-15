@@ -13,7 +13,7 @@ describe('mongoCodec()', () => {
     });
 
     expect(codec.id).toBe('test/string@1');
-    expect(await codec.decode('hello', {})).toBe('hello');
+    expect(codec.decode('hello', {})).toBe('hello');
     expect(await codec.encode('hello', {})).toBe('hello');
   });
 
@@ -24,11 +24,11 @@ describe('mongoCodec()', () => {
       encode: (value: string) => value.toLowerCase(),
     });
 
-    expect(await codec.decode('hello', {})).toBe('HELLO');
+    expect(codec.decode('hello', {})).toBe('HELLO');
     expect(await codec.encode('HELLO', {})).toBe('hello');
   });
 
-  it('lifts sync author functions to Promise-returning methods', () => {
+  it('keeps decode synchronous while lifting encode to a Promise', () => {
     const codec = mongoCodec({
       typeId: 'test/sync@1',
       decode: (wire: string) => wire,
@@ -37,18 +37,18 @@ describe('mongoCodec()', () => {
 
     const decoded = codec.decode('x', {});
     const encoded = codec.encode('y', {});
-    expect(typeof (decoded as { then?: unknown }).then).toBe('function');
+    expect(decoded).toBe('x');
     expect(typeof (encoded as { then?: unknown }).then).toBe('function');
   });
 
-  it('accepts async author functions and uses them directly', async () => {
+  it('accepts async encode alongside synchronous decode', async () => {
     const codec = mongoCodec({
       typeId: 'test/async@1',
-      decode: async (wire: string) => `decoded:${wire}`,
+      decode: (wire: string) => `decoded:${wire}`,
       encode: async (value: string) => `encoded:${value}`,
     });
 
-    expect(await codec.decode('a', {})).toBe('decoded:a');
+    expect(codec.decode('a', {})).toBe('decoded:a');
     expect(await codec.encode('b', {})).toBe('encoded:b');
   });
 });

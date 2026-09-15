@@ -25,7 +25,7 @@ export function defineTestCodec<
     typeId: Id;
     targetTypes?: readonly string[];
     encode: (value: TInput, ctx: SqlCodecCallContext) => TWire | Promise<TWire>;
-    decode: (wire: TWire, ctx: SqlCodecCallContext) => TInput | Promise<TInput>;
+    decode: (wire: TWire, ctx: SqlCodecCallContext) => TInput;
     traits?: TTraits;
   } & JsonRoundTripConfig<TInput>,
 ): Codec<Id, TTraits, TWire, TInput> {
@@ -45,13 +45,7 @@ export function defineTestCodec<
         return Promise.reject(error);
       }
     },
-    decode: (wire, ctx) => {
-      try {
-        return Promise.resolve(userDecode(wire, ctx));
-      } catch (error) {
-        return Promise.reject(error);
-      }
-    },
+    decode: (wire, ctx) => userDecode(wire, ctx),
     encodeJson: (widenedConfig.encodeJson ?? identity) as (value: TInput) => JsonValue,
     decodeJson: (widenedConfig.decodeJson ?? identity) as (json: JsonValue) => TInput,
   } as Codec<Id, TTraits, TWire, TInput>;

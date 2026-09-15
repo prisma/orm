@@ -29,7 +29,7 @@ class Int4FixtureCodec extends CodecImpl<'demo/int4@1', readonly ['equality'], n
   async encode(value: number, _ctx: CodecCallContext): Promise<number> {
     return value;
   }
-  async decode(wire: number, _ctx: CodecCallContext): Promise<number> {
+  decode(wire: number, _ctx: CodecCallContext): number {
     return wire;
   }
   encodeJson(value: number): JsonValue {
@@ -82,7 +82,7 @@ class VectorFixtureCodec<N extends number> extends CodecImpl<
   async encode(value: number[], _ctx: CodecCallContext): Promise<string> {
     return `[${value.join(',')}]`;
   }
-  async decode(wire: string, _ctx: CodecCallContext): Promise<number[]> {
+  decode(wire: string, _ctx: CodecCallContext): number[] {
     return wire.slice(1, -1).split(',').map(Number);
   }
   encodeJson(value: number[]): JsonValue {

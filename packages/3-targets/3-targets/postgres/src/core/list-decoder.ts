@@ -3,8 +3,8 @@ import { parse as parsePostgresArray } from 'postgres-array';
 
 export type PostgresListDecoder = (
   wireValue: unknown,
-  decodeElement: (value: unknown) => Promise<unknown>,
-) => Promise<readonly unknown[]>;
+  decodeElement: (value: unknown) => unknown,
+) => readonly unknown[];
 
 export function parsePostgresListText(wireValue: unknown): readonly unknown[] {
   if (typeof wireValue !== 'string') {
@@ -17,10 +17,10 @@ export function parsePostgresListText(wireValue: unknown): readonly unknown[] {
   >(parsePostgresArray(wireValue));
 }
 
-export async function decodePostgresListText(
+export function decodePostgresListText(
   wireValue: unknown,
-  decodeElement: (value: unknown) => Promise<unknown>,
-): Promise<readonly unknown[]> {
+  decodeElement: (value: unknown) => unknown,
+): readonly unknown[] {
   const decoded: unknown[] = [];
   for (const element of parsePostgresListText(wireValue)) {
     if (element === null) {
@@ -28,7 +28,7 @@ export async function decodePostgresListText(
       continue;
     }
 
-    decoded.push(await decodeElement(element));
+    decoded.push(decodeElement(element));
   }
 
   return decoded;
