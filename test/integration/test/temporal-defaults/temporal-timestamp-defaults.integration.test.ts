@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { timeouts, withPostgresPort } from '../_harness/postgres';
 import type { Contract } from './_fixture-timestamp/generated/contract';
 import contractJson from './_fixture-timestamp/generated/contract.json' with { type: 'json' };
@@ -8,8 +8,17 @@ function withStamps(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
 }
 
 describe('temporal.timestamp and temporal.timestamptz with onCreate: now, onUpdate: now', () => {
+  const previousTz = process.env['TZ'];
+  beforeAll(() => {
+    process.env['TZ'] = 'Etc/GMT-3';
+  });
+  afterAll(() => {
+    if (previousTz === undefined) delete process.env['TZ'];
+    else process.env['TZ'] = previousTz;
+  });
+
   it(
-    'the timestamp column takes a UTC PlainDateTime from the generator and advances on update',
+    'the timestamp column takes a UTC PlainDateTime from the generator on a host outside UTC and advances on update',
     () =>
       withStamps(async ({ db }) => {
         const created = await db.public.Stamp.create({ id: 1, label: 'a' });
