@@ -621,7 +621,8 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
         runtime: '@internal/sql-runtime',
         target: '@internal/target-postgres',
         // Every target subpath except `prisma7-binding`, which only the
-        // facade's `prisma7Schema` imports.
+        // facade's `prisma7Schema` imports. A test fails when a target export
+        // is missing here.
         targetSubpaths: [
           'aggregates',
           'codec-descriptor',

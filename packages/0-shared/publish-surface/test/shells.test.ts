@@ -112,6 +112,25 @@ describe('publicShells', () => {
     expect(published('packages/9-public/@prisma/orm-postgres', /prisma7/)).toEqual([]);
   });
 
+  it('forwards every Postgres target export from the Postgres facade except the ones only the facade imports', () => {
+    const notForwardedByFacade = ['prisma7-binding'];
+    const manifest: unknown = JSON.parse(
+      readFileSync(join(repoRoot, 'packages/3-targets/3-targets/postgres/package.json'), 'utf8'),
+    );
+    const targetSubpaths = Object.keys(
+      (manifest as { exports?: Record<string, unknown> }).exports ?? {},
+    )
+      .filter((subpath) => subpath.startsWith('./') && subpath !== './package.json')
+      .map((subpath) => subpath.slice(2));
+    const forwarded = publicShells
+      .get('@prisma/orm-postgres')
+      ?.reexports?.find((reexport) => reexport.package === '@internal/target-postgres')?.subpaths;
+
+    expect([...(forwarded ?? [])].sort()).toEqual(
+      targetSubpaths.filter((subpath) => !notForwardedByFacade.includes(subpath)).sort(),
+    );
+  });
+
   it('gives exactly the facades the re-exports that make one', () => {
     for (const [name, shell] of publicShells) {
       expect(`${name}: ${shell.reexports !== undefined}`).toBe(
