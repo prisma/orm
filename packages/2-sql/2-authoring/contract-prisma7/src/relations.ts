@@ -22,7 +22,7 @@ import type {
   ModelNode,
   RelationNode,
 } from '@internal/sql-contract-ts/contract-builder';
-import { prisma7Diagnostic } from './diagnostics';
+import { ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { prisma7ConstraintName } from './indexes';
 
 export interface RelationAttribute {
@@ -48,8 +48,10 @@ export interface RelationModel {
   readonly namespaceId: string;
   readonly sourceId: string;
   readonly columns: ReadonlyMap<string, FieldNode>;
-  /** Field names of scalars skipped with `@ignore`; a relation over one is dropped silently. */
+  /** Names of the fields marked `@ignore`. */
   readonly ignoredFields: ReadonlySet<string>;
+  /** Relation fields marked `@ignore`; their back-relations are omitted with them. */
+  readonly ignoredRelationFields: readonly RelationField[];
   readonly idFields: readonly string[];
   readonly uniqueFieldSets: readonly (readonly string[])[];
   readonly relationFields: readonly RelationField[];
@@ -257,7 +259,22 @@ export function lowerRelations(
       if (isFkSide(relationField)) {
         const attribute = relationField.attribute;
         if (attribute === undefined || attribute.fields === undefined) continue;
-        if (attribute.fields.some((name) => model.ignoredFields.has(name))) continue;
+        const ignoredScalars = attribute.fields.filter((name) => model.ignoredFields.has(name));
+        if (ignoredScalars.length > 0) {
+          rejectFkSide(
+            model,
+            relationField,
+            ignoredFieldReferenced({
+              modelName: model.modelName,
+              fieldNames: ignoredScalars,
+              usedBy: `relation field "${model.modelName}.${field.name}"`,
+              constraint: 'foreign key',
+              sourceId: model.sourceId,
+              span: attribute.span,
+            }),
+          );
+          continue;
+        }
         if (attribute.references === undefined) {
           rejectFkSide(
             model,
@@ -347,6 +364,13 @@ export function lowerRelations(
         continue;
       }
 
+      if (
+        target.ignoredRelationFields.some(
+          (other) => other.targetModelName === model.modelName && sameName(other, relationField),
+        )
+      ) {
+        continue;
+      }
       const fkSides = target.relationFields.filter(
         (other) =>
           other.targetModelName === model.modelName &&

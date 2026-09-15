@@ -38,7 +38,7 @@ The package itself is target-neutral: the Postgres facade supplies the target pa
 | `@unique`, `@@unique`, `@@index` | Indexes named `{table}_{columns}_key` and `{table}_{columns}_idx` cut to 63 bytes as Prisma 7 cuts them, `map` overriding, `type` mapped. |
 | Explicit relations | Foreign keys with `onDelete` `restrict` (any foreign key field required) or `setNull` (every field optional) and `onUpdate` `cascade` unless given; paired through `@internal/sql-contract-psl/resolution`. |
 | Implicit many-to-many | Junction `_AToB` or `_Name`: columns `A` and `B`, primary key `(A, B)`, index `_AToB_B_index`, cascading foreign keys. |
-| `@ignore`, `@@ignore` | Omitted, together with relations over them. |
+| `@ignore`, `@@ignore` | Omitted, together with relations over them. An `@ignore`d field that a key, an index, or a relation uses is an error. |
 | `view`, `Unsupported(...)`, unmapped `@db.*`, `relationMode = "prisma"`, generators on optional fields, `@updatedAt` with `@default`, index arguments | Hard errors (table below). |
 
 ## Diagnostics
@@ -60,6 +60,7 @@ Codes are prefixed `PRISMA7_`:
 | `PRISMA7_UNKNOWN_DEFAULT` | A `@default` value this source cannot read: an unknown function, an enum member on a non-enum field, a non-member, a non-integer `BigInt` literal, a malformed JSON or base64 literal, or `dbgenerated()` with no expression, which is not supported yet. |
 | `PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` | An ORM-side generator or `@updatedAt` on an optional field. |
 | `PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` | `@updatedAt` combined with `@default`. |
+| `PRISMA7_IGNORED_FIELD_REFERENCED` | An `@ignore`d field that `@id`, `@unique`, `@@id`, `@@unique`, `@@index`, or a relation's `fields:` uses; Prisma 7 still creates the primary key, index, or foreign key over its column. |
 | `PRISMA7_INDEX_ARGUMENT_UNSUPPORTED` | An index argument Prisma 8 cannot carry (`sort`, `length`, `ops`, an unknown type) or a field that is not a column. |
 | `PRISMA7_SCHEMA_READ_FAILED` | The input path could not be read, or a schema directory holds no `.prisma` file. |
 
@@ -67,7 +68,7 @@ Unknown top-level blocks keep the parser's `PSL_UNSUPPORTED_TOP_LEVEL_BLOCK` cod
 
 ## Relations
 
-Explicit relations keep their fields, references, and actions; an omitted `onDelete` becomes `Restrict` when any foreign key field is required and `SetNull` only when every one is optional, as Prisma 7 writes them; a relation field may be optional over required fields, and its foreign key and relation are then those of a required relation; an omitted `onUpdate` becomes `Cascade`, and both are always written. `map` is ignored because foreign key names are not verified. One-to-one is recognised by `@unique` on the foreign key fields. An implicit many-to-many relation (a list field on both sides) becomes the junction Prisma 7 creates: model `AToB` (models in alphabetical order, or the relation name), table `_AToB`, columns `A` and `B` typed like the two ids, primary key `(A, B)`, index `_AToB_B_index`, two cascading foreign keys, and relation fields `a` and `b`. `A` is the model with the smaller name in plain string order; for a self-relation, the field with the smaller name, which is prisma-engines' own rule (`psl/parser-database/src/relations.rs`, `ingest_relation`). A relation over an `@ignore`d field or to an `@@ignore`d model is omitted on both sides. Pairing reuses `@internal/sql-contract-psl/resolution`.
+Explicit relations keep their fields, references, and actions; an omitted `onDelete` becomes `Restrict` when any foreign key field is required and `SetNull` only when every one is optional, as Prisma 7 writes them; a relation field may be optional over required fields, and its foreign key and relation are then those of a required relation; an omitted `onUpdate` becomes `Cascade`, and both are always written. `map` is ignored because foreign key names are not verified. One-to-one is recognised by `@unique` on the foreign key fields. An implicit many-to-many relation (a list field on both sides) becomes the junction Prisma 7 creates: model `AToB` (models in alphabetical order, or the relation name), table `_AToB`, columns `A` and `B` typed like the two ids, primary key `(A, B)`, index `_AToB_B_index`, two cascading foreign keys, and relation fields `a` and `b`. `A` is the model with the smaller name in plain string order; for a self-relation, the field with the smaller name, which is prisma-engines' own rule (`psl/parser-database/src/relations.rs`, `ingest_relation`). A relation field marked `@ignore`, or one to an `@@ignore`d model, is omitted on both sides. A relation field that is not ignored but lists an `@ignore`d field in `fields:` is `PRISMA7_IGNORED_FIELD_REFERENCED`, because Prisma 7 still creates its foreign key. Pairing reuses `@internal/sql-contract-psl/resolution`.
 
 `@id`, `@@id`, `@unique`, and `@@unique` are read because relations depend on them (one-to-one detection, junction column types) and become the primary key and unique constraints.
 

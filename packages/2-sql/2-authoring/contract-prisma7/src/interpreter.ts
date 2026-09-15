@@ -53,7 +53,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { basename } from 'pathe';
 import { lowerPrisma7Default } from './defaults';
-import { prisma7Diagnostic } from './diagnostics';
+import { ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
 import { type IndexAttribute, indexNode, parseIndexAttribute } from './indexes';
 import {
   type Prisma7TypeMap,
@@ -128,7 +128,7 @@ interface ModelDeclaration {
   readonly sourceId: string;
   readonly namespaceId: string;
   readonly tableName: string;
-  readonly idFields: readonly string[];
+  readonly id: IndexAttribute | undefined;
   readonly uniqueIndexes: readonly IndexAttribute[];
   readonly indexes: readonly IndexAttribute[];
 }
@@ -137,6 +137,7 @@ interface ModelBuild {
   readonly declaration: ModelDeclaration;
   readonly columns: Map<string, FieldNode>;
   readonly ignoredFields: Set<string>;
+  readonly ignoredRelationFields: RelationField[];
   idFields: readonly string[];
   readonly uniqueIndexes: IndexAttribute[];
   readonly relationFields: RelationField[];
@@ -290,7 +291,8 @@ export function interpretPrisma7Documents(
       declaration,
       columns: new Map(),
       ignoredFields: new Set(),
-      idFields: declaration.idFields,
+      ignoredRelationFields: [],
+      idFields: declaration.id?.fields ?? [],
       uniqueIndexes: [...declaration.uniqueIndexes],
       relationFields: [],
     };
@@ -320,6 +322,7 @@ export function interpretPrisma7Documents(
       sourceId: build.declaration.sourceId,
       columns: build.columns,
       ignoredFields: build.ignoredFields,
+      ignoredRelationFields: build.ignoredRelationFields,
       idFields: build.idFields,
       uniqueFieldSets: build.uniqueIndexes.flatMap((index) =>
         index.fields === undefined ? [] : [index.fields],
@@ -333,11 +336,41 @@ export function interpretPrisma7Documents(
   for (const [modelName, build] of builds) {
     const model = relationModels.get(modelName);
     if (model === undefined) continue;
+    const ignoredAmong = (fieldNames: readonly string[] | undefined): readonly string[] =>
+      fieldNames?.filter((name) => build.ignoredFields.has(name)) ?? [];
+    const idAttribute = build.declaration.id;
+    const ignoredIdFields = ignoredAmong(idAttribute?.fields);
+    if (idAttribute !== undefined && ignoredIdFields.length > 0) {
+      diagnostics.push(
+        ignoredFieldReferenced({
+          modelName,
+          fieldNames: ignoredIdFields,
+          usedBy: `@@id on model "${modelName}"`,
+          constraint: 'primary key',
+          sourceId: model.sourceId,
+          span: idAttribute.span,
+        }),
+      );
+    }
     const id = keyColumns(model, model.idFields);
     const indexes = [
       ...build.uniqueIndexes.map((attribute) => ({ attribute, unique: true })),
       ...build.declaration.indexes.map((attribute) => ({ attribute, unique: false })),
     ].flatMap(({ attribute, unique }) => {
+      const ignoredIndexFields = ignoredAmong(attribute.fields);
+      if (ignoredIndexFields.length > 0) {
+        diagnostics.push(
+          ignoredFieldReferenced({
+            modelName,
+            fieldNames: ignoredIndexFields,
+            usedBy: `${unique ? '@@unique' : '@@index'} on model "${modelName}"`,
+            constraint: unique ? 'unique index' : 'index',
+            sourceId: model.sourceId,
+            span: attribute.span,
+          }),
+        );
+        return [];
+      }
       const columns =
         attribute.fields === undefined ? undefined : keyColumns(model, attribute.fields);
       if (columns === undefined) {
@@ -502,7 +535,7 @@ function readModelDeclaration(
   if (symbol.attributes.some((attribute) => attribute.name === 'ignore')) return undefined;
   let tableName = symbol.name;
   let namespaceId = defaultNamespaceId;
-  let idFields: readonly string[] = [];
+  let id: IndexAttribute | undefined;
   const uniqueIndexes: IndexAttribute[] = [];
   const indexes: IndexAttribute[] = [];
   for (const attribute of symbol.attributes) {
@@ -517,7 +550,7 @@ function readModelDeclaration(
         break;
       case 'id': {
         const parsed = parseIndexAttribute(attribute, symbol.name, sourceId, diagnostics);
-        if (parsed?.fields !== undefined) idFields = parsed.fields;
+        if (parsed?.fields !== undefined) id = parsed;
         break;
       }
       case 'unique': {
@@ -541,7 +574,7 @@ function readModelDeclaration(
         );
     }
   }
-  return { symbol, sourceId, namespaceId, tableName, idFields, uniqueIndexes, indexes };
+  return { symbol, sourceId, namespaceId, tableName, id, uniqueIndexes, indexes };
 }
 
 function requireStringArgument(
@@ -688,7 +721,7 @@ function lowerNativeEnums(
   return result;
 }
 
-function readField(args: {
+interface ReadFieldArgs {
   readonly field: FieldSymbol;
   readonly build: ModelBuild;
   readonly modelNames: ReadonlySet<string>;
@@ -699,17 +732,51 @@ function readField(args: {
   readonly composedExtensions: ReadonlySet<string>;
   readonly input: InterpretPrisma7DocumentsInput;
   readonly diagnostics: ContractSourceDiagnostic[];
-}): void {
+}
+
+function readIgnoredField(field: FieldSymbol, isRelationField: boolean, args: ReadFieldArgs): void {
+  const { build, diagnostics } = args;
+  const model = build.declaration;
+  if (isRelationField) {
+    if (args.ignoredModels.has(field.typeName)) return;
+    const relation = field.attributes.find((attribute) => attribute.name === 'relation');
+    build.ignoredRelationFields.push({
+      field,
+      targetModelName: field.typeName,
+      attribute:
+        relation === undefined
+          ? undefined
+          : parseRelationAttribute(relation, field.name, model.sourceId, []),
+    });
+    return;
+  }
+  for (const attribute of field.attributes) {
+    if (attribute.name !== 'id' && attribute.name !== 'unique') continue;
+    diagnostics.push(
+      ignoredFieldReferenced({
+        modelName: model.symbol.name,
+        fieldNames: [field.name],
+        usedBy: `its @${attribute.name}`,
+        constraint: attribute.name === 'id' ? 'primary key' : 'unique index',
+        sourceId: model.sourceId,
+        span: attribute.span,
+      }),
+    );
+  }
+}
+
+function readField(args: ReadFieldArgs): void {
   const { field, build, diagnostics, input } = args;
   const model = build.declaration;
   const sourceId = model.sourceId;
   const label = `Field "${model.symbol.name}.${field.name}"`;
-  if (field.attributes.some((attribute) => attribute.name === 'ignore')) {
-    build.ignoredFields.add(field.name);
-    return;
-  }
   const isRelationField =
     args.modelNames.has(field.typeName) && field.typeConstructor === undefined;
+  if (field.attributes.some((attribute) => attribute.name === 'ignore')) {
+    build.ignoredFields.add(field.name);
+    readIgnoredField(field, isRelationField, args);
+    return;
+  }
 
   let columnName = field.name;
   let nativeType: { readonly name: string; readonly attribute: ResolvedAttribute } | undefined;
