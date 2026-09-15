@@ -4,6 +4,7 @@ import { loadConfig } from '@internal/config-loader';
 import { createControlStack } from '@internal/framework-components/control';
 import type { CompletedEnvelope, ErroredEnvelope } from '@prisma/cli-engine';
 import { timeouts } from '@repo/test-utils';
+import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   type EngineRunResult,
@@ -608,13 +609,44 @@ describe('emit command: additional fixtures', () => {
         ok: false,
         error: {
           code: 'CONTRACT.SOURCE_LOAD_FAILED',
-          why: 'PSL to SQL contract interpretation failed',
+          why: expect.stringContaining('PSL to SQL contract interpretation failed'),
         },
       });
 
       const reported = JSON.stringify(envelope);
       expect(reported).toContain('PSL_UNSUPPORTED_FIELD_TYPE');
       expect(reported).toContain('schema.prisma');
+    } finally {
+      testSetup.cleanup();
+    }
+  });
+
+  it('names the offending field and its position in human mode', {
+    timeout: timeouts.typeScriptCompilation,
+  }, async () => {
+    const testSetup = setupIntegrationTestDirectoryFromFixtures(
+      fixtureSubdir,
+      'prisma.config.parity-psl.ts',
+    );
+
+    try {
+      writeFileSync(
+        join(testSetup.testDir, 'schema.prisma'),
+        `model User {
+  id        Int @id
+  updatedAt DateTime @updatedAt
+}
+`,
+        'utf-8',
+      );
+
+      const run = await runOnEngine(testSetup, ['contract', 'emit']);
+      expect(run.exitCode).toBe(2);
+
+      const reported = stripAnsi(run.stderr);
+      expect(reported).toContain('Field "User.updatedAt" uses unsupported attribute "@updatedAt"');
+      expect(reported).toContain('temporal.updatedAt()');
+      expect(reported).toMatch(/schema\.prisma:3:\d+/);
     } finally {
       testSetup.cleanup();
     }
