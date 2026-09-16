@@ -246,8 +246,8 @@ withTempDir(({ createTempDir }) => {
             },
           ],
         });
-        const findings = (envelope as { diagnostics?: readonly Record<string, unknown>[] })
-          .diagnostics;
+        const findings =
+          envelope !== undefined && 'diagnostics' in envelope ? envelope.diagnostics : undefined;
         expect(findings?.[0]).not.toHaveProperty('meta');
         // The source's diagnostics ride on the error's meta, one per construct.
         const meta = (
