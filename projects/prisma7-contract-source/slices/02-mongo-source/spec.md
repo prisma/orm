@@ -4,7 +4,7 @@ _Parent project: `projects/prisma7-contract-source/`. Linear: to be created. Out
 
 Prisma 7 has no MongoDB connector; the [MongoDB upgrade guide](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb) is a Prisma 6 to 8 port with no side-by-side phase. This slice therefore reads the Prisma 6 MongoDB schema dialect (the same `schema.prisma` grammar, `datasource` with `provider = "mongodb"`, `@db.ObjectId`, `@default(auto())`, composite `type` blocks, `@@fulltext`).
 
-The Mongo facade's function is `prisma6Schema`, because the dialect it reads is Prisma 6. There is no `prisma7Schema` alias on the Mongo facade: one function gets one name, and the name says which Prisma version's schema it accepts. [ADR 252](<../../../../docs/architecture docs/adrs/ADR 252 - A frozen earlier Prisma dialect is a contract source.md>) records the naming decision for both facades. Its codes follow the same ADR: dotted, in the `PSL` namespace, and named after the dialect they belong to, so the Mongo codes are `PSL.PRISMA6_MONGO_*`.
+The Mongo facade's function is `prisma6Schema`, because the dialect it reads is Prisma 6. There is no `prisma7Schema` alias on the Mongo facade: one function gets one name, and the name says which Prisma version's schema it accepts. [ADR 252](<../../../../docs/architecture docs/adrs/ADR 252 - An earlier Prisma version's schema is a contract source.md>) records the naming decision for both facades. Its codes follow the same ADR: dotted, in the `PSL` namespace, and named after the dialect they belong to, so the Mongo codes are `PSL.PRISMA6_MONGO_*`.
 
 ## At a glance
 

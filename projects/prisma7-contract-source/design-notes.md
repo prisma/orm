@@ -31,7 +31,7 @@ A contract source is a `ContractConfig` whose `source.load` returns a family con
 
 The contract accepts execution generators on a nullable column and alongside a storage default, and `db verify` is satisfied by either. Prisma 8 PSL cannot spell them: a preset field may not be optional, and a preset may not combine with `@default`. The Prisma 7 source therefore rejects both, with `PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` and `PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED`.
 
-The rule behind that: **Prisma 8 does not compromise its parser or its interpreter for a feature it has not built. A construct the language cannot express is a signal to build the feature.** The feature here is first-class authoring for an optional generated timestamp, and for a storage default combined with an update generator, each designed on its own terms rather than admitted by a loosened check. Until that exists, the hard errors stand. [ADR 252](<../../docs/architecture docs/adrs/ADR 252 - A frozen earlier Prisma dialect is a contract source.md>) records the rule.
+The rule behind that: **Prisma 8 does not compromise its parser or its interpreter for a feature it has not built. A construct the language cannot express is a signal to build the feature.** The feature here is first-class authoring for an optional generated timestamp, and for a storage default combined with an update generator, each designed on its own terms rather than admitted by a loosened check. Until that exists, the hard errors stand. [ADR 252](<../../docs/architecture docs/adrs/ADR 252 - An earlier Prisma version's schema is a contract source.md>) records the rule.
 
 ## The public upgrade guide (read 2026-09-14)
 
