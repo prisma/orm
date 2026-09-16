@@ -24,12 +24,14 @@ model Student {
   id           String         @id
   name         String
   StudentClass StudentClass[]
+  @@map("student")
 }
 
 model Class {
   id           String         @id
   name         String
   StudentClass StudentClass[]
+  @@map("class")
 }
 
 model StudentClass {
@@ -38,4 +40,5 @@ model StudentClass {
   classId   String
   student   Student @relation(fields: [studentId], references: [id])
   class     Class   @relation(fields: [classId], references: [id])
+  @@map("studentClass")
 }

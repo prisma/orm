@@ -143,7 +143,14 @@ export const sqlFamilyEntityTypes: AuthoringEntityTypeNamespace = {
 };
 
 const enumTypeBlockAttribute = blockAttribute('type', {
-  positional: [{ key: 'codecId', type: str() }],
+  documentation: 'Selects the storage codec for this enum.',
+  positional: [
+    {
+      key: 'codecId',
+      type: str(),
+      documentation: 'The fully qualified codec identifier used to store enum values.',
+    },
+  ],
 });
 
 export const sqlFamilyPslBlockDescriptors = {

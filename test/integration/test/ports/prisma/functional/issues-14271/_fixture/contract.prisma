@@ -23,6 +23,7 @@ model Hub {
   id            Int            @id @default(autoincrement())
   name          String         @unique
   batteryLevels BatteryLevel[]
+  @@map("hub")
 }
 
 model BatteryLevel {
@@ -30,4 +31,5 @@ model BatteryLevel {
   name  String @unique
   hubId Int?
   hub   Hub?   @relation(fields: [hubId], references: [id], onDelete: SetNull)
+  @@map("batteryLevel")
 }

@@ -164,7 +164,7 @@ describe('prismaContract provider helper', () => {
             public: {
               entries: {
                 table: {
-                  user: expect.any(Object),
+                  User: expect.any(Object),
                 },
               },
             },
@@ -203,7 +203,7 @@ describe('prismaContract provider helper', () => {
             public: {
               entries: {
                 table: {
-                  user: expect.any(Object),
+                  User: expect.any(Object),
                 },
               },
             },
@@ -520,7 +520,7 @@ model Other {
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
       expect(unboundTables(storage)).toMatchObject({
-        document: {
+        Document: {
           columns: {
             embedding: {
               codecId: 'pg/vector@1',
@@ -617,15 +617,15 @@ model Document {
         mutations: {
           defaults: [
             {
-              ref: { namespace: 'public', table: 'user', column: 'cuid2' },
+              ref: { namespace: 'public', table: 'User', column: 'cuid2' },
               onCreate: { kind: 'generator', id: 'cuid2' },
             },
             {
-              ref: { namespace: 'public', table: 'user', column: 'nanoid16' },
+              ref: { namespace: 'public', table: 'User', column: 'nanoid16' },
               onCreate: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
             },
             {
-              ref: { namespace: 'public', table: 'user', column: 'uuidV7' },
+              ref: { namespace: 'public', table: 'User', column: 'uuidV7' },
               onCreate: { kind: 'generator', id: 'uuidv7' },
             },
           ],
@@ -636,7 +636,7 @@ model Document {
           public: {
             entries: {
               table: {
-                user: {
+                User: {
                   columns: {
                     dbExpr: {
                       default: {
@@ -792,7 +792,7 @@ model Document {
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
       expect(unboundTables(storage)).toMatchObject({
-        user: {
+        User: {
           columns: {
             id: { codecId: 'pg/int4@1', nativeType: 'int4' },
             name: { codecId: 'pg/text@1', nativeType: 'text' },

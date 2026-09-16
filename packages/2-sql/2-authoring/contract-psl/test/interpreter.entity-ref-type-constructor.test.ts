@@ -246,7 +246,7 @@ namespace docs {
         docs: {
           entries: {
             table: {
-              authSession: {
+              AuthSession: {
                 columns: {
                   aal: {
                     codecId: 'test/native-enum@1',
@@ -293,7 +293,7 @@ namespace docs {
         >;
       }
     ).namespaces;
-    const column = namespaces['docs']?.entries.table['authSession']?.columns['aal'];
+    const column = namespaces['docs']?.entries.table['AuthSession']?.columns['aal'];
     expect(column).toMatchObject({ codecId: 'test/native-enum@1' });
     expect((column as { typeRef?: unknown } | undefined)?.typeRef).toBeUndefined();
   });
@@ -319,7 +319,7 @@ namespace docs {
         docs: {
           entries: {
             table: {
-              thing: {
+              Thing: {
                 columns: {
                   ref: { codecId: 'test/plain-ref@1', nativeType: 'AnyName' },
                 },
@@ -337,7 +337,7 @@ namespace docs {
         >;
       }
     ).namespaces;
-    const column = namespaces['docs']?.entries.table['thing']?.columns['ref'];
+    const column = namespaces['docs']?.entries.table['Thing']?.columns['ref'];
     expect((column as { valueSet?: unknown } | undefined)?.valueSet).toBeUndefined();
   });
 

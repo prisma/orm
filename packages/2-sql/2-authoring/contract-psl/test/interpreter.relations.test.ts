@@ -45,8 +45,8 @@ model Post {
     if (!result.ok) return;
 
     expect(result.value.roots).toEqual({
-      user: crossRef('User', 'public'),
-      post: crossRef('Post', 'public'),
+      User: crossRef('User', 'public'),
+      Post: crossRef('Post', 'public'),
     });
 
     const models = modelsOf(result.value) as Record<
@@ -404,10 +404,10 @@ model Member {
     if (!result.ok) return;
 
     expect(result.value.roots).toEqual({
-      user: crossRef('User', 'public'),
-      post: crossRef('Post', 'public'),
-      team: crossRef('Team', 'public'),
-      member: crossRef('Member', 'public'),
+      User: crossRef('User', 'public'),
+      Post: crossRef('Post', 'public'),
+      Team: crossRef('Team', 'public'),
+      Member: crossRef('Member', 'public'),
     });
 
     const models = modelsOf(result.value) as Record<
@@ -555,13 +555,13 @@ model Member {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    const memberTable = unboundTables(storage)['member'];
+    const memberTable = unboundTables(storage)['Member'];
     const fks = memberTable?.foreignKeys ?? [];
     expect(fks[0]).not.toHaveProperty('index');
     expect(memberTable?.indexes).toEqual([
       {
-        name: 'member_teamId_idx_f2b72ab3',
-        prefix: 'member_teamId_idx',
+        name: 'Member_teamId_idx_f2b72ab3',
+        prefix: 'Member_teamId_idx',
         columns: ['teamId'],
         unique: false,
       },
@@ -590,7 +590,7 @@ model Member {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    const memberTable = unboundTables(storage)['member'];
+    const memberTable = unboundTables(storage)['Member'];
     const fks = memberTable?.foreignKeys ?? [];
     expect(fks[0]).not.toHaveProperty('index');
     expect(memberTable?.indexes).toEqual([]);

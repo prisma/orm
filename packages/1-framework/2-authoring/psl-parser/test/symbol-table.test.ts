@@ -678,7 +678,8 @@ describe('buildSymbolTable() — N:1 keywords sharing one discriminator', () => 
 
 describe('buildSymbolTable() — block attributes parsed through the kit', () => {
   const mapSpec = blockAttribute('map', {
-    positional: [{ key: 'name', type: str() }],
+    documentation: 'Maps the widget to its storage name.',
+    positional: [{ key: 'name', type: str(), documentation: 'The nonempty storage name.' }],
     refine: (parsed, ctx, node) =>
       parsed.name === '' ? [leafDiagnostic(ctx, node, 'empty', 'PSL_FIXTURE_EMPTY_MAP')] : [],
   });

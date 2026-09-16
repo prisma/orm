@@ -70,7 +70,7 @@ import {
   interpretModelAttribute,
   mongoAttributeSpecs,
 } from './mongo-attribute-specs';
-import { getAttribute, lowerFirst } from './psl-helpers';
+import { defaultCollectionName, getAttribute } from './psl-helpers';
 
 /**
  * Encode an authored enum value to its codec-encoded JSON form via the codec resolved by id from the
@@ -251,7 +251,7 @@ function resolveCollectionName(input: {
         diagnostics,
       })?.name
     : undefined;
-  return name ?? lowerFirst(model.name);
+  return name ?? defaultCollectionName(model.name);
 }
 
 interface MongoModelEntry {
@@ -332,7 +332,7 @@ function collectPolymorphismDeclarations(
       });
       if (parsed) {
         const collectionName =
-          modelMetadataByName.get(model.name)?.collectionName ?? lowerFirst(model.name);
+          modelMetadataByName.get(model.name)?.collectionName ?? defaultCollectionName(model.name);
         baseDeclarations.set(model.name, {
           baseName: parsed.base,
           value: parsed.value,
@@ -483,7 +483,7 @@ function resolvePolymorphism(input: {
     }
 
     const variantCollectionName =
-      modelMetadataByName.get(variantName)?.collectionName ?? lowerFirst(variantName);
+      modelMetadataByName.get(variantName)?.collectionName ?? defaultCollectionName(variantName);
     if (roots[variantCollectionName]?.model === variantName) {
       if (variantCollectionName === baseCollection && baseModel) {
         roots = { ...roots, [variantCollectionName]: mongoCrossRef(baseDecl.baseName) };

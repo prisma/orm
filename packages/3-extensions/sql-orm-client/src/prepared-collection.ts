@@ -3,7 +3,12 @@ import type { AsyncIterableResult, MetaBuilder } from '@internal/framework-compo
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { Preparable } from '@internal/sql-relational-core/plan';
 import type { WhereInput } from './collection-internal-types';
-import type { CollectionTypeState } from './types';
+import type {
+  AggregateBuilder,
+  AggregateResult,
+  AggregateSpec,
+  CollectionTypeState,
+} from './types';
 
 export interface PreparedCollection<
   TContract extends Contract<SqlStorage>,
@@ -11,6 +16,10 @@ export interface PreparedCollection<
   Row,
   State extends CollectionTypeState,
 > {
+  aggregate<Spec extends AggregateSpec>(
+    selector: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
+    configure?: (meta: MetaBuilder<'read'>) => void,
+  ): Preparable<Record<string, unknown>, Promise<AggregateResult<Spec>>>;
   all(
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Preparable<Record<string, unknown>, AsyncIterableResult<Row>>;

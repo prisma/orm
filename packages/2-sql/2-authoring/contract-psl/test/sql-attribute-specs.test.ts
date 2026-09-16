@@ -5,9 +5,11 @@ import type {
   FieldAttributeCtx,
   FieldAttributeSpecFactory,
   FieldSymbol,
+  FuncCallSig,
   ModelAttributeCtx,
   ModelAttributeSpecFactory,
   ModelSymbol,
+  Param,
 } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import {
@@ -54,13 +56,7 @@ interface OneOfMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> 
 interface FuncCallMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
   readonly kind: 'funcCall';
   readonly name: string;
-  readonly signature: {
-    readonly positional?: readonly {
-      readonly key: string;
-      readonly type: ArgType<unknown, AttributeCtx>;
-    }[];
-    readonly named?: Readonly<Record<string, ArgType<unknown, AttributeCtx>>>;
-  };
+  readonly signature: FuncCallSig;
 }
 
 function positionalType<Ctx extends AttributeCtx>(spec: {
@@ -72,12 +68,12 @@ function positionalType<Ctx extends AttributeCtx>(spec: {
 }
 
 function namedType<Ctx extends AttributeCtx>(
-  spec: { readonly named: Readonly<Record<string, ArgType<unknown, Ctx>>> },
+  spec: { readonly named: Readonly<Record<string, Param<unknown, Ctx>>> },
   key: string,
 ): ArgType<unknown, Ctx> {
   const type = spec.named[key];
   if (type === undefined) throw new Error(`spec declares named argument ${key}`);
-  return type;
+  return type.type;
 }
 
 function listMetadata<T, Ctx extends AttributeCtx>(

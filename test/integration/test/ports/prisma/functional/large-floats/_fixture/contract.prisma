@@ -10,4 +10,5 @@
 model Floats {
   id    String @id
   value Float
+  @@map("floats")
 }

@@ -57,6 +57,7 @@ import {
   type InitializeResult,
   InsertTextFormat,
   LogMessageNotification,
+  MarkupKind,
   MessageType,
   type Position,
   PublishDiagnosticsNotification,
@@ -64,6 +65,9 @@ import {
   type RegistrationParams,
   RegistrationRequest,
   type SemanticTokens,
+  type SignatureHelpContext,
+  SignatureHelpRequest,
+  SignatureHelpTriggerKind,
   StreamMessageReader,
   StreamMessageWriter,
   type TextEdit,
@@ -140,11 +144,19 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
 };
 
 const markerAttribute = fieldAttribute('marker', {
-  positional: [{ key: 'target', type: str() }],
-  named: { name: str(), priority: optional(int()) },
+  documentation: 'Attaches a named marker to a target.',
+  positional: [{ key: 'target', type: str(), documentation: 'The marker target.' }],
+  named: {
+    name: { type: str(), documentation: 'The marker name.' },
+    priority: { type: optional(int()), documentation: 'The marker priority.' },
+  },
 });
 const rlsAttribute = modelAttribute('rls', {
-  named: { mode: str(), enabled: optional(str()) },
+  documentation: 'Configures row-level security for this model.',
+  named: {
+    mode: { type: str(), documentation: 'The security mode.' },
+    enabled: { type: optional(str()), documentation: 'The security enablement setting.' },
+  },
 });
 const completionAuthoringContributions = assembleAuthoringContributions([
   {
@@ -232,14 +244,29 @@ async function recursiveCompletionResolution(): Promise<ConfigResolution> {
     ).href
   )) as { sqlAttributeSpecs: AttributeSpecNamespace };
   const signature = {
+    documentation: 'Selects a value and a set of flags.',
     named: {
-      value: funcCall('choose', {
-        named: {
-          mode: oneOf(identifier('First'), identifier('Second')),
-          enabled: optional(bool()),
-        },
-      }),
-      flags: list(bool()),
+      value: {
+        type: funcCall('choose', {
+          documentation: 'Chooses between the first and second modes.',
+          named: {
+            mode: {
+              type: oneOf(
+                identifier('First', {
+                  documentation: 'An accepted identifier in this test grammar.',
+                }),
+                identifier('Second', {
+                  documentation: 'An accepted identifier in this test grammar.',
+                }),
+              ),
+              documentation: 'The selected mode.',
+            },
+            enabled: { type: optional(bool()), documentation: 'Whether the choice is enabled.' },
+          },
+        }),
+        documentation: 'The configured choice.',
+      },
+      flags: { type: list(bool()), documentation: 'The boolean flags accompanying the choice.' },
     },
   };
   const probeField = fieldAttribute('probe', signature);
@@ -677,6 +704,19 @@ function requestCompletion(
   });
 }
 
+function requestSignatureHelp(
+  harness: Harness,
+  uri: string,
+  position: Position,
+  context?: SignatureHelpContext,
+) {
+  return harness.client.sendRequest(SignatureHelpRequest.type, {
+    textDocument: { uri },
+    position,
+    ...(context === undefined ? {} : { context }),
+  });
+}
+
 function completionItems(
   result: CompletionItem[] | CompletionList | null,
 ): readonly CompletionItem[] {
@@ -780,6 +820,217 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     expect(result.capabilities.completionProvider).toEqual({
       triggerCharacters: ['.', '@', '[', '(', '{', ':', ','],
     });
+    expect(result.capabilities.signatureHelpProvider).toEqual({
+      triggerCharacters: ['(', ','],
+    });
+  });
+
+  it.each([
+    { args: '|', parameter: 0, trigger: '(' },
+    { args: '"user", name: |', parameter: 1, trigger: ',' },
+    { args: 'priority: |1, name: "visible", target: "user"', parameter: 2, trigger: undefined },
+    { args: 'name: "visible",| priority: 1', parameter: 2, trigger: ',' },
+    { args: 'name: "visible", |priority: 1', parameter: 2, trigger: undefined },
+    { args: 'name: "visible",| priority: 1', parameter: 2, trigger: undefined },
+  ])(
+    'serves documented signature help through trigger and explicit requests: $args',
+    async ({ args, parameter, trigger }) => {
+      harness = startHarness(resolveToSchemaWithAttributeContributions);
+      await harness.initialize();
+      const { source, position } = sourceWithCursor(
+        `// use prisma-8\nmodel User { id Int @marker(${args}) }`,
+      );
+      openDocument(harness, schemaUri, source);
+      await harness.waitForDiagnostics(schemaUri);
+      const result = await requestSignatureHelp(harness, schemaUri, position, {
+        triggerKind:
+          trigger === undefined
+            ? SignatureHelpTriggerKind.Invoked
+            : SignatureHelpTriggerKind.TriggerCharacter,
+        isRetrigger: false,
+        ...(trigger === undefined ? {} : { triggerCharacter: trigger }),
+      });
+      expect(result).toEqual({
+        activeSignature: 0,
+        activeParameter: parameter,
+        signatures: [
+          {
+            label: '@marker(string, name: string, priority?: integer)',
+            documentation: {
+              kind: MarkupKind.Markdown,
+              value: 'Attaches a named marker to a target.',
+            },
+            parameters: [
+              {
+                label: 'string',
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: '**target**\n\nThe marker target.',
+                },
+              },
+              {
+                label: 'name: string',
+                documentation: { kind: MarkupKind.Markdown, value: 'The marker name.' },
+              },
+              {
+                label: 'priority?: integer',
+                documentation: { kind: MarkupKind.Markdown, value: 'The marker priority.' },
+              },
+            ],
+          },
+        ],
+      });
+    },
+  );
+
+  it.each([
+    'model User { id Int @probe(value: choose(mode: First, enabled: |)) }',
+    'model User { id Int @probe(value: choose(mode: First,| enabled: true)) }',
+    'model User { id Int @probe(value: choose(mode: First, |enabled: true)) }',
+    'model User { id Int\n @@probe(value: choose(mode: First, enabled: |)) }',
+    'policy Rule { @@probe(value: choose(mode: First, enabled: |)) }',
+    'model User { id Int @probe(value: choose(mode: First, enabled: |',
+  ])(
+    'serves innermost signatures from contributed owners and unfinished input: %s',
+    async (body) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution);
+      await harness.initialize();
+      const { source, position } = sourceWithCursor(`// use prisma-8\n${body}`);
+      openDocument(harness, schemaUri, source);
+      const diagnostics = await harness.waitForDiagnostics(schemaUri);
+      expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+        'PSL_TEST_INTERPRETATION_FAILED',
+      );
+      expect(await requestSignatureHelp(harness, schemaUri, position)).toEqual({
+        activeSignature: 0,
+        activeParameter: 1,
+        signatures: [
+          {
+            label: 'choose(mode: First | Second, enabled?: boolean)',
+            documentation: {
+              kind: MarkupKind.Markdown,
+              value: 'Chooses between the first and second modes.',
+            },
+            parameters: [
+              {
+                label: 'mode: First | Second',
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: 'The selected mode.',
+                },
+              },
+              {
+                label: 'enabled?: boolean',
+                documentation: {
+                  kind: MarkupKind.Markdown,
+                  value: 'Whether the choice is enabled.',
+                },
+              },
+            ],
+          },
+        ],
+      });
+    },
+  );
+
+  it('uses the current buffer and suppresses unknown nested signatures without outer fallback', async () => {
+    const resolution = await recursiveCompletionResolution();
+    harness = startHarness(async () => resolution);
+    await harness.initialize();
+    const initial = sourceWithCursor(
+      '// use prisma-8\nmodel User { id Int @probe(value: choose(|)) }',
+    );
+    openDocument(harness, schemaUri, initial.source);
+    await harness.waitForDiagnostics(schemaUri);
+    expect(
+      (await requestSignatureHelp(harness, schemaUri, initial.position))?.signatures[0]?.label,
+    ).toBe('choose(mode: First | Second, enabled?: boolean)');
+    const changed = sourceWithCursor(
+      '// use prisma-8\nmodel User { id Int @probe(value: unknown(|)) }',
+    );
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: changed.source }],
+    });
+    expect(await requestSignatureHelp(harness, schemaUri, changed.position)).toBeNull();
+  });
+
+  it.each([
+    { uri: schemaUri, directive: '', open: true },
+    {
+      uri: pathToFileURL(join(root, 'outside.prisma')).href,
+      directive: '// use prisma-8\n',
+      open: true,
+    },
+    { uri: schemaUri, directive: '// use prisma-8\n', open: false },
+  ])(
+    'returns no signature help for unmanaged or unopened documents: %j',
+    async ({ uri, directive, open }) => {
+      harness = startHarness(resolveToSchemaWithAttributeContributions);
+      await harness.initialize();
+      const { source, position } = sourceWithCursor(`${directive}model User { id Int @marker(|) }`);
+      if (open) openDocument(harness, uri, source);
+      expect(await requestSignatureHelp(harness, uri, position)).toBeNull();
+    },
+  );
+
+  it('returns no signature help after a document closes', async () => {
+    harness = startHarness(resolveToSchemaWithAttributeContributions);
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User { id Int @marker(|) }',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+    expect((await requestSignatureHelp(harness, schemaUri, position))?.activeParameter).toBe(0);
+    closeDocument(harness, schemaUri);
+    expect(await requestSignatureHelp(harness, schemaUri, position)).toBeNull();
+  });
+
+  it('contains contribution-factory failures and serves the next signature request', async () => {
+    const factory = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error('broken signature factory');
+      })
+      .mockReturnValue(markerAttribute);
+    const resolution = await resolveToSchemaWithAttributeContributions(configPath);
+    harness = startHarness(async () => ({
+      ...resolution,
+      controlStack: {
+        ...resolution.controlStack,
+        authoringContributions: assembleAuthoringContributions([
+          {
+            id: 'broken-signature',
+            authoring: { attributeSpecs: { field: { marker: factory }, model: {} } },
+          },
+        ]),
+      },
+    }));
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User { id Int @marker(|) }',
+    );
+    openDocument(harness, schemaUri, source);
+    await harness.waitForDiagnostics(schemaUri);
+    expect(await requestSignatureHelp(harness, schemaUri, position)).toBeNull();
+    expect((await requestSignatureHelp(harness, schemaUri, position))?.signatures[0]?.label).toBe(
+      '@marker(string, name: string, priority?: integer)',
+    );
+    expect(factory).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns no signature help when project configuration cannot load', async () => {
+    harness = startHarness(async () => {
+      throw new Error('signature config failed');
+    });
+    await harness.initialize();
+    const { source, position } = sourceWithCursor(
+      '// use prisma-8\nmodel User { id Int @marker(|) }',
+    );
+    openDocument(harness, schemaUri, source);
+    expect(await requestSignatureHelp(harness, schemaUri, position)).toBeNull();
   });
 
   it('returns model field type completions for configured PSL inputs', async () => {
@@ -1030,6 +1281,42 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       ].join('\n'),
     );
   });
+
+  it.each([
+    [undefined, false],
+    [null, false],
+    [{ completion: null }, false],
+    [{ completion: { supportsTriggerSuggestCommand: true } }, false],
+    [{ completion: { supportsTriggerParameterHintsCommand: 'true' } }, false],
+    [{ completion: { supportsTriggerParameterHintsCommand: false } }, false],
+    [{ completion: { supportsTriggerParameterHintsCommand: true } }, true],
+  ])(
+    'requires explicit parameter-hints opt-in: %j',
+    async (options, enabled) => {
+      const resolution = await recursiveCompletionResolution();
+      harness = startHarness(async () => resolution, snippetCompletionCapabilities);
+      await harness.initialize(options);
+      for (const [body, label] of [
+        ['model User { id Int @pro| }', 'probe'],
+        ['model User { id Int @probe(value: ch|) }', 'choose'],
+      ]) {
+        const completion = sourceWithCursor(`// use prisma-8\n${body}`);
+        openDocument(harness, schemaUri, completion.source);
+        await harness.waitForDiagnostics(schemaUri);
+        const item = completionItemByLabel(
+          completionItems(await requestCompletion(harness, schemaUri, completion.position)),
+          label!,
+        );
+        expect(item.insertTextFormat).toBe(InsertTextFormat.Snippet);
+        expect(item.command).toEqual(
+          enabled
+            ? { title: 'Show argument hints', command: 'editor.action.triggerParameterHints' }
+            : undefined,
+        );
+      }
+    },
+    5_000,
+  );
 
   it('completes nested keys and values from updated buffers despite interpretation failure', async () => {
     const resolution = await recursiveCompletionResolution();

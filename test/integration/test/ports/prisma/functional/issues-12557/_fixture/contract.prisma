@@ -17,12 +17,14 @@ model Category {
   id     String   @id
   name   String   @unique
   brands Brand[]
+  @@map("category")
 }
 
 model Brand {
   id         String   @id
   name       String   @unique
   categories Category[]
+  @@map("brand")
 }
 
 model CategoryBrand {
@@ -33,4 +35,5 @@ model CategoryBrand {
   brand    Brand    @relation(fields: [brandId], references: [id], onDelete: Cascade)
 
   @@id([categoryId, brandId])
+  @@map("categoryBrand")
 }

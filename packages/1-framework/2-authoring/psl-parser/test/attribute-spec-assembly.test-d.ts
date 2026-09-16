@@ -10,14 +10,36 @@ import { fieldAttribute, modelAttribute, str } from '../src/exports';
 
 const namespace = {
   model: {
-    rls: () => modelAttribute('rls', {}),
+    rls: () =>
+      modelAttribute('rls', { documentation: 'Declares a model attribute for argument binding.' }),
     audit: (ctx: AttributeSpecContext) =>
-      modelAttribute('audit', { positional: [{ key: ctx.model.name, type: str() }] }),
+      modelAttribute('audit', {
+        documentation: 'Declares a model attribute for argument binding.',
+        positional: [
+          {
+            key: ctx.model.name,
+            type: str(),
+            documentation: 'The value bound to this positional slot.',
+          },
+        ],
+      }),
   },
   field: {
-    relation: () => fieldAttribute('relation', {}),
+    relation: () =>
+      fieldAttribute('relation', {
+        documentation: 'Declares a field attribute for argument binding.',
+      }),
     map: (ctx: FieldAttributeSpecContext) =>
-      fieldAttribute('map', { positional: [{ key: ctx.field.name, type: str() }] }),
+      fieldAttribute('map', {
+        documentation: 'Declares a field attribute for argument binding.',
+        positional: [
+          {
+            key: ctx.field.name,
+            type: str(),
+            documentation: 'The value bound to this positional slot.',
+          },
+        ],
+      }),
   },
 } as const satisfies AttributeSpecNamespace;
 

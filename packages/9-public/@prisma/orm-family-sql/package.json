@@ -74,6 +74,7 @@
     "./contract-prisma7/provider": "./dist/contract-prisma7__provider.mjs",
     "./contract-psl": "./dist/contract-psl.mjs",
     "./contract-psl/attribute-specs": "./dist/contract-psl__attribute-specs.mjs",
+    "./contract-psl/default-table-name": "./dist/contract-psl__default-table-name.mjs",
     "./contract-psl/provider": "./dist/contract-psl__provider.mjs",
     "./contract-ts": "./dist/contract-ts.mjs",
     "./contract-ts/config-types": "./dist/contract-ts__config-types.mjs",

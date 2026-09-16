@@ -3,4 +3,5 @@ model Stamp {
   label       String
   updatedAt   temporal.timestamp(3, onCreate: now, onUpdate: now)
   updatedAtTz temporal.timestamptz(3, onCreate: now, onUpdate: now)
+  @@map("stamp")
 }

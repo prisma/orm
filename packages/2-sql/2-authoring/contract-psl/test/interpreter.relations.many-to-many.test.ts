@@ -63,7 +63,7 @@ model PostTag {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['postId'] },
         through: {
-          table: 'postTag',
+          table: 'PostTag',
           namespaceId: 'public',
           parentColumns: ['postId'],
           childColumns: ['tagId'],
@@ -77,7 +77,7 @@ model PostTag {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['tagId'] },
         through: {
-          table: 'postTag',
+          table: 'PostTag',
           namespaceId: 'public',
           parentColumns: ['tagId'],
           childColumns: ['postId'],
@@ -137,7 +137,7 @@ model PostTag {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['userId'] },
         through: {
-          table: 'userTag',
+          table: 'UserTag',
           namespaceId: 'auth',
           parentColumns: ['userId'],
           childColumns: ['tagId'],
@@ -183,7 +183,7 @@ model UserTag {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['userId'] },
         through: {
-          table: 'userTag',
+          table: 'UserTag',
           namespaceId: 'public',
           parentColumns: ['userId'],
           childColumns: ['tagId'],
@@ -231,7 +231,7 @@ model ProjectLabel {
           targetFields: ['projectTenantId', 'projectId'],
         },
         through: {
-          table: 'projectLabel',
+          table: 'ProjectLabel',
           namespaceId: 'public',
           parentColumns: ['projectTenantId', 'projectId'],
           childColumns: ['labelId'],
@@ -245,7 +245,7 @@ model ProjectLabel {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['labelId'] },
         through: {
-          table: 'projectLabel',
+          table: 'ProjectLabel',
           namespaceId: 'public',
           parentColumns: ['labelId'],
           childColumns: ['projectTenantId', 'projectId'],
@@ -290,7 +290,7 @@ model ProjectLabel {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['labelId'] },
         through: {
-          table: 'projectLabel',
+          table: 'ProjectLabel',
           namespaceId: 'public',
           parentColumns: ['labelId'],
           childColumns: ['projectTenantId', 'projectId'],
@@ -307,7 +307,7 @@ model ProjectLabel {
           targetFields: ['projectId', 'projectTenantId'],
         },
         through: {
-          table: 'projectLabel',
+          table: 'ProjectLabel',
           namespaceId: 'public',
           parentColumns: ['projectId', 'projectTenantId'],
           childColumns: ['labelId'],
@@ -386,7 +386,7 @@ model Follow {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['followerId'] },
         through: {
-          table: 'follow',
+          table: 'Follow',
           namespaceId: 'public',
           parentColumns: ['followerId'],
           childColumns: ['followeeId'],
@@ -398,7 +398,7 @@ model Follow {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['followeeId'] },
         through: {
-          table: 'follow',
+          table: 'Follow',
           namespaceId: 'public',
           parentColumns: ['followeeId'],
           childColumns: ['followerId'],
@@ -479,7 +479,7 @@ model TagWatch {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['userId'] },
         through: {
-          table: 'tagOwnership',
+          table: 'TagOwnership',
           namespaceId: 'public',
           parentColumns: ['userId'],
           childColumns: ['tagId'],
@@ -491,7 +491,7 @@ model TagWatch {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['userId'] },
         through: {
-          table: 'tagWatch',
+          table: 'TagWatch',
           namespaceId: 'public',
           parentColumns: ['userId'],
           childColumns: ['tagId'],
@@ -505,7 +505,7 @@ model TagWatch {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['tagId'] },
         through: {
-          table: 'tagOwnership',
+          table: 'TagOwnership',
           namespaceId: 'public',
           parentColumns: ['tagId'],
           childColumns: ['userId'],
@@ -517,7 +517,7 @@ model TagWatch {
         cardinality: 'N:M',
         on: { localFields: ['id'], targetFields: ['tagId'] },
         through: {
-          table: 'tagWatch',
+          table: 'TagWatch',
           namespaceId: 'public',
           parentColumns: ['tagId'],
           childColumns: ['userId'],

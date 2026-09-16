@@ -135,17 +135,50 @@ function lowerDbgenerated(input: {
   };
 }
 
-const nowSig: FuncCallSig = {};
-const autoincrementSig: FuncCallSig = {};
-const ulidSig: FuncCallSig = {};
+const nowSig: FuncCallSig = {
+  documentation: 'Uses the current database timestamp as the default value.',
+};
+const autoincrementSig: FuncCallSig = {
+  documentation: 'Generates an increasing integer value in the database.',
+};
+const ulidSig: FuncCallSig = { documentation: 'Generates a ULID when a value is not supplied.' };
 const uuidSig: FuncCallSig = {
-  positional: [{ key: 'version', type: optional(oneOf(num(4), num(7))) }],
+  documentation: 'Generates a UUID when a value is not supplied.',
+  positional: [
+    {
+      key: 'version',
+      type: optional(oneOf(num(4), num(7))),
+      documentation: 'The UUID version: `4` or `7`. Defaults to `4`.',
+    },
+  ],
 };
-const cuidSig: FuncCallSig = { positional: [{ key: 'version', type: num(2) }] };
+const cuidSig: FuncCallSig = {
+  documentation: 'Generates a CUID2 identifier when a value is not supplied.',
+  positional: [
+    { key: 'version', type: num(2), documentation: 'The CUID version. Only `2` is supported.' },
+  ],
+};
 const nanoidSig: FuncCallSig = {
-  positional: [{ key: 'size', type: optional(int({ min: 2, max: 255 })) }],
+  documentation: 'Generates a Nano ID when a value is not supplied.',
+  positional: [
+    {
+      key: 'size',
+      type: optional(int({ min: 2, max: 255 })),
+      documentation:
+        'The identifier length, from `2` through `255`. Omit to use the generator default.',
+    },
+  ],
 };
-const dbgeneratedSig: FuncCallSig = { positional: [{ key: 'expression', type: str() }] };
+const dbgeneratedSig: FuncCallSig = {
+  documentation: 'Uses a database SQL expression as the default value.',
+  positional: [
+    {
+      key: 'expression',
+      type: str(),
+      documentation: 'The nonempty SQL expression evaluated by the database.',
+    },
+  ],
+};
 
 const sqliteDefaultFunctionRegistryEntries = [
   [

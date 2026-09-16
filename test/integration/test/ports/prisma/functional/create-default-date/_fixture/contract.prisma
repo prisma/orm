@@ -9,4 +9,5 @@
 model Visit {
   id        Int      @id @default(autoincrement())
   visitTime DateTime @default(now())
+  @@map("visit")
 }

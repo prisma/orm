@@ -521,7 +521,8 @@ const policyPermissiveParam = { kind: 'value', codecId: 'pg/bool@1' } as const;
 const policyRequiresRls = { parameter: 'target', attribute: 'rls' } as const;
 
 const policyMapAttribute = blockAttribute('map', {
-  positional: [{ key: 'name', type: str() }],
+  documentation: 'Maps this row-level security policy to its PostgreSQL policy name.',
+  positional: [{ key: 'name', type: str(), documentation: 'The nonempty PostgreSQL policy name.' }],
   refine: (parsed, ctx, attributeNode) =>
     parsed.name === ''
       ? [
@@ -538,7 +539,8 @@ const policyMapAttribute = blockAttribute('map', {
 const policyBlockAttributes = { map: () => policyMapAttribute };
 
 const nativeEnumMapAttribute = blockAttribute('map', {
-  positional: [{ key: 'name', type: str() }],
+  documentation: 'Maps this native enum to its PostgreSQL type name.',
+  positional: [{ key: 'name', type: str(), documentation: 'The PostgreSQL enum type name.' }],
 });
 
 export const postgresAuthoringPslBlockDescriptors = {
@@ -654,7 +656,9 @@ export const postgresAuthoringPslBlockDescriptors = {
   },
 } as const satisfies AuthoringPslBlockDescriptorNamespace;
 
-const postgresRlsSpec = modelAttribute('rls', {});
+const postgresRlsSpec = modelAttribute('rls', {
+  documentation: 'Enables PostgreSQL row-level security on this model’s table.',
+});
 
 const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
 

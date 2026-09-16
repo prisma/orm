@@ -168,11 +168,13 @@ function validateMappedName(
 }
 
 const mapModelSpec = modelAttribute('map', {
-  positional: [{ key: 'name', type: str() }],
+  documentation: 'Maps this model to a database table name.',
+  positional: [{ key: 'name', type: str(), documentation: 'The nonempty database table name.' }],
   refine: validateMappedName,
 });
 const mapFieldSpec = fieldAttribute('map', {
-  positional: [{ key: 'name', type: str() }],
+  documentation: 'Maps this field to a database column name.',
+  positional: [{ key: 'name', type: str(), documentation: 'The nonempty database column name.' }],
   refine: validateMappedName,
 });
 
@@ -221,10 +223,13 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
 
 function enumDefaultArms(
   members: readonly string[],
+  enumName: string,
 ): readonly [ArgType<DefaultArgValue, AttributeCtx>, ...ArgType<DefaultArgValue, AttributeCtx>[]] {
   const [first, ...rest] = members;
   if (first === undefined) return [noEnumMember()];
-  return [identifier(first), ...rest.map((name) => identifier(name))];
+  const member = (name: string) =>
+    identifier(name, { documentation: `The \`${name}\` member of enum \`${enumName}\`.` });
+  return [member(first), ...rest.map(member)];
 }
 
 function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
@@ -232,14 +237,40 @@ function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
   const valueArms =
     members === undefined
       ? scalarDefaultArms(ctx.field.list, ctx.controlMutationDefaults)
-      : enumDefaultArms(members);
-  return fieldAttribute('default', { positional: [{ key: 'value', type: oneOf(...valueArms) }] });
+      : enumDefaultArms(members, ctx.field.typeName);
+  return fieldAttribute('default', {
+    documentation: 'Supplies a default value when this field is omitted from a mutation.',
+    positional: [
+      {
+        key: 'value',
+        type: oneOf(...valueArms),
+        documentation:
+          'A literal, enum member, or registered default function compatible with this field.',
+      },
+    ],
+  });
 }
 
-const idFieldSpec = fieldAttribute('id', { named: { map: optional(str()) } });
-const uniqueFieldSpec = fieldAttribute('unique', { named: { map: optional(str()) } });
+const idFieldSpec = fieldAttribute('id', {
+  documentation: 'Makes this field the primary key of the table.',
+  named: {
+    map: { type: optional(str()), documentation: 'The database primary-key constraint name.' },
+  },
+});
+const uniqueFieldSpec = fieldAttribute('unique', {
+  documentation: 'Requires values in this field to be unique.',
+  named: { map: { type: optional(str()), documentation: 'The database unique-constraint name.' } },
+});
 
-const noCheckKindArgument = () => oneOf(identifier('membership'), identifier('elementNotNull'));
+const noCheckKindArgument = () =>
+  oneOf(
+    identifier('membership', {
+      documentation: 'Waives the generated check that values belong to the declared domain enum.',
+    }),
+    identifier('elementNotNull', {
+      documentation: 'Waives the generated check that scalar-list elements are non-null.',
+    }),
+  );
 
 /**
  * `@noCheck` waives generated CHECK constraints on one column: bare for every
@@ -248,9 +279,19 @@ const noCheckKindArgument = () => oneOf(identifier('membership'), identifier('el
  * necessarily a duplicate and fails as excess arity.
  */
 const noCheckFieldSpec = fieldAttribute('noCheck', {
+  documentation:
+    'Waives generated CHECK constraints for this column. With no arguments, waives every generated kind.',
   positional: [
-    { key: 'first', type: optional(noCheckKindArgument()) },
-    { key: 'second', type: optional(noCheckKindArgument()) },
+    {
+      key: 'first',
+      type: optional(noCheckKindArgument()),
+      documentation: 'The first generated check kind to waive: `membership` or `elementNotNull`.',
+    },
+    {
+      key: 'second',
+      type: optional(noCheckKindArgument()),
+      documentation: 'A second, distinct generated check kind to waive.',
+    },
   ],
   refine: (value, ctx, attributeNode) => {
     if (value.first !== undefined && value.first === value.second) {
@@ -261,12 +302,28 @@ const noCheckFieldSpec = fieldAttribute('noCheck', {
 });
 
 const idModelSpec = modelAttribute('id', {
-  positional: [{ key: 'fields', type: list(fieldRef(), { allowEmpty: false, unique: true }) }],
-  named: { map: optional(str()) },
+  documentation: 'Declares a compound primary key for this table.',
+  positional: [
+    {
+      key: 'fields',
+      type: list(fieldRef(), { allowEmpty: false, unique: true }),
+      documentation: 'The ordered, nonempty list of distinct primary-key fields.',
+    },
+  ],
+  named: {
+    map: { type: optional(str()), documentation: 'The database primary-key constraint name.' },
+  },
 });
 const uniqueModelSpec = modelAttribute('unique', {
-  positional: [{ key: 'fields', type: list(fieldRef(), { allowEmpty: false, unique: true }) }],
-  named: { map: optional(str()) },
+  documentation: 'Requires the combination of these fields to be unique.',
+  positional: [
+    {
+      key: 'fields',
+      type: list(fieldRef(), { allowEmpty: false, unique: true }),
+      documentation: 'The ordered, nonempty list of distinct fields in the unique constraint.',
+    },
+  ],
+  named: { map: { type: optional(str()), documentation: 'The database unique-constraint name.' } },
 });
 
 // `@@index` cross-argument diagnostic codes — contributed by this package
@@ -279,17 +336,40 @@ export const PSL_INDEX_EXPRESSION_REQUIRES_NAME: ContributedPslDiagnosticCode =
 export const PSL_INDEX_NAME_XOR_MAP: ContributedPslDiagnosticCode = 'PSL_INDEX_NAME_XOR_MAP';
 
 const indexModelSpec = modelAttribute('index', {
+  documentation:
+    'Declares a database index over fields or a SQL expression, optionally restricted by a predicate.',
   positional: [
-    { key: 'fields', type: optional(list(fieldRef(), { allowEmpty: false, unique: true })) },
+    {
+      key: 'fields',
+      type: optional(list(fieldRef(), { allowEmpty: false, unique: true })),
+      documentation:
+        'The ordered list of distinct indexed fields. Mutually exclusive with `expression`.',
+    },
   ],
   named: {
-    expression: optional(str()),
-    where: optional(str()),
-    unique: optional(bool()),
-    name: optional(str()),
-    map: optional(str()),
-    type: optional(str()),
-    options: optional(record(str())),
+    expression: {
+      type: optional(str()),
+      documentation:
+        'The SQL index expression. Requires `name` or `map` and cannot be combined with a fields list.',
+    },
+    where: {
+      type: optional(str()),
+      documentation: 'The SQL predicate restricting rows included in a partial index.',
+    },
+    unique: { type: optional(bool()), documentation: 'Whether the index enforces uniqueness.' },
+    name: {
+      type: optional(str()),
+      documentation: 'The index name. Mutually exclusive with `map`.',
+    },
+    map: {
+      type: optional(str()),
+      documentation: 'The database index name. Mutually exclusive with `name`.',
+    },
+    type: { type: optional(str()), documentation: 'The target-specific index access method.' },
+    options: {
+      type: optional(record(str())),
+      documentation: 'Target-specific index options. Requires an explicit `type`.',
+    },
   },
   refine: (value, ctx, attributeNode) => {
     const diagnostics: PslDiagnostic[] = [];
@@ -350,10 +430,17 @@ export const PSL_CHECK_EXPRESSION_EMPTY: ContributedPslDiagnosticCode =
 export const PSL_CHECK_ON_STI_VARIANT: ContributedPslDiagnosticCode = 'PSL_CHECK_ON_STI_VARIANT';
 
 const checkModelSpec = modelAttribute('check', {
+  documentation: 'Declares a named database CHECK constraint on this table.',
   named: {
-    expression: str(),
-    name: optional(str()),
-    map: optional(str()),
+    expression: { type: str(), documentation: 'The nonempty SQL predicate checked for each row.' },
+    name: {
+      type: optional(str()),
+      documentation: 'The constraint name. Exactly one of `name` and `map` is required.',
+    },
+    map: {
+      type: optional(str()),
+      documentation: 'The database constraint name. Exactly one of `name` and `map` is required.',
+    },
   },
   refine: (value, ctx, attributeNode) => {
     const diagnostics: PslDiagnostic[] = [];
@@ -392,26 +479,48 @@ const checkModelSpec = modelAttribute('check', {
 });
 
 const controlModelSpec = modelAttribute('control', {
+  documentation: 'Sets how schema management treats this model’s storage.',
   positional: [
     {
       key: 'policy',
+      documentation:
+        'The storage control policy: `managed`, `tolerated`, `external`, or `observed`.',
       type: oneOf(
-        identifier('managed'),
-        identifier('tolerated'),
-        identifier('external'),
-        identifier('observed'),
+        identifier('managed', {
+          documentation:
+            'Verifies the declared shape strictly and allows migrations to create, alter, or drop the storage object.',
+        }),
+        identifier('tolerated', {
+          documentation:
+            'Verifies declared columns while allowing extra columns. Migrations may create missing storage, but never alter or drop existing storage.',
+        }),
+        identifier('external', {
+          documentation: 'Verifies declared storage without creating, altering, or dropping it.',
+        }),
+        identifier('observed', {
+          documentation:
+            'Reports storage differences as warnings rather than verification failures and never emits migration operations.',
+        }),
       ),
     },
   ],
 });
 
 const discriminatorModelSpec = modelAttribute('discriminator', {
-  positional: [{ key: 'field', type: fieldRef() }],
+  documentation: 'Selects the field that identifies inheritance variants of this model.',
+  positional: [
+    { key: 'field', type: fieldRef(), documentation: 'The discriminator field on this model.' },
+  ],
 });
 const baseModelSpec = modelAttribute('base', {
+  documentation: 'Declares this model as a variant of a base model.',
   positional: [
-    { key: 'base', type: entityRef() },
-    { key: 'value', type: str() },
+    { key: 'base', type: entityRef(), documentation: 'The base model to inherit from.' },
+    {
+      key: 'value',
+      type: str(),
+      documentation: 'The discriminator value identifying this variant.',
+    },
   ],
 });
 
@@ -444,23 +553,67 @@ function relationInvariants(
 
 const referentialActionArgument = () =>
   oneOf(
-    identifier('NoAction'),
-    identifier('Restrict'),
-    identifier('Cascade'),
-    identifier('SetNull'),
-    identifier('SetDefault'),
+    identifier('NoAction', {
+      documentation:
+        'Rejects a change that would violate the foreign key when the constraint is checked; checking may be deferred when supported and configured.',
+    }),
+    identifier('Restrict', {
+      documentation:
+        'Rejects deleting or updating a referenced row while referencing rows remain, without deferring the check.',
+    }),
+    identifier('Cascade', {
+      documentation:
+        'Propagates deletion or key updates of a referenced row to its referencing rows.',
+    }),
+    identifier('SetNull', {
+      documentation:
+        'Sets referencing foreign-key fields to null when the referenced row is deleted or its key changes. The fields must allow null.',
+    }),
+    identifier('SetDefault', {
+      documentation:
+        'Sets referencing foreign-key fields to their defaults when the referenced row is deleted or its key changes. The resulting values must satisfy the foreign key.',
+    }),
   );
 
 const relationFieldSpec = fieldAttribute('relation', {
-  positional: [{ key: 'name', type: optional(str()) }],
+  documentation:
+    'Defines the relation name, foreign-key fields, and referential actions for this relation.',
+  positional: [
+    {
+      key: 'name',
+      type: optional(str()),
+      documentation: 'The relation name used to pair both sides. May also be supplied by name.',
+    },
+  ],
   named: {
-    name: optional(str()),
-    fields: optional(list(fieldRef(), { allowEmpty: false, unique: true })),
-    references: optional(list(referencedFieldRef(), { allowEmpty: false, unique: true })),
-    map: optional(str()),
-    onDelete: optional(referentialActionArgument()),
-    onUpdate: optional(referentialActionArgument()),
-    index: optional(bool()),
+    name: {
+      type: optional(str()),
+      documentation:
+        'The relation name used to pair both sides. Cannot also be supplied positionally.',
+    },
+    fields: {
+      type: optional(list(fieldRef(), { allowEmpty: false, unique: true })),
+      documentation:
+        'The ordered local foreign-key fields. Must be supplied together with `references`.',
+    },
+    references: {
+      type: optional(list(referencedFieldRef(), { allowEmpty: false, unique: true })),
+      documentation:
+        'The corresponding fields on the referenced model. Must be supplied together with `fields`.',
+    },
+    map: { type: optional(str()), documentation: 'The database foreign-key constraint name.' },
+    onDelete: {
+      type: optional(referentialActionArgument()),
+      documentation: 'The referential action when a referenced row is deleted.',
+    },
+    onUpdate: {
+      type: optional(referentialActionArgument()),
+      documentation: 'The referential action when a referenced key is updated.',
+    },
+    index: {
+      type: optional(bool()),
+      documentation: 'Whether to create an index for the relation’s foreign-key fields.',
+    },
   },
   refine: relationInvariants,
 });

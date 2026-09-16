@@ -90,7 +90,7 @@ describe('contract build registers postgres index types end-to-end', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ns = result.value.storage.namespaces['public'] as PostgresSchema;
-    expect(ns.table['widgets']?.indexes.map((idx) => idx.type)).toEqual(['gin']);
+    expect(ns.table['Widgets']?.indexes.map((idx) => idx.type)).toEqual(['gin']);
   });
 
   it('accepts @@index(..., type: "hash")', () => {
@@ -98,7 +98,7 @@ describe('contract build registers postgres index types end-to-end', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const ns = result.value.storage.namespaces['public'] as PostgresSchema;
-    expect(ns.table['widgets']?.indexes.map((idx) => idx.type)).toEqual(['hash']);
+    expect(ns.table['Widgets']?.indexes.map((idx) => idx.type)).toEqual(['hash']);
   });
 
   it('still rejects a bogus, unregistered index type — registering real methods does not disable the check', () => {

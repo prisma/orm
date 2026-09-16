@@ -253,7 +253,7 @@ describe('interpretPslDocumentToMongoContract', () => {
   });
 
   describe('collection naming', () => {
-    it('uses lowerFirst(modelName) as default collection name', () => {
+    it('uses the model name verbatim as the default collection name', () => {
       const ir = interpretOk(`
         model UserProfile {
           id ObjectId @id @map("_id")
@@ -261,16 +261,9 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
 
       expect(modelsOf(ir)['UserProfile']).toMatchObject({
-        storage: { collection: 'userProfile' },
+        storage: { collection: 'UserProfile' },
       });
-      expect(ir.storage).toMatchObject({
-        namespaces: {
-          [UNBOUND_NAMESPACE_ID]: {
-            id: UNBOUND_NAMESPACE_ID,
-            entries: { collection: { userProfile: {} } },
-          },
-        },
-      });
+      expect(Object.keys(mongoCollectionsFromIr(ir))).toEqual(['UserProfile']);
     });
 
     it('uses @@map() to override collection name', () => {
@@ -838,7 +831,7 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
 
       expect(ir.roots).toEqual({
-        user: crossRef('User'),
+        User: crossRef('User'),
         blog_posts: crossRef('Post'),
       });
     });
@@ -871,8 +864,8 @@ describe('interpretPslDocumentToMongoContract', () => {
             id: UNBOUND_NAMESPACE_ID,
             entries: {
               collection: {
-                user: {},
-                post: {},
+                User: {},
+                Post: {},
               },
             },
           },
@@ -1163,7 +1156,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([email])
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['user']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['User']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes).toHaveLength(1);
@@ -1178,7 +1171,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([email], type: -1)
         }
       `);
-      expect(getIndexes(ir, 'user')?.[0]?.['keys']).toEqual([{ field: 'email', direction: -1 }]);
+      expect(getIndexes(ir, 'User')?.[0]?.['keys']).toEqual([{ field: 'email', direction: -1 }]);
     });
 
     it('creates unique index from @@unique', () => {
@@ -1189,7 +1182,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([email])
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['user']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['User']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes).toHaveLength(1);
@@ -1205,7 +1198,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([email, name])
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['user']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['User']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes).toHaveLength(1);
@@ -1222,7 +1215,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           email String   @unique
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['user']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['User']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes).toHaveLength(1);
@@ -1238,7 +1231,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([expiresAt], sparse: true, expireAfterSeconds: 3600)
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['session']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['Session']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes).toHaveLength(1);
@@ -1254,7 +1247,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([email])
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['user']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['User']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes![0]!['keys']).toEqual([{ field: 'email_address', direction: 1 }]);
@@ -1266,7 +1259,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           id ObjectId @id @map("_id")
         }
       `);
-      const userColl = mongoCollectionsFromIr(ir)['user'];
+      const userColl = mongoCollectionsFromIr(ir)['User'];
       expect(userColl?.['indexes']).toBeUndefined();
     });
 
@@ -1278,7 +1271,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard()])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([{ field: '$**', direction: 1 }]);
     });
@@ -1291,7 +1284,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard(metadata)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([{ field: 'metadata.$**', direction: 1 }]);
     });
@@ -1305,7 +1298,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([tenantId, wildcard(metadata)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([
         { field: 'tenantId', direction: 1 },
@@ -1321,7 +1314,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard(meta)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['keys']).toEqual([{ field: 'metadata.$**', direction: 1 }]);
     });
 
@@ -1333,7 +1326,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard(sort: Desc)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['keys']).toEqual([{ field: 'wildcard', direction: -1 }]);
     });
 
@@ -1345,7 +1338,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([createdAt(sort: Desc)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['keys']).toEqual([{ field: 'createdAt', direction: -1 }]);
     });
 
@@ -1358,7 +1351,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([status, createdAt(sort: Desc)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['keys']).toEqual([
         { field: 'status', direction: 1 },
         { field: 'createdAt', direction: -1 },
@@ -1373,7 +1366,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([tenantId], type: "hashed")
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['keys']).toEqual([{ field: 'tenantId', direction: 'hashed' }]);
     });
 
@@ -1385,7 +1378,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([location], type: "2dsphere")
         }
       `);
-      const indexes = getIndexes(ir, 'places');
+      const indexes = getIndexes(ir, 'Places');
       expect(indexes![0]!['keys']).toEqual([{ field: 'location', direction: '2dsphere' }]);
     });
 
@@ -1397,7 +1390,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([status], filter: "{\\"status\\": \\"active\\"}")
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['partialFilterExpression']).toEqual({ status: 'active' });
     });
 
@@ -1409,7 +1402,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([status], collationLocale: "fr", collationStrength: 2)
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['collation']).toEqual({ locale: 'fr', strength: 2 });
     });
 
@@ -1421,7 +1414,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([status], collationLocale: "en", collationStrength: 2, collationCaseLevel: true, collationCaseFirst: "upper", collationNumericOrdering: true, collationAlternate: "shifted", collationMaxVariable: "punct", collationBackwards: false, collationNormalization: true)
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['collation']).toEqual({
         locale: 'en',
         strength: 2,
@@ -1492,7 +1485,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard()], include: ["metadata", "nested.path"])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['wildcardProjection']).toEqual({ metadata: 1, 'nested.path': 1 });
     });
 
@@ -1531,7 +1524,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard()], exclude: ["internal", "_class"])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['wildcardProjection']).toEqual({ internal: 0, _class: 0 });
     });
 
@@ -1544,7 +1537,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@textIndex([title, body])
         }
       `);
-      const indexes = getIndexes(ir, 'article');
+      const indexes = getIndexes(ir, 'Article');
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([
         { field: 'title', direction: 'text' },
@@ -1561,7 +1554,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@textIndex([title, body], weights: { title: 1, body: 99999 }, language: "english", languageOverride: "idioma")
         }
       `);
-      const indexes = getIndexes(ir, 'article');
+      const indexes = getIndexes(ir, 'Article');
       expect(indexes![0]!['weights']).toEqual({ title: 1, body: 99999 });
       expect(indexes![0]!['default_language']).toBe('english');
       expect(indexes![0]!['language_override']).toBe('idioma');
@@ -1575,7 +1568,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@textIndex([title], weights: { "__proto__": 10 })
         }
       `);
-      const weights = getIndexes(ir, 'article')?.[0]?.['weights'];
+      const weights = getIndexes(ir, 'Article')?.[0]?.['weights'];
 
       expect(weights).not.toBeNull();
       expect(typeof weights).toBe('object');
@@ -1610,7 +1603,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([email], collationLocale: "en", collationStrength: 2)
         }
       `);
-      const indexes = getIndexes(ir, 'user');
+      const indexes = getIndexes(ir, 'User');
       expect(indexes![0]!['unique']).toBe(true);
       expect(indexes![0]!['collation']).toEqual({ locale: 'en', strength: 2 });
     });
@@ -1623,7 +1616,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([email], filter: "{\\"active\\": true}")
         }
       `);
-      const indexes = getIndexes(ir, 'user');
+      const indexes = getIndexes(ir, 'User');
       expect(indexes![0]!['unique']).toBe(true);
       expect(indexes![0]!['partialFilterExpression']).toEqual({ active: true });
     });
@@ -1638,7 +1631,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([name])
         }
       `);
-      const indexes = getIndexes(ir, 'user');
+      const indexes = getIndexes(ir, 'User');
       expect(indexes).toHaveLength(2);
       expect(indexes![0]!['keys']).toEqual([{ field: 'email', direction: 1 }]);
       expect(indexes![1]!['keys']).toEqual([{ field: 'name', direction: 1 }]);
@@ -1976,7 +1969,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           age   Int
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       expect(validator).toBeDefined();
       expect(validator!['validationLevel']).toBe('strict');
       expect(validator!['validationAction']).toBe('error');
@@ -1995,7 +1988,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           bio  String?
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
       expect(props['bio']).toEqual({ bsonType: ['null', 'string'] });
@@ -2008,7 +2001,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           tags String[]
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
       expect(props['tags']).toEqual({ bsonType: 'array', items: { bsonType: 'string' } });
@@ -2021,7 +2014,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           firstName String   @map("first_name")
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
       expect(props['first_name']).toEqual({ bsonType: 'string' });
@@ -2036,7 +2029,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           bio  String?
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const required = schema['required'] as string[];
       expect(required).toContain('_id');
@@ -2052,7 +2045,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([email])
         }
       `);
-      const userColl = mongoCollectionsFromIr(ir as { storage: unknown })['user'];
+      const userColl = mongoCollectionsFromIr(ir as { storage: unknown })['User'];
       expect(userColl?.['indexes']).toBeDefined();
       expect(userColl?.['validator']).toBeDefined();
     });
@@ -2069,7 +2062,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           address Address
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
       expect(props['address']).toEqual({
@@ -2095,7 +2088,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           address Address?
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
       expect(props['address']).toEqual({

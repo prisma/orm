@@ -6,10 +6,12 @@ enum Color {
 model Parent {
   id Int @id
   children Child[]
+  @@map("parent")
 }
 model Child {
   childId Int @id
   parentId Int?
   parent Parent? @relation(fields: [parentId], references: [id])
   enum Color
+  @@map("child")
 }

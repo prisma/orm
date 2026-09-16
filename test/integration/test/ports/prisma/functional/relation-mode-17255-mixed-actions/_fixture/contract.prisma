@@ -30,11 +30,13 @@ model Main {
   aliceId String?
 
   bob Bob?
+  @@map("main")
 }
 
 model Alice {
   id        String @id
   manyMains Main[]
+  @@map("alice")
 }
 
 model Bob {
@@ -42,4 +44,5 @@ model Bob {
 
   main   Main   @relation(fields: [mainId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   mainId String @unique
+  @@map("bob")
 }

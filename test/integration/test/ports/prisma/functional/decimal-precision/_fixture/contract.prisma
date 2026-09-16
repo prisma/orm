@@ -19,4 +19,5 @@ model TestModel {
   d10_0  Decimal10_0?
   d20_10 Decimal20_10?
   d38_30 Decimal38_30?
+  @@map("testModel")
 }

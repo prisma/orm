@@ -8,6 +8,7 @@ import type {
 } from '@internal/family-sql/control';
 import {
   controlPolicyForCall,
+  detectTableNameCaseChanges,
   extractCodecControlHooks,
   partitionCallsByControlPolicy,
   partitionIssuesByControlPolicy,
@@ -36,6 +37,7 @@ import { PostgresRlsPolicy } from '../postgres-rls-policy';
 import { postgresNodeStorageCoordinate } from '../schema-ir/node-storage-coordinate';
 import { PostgresDatabaseSchemaNode } from '../schema-ir/postgres-database-schema-node';
 import { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
+import { PostgresTableSchemaNode } from '../schema-ir/postgres-table-schema-node';
 import type { SqlSchemaDiffNode } from '../schema-ir/schema-node-kinds';
 import {
   renderPostgresSuppression,
@@ -285,6 +287,22 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
         resolvePostgresNodeIssueControlPolicySubject(issue, options.contract),
       resolveCreationFactoryName: resolvePostgresNodeIssueCreationFactoryName,
     });
+
+    // The case guard runs on the plannable partition only: a table the
+    // control policy keeps the planner away from (`external`, `observed`) is
+    // never dropped or created, so it cannot form a drop-and-create pair.
+    const caseChangeConflicts = detectTableNameCaseChanges({
+      issues: issuePartition.plannable,
+      tableOf: (issue) => {
+        const node = issueNode(issue);
+        return node !== undefined && PostgresTableSchemaNode.is(node) ? node : undefined;
+      },
+      namespaceIdOf: (issue) =>
+        resolveNamespaceIdForDdlSchema(options.contract, issueSchemaName(issue) ?? schemaName),
+    });
+    if (caseChangeConflicts.length > 0) {
+      return plannerFailure(caseChangeConflicts);
+    }
 
     const result = planIssues({
       issues: issuePartition.plannable,

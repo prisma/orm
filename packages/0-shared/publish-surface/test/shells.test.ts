@@ -103,6 +103,7 @@ describe('publicShells', () => {
         './contract-prisma7/provider',
         './contract-psl',
         './contract-psl/attribute-specs',
+        './contract-psl/default-table-name',
         './contract-psl/provider',
       ],
     );

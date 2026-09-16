@@ -81,27 +81,27 @@ describe('interpretPslDocumentToSqlContract default lowering', () => {
       mutations: {
         defaults: [
           {
-            ref: { namespace: 'public', table: 'defaults', column: 'idCuid2' },
+            ref: { namespace: 'public', table: 'Defaults', column: 'idCuid2' },
             onCreate: { kind: 'generator', id: 'cuid2' },
           },
           {
-            ref: { namespace: 'public', table: 'defaults', column: 'idNanoidDefault' },
+            ref: { namespace: 'public', table: 'Defaults', column: 'idNanoidDefault' },
             onCreate: { kind: 'generator', id: 'nanoid' },
           },
           {
-            ref: { namespace: 'public', table: 'defaults', column: 'idNanoidSized' },
+            ref: { namespace: 'public', table: 'Defaults', column: 'idNanoidSized' },
             onCreate: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
           },
           {
-            ref: { namespace: 'public', table: 'defaults', column: 'idUlid' },
+            ref: { namespace: 'public', table: 'Defaults', column: 'idUlid' },
             onCreate: { kind: 'generator', id: 'ulid' },
           },
           {
-            ref: { namespace: 'public', table: 'defaults', column: 'idUuidV4' },
+            ref: { namespace: 'public', table: 'Defaults', column: 'idUuidV4' },
             onCreate: { kind: 'generator', id: 'uuidv4' },
           },
           {
-            ref: { namespace: 'public', table: 'defaults', column: 'idUuidV7' },
+            ref: { namespace: 'public', table: 'Defaults', column: 'idUuidV7' },
             onCreate: { kind: 'generator', id: 'uuidv7' },
           },
         ],
@@ -112,7 +112,7 @@ describe('interpretPslDocumentToSqlContract default lowering', () => {
         public: {
           entries: {
             table: {
-              defaults: {
+              Defaults: {
                 columns: {
                   // Generator defaults never mutate storage: the String type
                   // position alone decides the column type (pg: text).
@@ -174,11 +174,11 @@ model UuidNative {
       mutations: {
         defaults: expect.arrayContaining([
           {
-            ref: { namespace: 'public', table: 'uuidNative', column: 'idV4' },
+            ref: { namespace: 'public', table: 'UuidNative', column: 'idV4' },
             onCreate: { kind: 'generator', id: 'uuidv4' },
           },
           {
-            ref: { namespace: 'public', table: 'uuidNative', column: 'idV7' },
+            ref: { namespace: 'public', table: 'UuidNative', column: 'idV7' },
             onCreate: { kind: 'generator', id: 'uuidv7' },
           },
         ]),
@@ -186,7 +186,7 @@ model UuidNative {
     });
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    const uuidNativeTable = storage.namespaces['public']?.entries.table?.['uuidNative'];
+    const uuidNativeTable = storage.namespaces['public']?.entries.table?.['UuidNative'];
     expect(uuidNativeTable?.columns['idV4']).toMatchObject({
       codecId: 'pg/uuid@1',
       nativeType: 'uuid',
@@ -222,7 +222,7 @@ model Profile {
       mutations: {
         defaults: [
           {
-            ref: { namespace: 'public', table: 'profile', column: 'id' },
+            ref: { namespace: 'public', table: 'Profile', column: 'id' },
             onCreate: { kind: 'generator', id: 'uuidv4' },
           },
         ],
@@ -230,7 +230,7 @@ model Profile {
     });
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    const profileTable = storage.namespaces['public']?.entries.table?.['profile'];
+    const profileTable = storage.namespaces['public']?.entries.table?.['Profile'];
     expect(profileTable?.columns['id']).toMatchObject({
       codecId: 'pg/uuid@1',
       nativeType: 'uuid',
@@ -355,7 +355,7 @@ model UuidNativeBad {
         public: {
           entries: {
             table: {
-              defaults: {
+              Defaults: {
                 columns: {
                   touchedAt: {
                     default: {
@@ -424,11 +424,11 @@ model UuidNativeBad {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(unboundTables(storage)['flags']?.columns['enabled']?.default).toEqual({
+    expect(unboundTables(storage)['Flags']?.columns['enabled']?.default).toEqual({
       kind: 'literal',
       value: true,
     });
-    expect(unboundTables(storage)['flags']?.columns['disabled']?.default).toEqual({
+    expect(unboundTables(storage)['Flags']?.columns['disabled']?.default).toEqual({
       kind: 'literal',
       value: false,
     });
@@ -454,13 +454,13 @@ model UuidNativeBad {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(unboundTables(storage)['timestamped']?.columns['createdAt']?.default).toEqual({
+    expect(unboundTables(storage)['Timestamped']?.columns['createdAt']?.default).toEqual({
       kind: 'function',
       expression: 'now()',
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: 'public', table: 'timestamped', column: 'updatedAt' },
+        ref: { namespace: 'public', table: 'Timestamped', column: 'updatedAt' },
         onCreate: { kind: 'generator', id: 'timestampNow' },
         onUpdate: { kind: 'generator', id: 'timestampNow' },
       },
@@ -492,14 +492,14 @@ model UuidNativeBad {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(unboundTables(storage)['timestamped']?.columns['updatedAt']).toMatchObject({
+    expect(unboundTables(storage)['Timestamped']?.columns['updatedAt']).toMatchObject({
       codecId: 'sqlite/datetime@1',
       nativeType: 'text',
       nullable: false,
     });
     expect(result.value.execution?.mutations.defaults).toEqual([
       {
-        ref: { namespace: '__unbound__', table: 'timestamped', column: 'updatedAt' },
+        ref: { namespace: '__unbound__', table: 'Timestamped', column: 'updatedAt' },
         onCreate: { kind: 'generator', id: 'timestampNow' },
         onUpdate: { kind: 'generator', id: 'timestampNow' },
       },
@@ -606,7 +606,7 @@ model UuidNativeBad {
         public: {
           entries: {
             table: {
-              synthetic: {
+              Synthetic: {
                 columns: {
                   example: {
                     codecId: 'pg/text@1',
@@ -666,7 +666,7 @@ model UuidNativeBad {
         public: {
           entries: {
             table: {
-              synthetic: {
+              Synthetic: {
                 columns: {
                   maybe: {
                     codecId: 'pg/text@1',
@@ -728,7 +728,7 @@ model UuidNativeBad {
         public: {
           entries: {
             table: {
-              synthetic: {
+              Synthetic: {
                 columns: {
                   example: {
                     codecId: 'pg/text@1',
@@ -1028,7 +1028,7 @@ model UuidNativeBad {
       if (!result.ok) throw new Error('interpretation failed');
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
       return {
-        column: unboundTables(storage)['t']?.columns['stamped'],
+        column: unboundTables(storage)['T']?.columns['stamped'],
         defaults: result.value.execution?.mutations.defaults ?? [],
       };
     };
@@ -1044,7 +1044,7 @@ model UuidNativeBad {
       nullable: false,
       typeParams: { precision: 3 },
     };
-    const stampedRef = { namespace: 'public', table: 't', column: 'stamped' };
+    const stampedRef = { namespace: 'public', table: 'T', column: 'stamped' };
     const nowPhase = { kind: 'generator', id: 'timestampNow' };
 
     it('timestamp(3, onCreate: now, onUpdate: now) yields precision 3 and both phases', () => {
@@ -1128,14 +1128,14 @@ model UuidNativeBad {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      expect(unboundTables(storage)['t']?.columns['stamped']).toEqual({
+      expect(unboundTables(storage)['T']?.columns['stamped']).toEqual({
         nativeType: 'text',
         codecId: 'sqlite/datetime@1',
         nullable: false,
       });
       expect(result.value.execution?.mutations.defaults).toEqual([
         {
-          ref: { namespace: '__unbound__', table: 't', column: 'stamped' },
+          ref: { namespace: '__unbound__', table: 'T', column: 'stamped' },
           onCreate: nowPhase,
           onUpdate: nowPhase,
         },
@@ -1230,14 +1230,14 @@ model UuidNativeBad {
       if (!result.ok) return;
 
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      expect(storage.namespaces['public']?.entries.table?.['f']?.columns['id']).toEqual({
+      expect(storage.namespaces['public']?.entries.table?.['F']?.columns['id']).toEqual({
         codecId: 'pg/uuid@1',
         nativeType: 'uuid',
         nullable: false,
       });
       expect(result.value.execution?.mutations.defaults).toEqual([
         {
-          ref: { namespace: 'public', table: 'f', column: 'id' },
+          ref: { namespace: 'public', table: 'F', column: 'id' },
           onCreate: { kind: 'generator', id: 'uuidv4' },
         },
       ]);
@@ -1256,7 +1256,7 @@ model E {
       if (!result.ok) return;
 
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      expect(storage.namespaces['public']?.entries.table?.['e']?.columns['id']).toEqual({
+      expect(storage.namespaces['public']?.entries.table?.['E']?.columns['id']).toEqual({
         codecId: 'pg/uuid@1',
         nativeType: 'uuid',
         nullable: false,
@@ -1273,7 +1273,7 @@ model E {
       if (!result.ok) return;
 
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      expect(storage.namespaces['public']?.entries.table?.['m']?.columns['id']).toEqual({
+      expect(storage.namespaces['public']?.entries.table?.['M']?.columns['id']).toEqual({
         codecId: 'sql/char@1',
         nativeType: 'character',
         nullable: false,
@@ -1281,7 +1281,7 @@ model E {
       });
       expect(result.value.execution?.mutations.defaults).toEqual([
         {
-          ref: { namespace: 'public', table: 'm', column: 'id' },
+          ref: { namespace: 'public', table: 'M', column: 'id' },
           onCreate: { kind: 'generator', id: 'cuid2' },
         },
       ]);
@@ -1296,14 +1296,14 @@ model E {
       if (!result.ok) return;
 
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      expect(storage.namespaces['public']?.entries.table?.['l']?.columns['id']).toEqual({
+      expect(storage.namespaces['public']?.entries.table?.['L']?.columns['id']).toEqual({
         codecId: 'pg/text@1',
         nativeType: 'text',
         nullable: false,
       });
       expect(result.value.execution?.mutations.defaults).toEqual([
         {
-          ref: { namespace: 'public', table: 'l', column: 'id' },
+          ref: { namespace: 'public', table: 'L', column: 'id' },
           onCreate: { kind: 'generator', id: 'uuidv4' },
         },
       ]);
@@ -1318,7 +1318,7 @@ model E {
       if (!result.ok) return;
 
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      expect(storage.namespaces['public']?.entries.table?.['p']?.columns['id']).toEqual({
+      expect(storage.namespaces['public']?.entries.table?.['P']?.columns['id']).toEqual({
         codecId: 'pg/text@1',
         nativeType: 'text',
         nullable: false,
@@ -1336,7 +1336,7 @@ model E {
       if (!result.ok) return;
 
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      const columns = storage.namespaces['public']?.entries.table?.['n']?.columns;
+      const columns = storage.namespaces['public']?.entries.table?.['N']?.columns;
       expect(columns?.['id']).toEqual({
         codecId: 'pg/text@1',
         nativeType: 'text',
@@ -1355,7 +1355,7 @@ model E {
       expect(result.value.execution?.mutations.defaults).toEqual(
         expect.arrayContaining([
           {
-            ref: { namespace: 'public', table: 'n', column: 'sized' },
+            ref: { namespace: 'public', table: 'N', column: 'sized' },
             onCreate: { kind: 'generator', id: 'nanoid', params: { size: 16 } },
           },
         ]),
@@ -1375,7 +1375,7 @@ model T {
       if (!result.ok) return;
 
       const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-      expect(storage.namespaces['public']?.entries.table?.['t']?.columns['id']).toEqual({
+      expect(storage.namespaces['public']?.entries.table?.['T']?.columns['id']).toEqual({
         codecId: 'pg/text@1',
         nativeType: 'text',
         nullable: false,

@@ -25,11 +25,8 @@ import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
-import {
-  formatDbAttributeMigrationMessage,
-  getAttribute,
-  lowerFirst,
-} from './psl-attribute-parsing';
+import { defaultTableName } from './default-table-name';
+import { formatDbAttributeMigrationMessage, getAttribute } from './psl-attribute-parsing';
 import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
 import {
   checkUncomposedNamespace,
@@ -727,7 +724,7 @@ export function buildModelMappings(
     const mapNode = findModelAttributeNode(model, 'map');
     const tableName =
       mapNode === undefined
-        ? lowerFirst(model.name)
+        ? defaultTableName(model.name)
         : (interpretModelAttribute({
             node: mapNode,
             spec: sqlAttributeSpecs.model.map(),
@@ -735,7 +732,7 @@ export function buildModelMappings(
             sourceFile,
             sourceId,
             diagnostics,
-          })?.name ?? lowerFirst(model.name));
+          })?.name ?? defaultTableName(model.name));
     const fieldColumns = new Map<string, string>();
     for (const field of Object.values(model.fields)) {
       const fieldMapNode = findFieldAttributeNode(field, 'map');

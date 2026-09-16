@@ -1,6 +1,7 @@
 model TestModel {
   id     Int         @id
   toMany OneToMany[]
+  @@map("testModel")
 }
 
 model OneToMany {
@@ -9,6 +10,7 @@ model OneToMany {
   test    TestModel? @relation(fields: [testId], references: [id])
   toOneId Int?       @unique
   toOne   ToOne?     @relation(fields: [toOneId], references: [id])
+  @@map("oneToMany")
 }
 
 model ToOne {
@@ -16,4 +18,5 @@ model ToOne {
   string1 String
   string2 String
   toMany  OneToMany?
+  @@map("toOne")
 }

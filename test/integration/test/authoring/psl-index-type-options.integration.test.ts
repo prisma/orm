@@ -49,7 +49,7 @@ describe('PSL @@index type and options — integration with real paradedb pack',
         public: {
           entries: {
             table: {
-              doc: {
+              Doc: {
                 indexes: [
                   {
                     columns: ['body'],

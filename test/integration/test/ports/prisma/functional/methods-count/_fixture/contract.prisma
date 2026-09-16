@@ -26,6 +26,7 @@ model User {
   age   Int
   name  String?
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -37,4 +38,5 @@ model Post {
   content   String?
   authorId  String
   author    User     @relation(fields: [authorId], references: [id])
+  @@map("post")
 }

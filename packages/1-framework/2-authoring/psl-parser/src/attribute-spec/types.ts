@@ -67,6 +67,7 @@ export interface ReferencedFieldRefArgType<Ctx extends FieldAttributeCtx = Field
 }
 
 export interface FuncCallSig {
+  readonly documentation: string;
   readonly positional?: readonly PositionalParam<unknown, AttributeCtx>[];
   readonly named?: Readonly<Record<string, Param<unknown, AttributeCtx>>>;
 }
@@ -93,6 +94,7 @@ export interface IdentifierArgType<
 > extends ArgTypeOutput<Name, Ctx> {
   readonly kind: 'identifier';
   readonly name: Name;
+  readonly documentation: string;
 }
 
 export interface IntArgType<Ctx extends AttributeCtx = AttributeCtx>
@@ -234,14 +236,17 @@ export type OptionalArgType<
   readonly defaultValue?: T | undefined;
 };
 
-export type Param<T, Ctx extends AttributeCtx> = ArgType<T, Ctx>;
+export interface Param<T, Ctx extends AttributeCtx> {
+  readonly type: ArgType<T, Ctx>;
+  readonly documentation: string;
+}
 
-export interface PositionalParam<T, Ctx extends AttributeCtx> {
+export interface PositionalParam<T, Ctx extends AttributeCtx> extends Param<T, Ctx> {
   readonly key: string;
-  readonly type: Param<T, Ctx>;
 }
 
 export interface AttributeSpec<Out, Ctx extends AttributeCtx> {
+  readonly documentation: string;
   readonly level: AttributeLevel;
   readonly name: string;
   readonly positional: readonly PositionalParam<unknown, Ctx>[];
@@ -259,8 +264,8 @@ export type OutOf<P> = P extends { readonly _out?: infer T } ? T : never;
 type OptionalMarker = { readonly optional: true };
 
 export type NamedOut<N extends Record<string, Param<unknown, never>>> = Simplify<
-  { [K in keyof N as N[K] extends OptionalMarker ? never : K]: OutOf<N[K]> } & {
-    [K in keyof N as N[K] extends OptionalMarker ? K : never]?: OutOf<N[K]>;
+  { [K in keyof N as N[K]['type'] extends OptionalMarker ? never : K]: OutOf<N[K]['type']> } & {
+    [K in keyof N as N[K]['type'] extends OptionalMarker ? K : never]?: OutOf<N[K]['type']>;
   }
 >;
 

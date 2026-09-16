@@ -1,4 +1,5 @@
 model TestModel {
   id      Int @id
   decimal Decimal?
+  @@map("testModel")
 }

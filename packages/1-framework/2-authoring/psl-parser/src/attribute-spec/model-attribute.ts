@@ -12,6 +12,7 @@ interface ModelAttributeConfig<
   Pos extends readonly PositionalParam<unknown, ModelAttributeCtx>[],
   Named extends Record<string, Param<unknown, ModelAttributeCtx>>,
 > {
+  readonly documentation: string;
   readonly positional?: Pos;
   readonly named?: Named;
   readonly refine?: (
@@ -31,6 +32,7 @@ export function modelAttribute<
   return {
     level: 'model',
     name,
+    documentation: config.documentation,
     positional: config.positional ?? [],
     named: config.named ?? {},
     ...(config.refine !== undefined ? { refine: config.refine } : {}),

@@ -396,7 +396,7 @@ model Bug {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
 
-      expect(result.value.roots).toHaveProperty('task', crossRef('Task', 'public'));
+      expect(result.value.roots).toHaveProperty('Task', crossRef('Task', 'public'));
       expect(Object.values(result.value.roots)).not.toContainEqual(crossRef('Bug', 'public'));
     });
   });
@@ -551,7 +551,7 @@ model Bug {
       // The STI variant shares the base table; it must not also produce its
       // own (empty) table or a root pointing at one.
       expect(Object.keys(tablesOf(result.value))).toEqual(['tasks']);
-      expect(result.value.roots).not.toHaveProperty('bug');
+      expect(result.value.roots).not.toHaveProperty('Bug');
     });
 
     it('materializes columns for two STI variants onto the same base table', () => {

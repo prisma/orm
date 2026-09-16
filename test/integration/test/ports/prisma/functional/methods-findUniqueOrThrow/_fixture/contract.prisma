@@ -18,6 +18,7 @@ model User {
   id    String @id @default(cuid(2))
   email String @unique
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -25,4 +26,5 @@ model Post {
   title    String
   author   User   @relation(fields: [authorId], references: [id])
   authorId String
+  @@map("post")
 }

@@ -17,6 +17,7 @@ model User {
   createdAt DateTime @default(now())
   isActive Boolean @default(true)
   profile Jsonb?
+  @@map("user")
 }
 
 model Post {
@@ -27,4 +28,5 @@ model Post {
   author User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   @@index([userId])
   @@unique([title, userId])
+  @@map("post")
 }

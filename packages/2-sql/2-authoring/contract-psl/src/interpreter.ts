@@ -2562,9 +2562,9 @@ export function interpretPslDocumentToSqlContract(
   // A variant with `@@base` but no own `@@map` is single-table inheritance:
   // it shares the base table. (`@@map` ⇒ multi-table inheritance.) This is the
   // authoritative STI/MTI signal — the variant's resolved table name is not,
-  // because a no-`@@map` STI variant still gets a `lowerFirst(name)` default
-  // table name that differs from the base before `resolvePolymorphism` rewrites
-  // it onto the base table.
+  // because a no-`@@map` STI variant still gets its own verbatim default table
+  // name (`defaultTableName`) that differs from the base before
+  // `resolvePolymorphism` rewrites it onto the base table.
   const stiVariantNames = new Set<string>();
   for (const variantName of baseDeclarations.keys()) {
     const variantMapping = modelMappings.get(variantName);

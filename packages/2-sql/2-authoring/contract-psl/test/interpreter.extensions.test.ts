@@ -312,7 +312,7 @@ model Document {
         public: {
           entries: {
             table: {
-              document: {
+              Document: {
                 columns: {
                   shortName: {
                     codecId: 'custom/varchar@1',

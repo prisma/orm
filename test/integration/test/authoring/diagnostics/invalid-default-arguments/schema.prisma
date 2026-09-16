@@ -5,4 +5,5 @@ model User {
   badUuid String @default(uuid(5))
   badNanoid String @default(nanoid(1))
   emptyDbExpr String @default(dbgenerated(""))
+  @@map("user")
 }

@@ -12,6 +12,7 @@ interface FieldAttributeConfig<
   Pos extends readonly PositionalParam<unknown, FieldAttributeCtx>[],
   Named extends Record<string, Param<unknown, FieldAttributeCtx>>,
 > {
+  readonly documentation: string;
   readonly positional?: Pos;
   readonly named?: Named;
   readonly refine?: (
@@ -31,6 +32,7 @@ export function fieldAttribute<
   return {
     level: 'field',
     name,
+    documentation: config.documentation,
     positional: config.positional ?? [],
     named: config.named ?? {},
     ...(config.refine !== undefined ? { refine: config.refine } : {}),

@@ -10,4 +10,5 @@ model Round {
   id       String @id @default(cuid(2))
   teamName String
   points   Int
+  @@map("round")
 }

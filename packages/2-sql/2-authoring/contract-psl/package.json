@@ -51,6 +51,7 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./attribute-specs": "./dist/attribute-specs.mjs",
+    "./default-table-name": "./dist/default-table-name.mjs",
     "./provider": "./dist/provider.mjs",
     "./resolution": "./dist/resolution.mjs",
     "./package.json": "./package.json"

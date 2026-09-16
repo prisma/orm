@@ -76,7 +76,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
       return;
     }
     const storage = result.value.storage as SqlStorage;
-    expect(storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries.table?.['tenant']).toBeDefined();
+    expect(storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries.table?.['Tenant']).toBeDefined();
 
     // The storage map carries the Postgres target concretion (not the
     // SQL family placeholder) at the unbound slot.
@@ -89,7 +89,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
     if (!(namespace instanceof PostgresSchema)) {
       throw new Error('expected PostgresSchema concretion');
     }
-    expect(namespace.qualifyTable('tenant')).toBe('"tenant"');
+    expect(namespace.qualifyTable('Tenant')).toBe('"Tenant"');
   });
 
   it('`namespace auth { … }` lowers to PostgresSchema("auth"), whose qualifyTable emits `"auth"."<table>"`', () => {
@@ -113,7 +113,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
       return;
     }
     const storage = result.value.storage as SqlStorage;
-    expect(storage.namespaces['auth']!.entries.table?.['user']).toBeDefined();
+    expect(storage.namespaces['auth']!.entries.table?.['User']).toBeDefined();
 
     const namespace = storage.namespaces['auth'];
     expect(namespace).toBeInstanceOf(PostgresSchema);
@@ -121,7 +121,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
     if (!(namespace instanceof PostgresSchema)) {
       throw new Error('expected PostgresSchema concretion');
     }
-    expect(namespace.qualifyTable('user')).toBe('"auth"."user"');
+    expect(namespace.qualifyTable('User')).toBe('"auth"."User"');
   });
 
   it('top-level (implicit) models lower to the public namespace with schema-qualified DDL', () => {
@@ -143,7 +143,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
       return;
     }
     const storage = result.value.storage as SqlStorage;
-    expect(storage.namespaces['public']!.entries.table?.['post']).toBeDefined();
+    expect(storage.namespaces['public']!.entries.table?.['Post']).toBeDefined();
 
     const namespace = storage.namespaces['public'];
     expect(namespace).toBeInstanceOf(PostgresSchema);
@@ -151,6 +151,6 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
     if (!(namespace instanceof PostgresSchema)) {
       throw new Error('expected PostgresSchema concretion');
     }
-    expect(namespace.qualifyTable('post')).toBe('"public"."post"');
+    expect(namespace.qualifyTable('Post')).toBe('"public"."Post"');
   });
 });

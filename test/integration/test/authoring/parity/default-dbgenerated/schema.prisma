@@ -2,4 +2,5 @@
 
 model User {
   id String @id @default(dbgenerated("gen_random_uuid()"))
+  @@map("user")
 }

@@ -19,4 +19,5 @@ model Resource {
   id           String @id
   requiredJson Jsonb
   optionalJson Jsonb?
+  @@map("resource")
 }

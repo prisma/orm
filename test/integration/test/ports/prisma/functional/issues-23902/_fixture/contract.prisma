@@ -29,6 +29,7 @@ model User {
   email String  @unique
   name  String?
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -43,4 +44,5 @@ model Post {
   authorId  String?
 
   @@index([authorId])
+  @@map("post")
 }

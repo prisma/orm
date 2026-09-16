@@ -135,10 +135,24 @@ describe('str', () => {
 });
 
 describe('identifier', () => {
+  it('retains value documentation without changing exact-case parsing', () => {
+    const action = identifier('Cascade', {
+      documentation: 'Propagates the change to referencing rows.',
+    });
+    expect(action).toMatchObject({
+      name: 'Cascade',
+      label: 'Cascade',
+      documentation: 'Propagates the change to referencing rows.',
+    });
+    const { expr, ctx } = argOf('cascade');
+    expect(action.parse(expr, ctx).ok).toBe(false);
+  });
   it('matches a bare identifier equal to the pinned name', () => {
     const { expr, ctx } = argOf('Cascade');
 
-    const result = identifier('Cascade').parse(expr, ctx);
+    const result = identifier('Cascade', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe('Cascade');
@@ -147,7 +161,9 @@ describe('identifier', () => {
   it('rejects a bare identifier with a different name', () => {
     const { expr, ctx } = argOf('Cascade');
 
-    const result = identifier('NoAction').parse(expr, ctx);
+    const result = identifier('NoAction', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -159,7 +175,9 @@ describe('identifier', () => {
   it('rejects a quoted string with the same characters', () => {
     const { expr, ctx } = argOf('"Cascade"');
 
-    const result = identifier('Cascade').parse(expr, ctx);
+    const result = identifier('Cascade', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -168,7 +186,9 @@ describe('identifier', () => {
   it('rejects a number token', () => {
     const { expr, ctx } = argOf('1');
 
-    const result = identifier('Cascade').parse(expr, ctx);
+    const result = identifier('Cascade', {
+      documentation: 'An accepted identifier in this test grammar.',
+    }).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -472,7 +492,12 @@ describe('bool', () => {
 
 describe('modelAttribute', () => {
   it('fixes the spec level to model', () => {
-    const spec = modelAttribute('demo', { positional: [{ key: 'k', type: int() }] });
+    const spec = modelAttribute('demo', {
+      documentation: 'Declares a model attribute for argument binding.',
+      positional: [
+        { key: 'k', type: int(), documentation: 'The value bound to this positional slot.' },
+      ],
+    });
 
     expect(spec.level).toBe('model');
     expect(spec.name).toBe('demo');
@@ -480,7 +505,12 @@ describe('modelAttribute', () => {
 
   it('binds a model-attribute node through interpretAttribute', () => {
     const { node, ctx } = modelAttrOf('@@demo(7)');
-    const spec = modelAttribute('demo', { positional: [{ key: 'k', type: int() }] });
+    const spec = modelAttribute('demo', {
+      documentation: 'Declares a model attribute for argument binding.',
+      positional: [
+        { key: 'k', type: int(), documentation: 'The value bound to this positional slot.' },
+      ],
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -490,7 +520,12 @@ describe('modelAttribute', () => {
 
   it('surfaces a leaf diagnostic when a model-attribute argument fails to parse', () => {
     const { node, ctx } = modelAttrOf('@@demo("nope")');
-    const spec = modelAttribute('demo', { positional: [{ key: 'k', type: int() }] });
+    const spec = modelAttribute('demo', {
+      documentation: 'Declares a model attribute for argument binding.',
+      positional: [
+        { key: 'k', type: int(), documentation: 'The value bound to this positional slot.' },
+      ],
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -525,7 +560,10 @@ describe('oneOf', () => {
   it('matches whichever alternative accepts the argument', () => {
     const { expr, ctx } = argOf('SetNull');
 
-    const result = oneOf(identifier('Cascade'), identifier('SetNull')).parse(expr, ctx);
+    const result = oneOf(
+      identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+      identifier('SetNull', { documentation: 'An accepted identifier in this test grammar.' }),
+    ).parse(expr, ctx);
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toBe('SetNull');
@@ -549,7 +587,10 @@ describe('oneOf', () => {
   it('names each function when every function-call alternative fails', () => {
     const { expr, ctx } = argOf('unknown()');
 
-    const result = oneOf(funcCall('now', {}), funcCall('uuid', {})).parse(expr, ctx);
+    const result = oneOf(
+      funcCall('now', { documentation: 'Calls the named value generator.' }),
+      funcCall('uuid', { documentation: 'Calls the named value generator.' }),
+    ).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -561,7 +602,10 @@ describe('oneOf', () => {
   it('emits a single aggregate diagnostic anchored to the arg node when every alternative fails', () => {
     const { expr, ctx } = argOf('WeirdAction');
 
-    const result = oneOf(identifier('Cascade'), identifier('SetNull')).parse(expr, ctx);
+    const result = oneOf(
+      identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+      identifier('SetNull', { documentation: 'An accepted identifier in this test grammar.' }),
+    ).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -866,7 +910,10 @@ describe('funcCall', () => {
   it('accepts a nullary call whose callee matches the pinned name', () => {
     const { expr, ctx } = argOf('now()');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toMatchObject({ fn: 'now', args: {} });
@@ -875,7 +922,10 @@ describe('funcCall', () => {
   it('rejects a call whose callee differs from the pinned name', () => {
     const { expr, ctx } = argOf('uuid()');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -887,7 +937,10 @@ describe('funcCall', () => {
   it('rejects a bare identifier', () => {
     const { expr, ctx } = argOf('now');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -899,7 +952,10 @@ describe('funcCall', () => {
   it('rejects a string literal', () => {
     const { expr, ctx } = argOf('"now"');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -908,7 +964,10 @@ describe('funcCall', () => {
   it('rejects an array literal', () => {
     const { expr, ctx } = argOf('[1]');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -917,7 +976,10 @@ describe('funcCall', () => {
   it('rejects a namespaced callee', () => {
     const { expr, ctx } = argOf('foo.now()');
 
-    const result = funcCall('now', {}).parse(expr, ctx);
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      expr,
+      ctx,
+    );
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -927,7 +989,14 @@ describe('funcCall', () => {
 describe('funcCall with a signature', () => {
   const nanoid = () =>
     funcCall('nanoid', {
-      positional: [{ key: 'size', type: optional(int({ min: 2, max: 255 })) }],
+      documentation: 'Calls the named value generator.',
+      positional: [
+        {
+          key: 'size',
+          type: optional(int({ min: 2, max: 255 })),
+          documentation: 'The value bound to this positional slot.',
+        },
+      ],
     });
 
   it('binds a positional argument through the signature into the typed record', () => {
@@ -982,7 +1051,10 @@ describe('combinator code through interpretAttribute', () => {
     if (!node) throw new Error('expected a field attribute');
     const ctx = makeCtx(cursor.sourceFile);
     const spec = fieldAttribute('rel', {
-      positional: [{ key: 'name', type: str() }],
+      documentation: 'Declares a field attribute for argument binding.',
+      positional: [
+        { key: 'name', type: str(), documentation: 'The value bound to this positional slot.' },
+      ],
     });
 
     const result = interpretAttribute(node, spec, ctx);

@@ -25,6 +25,36 @@ function expectUnsupported(markedSource: string): void {
 }
 
 describe('classifyPslCompletionContext', () => {
+  it.each([
+    {
+      args: 'flag: true,| collection: []',
+      path: [],
+      positionalIndex: 0,
+      keys: ['flag', 'collection'],
+    },
+    {
+      args: 'call: nested("a",| flag: true)',
+      path: [
+        { kind: 'namedArgument', name: 'call' },
+        { kind: 'functionCall', name: 'nested' },
+      ],
+      positionalIndex: 1,
+      keys: ['flag'],
+    },
+  ])(
+    'preserves completion slots before existing named arguments: $args',
+    ({ args, path, positionalIndex, keys }) => {
+      expect(classify(`model Example { value String @probe(${args}) }`)).toMatchObject({
+        kind: 'fieldAttributeArgumentSlot',
+        attributeName: 'probe',
+        path,
+        positionalIndex,
+        existingNamedKeys: keys,
+        hasColon: false,
+      });
+    },
+  );
+
   it('classifies blank document-level declaration keyword positions', () => {
     const context = classify('|');
 
@@ -227,6 +257,7 @@ describe('classifyPslCompletionContext', () => {
     const fieldContext = classify(['model Post {', '  id Int @|', '}'].join('\n'));
     expect(fieldContext).toMatchObject({
       kind: 'fieldAttributeName',
+      ownerKind: 'field',
     });
     if (fieldContext.kind !== 'fieldAttributeName') {
       throw new Error('expected fieldAttributeName');
@@ -239,6 +270,7 @@ describe('classifyPslCompletionContext', () => {
     const modelContext = classify(['model Post {', '  id Int', '  @@|', '}'].join('\n'));
     expect(modelContext).toMatchObject({
       kind: 'modelAttributeName',
+      ownerKind: 'model',
     });
     if (modelContext.kind !== 'modelAttributeName') {
       throw new Error('expected modelAttributeName');
@@ -251,6 +283,7 @@ describe('classifyPslCompletionContext', () => {
     const blockContext = classify(['policy Foo {', '  @@|', '}'].join('\n'));
     expect(blockContext).toMatchObject({
       kind: 'blockAttributeName',
+      ownerKind: 'block',
       blockKeyword: 'policy',
     });
     if (blockContext.kind !== 'blockAttributeName') {
@@ -456,10 +489,18 @@ describe('classifyPslCompletionContext', () => {
     expect(context).toEqual({
       kind,
       ...(kind === 'fieldAttributeValue'
-        ? { field: expect.any(FieldDeclarationAst), model: expect.any(ModelDeclarationAst) }
+        ? {
+            ownerKind: 'field',
+            field: expect.any(FieldDeclarationAst),
+            model: expect.any(ModelDeclarationAst),
+          }
         : kind === 'modelAttributeValue'
-          ? { model: expect.any(ModelDeclarationAst) }
-          : { block: expect.any(GenericBlockDeclarationAst), blockKeyword: 'policy' }),
+          ? { ownerKind: 'model', model: expect.any(ModelDeclarationAst) }
+          : {
+              ownerKind: 'block',
+              block: expect.any(GenericBlockDeclarationAst),
+              blockKeyword: 'policy',
+            }),
       attributeName: 'probe',
       path: [
         { kind: 'namedArgument', name: 'nested' },
@@ -481,13 +522,21 @@ describe('classifyPslCompletionContext', () => {
     [
       'model M { value String @probe(',
       'fieldAttribute',
-      { field: expect.any(FieldDeclarationAst), model: expect.any(ModelDeclarationAst) },
+      {
+        ownerKind: 'field',
+        field: expect.any(FieldDeclarationAst),
+        model: expect.any(ModelDeclarationAst),
+      },
     ],
-    ['model M { @@probe(', 'modelAttribute', { model: expect.any(ModelDeclarationAst) }],
+    [
+      'model M { @@probe(',
+      'modelAttribute',
+      { ownerKind: 'model', model: expect.any(ModelDeclarationAst) },
+    ],
     [
       'policy M { @@probe(',
       'blockAttribute',
-      { block: expect.any(GenericBlockDeclarationAst), blockKeyword: 'policy' },
+      { ownerKind: 'block', block: expect.any(GenericBlockDeclarationAst), blockKeyword: 'policy' },
     ],
   ])('preserves exact nested keys and ambiguous slots for %s', (prefix, ownerKind, owner) => {
     for (const args of [
@@ -554,6 +603,7 @@ describe('classifyPslCompletionContext', () => {
       field: expect.any(FieldDeclarationAst),
       attributeName: 'probe',
       path: [{ kind: 'namedArgument', name }],
+      ownerKind: 'field',
       syntax,
       offset: marked.indexOf('|'),
       replacementStartOffset: source.indexOf(token),
@@ -571,6 +621,7 @@ describe('classifyPslCompletionContext', () => {
       replacementStartOffset: marked.indexOf('pr|'),
       replacementEndOffset: marked.indexOf('|') + 3,
       hasArgumentList: suffix.length > 0,
+      ownerKind: 'field',
     });
   });
 
@@ -581,6 +632,7 @@ describe('classifyPslCompletionContext', () => {
       model: expect.any(ModelDeclarationAst),
       field: expect.any(FieldDeclarationAst),
       attributeName: 'probe',
+      ownerKind: 'field',
       path: [
         { kind: 'namedArgument', name: 'records' },
         { kind: 'recordValue' },

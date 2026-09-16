@@ -164,7 +164,7 @@ An attribute name the registry does not carry is reported, in both families and 
 - Mongo, both levels: `reportUnknownAttributes` in `packages/2-mongo-family/2-authoring/contract-psl/src/interpreter.ts` walks every model and composite type and reports names absent from `mongoAttributeSpecs.model` / `.field` with the same two codes.
 - Block level: `parseBlockAttribute` reports a name absent from the block descriptor's `attributes` as `PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE`, and a repeated name as `PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE`.
 
-This makes coverage a correctness requirement, not a nicety: a diagnostic driven by registry keys is only sound if every attribute the interpreter accepts is registered. Mongo's field-level `@id` and `@unique` are declared as specs for that reason — `fieldAttribute('id', {})` and `fieldAttribute('unique', {})`, argument-less but present — so that the surface is complete and enumerable rather than recognized by an ad-hoc presence check the registry cannot see. Per-family tests assert the exact key set of each level, so adding an accepted attribute without registering it fails.
+This makes coverage a correctness requirement, not a nicety: a diagnostic driven by registry keys is only sound if every attribute the interpreter accepts is registered. Mongo's field-level `@id` and `@unique` are declared as specs for that reason — argument-less `fieldAttribute` specs with required documentation for the primary-key and uniqueness markers — so that the surface is complete and enumerable rather than recognized by an ad-hoc presence check the registry cannot see. Per-family tests assert the exact key set of each level, so adding an accepted attribute without registering it fails.
 
 ---
 

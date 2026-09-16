@@ -1270,6 +1270,10 @@ A `--from` reference cannot produce a contract: either a ref name has no pointer
 
 SQLite twin of `MIGRATION.POSTGRES_CONTROL_STACK_MISSING`: a `SqliteMigration` operation needing the control adapter was invoked on an instance constructed without a control stack (only introspection is valid in that form). Payload: `operation`.
 
+### MIGRATION.TABLE_NAME_CASE_CHANGED
+
+The planner would drop table `X` and create table `Y` in the same namespace, where `X` is `Y` with its first letter lowered; the columns are not compared. That is the shape of a schema upgraded across the release in which a model with no `@@map` stopped lowering the first letter of its table name (`model UserProfile` now names `"UserProfile"`, previously `"userProfile"`); planning it would recreate the table empty. Reported as a conflict inside `MIGRATION.PLANNING_FAILED`. Add `@@map("X")` to the model (or run the `add-model-map` codemod) to keep the existing table, or rename it by hand with `ALTER TABLE "X" RENAME TO "Y"`, after which the plan is empty. Payload: `droppedTable`, `createdTable`.
+
 ### MIGRATION.TARGET_MISMATCH
 
 A migration script declares one `targetId` but the loaded `prisma.config.ts` declares another; the script can only run against a config targeting the same database. Switch configs or pass `--config <path>`. Payload: `migrationTargetId`, `configTargetId`.

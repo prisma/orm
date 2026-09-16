@@ -1457,7 +1457,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['tags']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
       nativeType: 'text',
       codecId: 'pg/text@1',
       many: true,
@@ -1485,7 +1485,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['tags']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
       many: true,
       default: { kind: 'literal', value: ['a', 'b'] },
     });
@@ -1511,7 +1511,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['scores']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['scores']).toMatchObject({
       many: true,
       default: { kind: 'literal', value: [1, 2] },
     });
@@ -1537,7 +1537,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['flags']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['flags']).toMatchObject({
       many: true,
       default: { kind: 'literal', value: [true, false] },
     });
@@ -1563,7 +1563,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['tags']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
       many: true,
       default: { kind: 'literal', value: ['a,b', 'c'] },
     });

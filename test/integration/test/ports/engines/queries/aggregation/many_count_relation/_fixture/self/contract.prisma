@@ -3,6 +3,7 @@ model User {
   name      String
   following User[] @relation("follower")
   followers User[] @relation("followee")
+  @@map("user")
 }
 
 model UserFollow {
@@ -12,4 +13,5 @@ model UserFollow {
   followee   User @relation("followee", fields: [followeeId], references: [id])
 
   @@id([followerId, followeeId])
+  @@map("userFollow")
 }
