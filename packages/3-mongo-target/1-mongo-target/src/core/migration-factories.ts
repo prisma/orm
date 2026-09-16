@@ -48,12 +48,8 @@ interface Buildable {
 }
 
 function isBuildable(value: unknown): value is Buildable {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'build' in value &&
-    typeof (value as { build: unknown }).build === 'function'
-  );
+  if (typeof value !== 'object' || value === null || !('build' in value)) return false;
+  return typeof Reflect.get(value, 'build') === 'function';
 }
 
 function resolveQuery(value: MongoQueryPlan | Buildable): MongoQueryPlan {

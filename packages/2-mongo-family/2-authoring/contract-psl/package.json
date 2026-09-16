@@ -48,9 +48,18 @@
   ],
   "types": "./dist/index.d.mts",
   "exports": {
-    ".": "./dist/index.mjs",
-    "./provider": "./dist/exports/provider.mjs",
-    "./package.json": "./package.json"
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./provider": {
+      "types": "./dist/exports/provider.d.mts",
+      "import": "./dist/exports/provider.mjs"
+    },
+    "./package.json": {
+      "types": "./package.json",
+      "import": "./package.json"
+    }
   },
   "engines": {
     "node": ">=24"
