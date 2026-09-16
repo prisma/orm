@@ -9,7 +9,6 @@ import {
   FunctionCallAst,
   isTrivia,
   ModelAttributeAst,
-  nonTriviaSibling,
   ObjectLiteralExprAst,
   type Position,
   type SourceFile,
@@ -31,38 +30,12 @@ export type AttributeArgumentPathStep =
   | { readonly kind: 'recordValue' }
   | { readonly kind: 'functionCall'; readonly name: string };
 
-interface SyntaxCursor {
+export interface SyntaxCursor {
   readonly offset: number;
   readonly preceding: SyntaxToken | undefined;
 }
 
-export interface ArgumentListSyntaxFrame {
-  readonly kind: 'arguments';
-  readonly node: AttributeArgListAst | FunctionCallAst;
-  readonly insideDelimiters: boolean;
-  readonly containingArgument: AttributeArgAst | undefined;
-  readonly precedingArgument: AttributeArgAst | undefined;
-  readonly followingArgument: AttributeArgAst | undefined;
-  readonly region: 'name' | 'value' | 'separator' | 'trivia';
-}
-
-export interface ExpressionSyntaxFrame {
-  readonly kind: 'expression';
-  readonly node: ExpressionAst;
-  readonly recovered: boolean;
-  readonly atBoundaryOrOutside: boolean;
-  readonly insideDelimiters: boolean;
-  readonly childEdge: 'listElement' | 'recordValue' | undefined;
-}
-
-export type AttributeSyntaxFrame = ArgumentListSyntaxFrame | ExpressionSyntaxFrame;
-
-export interface AttributeSyntaxContext extends SyntaxCursor {
-  readonly attribute: FieldAttributeAst | ModelAttributeAst;
-  readonly frames: readonly AttributeSyntaxFrame[];
-}
-
-export function locateAttributeSyntax(input: PslCursorInput): AttributeSyntaxContext | undefined {
+export function locateAttributeSyntax(input: PslCursorInput) {
   const offset = input.sourceFile.offsetAt(input.position);
   const at = input.document.syntax.tokenAtOffset(offset);
   if (at.leftBiased()?.kind === 'Comment') return undefined;
@@ -74,7 +47,7 @@ export function locateAttributeSyntax(input: PslCursorInput): AttributeSyntaxCon
           any(FieldAttributeAst.cast, ModelAttributeAst.cast),
         );
   if (attribute === undefined || !attributeContainsOffset(attribute, offset)) return undefined;
-  return locateAttributeArguments(attribute, offset);
+  return { attribute, ...attributeCursor(attribute, offset) };
 }
 
 export function attributeContainsOffset(
@@ -86,31 +59,27 @@ export function attributeContainsOffset(
   return args !== undefined && args.rparen() === undefined && offset >= args.syntax.endOffset;
 }
 
-export function locateAttributeArguments(
+export function attributeCursor(
   attribute: FieldAttributeAst | ModelAttributeAst,
   offset: number,
-): AttributeSyntaxContext {
+): SyntaxCursor {
   const at = attribute.syntax.tokenAtOffset(offset);
   const anchor = at.leftBiased() ?? attribute.syntax.lastToken;
-  const cursor = {
+  return {
     offset,
     preceding: anchor === undefined ? undefined : skipTriviaToken(anchor, 'prev'),
   };
-  const frames: AttributeSyntaxFrame[] = [];
-  const args = attribute.argList();
-  if (args !== undefined) locateArguments(cursor, args, frames);
-  return { ...cursor, attribute, frames };
 }
 
 export function argumentSiblings(
-  frame: ArgumentListSyntaxFrame,
+  node: AttributeArgListAst | FunctionCallAst,
   selected: AttributeArgAst | undefined,
   offset: number,
 ): { precedingPositionalCount: number; otherNamedKeys: readonly string[] } {
   let precedingPositionalCount = 0;
   const otherNamedKeys: string[] = [];
   let beforeSelected = true;
-  for (const arg of frame.node.args()) {
+  for (const arg of node.args()) {
     if (arg.syntax.offset === selected?.syntax.offset) {
       beforeSelected = false;
       continue;
@@ -122,99 +91,22 @@ export function argumentSiblings(
   return { precedingPositionalCount, otherNamedKeys };
 }
 
-function locateArguments(
+export function argumentAtCursor(
   cursor: SyntaxCursor,
   node: AttributeArgListAst | FunctionCallAst,
-  frames: AttributeSyntaxFrame[],
-): void {
-  const insideDelimiters = betweenDelimiters(cursor.offset, node.lparen(), node.rparen());
-  let containingArgument: AttributeArgAst | undefined;
-  let precedingArgument: AttributeArgAst | undefined;
-  let followingArgument: AttributeArgAst | undefined;
-  const next =
-    cursor.preceding?.kind === 'Comma' ? nonTriviaSibling(cursor.preceding, 'next') : undefined;
+) {
   for (const arg of node.args()) {
-    if (next?.offset === arg.syntax.offset) followingArgument = arg;
-    if (arg.syntax.endOffset <= cursor.offset) precedingArgument = arg;
     if (
-      containingArgument === undefined &&
       arg.syntax.offset <= cursor.offset &&
       (containsCursor(arg.syntax, cursor) ||
         recoveredContainerContainsCursor(arg.value(), cursor.offset))
     )
-      containingArgument = arg;
+      return arg;
   }
-  frames.push({
-    kind: 'arguments',
-    node,
-    insideDelimiters,
-    containingArgument,
-    precedingArgument,
-    followingArgument,
-    region: argumentRegion(cursor, containingArgument),
-  });
-  if (insideDelimiters) locateExpression(cursor, containingArgument?.value(), frames);
+  return undefined;
 }
 
-function locateExpression(
-  cursor: SyntaxCursor,
-  node: ExpressionAst | undefined,
-  frames: AttributeSyntaxFrame[],
-): void {
-  if (node === undefined) return;
-  const recovered = recoveredContainerContainsCursor(node, cursor.offset);
-  const atBoundaryOrOutside =
-    cursor.offset <= node.syntax.offset || (cursor.offset >= node.syntax.endOffset && !recovered);
-  let insideDelimiters = true;
-  let child: ExpressionAst | undefined;
-  let childEdge: ExpressionSyntaxFrame['childEdge'];
-  if (node instanceof ArrayLiteralAst) {
-    insideDelimiters = betweenDelimiters(cursor.offset, node.lbracket(), node.rbracket());
-    if (insideDelimiters) {
-      child = listElementAtCursor(cursor, node);
-      childEdge = 'listElement';
-    }
-  } else if (node instanceof ObjectLiteralExprAst) {
-    const closing = node.rbrace();
-    insideDelimiters = closing === undefined || cursor.offset < closing.endOffset;
-    if (insideDelimiters) {
-      const field = recordFieldAtCursor(cursor, node);
-      child = field?.value();
-      childEdge = field === undefined ? undefined : 'recordValue';
-    }
-  } else if (node instanceof FunctionCallAst) {
-    insideDelimiters = betweenDelimiters(cursor.offset, node.lparen(), node.rparen());
-  }
-  frames.push({
-    kind: 'expression',
-    node,
-    recovered,
-    atBoundaryOrOutside,
-    insideDelimiters,
-    childEdge,
-  });
-  const opening = node instanceof FunctionCallAst ? node.lparen() : undefined;
-  if (node instanceof FunctionCallAst && opening !== undefined && cursor.offset > opening.offset) {
-    locateArguments(cursor, node, frames);
-  } else {
-    locateExpression(cursor, child, frames);
-  }
-}
-
-function argumentRegion(
-  cursor: SyntaxCursor,
-  argument: AttributeArgAst | undefined,
-): ArgumentListSyntaxFrame['region'] {
-  if (argument !== undefined) {
-    const colon = argument.colon();
-    return colon !== undefined && cursor.offset <= colon.offset ? 'name' : 'value';
-  }
-  return cursor.preceding?.kind === 'Comma' && cursor.offset === cursor.preceding.endOffset
-    ? 'separator'
-    : 'trivia';
-}
-
-function listElementAtCursor(cursor: SyntaxCursor, node: ArrayLiteralAst) {
+export function listElementAtCursor(cursor: SyntaxCursor, node: ArrayLiteralAst) {
   for (const element of node.elements()) {
     if (
       containsCursor(element.syntax, cursor) ||
@@ -225,7 +117,7 @@ function listElementAtCursor(cursor: SyntaxCursor, node: ArrayLiteralAst) {
   return undefined;
 }
 
-function recordFieldAtCursor(cursor: SyntaxCursor, node: ObjectLiteralExprAst) {
+export function recordFieldAtCursor(cursor: SyntaxCursor, node: ObjectLiteralExprAst) {
   for (const field of node.fields()) {
     const colon = field.colon();
     if (
@@ -239,7 +131,7 @@ function recordFieldAtCursor(cursor: SyntaxCursor, node: ObjectLiteralExprAst) {
   return undefined;
 }
 
-function betweenDelimiters(
+export function betweenDelimiters(
   offset: number,
   opening: SyntaxToken | undefined,
   closing: SyntaxToken | undefined,
@@ -251,7 +143,7 @@ function betweenDelimiters(
   );
 }
 
-function recoveredContainerContainsCursor(
+export function recoveredContainerContainsCursor(
   expression: ExpressionAst | undefined,
   offset: number,
 ): boolean {

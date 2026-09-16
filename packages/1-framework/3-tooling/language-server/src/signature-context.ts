@@ -1,20 +1,31 @@
 import {
   ArrayLiteralAst,
+  AttributeArgAst,
+  type AttributeArgListAst,
+  type ExpressionAst,
   FieldAttributeAst,
   FieldDeclarationAst,
   FunctionCallAst,
   GenericBlockDeclarationAst,
   IdentifierAst,
+  type ModelAttributeAst,
   ModelDeclarationAst,
+  nonTriviaSibling,
   ObjectLiteralExprAst,
+  SyntaxNode,
 } from '@internal/psl-parser/syntax';
 import type { AttributeSpecOwner } from './attribute-spec-resolution';
 import {
   type AttributeArgumentPathStep,
-  type AttributeSyntaxContext,
+  argumentAtCursor,
   argumentSiblings,
+  betweenDelimiters,
+  listElementAtCursor,
   locateAttributeSyntax,
   type PslCursorInput,
+  recordFieldAtCursor,
+  recoveredContainerContainsCursor,
+  type SyntaxCursor,
 } from './attribute-syntax-context';
 
 interface SignaturePosition {
@@ -38,15 +49,17 @@ export function classifyPslSignatureContext(
   const syntax = locateAttributeSyntax(input);
   if (syntax === undefined) return undefined;
   const attributeName = syntax.attribute.name()?.identifier()?.name();
-  const position = interpretArguments(syntax, 0, []);
-  const owner = signatureOwner(syntax);
+  const args = syntax.attribute.argList();
+  const position = args === undefined ? undefined : signatureArguments(syntax, args, []);
+  const owner = signatureOwner(syntax.attribute);
   return attributeName === undefined || position === undefined || owner === undefined
     ? undefined
     : { ...owner, ...position, attributeName };
 }
 
-function signatureOwner(context: AttributeSyntaxContext): AttributeSpecOwner | undefined {
-  const attribute = context.attribute;
+function signatureOwner(
+  attribute: FieldAttributeAst | ModelAttributeAst,
+): AttributeSpecOwner | undefined {
   if (attribute instanceof FieldAttributeAst) {
     const field = attribute.syntax.findAncestor(FieldDeclarationAst.cast);
     const model = attribute.syntax.findAncestor(ModelDeclarationAst.cast);
@@ -63,16 +76,22 @@ function signatureOwner(context: AttributeSyntaxContext): AttributeSpecOwner | u
   return model === undefined ? undefined : { model };
 }
 
-function interpretArguments(
-  context: AttributeSyntaxContext,
-  index: number,
+function signatureArguments(
+  context: SyntaxCursor,
+  args: AttributeArgListAst | FunctionCallAst,
   path: readonly AttributeArgumentPathStep[],
 ): SignaturePosition | undefined {
-  const frame = context.frames[index];
-  if (frame?.kind !== 'arguments' || !frame.insideDelimiters) return undefined;
-  const active = frame.containingArgument ?? frame.followingArgument;
+  if (!betweenDelimiters(context.offset, args.lparen(), args.rparen())) return undefined;
+  const containing = argumentAtCursor(context, args);
+  const next =
+    context.preceding?.kind === 'Comma' ? nonTriviaSibling(context.preceding, 'next') : undefined;
+  const following =
+    next instanceof SyntaxNode && next.parent?.offset === args.syntax.offset
+      ? AttributeArgAst.cast(next)
+      : undefined;
+  const active = containing ?? following;
   const { precedingPositionalCount: positionalIndex, otherNamedKeys: existingNamedKeys } =
-    argumentSiblings(frame, active, context.offset);
+    argumentSiblings(args, active, context.offset);
   if (active === undefined) {
     return ['LParen', 'Comma'].includes(context.preceding?.kind ?? '')
       ? { path, argumentSlot: { positionalIndex, existingNamedKeys } }
@@ -85,8 +104,8 @@ function interpretArguments(
       ...path,
       { kind: 'namedArgument', name },
     ];
-    return active === frame.containingArgument
-      ? interpretExpression(context, index + 1, valuePath)
+    return active === containing
+      ? signatureExpression(context, active.value(), valuePath)
       : { path: valuePath, argumentSlot: undefined };
   }
   const value = active.value();
@@ -100,39 +119,47 @@ function interpretArguments(
     ...path,
     { kind: 'positionalArgument', index: positionalIndex },
   ];
-  return active === frame.containingArgument
-    ? interpretExpression(context, index + 1, valuePath)
+  return active === containing
+    ? signatureExpression(context, value, valuePath)
     : { path: valuePath, argumentSlot: undefined };
 }
 
-function interpretExpression(
-  context: AttributeSyntaxContext,
-  index: number,
+function signatureExpression(
+  context: SyntaxCursor,
+  expression: ExpressionAst | undefined,
   path: readonly AttributeArgumentPathStep[],
 ): SignaturePosition | undefined {
-  const frame = context.frames[index];
   const position = { path, argumentSlot: undefined };
-  if (frame === undefined) return position;
-  if (frame.kind !== 'expression') return undefined;
-  if (frame.atBoundaryOrOutside) return position;
-  const expression = frame.node;
+  if (
+    expression === undefined ||
+    context.offset <= expression.syntax.offset ||
+    (context.offset >= expression.syntax.endOffset &&
+      !recoveredContainerContainsCursor(expression, context.offset))
+  )
+    return position;
   if (expression instanceof ArrayLiteralAst) {
-    return frame.insideDelimiters
-      ? interpretExpression(context, index + 1, [...path, { kind: 'listElement' }])
+    return betweenDelimiters(context.offset, expression.lbracket(), expression.rbracket())
+      ? signatureExpression(context, listElementAtCursor(context, expression), [
+          ...path,
+          { kind: 'listElement' },
+        ])
       : undefined;
   }
   if (expression instanceof ObjectLiteralExprAst) {
-    if (!frame.insideDelimiters) return undefined;
-    return frame.childEdge === 'recordValue'
-      ? interpretExpression(context, index + 1, [...path, { kind: 'recordValue' }])
+    const closing = expression.rbrace();
+    if (closing !== undefined && context.offset >= closing.endOffset) return undefined;
+    const field = recordFieldAtCursor(context, expression);
+    return field !== undefined
+      ? signatureExpression(context, field.value(), [...path, { kind: 'recordValue' }])
       : position;
   }
   if (expression instanceof FunctionCallAst) {
-    if (context.frames[index + 1]?.kind === 'arguments') {
+    const opening = expression.lparen();
+    if (opening !== undefined && context.offset > opening.offset) {
       const name = expression.name();
       const identifier = name?.identifier()?.name();
       return identifier !== undefined && name?.isSimpleName(identifier) === true
-        ? interpretArguments(context, index + 1, [
+        ? signatureArguments(context, expression, [
             ...path,
             { kind: 'functionCall', name: identifier },
           ])

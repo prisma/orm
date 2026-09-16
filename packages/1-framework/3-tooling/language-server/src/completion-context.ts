@@ -5,6 +5,7 @@ import {
   type BracedBlock,
   CompositeTypeDeclarationAst,
   type DocumentAst,
+  type ExpressionAst,
   FieldAttributeAst,
   FieldDeclarationAst,
   FunctionCallAst,
@@ -26,10 +27,13 @@ import {
 } from '@internal/psl-parser/syntax';
 import {
   type AttributeArgumentPathStep,
-  type AttributeSyntaxContext,
+  argumentAtCursor,
   argumentSiblings,
   attributeContainsOffset,
-  locateAttributeArguments,
+  attributeCursor,
+  betweenDelimiters,
+  listElementAtCursor,
+  recordFieldAtCursor,
 } from './attribute-syntax-context';
 
 export interface ClassifyPslCompletionContextInput {
@@ -603,7 +607,7 @@ interface AttributeContextFactory {
 
 interface AttributeCursor extends CompletionReplacement {
   readonly attributeName: string;
-  readonly syntax: AttributeSyntaxContext;
+  readonly preceding: SyntaxToken | undefined;
   readonly factory: AttributeContextFactory;
 }
 
@@ -627,16 +631,16 @@ function classifyAttributePosition(
   const right = at.rightBiased();
   const token = isValueToken(right) ? right : at.leftBiased();
   const replaceToken = isValueToken(token);
-  return interpretAttributeArguments(
+  return classifyAttributeArguments(
     {
       offset: input.offset,
       replacementStartOffset: replaceToken ? token.offset : input.offset,
       replacementEndOffset: replaceToken ? token.endOffset : input.offset,
       attributeName,
-      syntax: locateAttributeArguments(attribute, input.offset),
+      preceding: attributeCursor(attribute, input.offset).preceding,
       factory,
     },
-    0,
+    args,
     [],
   );
 }
@@ -654,16 +658,15 @@ function argumentPosition(
   };
 }
 
-function interpretAttributeArguments(
+function classifyAttributeArguments(
   cursor: AttributeCursor,
-  frameIndex: number,
+  args: AttributeArgListAst | FunctionCallAst,
   path: readonly AttributeArgumentPathStep[],
 ): PslCompletionContext {
-  const frame = cursor.syntax.frames[frameIndex];
-  if (frame?.kind !== 'arguments' || !frame.insideDelimiters) return UNSUPPORTED;
-  const active = frame.containingArgument;
+  if (!betweenDelimiters(cursor.offset, args.lparen(), args.rparen())) return UNSUPPORTED;
+  const active = argumentAtCursor(cursor, args);
   const { precedingPositionalCount: positionalIndex, otherNamedKeys: existingNamedKeys } =
-    argumentSiblings(frame, active, cursor.offset);
+    argumentSiblings(args, active, cursor.offset);
   const position = argumentPosition(cursor, path);
   if (active === undefined) {
     return followsSeparator(cursor, ['LParen', 'Comma'])
@@ -675,13 +678,14 @@ function interpretAttributeArguments(
         })
       : UNSUPPORTED;
   }
-  if (active.colon() !== undefined) {
-    if (frame.region === 'name')
+  const colon = active.colon();
+  if (colon !== undefined) {
+    if (cursor.offset <= colon.offset)
       return cursor.factory.namedKey({ ...position, existingNamedKeys, hasColon: true });
     const name = active.name()?.name();
     return name === undefined
       ? UNSUPPORTED
-      : interpretAttributeExpression(cursor, frameIndex + 1, [
+      : classifyAttributeExpression(cursor, active.value(), [
           ...path,
           { kind: 'namedArgument', name },
         ]);
@@ -698,40 +702,42 @@ function interpretAttributeArguments(
       hasColon: false,
     });
   }
-  return interpretAttributeExpression(cursor, frameIndex + 1, [
+  return classifyAttributeExpression(cursor, value, [
     ...path,
     { kind: 'positionalArgument', index: positionalIndex },
   ]);
 }
 
-function interpretAttributeExpression(
+function classifyAttributeExpression(
   cursor: AttributeCursor,
-  frameIndex: number,
+  expression: ExpressionAst | undefined,
   path: readonly AttributeArgumentPathStep[],
 ): PslCompletionContext {
-  const frame = cursor.syntax.frames[frameIndex];
-  if (frame === undefined)
+  if (expression === undefined)
     return cursor.factory.value({ ...argumentPosition(cursor, path), syntax: 'scalar' });
-  if (frame.kind !== 'expression') return UNSUPPORTED;
-  const expression = frame.node;
   if (expression instanceof ArrayLiteralAst) {
-    if (!frame.insideDelimiters) return UNSUPPORTED;
-    return cursor.syntax.frames[frameIndex + 1] !== undefined ||
-      followsSeparator(cursor, ['LBracket', 'Comma'])
-      ? interpretAttributeExpression(cursor, frameIndex + 1, [...path, { kind: 'listElement' }])
+    if (!betweenDelimiters(cursor.offset, expression.lbracket(), expression.rbracket()))
+      return UNSUPPORTED;
+    const element = listElementAtCursor(cursor, expression);
+    return element !== undefined || followsSeparator(cursor, ['LBracket', 'Comma'])
+      ? classifyAttributeExpression(cursor, element, [...path, { kind: 'listElement' }])
       : UNSUPPORTED;
   }
   if (expression instanceof ObjectLiteralExprAst) {
-    return frame.insideDelimiters && frame.childEdge === 'recordValue'
-      ? interpretAttributeExpression(cursor, frameIndex + 1, [...path, { kind: 'recordValue' }])
+    const closing = expression.rbrace();
+    if (closing !== undefined && cursor.offset >= closing.endOffset) return UNSUPPORTED;
+    const field = recordFieldAtCursor(cursor, expression);
+    return field !== undefined
+      ? classifyAttributeExpression(cursor, field.value(), [...path, { kind: 'recordValue' }])
       : UNSUPPORTED;
   }
   if (expression instanceof FunctionCallAst) {
-    if (cursor.syntax.frames[frameIndex + 1]?.kind === 'arguments') {
+    const opening = expression.lparen();
+    if (opening !== undefined && cursor.offset > opening.offset) {
       const name = expression.name();
       const identifier = name?.identifier()?.name();
       return identifier !== undefined && name?.isSimpleName(identifier) === true
-        ? interpretAttributeArguments(cursor, frameIndex + 1, [
+        ? classifyAttributeArguments(cursor, expression, [
             ...path,
             { kind: 'functionCall', name: identifier },
           ])
@@ -754,7 +760,7 @@ function isValueToken(token: SyntaxToken | undefined): token is SyntaxToken {
 }
 
 function followsSeparator(cursor: AttributeCursor, kinds: readonly string[]): boolean {
-  return kinds.includes(cursor.syntax.preceding?.kind ?? '');
+  return kinds.includes(cursor.preceding?.kind ?? '');
 }
 
 function classifyGenericBlockParameter(input: {

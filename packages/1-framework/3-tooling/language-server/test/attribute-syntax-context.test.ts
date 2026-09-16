@@ -1,85 +1,78 @@
-import { FunctionCallAst, parse } from '@internal/psl-parser/syntax';
+import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
-import { locateAttributeSyntax } from '../src/attribute-syntax-context';
+import {
+  argumentAtCursor,
+  argumentSiblings,
+  betweenDelimiters,
+  locateAttributeSyntax,
+  recoveredContainerContainsCursor,
+} from '../src/attribute-syntax-context';
 
-function locate(args: string) {
-  const source = `model Example { value String @probe(${args}) }`;
+function locate(source: string) {
   const offset = source.indexOf('|');
   const { document, sourceFile } = parse(source.replace('|', ''));
-  const context = locateAttributeSyntax({
+  const cursor = locateAttributeSyntax({
     document,
     sourceFile,
     position: sourceFile.positionAt(offset),
   });
-  expect(context).toBeDefined();
-  return context;
+  if (cursor === undefined) throw new Error('Missing attribute');
+  const args = cursor.attribute.argList();
+  if (args === undefined) throw new Error('Missing arguments');
+  return { cursor, args };
 }
 
-describe('attribute argument syntax cursor', () => {
+describe('attribute syntax helpers', () => {
   it.each([
-    { gap: '| ', containing: undefined, region: 'separator' },
-    { gap: ' | ', containing: undefined, region: 'trivia' },
-    { gap: ' |', containing: 'references', region: 'name' },
-  ])(
-    'retains the following argument across comma whitespace: $gap',
-    ({ gap, containing, region }) => {
-      const context = locate(`fields: [id],${gap}references: [id]`);
-      const frame = context?.frames[0];
-      expect(frame).toMatchObject({ kind: 'arguments', region });
-      if (frame?.kind !== 'arguments') throw new Error('Missing argument frame');
-      expect({
-        containing: frame.containingArgument?.name()?.name(),
-        preceding: frame.precedingArgument?.name()?.name(),
-        following: frame.followingArgument?.name()?.name(),
-        separator: context?.preceding?.kind,
-      }).toEqual({ containing, preceding: 'fields', following: 'references', separator: 'Comma' });
-    },
-  );
-
-  it.each([
-    { args: 'references|: [id]', region: 'name' },
-    { args: 'references: |[id]', region: 'value' },
-  ])('distinguishes named keys and values: $args', ({ args, region }) => {
-    const frame = locate(args)?.frames[0];
-    expect(frame).toMatchObject({ kind: 'arguments', region });
-    if (frame?.kind !== 'arguments') throw new Error('Missing argument frame');
-    expect(frame.containingArgument?.name()?.name()).toBe('references');
+    { gap: '| ', selected: undefined, keys: ['fields', 'references'] },
+    { gap: ' | ', selected: undefined, keys: ['fields', 'references'] },
+    { gap: ' |', selected: 'references', keys: ['fields'] },
+  ])('locates only the argument containing the cursor: $gap', ({ gap, selected, keys }) => {
+    const { cursor, args } = locate(
+      `model Example { value String @probe(fields: [id],${gap}references: [id]) }`,
+    );
+    const active = argumentAtCursor(cursor, args);
+    expect(active?.name()?.name()).toBe(selected);
+    expect(argumentSiblings(args, active, cursor.offset)).toEqual({
+      precedingPositionalCount: 0,
+      otherNamedKeys: keys,
+    });
   });
 
-  it.each(['nested', 'unknown'])(
-    'retains syntactic calls without resolving their names: %s',
-    (name) => {
-      const context = locate(`records: { item: [${name}(|)] }`);
-      expect(context?.frames.map((frame) => frame.node.syntax.kind)).toEqual([
-        'AttributeArgList',
-        'ObjectLiteralExpr',
-        'ArrayLiteral',
-        'FunctionCall',
-        'FunctionCall',
-      ]);
-      const frame = context?.frames.at(-1);
-      expect(frame).toMatchObject({ kind: 'arguments', insideDelimiters: true });
-      expect(
-        frame?.node instanceof FunctionCallAst && frame.node.name()?.identifier()?.name(),
-      ).toBe(name);
-    },
-  );
+  it('counts preceding positional arguments without counting the selected argument', () => {
+    const { cursor, args } = locate(
+      'model Example { value String @probe(First, S|econd, key: 1) }',
+    );
+    const active = argumentAtCursor(cursor, args);
+    expect(active?.value()?.syntax.kind).toBe('Identifier');
+    expect(argumentSiblings(args, active, cursor.offset)).toEqual({
+      precedingPositionalCount: 1,
+      otherNamedKeys: ['key'],
+    });
+  });
 
-  it.each(['@probe(|', '@probe(call: unknown( |', '@probe(collection: [unknown( |'])(
-    'retains unfinished delimiters: %s',
-    (attribute) => {
-      const source = `model Example { value String ${attribute}`;
-      const offset = source.indexOf('|');
-      const { document, sourceFile } = parse(source.replace('|', ''));
-      const context = locateAttributeSyntax({
-        document,
-        sourceFile,
-        position: sourceFile.positionAt(offset),
-      });
-      const frame = context?.frames.at(-1);
-      expect(frame).toMatchObject({ kind: 'arguments', insideDelimiters: true });
-      if (frame?.kind !== 'arguments') throw new Error('Missing argument frame');
-      expect(frame.node.rparen()).toBeUndefined();
-    },
-  );
+  it.each([
+    { call: '|(value)', inside: false },
+    { call: '(|value)', inside: true },
+    { call: '(value|)', inside: true },
+    { call: '(value)|', inside: false },
+    { call: '(value |', inside: true },
+  ])('checks delimiter boundaries: $call', ({ call, inside }) => {
+    const { cursor, args } = locate(`model Example { value String @probe${call}`);
+    expect(betweenDelimiters(cursor.offset, args.lparen(), args.rparen())).toBe(inside);
+  });
+
+  it.each([
+    { value: '[First, |', recovered: true },
+    { value: '{ item: First, |', recovered: true },
+    { value: 'nested(First, |', recovered: true },
+    { value: '[First] |', recovered: false },
+    { value: 'nested(First) |', recovered: false },
+    { value: 'First |', recovered: false },
+  ])('extends only unfinished containers into trailing trivia: $value', ({ value, recovered }) => {
+    const { cursor, args } = locate(`model Example { value String @probe(${value}`);
+    const expression = args.args()[Symbol.iterator]().next().value?.value();
+    expect(expression).toBeDefined();
+    expect(recoveredContainerContainsCursor(expression, cursor.offset)).toBe(recovered);
+  });
 });

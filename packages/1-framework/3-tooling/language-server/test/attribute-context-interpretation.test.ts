@@ -50,6 +50,50 @@ describe('attribute cursor interpretation', () => {
     });
   });
 
+  it('treats the start of the name after comma whitespace as a key, not an insertion', () => {
+    const cursor = input('fields: [id], |references: [id]');
+    expect(classifyPslCompletionContext(cursor)).toMatchObject({
+      kind: 'fieldAttributeNamedKey',
+      existingNamedKeys: ['fields'],
+      hasColon: true,
+    });
+    expect(classifyPslSignatureContext(cursor)).toMatchObject({
+      path: [{ kind: 'namedArgument', name: 'references' }],
+      argumentSlot: undefined,
+    });
+  });
+
+  it('offers signature information but no completion at a record key', () => {
+    const cursor = input('references: { i|tem: Strict }');
+    expect(classifyPslCompletionContext(cursor)).toEqual({ kind: 'unsupported' });
+    expect(classifyPslSignatureContext(cursor)).toMatchObject({
+      path: [{ kind: 'namedArgument', name: 'references' }],
+      argumentSlot: undefined,
+    });
+  });
+
+  it.each(['nested', 'unknown'])('preserves unfinished nested calls: %s', (name) => {
+    const source = `model Example { value String @relation(references: [{ item: ${name}( `;
+    const { document, sourceFile } = parse(source);
+    const cursor = { document, sourceFile, position: sourceFile.positionAt(source.length) };
+    const path = [
+      { kind: 'namedArgument', name: 'references' },
+      { kind: 'listElement' },
+      { kind: 'recordValue' },
+      { kind: 'functionCall', name },
+    ];
+    expect(classifyPslCompletionContext(cursor)).toMatchObject({
+      kind: 'fieldAttributeArgumentSlot',
+      path,
+      positionalIndex: 0,
+      existingNamedKeys: [],
+    });
+    expect(classifyPslSignatureContext(cursor)).toMatchObject({
+      path,
+      argumentSlot: { positionalIndex: 0, existingNamedKeys: [] },
+    });
+  });
+
   it('keeps the inner value path for identifier documentation', () => {
     const cursor = input('references: [{ item: nested(mode: S|trict) }]');
     const path = [
