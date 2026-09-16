@@ -578,25 +578,6 @@ function attributeAnchor(at: TokenAtOffset): SyntaxNode | undefined {
   return token === undefined ? undefined : skipTriviaToken(token, 'prev')?.parent;
 }
 
-function isAttributeNamePosition(
-  attribute: FieldAttributeAst | ModelAttributeAst,
-  offset: number,
-): boolean {
-  const argList = attribute.argList();
-  return argList === undefined || offset < argList.syntax.offset;
-}
-
-function attributeArgumentName(
-  attribute: FieldAttributeAst | ModelAttributeAst,
-  offset: number,
-): string | undefined {
-  const args = attribute.argList();
-  if (args === undefined || offset < args.syntax.offset) return undefined;
-  const closing = args.rparen();
-  if (closing !== undefined && offset >= closing.endOffset) return undefined;
-  return attribute.name()?.identifier()?.name();
-}
-
 interface AttributeContextFactory {
   readonly name: (position: AttributeNamePosition) => AttributeNameCompletionContext;
   readonly namedKey: (position: AttributeNamedKeyPosition) => AttributeNamedKeyCompletionContext;
@@ -618,7 +599,7 @@ function classifyAttributePosition(
   factory: AttributeContextFactory,
 ): PslCompletionContext {
   const args = attribute.argList();
-  if (isAttributeNamePosition(attribute, input.offset)) {
+  if (args === undefined || input.offset < args.syntax.offset) {
     return factory.name({
       offset: input.offset,
       replacementStartOffset: input.replacementStartOffset,
@@ -626,8 +607,8 @@ function classifyAttributePosition(
       hasArgumentList: args !== undefined,
     });
   }
-  const attributeName = attributeArgumentName(attribute, input.offset);
-  if (attributeName === undefined || args === undefined) return UNSUPPORTED;
+  const attributeName = attribute.name()?.identifier()?.name();
+  if (attributeName === undefined) return UNSUPPORTED;
   const at = attribute.syntax.tokenAtOffset(input.offset);
   const right = at.rightBiased();
   const token = isValueToken(right) ? right : at.leftBiased();
