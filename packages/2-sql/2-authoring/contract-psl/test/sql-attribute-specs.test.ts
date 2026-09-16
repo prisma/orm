@@ -96,7 +96,7 @@ function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>): O
 }
 
 function interpretDefault(schema: string, fieldName: string) {
-  const { symbolTable, sourceFile, sourceId, model } = project(schema, 'Post');
+  const { symbolTable, sources, model } = project(schema, 'Post');
   const target = field(model, fieldName);
   const node = findFieldAttributeNode(target, 'default');
   if (node === undefined) throw new Error('no @default on field');
@@ -108,8 +108,7 @@ function interpretDefault(schema: string, fieldName: string) {
     ),
     model,
     field: target,
-    sourceFile,
-    sourceId,
+    sources,
     diagnostics,
   });
   return { value, diagnostics };

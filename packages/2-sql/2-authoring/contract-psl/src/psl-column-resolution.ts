@@ -40,7 +40,7 @@ import type {
   ResolvedTypeConstructorCall,
   SymbolTable,
 } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import type {
   AuthoredColumnDefault,
   AuthoredColumnDefaultLiteralValue,
@@ -744,6 +744,7 @@ export function lowerDefaultForField(input: {
   readonly model: ModelSymbol;
   readonly symbolTable: SymbolTable;
   readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly columnDescriptor: ColumnDescriptor;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly sourceId: string;
@@ -773,8 +774,7 @@ export function lowerDefaultForField(input: {
     spec,
     model: input.model,
     field: input.field,
-    sourceFile: input.sourceFile,
-    sourceId: input.sourceId,
+    sources: input.sources,
     diagnostics: input.diagnostics,
   });
   if (interpreted === undefined) return {};

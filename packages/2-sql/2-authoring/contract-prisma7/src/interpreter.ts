@@ -29,11 +29,10 @@ import {
   buildSymbolTable,
   keywordPslSpan,
   nodePslSpan,
-  rangeToPslSpan,
   readResolvedAttribute,
   readResolvedAttributes,
 } from '@internal/psl-parser';
-import type { DocumentAst, SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { StringLiteralExprAst } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { deriveValueSetFromEntity } from '@internal/sql-contract/value-set-derivation-hook';
@@ -65,6 +64,7 @@ import type { Prisma7TargetBinding } from './target-binding';
 
 export interface Prisma7Document {
   readonly document: DocumentAst;
+  readonly sources: PslSources;
   readonly sourceFile: SourceFile;
   readonly sourceId: string;
 }
@@ -85,6 +85,7 @@ const EMPTY_DESCRIPTORS: ReadonlyMap<string, ColumnDescriptor> = new Map();
 interface SourceBlock {
   readonly block: BlockSymbol;
   readonly sourceId: string;
+  readonly sources: PslSources;
   readonly sourceFile: SourceFile;
 }
 
@@ -104,6 +105,7 @@ interface EnumDeclaration {
 interface ModelDeclaration {
   readonly symbol: ModelSymbol;
   readonly sourceId: string;
+  readonly sources: PslSources;
   readonly namespaceId: string;
   readonly tableName: string;
   readonly id: IndexAttribute | undefined;
@@ -184,10 +186,10 @@ export function interpretPrisma7Documents(
     return false;
   };
 
-  for (const { document, sourceFile, sourceId } of input.documents) {
+  for (const { document, sources, sourceFile, sourceId } of input.documents) {
     const { table, diagnostics: tableDiagnostics } = buildSymbolTable({
       document,
-      sourceFile,
+      sources,
       pslBlockDescriptors: {},
     });
     for (const diagnostic of tableDiagnostics) {
@@ -195,7 +197,7 @@ export function interpretPrisma7Documents(
         code: diagnostic.code,
         message: diagnostic.message,
         sourceId,
-        span: rangeToPslSpan(diagnostic.range, sourceFile),
+        span: sourceFile.rangeToPslSpan(diagnostic.range),
       });
     }
     const unsupported = (keyword: string, span: PslSpan): void => {
@@ -209,13 +211,13 @@ export function interpretPrisma7Documents(
     for (const block of Object.values(table.topLevel.blocks)) {
       switch (block.keyword) {
         case 'datasource':
-          datasources.push({ block, sourceId, sourceFile });
+          datasources.push({ block, sourceId, sources, sourceFile });
           break;
         case 'generator':
           break;
         case 'enum':
           if (claimName('enum', block.name, sourceId, block.span)) {
-            enumBlocks.push({ block, sourceId, sourceFile });
+            enumBlocks.push({ block, sourceId, sources, sourceFile });
           }
           break;
         case 'view':
@@ -224,12 +226,12 @@ export function interpretPrisma7Documents(
               'PSL.PRISMA7_VIEW_UNSUPPORTED',
               `View "${block.name}" is not supported; Prisma 8 has no views. Remove the view or replace it with a model over the underlying table.`,
               sourceId,
-              keywordPslSpan(block.node.syntax, block.keyword, sourceFile),
+              keywordPslSpan(block.node.syntax, block.keyword, sources),
             ),
           );
           break;
         default:
-          unsupported(block.keyword, keywordPslSpan(block.node.syntax, block.keyword, sourceFile));
+          unsupported(block.keyword, keywordPslSpan(block.node.syntax, block.keyword, sources));
       }
     }
     for (const namespace of Object.values(table.topLevel.namespaces)) {
@@ -248,6 +250,7 @@ export function interpretPrisma7Documents(
       const declaration = readModelDeclaration(
         symbol,
         sourceId,
+        sources,
         defaultNamespaceId,
         binding.indexTypes,
         diagnostics,
@@ -325,6 +328,7 @@ export function interpretPrisma7Documents(
         build.declaration.symbol.span,
       namespaceId: build.declaration.namespaceId,
       sourceId: build.declaration.sourceId,
+      sources: build.declaration.sources,
       columns: build.columns,
       ignoredFields: build.ignoredFields,
       ignoredRelationFields: build.ignoredRelationFields,
@@ -538,6 +542,7 @@ function keyColumns(
 function readModelDeclaration(
   symbol: ModelSymbol,
   sourceId: string,
+  sources: PslSources,
   defaultNamespaceId: string,
   indexTypes: Prisma7TargetBinding['indexTypes'],
   diagnostics: ContractSourceDiagnostic[],
@@ -602,7 +607,7 @@ function readModelDeclaration(
         );
     }
   }
-  return { symbol, sourceId, namespaceId, tableName, id, uniqueIndexes, indexes };
+  return { symbol, sourceId, sources, namespaceId, tableName, id, uniqueIndexes, indexes };
 }
 
 function requireStringArgument(
@@ -628,10 +633,10 @@ function readEnumDeclaration(
   defaultNamespaceId: string,
   diagnostics: ContractSourceDiagnostic[],
 ): EnumDeclaration | undefined {
-  const { block, sourceId, sourceFile } = source;
+  const { block, sourceId, sources } = source;
   let typeName = block.name;
   let namespaceId = defaultNamespaceId;
-  for (const attribute of readResolvedAttributes(block.node.attributes(), sourceFile)) {
+  for (const attribute of readResolvedAttributes(block.node.attributes(), sources)) {
     switch (attribute.name) {
       case 'map':
         typeName = requireStringArgument(attribute, block.name, sourceId, diagnostics) ?? typeName;
@@ -656,9 +661,9 @@ function readEnumDeclaration(
     const name = entry.key()?.name();
     if (name === undefined) continue;
     let value = name;
-    const span = nodePslSpan(entry.syntax, sourceFile);
+    const span = nodePslSpan(entry.syntax, sources);
     for (const attributeNode of entry.attributes()) {
-      const attribute = readResolvedAttribute(attributeNode, sourceFile);
+      const attribute = readResolvedAttribute(attributeNode, sources);
       if (attribute.name === 'map') {
         value =
           requireStringArgument(attribute, `${block.name}.${name}`, sourceId, diagnostics) ?? value;

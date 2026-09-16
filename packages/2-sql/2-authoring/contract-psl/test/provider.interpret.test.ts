@@ -17,14 +17,18 @@ const baseOptions = {
 
 const SOURCE_ID = './schema.prisma';
 
-function buildInterpretInput(schema: string, context: ContractSourceContext): PslInterpretInput {
-  const { document, sourceFile } = parse(schema);
+function buildInterpretInput(
+  schema: string,
+  context: ContractSourceContext,
+  filename = SOURCE_ID,
+): PslInterpretInput {
+  const { document, sources } = parse(schema, filename);
   const { table: symbolTable } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });
-  return { document, sourceFile, symbolTable, sourceId: SOURCE_ID };
+  return { document, sources, symbolTable };
 }
 
 function interpretCapableSource(schemaPath: string) {
@@ -170,6 +174,33 @@ model Other {
 
     expect(result).toBeDefined();
     expect(typeof result?.ok).toBe('boolean');
+  });
+
+  it('derives cached interpret diagnostic source IDs from the parsed source name', () => {
+    const schema = `model User {
+  id Int @id
+  things Unknown[]
+}
+`;
+    const source = interpretCapableSource('./external-context.prisma');
+    const context = createPostgresTestContext();
+    const input = buildInterpretInput(schema, context, 'memory-schema.prisma');
+
+    const result = source.interpret(input, context);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          sourceId: 'memory-schema.prisma',
+        }),
+      ]),
+    );
+    expect(result.failure.diagnostics).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ sourceId: './external-context.prisma' })]),
+    );
   });
 
   it('load merges parse and symbol-table seeds ahead of interpreter findings', async () => {

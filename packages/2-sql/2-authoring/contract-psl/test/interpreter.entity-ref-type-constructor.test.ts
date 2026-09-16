@@ -467,15 +467,18 @@ namespace docs {
     // ref (mirroring what a real namespace lowering pass would have
     // produced) but no `namespaceId` — a combination the exported function
     // signature permits even though production never produces it.
-    const { document, sourceFile } = parse(`
+    const { document, sources } = parse(
+      `
 model AuthSession {
   id Int @id
   aal pg.enum(AalLevel)
 }
-`);
+`,
+      'schema.prisma',
+    );
     const { table } = buildSymbolTable({
       document,
-      sourceFile,
+      sources,
       pslBlockDescriptors,
     });
     const field = table.topLevel.models['AuthSession']?.fields['aal'];

@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { sqlFamilyPslBlockDescriptors } from '../src/core/authoring-entity-types';
 
 function build(source: string) {
-  const { document, sourceFile } = parse(source);
+  const { document, sources } = parse(source, 'schema.prisma');
   return buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: sqlFamilyPslBlockDescriptors,
   });
 }

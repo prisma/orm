@@ -59,7 +59,7 @@ import {
   type SymbolTable,
 } from '@internal/psl-parser';
 import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import type {
   SqlModelStorage,
   SqlNamespaceBase,
@@ -119,9 +119,9 @@ import {
 } from './sql-attribute-specs';
 
 export interface InterpretPslDocumentToSqlContractInput {
+  readonly document: DocumentAst;
   readonly symbolTable: SymbolTable;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
+  readonly sources: PslSources;
   readonly target: TargetPackRef<'sql', string>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly composedExtensions?: readonly string[];
@@ -268,7 +268,7 @@ function validateNamespaceBlocksForSqlTarget(input: {
   readonly namespaces: readonly NamespaceSymbol[];
   readonly targetId: string;
   readonly sourceId: string;
-  readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): void {
   if (input.targetId === 'sqlite') {
@@ -637,6 +637,7 @@ interface BuildModelNodeInput {
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly sourceId: string;
   readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
   readonly diagnostics: ContractSourceDiagnostic[];
   /** Resolved namespace id keyed by model name — used to stamp the target namespace on FKs. */
@@ -723,7 +724,7 @@ function relationNullabilityMismatchDiagnostic(
 }
 
 function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult {
-  const { model, mapping, sourceId, diagnostics } = input;
+  const { model, mapping, sourceId, sourceFile, diagnostics } = input;
   const tableName = mapping.tableName;
   const modelNamespaceId = input.modelNamespaceIds.get(model.name);
   const namespaceExtensionEntitiesForModel =
@@ -748,7 +749,8 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     generatorDescriptorById: input.generatorDescriptorById,
     diagnostics,
     sourceId,
-    sourceFile: input.sourceFile,
+    sources: input.sources,
+    sourceFile,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
     ...ifDefined('enumHandles', input.enumHandles),
     capabilities: input.capabilities,
@@ -811,8 +813,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         selfModel: model,
         field,
         symbols: input.symbolTable,
-        sourceFile: input.sourceFile,
-        sourceId,
+        sources: input.sources,
         diagnostics,
       });
       if (!parsedRelation) {
@@ -934,8 +935,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.control(),
         model,
-        sourceFile: input.sourceFile,
-        sourceId,
+        sources: input.sources,
         diagnostics,
       });
       if (parsed !== undefined) {
@@ -972,8 +972,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.id(),
         model,
-        sourceFile: input.sourceFile,
-        sourceId,
+        sources: input.sources,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1018,8 +1017,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.unique(),
         model,
-        sourceFile: input.sourceFile,
-        sourceId,
+        sources: input.sources,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1052,8 +1050,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.index(),
         model,
-        sourceFile: input.sourceFile,
-        sourceId,
+        sources: input.sources,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1113,8 +1110,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         node,
         spec: sqlAttributeSpecs.model.check(),
         model,
-        sourceFile: input.sourceFile,
-        sourceId,
+        sources: input.sources,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1160,8 +1156,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
           },
         }),
         model,
-        sourceFile: input.sourceFile,
-        sourceId,
+        sources: input.sources,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1254,8 +1249,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         selfModel: model,
         field: relationAttribute.field,
         symbols: input.symbolTable,
-        sourceFile: input.sourceFile,
-        sourceId,
+        sources: input.sources,
         diagnostics,
       });
       if (!parsedRelation) {
@@ -1419,8 +1413,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       selfModel: model,
       field: relationAttribute.field,
       symbols: input.symbolTable,
-      sourceFile: input.sourceFile,
-      sourceId,
+      sources: input.sources,
       diagnostics,
     });
     if (!parsedRelation) {
@@ -1700,7 +1693,7 @@ type BaseDeclaration = {
 
 function collectPolymorphismDeclarations(
   models: readonly ModelSymbol[],
-  sourceFile: SourceFile,
+  sources: PslSources,
   sourceId: string,
   diagnostics: ContractSourceDiagnostic[],
 ): {
@@ -1717,12 +1710,11 @@ function collectPolymorphismDeclarations(
         node: discriminatorNode,
         spec: sqlAttributeSpecs.model.discriminator(),
         model,
-        sourceFile,
-        sourceId,
+        sources,
         diagnostics,
       });
       if (parsed !== undefined) {
-        const span = nodePslSpan(discriminatorNode.syntax, sourceFile);
+        const span = nodePslSpan(discriminatorNode.syntax, sources);
         const discField = model.fields[parsed.field];
         if (discField && discField.typeName !== 'String') {
           diagnostics.push({
@@ -1743,15 +1735,14 @@ function collectPolymorphismDeclarations(
         node: baseNode,
         spec: sqlAttributeSpecs.model.base(),
         model,
-        sourceFile,
-        sourceId,
+        sources,
         diagnostics,
       });
       if (parsed !== undefined) {
         baseDeclarations.set(model.name, {
           baseName: parsed.base,
           value: parsed.value,
-          span: nodePslSpan(baseNode.syntax, sourceFile),
+          span: nodePslSpan(baseNode.syntax, sources),
         });
       }
     }
@@ -2084,7 +2075,8 @@ function stripStorageOnlyDomainFields(
 export function interpretPslDocumentToSqlContract(
   input: InterpretPslDocumentToSqlContractInput,
 ): Result<Contract, ContractSourceDiagnostics> {
-  const sourceId = input.sourceId;
+  const sourceFile = input.sources.sourceFileFor(input.document.syntax);
+  const sourceId = sourceFile.filename;
   if (!input.target) {
     return notOk({
       summary: 'PSL to SQL contract interpretation failed',
@@ -2111,14 +2103,13 @@ export function interpretPslDocumentToSqlContract(
   }
 
   const { topLevel } = input.symbolTable;
-  const sourceFile = input.sourceFile;
   const namespaceSymbols = Object.values(topLevel.namespaces);
   const diagnostics: ContractSourceDiagnostic[] = [...(input.seedDiagnostics ?? [])];
   validateNamespaceBlocksForSqlTarget({
     namespaces: namespaceSymbols,
     targetId: input.target.targetId,
     sourceId,
-    sourceFile,
+    sources: input.sources,
     diagnostics,
   });
   validateBlockModelAttributeRequirements({
@@ -2189,7 +2180,7 @@ export function interpretPslDocumentToSqlContract(
       code: 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
       message: `Unsupported top-level block "${block.keyword}"`,
       sourceId,
-      span: keywordPslSpan(block.node.syntax, block.keyword, sourceFile),
+      span: keywordPslSpan(block.node.syntax, block.keyword, input.sources),
     });
   };
 
@@ -2217,7 +2208,7 @@ export function interpretPslDocumentToSqlContract(
           code: 'PSL_ENUM_NAMESPACE_NOT_SUPPORTED',
           message: `enum "${block.name}" inside namespace "${namespace.name}" is not supported; declare enum at the top level`,
           sourceId,
-          span: nodePslSpan(block.node.syntax, sourceFile),
+          span: nodePslSpan(block.node.syntax, input.sources),
         });
         continue;
       }
@@ -2300,8 +2291,7 @@ export function interpretPslDocumentToSqlContract(
     modelEntries,
     defaultNamespaceId,
     [],
-    sourceId,
-    sourceFile,
+    input.sources,
   );
   const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
   const namespaceExtensionEntities = new Map<
@@ -2440,8 +2430,7 @@ export function interpretPslDocumentToSqlContract(
     modelEntries,
     defaultNamespaceId,
     diagnostics,
-    sourceId,
-    sourceFile,
+    input.sources,
   );
   // Bare-name view for unqualified relation targets and polymorphism, where
   // resolution is by bare model name. When a bare name is shared across
@@ -2493,6 +2482,7 @@ export function interpretPslDocumentToSqlContract(
       scalarColumnDescriptors: input.scalarColumnDescriptors,
       sourceId,
       sourceFile,
+      sources: input.sources,
       symbolTable: input.symbolTable,
       diagnostics,
       modelNamespaceIds,
@@ -2552,6 +2542,7 @@ export function interpretPslDocumentToSqlContract(
     modelRelations,
     diagnostics,
     sourceId,
+    sources: input.sources,
   });
 
   // Merge cross-space relations into modelRelations after local back-relation matching.
@@ -2567,7 +2558,7 @@ export function interpretPslDocumentToSqlContract(
 
   const { discriminatorDeclarations, baseDeclarations } = collectPolymorphismDeclarations(
     models,
-    sourceFile,
+    input.sources,
     sourceId,
     diagnostics,
   );
@@ -2608,7 +2599,7 @@ export function interpretPslDocumentToSqlContract(
         code: PSL_CHECK_ON_STI_VARIANT,
         message: `Model "${variantName}" declares "@@check", but it shares its base model "${baseDecl.baseName}"'s storage table (single-table inheritance via @@base) and has no table of its own to declare a check constraint on. Declare the check on "${baseDecl.baseName}" instead.`,
         sourceId,
-        span: nodePslSpan(attribute.syntax, sourceFile),
+        span: nodePslSpan(attribute.syntax, input.sources),
       });
     }
   }

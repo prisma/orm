@@ -17,7 +17,7 @@ import type {
   ResolvedAttribute,
   SymbolTable,
 } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import type {
   AuthoredColumnDefault,
   EnumTypeHandle,
@@ -56,13 +56,14 @@ function lowerEnumDefaultForField(input: {
   readonly model: ModelSymbol;
   readonly symbolTable: SymbolTable;
   readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly enumHandle: EnumTypeHandle;
   readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): LoweredFieldDefault {
-  const { field, model, sourceFile, enumHandle, sourceId, diagnostics } = input;
+  const { field, model, enumHandle, diagnostics } = input;
   const node = findFieldAttributeNode(field, 'default');
   if (node === undefined) return {};
   if (enumHandle.enumMembers.length === 0) return {};
@@ -82,8 +83,7 @@ function lowerEnumDefaultForField(input: {
     spec,
     model,
     field,
-    sourceFile,
-    sourceId,
+    sources: input.sources,
     diagnostics,
   });
   if (interpreted === undefined) return {};
@@ -168,6 +168,7 @@ export interface CollectResolvedFieldsInput {
   readonly diagnostics: ContractSourceDiagnostic[];
   readonly sourceId: string;
   readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly enumHandles?: ReadonlyMap<string, EnumTypeHandle>;
   readonly capabilities: CapabilityMatrix;
@@ -278,6 +279,7 @@ function extractFieldConstraintNames(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly sourceId: string;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): {
@@ -297,8 +299,7 @@ function extractFieldConstraintNames(input: {
           spec: sqlAttributeSpecs.field.id(),
           model: input.model,
           field: input.field,
-          sourceFile: input.sourceFile,
-          sourceId: input.sourceId,
+          sources: input.sources,
           diagnostics: input.diagnostics,
         })?.map;
   const uniqueNode = findFieldAttributeNode(input.field, 'unique');
@@ -310,8 +311,7 @@ function extractFieldConstraintNames(input: {
           spec: sqlAttributeSpecs.field.unique(),
           model: input.model,
           field: input.field,
-          sourceFile: input.sourceFile,
-          sourceId: input.sourceId,
+          sources: input.sources,
           diagnostics: input.diagnostics,
         })?.map;
   return { idAttribute, uniqueAttribute, idName, uniqueName };
@@ -332,6 +332,7 @@ function lowerNoCheckForField(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly sourceId: string;
   readonly isListField: boolean;
   readonly isDomainEnum: boolean;
@@ -344,8 +345,7 @@ function lowerNoCheckForField(input: {
     spec: sqlAttributeSpecs.field.noCheck(),
     model: input.model,
     field: input.field,
-    sourceFile: input.sourceFile,
-    sourceId: input.sourceId,
+    sources: input.sources,
     diagnostics: input.diagnostics,
   });
   if (interpreted === undefined) return undefined;
@@ -589,6 +589,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             model,
             symbolTable,
             sourceFile: input.sourceFile,
+            sources: input.sources,
             enumHandle,
             sourceId,
             defaultFunctionRegistry,
@@ -602,6 +603,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             model,
             symbolTable,
             sourceFile: input.sourceFile,
+            sources: input.sources,
             columnDescriptor: descriptor,
             generatorDescriptorById,
             sourceId,
@@ -653,6 +655,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       model,
       field,
       sourceFile: input.sourceFile,
+      sources: input.sources,
       sourceId,
       diagnostics,
     });
@@ -702,6 +705,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
           model,
           field,
           sourceFile: input.sourceFile,
+          sources: input.sources,
           sourceId,
           // The storage shape decides, not the PSL shape: a value-object list
           // lands in one JSONB column, which derives no generated checks, so
@@ -737,8 +741,7 @@ export function buildModelMappings(
   modelEntries: readonly ModelNamespaceEntry[],
   defaultNamespaceId: string,
   diagnostics: ContractSourceDiagnostic[],
-  sourceId: string,
-  sourceFile: SourceFile,
+  sources: PslSources,
 ): Map<string, ModelNameMapping> {
   const result = new Map<string, ModelNameMapping>();
   for (const { model, namespaceId } of modelEntries) {
@@ -750,8 +753,7 @@ export function buildModelMappings(
             node: mapNode,
             spec: sqlAttributeSpecs.model.map(),
             model,
-            sourceFile,
-            sourceId,
+            sources,
             diagnostics,
           })?.name ?? defaultTableName(model.name));
     const fieldColumns = new Map<string, string>();
@@ -765,8 +767,7 @@ export function buildModelMappings(
               spec: sqlAttributeSpecs.field.map(),
               model,
               field,
-              sourceFile,
-              sourceId,
+              sources,
               diagnostics,
             })?.name ?? field.name);
       fieldColumns.set(field.name, columnName);

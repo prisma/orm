@@ -7,7 +7,7 @@ import {
   type InvalidFkPairing,
   requiredOneToOneBackrelationDiagnostic,
 } from '@internal/psl-parser/interpret';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { PslSources } from '@internal/psl-parser/syntax';
 import type { ReferentialAction } from '@internal/sql-contract/types';
 import type { RelationNode } from '@internal/sql-contract-ts/contract-builder';
 import { assertDefined, invariant } from '@internal/utils/assertions';
@@ -86,8 +86,7 @@ export function interpretRelationAttribute(input: {
   readonly selfModel: ModelSymbol;
   readonly field: FieldSymbol;
   readonly symbols: SymbolTable;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
+  readonly sources: PslSources;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): SqlRelationOutput | undefined {
   const node = findFieldAttributeNode(input.field, 'relation');
@@ -97,8 +96,7 @@ export function interpretRelationAttribute(input: {
     spec: sqlAttributeSpecs.field.relation(),
     model: input.selfModel,
     field: input.field,
-    sourceFile: input.sourceFile,
-    sourceId: input.sourceId,
+    sources: input.sources,
     diagnostics: input.diagnostics,
     resolveReferencedModel: () => resolveReferencedModel(input.symbols, input.field),
   });
@@ -385,6 +383,7 @@ export function applyBackrelationCandidates(input: {
   readonly modelRelations: Map<string, ModelRelationMetadata[]>;
   readonly diagnostics: ContractSourceDiagnostic[];
   readonly sourceId: string;
+  readonly sources: PslSources;
 }): void {
   for (const candidate of input.backrelationCandidates) {
     const pairKey = fkRelationPairKey(candidate.targetModelName, candidate.modelName);
@@ -468,7 +467,7 @@ export function applyBackrelationCandidates(input: {
           modelName: candidate.modelName,
           field: candidate.field,
           targetModelName: candidate.targetModelName,
-          sourceId: input.sourceId,
+          sources: input.sources,
           recordNoun: 'row',
         }),
       );
