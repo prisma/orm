@@ -292,8 +292,9 @@ function findJunctionFkPairs(input: {
 function junctionNearMissDiagnostic(
   candidate: ModelBackrelationCandidate,
   nearMiss: JunctionNearMiss,
-  sourceId: string,
+  sources: PslSources,
 ): ContractSourceDiagnostic {
+  const sourceId = sources.sourceFileFor(candidate.field.node.syntax).filename;
   const listField = `${candidate.modelName}.${candidate.field.name}`;
   const data = {
     listField,
@@ -382,10 +383,10 @@ export function applyBackrelationCandidates(input: {
   readonly modelUniqueColumnSets: ReadonlyMap<string, readonly (readonly string[])[]>;
   readonly modelRelations: Map<string, ModelRelationMetadata[]>;
   readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
   readonly sources: PslSources;
 }): void {
   for (const candidate of input.backrelationCandidates) {
+    const sourceId = input.sources.sourceFileFor(candidate.field.node.syntax).filename;
     const pairKey = fkRelationPairKey(candidate.targetModelName, candidate.modelName);
     const pairMatches = input.fkRelationsByPair.get(pairKey) ?? [];
     const matches = candidate.relationName
@@ -415,21 +416,21 @@ export function applyBackrelationCandidates(input: {
           input.diagnostics.push({
             code: 'PSL_AMBIGUOUS_BACKRELATION',
             message: `Backrelation list field "${candidate.modelName}.${candidate.field.name}" matches multiple junction FK pairs for a many-to-many relation. Add @relation(name: "...") (or @relation("...")) to the list field and the junction FK-side relation pointing back at "${candidate.modelName}" to disambiguate.`,
-            sourceId: input.sourceId,
+            sourceId,
             span: candidate.field.span,
           });
           continue;
         }
         const nearMiss = nearMisses[0];
         if (nearMiss) {
-          input.diagnostics.push(junctionNearMissDiagnostic(candidate, nearMiss, input.sourceId));
+          input.diagnostics.push(junctionNearMissDiagnostic(candidate, nearMiss, input.sources));
           continue;
         }
       }
       input.diagnostics.push({
         code: 'PSL_ORPHANED_BACKRELATION',
         message: `Backrelation field "${candidate.modelName}.${candidate.field.name}" has no matching FK-side relation on model "${candidate.targetModelName}". Add @relation(fields: [...], references: [...]) on the FK-side relation${candidate.isList ? ' or use an explicit join model for many-to-many' : ''}.`,
-        sourceId: input.sourceId,
+        sourceId,
         span: candidate.field.span,
       });
       continue;
@@ -438,7 +439,7 @@ export function applyBackrelationCandidates(input: {
       input.diagnostics.push({
         code: 'PSL_AMBIGUOUS_BACKRELATION',
         message: `Backrelation field "${candidate.modelName}.${candidate.field.name}" matches multiple FK-side relations on model "${candidate.targetModelName}". Add @relation(name: "...") (or @relation("...")) to both sides to disambiguate.`,
-        sourceId: input.sourceId,
+        sourceId,
         span: candidate.field.span,
       });
       continue;
@@ -454,7 +455,7 @@ export function applyBackrelationCandidates(input: {
         input.diagnostics.push({
           code: 'PSL_NON_UNIQUE_BACKRELATION',
           message: `Backrelation field "${candidate.modelName}.${candidate.field.name}" is singular, but the matching FK on "${matched.declaringModelName}" (fields ${matched.localColumns.map((column) => `"${column}"`).join(', ')}) is not unique. A singular back-relation implies at most one related row; add @unique (or @@unique([...])) to the FK fields, or make "${candidate.field.name}" a list.`,
-          sourceId: input.sourceId,
+          sourceId,
           span: candidate.field.span,
         });
         continue;
@@ -494,13 +495,14 @@ export function applyBackrelationCandidates(input: {
 export function validateBackrelationFieldAttributes(input: {
   readonly modelName: string;
   readonly field: FieldSymbol;
-  readonly sourceId: string;
+  readonly sources: PslSources;
   readonly composedExtensions: Set<string>;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: ContractSourceDiagnostic[];
   readonly familyId: string;
   readonly targetId: string;
 }): boolean {
+  const sourceId = input.sources.sourceFileFor(input.field.node.syntax).filename;
   let valid = true;
   for (const attribute of input.field.attributes) {
     if (attribute.name === 'relation') {
@@ -516,7 +518,7 @@ export function validateBackrelationFieldAttributes(input: {
       reportUncomposedNamespace({
         subjectLabel: `Attribute "@${attribute.name}"`,
         namespace: uncomposedNamespace,
-        sourceId: input.sourceId,
+        sourceId,
         span: attribute.span,
         diagnostics: input.diagnostics,
       });
@@ -526,7 +528,7 @@ export function validateBackrelationFieldAttributes(input: {
     input.diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
       message: `Field "${input.modelName}.${input.field.name}" uses unsupported attribute "@${attribute.name}"`,
-      sourceId: input.sourceId,
+      sourceId,
       span: attribute.span,
     });
     valid = false;

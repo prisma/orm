@@ -1019,7 +1019,7 @@ function readField(args: ReadFieldArgs): void {
     familyId: binding.target.familyId,
     targetId: binding.target.targetId,
     diagnostics,
-    sourceId,
+    sources: model.sources,
     entityLabel: label,
     namespaceId: model.namespaceId,
     ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntities),

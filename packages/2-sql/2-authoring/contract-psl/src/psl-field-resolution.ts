@@ -17,7 +17,7 @@ import type {
   ResolvedAttribute,
   SymbolTable,
 } from '@internal/psl-parser';
-import type { PslSources, SourceFile } from '@internal/psl-parser/syntax';
+import type { PslSources } from '@internal/psl-parser/syntax';
 import type {
   AuthoredColumnDefault,
   EnumTypeHandle,
@@ -55,10 +55,8 @@ function lowerEnumDefaultForField(input: {
   readonly field: FieldSymbol;
   readonly model: ModelSymbol;
   readonly symbolTable: SymbolTable;
-  readonly sourceFile: SourceFile;
   readonly sources: PslSources;
   readonly enumHandle: EnumTypeHandle;
-  readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly diagnostics: ContractSourceDiagnostic[];
@@ -166,8 +164,6 @@ export interface CollectResolvedFieldsInput {
   readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
-  readonly sourceFile: SourceFile;
   readonly sources: PslSources;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly enumHandles?: ReadonlyMap<string, EnumTypeHandle>;
@@ -224,7 +220,7 @@ function validateFieldAttributes(input: {
   readonly composedExtensions: ReadonlySet<string>;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly sources: PslSources;
   readonly familyId: string;
   readonly targetId: string;
 }): void {
@@ -237,7 +233,7 @@ function validateFieldAttributes(input: {
       input.diagnostics.push({
         code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
         message: formatDbAttributeMigrationMessage(attribute),
-        sourceId: input.sourceId,
+        sourceId: input.sources.sourceFileFor(input.field.node.syntax).filename,
         span: attribute.span,
       });
       continue;
@@ -252,7 +248,7 @@ function validateFieldAttributes(input: {
       reportUncomposedNamespace({
         subjectLabel: `Attribute "@${attribute.name}"`,
         namespace: uncomposedNamespace,
-        sourceId: input.sourceId,
+        sourceId: input.sources.sourceFileFor(input.field.node.syntax).filename,
         span: attribute.span,
         diagnostics: input.diagnostics,
       });
@@ -269,7 +265,7 @@ function validateFieldAttributes(input: {
     input.diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
       message,
-      sourceId: input.sourceId,
+      sourceId: input.sources.sourceFileFor(input.field.node.syntax).filename,
       span: attribute.span,
     });
   }
@@ -278,9 +274,7 @@ function validateFieldAttributes(input: {
 function extractFieldConstraintNames(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
-  readonly sourceFile: SourceFile;
   readonly sources: PslSources;
-  readonly sourceId: string;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): {
   readonly idAttribute: ResolvedAttribute | undefined;
@@ -331,9 +325,7 @@ type NoCheckKind = 'membership' | 'elementNotNull';
 function lowerNoCheckForField(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
-  readonly sourceFile: SourceFile;
   readonly sources: PslSources;
-  readonly sourceId: string;
   readonly isListField: boolean;
   readonly isDomainEnum: boolean;
   readonly diagnostics: ContractSourceDiagnostic[];
@@ -364,7 +356,7 @@ function lowerNoCheckForField(input: {
       input.diagnostics.push({
         code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
         message: `${subject} @noCheck waives nothing — this column's shape derives no generated checks`,
-        sourceId: input.sourceId,
+        sourceId: input.sources.sourceFileFor(input.field.node.syntax).filename,
         span,
       });
       return undefined;
@@ -380,7 +372,7 @@ function lowerNoCheckForField(input: {
       input.diagnostics.push({
         code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
         message: `${subject} @noCheck(${kind}) does not apply — ${explanation}`,
-        sourceId: input.sourceId,
+        sourceId: input.sources.sourceFileFor(input.field.node.syntax).filename,
         span,
       });
       return undefined;
@@ -406,7 +398,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     defaultLiteralTagRegistry,
     generatorDescriptorById,
     diagnostics,
-    sourceId,
+    sources,
     scalarColumnDescriptors,
     enumHandles,
     capabilities,
@@ -434,6 +426,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     declaredControlPolicy === undefined || declaredControlPolicy === 'managed';
 
   for (const field of Object.values(model.fields)) {
+    const sourceId = sources.sourceFileFor(field.node.syntax).filename;
     const isModelField = modelNames.has(field.typeName);
 
     if (field.list && isModelField) {
@@ -446,7 +439,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       composedExtensions,
       authoringContributions,
       diagnostics,
-      sourceId,
+      sources,
       familyId,
       targetId,
     });
@@ -485,7 +478,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       familyId,
       targetId,
       diagnostics,
-      sourceId,
+      sources,
       entityLabel: `Field "${model.name}.${field.name}"`,
       ...ifDefined('namespaceId', namespaceId),
       ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntities),
@@ -588,10 +581,8 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             field,
             model,
             symbolTable,
-            sourceFile: input.sourceFile,
             sources: input.sources,
             enumHandle,
-            sourceId,
             defaultFunctionRegistry,
             defaultLiteralTagRegistry,
             diagnostics,
@@ -602,11 +593,9 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             field,
             model,
             symbolTable,
-            sourceFile: input.sourceFile,
             sources: input.sources,
             columnDescriptor: descriptor,
             generatorDescriptorById,
-            sourceId,
             defaultFunctionRegistry,
             defaultLiteralTagRegistry,
             codecLookup,
@@ -654,9 +643,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     const { idAttribute, uniqueAttribute, idName, uniqueName } = extractFieldConstraintNames({
       model,
       field,
-      sourceFile: input.sourceFile,
       sources: input.sources,
-      sourceId,
       diagnostics,
     });
     let isIdField = Boolean(idAttribute);
@@ -704,9 +691,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       ? lowerNoCheckForField({
           model,
           field,
-          sourceFile: input.sourceFile,
           sources: input.sources,
-          sourceId,
           // The storage shape decides, not the PSL shape: a value-object list
           // lands in one JSONB column, which derives no generated checks, so
           // any waiver on it waives nothing and must be rejected here rather

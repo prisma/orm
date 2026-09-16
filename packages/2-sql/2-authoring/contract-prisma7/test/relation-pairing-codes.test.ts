@@ -84,7 +84,6 @@ function pairingDiagnostics(input: {
     modelUniqueColumnSets: new Map(Object.entries(input.uniqueColumnSets ?? {})),
     modelRelations,
     diagnostics,
-    sourceId: 'schema.prisma',
     sources,
   });
   return diagnostics;

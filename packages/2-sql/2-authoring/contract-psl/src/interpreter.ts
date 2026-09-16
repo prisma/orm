@@ -59,7 +59,7 @@ import {
   type SymbolTable,
 } from '@internal/psl-parser';
 import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
-import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
 import type {
   SqlModelStorage,
   SqlNamespaceBase,
@@ -635,8 +635,6 @@ interface BuildModelNodeInput {
   readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
-  readonly sourceId: string;
-  readonly sourceFile: SourceFile;
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
   readonly diagnostics: ContractSourceDiagnostic[];
@@ -724,7 +722,8 @@ function relationNullabilityMismatchDiagnostic(
 }
 
 function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult {
-  const { model, mapping, sourceId, sourceFile, diagnostics } = input;
+  const { model, mapping, diagnostics } = input;
+  const sourceId = input.sources.sourceFileFor(model.node.syntax).filename;
   const tableName = mapping.tableName;
   const modelNamespaceId = input.modelNamespaceIds.get(model.name);
   const namespaceExtensionEntitiesForModel =
@@ -748,9 +747,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
     generatorDescriptorById: input.generatorDescriptorById,
     diagnostics,
-    sourceId,
     sources: input.sources,
-    sourceFile,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
     ...ifDefined('enumHandles', input.enumHandles),
     capabilities: input.capabilities,
@@ -800,7 +797,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     const attributesValid = validateBackrelationFieldAttributes({
       modelName: model.name,
       field,
-      sourceId,
+      sources: input.sources,
       composedExtensions: input.composedExtensions,
       authoringContributions: input.authoringContributions,
       diagnostics,
@@ -1575,7 +1572,7 @@ interface BuildValueObjectsInput {
   readonly targetId: string;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly sources: PslSources;
 }
 
 function buildValueObjects(input: BuildValueObjectsInput): Record<string, ContractValueObject> {
@@ -1589,7 +1586,7 @@ function buildValueObjects(input: BuildValueObjectsInput): Record<string, Contra
     targetId,
     authoringContributions,
     diagnostics,
-    sourceId,
+    sources,
   } = input;
   const valueObjects: Record<string, ContractValueObject> = {};
   const compositeTypeNames = new Set(compositeTypes.map((ct) => ct.name));
@@ -1615,7 +1612,7 @@ function buildValueObjects(input: BuildValueObjectsInput): Record<string, Contra
         familyId,
         targetId,
         diagnostics,
-        sourceId,
+        sources,
         entityLabel: `Field "${compositeType.name}.${field.name}"`,
       });
       if (!resolved.ok) {
@@ -1623,7 +1620,7 @@ function buildValueObjects(input: BuildValueObjectsInput): Record<string, Contra
           diagnostics.push({
             code: 'PSL_UNSUPPORTED_FIELD_TYPE',
             message: `Field "${compositeType.name}.${field.name}" type "${field.typeName}" is not supported`,
-            sourceId,
+            sourceId: sources.sourceFileFor(field.node.syntax).filename,
             span: field.span,
           });
         }
@@ -2480,8 +2477,6 @@ export function interpretPslDocumentToSqlContract(
       defaultLiteralTagRegistry,
       generatorDescriptorById,
       scalarColumnDescriptors: input.scalarColumnDescriptors,
-      sourceId,
-      sourceFile,
       sources: input.sources,
       symbolTable: input.symbolTable,
       diagnostics,
@@ -2541,7 +2536,6 @@ export function interpretPslDocumentToSqlContract(
     modelUniqueColumnSets,
     modelRelations,
     diagnostics,
-    sourceId,
     sources: input.sources,
   });
 
@@ -2619,7 +2613,7 @@ export function interpretPslDocumentToSqlContract(
     targetId: input.target.targetId,
     authoringContributions: input.authoringContributions,
     diagnostics,
-    sourceId,
+    sources: input.sources,
   });
 
   if (diagnostics.length > 0) {

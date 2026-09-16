@@ -40,7 +40,7 @@ import type {
   ResolvedTypeConstructorCall,
   SymbolTable,
 } from '@internal/psl-parser';
-import type { PslSources, SourceFile } from '@internal/psl-parser/syntax';
+import type { PslSources } from '@internal/psl-parser/syntax';
 import type {
   AuthoredColumnDefault,
   AuthoredColumnDefaultLiteralValue,
@@ -566,7 +566,7 @@ export function resolveFieldTypeDescriptor(input: {
   readonly familyId: string;
   readonly targetId: string;
   readonly diagnostics: ContractSourceDiagnostic[];
-  readonly sourceId: string;
+  readonly sources: PslSources;
   readonly entityLabel: string;
   /**
    * The field's namespace id — required to build a `valueSet` ref (`{
@@ -591,6 +591,7 @@ export function resolveFieldTypeDescriptor(input: {
    */
   readonly codecLookup?: CodecLookup;
 }): ResolveFieldTypeResult {
+  const sourceId = input.sources.sourceFileFor(input.field.node.syntax).filename;
   // Avoid cascading unsupported-type diagnostics after invalid qualification.
   if (input.field.malformedType) {
     return { ok: false, alreadyReported: true };
@@ -606,7 +607,7 @@ export function resolveFieldTypeDescriptor(input: {
         call: input.field.typeConstructor,
         descriptor: presetDescriptor,
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        sourceId,
         entityLabel: input.entityLabel,
       });
       if (!instantiated) {
@@ -640,7 +641,7 @@ export function resolveFieldTypeDescriptor(input: {
         namespaceExtensionEntities: input.namespaceExtensionEntities,
         codecLookup: input.codecLookup,
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        sourceId,
         entityLabel: input.entityLabel,
       });
     }
@@ -654,7 +655,7 @@ export function resolveFieldTypeDescriptor(input: {
         entityLabel: input.entityLabel,
         namespace: namespacePrefix,
         helperPath,
-        sourceId: input.sourceId,
+        sourceId,
         span: input.field.typeConstructor.span,
         diagnostics: input.diagnostics,
       });
@@ -670,7 +671,7 @@ export function resolveFieldTypeDescriptor(input: {
         familyId: input.familyId,
         targetId: input.targetId,
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        sourceId,
         unsupportedCode: 'PSL_UNSUPPORTED_FIELD_TYPE',
         unsupportedMessage: `${input.entityLabel} type constructor "${helperPath}" is not supported in SQL PSL provider v1`,
       });
@@ -682,7 +683,7 @@ export function resolveFieldTypeDescriptor(input: {
       call: input.field.typeConstructor,
       descriptor,
       diagnostics: input.diagnostics,
-      sourceId: input.sourceId,
+      sourceId,
       entityLabel: input.entityLabel,
     });
     if (!instantiated) {
@@ -743,11 +744,9 @@ export function lowerDefaultForField(input: {
   readonly field: FieldSymbol;
   readonly model: ModelSymbol;
   readonly symbolTable: SymbolTable;
-  readonly sourceFile: SourceFile;
   readonly sources: PslSources;
   readonly columnDescriptor: ColumnDescriptor;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
-  readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly codecLookup: CodecLookup | undefined;
@@ -758,6 +757,7 @@ export function lowerDefaultForField(input: {
 } {
   const node = findFieldAttributeNode(input.field, 'default');
   if (node === undefined) return {};
+  const sourceId = input.sources.sourceFileFor(node.syntax).filename;
   const spec = sqlAttributeSpecs.field.default(
     fieldSpecContext({
       symbols: input.symbolTable,
@@ -797,7 +797,7 @@ export function lowerDefaultForField(input: {
 
   if (typeof value === 'object') {
     const context: DefaultFunctionLoweringContext = {
-      sourceId: input.sourceId,
+      sourceId,
       modelName: input.modelName,
       fieldName: input.fieldName,
       columnCodecId: input.columnDescriptor.codecId,
@@ -825,7 +825,7 @@ export function lowerDefaultForField(input: {
       input.diagnostics.push({
         code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
         message: `Default generator "${lowered.value.generated.id}" is not available in the composed mutation default registry.`,
-        sourceId: input.sourceId,
+        sourceId,
         span: value.span,
       });
       return {};
@@ -836,7 +836,7 @@ export function lowerDefaultForField(input: {
       input.diagnostics.push({
         code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
         message: `Default generator "${generatorDescriptor.id}" is not applicable to "@default(...)" lowering. Use the corresponding field preset (e.g. \`temporal.${generatorDescriptor.id === 'timestampNow' ? 'updatedAt' : generatorDescriptor.id}()\`) instead.`,
-        sourceId: input.sourceId,
+        sourceId,
         span: value.span,
       });
       return {};
@@ -846,7 +846,7 @@ export function lowerDefaultForField(input: {
       input.diagnostics.push({
         code: 'PSL_INVALID_DEFAULT_APPLICABILITY',
         message: `Default generator "${generatorDescriptor.id}" is not applicable to "${input.modelName}.${input.fieldName}" with codecId "${input.columnDescriptor.codecId}".`,
-        sourceId: input.sourceId,
+        sourceId,
         span: value.span,
       });
       return {};

@@ -496,7 +496,7 @@ model AuthSession {
       familyId: 'sql',
       targetId: 'postgres',
       diagnostics,
-      sourceId: 'schema.prisma',
+      sources,
       entityLabel: 'Field "AuthSession.aal"',
       namespaceExtensionEntities: {
         [NATIVE_ENUM_DISCRIMINATOR]: { AalLevel: { typeName: 'AalLevel', members: ['aal1'] } },

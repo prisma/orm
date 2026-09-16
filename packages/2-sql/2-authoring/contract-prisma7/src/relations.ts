@@ -707,9 +707,8 @@ export function lowerRelations(
     modelIdColumns.set(key, ['A', 'B']);
     modelUniqueColumnSets.set(key, [['A', 'B']]);
   }
-  // The shared helper reports every diagnostic against one sourceId, so the
-  // candidates are paired one declaring file at a time: a diagnostic then
-  // names the file that declares the relation field it is about.
+  // Keep pairing groups per declaring file so every candidate field remains
+  // covered by the document registry that owns its syntax node.
   const pairingDiagnostics: ContractSourceDiagnostic[] = [];
   const candidatesBySourceId = new Map<
     string,
@@ -725,7 +724,7 @@ export function lowerRelations(
     candidatesBySourceId.set(model.sourceId, group);
     group.candidates.push(candidate);
   }
-  for (const [sourceId, { sources, candidates: backrelationCandidates }] of candidatesBySourceId) {
+  for (const { sources, candidates: backrelationCandidates } of candidatesBySourceId.values()) {
     applyBackrelationCandidates({
       backrelationCandidates,
       fkRelationsByPair,
@@ -735,7 +734,6 @@ export function lowerRelations(
       modelUniqueColumnSets,
       modelRelations,
       diagnostics: pairingDiagnostics,
-      sourceId,
       sources,
     });
   }
