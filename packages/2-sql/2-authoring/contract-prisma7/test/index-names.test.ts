@@ -8,8 +8,8 @@ const { identifierMaxBytes } = prisma7PostgresBinding;
  * Prisma 7.10.0 cuts a generated constraint name so the whole name fits in
  * PostgreSQL's 63-byte identifier limit: the `{table}_{columns}` part is cut
  * to 63 bytes minus the suffix, on a character boundary, and the suffix is
- * kept whole. The expectations are the names `prisma migrate diff` emitted
- * for these schemas (the `long` and `long2` scratch schemas under `wip/prisma7-review`).
+ * kept whole. Every cut name below appears in
+ * `fixtures/long-names/migration.sql`, which Prisma 7.10.0 generated.
  */
 describe('defaultIndexName', () => {
   const table = 'AVeryLongModelNameThatKeepsGoingAndGoingForever';

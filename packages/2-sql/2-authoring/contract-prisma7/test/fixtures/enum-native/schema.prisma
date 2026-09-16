@@ -32,7 +32,7 @@ enum Unused {
 }
 
 model User {
-  id       Int
+  id       Int    @id
   role     Role
   roleOpt  Role?
   roleList Role[]
@@ -41,7 +41,7 @@ model User {
 }
 
 model AuditLog {
-  id     Int
+  id     Int         @id
   action AuditAction
 
   @@map("audit_log")

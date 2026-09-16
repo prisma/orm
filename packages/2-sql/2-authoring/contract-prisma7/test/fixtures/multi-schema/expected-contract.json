@@ -105,7 +105,7 @@
   "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
   "meta": {},
   "storage": {
-    "storageHash": "eb8dd7e58a5e8097fdb1561d96b83d51f18773717f0740f97500f1bfc68001c4",
+    "storageHash": "f9ebac55bec1254f60f71b39247fcf5e08ac507e1fb05aac8f4221ff09459fbd",
     "namespaces": {
       "audit": {
         "id": "audit",
@@ -127,7 +127,10 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": []
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["a", "b"]
+              }
             }
           }
         }
@@ -147,7 +150,10 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": []
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
             },
             "Plain": {
               "columns": {
@@ -159,7 +165,10 @@
               },
               "uniques": [],
               "indexes": [],
-              "foreignKeys": []
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
             }
           }
         }

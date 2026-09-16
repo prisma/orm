@@ -8,7 +8,7 @@ generator client {
 }
 
 model UserProfile {
-  id        Int
+  id        Int    @id
   firstName String @map("first_name")
   Bio       String
 
@@ -16,5 +16,5 @@ model UserProfile {
 }
 
 model Keep {
-  Id Int
+  Id Int @id
 }

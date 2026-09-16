@@ -119,6 +119,7 @@ describe('Prisma 7 fixtures', () => {
       'updated-at-with-default',
       'updated-at-without-generator',
       'view',
+      'view-attributed-fields',
     ]);
   });
 

@@ -36,6 +36,7 @@ model User {
   followers   User[]    @relation("Follows")
   following   User[]    @relation("Follows")
   legacyOwned Post[]    @relation("LegacyOwner") @ignore
+  reviews     Review[]  @relation("ReviewAuthor")
 
   @@schema("public")
 }
@@ -54,6 +55,7 @@ model Post {
   legacyOwner   User?   @relation("LegacyOwner", fields: [legacyOwnerId], references: [id]) @ignore
   tags          Tag[]
   fans          User[]  @relation("Favorites")
+  labels        Label[]
 
   @@unique([title, category])
   @@schema("public")
@@ -86,8 +88,9 @@ model Settings {
 }
 
 model Composite {
-  a Int
-  b String
+  a        Int
+  b        String
+  children CompositeChild[]
 
   @@id([a, b])
   @@schema("audit")
@@ -107,4 +110,29 @@ model LegacyThing {
 
   @@ignore
   @@schema("public")
+}
+
+model Review {
+  id       Int   @id
+  authorId Int
+  author   User? @relation("ReviewAuthor", fields: [authorId], references: [id])
+
+  @@schema("public")
+}
+
+model CompositeChild {
+  id         Int        @id
+  compositeA Int?
+  compositeB String
+  composite  Composite? @relation(fields: [compositeA, compositeB], references: [a, b])
+
+  @@schema("audit")
+}
+
+model Label {
+  id    Int    @id
+  name  String
+  posts Post[]
+
+  @@schema("audit")
 }
