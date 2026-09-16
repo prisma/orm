@@ -672,3 +672,28 @@ describe('parsePostgresDefault expressions that are not literals', () => {
     expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'function', expression: raw });
   });
 });
+
+/**
+ * Postgres prints a float default through `float4out` or `float8out`, which switch to exponent
+ * notation for very large and very small magnitudes. Each raw expression below is what
+ * `pg_get_expr` reported for the column default named beside it.
+ */
+describe('parsePostgresDefault float defaults Postgres prints in exponent notation', () => {
+  it.each([
+    { raw: "'1e+20'::real", nativeType: 'float4', value: 1e20 },
+    { raw: "'1.5e-40'::real", nativeType: 'float4', value: 1.5e-40 },
+    { raw: "'1e+300'::double precision", nativeType: 'float8', value: 1e300 },
+    { raw: "'1e-320'::double precision", nativeType: 'float8', value: 1e-320 },
+    { raw: "'-1.5e-40'::real", nativeType: 'float4', value: -1.5e-40 },
+  ])('reads $raw as the number $value for $nativeType', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+
+  it.each([
+    { raw: '1e+20', nativeType: 'float8', value: 1e20 },
+    { raw: '1.5e-40::double precision', nativeType: 'float8', value: 1.5e-40 },
+    { raw: '-2.5E+3', nativeType: 'float8', value: -2500 },
+  ])('reads the unquoted $raw as the number $value', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+});
