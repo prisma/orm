@@ -118,7 +118,8 @@ Positionals are fixed slots with an output key. Variadic positionals are not sup
 ### Scalars and pinned literals
 
 - `str()` parses any string literal; `str(value)` matches one exact string and preserves its literal type.
-- `num()` parses any number literal; `num(value)` matches one exact number and preserves its literal type.
+- `num()` parses any number literal as a JavaScript number; `num(value)` matches one exact number and preserves its literal type.
+- `numLiteral()` parses any number literal and keeps its source text, for consumers that must not round it through a JavaScript number.
 - `int({ min, max })` parses an integer with optional inclusive bounds.
 - `bool()` parses a boolean literal.
 - `identifier(name)` matches one exact bare identifier and preserves its literal type.
@@ -206,9 +207,11 @@ const functionArms = registryEntries.map(([name, entry]) =>
   funcCall(name, entry.signature),
 );
 
-const scalarDefault = oneOf(str(), num(), bool(), ...functionArms);
+const scalarDefault = oneOf(str(), numLiteral(), bool(), ...functionArms);
 const enumDefault = oneOf(...enumMembers.map(identifier));
 ```
+
+The number arm is `numLiteral()`, not `num()`. `num()` yields a JavaScript number, which rounds a literal past the safe integer range and drops trailing zeros; `numLiteral()` yields the literal's source text, so a `Decimal` or `BigInt` default keeps every digit as written. What to do with that text is the lowering concern below: the plain number goes to a codec that reads one, and the decimal text to a codec that does not.
 
 Literal-to-codec compatibility remains a lowering concern. A `matchingScalarLiteral` combinator is not implemented.
 

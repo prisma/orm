@@ -99,7 +99,7 @@ What the project needs around that file:
 
 During the transition Prisma 7 keeps owning the database and its migrations. Prisma 8 reads the schema and verifies it against what Prisma 7 built; it does not migrate. After every Prisma 7 migration, run `prisma contract emit` and then `prisma db sign` so the recorded contract matches the database again; `prisma db verify` reports nothing when they match. A database last migrated on Prisma 5 or earlier must migrate on Prisma 7 first: since Prisma 6.0.0 the implicit many-to-many junction tables carry a primary key on `(A, B)` instead of a unique index, and the source describes that shape.
 
-The source interprets every construct Prisma 7 creates in Postgres: scalars and `@db.*` native types, `@map` and `@@map`, `@@schema`, enums as native enum types (with member `@map`), `@ignore` and `@@ignore`, defaults and ORM-side generators, `@updatedAt`, `@id`, `@unique`, `@@unique`, `@@index`, explicit and implicit relations. Anything it cannot express is a hard error with the file, line, and what to change. Prisma 7 still owns the database, so every edit below is a Prisma 7 schema change that Prisma 7's next migration applies; the table says what that migration does where it does anything:
+A construct is either described exactly or refused. There is no approximate lowering and no silent change. The source reads scalars and `@db.*` native types, `@map` and `@@map`, `@@schema`, enums as native enum types (with member `@map`), `@ignore` and `@@ignore`, defaults and ORM-side generators, `@updatedAt`, `@id`, `@@id`, `@unique`, `@@unique`, `@@index`, and explicit and implicit relations. Everything else is a hard error naming the file, the line, and what to change: views, `Unsupported(...)`, `@db.*` types Prisma 8 has no codec for, `relationMode = "prisma"`, and the handful of shapes in the table below that Prisma 8 cannot yet express. Prisma 7 still owns the database, so every edit below is a Prisma 7 schema change that Prisma 7's next migration applies; the table says what that migration does where it does anything:
 
 | Code | What it means | What to change |
 |---|---|---|
@@ -126,7 +126,16 @@ The source interprets every construct Prisma 7 creates in Postgres: scalars and 
 | `PSL.PRISMA7_CONTRACT_INVALID` | The schema gives a contract Prisma 8 rejects, for a cause the source has no specific diagnostic for. | This is a bug in Prisma ORM: report it with the schema. The message names the cause. |
 | `PSL.PRISMA7_SCHEMA_READ_FAILED` | The path could not be read, or the schema directory holds no `.prisma` file. | Fix the path. |
 
-Two things `db verify` gained alongside this source benefit every Prisma 8 project: it now recognises three more default spellings introspection reports (an enum literal cast to a type in another schema, a zoneless `timestamp` literal, and an `ARRAY[...]` list default), and it now compares a schema-qualified mixed-case type name such as `audit."AuditAction"` correctly.
+#### What every Prisma 8 project gets alongside this source
+
+These changes are not specific to a Prisma 7 schema. They apply to any Postgres project.
+
+- `db verify` reads more of the default spellings Postgres prints. It reads a negative or cast numeral (`'-1'::integer`, `(5)::smallint`) as the number, an enum literal cast to a type in another schema as the enum value, and a zoneless `timestamp` literal as that timestamp. It reads `ARRAY[...]` defaults of text, boolean, integer (including negative), bigint, float, decimal, timestamp and enum elements, with the casts Postgres prints, and an empty `VARCHAR(n)[]`. An element that is an expression or a function call stays raw. Columns that were reported as drift on these spellings now verify clean.
+- `db verify` compares a schema-qualified mixed-case type name such as `audit."AuditAction"` correctly.
+- Introspection reads defaults, check constraints, index predicates, and policy expressions in a session pinned to `TimeZone = UTC`, `DateStyle = ISO, MDY`, and `IntervalStyle = postgres`, restoring the caller's settings afterwards. The text it reads is therefore the same whatever the server, the role, or the caller set. One consequence: a contract inferred earlier from a server outside UTC, holding a `timestamptz` constant inside check or index text, shows that text once as a difference; the new text is stable from then on.
+- Migration planning renders a list literal default with its cast (`ARRAY['1', '-2']::int8[]`), the same rendering the adapter uses for column DDL.
+
+**The ORM's `now` for `timestamp` columns is UTC wall-clock time, whatever the host's time zone.** A database `now()` default uses the session time zone instead, so a column filled by the ORM and a column filled by a database default agree only in a UTC session. Prisma 7 writes UTC into `timestamp(3)`, so a Prisma 7 database stays consistent with what Prisma 8's generator writes.
 
 ### `@internal/postgres/runtime`
 

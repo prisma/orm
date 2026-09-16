@@ -26,7 +26,7 @@ The guide's phases, and what this example does in each.
 
 ### 1. Prepare Prisma 7 to run side by side
 
-`package.json` has `@prisma/prisma7@7.10.0` as a dev dependency instead of `prisma`, so the Prisma 7 CLI is the `prisma7` binary and `prisma` is free for Prisma 8. Prisma 7's config is `prisma7.config.ts`, importing `defineConfig` from `@prisma/prisma7/config`; every Prisma 7 command passes `--config prisma7.config.ts`, because the CLI looks for `prisma.config.ts` by default and that file now belongs to Prisma 8. `@prisma/client@7.10.0` and `@prisma/adapter-pg@7.10.0` stay, and the schema's generator writes the Prisma 7 client to `generated/prisma7/` (gitignored; `pnpm v7:generate` recreates it).
+`package.json` has `@prisma/prisma7@7.10.0` as a dev dependency instead of `prisma`, so the Prisma 7 CLI is the `prisma7` binary and `prisma` is free for Prisma 8. Prisma 7's config is `prisma7.config.ts`, importing `defineConfig` from `@prisma/prisma7/config`; Prisma 7.10.0 looks for `prisma7.config.*` before `prisma.config.*`, so it finds its own config without help even though `prisma.config.ts` sits beside it; the scripts here still pass `--config prisma7.config.ts` so that every command shows which config it reads. `@prisma/client@7.10.0` and `@prisma/adapter-pg@7.10.0` stay, and the schema's generator writes the Prisma 7 client to `generated/prisma7/` (gitignored; `pnpm v7:generate` recreates it).
 
 ### 2. Add Prisma 8
 
@@ -39,8 +39,11 @@ import { defineConfig as definePostgresConfig, prisma7Schema } from '@prisma/orm
 
 export default definePrismaConfig({
   orm: definePostgresConfig({
-    contract: prisma7Schema('prisma/schema.prisma', { output: 'generated/prisma8/contract.json' }),
-    db: { connection: process.env['DATABASE_URL']! },
+    contract: prisma7Schema('prisma/schema.prisma'),
+    output: 'generated/prisma8',
+    db: {
+      connection: process.env['DATABASE_URL']!,
+    },
   }),
 });
 ```
