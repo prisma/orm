@@ -62,14 +62,12 @@ const explicitUrl = readUrlFlag(process.argv.slice(2));
 //
 // Fidelity notes:
 //   - storage.buckets.allowed_mime_types, storage.objects.path_tokens: both
-//     nullable `text[]`. PSL/Prisma-family list fields have no nullable-list
-//     syntax (`String[]?` is invalid), so a nullable array column has no
-//     authorable PSL form; the interpreter's `list` and `optional` are
-//     independent booleans, but the target's list-field lowering requires
-//     `nullable: false`. `path_tokens` is additionally a `GENERATED ALWAYS`
-//     column, so it is not user-writable either way. Omitted until nullable
-//     list fields land; under `external` control an undeclared live column
-//     is a suppressed extra, so omission is verify-safe.
+//     nullable `text[]`. PSL prints and accepts these as `String[]?`, but
+//     this contract predates that and stays omitted until it is regenerated
+//     against a live Supabase database. `path_tokens` is additionally a
+//     `GENERATED ALWAYS` column, so it is not user-writable either way.
+//     Under `external` control an undeclared live column is a suppressed
+//     extra, so omission is verify-safe.
 const COLUMN_OMISSIONS: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
   storage: {
     buckets: ['allowed_mime_types'],

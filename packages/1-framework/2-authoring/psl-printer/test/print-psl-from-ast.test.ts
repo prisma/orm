@@ -305,6 +305,46 @@ describe('printPslFromAst', () => {
     expect(out).toMatch(/tags\s+String\[\]/);
   });
 
+  it('renders a list-and-optional field as Type[]? and a required list as Type[]', () => {
+    const models: PslModel[] = [
+      {
+        kind: 'model',
+        name: 'Doc',
+        fields: [
+          {
+            kind: 'field',
+            name: 'labels',
+            typeName: 'String',
+            optional: true,
+            list: true,
+            attributes: [],
+            span: span(0),
+          },
+          {
+            kind: 'field',
+            name: 'tags',
+            typeName: 'String',
+            optional: false,
+            list: true,
+            attributes: [],
+            span: span(0),
+          },
+        ],
+        attributes: [],
+        span: span(0),
+      },
+    ];
+    const ast: PslDocumentAst = {
+      kind: 'document',
+      sourceId: 't',
+      namespaces: [makeNs(UNSPECIFIED_PSL_NAMESPACE_ID, models, [], 0)],
+      span: span(0),
+    };
+    const out = printPslFromAst(ast);
+    expect(out).toMatch(/labels\s+String\[\]\?/);
+    expect(out).toMatch(/tags\s+String\[\]\s*$/m);
+  });
+
   it('renders model with both fields and model-level attributes (separator blank line)', () => {
     const models: PslModel[] = [
       {

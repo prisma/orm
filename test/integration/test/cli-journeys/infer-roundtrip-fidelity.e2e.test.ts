@@ -52,6 +52,7 @@ const SEED_SQL = `
     precise_balance numeric(10,2),
     birth_date date,
     tags text[] NOT NULL DEFAULT '{}'::text[],
+    labels text[] DEFAULT '{}'::text[],
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb
   );
   CREATE INDEX users_metadata_gin_idx ON users USING gin (metadata);
@@ -294,6 +295,38 @@ withTempDir(({ createTempDir }) => {
         ).toBe(0);
 
         await expectVerifiesCleanAfterPull(ctx, 'Users.tags');
+      },
+      timeouts.spinUpPpgDev,
+    );
+
+    it(
+      'infer prints a nullable text[] column as String[]? with its default, and it round-trips clean',
+      async () => {
+        const ctx: JourneyContext = setupJourney({
+          connectionString: db.connectionString,
+          createTempDir,
+          contractMode: 'psl',
+        });
+
+        const infer = await runContractInfer(ctx);
+        expect(infer.exitCode, `contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
+
+        const psl = readContractPsl(ctx);
+        expect(psl, 'Users.labels is a nullable list with a literal-list default').toMatch(
+          /labels\s+String\[\]\?\s+@default\(\[\]\)/,
+        );
+
+        const reduced = fixOneToOneBackRelation(psl);
+        writeContractPsl(ctx, reduced);
+
+        const emit = await runContractEmit(ctx);
+        expect(
+          emit.exitCode,
+          'contract emit should accept String[]? @default([]) on Users.labels; ' +
+            `instead got:\n${stripAnsi(emit.stderr)}\n${stripAnsi(emit.stdout)}`,
+        ).toBe(0);
+
+        await expectVerifiesCleanAfterPull(ctx, 'Users.labels');
       },
       timeouts.spinUpPpgDev,
     );
