@@ -42,7 +42,7 @@ The canonicalized body is the expression. Nothing rewrites it at authoring time,
 
 ### D5. SQLite verifies defaults exactly the way Postgres does
 
-Postgres runs its introspection parser over the expression in the contract before comparing it to the expression the database reports, so the two are compared in the same form. SQLite does the same with its own parser. Slice A specifies the SQLite hook. A better comparison for raw SQL defaults on every target is a separate decision, recorded in [`deferred.md`](deferred.md) item 1.
+Postgres runs its introspection parser over the expression in the contract before comparing it to the expression the database reports, so the two are compared in the same form. SQLite does the same with its own parser. Slice A specifies the SQLite hook. The comparison itself is not changed in this project; see [`deferred.md`](deferred.md) item 1.
 
 ### D6. Named storage functions cover the common cases
 
