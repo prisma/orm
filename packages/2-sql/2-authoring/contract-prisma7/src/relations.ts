@@ -22,7 +22,13 @@ import type {
   ModelNode,
   RelationNode,
 } from '@internal/sql-contract-ts/contract-builder';
-import { andList, fieldList, ignoredFieldReferenced, prisma7Diagnostic } from './diagnostics';
+import {
+  andList,
+  fieldList,
+  ignoredFieldReferenced,
+  type Prisma7DiagnosticCode,
+  prisma7Diagnostic,
+} from './diagnostics';
 import { prisma7ConstraintName } from './indexes';
 import type { Prisma7TargetBinding } from './target-binding';
 
@@ -61,7 +67,7 @@ export interface RelationModel {
   readonly relationFields: readonly RelationField[];
 }
 
-/** The codes `applyBackrelationCandidates` reports, each shown as `PRISMA7_RELATION_UNRESOLVED`. */
+/** The codes `applyBackrelationCandidates` reports, each shown as `PSL.PRISMA7_RELATION_UNRESOLVED`. */
 export const RELATION_PAIRING_CODES: ReadonlySet<string> = new Set([
   'PSL_ORPHANED_BACKRELATION',
   'PSL_AMBIGUOUS_BACKRELATION',
@@ -195,7 +201,7 @@ function unresolved(
   sourceId: string,
   span: PslSpan,
 ): ContractSourceDiagnostic {
-  return prisma7Diagnostic('PRISMA7_RELATION_UNRESOLVED', `${label} ${reason}`, sourceId, span);
+  return prisma7Diagnostic('PSL.PRISMA7_RELATION_UNRESOLVED', `${label} ${reason}`, sourceId, span);
 }
 
 interface JunctionSide {
@@ -280,7 +286,7 @@ function referentialActionRejections(input: {
       const fields = fieldList(model.modelName, required);
       rejections.push(
         prisma7Diagnostic(
-          'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
+          'PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
           `${label}: ${key}: SetNull sets the foreign key fields to null, but ${fields} ${required.length === 1 ? 'is' : 'are'} required, so Prisma 8 cannot describe this foreign key. Make ${fields}${relationField.optional ? '' : ` and "${model.modelName}.${relationField.name}"`} optional, which drops NOT NULL on Prisma 7's next migration and makes ${required.length === 1 && relationField.optional ? 'it' : 'them'} nullable in the Prisma 7 client, or ${anotherAction}`,
           model.sourceId,
           span,
@@ -327,7 +333,7 @@ function referentialActionRejections(input: {
       ];
       rejections.push(
         prisma7Diagnostic(
-          'PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
+          'PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED',
           `${label}: ${key}: SetDefault sets the foreign key fields to their column defaults, but ${fields} ${one ? 'is' : 'are'} required and ${one ? 'has' : 'have'} no column default${generatorNote}, so Prisma 8 cannot describe this foreign key. ${edit}: ${andList(effects)}. Or ${anotherAction}`,
           model.sourceId,
           span,
@@ -590,7 +596,7 @@ export function lowerRelations(
           reportedJunctionNames.add(reportedKey);
           diagnostics.push(
             prisma7Diagnostic(
-              'PRISMA7_JUNCTION_NAME_COLLISION',
+              'PSL.PRISMA7_JUNCTION_NAME_COLLISION',
               `${label} is an implicit many-to-many relation whose junction model would be named "${junctionName}", but model "${junctionName}" already has that name. Rename model "${junctionName}" and keep its table with @@map("${namesake.tableName}"); Prisma 7's next migration is then empty.`,
               model.sourceId,
               field.span,
@@ -630,7 +636,7 @@ export function lowerRelations(
           .map((other) => `"${sideLabel(other.requester)}"`);
         diagnostics.push(
           prisma7Diagnostic(
-            'PRISMA7_RELATION_NAME_SHARED',
+            'PSL.PRISMA7_RELATION_NAME_SHARED',
             `Relation field "${sideLabel(request.requester)}" is an implicit many-to-many relation named "${name}", and so ${others.length === 1 ? 'is relation field' : 'are relation fields'} ${andList(others)}; Prisma 7 creates one table "${tableName}" for them, wired to only one of the relations (its foreign keys show which). Give each relation its own name with @relation("<name>") on both fields: renaming a relation that "${tableName}" does not reference makes Prisma 7's next migration create its own table, while renaming the one it references moves "${tableName}"'s foreign keys to another relation, which fails on rows whose ids that relation's models lack and attaches the rest to the wrong records.`,
             request.requester.model.sourceId,
             request.requester.field.field.span,
@@ -647,13 +653,13 @@ export function lowerRelations(
       const message = `Model "${tableOwner.modelName}" and the implicit many-to-many relation "${relationField}" both use table "${tableOwner.namespaceId}"."${tableName}"; Prisma 7 creates the relation's table there and never creates the model's. Rename the model's table with @@map, which makes Prisma 7's next migration create it, or give the relation its own name with @relation("<name>") on both fields, which makes Prisma 7's next migration rebuild "${tableName}" as the model's table and create an empty table for the relation, losing the relation's rows.`;
       diagnostics.push(
         prisma7Diagnostic(
-          'PRISMA7_TABLE_COLLISION',
+          'PSL.PRISMA7_TABLE_COLLISION',
           message,
           tableOwner.sourceId,
           tableOwner.tableSpan,
         ),
         prisma7Diagnostic(
-          'PRISMA7_TABLE_COLLISION',
+          'PSL.PRISMA7_TABLE_COLLISION',
           message,
           first.requester.model.sourceId,
           first.requester.field.field.span,
@@ -726,7 +732,7 @@ export function lowerRelations(
   for (const diagnostic of pairingDiagnostics) {
     diagnostics.push(
       RELATION_PAIRING_CODES.has(diagnostic.code)
-        ? { ...diagnostic, code: 'PRISMA7_RELATION_UNRESOLVED' }
+        ? { ...diagnostic, code: 'PSL.PRISMA7_RELATION_UNRESOLVED' satisfies Prisma7DiagnosticCode }
         : diagnostic,
     );
   }
@@ -771,7 +777,7 @@ function singleIdColumn(
   if (column === undefined || rest.length > 0) {
     diagnostics.push(
       prisma7Diagnostic(
-        'PRISMA7_JUNCTION_ID_UNSUPPORTED',
+        'PSL.PRISMA7_JUNCTION_ID_UNSUPPORTED',
         `Relation field "${requester.model.modelName}.${requester.field.field.name}" is an implicit many-to-many relation, but "${side.model.modelName}" ${column === undefined ? 'has no single-field @id' : 'has a composite id'}; Prisma 7 requires a single-field @id on both models of an implicit many-to-many relation.`,
         requester.model.sourceId,
         requester.field.field.span,

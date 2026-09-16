@@ -144,9 +144,9 @@ describe('normalizeError', () => {
 
   describe('a prisma/prisma error carrying accompanying findings', () => {
     const finding = {
-      code: 'CONTRACT.SOURCE_DIAGNOSTIC' as const,
+      code: 'PSL.PRISMA7_VIEW_UNSUPPORTED' as const,
       severity: 'error' as const,
-      summary: 'schema.prisma:9:1 PRISMA7_VIEW_UNSUPPORTED: View "ActiveUsers" is not supported',
+      summary: 'schema.prisma:9:1 View "ActiveUsers" is not supported',
       nextActions: [],
       where: { path: 'schema.prisma', line: 9 },
     };

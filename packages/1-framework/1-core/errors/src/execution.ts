@@ -3,8 +3,7 @@ import type {
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
-import type { NextAction } from '@internal/utils/structured-error';
-import type { CliErrorDiagnostic } from './control';
+import type { Diagnostic, NextAction } from '@internal/utils/structured-error';
 import { CliStructuredError } from './control';
 
 // ============================================================================
@@ -331,7 +330,7 @@ export function errorRuntime(
   options?: {
     readonly why?: string;
     readonly fix?: string;
-    readonly diagnostics?: readonly CliErrorDiagnostic[];
+    readonly diagnostics?: readonly Diagnostic[];
     readonly meta?: Record<string, unknown>;
     readonly cause?: unknown;
   },

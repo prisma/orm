@@ -1,5 +1,5 @@
 import { ifDefined } from '@internal/utils/defined';
-import type { NextAction, StructuredError } from '@internal/utils/structured-error';
+import type { Diagnostic, NextAction, StructuredError } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
 
 /**
@@ -22,23 +22,7 @@ export interface CliErrorEnvelope {
   readonly why?: string;
   readonly fix?: string;
   readonly nextActions: readonly NextAction[];
-  readonly diagnostics?: readonly CliErrorDiagnostic[];
-  readonly where?: { readonly path?: string; readonly line?: number };
-  readonly meta?: Record<string, unknown>;
-  readonly docsUrl?: string;
-}
-
-/**
- * One finding reported alongside an error, so a command can fail with
- * everything it found instead of only the first thing. The same fields as the
- * envelope minus `ok` and `fix`; the CLI prints each one under the error.
- */
-export interface CliErrorDiagnostic {
-  readonly code: `${string}.${string}`;
-  readonly severity: 'error' | 'warn' | 'info';
-  readonly summary: string;
-  readonly why?: string;
-  readonly nextActions: readonly NextAction[];
+  readonly diagnostics?: readonly Diagnostic[];
   readonly where?: { readonly path?: string; readonly line?: number };
   readonly meta?: Record<string, unknown>;
   readonly docsUrl?: string;
@@ -70,7 +54,7 @@ export class CliStructuredError extends Error implements StructuredError {
   declare readonly why?: string;
   declare readonly fix?: string;
   declare readonly nextActions?: readonly NextAction[];
-  declare readonly diagnostics?: readonly CliErrorDiagnostic[];
+  declare readonly diagnostics?: readonly Diagnostic[];
   declare readonly where?: { readonly path?: string; readonly line?: number };
   declare readonly meta?: Record<string, unknown>;
   declare readonly docsUrl?: string;
@@ -83,7 +67,7 @@ export class CliStructuredError extends Error implements StructuredError {
       readonly why?: string;
       readonly fix?: string;
       readonly nextActions?: readonly NextAction[];
-      readonly diagnostics?: readonly CliErrorDiagnostic[];
+      readonly diagnostics?: readonly Diagnostic[];
       readonly where?: { readonly path?: string; readonly line?: number };
       readonly meta?: Record<string, unknown>;
       readonly docsUrl?: string;

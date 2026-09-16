@@ -1,7 +1,9 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { PslSpan } from '@internal/psl-parser';
 
-export type Prisma7DiagnosticCode =
+export type Prisma7DiagnosticCode = `PSL.${Prisma7Subcode}`;
+
+type Prisma7Subcode =
   | 'PRISMA7_PROVIDER_MISMATCH'
   | 'PRISMA7_RELATION_MODE_UNSUPPORTED'
   | 'PRISMA7_VIEW_UNSUPPORTED'
@@ -55,7 +57,7 @@ export function ignoredFieldReferenced(input: {
   const fields = fieldList(input.modelName, input.fieldNames);
   const one = input.fieldNames.length === 1;
   return prisma7Diagnostic(
-    'PRISMA7_IGNORED_FIELD_REFERENCED',
+    'PSL.PRISMA7_IGNORED_FIELD_REFERENCED',
     `${one ? 'Field' : 'Fields'} ${fields} ${one ? 'is' : 'are'} marked @ignore, but ${input.usedBy} uses ${one ? 'it' : 'them'}, and Prisma 7 still creates the ${input.constraint} that includes ${one ? 'its column' : 'their columns'}. Remove @ignore from ${fields}; Prisma 7's next migration is then empty, and ${one ? 'the field appears' : 'the fields appear'} in the Prisma 7 client again.`,
     input.sourceId,
     input.span,

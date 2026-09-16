@@ -110,7 +110,7 @@ export function prisma7Contract(
           return notOk({
             summary: `Failed to read Prisma 7 schema at "${schemaPath}"`,
             diagnostics: [
-              prisma7Diagnostic('PRISMA7_SCHEMA_READ_FAILED', message, schemaPath, undefined),
+              prisma7Diagnostic('PSL.PRISMA7_SCHEMA_READ_FAILED', message, schemaPath, undefined),
             ],
             meta: { schemaPath, absolutePath, cause: message },
           });
@@ -120,7 +120,7 @@ export function prisma7Contract(
             summary: `Failed to read Prisma 7 schema at "${schemaPath}"`,
             diagnostics: [
               prisma7Diagnostic(
-                'PRISMA7_SCHEMA_READ_FAILED',
+                'PSL.PRISMA7_SCHEMA_READ_FAILED',
                 `The schema directory "${schemaPath}" contains no .prisma file.`,
                 schemaPath,
                 undefined,
@@ -140,7 +140,12 @@ export function prisma7Contract(
             return notOk({
               summary: `Failed to read Prisma 7 schema at "${file.sourceId}"`,
               diagnostics: [
-                prisma7Diagnostic('PRISMA7_SCHEMA_READ_FAILED', message, file.sourceId, undefined),
+                prisma7Diagnostic(
+                  'PSL.PRISMA7_SCHEMA_READ_FAILED',
+                  message,
+                  file.sourceId,
+                  undefined,
+                ),
               ],
               meta: {
                 schemaPath: file.sourceId,
@@ -178,7 +183,7 @@ export function prisma7Contract(
             summary: 'Prisma 7 schema interpretation failed',
             diagnostics: [
               prisma7Diagnostic(
-                'PRISMA7_CONTRACT_INVALID',
+                'PSL.PRISMA7_CONTRACT_INVALID',
                 `This schema gives a contract that Prisma 8 rejects, and the Prisma 7 contract source has no specific diagnostic for the cause: ${error.message.replace(/\.$/, '')}. This is a bug in Prisma ORM; please report it with this schema.`,
                 schemaPath,
                 undefined,

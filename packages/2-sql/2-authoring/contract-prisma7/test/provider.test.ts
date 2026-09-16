@@ -148,7 +148,7 @@ describe('prisma7Contract', () => {
     ]);
   });
 
-  it('returns PRISMA7_SCHEMA_READ_FAILED at the input path when a directory holds no .prisma file', async () => {
+  it('returns PSL.PRISMA7_SCHEMA_READ_FAILED at the input path when a directory holds no .prisma file', async () => {
     const dir = scratchDir('empty');
     writeFileSync(join(dir, 'notes.txt'), 'not a schema\n');
 
@@ -159,7 +159,7 @@ describe('prisma7Contract', () => {
       failure: {
         diagnostics: [
           {
-            code: 'PRISMA7_SCHEMA_READ_FAILED',
+            code: 'PSL.PRISMA7_SCHEMA_READ_FAILED',
             sourceId: 'prisma/schema',
             message: 'The schema directory "prisma/schema" contains no .prisma file.',
           },
@@ -168,7 +168,7 @@ describe('prisma7Contract', () => {
     });
   });
 
-  it('returns a structured error thrown while the contract is built as PRISMA7_CONTRACT_INVALID at the input path', async () => {
+  it('returns a structured error thrown while the contract is built as PSL.PRISMA7_CONTRACT_INVALID at the input path', async () => {
     const dir = scratchDir('contract-invalid');
     const schemaFile = join(dir, 'schema.prisma');
     writeFileSync(
@@ -189,7 +189,7 @@ describe('prisma7Contract', () => {
       failure: {
         diagnostics: [
           {
-            code: 'PRISMA7_CONTRACT_INVALID',
+            code: 'PSL.PRISMA7_CONTRACT_INVALID',
             sourceId: 'prisma/schema.prisma',
             message:
               'This schema gives a contract that Prisma 8 rejects, and the Prisma 7 contract source has no specific diagnostic for the cause: the target rejected the namespace. This is a bug in Prisma ORM; please report it with this schema.',
@@ -199,7 +199,7 @@ describe('prisma7Contract', () => {
     });
   });
 
-  it('returns a contract that fails the checks contract emit runs as PRISMA7_CONTRACT_INVALID at the input path', async () => {
+  it('returns a contract that fails the checks contract emit runs as PSL.PRISMA7_CONTRACT_INVALID at the input path', async () => {
     const dir = scratchDir('contract-check-failed');
     const schemaFile = join(dir, 'schema.prisma');
     writeFileSync(
@@ -216,7 +216,7 @@ describe('prisma7Contract', () => {
       failure: {
         diagnostics: [
           {
-            code: 'PRISMA7_CONTRACT_INVALID',
+            code: 'PSL.PRISMA7_CONTRACT_INVALID',
             sourceId: 'prisma/schema.prisma',
             message:
               'This schema gives a contract that Prisma 8 rejects, and the Prisma 7 contract source has no specific diagnostic for the cause: Namespace "public" table "A" column "name" is NOT NULL but has a literal null default. This is a bug in Prisma ORM; please report it with this schema.',
@@ -246,7 +246,7 @@ describe('prisma7Contract', () => {
     );
   });
 
-  it('returns PRISMA7_SCHEMA_READ_FAILED when the input does not exist', async () => {
+  it('returns PSL.PRISMA7_SCHEMA_READ_FAILED when the input does not exist', async () => {
     const config = prisma7Contract('prisma/missing.prisma', postgres);
     const result = await config.source.load(
       postgresSourceContext([join(scratchDir('missing'), 'missing.prisma')]),
@@ -255,7 +255,7 @@ describe('prisma7Contract', () => {
       ok: false,
       failure: {
         summary: 'Failed to read Prisma 7 schema at "prisma/missing.prisma"',
-        diagnostics: [expect.objectContaining({ code: 'PRISMA7_SCHEMA_READ_FAILED' })],
+        diagnostics: [expect.objectContaining({ code: 'PSL.PRISMA7_SCHEMA_READ_FAILED' })],
       },
     });
   });

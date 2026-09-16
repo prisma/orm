@@ -188,7 +188,7 @@ withTempDir(({ createTempDir }) => {
         const terminalRun = await runContractEmit(ctx);
         expect(terminalRun.exitCode).toBe(2);
         expect(stripAnsi(terminalRun.stderr)).toContain(
-          './schema.prisma:9:1 PRISMA7_VIEW_UNSUPPORTED: View "ActiveUsers" is not supported',
+          '[PSL.PRISMA7_VIEW_UNSUPPORTED] ./schema.prisma:9:1 View "ActiveUsers" is not supported',
         );
         expect(stripAnsi(terminalRun.stderr)).not.toContain('return ok(Contract)');
 
@@ -207,19 +207,27 @@ withTempDir(({ createTempDir }) => {
             why: 'Prisma 7 schema interpretation failed',
           },
           diagnostics: [
-            expect.objectContaining({
-              code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+            {
+              code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
+              severity: 'error',
+              summary: expect.stringContaining(
+                './schema.prisma:9:1 View "ActiveUsers" is not supported',
+              ),
+              nextActions: [],
               where: { path: './schema.prisma', line: 9 },
-            }),
+            },
           ],
         });
+        const findings = (envelope as { diagnostics?: readonly Record<string, unknown>[] })
+          .diagnostics;
+        expect(findings?.[0]).not.toHaveProperty('meta');
         // The source's diagnostics ride on the error's meta, one per construct.
         const meta = (
           envelope as { error?: { meta?: { diagnostics?: readonly SourceDiagnostic[] } } }
         ).error?.meta;
         expect(meta?.diagnostics).toEqual([
           expect.objectContaining({
-            code: 'PRISMA7_VIEW_UNSUPPORTED',
+            code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
             message: expect.stringContaining('View "ActiveUsers" is not supported'),
             sourceId: './schema.prisma',
             span: expect.objectContaining({ start: expect.objectContaining({ line: 9 }) }),

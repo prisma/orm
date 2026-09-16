@@ -1,6 +1,6 @@
 [
   {
-    "code": "PRISMA7_RELATION_UNRESOLVED",
+    "code": "PSL.PRISMA7_RELATION_UNRESOLVED",
     "file": "schema.prisma",
     "line": 13,
     "message": "Relation field \"Post.author\" must be optional because one of its fields is optional."

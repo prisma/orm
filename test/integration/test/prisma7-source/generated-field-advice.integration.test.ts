@@ -79,9 +79,9 @@ async function removeAdvisedAttributesAndVerify(directory: string): Promise<void
     })
     .sort((left, right) => left.start - right.start);
   expect(advice.map(({ code, attribute }) => [code, attribute])).toEqual([
-    ['PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', '@updatedAt'],
-    ['PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED', '@default(now())'],
-    ['PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', '@default(uuid())'],
+    ['PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', '@updatedAt'],
+    ['PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED', '@default(now())'],
+    ['PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED', '@default(uuid())'],
   ]);
   for (const { message, attribute } of advice) {
     expect(message).toContain(`Remove ${attribute}`);
