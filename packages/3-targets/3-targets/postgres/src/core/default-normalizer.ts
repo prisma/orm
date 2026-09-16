@@ -15,7 +15,13 @@ const UUID_OSSP_PATTERN = /^uuid_generate_v4\s*\(\s*\)$/i;
 const NULL_PATTERN = /^NULL(?:::.+)?$/i;
 const TRUE_PATTERN = /^true$/i;
 const FALSE_PATTERN = /^false$/i;
-const NUMERIC_PATTERN = /^-?\d+(\.\d+)?$/;
+/**
+ * A decimal numeral with an optional sign and an optional exponent. Postgres prints a `real` or
+ * `double precision` default in exponent notation once its magnitude is large or small enough:
+ * `'1e+20'::real`, `'1e-320'::double precision`.
+ */
+const NUMERAL = String.raw`[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?`;
+const NUMERIC_PATTERN = new RegExp(`^${NUMERAL}$`);
 
 /**
  * A cast target type: a builtin of one or more words, where any word may carry a modifier
@@ -24,7 +30,7 @@ const NUMERIC_PATTERN = /^-?\d+(\.\d+)?$/;
  */
 const TYPE_NAME = String.raw`(?:(?:"(?:[^"]|"")+"|\w+)\.)?(?:"(?:[^"]|"")+"|\w+(?:\(\d+(?:,\s*\d+)?\))?(?:\s+\w+(?:\(\d+(?:,\s*\d+)?\))?)*)`;
 const QUOTED_LITERAL_PATTERN = new RegExp(`^'((?:[^']|'')*)'(?:::(${TYPE_NAME}))?$`);
-const NUMBER_LITERAL_PATTERN = new RegExp(String.raw`^(-?\d+(?:\.\d+)?)(?:::(${TYPE_NAME}))?$`);
+const NUMBER_LITERAL_PATTERN = new RegExp(`^(${NUMERAL})(?:::(${TYPE_NAME}))?$`);
 const PARENTHESISED_CAST_PATTERN = new RegExp(String.raw`^\((.+)\)::(${TYPE_NAME})$`, 's');
 const INTEGER_PATTERN = /^-?\d+$/;
 const INTEGER_TYPE_PATTERN = /^(?:smallint|integer|bigint|int2|int4|int8)$/i;
