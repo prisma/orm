@@ -37,6 +37,7 @@
   "sideEffects": false,
   "dependencies": {
     "@prisma/driver-adapter-utils": "workspace:*",
+    "async-mutex": "0.5.0",
     "pg": "^8.16.3",
     "postgres-array": "3.0.4",
     "@types/pg": "^8.16.0"
