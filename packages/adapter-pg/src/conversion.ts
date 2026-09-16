@@ -43,6 +43,7 @@ const ArrayColumnType = {
   TIMESTAMP_ARRAY: 1115,
   TIMESTAMPTZ_ARRAY: 1185,
   TIME_ARRAY: 1183,
+  TIMETZ_ARRAY: 1270,
   UUID_ARRAY: 2951,
   VARBIT_ARRAY: 1563,
   VARCHAR_ARRAY: 1015,
@@ -249,6 +250,7 @@ export function fieldToColumnType(fieldTypeId: number): ColumnType {
     case ArrayColumnType.DATE_ARRAY:
       return ColumnTypeEnum.DateArray
     case ArrayColumnType.TIME_ARRAY:
+    case ArrayColumnType.TIMETZ_ARRAY:
       return ColumnTypeEnum.TimeArray
     case ArrayColumnType.TIMESTAMP_ARRAY:
       return ColumnTypeEnum.DateTimeArray
@@ -386,6 +388,7 @@ export const customParsers = {
   [ArrayColumnType.NUMERIC_ARRAY]: normalize_array(normalize_numeric),
   [ScalarColumnType.TIME]: normalize_time,
   [ArrayColumnType.TIME_ARRAY]: normalize_array(normalize_time),
+  [ArrayColumnType.TIMETZ_ARRAY]: normalize_array(normalize_timez),
   [ScalarColumnType.TIMETZ]: normalize_timez,
   [ScalarColumnType.DATE]: normalize_date,
   [ArrayColumnType.DATE_ARRAY]: normalize_array(normalize_date),
