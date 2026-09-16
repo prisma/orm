@@ -132,8 +132,9 @@ jobs:
         run: pnpm lint:publishability
       - name: Check upgrade-instruction coverage
         env:
-          BASE: ${{ github.base_ref || 'main' }}
-        run: pnpm check:upgrade-coverage --mode pr --prev "origin/$BASE"
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha || github.sha }}
+        run: pnpm check:upgrade-coverage --mode pr --prev "$BASE_SHA" --head "$HEAD_SHA"
       - name: Check error-reference completeness
         run: pnpm check:error-reference
       - name: Check release notes

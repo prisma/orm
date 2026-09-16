@@ -1,6 +1,4 @@
 ---
-from: 8.0.0-rc.11
-to: 8.0.0-rc.12
 # The Prisma 7 contract source adds `prisma7Schema` and `contract: ContractConfig` to
 # `@prisma/orm-postgres/config`, and `diagnostics` to CliStructuredError. Both additive. It also
 # moves the Postgres raw default parser out of the family `psl-infer` subpath (entry below). The
