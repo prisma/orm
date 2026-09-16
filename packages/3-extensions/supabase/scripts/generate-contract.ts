@@ -34,11 +34,7 @@ import {
 } from '@internal/framework-components/psl-ast';
 import { printPsl } from '@internal/psl-printer';
 import postgresTargetDescriptor from '@internal/target-postgres/control';
-import {
-  PostgresDatabaseSchemaNode,
-  PostgresNamespaceSchemaNode,
-  PostgresTableSchemaNode,
-} from '@internal/target-postgres/types';
+import { PostgresDatabaseSchemaNode } from '@internal/target-postgres/types';
 import { createDevDatabase } from '@repo/test-utils';
 import { Client } from 'pg';
 import { SupabaseRole } from '../src/contract/roles';
@@ -57,23 +53,6 @@ function readUrlFlag(argv: readonly string[]): string | undefined {
 }
 
 const explicitUrl = readUrlFlag(process.argv.slice(2));
-
-// --- Column omissions (declarative, table.column keyed) -----------------
-//
-// Fidelity notes:
-//   - storage.buckets.allowed_mime_types, storage.objects.path_tokens: both
-//     nullable `text[]`, now authorable as `String[]?`. Lifting the omissions
-//     means regenerating and re-verifying this contract, which has not been
-//     done yet and is tracked separately. `path_tokens` is additionally a
-//     `GENERATED ALWAYS` column, so it is not user-writable either way.
-//     Under `external` control an undeclared live column is a suppressed
-//     extra, so omission is verify-safe.
-const COLUMN_OMISSIONS: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
-  storage: {
-    buckets: ['allowed_mime_types'],
-    objects: ['path_tokens'],
-  },
-};
 
 // --- Default omissions (declarative, table.column keyed) ----------------
 //
@@ -120,38 +99,6 @@ const MODEL_RENAMES: Readonly<Record<string, Readonly<Record<string, string>>>> 
     objects: 'StorageObject',
   },
 };
-
-function omitColumns(
-  tree: PostgresDatabaseSchemaNode,
-  schemaName: string,
-): PostgresDatabaseSchemaNode {
-  const omissions = COLUMN_OMISSIONS[schemaName];
-  if (!omissions) return tree;
-
-  const namespace = tree.namespaces[schemaName];
-  if (!namespace) return tree;
-
-  let tables = namespace.tables;
-  for (const [tableName, columns] of Object.entries(omissions)) {
-    const table = tables[tableName];
-    if (!table) continue;
-    const remainingColumns = Object.fromEntries(
-      Object.entries(table.columns).filter(([columnName]) => !columns.includes(columnName)),
-    );
-    tables = {
-      ...tables,
-      [tableName]: new PostgresTableSchemaNode({ ...table, columns: remainingColumns }),
-    };
-  }
-
-  return new PostgresDatabaseSchemaNode({
-    ...tree,
-    namespaces: {
-      ...tree.namespaces,
-      [schemaName]: new PostgresNamespaceSchemaNode({ ...namespace, tables }),
-    },
-  });
-}
 
 function tableNameOfModel(model: PslModel): string {
   const mapAttribute = model.attributes.find(
@@ -407,13 +354,12 @@ async function introspectSchema(
 
   const rawSchemaNode = await controlAdapter.introspect(driver, undefined, schemaName);
   PostgresDatabaseSchemaNode.assert(rawSchemaNode);
-  const tree = omitColumns(rawSchemaNode, schemaName);
 
   const inferPslContract = postgresTargetDescriptor.inferPslContract;
   if (!inferPslContract) {
     throw new Error('generate-contract: postgres target descriptor has no inferPslContract');
   }
-  const ast = inferPslContract(tree);
+  const ast = inferPslContract(rawSchemaNode);
   const namespace = ast.namespaces.find((ns) => ns.name === schemaName);
   if (!namespace) {
     throw new Error(

@@ -623,6 +623,7 @@ namespace storage {
     public                  Boolean?                  @default(false)
     avifAutodetection       Boolean?                  @default(false) @map("avif_autodetection")
     fileSizeLimit           BigInt?                   @map("file_size_limit")
+    allowedMimeTypes        String[]?                 @noCheck(elementNotNull) @map("allowed_mime_types")
     ownerId                 String?                   @map("owner_id")
     _type                   pg.enum(Buckettype)       @default(dbgenerated("'STANDARD'::storage.buckettype")) @map("type")
     objects                 StorageObject[]
@@ -680,6 +681,7 @@ namespace storage {
     updatedAt      DateTime?      @default(now()) @map("updated_at")
     lastAccessedAt DateTime?      @default(now()) @map("last_accessed_at")
     metadata       Jsonb?
+    pathTokens     String[]?      @noCheck(elementNotNull) @map("path_tokens")
     version        String?
     ownerId        String?        @map("owner_id")
     userMetadata   Jsonb?         @map("user_metadata")

@@ -4198,6 +4198,14 @@
                   }
                 }
               },
+              "allowedMimeTypes": {
+                "many": true,
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "avifAutodetection": {
                 "nullable": true,
                 "type": {
@@ -4314,6 +4322,9 @@
                 "_type": {
                   "column": "type"
                 },
+                "allowedMimeTypes": {
+                  "column": "allowed_mime_types"
+                },
                 "avifAutodetection": {
                   "column": "avif_autodetection"
                 },
@@ -4404,6 +4415,14 @@
                   "kind": "scalar"
                 }
               },
+              "pathTokens": {
+                "many": true,
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "updatedAt": {
                 "nullable": true,
                 "type": {
@@ -4469,6 +4488,9 @@
                 },
                 "ownerId": {
                   "column": "owner_id"
+                },
+                "pathTokens": {
+                  "column": "path_tokens"
                 },
                 "updatedAt": {
                   "column": "updated_at"
@@ -7607,6 +7629,15 @@
           "table": {
             "buckets": {
               "columns": {
+                "allowed_mime_types": {
+                  "codecId": "pg/text@1",
+                  "many": true,
+                  "nativeType": "text",
+                  "noCheck": [
+                    "elementNotNull"
+                  ],
+                  "nullable": true
+                },
                 "avif_autodetection": {
                   "codecId": "pg/bool@1",
                   "default": {
@@ -8181,6 +8212,15 @@
                   "nativeType": "text",
                   "nullable": true
                 },
+                "path_tokens": {
+                  "codecId": "pg/text@1",
+                  "many": true,
+                  "nativeType": "text",
+                  "noCheck": [
+                    "elementNotNull"
+                  ],
+                  "nullable": true
+                },
                 "updated_at": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "default": {
@@ -8582,7 +8622,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "409d9a5191d9d7d8e45a795cb55695a79edce9d8f42ff1e456bce6e79f98dff1",
+    "storageHash": "ede079259d126d9153bcb4fc4aa6781d870a255585524e1e95fae9e5af4eef89",
     "types": {
       "CreatedAt": {
         "codecId": "pg/timestamp-temporal@1",

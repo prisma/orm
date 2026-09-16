@@ -1,6 +1,6 @@
 # Contract fidelity notes
 
-The shipped contract (`contract.prisma` → emitted `contract.json` / `contract.d.ts`) is **generated, not hand-authored**: `pnpm contract:generate` restores the reference fixture ([`test/fixtures/supabase-reference/`](../../test/fixtures/supabase-reference/)) into a fresh PGlite database, introspects the `auth` and `storage` schemas, infers PSL per schema, assembles the `auth`/`storage` `namespace` blocks plus a `namespace unbound { }` block carrying the three `role` blocks (from `src/contract/roles.ts`'s `SupabaseRole.values`), and emits. Rerunning against the same fixture is byte-identical. `contract.prisma` is fully self-describing — nothing is injected outside of PSL text during emit.
+The shipped contract (`contract.prisma` → emitted `contract.json` / `contract.d.ts`) is **generated, not hand-authored**: `pnpm contract:generate` restores the reference fixture ([`test/fixtures/supabase-reference/`](../../test/fixtures/supabase-reference/)) into a fresh PGlite database, introspects the `auth` and `storage` schemas, infers PSL per schema, assembles the `auth`/`storage` `namespace` blocks plus a `namespace unbound { }` block carrying the three `role` blocks (from `src/contract/roles.ts`'s `SupabaseRole.values`), and emits. Rerunning the generator today does not reproduce the committed file: its output inlines the hand-authored `types {}` alias block, declares 43 `@@check` constraints the committed contract omits, spells `DateTime` columns as `Timestamptz` (same codec), and prints one enum default as a literal instead of `dbgenerated(...)`; reconciling the committed contract with the generator is tracked separately. `contract.prisma` is fully self-describing — nothing is injected outside of PSL text during emit.
 
 **Reference version:** supabase/postgres:17.6.1.106 (PostgreSQL 17.6), gotrue v2.188.1, storage-api v1.54.1, captured 2026-07-12 with supabase CLI 2.95.4. Supabase-internal schema drifts across platform upgrades; refresh by re-capturing the fixture from a newer stack and rerunning `contract:generate`.
 
@@ -10,14 +10,9 @@ Everything the pack declares is `control: 'external'`. Under `external`, `db ver
 
 ## What the contract deliberately does not declare
 
-Machine-readable versions of these lists live in `scripts/generate-contract.ts` (`COLUMN_OMISSIONS` / `DEFAULT_OMISSIONS`), each with the full reasoning; this is the audit summary.
+The machine-readable version of the default list lives in `scripts/generate-contract.ts` (`DEFAULT_OMISSIONS`) with the full reasoning; this is the audit summary.
 
-**Columns (2):**
-
-| Column | Live type | Why |
-| --- | --- | --- |
-| `storage.buckets.allowed_mime_types` | `text[]` nullable | Now authorable as `String[]?`; lifting the omission means regenerating and re-verifying this contract, tracked separately |
-| `storage.objects.path_tokens` | `text[]` nullable | Same; also `GENERATED ALWAYS`, so not user-writable regardless |
+**Columns:** none. Every live column of every declared table is declared, including the nullable `text[]` columns `storage.buckets.allowed_mime_types` and `storage.objects.path_tokens` (`String[]?`). `path_tokens` is `GENERATED ALWAYS`, so it is declared but not user-writable.
 
 **Column defaults (3):** `auth.users.phone` (`DEFAULT NULL` is a no-op, but round-trips through the raw-default parser as an explicit `@default(null)`, which the interpreter rejects); `auth.custom_oauth_providers.acceptable_client_ids` and `.scopes` (both `text[]` with `DEFAULT '{}'::text[]`, printed as `@default(dbgenerated("'{}'::text[]"))` — the interpreter rejects any function-kind default on a list field, and a `dbgenerated(...)` default is always function-kind at authoring time). Column type is declared in full for all three; only the `@default` is dropped. The jsonb `dbgenerated(...)` defaults that used to widen this list (TML-3037) are declared again — `db verify`'s permanent-drift disagreement is fixed generically, at the postgres target's `SchemaIR` construction, so it needs no authoring-side omission.
 

@@ -11,7 +11,7 @@
  *      undeclared schemas (realtime, vault, extensions, graphql, …) are
  *      tolerated extras under `external` control.
  *
- *      Two framework gaps this fixture surfaced are now resolved:
+ *      A framework gap this fixture surfaced is now resolved:
  *        - Foreign-key-derived columns default to requiring a backing index
  *          (`ForeignKeyInput.index` defaults `true`, `DEFAULT_FK_INDEX` in
  *          `packages/2-sql/1-core/contract/src/types.ts`), but several real
@@ -25,12 +25,6 @@
  *          table's FK-backing `indexes[]` entries — the entries `db verify` checks against (shared
  *          as `@internal/sql-contract/foreign-key-materialization`,
  *          `packages/2-sql/1-core/contract/src/foreign-key-materialization.ts`).
- *        - `storage.buckets.allowed_mime_types` / `storage.objects.path_tokens`
- *          are nullable `text[]` columns, now authorable as `String[]?`.
- *          Lifting their omission means regenerating and re-verifying this
- *          contract, which is tracked separately. Both stay omitted in
- *          `scripts/generate-contract.ts`'s `COLUMN_OMISSIONS` (verify-safe
- *          under `external` control).
  *
  *   2. Negative: on a second database, `auth.refresh_tokens` is dropped
  *      after restoring the fixture; `dbVerify` on the `supabase` space

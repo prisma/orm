@@ -34,7 +34,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'409d9a5191d9d7d8e45a795cb55695a79edce9d8f42ff1e456bce6e79f98dff1'>;
+  StorageHashBase<'ede079259d126d9153bcb4fc4aa6781d870a255585524e1e95fae9e5af4eef89'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -609,6 +609,7 @@ export type FieldOutputTypes = {
     };
     readonly StorageBucket: {
       readonly _type: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+      readonly allowedMimeTypes: ReadonlyArray<CodecTypes['pg/text@1']['output']> | null;
       readonly avifAutodetection: CodecTypes['pg/bool@1']['output'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly fileSizeLimit: CodecTypes['pg/int8@1']['output'] | null;
@@ -628,6 +629,7 @@ export type FieldOutputTypes = {
       readonly name: CodecTypes['pg/text@1']['output'] | null;
       readonly owner: CodecTypes['pg/uuid@1']['output'] | null;
       readonly ownerId: CodecTypes['pg/text@1']['output'] | null;
+      readonly pathTokens: ReadonlyArray<CodecTypes['pg/text@1']['output']> | null;
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly userMetadata: CodecTypes['pg/jsonb@1']['output'] | null;
       readonly version: CodecTypes['pg/text@1']['output'] | null;
@@ -1007,6 +1009,7 @@ export type FieldInputTypes = {
     };
     readonly StorageBucket: {
       readonly _type: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+      readonly allowedMimeTypes: ReadonlyArray<CodecTypes['pg/text@1']['input']> | null;
       readonly avifAutodetection: CodecTypes['pg/bool@1']['input'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly fileSizeLimit: CodecTypes['pg/int8@1']['input'] | null;
@@ -1026,6 +1029,7 @@ export type FieldInputTypes = {
       readonly name: CodecTypes['pg/text@1']['input'] | null;
       readonly owner: CodecTypes['pg/uuid@1']['input'] | null;
       readonly ownerId: CodecTypes['pg/text@1']['input'] | null;
+      readonly pathTokens: ReadonlyArray<CodecTypes['pg/text@1']['input']> | null;
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly userMetadata: CodecTypes['pg/jsonb@1']['input'] | null;
       readonly version: CodecTypes['pg/text@1']['input'] | null;
@@ -1339,6 +1343,7 @@ export type StorageColumnTypes = {
   readonly public: {};
   readonly storage: {
     readonly buckets: {
+      readonly allowed_mime_types: ReadonlyArray<CodecTypes['pg/text@1']['output']> | null;
       readonly avif_autodetection: CodecTypes['pg/bool@1']['output'] | null;
       readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly file_size_limit: CodecTypes['pg/int8@1']['output'] | null;
@@ -1402,6 +1407,7 @@ export type StorageColumnTypes = {
       readonly name: CodecTypes['pg/text@1']['output'] | null;
       readonly owner: CodecTypes['pg/uuid@1']['output'] | null;
       readonly owner_id: CodecTypes['pg/text@1']['output'] | null;
+      readonly path_tokens: ReadonlyArray<CodecTypes['pg/text@1']['output']> | null;
       readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly user_metadata: CodecTypes['pg/jsonb@1']['output'] | null;
       readonly version: CodecTypes['pg/text@1']['output'] | null;
@@ -1739,6 +1745,7 @@ export type StorageColumnInputTypes = {
   readonly public: {};
   readonly storage: {
     readonly buckets: {
+      readonly allowed_mime_types: ReadonlyArray<CodecTypes['pg/text@1']['input']> | null;
       readonly avif_autodetection: CodecTypes['pg/bool@1']['input'] | null;
       readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly file_size_limit: CodecTypes['pg/int8@1']['input'] | null;
@@ -1802,6 +1809,7 @@ export type StorageColumnInputTypes = {
       readonly name: CodecTypes['pg/text@1']['input'] | null;
       readonly owner: CodecTypes['pg/uuid@1']['input'] | null;
       readonly owner_id: CodecTypes['pg/text@1']['input'] | null;
+      readonly path_tokens: ReadonlyArray<CodecTypes['pg/text@1']['input']> | null;
       readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly user_metadata: CodecTypes['pg/jsonb@1']['input'] | null;
       readonly version: CodecTypes['pg/text@1']['input'] | null;
@@ -2290,6 +2298,7 @@ export namespace Models {
   };
   export type storage_StorageBucket = {
     _type: 'STANDARD' | 'ANALYTICS' | 'VECTOR';
+    allowedMimeTypes: ReadonlyArray<CodecTypes['pg/text@1']['output']> | null;
     avifAutodetection: CodecTypes['pg/bool@1']['output'] | null;
     createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
     fileSizeLimit: CodecTypes['pg/int8@1']['output'] | null;
@@ -2313,6 +2322,7 @@ export namespace Models {
     name: CodecTypes['pg/text@1']['output'] | null;
     owner: CodecTypes['pg/uuid@1']['output'] | null;
     ownerId: CodecTypes['pg/text@1']['output'] | null;
+    pathTokens: ReadonlyArray<CodecTypes['pg/text@1']['output']> | null;
     updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
     userMetadata: CodecTypes['pg/jsonb@1']['output'] | null;
     version: CodecTypes['pg/text@1']['output'] | null;
@@ -4698,6 +4708,11 @@ type ContractBase = Omit<
           readonly table: {
             readonly buckets: {
               columns: {
+                readonly allowed_mime_types: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
                 readonly avif_autodetection: {
                   readonly nativeType: 'bool';
                   readonly codecId: 'pg/bool@1';
@@ -5154,6 +5169,11 @@ type ContractBase = Omit<
                   readonly typeRef: 'Id';
                 };
                 readonly owner_id: {
+                  readonly nativeType: 'text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                };
+                readonly path_tokens: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
                   readonly nullable: true;
@@ -8325,6 +8345,11 @@ type ContractBase = Omit<
                   readonly typeParams: { readonly typeName: 'storage.buckettype' };
                 };
               };
+              readonly allowedMimeTypes: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: true;
+              };
               readonly avifAutodetection: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
@@ -8408,6 +8433,7 @@ type ContractBase = Omit<
               readonly namespaceId: 'storage';
               readonly fields: {
                 readonly _type: { readonly column: 'type' };
+                readonly allowedMimeTypes: { readonly column: 'allowed_mime_types' };
                 readonly avifAutodetection: { readonly column: 'avif_autodetection' };
                 readonly createdAt: { readonly column: 'created_at' };
                 readonly fileSizeLimit: { readonly column: 'file_size_limit' };
@@ -8460,6 +8486,11 @@ type ContractBase = Omit<
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
               };
+              readonly pathTokens: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+                readonly many: true;
+              };
               readonly updatedAt: {
                 readonly nullable: true;
                 readonly type: {
@@ -8502,6 +8533,7 @@ type ContractBase = Omit<
                 readonly name: { readonly column: 'name' };
                 readonly owner: { readonly column: 'owner' };
                 readonly ownerId: { readonly column: 'owner_id' };
+                readonly pathTokens: { readonly column: 'path_tokens' };
                 readonly updatedAt: { readonly column: 'updated_at' };
                 readonly userMetadata: { readonly column: 'user_metadata' };
                 readonly version: { readonly column: 'version' };
