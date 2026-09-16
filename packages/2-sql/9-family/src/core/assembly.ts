@@ -1,5 +1,6 @@
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import { assertUniqueCodecOwner } from '@internal/framework-components/control';
+import { blindCast } from '@internal/utils/casts';
 import type { CodecControlHooks } from './migrations/types';
 
 type CodecControlHooksMap = Record<string, CodecControlHooks>;
@@ -15,7 +16,10 @@ function hasCodecControlHooks(descriptor: unknown): descriptor is {
   if (typeof descriptor !== 'object' || descriptor === null) {
     return false;
   }
-  const d = descriptor as { types?: { codecTypes?: { controlPlaneHooks?: unknown } } };
+  const d = blindCast<
+    { types?: { codecTypes?: { controlPlaneHooks?: unknown } } },
+    'object check proves descriptor is property-readable, nested optional fields are probed defensively'
+  >(descriptor);
   const hooks = d.types?.codecTypes?.controlPlaneHooks;
   return hooks !== null && hooks !== undefined && typeof hooks === 'object';
 }
