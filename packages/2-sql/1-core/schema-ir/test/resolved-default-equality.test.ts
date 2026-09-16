@@ -248,6 +248,32 @@ describe('resolvedDefaultsEqual', () => {
       }).toEqual({ same: true, different: false });
     });
 
+    it('matches a number JavaScript prints in exponent notation against its decimal text', () => {
+      expect({
+        small: resolvedDefaultsEqual(literal(1e-7), literal('0.0000001'), nativeType),
+        smallWithoutScale: resolvedDefaultsEqual(literal(1e-7), literal('0.0000001'), 'numeric'),
+        large: resolvedDefaultsEqual(literal(1e21), literal('1000000000000000000000'), nativeType),
+        largeWithoutScale: resolvedDefaultsEqual(
+          literal(1e21),
+          literal('1000000000000000000000'),
+          'numeric',
+        ),
+        negative: resolvedDefaultsEqual(literal(-1.5e-7), literal('-0.00000015'), nativeType),
+        textFirst: resolvedDefaultsEqual(literal('0.0000001'), literal(1e-7), nativeType),
+      }).toEqual({
+        small: true,
+        smallWithoutScale: true,
+        large: true,
+        largeWithoutScale: true,
+        negative: true,
+        textFirst: true,
+      });
+    });
+
+    it('still separates two numbers in exponent notation that differ', () => {
+      expect(resolvedDefaultsEqual(literal(1e-7), literal('0.0000002'), nativeType)).toBe(false);
+    });
+
     it('leaves a number against its decimal text alone without a numeric native type', () => {
       expect(resolvedDefaultsEqual(literal(1.5), literal('1.5'), 'float8')).toBe(false);
     });

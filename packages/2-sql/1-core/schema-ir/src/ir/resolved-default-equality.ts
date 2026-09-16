@@ -58,9 +58,27 @@ function isInt64NativeType(nativeType?: string): boolean {
  */
 const DECIMAL_NATIVE_TYPE = /^(?:numeric|decimal)(\(\d+(?:,\s*\d+)?\))?$/i;
 const DECIMAL_NUMERAL = /^(-?)(\d+)(?:\.(\d+))?$/;
+const EXPONENT_NUMERAL = /^(-?)(\d+)(?:\.(\d+))?[eE]([+-]?\d+)$/;
+
+/**
+ * The plain decimal spelling of a value, so that a number JavaScript prints as `1e-7` or `1e+21`
+ * can be compared with the decimal text a numeric column stores. No digit is added or dropped;
+ * only the decimal point moves.
+ */
+function decimalText(value: string | number): string {
+  const text = String(value);
+  const numeral = EXPONENT_NUMERAL.exec(text);
+  if (numeral === null) return text;
+  const [, sign = '', whole = '', fraction = '', exponent = '0'] = numeral;
+  const digits = `${whole}${fraction}`;
+  const point = whole.length + Number(exponent);
+  if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${sign}${digits}${'0'.repeat(point - digits.length)}`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+}
 
 function decimalDigits(value: string | number): string | number {
-  const numeral = DECIMAL_NUMERAL.exec(String(value));
+  const numeral = DECIMAL_NUMERAL.exec(decimalText(value));
   if (numeral === null) return value;
   const whole = (numeral[2] ?? '').replace(/^0+(?=\d)/, '');
   const fraction = (numeral[3] ?? '').replace(/0+$/, '');
@@ -105,7 +123,7 @@ function normalizeLiteralValue(value: unknown, nativeType?: string): unknown {
   }
   const decimalType = nativeType === undefined ? null : DECIMAL_NATIVE_TYPE.exec(nativeType);
   if ((typeof value === 'number' || typeof value === 'string') && decimalType !== null) {
-    return decimalType[1] === undefined ? String(value) : decimalDigits(value);
+    return decimalType[1] === undefined ? decimalText(value) : decimalDigits(value);
   }
   return value;
 }
