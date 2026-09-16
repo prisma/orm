@@ -110,15 +110,16 @@ or {
   not $tok <: r"(?s).*(?i:migration)[^A-Za-z0-9]*(?i:log)[^A-Za-z0-9]*(?i:table).*",
   not {
     $filename <: r".*packages/1-framework/2-authoring/psl-parser/src/(?:source-file|extension-block)\.ts",
+    $tok <: JsLiteralMemberName(),
     $tok <: r"column",
   },
   not {
     $filename <: r".*packages/1-framework/2-authoring/psl-parser/src/symbol-table\.ts",
-    $tok <: r"(?s).*(?:table|Table).*",
+    $tok <: r"table",
   },
   not {
     $filename <: r".*packages/1-framework/2-authoring/psl-parser/src/format/emit\.ts",
-    $tok <: r"(?s).*(?:Column|column).*",
+    $tok <: r"(?:AlignmentColumns|alignmentColumns|columns|typeColumn|attributeColumn)",
   },
   register_diagnostic(span=$tok, message="no-family-vocabulary: family/target vocabulary in the family-blind framework domain; move the concept into the owning family layer, or suppress with `// biome-ignore lint/plugin/no-family-vocabulary: <why this is family-blind>`", severity="info")
 }

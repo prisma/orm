@@ -27,10 +27,13 @@ const FILE_COMMENTS_ONLY =
   '// a postgres table column\n/**\n * nativeType, primary key, mongo collection\n */\nexport const x = 1;\n';
 const FILE_SOURCE_COORDINATES =
   'export function offsetToPslPosition(offset, position) { return { offset, line: position.line + 1, column: position.character + 1 }; }\n';
+const FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN = `${FILE_SOURCE_COORDINATES}export const column = 1;\n`;
 const FILE_SYMBOL_TABLE =
   'export interface SymbolTableResult { readonly table: SymbolTable }\nconst table = {};\nexport function buildSymbolTable() { return { table }; }\n';
+const FILE_SYMBOL_TABLE_WITH_STORAGE_TABLE = `${FILE_SYMBOL_TABLE}export const storageTable = 1;\n`;
 const FILE_FORMATTER_ALIGNMENT_COLUMNS =
   'export function alignmentColumns(rows) { const typeColumn = 1; return { typeColumn, attributeColumn: 2 }; }\n';
+const FILE_FORMATTER_ALIGNMENT_WITH_STORAGE_COLUMN = `${FILE_FORMATTER_ALIGNMENT_COLUMNS}export const storageColumn = 1;\n`;
 const FILE_FORBIDDEN_STORAGE_VOCABULARY =
   'export interface StorageShape { readonly tableName: string; readonly columnName: string; readonly nativeType: string; }\n';
 
@@ -192,6 +195,54 @@ describe('lint-framework-vocabulary — counting', () => {
   it('still counts genuine storage vocabulary in framework code', () => {
     writeConfig(1);
     writeRepoFile(`${SCOPE}/src/storage-shape.ts`, FILE_FORBIDDEN_STORAGE_VOCABULARY);
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  it('still counts storage column vocabulary beside source-coordinate code', () => {
+    writeConfig(1);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/source-file.ts`,
+      FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  it('still counts storage column vocabulary beside extension-block source spans', () => {
+    writeConfig(1);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/extension-block.ts`,
+      FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  it('still counts storage table vocabulary in parser symbol-table code', () => {
+    writeConfig(1);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/symbol-table.ts`,
+      FILE_SYMBOL_TABLE_WITH_STORAGE_TABLE,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  it('still counts storage column vocabulary in formatter code', () => {
+    writeConfig(1);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/format/emit.ts`,
+      FILE_FORMATTER_ALIGNMENT_WITH_STORAGE_COLUMN,
+    );
 
     const result = runScript();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
