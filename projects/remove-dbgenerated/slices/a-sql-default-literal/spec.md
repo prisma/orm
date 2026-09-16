@@ -151,8 +151,7 @@ Files: [`sql-attribute-specs.ts`](../../../../packages/2-sql/2-authoring/contrac
 
 - `scalarDefaultArms` gains a `taggedLiteral([...registry.defaultLiteralTagRegistry.keys()])` arm, appended after the function arms, for both the list and the non-list case. The enum arms (`enumDefaultArms`) do not gain it: an enum column takes a member name.
 - `psl-column-resolution.ts`: when the interpreted value has a `tag` property, look up `registry.defaultLiteralTagRegistry.get(value.tag)` and call `lower`. The entry is guaranteed present because the combinator only accepted registered tags; assert rather than branch. The lowering result is handled exactly like a function-registry result.
-- The column-resolution result gains `readonly source: 'literal' | 'function' | 'taggedLiteral' | 'enumMember'`.
-- `psl-field-resolution.ts`: the list check that emits `PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED` skips a default whose `source` is `'taggedLiteral'`. It still rejects function-registry defaults and execution generators on list columns.
+- `psl-field-resolution.ts`: the list check that emits `PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED` now tests only `loweredOnCreate` (a client-side generator). The `loweredFunctionDefault` condition is deleted, so named storage functions and tagged literals lower on a list column like on any other column (project spec D8). The message keeps its wording; it only ever fires for generators now.
 
 ### A8. Named `gen_random_uuid()` on Postgres
 
@@ -164,7 +163,7 @@ File: [`postgres/src/core/control-mutation-defaults.ts`](../../../../packages/3-
 - The verifier already normalises the live default to `gen_random_uuid()`; no change there.
 - The language-server completion test gains `gen_random_uuid` in the Postgres function list.
 
-### A9. SQLite verify-side default resolution
+### A9. SQLite verifies defaults exactly the way Postgres does
 
 Postgres passes `postgresResolveDefault` into the family's `contract-to-schema-ir` resolver hook so an authored function expression is parsed the same way an introspected one is before comparison. SQLite provides the equivalent:
 
@@ -232,7 +231,7 @@ Registry assembly (`framework-components/test`):
 - two contributors, distinct tags, merged; duplicate tag → assembly error naming both.
 
 Interpreter (`contract-psl/test/interpreter.defaults.test.ts`):
-- `@default(sql\`gen_random_uuid()\`)` → `{ kind: 'function', expression: 'gen_random_uuid()' }`; quote fence equal; `pg.sql` equal; `sqlite.sql` with the Postgres fixture registry → unknown tag; body with `;` → `PSL_INVALID_DEFAULT_SQL`; empty body → `{ kind: 'function', expression: '' }` with no diagnostic; list column with `sql\`'{}'::text[]\`` → function default, no diagnostic; list column with `@default(now())` still → `PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED`; enum column with `sql\`...\`` → rejected by the enum arms.
+- `@default(sql\`gen_random_uuid()\`)` → `{ kind: 'function', expression: 'gen_random_uuid()' }`; quote fence equal; `pg.sql` equal; `sqlite.sql` with the Postgres fixture registry → unknown tag; body with `;` → `PSL_INVALID_DEFAULT_SQL`; empty body → `{ kind: 'function', expression: '' }` with no diagnostic; list column with `sql\`'{}'::text[]\`` → function default, no diagnostic; list column with `@default(now())` → function default `now()`, no diagnostic; list column with `@default(uuid())` → `PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED`; enum column with `sql\`...\`` → rejected by the enum arms.
 - `@default(gen_random_uuid())` on Postgres fixture → function default `gen_random_uuid()`.
 
 Adapters:

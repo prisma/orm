@@ -40,9 +40,9 @@ A tag is a qualified identifier: one or more identifiers joined by dots. The unp
 
 The canonicalized body is the expression. Nothing rewrites it at authoring time, in the contract, or in DDL. The SQLite adapter's current rewrite of `CURRENT_TIMESTAMP`, `datetime('now')`, and `datetime("now")` to `now()` at authoring time is deleted with `dbgenerated`. An empty body is passed through like any other body; the database reports the error if it cannot accept it. The only authoring-time check on a body is the one the Postgres planner already applies at DDL time, moved earlier so it has a source span: a body containing `;`, `--`, `/*`, `$$`, or the word `SELECT` is rejected. SQLite gets the same check.
 
-### D5. Verify compares both sides the same way, on every target
+### D5. SQLite verifies defaults exactly the way Postgres does
 
-Verification on Postgres already runs the introspection parser over the authored expression before comparing it to the database's. SQLite gains the same step. This changes nothing that is stored or rendered. It only means that a body written one way and read back from the database another way compares equal when the target's parser recognises both. Slice A specifies the SQLite hook.
+Postgres runs its introspection parser over the expression in the contract before comparing it to the expression the database reports, so the two are compared in the same form. SQLite does the same with its own parser. Slice A specifies the SQLite hook. A better comparison for raw SQL defaults on every target is a separate decision, recorded in [`deferred.md`](deferred.md) item 1.
 
 ### D6. Named storage functions cover the common cases
 
@@ -52,9 +52,9 @@ Postgres registers `gen_random_uuid()` as a storage default function, after `now
 
 The SQL family contract builder exports `sql` (template tag), `now()`, and `autoincrement()`. The Postgres contract builder additionally exports `genRandomUuid()`. All return a function-kind default accepted by `.default()`. `.defaultSql()` stays, marked `@deprecated` with a message naming the replacement, and is deleted at 8.0.0 GA. Every `.defaultSql(...)` call inside this repository is rewritten to the new forms.
 
-### D8. A tagged literal is allowed on a list column
+### D8. A list column takes any storage default
 
-The interpreter rejects named function defaults and client-side generator defaults on list columns, because it cannot know whether a function returns an array. That rejection stays. A tagged literal is not subject to it: the author wrote the SQL and takes responsibility for its type. `tags String[] @default(sql\`'{}'::text[]\`)` lowers to a function-kind default on the list column.
+Nobody can tell from a function's name whether it returns a value of the column's type, for a list column or for any other column. That is the author's responsibility and the database reports the error if it is wrong. So the interpreter's list-column check rejects only client-side generator defaults (`uuid()`, `cuid()`, `ulid()`, `nanoid()`), which generate one value and have no meaning for a list. Named storage functions and tagged literals on a list column lower like on any other column. `tags String[] @default(sql\`'{}'::text[]\`)` and `tags DateTime[] @default(now())` both lower; the second fails when the database refuses the DDL, which is where the error belongs.
 
 ### D9. Codecs own the PSL form of every literal
 
@@ -156,6 +156,6 @@ Conclusions from the shaping discussion on 2026-09-16, with reasons, assumptions
 
 **Empty Prisma 7 `dbgenerated()` means no default.** Why: the contract states whether a column has a default; the migration and runtime systems act on that; extra validation in the reader is a special case. Alternative rejected: the current diagnostic on required fields.
 
-**Tagged literal allowed on list columns.** Why: the list rejection exists because the interpreter cannot know a named function's return type. A tagged literal is the author's own SQL. Assumes the author accepts the database's error if the expression's type is wrong. This is the one decision the operator did not rule on explicitly; it follows from "verbatim".
+**List columns take any storage default.** Why: the interpreter cannot know any function's return type, for lists or for anything else, so refusing storage functions on lists alone was a special case. Only client-side generators are refused on lists, because a generator produces one value. Alternative rejected: the previous rule from the infer round-trip project, which kept the refusal to move a type error from DDL time to authoring time; the operator prefers the database to report it.
 
 **Persona cross-pollination.** Scope was settled under the product lens first (remove, replace, deadline is "before GA", tooling is a hand-off). Shape under the architect lens (two independent pieces meeting at the removal step). Buildability under the principal-engineer lens is in the slice specs.
