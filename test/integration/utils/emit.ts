@@ -16,6 +16,7 @@ export function emit(
 ): ReturnType<typeof emitImpl> {
   return emitImpl(contract, stack, family, {
     serializeContract: (c) => c as unknown as JsonObject,
+    deserializeContract: (json) => json as unknown as Contract,
     ...options,
   });
 }

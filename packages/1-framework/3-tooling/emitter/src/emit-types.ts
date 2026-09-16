@@ -59,12 +59,12 @@ export interface EmitOptions {
    */
   readonly supportsNamespaces?: boolean;
   /**
-   * Hydrates the canonical JSON object back into a contract. When given, the
-   * declarations are generated from that round-trip rather than from the
-   * contract as authored, so `contract.d.ts` orders every collection the way
+   * Hydrates the canonical JSON object back into a contract. The declarations
+   * are always generated from that round-trip, never from the contract as
+   * authored, so `contract.d.ts` orders every collection the way
    * `contract.json` does and a render from the JSON reproduces it exactly.
    */
-  readonly deserializeContract?: (json: Record<string, unknown>) => Contract;
+  readonly deserializeContract: (json: Record<string, unknown>) => Contract;
 }
 
 export interface EmitResult {

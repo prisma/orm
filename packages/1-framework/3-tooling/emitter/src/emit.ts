@@ -59,12 +59,8 @@ export async function emit(
     ...ifDefined('executionHash', executionHash),
     profileHash,
   };
-  const declared =
-    options.deserializeContract === undefined
-      ? contract
-      : options.deserializeContract(canonicalized);
   const contractDtsRaw = generateContractDts(
-    declared,
+    options.deserializeContract(canonicalized),
     targetFamily,
     codecTypeImports ?? [],
     contractTypeHashes,
