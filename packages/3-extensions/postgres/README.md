@@ -156,7 +156,7 @@ When URL binding is used, pool timeouts are configurable via `poolOptions`:
 
 ### Prepared SQL and ORM rows
 
-Use `db.prepare(declaration, params => ...)` to prepare SQL queries or ORM row reads once and execute them with different parameter values.
+Use `db.prepare(declaration, params => ...)` to prepare SQL queries, ORM row reads or ORM aggregates once and execute them with different parameter values.
 
 ```ts
 const byId = await db.prepare({ id: 'pg/int4@1' }, (params) =>
@@ -171,7 +171,7 @@ const rowOrNull = await first.query(db.runtime(), {});
 const sqlRows = await byId.query(db.runtime(), { id: 1 });
 ```
 
-Pass a compatible runtime, connection or transaction explicitly to `query(target, params, options?)`. ORM `all` returns a thenable async row stream; `first` returns a row-or-null promise. See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for supported predicates, includes and pagination.
+Pass a compatible runtime, connection or transaction explicitly to `query(target, params, options?)`. ORM `all` returns a thenable async row stream; `first` returns a row-or-null promise. For descriptions built with `.prepared.aggregate(selector, configure?)`, `query` returns an aggregate object promise on ungrouped collections (`Promise<AggregateResult<Spec>>`), or an array promise after `groupBy(...)` (`Promise<Array<GroupKeys & AggregateResult<Spec>>>`). See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for aggregate examples, HAVING, supported predicates, includes and pagination.
 
 ### `@internal/postgres/contract-builder`
 

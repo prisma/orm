@@ -21,6 +21,8 @@ Patterns the team has seen multiple times. Each entry: pattern → severity → 
 
 - **2026-09-15 — Final editor-project retro:** Editor acceptance must verify the rendered editor, not just HTTP or LSP transport. Record invocation and acceptance separately; verify the applied edit, caret, and visible follow-up suggestions, including required client opt-ins.
 
+- **2026-09-16 — Prepared ORM project final retro:** Validate prepared-query result claims through built public Postgres/SQLite facades and real runtime/driver decoding, not consumer-only mocks. Before resolving review, record the separately scoped layer fix and any remaining end-to-end failure; a passing consumer test does not establish the public result contract.
+
 ## Mandatory-final-retro template
 
 Per `drive-run-retro` § Step 8, the project-close retro covers the project as a whole. Template prompts:
