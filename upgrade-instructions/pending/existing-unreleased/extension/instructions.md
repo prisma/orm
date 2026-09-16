@@ -6,7 +6,6 @@
 # extension API; the app skill covers them.
 # contract.d.ts now orders every collection the way contract.json does; a re-emit reorders, nothing else.
 # Prepared include decoder specialization adds no consumer migration; retain existing entries below.
-# The Supabase nullable-list notes were corrected, prose only, no consumer migration; retain existing entries below.
 changes:
   - id: expression-codec-on-return-type
     summary: Move custom expression wrapper codec metadata to returnType.codec and remove the separate ExpressionImpl codec argument.
