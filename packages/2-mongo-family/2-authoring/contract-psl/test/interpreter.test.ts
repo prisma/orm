@@ -15,10 +15,10 @@ import {
   MongoValidator,
 } from '@internal/mongo-contract';
 import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources, SyntaxNode } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { JsonObject } from '@internal/utils/json';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   type InterpretPslDocumentToMongoContractInput,
   interpretPslDocumentToMongoContract,
@@ -142,6 +142,41 @@ function getIndexes(
 }
 
 describe('interpretPslDocumentToMongoContract', () => {
+  it('resolves missing enum factory diagnostics from the enum block node', () => {
+    const input = buildSymbolTableInput(
+      `enum Role {
+  USER
+}
+`,
+      'enum-owned.prisma',
+    );
+    const enumBlock = input.symbolTable.topLevel.blocks['Role'];
+    expect(enumBlock).toBeDefined();
+    if (enumBlock === undefined) return;
+
+    const originalSourceFileFor = input.sources.sourceFileFor.bind(input.sources);
+    const sourceFileFor = vi.fn((node: SyntaxNode) => originalSourceFileFor(node));
+    input.sources.sourceFileFor = sourceFileFor;
+
+    const result = interpretPslDocumentToMongoContract({
+      ...input,
+      scalarTypeCodecIds: mongoScalarTypeDescriptors,
+      controlMutationDefaults: new Map(),
+      codecLookup: mongoCodecLookup,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_ENUM_MISSING_FACTORY',
+        sourceId: 'enum-owned.prisma',
+        span: enumBlock.span,
+      }),
+    ]);
+    expect(sourceFileFor).toHaveBeenCalledWith(enumBlock.node.syntax);
+  });
+
   describe('scalar type mapping', () => {
     it('maps standard PSL types to Mongo codec IDs', () => {
       const ir = interpretOk(`

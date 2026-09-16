@@ -40,12 +40,12 @@ import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/can
 import type { CollationOptions } from '@internal/mongo-value/mongodb-types';
 import type {
   AttributeSpecContext,
+  BlockSymbol,
   CompositeTypeSymbol,
   FieldSymbol,
   InferAttr,
   ModelSymbol,
   NamespaceSymbol,
-  PslExtensionBlock,
   PslSpan,
   SymbolTable,
   TypedFuncCall,
@@ -1048,8 +1048,7 @@ function resolveNonRelationField(
 }
 
 function processEnumDeclarations(input: {
-  readonly document: DocumentAst;
-  readonly enumBlocks: readonly PslExtensionBlock[];
+  readonly enumSymbols: readonly BlockSymbol[];
   readonly sources: PslSources;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly entityContext: AuthoringEntityContext;
@@ -1057,7 +1056,7 @@ function processEnumDeclarations(input: {
 }): Record<string, ContractEnum> {
   const builtEnums: Record<string, ContractEnum> = {};
 
-  if (input.enumBlocks.length === 0) return builtEnums;
+  if (input.enumSymbols.length === 0) return builtEnums;
 
   const enumDescriptor =
     input.authoringContributions?.entityTypes?.['enum'] !== undefined &&
@@ -1066,23 +1065,26 @@ function processEnumDeclarations(input: {
       : undefined;
 
   if (!enumDescriptor) {
-    for (const decl of input.enumBlocks) {
+    for (const enumSymbol of input.enumSymbols) {
+      const sourceFile = input.sources.sourceFileFor(enumSymbol.node.syntax);
       input.diagnostics.push({
         code: 'PSL_ENUM_MISSING_FACTORY',
-        message: `enum "${decl.name}" requires an "enum" entityType factory in the active authoring contributions`,
-        sourceId: input.sources.sourceFileFor(input.document.syntax).filename,
-        span: decl.span,
+        message: `enum "${enumSymbol.block.name}" requires an "enum" entityType factory in the active authoring contributions`,
+        sourceId: sourceFile.filename,
+        span: enumSymbol.span,
       });
     }
     return builtEnums;
   }
 
-  for (const decl of input.enumBlocks) {
+  for (const enumSymbol of input.enumSymbols) {
+    const sourceFile = input.sources.sourceFileFor(enumSymbol.node.syntax);
+    const decl = enumSymbol.block;
     const handle = instantiateAuthoringEntityType<EnumTypeHandle | undefined>(
       'enum',
       enumDescriptor,
       [decl],
-      input.entityContext,
+      { ...input.entityContext, sourceId: sourceFile.filename },
     );
 
     if (handle === undefined || handle === null) continue;
@@ -1147,13 +1149,10 @@ export function interpretPslDocumentToMongoContract(
     });
   }
 
-  const topLevelEnumBlocks = Object.values(topLevel.blocks)
-    .filter((b) => b.keyword === 'enum')
-    .map((b) => b.block);
+  const topLevelEnumSymbols = Object.values(topLevel.blocks).filter((b) => b.keyword === 'enum');
 
   const builtEnums = processEnumDeclarations({
-    document: input.document,
-    enumBlocks: topLevelEnumBlocks,
+    enumSymbols: topLevelEnumSymbols,
     sources,
     authoringContributions: input.authoringContributions,
     entityContext: {
