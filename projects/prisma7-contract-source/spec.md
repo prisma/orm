@@ -69,7 +69,7 @@ Postgres and Mongo. SQLite is not a Prisma 7 side-by-side target in this project
 
 ## ADR pointer
 
-Close-out writes an ADR for the contract-source extension point and the "hard error, no warnings" rule for legacy dialects.
+[ADR 252 — A frozen earlier Prisma dialect is a contract source](<../../docs/architecture docs/adrs/ADR 252 - A frozen earlier Prisma dialect is a contract source.md>) records the decisions: the earlier dialect as a first-class contract source, hard errors instead of relaxed Prisma 8 checks, fidelity defined by `db verify`, the opt-in parser grammar, where dialect rules and target facts live, the public names, and the diagnostic code space. The extension point itself is [ADR 163](<../../docs/architecture docs/adrs/ADR 163 - Provider-invoked source interpretation packages.md>), which this project follows rather than changes.
 
 ## Project Definition of Done
 
