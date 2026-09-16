@@ -8,12 +8,15 @@ Items the project deliberately leaves open. Each names the decision, why it is d
 
 **How indexes, checks, and RLS policies solve it:** the authored body is hashed and the hash is part of the object's name in the catalog (ADR 234, ADR 243, ADR 244). Verify compares names and never reads the body. A column default has no name in the catalog, so that exact mechanism does not transfer.
 
+**What ADR 129 gives and does not give:** the `ext` envelope with `bodyHash` identifies a literal inside the contract, so two contracts can be diffed by hash. It says nothing about comparing a contract to a live database. Storing the default that way (which project spec D1 declines for now) does not answer this question on its own.
+
+**Rejected by the operator:** creating a temporary table on the target database at verify time so the database reprints the authored default. No shadow-database mechanism of any kind.
+
 **Candidate plans, to be decided after slice C:**
 
-1. **Let the database normalise both sides.** Verify already holds a connection. It creates a temporary table with one column carrying the authored default, reads back what the database reprints for it, and compares reprint to reprint. The database is then the only normaliser, which is the same idea as name comparison: never parse SQL in JavaScript. Cost: one round trip per raw default at verify time, and a temporary object on a connection that may be read-only. Recommended candidate.
-2. **Record the hash out of band.** Store `SHA-256(canonical body)` in the column's comment (`COMMENT ON COLUMN`, read from `pg_description`; SQLite has no column comments, so it would need another place). Verify compares hashes and never reads the expression. Cost: verify silently trusts the hash if someone edits the default and not the comment, the same trade-off ADR 244 accepts for checks; and SQLite needs a different mechanism.
-3. **Wrap every raw default in a named function** (`DEFAULT prisma_default_<hash>()`), giving the default a catalog name that carries the hash. Rejected in advance: it creates one database function per default and changes the SQL the user wrote.
-4. **Store the default as ADR 129's `ext` envelope with a `bodyHash`.** Changes the contract shape (project spec D1 keeps it). On its own it does not solve verification, since the database still has no name to compare; it only helps contract-to-contract diffing, which the storage hash already covers. Only worth doing together with 1 or 2.
+1. **Record the hash out of band, in the column comment.** The migration that sets a raw default also sets `COMMENT ON COLUMN` to carry `SHA-256(canonical body)` in a fixed form; verify reads it from `pg_description` and compares hashes, never the expression. Same trust model as ADR 244: a default edited by hand under an unchanged comment goes undetected. SQLite has no column comments, so it needs its own carrier, for example a row in the Prisma marker schema keyed by table and column.
+2. **Record the hash in the marker schema on every target.** The migration runner writes one row per raw default (table, column, hash) into the marker schema the database already carries; verify compares those rows to the contract. Uniform across targets. Weaker than 1 on Postgres because the hash lives beside the column rather than on it, so a column dropped and recreated by hand leaves a stale row.
+3. **Keep text comparison but make the parser complete.** Rejected in advance for the reason ADR 234 and ADR 244 record: matching the database's reprint needs a Postgres grammar in JavaScript.
 
 **Reopen when:** slice C is merged.
 
