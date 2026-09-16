@@ -8,14 +8,10 @@ import {
 import { argumentValueDocumentation } from './argument-value-documentation';
 import { type ArgumentSignature, resolveGrammar } from './attribute-argument-grammar';
 import { type AttributeSpecSource, attributeSpecResolver } from './attribute-spec-resolution';
-import {
-  type AttributeArgumentCompletionContext,
-  type AttributeArgumentPathStep,
-  type ClassifyPslCompletionContextInput,
-  classifyPslSignatureContext,
-} from './completion-context';
+import type { AttributeArgumentPathStep, PslCursorInput } from './attribute-syntax-context';
+import { type AttributeSignatureContext, classifyPslSignatureContext } from './signature-context';
 
-export interface ProvidePslSignatureHelpInput extends ClassifyPslCompletionContextInput {
+export interface ProvidePslSignatureHelpInput extends PslCursorInput {
   readonly candidates: AttributeSpecSource;
   readonly clientSupportsLabelOffsets?: boolean;
 }
@@ -29,7 +25,7 @@ export function providePslSignatureHelp(input: ProvidePslSignatureHelpInput): Si
 }
 
 function signatureHelp(
-  context: AttributeArgumentCompletionContext,
+  context: AttributeSignatureContext,
   spec: AttributeSpec<never, never>,
   labelOffsets: boolean,
 ): SignatureHelp | null {
@@ -69,17 +65,18 @@ function signatureHelp(
 }
 
 function parameterIndex(
-  context: AttributeArgumentCompletionContext,
+  context: AttributeSignatureContext,
   active: AttributeArgumentPathStep | undefined,
   params: readonly PositionalParam<unknown, never>[],
 ): number {
   if (active?.kind === 'namedArgument')
     return params.findIndex((param) => param.key === active.name);
   if (active?.kind === 'positionalArgument') return active.index;
-  if ('positionalIndex' in context) {
+  const slot = context.argumentSlot;
+  if (slot !== undefined) {
     return params.findIndex(
       (param, index) =>
-        index >= context.positionalIndex && !context.existingNamedKeys.includes(param.key),
+        index >= slot.positionalIndex && !slot.existingNamedKeys.includes(param.key),
     );
   }
   return -1;

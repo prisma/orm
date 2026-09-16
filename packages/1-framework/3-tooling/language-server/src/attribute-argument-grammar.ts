@@ -1,6 +1,6 @@
 import type { ArgType, InspectableArgType, Param, PositionalParam } from '@internal/psl-parser';
 import { blindCast } from '@internal/utils/casts';
-import type { AttributeArgumentPathStep } from './completion-context';
+import type { AttributeArgumentPathStep } from './attribute-syntax-context';
 
 export interface ArgumentSignature {
   readonly documentation: string;
