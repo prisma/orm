@@ -2,7 +2,9 @@
 from: 8.0.0-rc.11
 to: 8.0.0-rc.12
 # The Prisma 7 contract source adds `prisma7Schema` and `contract: ContractConfig` to
-# `@prisma/orm-postgres/config`. Additive; nothing for an extension author to translate.
+# `@prisma/orm-postgres/config`, and `diagnostics` to CliStructuredError. Both additive, so there is
+# nothing for an extension author to translate. The Postgres default reader and the pinned
+# introspection session change what users see, not any extension API; the app skill covers them.
 # contract.d.ts now orders every collection the way contract.json does; a re-emit reorders, nothing else.
 # Prepared include decoder specialization adds no consumer migration; retain existing entries below.
 changes:
