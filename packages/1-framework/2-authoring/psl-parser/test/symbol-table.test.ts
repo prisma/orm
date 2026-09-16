@@ -26,8 +26,8 @@ const emptyCodecLookup: CodecLookup = {
 };
 
 function build(source: string, pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {}) {
-  const { document, sourceFile } = parse(source);
-  return buildSymbolTable({ document, sourceFile, pslBlockDescriptors });
+  const { document, sources } = parse(source, 'test.psl');
+  return buildSymbolTable({ document, sources, pslBlockDescriptors });
 }
 
 describe('buildSymbolTable() — AC1 fault tolerance', () => {
@@ -474,9 +474,11 @@ describe('buildSymbolTable() — resolved declaration spans', () => {
     const result = build(
       ['model User {', '  id Int', '}', 'type Address {', '  street String', '}'].join('\n'),
     );
-    const { sourceFile } = parse(
+    const { document, sources } = parse(
       ['model User {', '  id Int', '}', 'type Address {', '  street String', '}'].join('\n'),
+      'test.psl',
     );
+    const sourceFile = sources.sourceFileFor(document.syntax);
 
     const model = result.table.topLevel.models['User'];
     const expectedModelStart = sourceFile.offsetAt({ line: 0, character: 0 });
@@ -666,7 +668,7 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
   });
 
   it('validates same-namespace refs against the block owner namespace', () => {
-    const { document, sourceFile } = parse(
+    const { document, sources } = parse(
       [
         'model Post {',
         '  id Int',
@@ -680,6 +682,7 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
         '  }',
         '}',
       ].join('\n'),
+      'test.psl',
     );
     const policySelectDescriptor: AuthoringPslBlockDescriptor = {
       kind: 'pslBlock',
@@ -695,7 +698,7 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
     };
     const result = buildSymbolTable({
       document,
-      sourceFile,
+      sources,
       pslBlockDescriptors: descriptors,
     });
     const block = result.table.topLevel.namespaces['blog']?.blocks['ReadArticles'];
@@ -707,15 +710,14 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
         block,
         descriptor: policySelectDescriptor,
         symbolTable: result.table,
-        sourceFile,
-        sourceId: 'schema.prisma',
+        sources,
         codecLookup: emptyCodecLookup,
       }),
     ).toEqual([]);
   });
 
   it('validates same-space refs against models from every namespace', () => {
-    const { document, sourceFile } = parse(
+    const { document, sources } = parse(
       [
         'namespace blog {',
         '  model Article {',
@@ -726,6 +728,7 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
         '  target = Article',
         '}',
       ].join('\n'),
+      'test.psl',
     );
     const policyAnywhereDescriptor: AuthoringPslBlockDescriptor = {
       kind: 'pslBlock',
@@ -741,7 +744,7 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
     };
     const result = buildSymbolTable({
       document,
-      sourceFile,
+      sources,
       pslBlockDescriptors: descriptors,
     });
     const block = result.table.topLevel.blocks['ReadArticles'];
@@ -753,8 +756,7 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
         block,
         descriptor: policyAnywhereDescriptor,
         symbolTable: result.table,
-        sourceFile,
-        sourceId: 'schema.prisma',
+        sources,
         codecLookup: emptyCodecLookup,
       }),
     ).toEqual([]);

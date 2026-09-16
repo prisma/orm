@@ -14,7 +14,7 @@ export function leafDiagnostic(
   return {
     code,
     message,
-    sourceId: ctx.sourceId,
-    span: nodePslSpan(node.syntax, ctx.sourceFile),
+    sourceId: ctx.sources.sourceFileFor(node.syntax).filename,
+    span: nodePslSpan(node.syntax, ctx.sources),
   };
 }

@@ -96,7 +96,6 @@ export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extens
 export {
   keywordPslSpan,
   nodePslSpan,
-  rangeToPslSpan,
   readResolvedAttribute,
   readResolvedAttributes,
   readResolvedConstructorCall,

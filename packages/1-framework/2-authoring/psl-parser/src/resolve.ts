@@ -1,5 +1,5 @@
 import type { PslSpan } from '@internal/framework-components/psl-ast';
-import type { Position, Range, SourceFile } from './source-file';
+import type { PslSources } from './source-file';
 import type {
   AttributeArgListAst,
   FieldAttributeAst,
@@ -33,38 +33,38 @@ export interface ResolvedTypeConstructorCall {
 
 export function readResolvedAttribute(
   attribute: FieldAttributeAst | ModelAttributeAst,
-  sourceFile: SourceFile,
+  sources: PslSources,
 ): ResolvedAttribute {
   return {
     name: attributeName(attribute.name()),
-    args: readResolvedArgList(attribute.argList(), sourceFile),
-    span: nodePslSpan(attribute.syntax, sourceFile),
+    args: readResolvedArgList(attribute.argList(), sources),
+    span: nodePslSpan(attribute.syntax, sources),
   };
 }
 
 export function readResolvedAttributes(
   attributes: Iterable<FieldAttributeAst | ModelAttributeAst>,
-  sourceFile: SourceFile,
+  sources: PslSources,
 ): readonly ResolvedAttribute[] {
-  return Array.from(attributes, (attribute) => readResolvedAttribute(attribute, sourceFile));
+  return Array.from(attributes, (attribute) => readResolvedAttribute(attribute, sources));
 }
 
 export function readResolvedConstructorCall(
   annotation: TypeAnnotationAst | undefined,
-  sourceFile: SourceFile,
+  sources: PslSources,
 ): ResolvedTypeConstructorCall | undefined {
   const argList = annotation?.argList();
   if (annotation === undefined || argList === undefined) return undefined;
   return {
     path: annotation.name()?.path() ?? [],
-    args: readResolvedArgList(argList, sourceFile),
-    span: nodePslSpan(annotation.syntax, sourceFile),
+    args: readResolvedArgList(argList, sources),
+    span: nodePslSpan(annotation.syntax, sources),
   };
 }
 
 function readResolvedArgList(
   argList: AttributeArgListAst | undefined,
-  sourceFile: SourceFile,
+  sources: PslSources,
 ): readonly ResolvedAttributeArg[] {
   if (argList === undefined) return [];
   const args: ResolvedAttributeArg[] = [];
@@ -76,7 +76,7 @@ function readResolvedArgList(
       ...(name !== undefined ? { name } : {}),
       value: renderExpression(expression),
       ...(expression !== undefined ? { expression } : {}),
-      span: nodePslSpan(arg.syntax, sourceFile),
+      span: nodePslSpan(arg.syntax, sources),
     });
   }
   return args;
@@ -91,33 +91,23 @@ function renderExpression(expression: ExpressionAst | undefined): string {
   return printSyntax(expression.syntax).trim();
 }
 
-export function nodePslSpan(node: SyntaxNode, sourceFile: SourceFile): PslSpan {
+export function nodePslSpan(node: SyntaxNode, sources: PslSources): PslSpan {
+  const sourceFile = sources.sourceFileFor(node);
   const start = node.offset;
   const end = start + node.green.textLength;
   return {
-    start: offsetToPslPosition(start, sourceFile),
-    end: offsetToPslPosition(end, sourceFile),
+    start: sourceFile.offsetToPslPosition(start),
+    end: sourceFile.offsetToPslPosition(end),
   };
 }
 
 /** Unsupported-top-level-block diagnostics are anchored to the keyword token. */
-export function keywordPslSpan(node: SyntaxNode, keyword: string, sourceFile: SourceFile): PslSpan {
+export function keywordPslSpan(node: SyntaxNode, keyword: string, sources: PslSources): PslSpan {
+  const sourceFile = sources.sourceFileFor(node);
   const start = node.offset;
   const end = start + keyword.length;
   return {
-    start: offsetToPslPosition(start, sourceFile),
-    end: offsetToPslPosition(end, sourceFile),
+    start: sourceFile.offsetToPslPosition(start),
+    end: sourceFile.offsetToPslPosition(end),
   };
-}
-
-export function rangeToPslSpan(range: Range, sourceFile: SourceFile): PslSpan {
-  return {
-    start: offsetToPslPosition(sourceFile.offsetAt(range.start), sourceFile),
-    end: offsetToPslPosition(sourceFile.offsetAt(range.end), sourceFile),
-  };
-}
-
-function offsetToPslPosition(offset: number, sourceFile: SourceFile): PslSpan['start'] {
-  const position: Position = sourceFile.positionAt(offset);
-  return { offset, line: position.line + 1, column: position.character + 1 };
 }

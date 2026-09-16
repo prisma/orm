@@ -4,6 +4,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import { nodePslSpan } from '../resolve';
 import type { FieldAttributeAst, ModelAttributeAst } from '../syntax/ast/attributes';
 import type { AttributeArgAst } from '../syntax/ast/expressions';
+import type { SyntaxNode } from '../syntax/red';
 import { ATTRIBUTE_DIAGNOSTIC_CODE } from './combinators/diagnostic';
 import type {
   ArgType,
@@ -28,6 +29,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
   spec: ArgBindingSpec<Ctx>,
   ctx: Ctx,
   span: PslSpan,
+  sourceNode: SyntaxNode,
 ): Result<Record<string, unknown>, readonly PslDiagnostic[]> {
   const diagnostics: PslDiagnostic[] = [];
 
@@ -50,6 +52,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
               `Attribute "${spec.name}" received too many positional arguments`,
               ctx,
               span,
+              sourceNode,
             ),
           );
           reportedExcess = true;
@@ -66,7 +69,8 @@ export function interpretArgs<Ctx extends AttributeCtx>(
           diagnostic(
             `Attribute "${spec.name}" received unknown argument "${name}"`,
             ctx,
-            nodePslSpan(arg.syntax, ctx.sourceFile),
+            nodePslSpan(arg.syntax, ctx.sources),
+            arg.syntax,
           ),
         );
         continue;
@@ -80,7 +84,8 @@ export function interpretArgs<Ctx extends AttributeCtx>(
         diagnostic(
           `Attribute "${spec.name}" received duplicate argument "${key}"`,
           ctx,
-          nodePslSpan(arg.syntax, ctx.sourceFile),
+          nodePslSpan(arg.syntax, ctx.sources),
+          arg.syntax,
         ),
       );
       continue;
@@ -105,7 +110,12 @@ export function interpretArgs<Ctx extends AttributeCtx>(
       return;
     }
     diagnostics.push(
-      diagnostic(`Attribute "${spec.name}" is missing required argument "${key}"`, ctx, span),
+      diagnostic(
+        `Attribute "${spec.name}" is missing required argument "${key}"`,
+        ctx,
+        span,
+        sourceNode,
+      ),
     );
   };
 
@@ -128,8 +138,14 @@ export function interpretAttribute<Out, Ctx extends AttributeCtx>(
   spec: AttributeSpec<Out, Ctx>,
   ctx: Ctx,
 ): Result<Out, readonly PslDiagnostic[]> {
-  const attributeSpan = nodePslSpan(attrNode.syntax, ctx.sourceFile);
-  const bound = interpretArgs(attrNode.argList()?.args() ?? [], spec, ctx, attributeSpan);
+  const attributeSpan = nodePslSpan(attrNode.syntax, ctx.sources);
+  const bound = interpretArgs(
+    attrNode.argList()?.args() ?? [],
+    spec,
+    ctx,
+    attributeSpan,
+    attrNode.syntax,
+  );
   if (!bound.ok) return notOk<readonly PslDiagnostic[]>(bound.failure);
 
   const value = blindCast<
@@ -156,7 +172,8 @@ function parseArgValue<Ctx extends AttributeCtx>(
     const missing = diagnostic(
       'Attribute argument is missing a value',
       ctx,
-      nodePslSpan(arg.syntax, ctx.sourceFile),
+      nodePslSpan(arg.syntax, ctx.sources),
+      arg.syntax,
     );
     diagnostics.push(missing);
     return notOk<readonly PslDiagnostic[]>([missing]);
@@ -174,6 +191,16 @@ function isOptionalArgType<Ctx extends AttributeCtx>(
   return 'optional' in param && param.optional === true;
 }
 
-function diagnostic(message: string, ctx: AttributeCtx, span: PslSpan): PslDiagnostic {
-  return { code: ATTRIBUTE_DIAGNOSTIC_CODE, message, sourceId: ctx.sourceId, span };
+function diagnostic(
+  message: string,
+  ctx: AttributeCtx,
+  span: PslSpan,
+  sourceNode: SyntaxNode,
+): PslDiagnostic {
+  return {
+    code: ATTRIBUTE_DIAGNOSTIC_CODE,
+    message,
+    sourceId: ctx.sources.sourceFileFor(sourceNode).filename,
+    span,
+  };
 }

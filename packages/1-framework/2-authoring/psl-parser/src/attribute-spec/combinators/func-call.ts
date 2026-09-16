@@ -19,12 +19,13 @@ export function funcCall<const Name extends string, const Signature extends Func
     parse: (arg, ctx): Result<TypedFuncCall, readonly PslDiagnostic[]> => {
       const guard = matchCallee(arg, name, ctx);
       if (!guard.ok) return guard;
-      const span = nodePslSpan(guard.value.syntax, ctx.sourceFile);
+      const span = nodePslSpan(guard.value.syntax, ctx.sources);
       const bound = interpretArgs(
         guard.value.args(),
         { name, positional: sig.positional ?? [], named: sig.named ?? {} },
         ctx,
         span,
+        guard.value.syntax,
       );
       if (!bound.ok) return notOk<readonly PslDiagnostic[]>(bound.failure);
       return ok({ fn: name, span, args: bound.value });
