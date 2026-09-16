@@ -22,7 +22,7 @@ The machine-readable version of the default list lives in `scripts/generate-cont
 - `auth.one_time_tokens`' two `USING hash` indexes are declared (`@@index(..., type: "hash")`) — the postgres target registers `hash` as a built-in index type (TML-3037).
 - 17 foreign keys whose source columns have **no live FK-shaped backing index** are declared with `@relation(..., index: false)` — 16 where real Supabase does not index those FK columns at all, plus `auth.oauth_consents.client_id`, whose only live backing index is partial and therefore declared as its own exact `@@index` entry rather than satisfying the FK-derived managed expectation. (This PSL argument and the inferrer support for it shipped with this contract.)
 
-**Generated columns** (`auth.users.confirmed_at`, `auth.identities.email`): declared as ordinary columns. Introspection reports them identically on the authored and live sides, so verify is clean; the contract does not record the generation expression.
+**Generated columns** (`auth.users.confirmed_at`, `auth.identities.email`, `storage.objects.path_tokens`): declared as ordinary columns. Introspection reports them identically on the authored and live sides, so verify is clean; the contract does not record the generation expression.
 
 ## What is complete
 
