@@ -162,7 +162,7 @@ The current kit does not return declaration-bearing entity coordinates, provide 
 
 ### Native collections
 
-`list(of, { nonEmpty, unique })` parses a native array literal, applies the element combinator to every item, and may enforce non-emptiness and uniqueness.
+`list(of, { allowEmpty: false, unique: true })` parses a native array literal, applies the element combinator to every item, and may enforce non-emptiness and uniqueness.
 
 `record(of)` parses a native object literal into `Record<string, T>`, rejects duplicate keys, and applies `of` to each value. Keys are strings; the kit does not currently provide a generic `map(key, value)` combinator.
 

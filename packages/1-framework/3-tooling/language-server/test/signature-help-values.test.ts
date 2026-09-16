@@ -7,10 +7,8 @@ import {
   fieldAttribute,
   funcCall,
   identifier,
-  list,
   oneOf,
   optional,
-  record,
 } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { expect, it, vi } from 'vitest';
@@ -27,25 +25,12 @@ const nested = funcCall('sort', {
 });
 
 it.each([
-  { type: asc, args: '|', values: '- `Asc`: Sort ascending.' },
-  {
-    type: oneOf(asc, desc, asc),
-    args: '|',
-    values: '- `Asc`: Sort ascending.\n- `Desc`: Sort descending.',
-  },
-  { type: optional(asc), args: '|', values: '- `Asc`: Sort ascending.' },
-  { type: oneOf(asc, list(desc)), args: '[|]', values: '- `Desc`: Sort descending.' },
-  {
-    type: list(oneOf(asc, desc)),
-    args: '[|]',
-    values: '- `Asc`: Sort ascending.\n- `Desc`: Sort descending.',
-  },
-  { type: record(asc), args: '{ key: | }', values: '- `Asc`: Sort ascending.' },
-  { type: oneOf(asc, nested), args: '|', values: '- `Asc`: Sort ascending.' },
-  { type: oneOf(asc, nested), args: 'sort(|)', values: '- `Desc`: Sort descending.' },
+  { type: oneOf(asc, desc), args: '|', label: '@probe(Asc | Desc)' },
+  { type: optional(asc), args: '|', label: '@probe(Asc?)' },
+  { type: oneOf(asc, nested), args: 'sort(|)', label: 'sort(Desc)' },
 ])(
-  'documents relevant identifier values without parsing: $args / $type.kind',
-  ({ type, args, values }) => {
+  'keeps allowed values in the signature and declaration-only documentation: $label',
+  ({ type, args, label }) => {
     const spec = fieldAttribute('probe', {
       documentation: 'Tests identifier documentation.',
       positional: [{ key: 'value', type, documentation: 'The declared value.' }],
@@ -80,9 +65,12 @@ it.each([
     });
     const signature = result?.signatures[0];
     expect(result?.activeParameter).toBe(0);
+    expect(signature?.label).toBe(label);
     expect(signature?.parameters?.[0]?.documentation).toEqual({
       kind: MarkupKind.Markdown,
-      value: `${args.startsWith('sort(') ? '**direction**\n\nNested direction.' : '**value**\n\nThe declared value.'}\n\nAllowed values:\n${values}`,
+      value: args.startsWith('sort(')
+        ? '**direction**\n\nNested direction.'
+        : '**value**\n\nThe declared value.',
     });
     expect(parseIdentifier).not.toHaveBeenCalled();
   },

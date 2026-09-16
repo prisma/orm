@@ -44,6 +44,35 @@ test('blockAttribute infers its output like modelAttribute', () => {
   }>();
 });
 
+test('documentation preserves defaults, optionality, literals, and refine inference', () => {
+  const reusable = str('value');
+  const spec = blockAttribute('demo', {
+    documentation: 'Demonstrates documented arguments.',
+    positional: [{ key: 'first', type: reusable, documentation: 'The first value.' }],
+    named: {
+      required: { type: reusable, documentation: 'The required value.' },
+      omitted: { type: optional(reusable), documentation: 'An optional value.' },
+      defaulted: { type: optional(reusable, 'value'), documentation: 'Defaults to `value`.' },
+      undefinedDefault: {
+        type: optional(reusable, undefined),
+        documentation: 'Defaults to undefined.',
+      },
+    },
+    refine: (parsed) => {
+      expectTypeOf(parsed.required).toEqualTypeOf<'value'>();
+      expectTypeOf(parsed.defaulted).toEqualTypeOf<'value' | undefined>();
+      return [];
+    },
+  });
+  expectTypeOf<InferAttr<typeof spec>>().toEqualTypeOf<{
+    first: 'value';
+    readonly required: 'value';
+    readonly omitted?: 'value';
+    readonly defaulted?: 'value';
+    readonly undefinedDefault?: 'value';
+  }>();
+});
+
 test('a model-free combinator parses over the bare attribute ctx', () => {
   expectTypeOf(str()).toMatchTypeOf<ArgType<string, AttributeCtx>>();
   expectTypeOf(list(str())).toMatchTypeOf<ArgType<string[], AttributeCtx>>();

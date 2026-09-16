@@ -36,14 +36,6 @@ Interpretation/validation (for example `@internal/sql-contract-psl`) is responsi
 - enforcing pack composition (using `@<ns>.*` without composing the pack fails), and
 - ensuring parity with the TS authoring surface.
 
-## Attribute specification metadata
-
-`fieldAttribute`, `modelAttribute`, and `blockAttribute` require Markdown `documentation` in their configuration and retain it on the returned `AttributeSpec`. Each parameter declaration requires its own documentation: positional entries use `{ key, type, documentation }`, and named entries use `{ type, documentation }`. The signature passed to `funcCall` also requires `documentation`, including for nullary functions.
-
-Parameter documentation describes the declaration, not the reusable argument type. Keep optionality and defaults on the type, for example `{ type: optional(str(), 'public'), documentation: 'The storage schema name.' }`. Interpretation returns only parsed argument values; it does not copy documentation into the output.
-
-Identifier values additionally require semantic documentation: `identifier('Asc', { documentation: 'Sort ascending.' })`. This documents what choosing that value means, independently of each parameter that accepts it. When upgrading one-argument `identifier(name)` calls, supply this required options object; there is no undocumented fallback. `IdentifierArgType.documentation` is retained through `optional`, `oneOf`, lists and records for editor inspection. Other reusable argument types do not acquire a documentation requirement, and declaration/signature documentation remains required. Signature help appends an **Allowed values** list for relevant identifiers without traversing unrelated nested-function signatures or invoking parsers.
-
 ## Public API
 
 - `parse(schema)` in `src/parse.ts` (also at `@internal/psl-parser/syntax`) — the CST parser: returns the `DocumentAst`, its backing `SourceFile`, and syntactic diagnostics. The recursive-descent / lossless-CST path supersedes the legacy `parsePslDocument`.

@@ -26,51 +26,63 @@ export interface AttributeSpecSource {
 }
 
 export type AttributeSpecOwner =
-  | { readonly block: GenericBlockDeclarationAst; readonly blockKeyword: string }
-  | { readonly model: ModelDeclarationAst; readonly field: FieldDeclarationAst }
-  | { readonly model: ModelDeclarationAst };
+  | {
+      readonly ownerKind: 'block';
+      readonly block: GenericBlockDeclarationAst;
+      readonly blockKeyword: string;
+    }
+  | {
+      readonly ownerKind: 'field';
+      readonly model: ModelDeclarationAst;
+      readonly field: FieldDeclarationAst;
+    }
+  | { readonly ownerKind: 'model'; readonly model: ModelDeclarationAst };
 
 export function attributeSpecResolver(
   context: AttributeSpecOwner,
   source: AttributeSpecSource,
 ): (name: string) => AttributeSpec<never, never> | undefined {
-  if ('blockKeyword' in context) {
-    const descriptor = findBlockDescriptor(source.pslBlockDescriptors, context.blockKeyword);
-    return (name) => {
-      const factory = descriptor?.attributes?.[name];
-      if (factory === undefined) return undefined;
-      return blindCast<
-        BlockAttributeSpecFactory,
-        'block descriptor attributes are validated as factories at control-stack assembly but exposed through framework-components as unknown to avoid a parser dependency'
-      >(factory)();
-    };
-  }
-  if (!('field' in context)) {
-    if (source.authoringContributions === undefined) return () => undefined;
-    const model = modelSymbolForNode(source.symbolTable, context.model);
-    if (model === undefined || source.controlMutationDefaults === undefined) {
-      return () => undefined;
+  switch (context.ownerKind) {
+    case 'block': {
+      const descriptor = findBlockDescriptor(source.pslBlockDescriptors, context.blockKeyword);
+      return (name) => {
+        const factory = descriptor?.attributes?.[name];
+        if (factory === undefined) return undefined;
+        return blindCast<
+          BlockAttributeSpecFactory,
+          'block descriptor attributes are validated as factories at control-stack assembly but exposed through framework-components as unknown to avoid a parser dependency'
+        >(factory)();
+      };
     }
-    const specs = assembleAttributeSpecs(source.authoringContributions);
-    const specContext = {
-      symbols: source.symbolTable,
-      model,
-      controlMutationDefaults: source.controlMutationDefaults.defaultFunctionRegistry,
-    };
-    return (name) => specs.model[name]?.(specContext);
+    case 'model': {
+      if (source.authoringContributions === undefined) return () => undefined;
+      const model = modelSymbolForNode(source.symbolTable, context.model);
+      if (model === undefined || source.controlMutationDefaults === undefined) {
+        return () => undefined;
+      }
+      const specs = assembleAttributeSpecs(source.authoringContributions);
+      const specContext = {
+        symbols: source.symbolTable,
+        model,
+        controlMutationDefaults: source.controlMutationDefaults.defaultFunctionRegistry,
+      };
+      return (name) => specs.model[name]?.(specContext);
+    }
+    case 'field': {
+      if (source.authoringContributions === undefined) return () => undefined;
+      const model = modelSymbolForNode(source.symbolTable, context.model);
+      if (model === undefined || source.controlMutationDefaults === undefined) {
+        return () => undefined;
+      }
+      const field = fieldSymbolForNode(model, context.field);
+      if (field === undefined) return () => undefined;
+      const specs = assembleAttributeSpecs(source.authoringContributions);
+      const specContext = {
+        symbols: source.symbolTable,
+        model,
+        controlMutationDefaults: source.controlMutationDefaults.defaultFunctionRegistry,
+      };
+      return (name) => specs.field[name]?.({ ...specContext, field });
+    }
   }
-  if (source.authoringContributions === undefined) return () => undefined;
-  const model = modelSymbolForNode(source.symbolTable, context.model);
-  if (model === undefined || source.controlMutationDefaults === undefined) {
-    return () => undefined;
-  }
-  const field = fieldSymbolForNode(model, context.field);
-  if (field === undefined) return () => undefined;
-  const specs = assembleAttributeSpecs(source.authoringContributions);
-  const specContext = {
-    symbols: source.symbolTable,
-    model,
-    controlMutationDefaults: source.controlMutationDefaults.defaultFunctionRegistry,
-  };
-  return (name) => specs.field[name]?.({ ...specContext, field });
 }

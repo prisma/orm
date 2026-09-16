@@ -29,9 +29,9 @@ import {
   type AttributeArgumentPathStep,
   argumentAtCursor,
   argumentSiblings,
-  attributeContainsOffset,
   attributeCursor,
   betweenDelimiters,
+  isWithinAttributeOrOpenArguments,
   listElementAtCursor,
   recordFieldAtCursor,
 } from './attribute-syntax-context';
@@ -92,15 +92,18 @@ interface AttributeNamePosition extends CompletionReplacement {
 }
 
 interface FieldAttributeOwner {
+  readonly ownerKind: 'field';
   readonly field: FieldDeclarationAst;
   readonly model: ModelDeclarationAst;
 }
 
 interface ModelAttributeOwner {
+  readonly ownerKind: 'model';
   readonly model: ModelDeclarationAst;
 }
 
 interface BlockAttributeOwner {
+  readonly ownerKind: 'block';
   readonly block: GenericBlockDeclarationAst;
   readonly blockKeyword: string;
 }
@@ -506,7 +509,7 @@ interface AttributeClassifierInput {
 
 function classifyFieldAttribute(input: AttributeClassifierInput): PslCompletionContext | undefined {
   const attribute = input.node?.findAncestor(FieldAttributeAst.cast);
-  if (attribute === undefined || !attributeContainsOffset(attribute, input.offset)) {
+  if (attribute === undefined || !isWithinAttributeOrOpenArguments(attribute, input.offset)) {
     return undefined;
   }
   const field = attribute.syntax.findAncestor(FieldDeclarationAst.cast);
@@ -514,11 +517,12 @@ function classifyFieldAttribute(input: AttributeClassifierInput): PslCompletionC
   if (field === undefined || model === undefined) {
     return UNSUPPORTED;
   }
+  const owner: FieldAttributeOwner = { ownerKind: 'field', field, model };
   return classifyAttributePosition(attribute, input, {
-    name: (position) => ({ kind: 'fieldAttributeName', ...position, field, model }),
-    namedKey: (position) => ({ kind: 'fieldAttributeNamedKey', ...position, field, model }),
-    argumentSlot: (position) => ({ kind: 'fieldAttributeArgumentSlot', ...position, field, model }),
-    value: (position) => ({ kind: 'fieldAttributeValue', ...position, field, model }),
+    name: (position) => ({ kind: 'fieldAttributeName', ...position, ...owner }),
+    namedKey: (position) => ({ kind: 'fieldAttributeNamedKey', ...position, ...owner }),
+    argumentSlot: (position) => ({ kind: 'fieldAttributeArgumentSlot', ...position, ...owner }),
+    value: (position) => ({ kind: 'fieldAttributeValue', ...position, ...owner }),
   });
 }
 
@@ -534,16 +538,12 @@ function classifyGenericBlockAttribute(
   if (blockKeyword === undefined || blockKeyword.length === 0) {
     return UNSUPPORTED;
   }
+  const owner: BlockAttributeOwner = { ownerKind: 'block', block, blockKeyword };
   return classifyAttributePosition(attribute, input, {
-    name: (position) => ({ kind: 'blockAttributeName', ...position, block, blockKeyword }),
-    namedKey: (position) => ({ kind: 'blockAttributeNamedKey', ...position, block, blockKeyword }),
-    argumentSlot: (position) => ({
-      kind: 'blockAttributeArgumentSlot',
-      ...position,
-      block,
-      blockKeyword,
-    }),
-    value: (position) => ({ kind: 'blockAttributeValue', ...position, block, blockKeyword }),
+    name: (position) => ({ kind: 'blockAttributeName', ...position, ...owner }),
+    namedKey: (position) => ({ kind: 'blockAttributeNamedKey', ...position, ...owner }),
+    argumentSlot: (position) => ({ kind: 'blockAttributeArgumentSlot', ...position, ...owner }),
+    value: (position) => ({ kind: 'blockAttributeValue', ...position, ...owner }),
   });
 }
 
@@ -556,17 +556,18 @@ function classifyModelAttribute(input: AttributeClassifierInput): PslCompletionC
   if (model === undefined) {
     return undefined;
   }
+  const owner: ModelAttributeOwner = { ownerKind: 'model', model };
   return classifyAttributePosition(attribute, input, {
-    name: (position) => ({ kind: 'modelAttributeName', ...position, model }),
-    namedKey: (position) => ({ kind: 'modelAttributeNamedKey', ...position, model }),
-    argumentSlot: (position) => ({ kind: 'modelAttributeArgumentSlot', ...position, model }),
-    value: (position) => ({ kind: 'modelAttributeValue', ...position, model }),
+    name: (position) => ({ kind: 'modelAttributeName', ...position, ...owner }),
+    namedKey: (position) => ({ kind: 'modelAttributeNamedKey', ...position, ...owner }),
+    argumentSlot: (position) => ({ kind: 'modelAttributeArgumentSlot', ...position, ...owner }),
+    value: (position) => ({ kind: 'modelAttributeValue', ...position, ...owner }),
   });
 }
 
 function activeModelAttribute(input: AttributeClassifierInput): ModelAttributeAst | undefined {
   const attribute = input.node?.findAncestor(ModelAttributeAst.cast);
-  if (attribute === undefined || !attributeContainsOffset(attribute, input.offset)) {
+  if (attribute === undefined || !isWithinAttributeOrOpenArguments(attribute, input.offset)) {
     return undefined;
   }
   return attribute;

@@ -46,11 +46,12 @@ export function locateAttributeSyntax(input: PslCursorInput) {
       : skipTriviaToken(token, 'prev')?.parent.findAncestor(
           any(FieldAttributeAst.cast, ModelAttributeAst.cast),
         );
-  if (attribute === undefined || !attributeContainsOffset(attribute, offset)) return undefined;
+  if (attribute === undefined || !isWithinAttributeOrOpenArguments(attribute, offset))
+    return undefined;
   return { attribute, ...attributeCursor(attribute, offset) };
 }
 
-export function attributeContainsOffset(
+export function isWithinAttributeOrOpenArguments(
   attribute: FieldAttributeAst | ModelAttributeAst,
   offset: number,
 ): boolean {

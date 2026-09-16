@@ -24,6 +24,7 @@ describe('attribute cursor interpretation', () => {
       const signature = classifyPslSignatureContext(cursor);
       expect(signature).toMatchObject({
         attributeName: 'relation',
+        ownerKind: 'field',
         path: [{ kind: 'namedArgument', name: 'references' }],
         argumentSlot: undefined,
       });
@@ -32,6 +33,7 @@ describe('attribute cursor interpretation', () => {
         'attributeName',
         'field',
         'model',
+        'ownerKind',
         'path',
       ]);
     },

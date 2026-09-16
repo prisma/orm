@@ -917,8 +917,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
                 label: 'mode: First | Second',
                 documentation: {
                   kind: MarkupKind.Markdown,
-                  value:
-                    'The selected mode.\n\nAllowed values:\n- `First`: An accepted identifier in this test grammar.\n- `Second`: An accepted identifier in this test grammar.',
+                  value: 'The selected mode.',
                 },
               },
               {

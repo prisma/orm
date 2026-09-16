@@ -24,6 +24,26 @@ function locate(source: string) {
 
 describe('attribute syntax helpers', () => {
   it.each([
+    { attribute: '@pr|obe()', found: true },
+    { attribute: '@probe(|)', found: true },
+    { attribute: '@probe(First,  |', found: true },
+    { attribute: '@probe()  |', found: false },
+  ])(
+    'locates names and open arguments but not closed trailing trivia: $attribute',
+    ({ attribute, found }) => {
+      const source = `model Example { value String ${attribute}`;
+      const offset = source.indexOf('|');
+      const { document, sourceFile } = parse(source.replace('|', ''));
+      const result = locateAttributeSyntax({
+        document,
+        sourceFile,
+        position: sourceFile.positionAt(offset),
+      });
+      expect(result?.attribute.name()?.identifier()?.name()).toBe(found ? 'probe' : undefined);
+    },
+  );
+
+  it.each([
     { gap: '| ', selected: undefined, keys: ['fields', 'references'] },
     { gap: ' | ', selected: undefined, keys: ['fields', 'references'] },
     { gap: ' |', selected: 'references', keys: ['fields'] },

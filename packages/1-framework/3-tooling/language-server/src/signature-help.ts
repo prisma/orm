@@ -1,11 +1,10 @@
-import type { ArgType, AttributeSpec, PositionalParam } from '@internal/psl-parser';
+import type { AttributeSpec, PositionalParam } from '@internal/psl-parser';
 import {
   MarkupKind,
   type ParameterInformation,
   type SignatureHelp,
   type SignatureInformation,
 } from 'vscode-languageserver';
-import { argumentValueDocumentation } from './argument-value-documentation';
 import { type ArgumentSignature, resolveGrammar } from './attribute-argument-grammar';
 import { type AttributeSpecSource, attributeSpecResolver } from './attribute-spec-resolution';
 import type { AttributeArgumentPathStep, PslCursorInput } from './attribute-syntax-context';
@@ -44,12 +43,7 @@ function signatureHelp(
     const active = context.path[callIndex + 1];
     const params = parameters(grammar, active?.kind === 'namedArgument' ? active.name : undefined);
     const index = parameterIndex(context, active, params);
-    const valueTypes = resolveGrammar(grammar, context.path.slice(callIndex + 1)).flatMap(
-      (value) => ('kind' in value ? [value] : []),
-    );
-    return [
-      { signature: renderSignature(name, grammar, params, labelOffsets, index, valueTypes), index },
-    ];
+    return [{ signature: renderSignature(name, grammar, params, labelOffsets), index }];
   });
   if (signatures.length === 0) return null;
   const matched = signatures.findIndex(
@@ -103,8 +97,6 @@ function renderSignature(
   signature: ArgumentSignature,
   params: readonly PositionalParam<unknown, never>[],
   labelOffsets: boolean,
-  activeIndex: number,
-  activeTypes: readonly ArgType<unknown, never>[],
 ): SignatureInformation {
   let label = `${name}(`;
   const rendered: ParameterInformation[] = params.map((param, index) => {
@@ -125,11 +117,7 @@ function renderSignature(
       label: positional && labelOffsets ? [start, label.length] : text,
       documentation: {
         kind: MarkupKind.Markdown,
-        value:
-          documentation +
-          argumentValueDocumentation(
-            index === activeIndex && activeTypes.length > 0 ? activeTypes : [param.type],
-          ),
+        value: documentation,
       },
     };
   });

@@ -63,17 +63,19 @@ function signatureOwner(
   if (attribute instanceof FieldAttributeAst) {
     const field = attribute.syntax.findAncestor(FieldDeclarationAst.cast);
     const model = attribute.syntax.findAncestor(ModelDeclarationAst.cast);
-    return field === undefined || model === undefined ? undefined : { field, model };
+    return field === undefined || model === undefined
+      ? undefined
+      : { ownerKind: 'field', field, model };
   }
   const block = attribute.syntax.findAncestor(GenericBlockDeclarationAst.cast);
   if (block !== undefined) {
     const blockKeyword = block.keyword()?.text;
     return blockKeyword === undefined || blockKeyword.length === 0
       ? undefined
-      : { block, blockKeyword };
+      : { ownerKind: 'block', block, blockKeyword };
   }
   const model = attribute.syntax.findAncestor(ModelDeclarationAst.cast);
-  return model === undefined ? undefined : { model };
+  return model === undefined ? undefined : { ownerKind: 'model', model };
 }
 
 function signatureArguments(
