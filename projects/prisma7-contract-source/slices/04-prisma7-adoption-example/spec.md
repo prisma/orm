@@ -18,21 +18,20 @@ During phases 1 to 3, Prisma 7 owns migrations; after each `prisma7 migrate dev`
 
 ```bash
 cd examples/prisma7-adoption
-pnpm db:start            # in-process Postgres, writes DATABASE_URL to .env
-pnpm prisma7 migrate deploy --config prisma7.config.ts   # Prisma 7 applies its own migrations
-pnpm prisma contract emit                                 # Prisma 8 reads prisma/schema.prisma via prisma7Schema
-pnpm prisma db sign                                       # verifies the database, records the marker
-pnpm seed                                                 # rows written through the Prisma 7 client
-pnpm start                                                # the same rows read and written through the Prisma 8 ORM
-pnpm prisma7 migrate deploy --config prisma7.config.ts   # a second Prisma 7 migration lands
-pnpm prisma contract emit && pnpm prisma db sign          # refresh and re-sign; nothing else changes
-pnpm test                                                 # the whole story as one vitest run
+pnpm db:start     # in-process Postgres, writes DATABASE_URL to .env
+pnpm v7:migrate   # prisma7 migrate deploy: Prisma 7 applies its own migrations
+pnpm emit         # prisma contract emit: Prisma 8 reads prisma/schema.prisma via prisma7Schema
+pnpm sign         # prisma db sign: verifies the database, records the marker
+pnpm verify       # prisma db verify: zero findings
+pnpm seed         # rows written through the Prisma 7 client
+pnpm start        # the same rows read and written through the Prisma 8 ORM
+pnpm test         # the whole story as one vitest run, including the second migration
 ```
 
 ## Chosen design
 
 - **Prisma 7 exactly as the guide installs it.** Dev dependency `@prisma/prisma7@7.10.0`, dependencies `@prisma/client@7.10.0` and `@prisma/adapter-pg@7.10.0`, `prisma7.config.ts` importing `defineConfig` from `@prisma/prisma7/config` with `schema`, `migrations.path`, and `datasource.url` from `.env`, and `generator client { provider = "prisma-client", output = "../generated/prisma7" }` in the schema. Two committed migrations under `prisma/migrations/`: the initial one and one adding `Post.viewCount Int @default(0)`. Seeding and a `src/v7-read.ts` use the generated Prisma 7 client through `@prisma/adapter-pg`, so both clients are shown on one database, as the guide's phase 3 does.
-- **Prisma 8 from the workspace.** Inside this repository the Prisma 8 CLI is the workspace-local `prisma` bin and the config wrapper is `definePrismaConfig` from `@prisma/cli-engine`, because the published `prisma` package that re-exports it as `prisma/config` is built elsewhere. The example's `prisma.config.ts` uses the workspace form, and its README shows the published form beside it, verbatim from the guide, with one sentence explaining the difference. `contract: prisma7Schema('prisma/schema.prisma')`, `output: 'generated/prisma8'`, `db.connection` from `.env`.
+- **Prisma 8 from the workspace.** Inside this repository the Prisma 8 CLI is the workspace-local `prisma` bin and the config wrapper is `definePrismaConfig` from `@prisma/cli-engine`, because the published `prisma` package that re-exports it as `prisma/config` is built elsewhere. The example's `prisma.config.ts` uses the workspace form, and its README says what the published form is, with one sentence explaining the difference. `contract: prisma7Schema('prisma/schema.prisma')` with no options, `output: 'generated/prisma8'` on `defineConfig` as the guide sets it, and `db.connection` from `.env`.
 - **Database.** In-process Postgres from `@prisma/dev` as the other examples do; `db:start` writes `DATABASE_URL` into `.env`.
 - **Schema.** The guide's own `User` and `Post` models, extended enough to exercise what the source handles: `User` gains `role Role @default(USER)`, `createdAt DateTime @default(now())`, `updatedAt DateTime @updatedAt`; `Post` gains `content String?` and `tags Tag[]`; `Tag` (`id`, `name @unique`, `posts Post[]`); enum `Role`. The implicit many-to-many is deliberate.
 - **Queries.** `src/main.ts` uses the Prisma 8 ORM client (`db.orm.public.User`, the guide's spelling): list users with posts and their tags through `_PostToTag`, create a post connected to existing tags, update a post and show `updatedAt` advanced by the Prisma 8 generator. `src/v7-read.ts` reads the same rows through the Prisma 7 client.
