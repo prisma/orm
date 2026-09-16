@@ -126,7 +126,7 @@ The reader's codes are `PSL.PRISMA7_*`, in the `PSL` namespace of [ADR 239](<./A
 
 ## How long the reader lives
 
-For as long as the Prisma version it reads is supported. The reader is for a project in transition, not a permanent second authoring language: a project is expected to convert its schema to Prisma 8's language when it stops running Prisma 7, and drop the reader. Retiring a reader is a separate decision, taken when that version's support ends.
+For as long as the Prisma version it reads is supported. The repository's [README](../../../README.md) states that period: Prisma 7 receives bug fixes and security updates for eighteen months after `8.0.0` final. The reader is for a project in transition, not a permanent second authoring language: a project is expected to convert its schema to Prisma 8's language when it stops running Prisma 7, and drop the reader. Retiring a reader is a separate decision, taken when that version's support ends.
 
 ## Consequences
 
