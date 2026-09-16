@@ -39,7 +39,7 @@ describe('printPslFromAst', () => {
     expect(out).toMatch(/ {2}id Int @id\n\n {2}@@index/);
   });
 
-  it('renders model with leading comment and per-field comment', () => {
+  it('renders model with leading comment', () => {
     const models: PslModel[] = [
       {
         kind: 'model',
