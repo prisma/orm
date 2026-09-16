@@ -50,9 +50,9 @@ const PENDING = 'upgrade-instructions/pending/';
 const PENDING_INSTRUCTIONS =
   /^upgrade-instructions\/pending\/[^/]+\/(app|extension)\/instructions\.md$/;
 const PUBLISHED_DIRECTORY = /^(skills\/prisma-8\/upgrading\/(?:app|extension)\/upgrades\/[^/]+)\//;
-const SUBSTRATES = [
-  { audience: 'app', substrate: 'examples/' },
-  { audience: 'extension', substrate: 'packages/3-extensions/' },
+const COVERED_DIRECTORIES = [
+  { audience: 'app', directory: 'examples/' },
+  { audience: 'extension', directory: 'packages/3-extensions/' },
 ];
 function git(repoRoot, ...args) {
   return execFileSync('git', args, {
@@ -281,13 +281,13 @@ export function runCheck({ repoRoot, head = 'HEAD', prev, mode = 'pr' }) {
         path,
         reason: 'assemble and archive all pending files before release',
       });
-    for (const { audience } of SUBSTRATES)
+    for (const { audience } of COVERED_DIRECTORIES)
       validate.add(`skills/prisma-8/upgrading/${audience}/upgrades/${transition}/instructions.md`);
   } else if (mode === 'pr') {
-    for (const { audience, substrate } of SUBSTRATES) {
+    for (const { audience, directory } of COVERED_DIRECTORIES) {
       const relevant = changed.filter(
         (path) =>
-          path.startsWith(substrate) && !isTranslationIrrelevant(repoRoot, prev, head, path),
+          path.startsWith(directory) && !isTranslationIrrelevant(repoRoot, prev, head, path),
       );
       if (
         relevant.length &&
@@ -298,7 +298,7 @@ export function runCheck({ repoRoot, head = 'HEAD', prev, mode = 'pr' }) {
         violations.push({
           rule: 'per-pr-declaration',
           path: `${PENDING}<name>/${audience}/instructions.md`,
-          reason: `diff in ${substrate} requires a new declaration relative to --prev; inherited or modified files do not count`,
+          reason: `diff in ${directory} requires a new declaration relative to --prev; inherited or modified files do not count`,
           sampleDiffPaths: relevant.slice(0, 5),
         });
       }

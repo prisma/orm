@@ -100,13 +100,13 @@ describe('version and format helpers', () => {
 });
 
 describe('independent PR declarations', () => {
-  for (const [audience, substrate] of [
+  for (const [audience, changedFile] of [
     ['app', 'examples/demo.ts'],
     ['extension', 'packages/3-extensions/pack/src.ts'],
   ]) {
     it(`accepts a new no-op ${audience} without a transition`, () => {
       const base = commit();
-      write(substrate, 'changed');
+      write(changedFile, 'changed');
       write(pending('feature', audience));
       commit();
       passes(base);
@@ -114,7 +114,7 @@ describe('independent PR declarations', () => {
     it(`rejects inherited and modified ${audience} declarations`, () => {
       write(pending('existing', audience));
       const base = commit();
-      write(substrate, 'changed');
+      write(changedFile, 'changed');
       commit();
       fails(base, /per-pr-declaration/);
       write(pending('existing', audience), `${empty}changed\n`);
@@ -208,7 +208,7 @@ describe('release completeness', () => {
     passes(base);
     passes(null, '--mode', 'publish');
   });
-  it('requires both explicit guides even without substrate changes and uses the actual skip hop', () => {
+  it('requires both guides even without example or extension changes and supports skipped releases', () => {
     const base = commit();
     version('0.9.0');
     commit();

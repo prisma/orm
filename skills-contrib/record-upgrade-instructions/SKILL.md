@@ -7,7 +7,7 @@ description: >-
   automatically via the published upgrade skills. Use when you have
   refactored framework code and the test suite went red in
   `examples/` or `packages/3-extensions/`, when you fixed those
-  red tests by editing the substrate, when you are told to "record
+  red tests by updating example or extension code, when you are told to "record
   upgrade instructions for this PR", or when you made a breaking
   change to Prisma 8 that downstream consumers will need help
   migrating across.
@@ -19,15 +19,15 @@ Contribute an independent fragment on the PR that changes Prisma 8. Release prep
 
 ## Detection signals and routing
 
-Use this skill when a framework change makes tests red in `examples/` or `packages/3-extensions/` and you fix them by editing that substrate rather than reverting the framework change. Those edits are the same translation downstream consumers need.
+Use this skill when a framework change makes tests red in `examples/` or `packages/3-extensions/` and you fix them by updating the example or extension code rather than reverting the framework change. Those edits are the same translation downstream consumers need.
 
-| Substrate touched by the PR | Fragment audience | Consumers |
+| Directory changed by the PR | Fragment audience | Consumers |
 | --- | --- | --- |
 | `examples/` | `app` | Public package API, contract files, on-disk migrations |
 | `packages/3-extensions/` | `extension` | Framework SPI and extension authors |
 | Both | Both, independently | Both audiences |
 
-The substrate diff requires a declaration, subject to existing coverage-check exclusions. Generated artefacts are not generally exempt: contract format changes require a codemod or re-emission instructions. Genuinely consumer-invisible changes still get an explicit `changes: []` declaration, with no prose.
+Changes in these directories require a declaration, subject to existing coverage-check exclusions. Generated artefacts are not generally exempt: contract format changes require a codemod or re-emission instructions. Genuinely consumer-invisible changes still get an explicit `changes: []` declaration, with no prose.
 
 **Stacked PRs:** compare against the branch the PR actually targets, not always `main`. Each PR adds its own declaration in its own commits; inherited fragments do not cover a new PR. Do not pool a stack's instructions in its bottom PR.
 
@@ -35,7 +35,7 @@ Throughout this skill, `<target>` is the target branch (`main` unless stacked), 
 
 ## Authoring workflow
 
-1. **Identify affected audiences.** Inspect `git diff <base>..<head> -- examples/ packages/3-extensions/`. If neither relevant substrate changed, no declaration is required by the heuristic.
+1. **Identify affected audiences.** Inspect `git diff <base>..<head> -- examples/ packages/3-extensions/`. If neither directory has relevant changes, the coverage check does not require a declaration.
 2. **Choose a descriptive pending name.** Add `upgrade-instructions/pending/<descriptive-name>/<audience>/instructions.md` for each affected audience. Avoid collisions with pending work; no random suffix, global registry, historical-name reservation, or shared index is required. Never append to another PR's fragment. A release landing during your PR does not change this unversioned destination.
 3. **Write the instructions.** Retain the existing YAML frontmatter `changes[]` and Markdown prose format. Each change has a kebab-case `id` unique within the guide, a one-line `summary`, optional `detection` (glob and content predicate), and an optional `script` path relative to `instructions.md`. Prose-only transformations omit `script`; the consumer's agent follows the body.
 
@@ -61,8 +61,8 @@ Throughout this skill, `<target>` is the target branch (`main` unless stacked), 
    No "consumers need not do anything" body prose. Both audiences declare independently, including real-change/no-op combinations.
 
 4. **Author optional colocated scripts/assets.** TypeScript (`pnpm exec tsx`), shell, or codemods are appropriate. Require no network, environment variables, or input beyond the consumer filesystem and bundled assets. Keep relative references inside the fragment's audience directory. For cross-audience changes, copy scripts into both audience directories; do not symlink or import from the other audience. The published clusters remain independently installable.
-5. **Validate by execution** using the unchanged concrete procedure below. An entry translates consumer code, not the substrate's tests. Do not introduce a separate testing system.
-6. **Include the fragment and substrate post-state in the PR.** Commit working changes before running the Git-ref check:
+5. **Validate by execution** using the unchanged concrete procedure below. An entry updates consumer code, not the example or extension tests. Do not introduce a separate testing system.
+6. **Include the fragment and updated example or extension code in the PR.** Commit working changes before running the Git-ref check:
 
    ```bash
    pnpm check:upgrade-coverage --mode pr --prev <base> --head <head>
@@ -72,20 +72,20 @@ Throughout this skill, `<target>` is the target branch (`main` unless stacked), 
 
 ## Validation by execution
 
-Before merging, every new entry runs against the corresponding in-repo substrate, starting from the substrate's pre-PR state and ending with green tests. This is the existing per-PR quality bar, not a release-wide migration test.
+Before merging, run every new entry against the corresponding example or extension code in this repository, starting from its pre-PR state and ending with passing tests. This is the existing per-PR quality bar, not a release-wide migration test.
 
 Workflow per entry (both flows apply for cross-audience entries):
 
 - **Open PR:** `<head>` is the PR branch head; `<base>` is the actual target branch's comparison commit.
 - **Merged PR:** `<head>` is the merge commit; `<base>` is its mainline parent. `git log --first-parent` names both.
 
-Use a disposable checkout for the restoration steps so unrelated working changes are not overwritten. The substrate's own tests are the PR author's work, not the entry's. The equality check excludes `test/` directories; the companion check confirms the entry left those directories exactly as it found them.
+Use a disposable checkout for the restoration steps so unrelated working changes are not overwritten. The PR author updates example and extension tests; the upgrade instructions must not change them. The equality check excludes `test/` directories; the companion check confirms the entry left those directories exactly as it found them.
 
 ### App entry (against `examples/`)
 
 1. Check out `<head>`, which has the framework change applied.
 2. Revert `examples/` to its pre-PR state (`git restore --source=<base> -- examples/`).
-3. Run the fragment against the reverted substrate: invoke colocated scripts per `script:` references, then walk the prose body for additional instructions.
+3. Run the fragment against the restored example code: invoke colocated scripts per `script:` references, then walk the prose body for additional instructions.
 4. Verify `examples/` matches `<head>` outside test directories:
 
    ```bash
@@ -107,7 +107,7 @@ Use a disposable checkout for the restoration steps so unrelated working changes
 
 1. Check out `<head>`, which has the framework change applied.
 2. Revert `packages/3-extensions/` to its pre-PR state (`git restore --source=<base> -- packages/3-extensions/`).
-3. Run the fragment against the reverted substrate, including referenced scripts and prose.
+3. Run the fragment against the restored extension code, including referenced scripts and prose.
 4. Verify the non-test paths match `<head>`:
 
    ```bash
@@ -132,7 +132,7 @@ If any check fails, iterate on the entry; do not merge. Classify failures before
 Include:
 
 - Each new `upgrade-instructions/pending/<name>/<audience>/instructions.md` and any colocated scripts/assets.
-- The post-instructions state of every affected substrate, matching validation output outside test directories. The entry neither writes nor updates those tests.
+- The updated example and extension code, matching the result of applying the instructions outside test directories. The entry neither writes nor updates those tests.
 - PR-description references naming the fragment directories, for example `upgrade-instructions/pending/migration-metadata-shape/app/` and `upgrade-instructions/pending/migration-metadata-shape/extension/`.
 
 Both audience copies may share IDs, summaries, or detection predicates; they are independent records. Fixes to either copy use normal PR review. Historical published guidance can also be corrected through normal reviewed PRs, but edits to old guides do not replace a new PR's required pending declaration.

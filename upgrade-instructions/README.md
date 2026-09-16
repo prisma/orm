@@ -12,7 +12,7 @@ upgrade-instructions/pending/<descriptive-name>/<app|extension>/
 
 Choose a descriptive name that avoids collisions with other pending contributions; no random suffix, shared index, counter, or global registry is required. A name can recur in a different release. Never overwrite another contribution at a pending, archive, or output destination; resolve actual collisions when encountered.
 
-Relevant changes to `examples/` require an `app` declaration; changes to `packages/3-extensions/` require an `extension` declaration, subject to the existing substrate exclusions. Each PR must **add its own declaration relative to its actual target branch**, including stacked PRs. Inherited fragments do not count. Both audiences need separate declarations when both are affected.
+Relevant changes to `examples/` require an `app` declaration; changes to `packages/3-extensions/` require an `extension` declaration, subject to the existing coverage-check exclusions. Each PR must **add its own declaration relative to its actual target branch**, including stacked PRs. Inherited fragments do not count. Both audiences need separate declarations when both are affected.
 
 Keep the existing YAML frontmatter `changes[]` and Markdown prose, with optional `detection` and relative `script` references. A no-op declaration is `changes: []` with no consumer prose. Scripts/assets must stay within their audience directory. Follow [record-upgrade-instructions](../skills-contrib/record-upgrade-instructions/SKILL.md) for authoring and the unchanged per-PR validation by execution.
 
