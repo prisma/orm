@@ -180,6 +180,10 @@ export const typeCast: mariadb.TypeCastFunction = (field, next) => {
 function formatDateTime(date: Date): string {
   const pad = (n: number, z = 2) => String(n).padStart(z, '0')
   const ms = date.getUTCMilliseconds()
+  // Emit a plain UTC datetime string without an offset suffix.
+  // MariaDB rejects offset syntax in DATETIME/TIMESTAMP literals; UTC is
+  // enforced unconditionally via timezone:'UTC' on the connection config.
+  // See: https://github.com/prisma/prisma/issues/29096
   return (
     pad(date.getUTCFullYear(), 4) +
     '-' +
