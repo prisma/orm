@@ -23,15 +23,20 @@ describe('format given a Prisma 7 construct in a Prisma 8 document', () => {
   });
 });
 
-describe('emitDocument', () => {
-  it('raises an internal error for a block member it has no rule for instead of dropping it', () => {
-    const { document } = parse('view ActiveUsers {\n  id Int\n}\n', { grammar: 'prisma7' });
-    expect(() => emitDocument(document, '  ', '\n')).toThrow(
-      expect.objectContaining({
-        isPrismaInternalError: true,
-        message:
-          'Formatter has no rule for a FieldDeclaration node at offset 21; formatting would drop its text',
-      }),
+describe('emitDocument given a view block parsed with the Prisma 7 grammar', () => {
+  it('keeps each field on one line with its type, aligned like a model field', () => {
+    const { document } = parse('view ActiveUsers {\n  id Int\n  email   String\n}\n', {
+      grammar: 'prisma7',
+    });
+    expect(emitDocument(document, '  ', '\n')).toEqual(
+      'view ActiveUsers {\n  id    Int\n  email String\n}\n',
     );
+  });
+
+  it('keeps a field attribute on the same line as its field', () => {
+    const { document } = parse('view ActiveUsers {\n  id Int @unique\n}\n', {
+      grammar: 'prisma7',
+    });
+    expect(emitDocument(document, '  ', '\n')).toEqual('view ActiveUsers {\n  id Int @unique\n}\n');
   });
 });
