@@ -1,3 +1,5 @@
+import { InternalError } from '@internal/utils/internal-error';
+
 export type TokenKind =
   | 'Ident'
   | 'StringLiteral'
@@ -66,7 +68,11 @@ export class Tokenizer {
       this.#buffer.push(token);
     }
 
-    return this.#buffer[offset] as Token;
+    const buffered = this.#buffer[offset];
+    if (buffered === undefined) {
+      throw new InternalError('Tokenizer failed to buffer the requested lookahead token');
+    }
+    return buffered;
   }
 
   #scanNext(): Token {

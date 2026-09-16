@@ -25,6 +25,14 @@ const FILE_ONE_LINE_MANY_TERMS = "export const columnTable = 'postgres table';\n
 // Vocabulary only in comments.
 const FILE_COMMENTS_ONLY =
   '// a postgres table column\n/**\n * nativeType, primary key, mongo collection\n */\nexport const x = 1;\n';
+const FILE_SOURCE_COORDINATES =
+  'export function offsetToPslPosition(offset, position) { return { offset, line: position.line + 1, column: position.character + 1 }; }\n';
+const FILE_SYMBOL_TABLE =
+  'export interface SymbolTableResult { readonly table: SymbolTable }\nconst table = {};\nexport function buildSymbolTable() { return { table }; }\n';
+const FILE_FORMATTER_ALIGNMENT_COLUMNS =
+  'export function alignmentColumns(rows) { const typeColumn = 1; return { typeColumn, attributeColumn: 2 }; }\n';
+const FILE_FORBIDDEN_STORAGE_VOCABULARY =
+  'export interface StorageShape { readonly tableName: string; readonly columnName: string; readonly nativeType: string; }\n';
 
 let repo;
 
@@ -153,6 +161,37 @@ describe('lint-framework-vocabulary — counting', () => {
   it('counts a line carrying several terms once', () => {
     writeConfig(1);
     writeRepoFile(`${SCOPE}/src/app.ts`, FILE_ONE_LINE_MANY_TERMS);
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  it('does not count source-coordinate positions as family vocabulary', () => {
+    writeConfig(0);
+    writeRepoFile(`${SCOPE}/2-authoring/psl-parser/src/source-file.ts`, FILE_SOURCE_COORDINATES);
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=0 threshold=0/);
+  });
+
+  it('does not count parser symbol tables or formatter alignment columns as family vocabulary', () => {
+    writeConfig(0);
+    writeRepoFile(`${SCOPE}/2-authoring/psl-parser/src/symbol-table.ts`, FILE_SYMBOL_TABLE);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/format/emit.ts`,
+      FILE_FORMATTER_ALIGNMENT_COLUMNS,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=0 threshold=0/);
+  });
+
+  it('still counts genuine storage vocabulary in framework code', () => {
+    writeConfig(1);
+    writeRepoFile(`${SCOPE}/src/storage-shape.ts`, FILE_FORBIDDEN_STORAGE_VOCABULARY);
 
     const result = runScript();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
