@@ -9,11 +9,17 @@ function pad(value: number, width = 2): string {
   return String(value).padStart(width, '0');
 }
 
-/** Postgres reads fractional seconds with C's `rint`, which rounds a tie to the even neighbour. */
-function roundHalfToEven(value: number): number {
-  const floor = Math.floor(value);
-  if (value - floor !== 0.5) return Math.round(value);
-  return floor % 2 === 0 ? floor : floor + 1;
+/**
+ * The microseconds Postgres keeps for a fraction-of-a-second digit string. Every digit counts:
+ * `.1234565` is an exact tie, and C's `rint` takes the even neighbour 123456, while `.1234565001`
+ * is above the tie and rounds up to 123457.
+ */
+function fractionMicros(fraction: string): number {
+  const micros = Number(`${fraction}000000`.slice(0, 6));
+  const beyondTie = fraction.slice(6).replace(/0+$/, '');
+  if (beyondTie === '') return micros;
+  if (beyondTie === '5') return micros % 2 === 0 ? micros : micros + 1;
+  return beyondTie > '5' ? micros + 1 : micros;
 }
 
 function fractionText(micros: number): string {
@@ -58,7 +64,7 @@ export function storedTemporalText(
   ] = match;
   if (nativeType === 'date') return `${year}-${month}-${day}`;
 
-  const micros = roundHalfToEven(Number(`0.${fraction.slice(0, 9)}`) * MICROS_PER_SECOND);
+  const micros = fractionMicros(fraction);
   const clockSeconds =
     Number(hour) * 3600 +
     Number(minute) * 60 +
