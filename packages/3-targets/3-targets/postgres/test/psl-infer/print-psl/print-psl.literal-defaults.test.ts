@@ -18,7 +18,7 @@ function introspected(
   return {
     name,
     nativeType,
-    nullable: shape.many === true || shape.nullable === true,
+    nullable: shape.nullable === true,
     default: rawDefault,
     ...ifDefined('many', shape.many),
     resolvedNativeType,
