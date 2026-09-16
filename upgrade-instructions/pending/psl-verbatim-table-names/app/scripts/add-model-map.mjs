@@ -7,6 +7,8 @@
  * Usage:
  *   node scripts/codemods/add-model-map.mjs <file-or-glob> [...more]
  *
+ * Globs never descend into `node_modules` or `dist`.
+ *
  * A model with `@@base(...)` and no `@@map` shares its base's storage, so it
  * is left alone: adding `@@map` there would split it into its own table or
  * collection.
@@ -161,10 +163,16 @@ export function addModelMaps(source) {
   return out.join('\n');
 }
 
+const SKIPPED_DIRECTORIES = /(^|\/)(node_modules|dist)\//;
+
 async function expandPatterns(patterns) {
   const files = new Set();
   for (const pattern of patterns) {
-    for await (const match of glob(pattern)) files.add(match);
+    for await (const match of glob(pattern, {
+      exclude: (path) => SKIPPED_DIRECTORIES.test(`${path}/`),
+    })) {
+      files.add(match);
+    }
   }
   return [...files].sort();
 }

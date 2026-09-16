@@ -20,7 +20,7 @@ changes:
 
 A PSL `model` with no `@@map` used to name its table, or its Mongo collection, after the model with the first letter lowered: `model UserProfile` read and wrote `"userProfile"`. It now uses the model name verbatim, `"UserProfile"`, the same rule every other Prisma 8 authoring surface already followed. Every model without `@@map` therefore points at a table that does not exist yet, so the schema must say which table it means.
 
-Run the colocated codemod once, from the project root, over every schema file, including the `contract.prisma` copy inside each migration directory:
+Run the colocated codemod once, from the extension package root, over every schema file, including the contract-space `contract.prisma` and the copy inside each migration directory:
 
 ```bash
 node scripts/add-model-map.mjs '**/*.prisma'
@@ -28,7 +28,7 @@ node scripts/add-model-map.mjs '**/*.prisma'
 
 It adds `@@map("<model name with its first letter lowered>")` as the last line of every `model` block that has no `@@map`, keeps the file's indentation and line endings, leaves models that already have `@@map` alone, and leaves a variant with `@@base(...)` and no `@@map` alone because it shares its base's table. It never descends into `node_modules` or `dist`, prints each file it changed, and is idempotent. If a `model` block is written in a shape it cannot read it prints `<file>:<line>: model block not understood` and exits 1; add the `@@map` to that block by hand.
 
-Then run the project's emit command (`prisma contract emit`, or its `contract:emit` script) and check that `contract.json` did not change. Storage hashes, migration history, and refs are unchanged, so no `db sign`, migration, or data move is needed.
+Then run the package's contract-space build (`build:contract-space`, or `prisma contract emit` for the package) and check that the emitted `contract.json` did not change. Storage hashes, migration history, and refs are unchanged, so applications composing the extension see no change.
 
 If you plan a migration (`prisma migration plan`, `prisma db update`, `prisma migrate`) without running the codemod, planning fails instead of dropping the table:
 
