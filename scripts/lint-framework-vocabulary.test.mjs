@@ -27,7 +27,11 @@ const FILE_COMMENTS_ONLY =
   '// a postgres table column\n/**\n * nativeType, primary key, mongo collection\n */\nexport const x = 1;\n';
 const FILE_SOURCE_COORDINATES =
   'export function offsetToPslPosition(offset, position) { return { offset, line: position.line + 1, column: position.character + 1 }; }\n';
+const FILE_ZERO_SPAN_COORDINATES =
+  'const ZERO_SPAN = { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } };\n';
 const FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN = `${FILE_SOURCE_COORDINATES}export const column = 1;\n`;
+const FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN_MEMBER = `${FILE_SOURCE_COORDINATES}export const storage = { column: 'id' };\n`;
+const FILE_SOURCE_COORDINATES_WITH_STORAGE_STRING_KEY = `${FILE_SOURCE_COORDINATES}export const storage = { 'column': 'id' };\n`;
 const FILE_SYMBOL_TABLE =
   'export interface SymbolTableResult { readonly table: SymbolTable }\nconst table = {};\nexport function buildSymbolTable() { return { table }; }\n';
 const FILE_SYMBOL_TABLE_WITH_STORAGE_TABLE = `${FILE_SYMBOL_TABLE}export const storageTable = 1;\n`;
@@ -173,6 +177,10 @@ describe('lint-framework-vocabulary — counting', () => {
   it('does not count source-coordinate positions as family vocabulary', () => {
     writeConfig(0);
     writeRepoFile(`${SCOPE}/2-authoring/psl-parser/src/source-file.ts`, FILE_SOURCE_COORDINATES);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/extension-block.ts`,
+      FILE_ZERO_SPAN_COORDINATES,
+    );
 
     const result = runScript();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
@@ -213,11 +221,47 @@ describe('lint-framework-vocabulary — counting', () => {
     assert.match(result.stdout, /count=1 threshold=1/);
   });
 
-  it('still counts storage column vocabulary beside extension-block source spans', () => {
+  it('still counts storage column object members beside source-coordinate code', () => {
+    writeConfig(1);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/source-file.ts`,
+      FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN_MEMBER,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  it('still counts storage column string keys beside source-coordinate code', () => {
+    writeConfig(1);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/source-file.ts`,
+      FILE_SOURCE_COORDINATES_WITH_STORAGE_STRING_KEY,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  it('still counts storage column object members beside extension-block source spans', () => {
     writeConfig(1);
     writeRepoFile(
       `${SCOPE}/2-authoring/psl-parser/src/extension-block.ts`,
-      FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN,
+      FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN_MEMBER,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  it('still counts storage column string keys beside extension-block source spans', () => {
+    writeConfig(1);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/extension-block.ts`,
+      FILE_SOURCE_COORDINATES_WITH_STORAGE_STRING_KEY,
     );
 
     const result = runScript();

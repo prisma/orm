@@ -112,6 +112,17 @@ or {
     $filename <: r".*packages/1-framework/2-authoring/psl-parser/src/(?:source-file|extension-block)\.ts",
     $tok <: JsLiteralMemberName(),
     $tok <: r"column",
+    or {
+      $tok <: within `{ offset: $OFFSET, line: $LINE, column: $COLUMN }`,
+      and {
+        $tok <: within JsObjectExpression() as $coordinateObject where {
+          $coordinateObject <: contains JsShorthandPropertyObjectMember(name=$OFFSET)
+        },
+        $OFFSET <: r"offset",
+        $coordinateObject <: contains `line: $LINE`,
+        $coordinateObject <: contains `column: $COLUMN`,
+      }
+    },
   },
   not {
     $filename <: r".*packages/1-framework/2-authoring/psl-parser/src/symbol-table\.ts",
