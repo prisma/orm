@@ -67,8 +67,6 @@ const query = await db.prepare({ id: 'pg/int4@1' }, (params) =>
 
 Apply the same translation to SQLite's flat SQL facade (`sql.users` becomes `db.sql.users`), retaining its existing codec ids. Keep `.query(target, params, options?)` and SQL statistics `.execute(target, params, options?)` calls unchanged. Do not rewrite historical release notes, applied upgrade recipes, generated contracts or tests as part of this source translation.
 
-## `postgres-list-element-codecs-receive-raw-strings`
-
 ## `psl-infer-raw-default-parser-is-target-owned`
 
 Find imports of `parseRawDefault` from `@prisma/orm-family-sql/family/psl-infer`, `@prisma/orm-postgres/family/psl-infer`, or `@prisma/orm-sqlite/family/psl-infer`. The function read Postgres default spellings, so it now lives in the Postgres target. Replace each import with `parsePostgresDefault` from `@prisma/orm-postgres/target/default-normalizer`. The signature is unchanged: `(rawDefault: string, nativeType?: string) => ColumnDefault | undefined`. It reads every spelling the old function read, plus the negative and cast numerals, cross-schema enum literals, zoneless `timestamp` literals, and `ARRAY[...]` lists added in this release, so a value that was `undefined` before may now be a literal.
