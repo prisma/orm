@@ -1,6 +1,6 @@
 # Project spec — PSL models name their table verbatim
 
-**Linear:** project to be created by the operator; supersedes TML-3248.
+**Supersedes** TML-3248.
 
 ## Purpose
 
@@ -16,7 +16,6 @@ Prisma 8's policy is that nothing transforms identifier case implicitly. The PSL
 
 ## Non-goals
 
-- No rename-table migration operation. Model renames stay drop-and-create; that gap gets its own ticket.
 - No change to how `contract infer` re-cases names. It still turns `user_profile` into `model UserProfile` with `@@map("user_profile")`. Whether it should stay verbatim like Prisma 7 is a separate question.
 - No change to the `@@map` attribute itself, to field `@map`, or to native enum naming.
 - No silent or automatic rename anywhere. The planner guard is an error with instructions, nothing else.
@@ -39,7 +38,9 @@ Prisma 8's policy is that nothing transforms identifier case implicitly. The PSL
 
 ## Transitional-shape constraints
 
-- Slice 1 lands the default change, the codemod applied to the repo, the planner guard, and the infer test together. Landing the default change without the guard would ship a release that drops user tables.
+- Slice 1 lands the default change, the codemod applied to the repo, the planner guard, the infer test, and the complete, execution-validated upgrade fragment together. Landing the default change without the guard would ship a release that drops user tables; landing it without the fragment would ship a breaking change with no upgrade path.
+- Slice 2 adds a rename-table migration operation so a model rename no longer plans as drop-and-create. Once it exists, the guard's second remedy points at it instead of a by-hand `ALTER TABLE`.
+- Slice 3 fixes the TypeScript authoring DSL's cross-space relation fallback, which lowercases the whole target model name when no table is given. Same class of defect as the PSL default, different surface.
 - The guard is temporary. It is removed once the release that introduced it is no longer within the supported upgrade window; record the removal condition in the guard's own test.
 
 ## Project DoD
@@ -48,7 +49,9 @@ Prisma 8's policy is that nothing transforms identifier case implicitly. The PSL
 - A schema with `model UserProfile` and no `@@map`, planned against a database holding `"userProfile"`, fails with the guard error naming `UserProfile`.
 - The same schema after the codemod plans with zero operations against that database.
 - `pnpm fixtures:check` passes with no emitted artifact changes after the repo-wide codemod.
-- Release notes and an upgrade recipe that runs the codemod are committed.
+- The app upgrade fragment under `upgrade-instructions/pending/psl-verbatim-table-names/` reproduces the repo's own example changes when run against the pre-change examples, per the record-upgrade-instructions skill's validation-by-execution procedure.
+- A model rename in PSL plans as a single rename-table operation on Postgres and SQLite, and the rows survive.
+- A TS-authored relation to a model in another contract space with no explicit table resolves to that model's actual table name.
 
 ## Open questions
 
