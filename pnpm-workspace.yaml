@@ -49,6 +49,11 @@ trustPolicy: no-downgrade
 
 trustPolicyExclude:
   - chokidar@4.0.3
+  # examples/prisma7-adoption installs Prisma 7 for real (@prisma/prisma7 depends on
+  # prisma@7.10.0). Prisma's 7.x releases stopped carrying provenance attestation at
+  # some point before 7.10.0, so the no-downgrade check refuses the pin; 7.10.0 is
+  # the published Prisma 7 release the upgrade guide names, not a known compromise.
+  - prisma@7.10.0
   - evlog@1.9.0
   - semver@6.3.1
   # Dev-only: pulled transitively by @cursor/sdk (→ @connectrpc/connect-node).

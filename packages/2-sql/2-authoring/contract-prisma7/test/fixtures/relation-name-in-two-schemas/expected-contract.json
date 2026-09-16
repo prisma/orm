@@ -1,0 +1,516 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "one": {
+        "models": {
+          "A": {
+            "storage": {
+              "table": "A",
+              "namespaceId": "one",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "bs": {
+                "to": {
+                  "namespace": "one",
+                  "model": "B"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["A"]
+                },
+                "through": {
+                  "table": "_X",
+                  "namespaceId": "one",
+                  "parentColumns": ["A"],
+                  "childColumns": ["B"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "B": {
+            "storage": {
+              "table": "B",
+              "namespaceId": "one",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "as": {
+                "to": {
+                  "namespace": "one",
+                  "model": "A"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["B"]
+                },
+                "through": {
+                  "table": "_X",
+                  "namespaceId": "one",
+                  "parentColumns": ["B"],
+                  "childColumns": ["A"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "X": {
+            "storage": {
+              "table": "_X",
+              "namespaceId": "one",
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              }
+            },
+            "fields": {
+              "A": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "B": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "a2": {
+                "to": {
+                  "namespace": "one",
+                  "model": "A"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["A"],
+                  "targetFields": ["id"]
+                }
+              },
+              "b2": {
+                "to": {
+                  "namespace": "one",
+                  "model": "B"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["B"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "two": {
+        "models": {
+          "C": {
+            "storage": {
+              "table": "C",
+              "namespaceId": "two",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "ds": {
+                "to": {
+                  "namespace": "two",
+                  "model": "D"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["A"]
+                },
+                "through": {
+                  "table": "_X",
+                  "namespaceId": "two",
+                  "parentColumns": ["A"],
+                  "childColumns": ["B"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "D": {
+            "storage": {
+              "table": "D",
+              "namespaceId": "two",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "cs": {
+                "to": {
+                  "namespace": "two",
+                  "model": "C"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["B"]
+                },
+                "through": {
+                  "table": "_X",
+                  "namespaceId": "two",
+                  "parentColumns": ["B"],
+                  "childColumns": ["A"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "X": {
+            "storage": {
+              "table": "_X",
+              "namespaceId": "two",
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              }
+            },
+            "fields": {
+              "A": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "B": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "c": {
+                "to": {
+                  "namespace": "two",
+                  "model": "C"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["A"],
+                  "targetFields": ["id"]
+                }
+              },
+              "d": {
+                "to": {
+                  "namespace": "two",
+                  "model": "D"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["B"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "A": {
+      "namespace": "one",
+      "model": "A"
+    },
+    "B": {
+      "namespace": "one",
+      "model": "B"
+    },
+    "C": {
+      "namespace": "two",
+      "model": "C"
+    },
+    "D": {
+      "namespace": "two",
+      "model": "D"
+    },
+    "one._X": {
+      "namespace": "one",
+      "model": "X"
+    },
+    "two._X": {
+      "namespace": "two",
+      "model": "X"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "2d6c75b6217422f325e521f7beadb9e4a6a76c480a67e05480a61d18c9cea93b",
+    "namespaces": {
+      "one": {
+        "id": "one",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "A": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "B": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "_X": {
+              "columns": {
+                "A": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "B": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "_X_B_index",
+                  "unique": false,
+                  "columns": ["B"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "one",
+                    "tableName": "_X",
+                    "columns": ["A"]
+                  },
+                  "target": {
+                    "namespaceId": "one",
+                    "tableName": "A",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade"
+                },
+                {
+                  "source": {
+                    "namespaceId": "one",
+                    "tableName": "_X",
+                    "columns": ["B"]
+                  },
+                  "target": {
+                    "namespaceId": "one",
+                    "tableName": "B",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["A", "B"]
+              }
+            }
+          }
+        }
+      },
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {}
+        }
+      },
+      "two": {
+        "id": "two",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "C": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "D": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "_X": {
+              "columns": {
+                "A": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "B": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "_X_B_index",
+                  "unique": false,
+                  "columns": ["B"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "two",
+                    "tableName": "_X",
+                    "columns": ["A"]
+                  },
+                  "target": {
+                    "namespaceId": "two",
+                    "tableName": "C",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade"
+                },
+                {
+                  "source": {
+                    "namespaceId": "two",
+                    "tableName": "_X",
+                    "columns": ["B"]
+                  },
+                  "target": {
+                    "namespaceId": "two",
+                    "tableName": "D",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["A", "B"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

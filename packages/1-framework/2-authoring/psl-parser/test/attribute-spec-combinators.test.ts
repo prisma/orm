@@ -15,6 +15,7 @@ import {
   modelAttribute,
   nodePslSpan,
   num,
+  numLiteral,
   oneOf,
   optional,
   record,
@@ -329,6 +330,40 @@ describe('num', () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
+  });
+});
+
+describe('numLiteral', () => {
+  it.each([
+    ['a decimal with more digits than a JS number holds', '12345678901234567890.123456789'],
+    ['a decimal JS would print with an exponent', '0.000000000000000001'],
+    ['trailing zeros', '1.50'],
+    ['a negative decimal', '-1.25'],
+    ['an integer beyond 2^53', '9007199254740993'],
+    ['a keyword number', '-Infinity'],
+  ])('keeps %s as written', (_name, source) => {
+    const { expr, ctx } = argOf(source);
+
+    const result = numLiteral().parse(expr, ctx);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual({ text: source });
+  });
+
+  it('rejects a string literal carrying digits', () => {
+    const { expr, ctx } = argOf('"1.50"');
+
+    const result = numLiteral().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.message).toBe('Expected a number literal');
+    }
+  });
+
+  it('carries the kind and label of an unrestricted number', () => {
+    expect(numLiteral()).toMatchObject({ kind: 'num', label: 'number', value: undefined });
   });
 });
 

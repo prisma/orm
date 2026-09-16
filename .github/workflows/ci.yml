@@ -258,6 +258,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Start cloudflare-worker Postgres (5433, pg_stat_statements)
         run: pnpm --filter prisma-8-cloudflare-worker db:up
+      # Fetch Prisma 7's schema engine, which the install does not download,
+      # so a slow or unreachable binary host fails this step within 5 minutes
+      # instead of timing out inside the example test.
+      - name: Fetch the Prisma 7 schema engine (prisma7-adoption)
+        timeout-minutes: 5
+        run: pnpm --filter prisma7-adoption exec prisma7 --version --config prisma7.config.ts
       - name: Test examples
         run: pnpm test:examples
       - name: Check working tree is clean

@@ -1,5 +1,5 @@
 import type { ColumnDefault, ColumnDefaultLiteralInputValue } from '@internal/contract/types';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { resolvedDefaultsEqual } from '../src/ir/resolved-default-equality';
 
@@ -14,6 +14,14 @@ describe('resolvedDefaultsEqual', () => {
   describe('across kinds', () => {
     it('a literal never equals a function', () => {
       expect(resolvedDefaultsEqual(literal('now'), fn('now()'))).toBe(false);
+    });
+
+    it('a raw expression never equals a literal, even one it spells', () => {
+      const expression = fn("'confidential'::auth.oauth_client_type");
+      expect({
+        expressionFirst: resolvedDefaultsEqual(expression, literal('confidential'), 'text'),
+        literalFirst: resolvedDefaultsEqual(literal('confidential'), expression, 'text'),
+      }).toEqual({ expressionFirst: false, literalFirst: false });
     });
 
     it('a kind outside the union compares unequal rather than throwing', () => {
@@ -102,6 +110,41 @@ describe('resolvedDefaultsEqual', () => {
         true,
       );
     });
+
+    it('reads the year of a timestamp Postgres prints with an offset, below year 100 too', () => {
+      expect({
+        sameInstant: resolvedDefaultsEqual(
+          literal('0001-01-01T00:00:00Z'),
+          literal('0001-01-01 00:00:00+00'),
+          'timestamptz(6)',
+        ),
+        otherCentury: resolvedDefaultsEqual(
+          literal('1950-01-01T00:00:00Z'),
+          literal('0050-01-01 00:00:00+00'),
+          'timestamptz(6)',
+        ),
+        halfHourOffset: resolvedDefaultsEqual(
+          literal('2024-01-01T21:34:05Z'),
+          literal('2024-01-02 03:04:05+05:30'),
+          'timestamptz(6)',
+        ),
+      }).toEqual({ sameInstant: true, otherCentury: false, halfHourOffset: true });
+    });
+
+    it('compares a timestamp before year one by its text', () => {
+      expect({
+        same: resolvedDefaultsEqual(
+          literal('0001-12-31 23:30:00+00 BC'),
+          literal('0001-12-31 23:30:00+00 BC'),
+          'timestamptz(6)',
+        ),
+        yearOne: resolvedDefaultsEqual(
+          literal('0001-12-31 23:30:00+00 BC'),
+          literal('0001-12-31 23:30:00+00'),
+          'timestamptz(6)',
+        ),
+      }).toEqual({ same: true, yearOne: false });
+    });
   });
 
   describe('int64 literals', () => {
@@ -146,5 +189,165 @@ describe('resolvedDefaultsEqual', () => {
         resolvedDefaultsEqual(literal('9007199254740993'), literal('9007199254740993'), 'int8'),
       ).toBe(true);
     });
+  });
+
+  describe('numeric literals', () => {
+    const nativeType = 'numeric(65,30)';
+
+    it('matches a number against the decimal text it denotes', () => {
+      expect({
+        numberFirst: resolvedDefaultsEqual(literal(12.34), literal('12.34'), nativeType),
+        textFirst: resolvedDefaultsEqual(literal('-0.5'), literal(-0.5), 'numeric'),
+      }).toEqual({ numberFirst: true, textFirst: true });
+    });
+
+    it('ignores zeros that do not change the value under a type with a scale', () => {
+      expect({
+        trailing: resolvedDefaultsEqual(literal('1.5'), literal('1.50'), nativeType),
+        whole: resolvedDefaultsEqual(literal(10), literal('10.000'), nativeType),
+        leading: resolvedDefaultsEqual(literal('0.5'), literal('00.5'), nativeType),
+        negativeZero: resolvedDefaultsEqual(literal('0'), literal('-0.0'), nativeType),
+        scaleZero: resolvedDefaultsEqual(literal('2'), literal('2.0'), 'numeric(10,0)'),
+      }).toEqual({
+        trailing: true,
+        whole: true,
+        leading: true,
+        negativeZero: true,
+        scaleZero: true,
+      });
+    });
+
+    it('compares the decimal text exactly under a type without a scale, which stores it as written', () => {
+      expect({
+        trailingText: resolvedDefaultsEqual(literal('1.5'), literal('1.50'), 'numeric'),
+        trailingNumber: resolvedDefaultsEqual(literal(1.5), literal('1.50'), 'numeric'),
+        decimal: resolvedDefaultsEqual(literal('10'), literal('10.0'), 'decimal'),
+        same: resolvedDefaultsEqual(literal('1.50'), literal('1.50'), 'numeric'),
+      }).toEqual({ trailingText: false, trailingNumber: false, decimal: false, same: true });
+    });
+
+    it('compares every digit of the decimal text', () => {
+      expect({
+        rounded: resolvedDefaultsEqual(
+          literal(12345678901234567000),
+          literal('12345678901234567890.123456789'),
+          nativeType,
+        ),
+        lastDigit: resolvedDefaultsEqual(
+          literal('0.000000000000000001'),
+          literal('0.000000000000000002'),
+          nativeType,
+        ),
+      }).toEqual({ rounded: false, lastDigit: false });
+    });
+
+    it('compares text that is not a numeral by identity', () => {
+      expect({
+        same: resolvedDefaultsEqual(literal('NaN'), literal('NaN'), nativeType),
+        different: resolvedDefaultsEqual(literal('NaN'), literal('Infinity'), nativeType),
+      }).toEqual({ same: true, different: false });
+    });
+
+    it('matches a number JavaScript prints in exponent notation against its decimal text', () => {
+      expect({
+        small: resolvedDefaultsEqual(literal(1e-7), literal('0.0000001'), nativeType),
+        smallWithoutScale: resolvedDefaultsEqual(literal(1e-7), literal('0.0000001'), 'numeric'),
+        large: resolvedDefaultsEqual(literal(1e21), literal('1000000000000000000000'), nativeType),
+        largeWithoutScale: resolvedDefaultsEqual(
+          literal(1e21),
+          literal('1000000000000000000000'),
+          'numeric',
+        ),
+        negative: resolvedDefaultsEqual(literal(-1.5e-7), literal('-0.00000015'), nativeType),
+        textFirst: resolvedDefaultsEqual(literal('0.0000001'), literal(1e-7), nativeType),
+      }).toEqual({
+        small: true,
+        smallWithoutScale: true,
+        large: true,
+        largeWithoutScale: true,
+        negative: true,
+        textFirst: true,
+      });
+    });
+
+    it('still separates two numbers in exponent notation that differ', () => {
+      expect(resolvedDefaultsEqual(literal(1e-7), literal('0.0000002'), nativeType)).toBe(false);
+    });
+
+    it('leaves a number against its decimal text alone without a numeric native type', () => {
+      expect(resolvedDefaultsEqual(literal(1.5), literal('1.5'), 'float8')).toBe(false);
+    });
+  });
+
+  describe('list literals', () => {
+    it('normalizes each element under the element type', () => {
+      expect({
+        timestamps: resolvedDefaultsEqual(
+          literal(['2024-01-01T00:00:00.000Z']),
+          literal(['2024-01-01 00:00:00']),
+          'timestamp(3)[]',
+        ),
+        int8: resolvedDefaultsEqual(literal([1, -2]), literal(['1', '-2']), 'int8[]'),
+        numeric: resolvedDefaultsEqual(literal([12.5]), literal(['12.50']), 'numeric(10,2)[]'),
+      }).toEqual({ timestamps: true, int8: true, numeric: true });
+    });
+
+    it('fires when an element or the length differs', () => {
+      expect({
+        element: resolvedDefaultsEqual(literal(['1', '2']), literal(['1', '3']), 'int8[]'),
+        length: resolvedDefaultsEqual(literal(['1']), literal(['1', '2']), 'int8[]'),
+        unscaledTrailingZero: resolvedDefaultsEqual(
+          literal(['1.5']),
+          literal(['1.50']),
+          'numeric[]',
+        ),
+      }).toEqual({ element: false, length: false, unscaledTrailingZero: false });
+    });
+
+    it('leaves the elements alone without a list native type', () => {
+      expect(resolvedDefaultsEqual(literal([1]), literal(['1']), 'jsonb')).toBe(false);
+    });
+  });
+});
+
+describe('resolvedDefaultsEqual zoneless timestamp literals', () => {
+  // `timestamp without time zone` defaults introspect without a zone
+  // (`'2024-01-01 00:00:00'`); the contract writes the same wall time as an
+  // ISO instant. Both are the same wall-clock value and must compare equal
+  // whatever the host timezone is, so the test pins one that is not UTC.
+  const previousTz = process.env['TZ'];
+  beforeAll(() => {
+    process.env['TZ'] = 'Etc/GMT-3';
+  });
+  afterAll(() => {
+    if (previousTz === undefined) delete process.env['TZ'];
+    else process.env['TZ'] = previousTz;
+  });
+
+  it('treats a zoneless timestamp literal as UTC under a timestamp native type', () => {
+    expect(
+      resolvedDefaultsEqual(
+        literal('2024-01-01T00:00:00.000Z'),
+        literal('2024-01-01 00:00:00'),
+        'timestamp(3)',
+      ),
+    ).toBe(true);
+  });
+
+  it('keeps a zoned literal on its own zone', () => {
+    expect(
+      resolvedDefaultsEqual(
+        literal('2024-01-01T00:00:00.000Z'),
+        literal('2024-01-01 03:00:00+03'),
+        'timestamptz',
+      ),
+    ).toBe(true);
+    expect(
+      resolvedDefaultsEqual(
+        literal('2024-01-01T00:00:00.000Z'),
+        literal('2024-01-01 00:00:00+03'),
+        'timestamptz',
+      ),
+    ).toBe(false);
   });
 });

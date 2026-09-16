@@ -1,0 +1,17 @@
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "audit"]
+}
+
+enum AuditAction {
+  CREATE
+
+  @@schema("audit")
+}
+
+model Event {
+  id     Int
+  action AuditAction
+
+  @@schema("public")
+}

@@ -318,7 +318,7 @@ function validateNamespaceBlocksForSqlTarget(input: {
  * interpreter uses this to dispatch parsed extension blocks to their factory
  * without naming any specific discriminator value (generic, by-discriminator).
  */
-function buildEntityTypesByDiscriminator(
+export function buildEntityTypesByDiscriminator(
   contributions: AuthoringContributions | undefined,
 ): ReadonlyMap<string, AuthoringEntityTypeDescriptor> {
   const result = new Map<string, AuthoringEntityTypeDescriptor>();

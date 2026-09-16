@@ -79,6 +79,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type {
+  AuthoredColumnDefault,
   ContractDefinition,
   FieldNode,
   ModelNode,
@@ -104,7 +105,7 @@ function encodeViaCodec(value: unknown, codecId: string, codecLookup?: CodecLook
 }
 
 function encodeColumnDefault(
-  defaultInput: ColumnDefault,
+  defaultInput: AuthoredColumnDefault,
   codecId: string,
   codecLookup?: CodecLookup,
   many = false,

@@ -502,7 +502,7 @@ describe('enum-typed column defaults', () => {
     expect(output).toContain('@default("aal1")');
   });
 
-  it('a schema-qualified cast default is preserved raw via dbgenerated, never mis-parsed', () => {
+  it('reads a schema-qualified cast default as the member literal, which interprets', () => {
     const output = inferAndPrint(
       tree({
         auth: namespaceNode(
@@ -523,8 +523,15 @@ describe('enum-typed column defaults', () => {
       }),
     );
 
-    expect(output).toContain('@default(dbgenerated("\'aal1\'::auth.aal_level"))');
-    expect(output).toContain('pg.enum(AalLevel)');
+    expect(output).toContain('aal pg.enum(AalLevel) @default("aal1")');
+    const result = interpret(output);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
+    expect(ns.table['sessions']?.columns['aal']?.default).toEqual({
+      kind: 'literal',
+      value: 'aal1',
+    });
   });
 });
 

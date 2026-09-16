@@ -1,6 +1,11 @@
 ---
 from: 8.0.0-rc.11
 to: 8.0.0-rc.12
+# The Prisma 7 contract source adds `prisma7Schema` and `contract: ContractConfig` to
+# `@prisma/orm-postgres/config`, and `diagnostics` to CliStructuredError. Both additive. It also
+# moves the Postgres raw default parser out of the family `psl-infer` subpath (entry below). The
+# Postgres default reader and the pinned introspection session change what users see, not any
+# extension API; the app skill covers them.
 # contract.d.ts now orders every collection the way contract.json does; a re-emit reorders, nothing else.
 # Prepared include decoder specialization adds no consumer migration; retain existing entries below.
 changes:
@@ -17,6 +22,9 @@ changes:
     summary: Preserve declaration nullability when constructing or cloning PreparedParamRef AST nodes.
   - id: preserve-orm-pagination-expressions
     summary: Preserve expression-valued limit and offset when consuming ORM CollectionState.
+  - id: psl-infer-raw-default-parser-is-target-owned
+    summary: |
+      `parseRawDefault` is no longer exported from the `family/psl-infer` subpath; import `parsePostgresDefault` from `@prisma/orm-postgres/target/default-normalizer` instead.
 ---
 
 ## `expression-codec-on-return-type`
@@ -58,6 +66,12 @@ const query = await db.prepare({ id: 'pg/int4@1' }, (params) =>
 ```
 
 Apply the same translation to SQLite's flat SQL facade (`sql.users` becomes `db.sql.users`), retaining its existing codec ids. Keep `.query(target, params, options?)` and SQL statistics `.execute(target, params, options?)` calls unchanged. Do not rewrite historical release notes, applied upgrade recipes, generated contracts or tests as part of this source translation.
+
+## `psl-infer-raw-default-parser-is-target-owned`
+
+Find imports of `parseRawDefault` from `@prisma/orm-family-sql/family/psl-infer`, `@prisma/orm-postgres/family/psl-infer`, or `@prisma/orm-sqlite/family/psl-infer`. The function read Postgres default spellings, so it now lives in the Postgres target. Replace each import with `parsePostgresDefault` from `@prisma/orm-postgres/target/default-normalizer`. The signature is unchanged: `(rawDefault: string, nativeType?: string) => ColumnDefault | undefined`. It reads every spelling the old function read, plus the negative and cast numerals, cross-schema enum literals, zoneless `timestamp` literals, and `ARRAY[...]` lists added in this release, so a value that was `undefined` before may now be a literal.
+
+The `parseRawDefault` option on `PslPrinterOptions` is unchanged; pass `parsePostgresDefault` there where you passed the old function.
 
 ## `postgres-list-element-codecs-receive-raw-strings`
 

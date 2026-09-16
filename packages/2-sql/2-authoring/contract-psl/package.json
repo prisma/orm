@@ -52,6 +52,7 @@
     ".": "./dist/index.mjs",
     "./attribute-specs": "./dist/attribute-specs.mjs",
     "./provider": "./dist/provider.mjs",
+    "./resolution": "./dist/resolution.mjs",
     "./package.json": "./package.json"
   },
   "engines": {

@@ -30,15 +30,20 @@ import type {
 import type {
   FieldSymbol,
   ModelSymbol,
+  NumLiteral,
   PslSpan,
   ResolvedTypeConstructorCall,
   SymbolTable,
 } from '@internal/psl-parser';
 import type { SourceFile } from '@internal/psl-parser/syntax';
-
+import type {
+  AuthoredColumnDefault,
+  AuthoredColumnDefaultLiteralValue,
+} from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
 import { lowerDefaultFunctionWithRegistry } from './default-function-registry';
+import { numberLiteralDefault } from './number-literal-default';
 
 import { mapPslHelperArgs } from './psl-authoring-arguments';
 import {
@@ -704,9 +709,10 @@ export function lowerDefaultForField(input: {
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly codecLookup: CodecLookup | undefined;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): {
-  readonly defaultValue?: ColumnDefault;
+  readonly defaultValue?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
 } {
   const node = findFieldAttributeNode(input.field, 'default');
@@ -730,9 +736,20 @@ export function lowerDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const value = interpreted.value;
+  const literalValue = (
+    literal: string | boolean | NumLiteral,
+  ): AuthoredColumnDefaultLiteralValue =>
+    typeof literal === 'object'
+      ? (numberLiteralDefault(literal.text, input.columnDescriptor.codecId, input.codecLookup) ??
+        Number(literal.text))
+      : literal;
 
   if (Array.isArray(value)) {
-    return { defaultValue: { kind: 'literal', value: [...value] } };
+    return { defaultValue: { kind: 'literal', value: value.map(literalValue) } };
+  }
+
+  if (typeof value === 'object' && 'text' in value) {
+    return { defaultValue: { kind: 'literal', value: literalValue(value) } };
   }
 
   if (typeof value === 'object') {

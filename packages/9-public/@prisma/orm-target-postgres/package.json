@@ -82,6 +82,7 @@
     "./target/planner-schema-lookup": "./dist/target__planner-schema-lookup.mjs",
     "./target/planner-sql-checks": "./dist/target__planner-sql-checks.mjs",
     "./target/planner-target-details": "./dist/target__planner-target-details.mjs",
+    "./target/prisma7-binding": "./dist/target__prisma7-binding.mjs",
     "./target/render-ops": "./dist/target__render-ops.mjs",
     "./target/render-typescript": "./dist/target__render-typescript.mjs",
     "./target/rls-canonicalize": "./dist/target__rls-canonicalize.mjs",

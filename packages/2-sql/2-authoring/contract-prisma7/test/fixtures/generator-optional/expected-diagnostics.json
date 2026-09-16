@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Generated.uuidOpt\" is optional and its value comes from @default(uuid()), which Prisma 8 cannot express on an optional field yet. Remove @default(uuid()) and keep the \"?\": the database does not change, and both clients then stop filling the value."
+  }
+]

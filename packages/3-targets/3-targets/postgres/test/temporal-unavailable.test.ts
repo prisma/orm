@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   PG_DATE_TEMPORAL_CODEC_ID,
   PG_TIME_TEMPORAL_CODEC_ID,
@@ -7,6 +7,7 @@ import {
 } from '../src/core/codec-ids';
 import { codecDescriptors } from '../src/core/codecs';
 import { instantNow } from '../src/core/instant-now-generator';
+import { plainDateTimeNow } from '../src/core/plain-date-time-now-generator';
 import { postgresCodecDescriptorRegistry } from '../src/core/registry';
 import {
   pgDateTemporalColumn,
@@ -131,6 +132,43 @@ describe('Temporal-backed codecs in a runtime without Temporal', () => {
 
   it('reads the clock through Temporal once one is available', () => {
     expect(instantNow()).toBeInstanceOf(Temporal.Instant);
+  });
+
+  it('fails the plainDateTimeNow generator with the same capability error', async () => {
+    const outcome = await withoutTemporal(async () => {
+      await Promise.resolve();
+      try {
+        plainDateTimeNow();
+        return { threw: false };
+      } catch (error) {
+        const structured = error as { code?: string; meta?: Record<string, unknown> };
+        return { threw: true, code: structured.code, meta: structured.meta };
+      }
+    });
+
+    expect(outcome).toEqual({
+      threw: true,
+      code: 'RUNTIME.TEMPORAL_UNAVAILABLE',
+      meta: { generatorId: 'plainDateTimeNow' },
+    });
+  });
+
+  describe('on a host outside UTC', () => {
+    const previousTz = process.env['TZ'];
+    beforeAll(() => {
+      process.env['TZ'] = 'Etc/GMT-3';
+    });
+    afterAll(() => {
+      if (previousTz === undefined) delete process.env['TZ'];
+      else process.env['TZ'] = previousTz;
+    });
+
+    it('plainDateTimeNow is the current moment as UTC wall-clock time', () => {
+      const value = plainDateTimeNow();
+      expect(value).toBeInstanceOf(Temporal.PlainDateTime);
+      const skew = Math.abs(value.toZonedDateTime('UTC').epochMilliseconds - Date.now());
+      expect(skew).toBeLessThan(5_000);
+    });
   });
 
   it('restores whatever Temporal the host had once the window closes', () => {

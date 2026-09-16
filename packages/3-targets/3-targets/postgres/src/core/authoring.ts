@@ -30,9 +30,16 @@ import { assertWireNamePrefixLength, normalizeSqlBody } from '@internal/sql-sche
 import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { PG_ENUM_CODEC_ID, PG_TIMESTAMPTZ_DATE_CODEC_ID } from './codec-ids';
+import {
+  PG_ENUM_CODEC_ID,
+  PG_TIMESTAMP_STRING_CODEC_ID,
+  PG_TIMESTAMP_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMPTZ_DATE_CODEC_ID,
+  PG_TIMESTAMPTZ_STRING_CODEC_ID,
+  PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
+} from './codec-ids';
 import { postgresError } from './errors';
-import { INSTANT_NOW_GENERATOR_ID } from './instant-now-generator';
+import { postgresNowGeneratorIds } from './now-generators';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
 import { PostgresRlsPolicy, type RlsPolicyOperation } from './postgres-rls-policy';
@@ -743,41 +750,47 @@ export const postgresAuthoringFieldPresets = {
     createdAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
       codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
       nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
     }).createdAt,
     updatedAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
       codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
       nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
     }).updatedAt,
     timestamptzJsDate: /* @__PURE__ */ temporalCodecPresetWithPrecision({
       codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
       nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
     }),
     .../* @__PURE__ */ temporalAuthoringPresets({
-      codecId: 'pg/timestamptz-temporal@1',
+      codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
       nativeType: 'timestamptz',
-      generatorId: INSTANT_NOW_GENERATOR_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID],
     }),
     .../* @__PURE__ */ temporalStringAuthoringPresets({
-      codecId: 'pg/timestamptz-string@1',
+      codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
       nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
     }),
     timestamp: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamp-temporal@1',
+      codecId: PG_TIMESTAMP_TEMPORAL_CODEC_ID,
       nativeType: 'timestamp',
-      generatorId: INSTANT_NOW_GENERATOR_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMP_TEMPORAL_CODEC_ID],
     }),
     timestamptz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamptz-temporal@1',
+      codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
       nativeType: 'timestamptz',
-      generatorId: INSTANT_NOW_GENERATOR_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID],
     }),
     timestampString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamp-string@1',
+      codecId: PG_TIMESTAMP_STRING_CODEC_ID,
       nativeType: 'timestamp',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMP_STRING_CODEC_ID],
     }),
     timestamptzString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamptz-string@1',
+      codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
       nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
     }),
   },
   uuidNative: {

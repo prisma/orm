@@ -1,0 +1,32 @@
+[
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"T.gen\": native type \"@db.Citext\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too; because the field is required and its column has no default, neither client can then insert rows. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"T.expr\": native type \"@db.Citext\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"T.none\": native type \"@db.Citext\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too; because the field is required and its column has no default, neither client can then insert rows. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Field \"T.lit\": native type \"@db.Citext\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Field \"T.cuid\": native type \"@db.Citext\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too; because the field is required and its column has no default, neither client can then insert rows. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  }
+]

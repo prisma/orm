@@ -1,0 +1,14 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Post {
+  id    Int    @id
+  title String
+  body  String
+
+  @@index([title(sort: Desc)])
+  @@index([body(length: 10)])
+  @@index([title], ops: raw("text_pattern_ops"))
+  @@index([body], type: constructor)
+}

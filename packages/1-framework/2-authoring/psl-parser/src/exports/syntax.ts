@@ -1,4 +1,4 @@
-export type { ParseDiagnostic, ParseResult } from '../parse';
+export type { ParseDiagnostic, ParseOptions, ParseResult } from '../parse';
 export { parse } from '../parse';
 export type { Position, Range } from '../source-file';
 export { SourceFile } from '../source-file';

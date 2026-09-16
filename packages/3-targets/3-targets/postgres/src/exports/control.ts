@@ -96,5 +96,9 @@ export {
   instantNowControlDescriptor,
 } from '../core/instant-now-generator';
 export { decodePostgresListText, parsePostgresListText } from '../core/list-decoder';
+export {
+  PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+  plainDateTimeNowControlDescriptor,
+} from '../core/plain-date-time-now-generator';
 
 export default postgresTargetDescriptor;

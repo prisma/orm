@@ -12,7 +12,10 @@ import { builtinGeneratorRegistryMetadata } from '@internal/ids';
 import type { FuncCallSig } from '@internal/psl-parser';
 import { int, num, oneOf, optional, str } from '@internal/psl-parser';
 import { PG_TIMESTAMPTZ_DATE_CODEC_ID } from '@internal/target-postgres/codec-ids';
-import { instantNowControlDescriptor } from '@internal/target-postgres/control';
+import {
+  instantNowControlDescriptor,
+  plainDateTimeNowControlDescriptor,
+} from '@internal/target-postgres/control';
 
 function invalidArgumentDiagnostic(input: {
   readonly context: DefaultFunctionLoweringContext;
@@ -350,5 +353,6 @@ export function createPostgresMutationDefaultGeneratorDescriptors(): readonly Mu
     ),
     timestampNowControlDescriptor(),
     instantNowControlDescriptor(),
+    plainDateTimeNowControlDescriptor(),
   ];
 }

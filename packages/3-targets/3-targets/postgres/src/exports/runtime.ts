@@ -8,6 +8,10 @@ import { decodePostgresListText } from '../core/list-decoder';
 
 export { INSTANT_NOW_GENERATOR_ID, instantNow } from '../core/instant-now-generator';
 export { decodePostgresListText } from '../core/list-decoder';
+export {
+  PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+  plainDateTimeNow,
+} from '../core/plain-date-time-now-generator';
 export { PostgresContractSerializer } from '../core/postgres-contract-serializer';
 export { PostgresContractView } from '../core/postgres-contract-view';
 

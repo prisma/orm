@@ -145,11 +145,20 @@ Runner error codes include: `EXECUTION_FAILED`, `PRECHECK_FAILED`, `POSTCHECK_FA
 
 See `@internal/family-sql/control` README for full error code documentation.
 
+## Prisma 7 binding
+
+`./prisma7-binding` exports `prisma7PostgresBinding`, everything the Postgres target supplies to the Prisma 7 interpreter in `@internal/sql-contract-prisma7`: the accepted `provider` names, the index types, the 63-byte identifier limit, the `@updatedAt` generator for each codec, how `Json`, `Bytes` and `DateTime` literal defaults are read (the SQL text Postgres stores for `Bytes` and `DateTime`, with `ARRAY[...]::type[]` for lists), and the type map. The type map is the table of what Prisma 7.10.0 creates in Postgres for each Prisma 7 scalar and `@db.*` native type, expressed as the Prisma 8 type constructor that produces the same column (`DateTime` is `Timestamp(3)`, `Decimal` is `Numeric(65, 30)`, `Json` is `Jsonb`, `@db.VarChar(n)` passes its argument through); the recorded SQL Prisma 7 generated for the reference schema is what the rows were read from. A `@db.*` spelling missing from the table is a hard error for the source, never a guess. The Postgres facade and the interpreter's tests import this one instance.
+
+## Introspection session settings
+
+Postgres prints a `timestamptz` value in the session's time zone, and dates and intervals in the session's styles, so the same stored default can read back as different text on two servers. The adapter therefore runs the whole introspection read with `TimeZone = UTC`, `DateStyle = ISO, MDY`, and `IntervalStyle = postgres`, and restores the caller's settings when it finishes, including when the read fails. Inside a caller's transaction the settings are set and restored locally; outside one they are set and restored for the session. Column defaults, check constraint text, index predicates, and policy expressions are all read under those settings, so their text does not depend on the server, the role, or what the caller had set.
+
 ## Exports
 
 - `./control`: Control plane entry point for `SqlControlTargetDescriptor`
 - `./runtime`: Runtime entry point for target-specific runtime code
 - `./pack`: Pure pack ref for `defineContract({ family, target: postgresPack, ... })`
+- `./prisma7-binding`: `prisma7PostgresBinding`, this target's view for the Prisma 7 contract source (see above)
 
 ## Tests
 

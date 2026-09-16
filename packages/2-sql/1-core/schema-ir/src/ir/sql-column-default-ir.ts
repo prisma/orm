@@ -1,4 +1,5 @@
 import type { ColumnDefault } from '@internal/contract/types';
+import type { CodecRef } from '@internal/framework-components/codec';
 import type { DiffableNode } from '@internal/framework-components/control';
 import { freezeNode } from '@internal/framework-components/ir';
 import { blindCast } from '@internal/utils/casts';
@@ -23,6 +24,16 @@ export interface SqlColumnDefaultIRInput {
    * {@link import('./sql-column-ir').SqlColumnIRInput.many}.
    */
   readonly many?: boolean;
+  /**
+   * The owning column's codec identity, threaded through so the set-default op-builder renders a
+   * list default's cast to the column type the way the column's DDL writes it. See
+   * {@link import('./sql-column-ir').SqlColumnIRInput.codecRef}.
+   */
+  readonly codecRef?: CodecRef;
+  /** See {@link import('./sql-column-ir').SqlColumnIRInput.codecBaseNativeType}. */
+  readonly codecBaseNativeType?: string;
+  /** See {@link import('./sql-column-ir').SqlColumnIRInput.codecNamedType}. */
+  readonly codecNamedType?: boolean;
 }
 
 /**
@@ -46,6 +57,12 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
   declare readonly nativeTypeContext?: string;
   /** See {@link SqlColumnDefaultIRInput.many}. Non-enumerable so it stays out of JSON and structural equality. */
   declare readonly many?: boolean;
+  /** See {@link SqlColumnDefaultIRInput.codecRef}. Non-enumerable, same reason as {@link many}. */
+  declare readonly codecRef?: CodecRef;
+  /** See {@link SqlColumnDefaultIRInput.codecBaseNativeType}. Non-enumerable, same reason as {@link many}. */
+  declare readonly codecBaseNativeType?: string;
+  /** See {@link SqlColumnDefaultIRInput.codecNamedType}. Non-enumerable, same reason as {@link many}. */
+  declare readonly codecNamedType?: boolean;
 
   constructor(input: SqlColumnDefaultIRInput) {
     super();
@@ -53,6 +70,9 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
     if (input.raw !== undefined) this.raw = input.raw;
     if (input.nativeTypeContext !== undefined) this.nativeTypeContext = input.nativeTypeContext;
     defineNonEnumerable(this, 'many', input.many);
+    defineNonEnumerable(this, 'codecRef', input.codecRef);
+    defineNonEnumerable(this, 'codecBaseNativeType', input.codecBaseNativeType);
+    defineNonEnumerable(this, 'codecNamedType', input.codecNamedType);
     freezeNode(this);
   }
 

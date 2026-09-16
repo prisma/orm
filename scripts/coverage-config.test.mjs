@@ -234,7 +234,7 @@ describe('coverage config', () => {
     }
     vitestPaths.sort();
 
-    assert.equal(vitestPaths.length, 69);
+    assert.equal(vitestPaths.length, 70);
     assert.deepEqual(
       configs.map(({ configPath }) => relative(repositoryRoot, configPath)),
       vitestPaths.map((path) => path.replace('vitest.config.ts', 'coverage.config.json')),

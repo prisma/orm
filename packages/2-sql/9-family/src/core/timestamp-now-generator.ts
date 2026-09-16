@@ -83,7 +83,12 @@ export function temporalAuthoringPresets<
 export function temporalStringAuthoringPresets<
   const CodecId extends string,
   const NativeType extends string,
->(input: { readonly codecId: CodecId; readonly nativeType: NativeType }) {
+  const GeneratorId extends string = typeof TIMESTAMP_NOW_GENERATOR_ID,
+>(input: {
+  readonly codecId: CodecId;
+  readonly nativeType: NativeType;
+  readonly generatorId?: GeneratorId;
+}) {
   const presets = temporalAuthoringPresets(input);
   return {
     createdAtString: presets.createdAt,

@@ -71,6 +71,7 @@ import type {
 import { parsePostgresDefault } from '@internal/target-postgres/default-normalizer';
 import { postgresError } from '@internal/target-postgres/errors';
 import { normalizeSchemaNativeType } from '@internal/target-postgres/native-type-normalizer';
+import { renderDefaultLiteral } from '@internal/target-postgres/planner-ddl-builders';
 import { escapeLiteral, quoteIdentifier } from '@internal/target-postgres/sql-utils';
 import {
   PostgresDatabaseSchemaNode,
@@ -635,30 +636,32 @@ export class PostgresControlAdapter implements SqlControlAdapter<'postgres'> {
     contract?: unknown,
     schema = 'public',
   ): Promise<PostgresDatabaseSchemaNode> {
-    const declaredNamespaces = extractContractNamespaceIds(contract);
-    const resolvedSchemas =
-      declaredNamespaces.length > 0
-        ? await this.resolveNamespaceSchemas(driver, declaredNamespaces)
-        : [schema];
+    return readWithDefaultOutputSettings(driver, async () => {
+      const declaredNamespaces = extractContractNamespaceIds(contract);
+      const resolvedSchemas =
+        declaredNamespaces.length > 0
+          ? await this.resolveNamespaceSchemas(driver, declaredNamespaces)
+          : [schema];
 
-    // Walk schemas sequentially: every introspectSchema call shares the one
-    // control connection, so a parallel walk only serialises behind the wire
-    // protocol and trips pg's "already executing a query" deprecation.
-    const namespaces: Record<string, PostgresNamespaceSchemaNode> = {};
-    let pgVersion = 'unknown';
-    for (const resolved of resolvedSchemas) {
-      const { namespace, pgVersion: version } = await this.introspectSchema(driver, resolved);
-      namespaces[resolved] = namespace;
-      pgVersion = version;
-    }
+      // Walk schemas sequentially: every introspectSchema call shares the one
+      // control connection, so a parallel walk only serialises behind the wire
+      // protocol and trips pg's "already executing a query" deprecation.
+      const namespaces: Record<string, PostgresNamespaceSchemaNode> = {};
+      let pgVersion = 'unknown';
+      for (const resolved of resolvedSchemas) {
+        const { namespace, pgVersion: version } = await this.introspectSchema(driver, resolved);
+        namespaces[resolved] = namespace;
+        pgVersion = version;
+      }
 
-    const roles = await this.introspectRoles(driver);
-    const existingSchemas = await this.listExistingSchemas(driver);
-    return new PostgresDatabaseSchemaNode({
-      namespaces,
-      roles,
-      existingSchemas,
-      pgVersion,
+      const roles = await this.introspectRoles(driver);
+      const existingSchemas = await this.listExistingSchemas(driver);
+      return new PostgresDatabaseSchemaNode({
+        namespaces,
+        roles,
+        existingSchemas,
+        pgVersion,
+      });
     });
   }
 
@@ -1517,12 +1520,36 @@ function normalizeFormattedType(formattedType: string, dataType: string, udtName
   if (dataType === 'time without time zone' || udtName === 'time') {
     return formattedType.replace(' without time zone', '').trim();
   }
-  // Only dataType === 'USER-DEFINED' should ever be quoted, but this should be safe without
-  // checking that explicitly either way
-  if (formattedType.startsWith('"') && formattedType.endsWith('"')) {
-    return formattedType.slice(1, -1);
+  // `format_type` quotes a user-defined type name that needs it (mixed case,
+  // reserved word, a dot) and schema-qualifies one outside the search path,
+  // so a mixed-case enum in another schema arrives as `audit."AuditAction"`.
+  // The contract side spells every type name unquoted (`audit.AuditAction`),
+  // so strip the quotes from each identifier segment, splitting only on dots
+  // that sit outside the quotes.
+  return splitQualifiedName(formattedType).map(unquoteIdentifier).join('.');
+}
+
+function splitQualifiedName(name: string): string[] {
+  const segments: string[] = [];
+  let current = '';
+  let quoted = false;
+  for (const char of name) {
+    if (char === '"') quoted = !quoted;
+    if (char === '.' && !quoted) {
+      segments.push(current);
+      current = '';
+      continue;
+    }
+    current += char;
   }
-  return formattedType;
+  segments.push(current);
+  return segments;
+}
+
+function unquoteIdentifier(segment: string): string {
+  return segment.length >= 2 && segment.startsWith('"') && segment.endsWith('"')
+    ? segment.slice(1, -1).replaceAll('""', '"')
+    : segment;
 }
 
 /**
@@ -1680,16 +1707,80 @@ function pgIsTextLikeNativeType(nativeType: string): boolean {
   );
 }
 
-function pgRenderArrayElement(el: unknown): string {
-  if (el === null) return 'NULL';
-  if (typeof el === 'number' || typeof el === 'boolean') return String(el);
-  if (typeof el === 'string') return `'${escapeLiteral(el)}'`;
-  return `'${escapeLiteral(JSON.stringify(el))}'`;
+interface OutputSettings {
+  readonly timeZone: string;
+  readonly dateStyle: string;
+  readonly intervalStyle: string;
 }
 
-function pgRenderArrayLiteral(elements: unknown[]): string {
-  if (elements.length === 0) return "'{}'";
-  return `ARRAY[${elements.map(pgRenderArrayElement).join(', ')}]`;
+/** Postgres's own defaults, the text the default parser reads: UTC, ISO dates, postgres intervals. */
+const INTROSPECTION_OUTPUT_SETTINGS: OutputSettings = {
+  timeZone: 'UTC',
+  dateStyle: 'ISO, MDY',
+  intervalStyle: 'postgres',
+};
+
+async function readOutputSettings(
+  driver: SqlControlDriverInstance<'postgres'>,
+): Promise<OutputSettings | undefined> {
+  const { rows } = await driver.query<OutputSettings>(
+    `SELECT current_setting('TimeZone') AS "timeZone",
+            current_setting('DateStyle') AS "dateStyle",
+            current_setting('IntervalStyle') AS "intervalStyle"`,
+  );
+  return rows[0];
+}
+
+async function applyOutputSettings(
+  driver: SqlControlDriverInstance<'postgres'>,
+  settings: OutputSettings,
+  local: boolean,
+): Promise<void> {
+  await driver.query(
+    `SELECT set_config('TimeZone', $1, $4),
+            set_config('DateStyle', $2, $4),
+            set_config('IntervalStyle', $3, $4)`,
+    [settings.timeZone, settings.dateStyle, settings.intervalStyle, local],
+  );
+}
+
+function sameOutputSettings(a: OutputSettings | undefined, b: OutputSettings): boolean {
+  return (
+    a?.timeZone === b.timeZone && a.dateStyle === b.dateStyle && a.intervalStyle === b.intervalStyle
+  );
+}
+
+/**
+ * Runs `read` with the settings that shape printed values pinned to Postgres's defaults, then
+ * restores the caller's. Postgres prints a `timestamptz` default in the session time zone, and
+ * dates and intervals in the session styles, so pinning them gives the same text whatever the
+ * server, the role, or the caller set.
+ *
+ * The settings are first set locally. A local setting outlives its own statement only inside a
+ * transaction, so reading them back tells the two cases apart. Inside the caller's transaction they
+ * are set and restored locally, so the caller's session values return when it commits; outside
+ * one they are set and restored for the session. When `read` fails, its error is the one thrown;
+ * inside a transaction the failure aborts it, and the caller's rollback restores the settings.
+ */
+async function readWithDefaultOutputSettings<T>(
+  driver: SqlControlDriverInstance<'postgres'>,
+  read: () => Promise<T>,
+): Promise<T> {
+  const callerSettings = await readOutputSettings(driver);
+  if (callerSettings === undefined) return read();
+  await applyOutputSettings(driver, INTROSPECTION_OUTPUT_SETTINGS, true);
+  const local = sameOutputSettings(await readOutputSettings(driver), INTROSPECTION_OUTPUT_SETTINGS);
+  if (!local) await applyOutputSettings(driver, INTROSPECTION_OUTPUT_SETTINGS, false);
+  const restore = () => applyOutputSettings(driver, callerSettings, local);
+  let result: T;
+  try {
+    result = await read();
+  } catch (error) {
+    await restore().catch(() => undefined);
+    throw error;
+  }
+  await restore();
+  return result;
 }
 
 function pgInlineLiteral(wire: unknown, nativeType: string): string {
@@ -1726,9 +1817,6 @@ function pgInlineLiteral(wire: unknown, nativeType: string): string {
       .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
     return `'\\x${hex}'::${nativeType}`;
-  }
-  if (Array.isArray(wire) && nativeType.endsWith('[]')) {
-    return pgRenderArrayLiteral(wire);
   }
   if (typeof wire === 'object') {
     const quoted = `'${escapeLiteral(JSON.stringify(wire))}'`;
@@ -1770,6 +1858,9 @@ async function pgRenderDdlColumnDefault(
       return '';
     }
     return `DEFAULT (${def.expression})`;
+  }
+  if (Array.isArray(def.value) && nativeType.endsWith('[]')) {
+    return `DEFAULT ${renderDefaultLiteral(def.value, { many: true, nativeType })}`;
   }
   if (codecRef !== undefined) {
     const codec = codecLookup.get(codecRef.codecId);

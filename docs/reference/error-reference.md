@@ -19,7 +19,7 @@ Namespaces:
 | `CONFIG` | Loading and validating `prisma.config.ts` |
 | `CLI` | Command-line argument and invocation errors |
 | `CONTRACT` | Contract authoring, emission, validation, and the contract↔database relationship (markers, schema verification) |
-| `PSL` | The PSL source text itself (parse/format) |
+| `PSL` | The PSL source text itself (parse, format, interpret), including a Prisma 7 schema read as the contract source |
 | `ORM` | ORM client and query-builder DSL API misuse |
 | `RUNTIME` | Query execution and runtime wiring |
 | `DRIVER` | Database driver connection and protocol failures |
@@ -413,9 +413,13 @@ Schema verification found that the live database schema does not satisfy the con
 
 The TypeScript contract module imports something outside the contract-source import allowlist; contract sources must stay pure so they can be bundled and evaluated deterministically. Raised by the CLI while loading a TS contract source. Payload: `allowlist`, `disallowed`.
 
+### CONTRACT.SOURCE_DIAGNOSTIC
+
+One finding a contract source reported with a code that is not yet dotted, such as the Prisma 8 PSL interpreter's `PSL_UNSUPPORTED_FIELD_TYPE` or a parser's `PSL_PARSE_ERROR`. This is its only producer case: it exists until those codes convert to dotted ones, and a source code that is already dotted, such as `PSL.PRISMA7_VIEW_UNSUPPORTED`, is reported under its own code instead. Never raised on its own; carried, one per such source diagnostic, in the `diagnostics` list of a `CONTRACT.SOURCE_LOAD_FAILED` error during `contract emit`, printed under it in the terminal and serialized as the envelope's `diagnostics` in JSON. `summary` is `<file>:<line>:<column> <source code>: <message>` (the location is omitted when the source gave none). `where` carries `path` and `line`. Payload: `code` (the source's own diagnostic code). Fix: edit the schema at each location the findings name, then run `prisma contract emit` again.
+
 ### CONTRACT.SOURCE_LOAD_FAILED
 
-Loading the contract source failed: bundling or evaluating the TypeScript contract module (esbuild bundle error, or the module threw on import), the contract source provider returning a failure or a malformed result during `contract emit`, or `format` failing to read the PSL source file. The underlying failure is attached as `cause` where one exists. Payload: `path`, `stage` (`bundle` or `import`) at the TS-loader site; `diagnostics`, `issues`, `providerMeta` at the emit provider site; none at the format read site.
+Loading the contract source failed: bundling or evaluating the TypeScript contract module (esbuild bundle error, or the module threw on import), the contract source provider returning a failure or a malformed result during `contract emit`, or `format` failing to read the PSL source file. The underlying failure is attached as `cause` where one exists. Payload: `path`, `stage` (`bundle` or `import`) at the TS-loader site; `diagnostics`, `issues`, `providerMeta` at the emit provider site; none at the format read site. At the emit provider site the error also carries a `diagnostics` list with one finding per source diagnostic: under the source's own code when it is dotted (for example `PSL.PRISMA7_VIEW_UNSUPPORTED`), otherwise as `CONTRACT.SOURCE_DIAGNOSTIC`.
 
 ### CONTRACT.TABLE_AMBIGUOUS
 
@@ -462,6 +466,94 @@ An authored wire-name prefix (an index name, an RLS policy prefix, or a check's 
 ### PSL.PARSE_FAILED
 
 `format()` was asked to format PSL source that has parse errors; formatting refuses to run on an unparseable document. The message carries the first diagnostic and a count of the rest; the CLI `format` command wraps this into a structured failure telling the user to fix the parse errors, attaching the parser error as `cause`. Payload: `diagnostics`.
+
+### PSL.PRISMA7_CONTRACT_INVALID
+
+The Prisma 7 schema gives a contract that Prisma 8 rejects, for a cause the source has no specific diagnostic for: a structured error was thrown while the contract was built, or the contract failed the domain, storage consistency, or model storage reference check. This is a bug in Prisma ORM; the message names the cause, and the user should report it with the schema. Reported at the schema path by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none; the error's `providerMeta` carries `schemaPath` and the thrown error's `code`.
+
+### PSL.PRISMA7_ENUM_NAMESPACE_MISMATCH
+
+A field uses an enum declared under a different `@@schema`; a Postgres enum lives in one schema and a Prisma 8 column references the enum of its own namespace. Declare the enum in the model's schema, or move the model. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_IGNORED_FIELD_REFERENCED
+
+An `@ignore`d field is used by `@id`, `@unique`, `@@id`, `@@unique`, `@@index`, or a relation's `fields:`, and Prisma 7 still creates that key, index, or foreign key over its column. Remove `@ignore` from the field. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_INDEX_ARGUMENT_UNSUPPORTED
+
+An index argument Prisma 8 indexes cannot carry (`sort`, `length`, `ops`, an unknown index type), or an indexed field that is not a column. Remove the argument. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED
+
+A `Json` default of `"null"`, or a `Json[]` default holding it: the contract cannot tell the JSON value null apart from SQL `NULL`. Remove the `@default` or give it another JSON value. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_JUNCTION_ID_UNSUPPORTED
+
+An implicit many-to-many relation on a model without a single-field `@id`. Give the model a single-field `@id`, or write the junction model out. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_JUNCTION_NAME_COLLISION
+
+A model in the same schema as an implicit many-to-many junction has the junction model's name (`PostToTag`, or the relation name). Rename the model and keep its table with `@@map`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED
+
+A `@db.*` type with no Prisma 8 codec (`Citext`, `Bit`, `VarBit`, `Xml`, `Oid`, `Money`, or an unknown spelling). Add `@ignore` to the field when no key, index, or relation uses it, or `@@ignore` to the model. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED
+
+An ORM-side generator such as `@default(uuid())`, or `@updatedAt`, on an optional field. Remove the generator or `@updatedAt` and keep the `?`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_PROVIDER_MISMATCH
+
+The Prisma 7 schema has no `datasource` block, or its `provider` is not one the target accepts (`postgresql` or `postgres` for Postgres). Use the source only with a schema for the configured target. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_REFERENTIAL_ACTION_UNSUPPORTED
+
+`SetNull` on a relation over a required foreign key field, or `SetDefault` over a required field with no column default. Make the fields optional, give them a column default, or choose another action. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_RELATION_MODE_UNSUPPORTED
+
+`relationMode = "prisma"`, or the older `referentialIntegrity = "prisma"`. Remove it or set `relationMode = "foreignKeys"`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_RELATION_NAME_SHARED
+
+Two or more implicit many-to-many relations in the same schema use the same relation name; Prisma 7 creates one table for all of them, wired to only one. Give each relation its own name. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_RELATION_UNRESOLVED
+
+A relation field that cannot be paired: no matching side, an ambiguous unnamed pair, a singular back-relation over a non-unique foreign key, a `fields`/`references` mismatch, or a required relation field over an optional foreign key field. Name both sides with `@relation("name")`, add the missing `fields`/`references`, or make the relation field optional. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_SCHEMA_READ_FAILED
+
+The schema path could not be read, or the schema directory holds no `.prisma` file. Fix the path. Reported at the schema path by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none; the error's `providerMeta` carries the schema path.
+
+### PSL.PRISMA7_TABLE_COLLISION
+
+Two models map to the same table in one schema, or a model maps to the table of an implicit many-to-many relation. Give each model its own table with `@@map`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_UNKNOWN_ATTRIBUTE
+
+An attribute Prisma 7 for the target does not have, or one the source does not read (`@@fulltext`, `@shardKey`). Remove it. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_UNKNOWN_DEFAULT
+
+A `@default` value the source cannot read: an unknown function, an enum member on a non-enum field or a non-member, a number with a fraction on an `Int` or `BigInt` field, a malformed JSON or base64 literal, or `dbgenerated()` with no expression on a required field. Use a literal, an enum member, or a supported function. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_UNSUPPORTED_TYPE
+
+`Unsupported("...")` or an unknown field type. Add `@@ignore` to the model, or correct the type name. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_UPDATED_AT_TYPE_UNSUPPORTED
+
+`@updatedAt` on a column whose codec has no "now" generator in the target, such as `@db.Date`. Remove `@updatedAt`. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED
+
+`@updatedAt` combined with `@default`. Remove the `@default`; `@updatedAt` still sets the value on create and update. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+
+### PSL.PRISMA7_VIEW_UNSUPPORTED
+
+A `view` block; Prisma 8 has no views. Remove the view, or replace it with a model over the underlying table. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ## ORM
 
@@ -687,7 +779,7 @@ Codecs also raise this code directly, as a structured envelope with `meta.codecI
 
 The integer codecs also check the JS type of the value they are given, and report that separately from the range: `pg/int8number@1` and `sqlite/bigintnumber@1` read a `number`, while `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` read a `bigint`. A value of the other type raises `<codec> value must be a <number|bigint>, got <type> <value>` with `meta.received` naming the type that arrived — the message you get from passing `9n` where a `number` is read, rather than a range complaint about a value plainly inside the range.
 
-The exact integer codecs make one exception, and only on the JSON side. `encodeJson` on `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` also accepts a `number`, because a schema language writes no `bigint` literal — `BigInt @default(0)` arrives as the JSON number `0`. The number must be an integer within the safe range, and a value that is not raises `<codec> number literal must be an integer within the safe integer range, got <value>`: past that range the literal was already rounded before the codec saw it, so its digits no longer name the value that was written. `encode` — the wire path a query parameter travels — takes no such number; it requires the `bigint`.
+The exact integer codecs make one exception, and only on the JSON side. `encodeJson` on `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` also accepts a `number`, because a schema language writes no `bigint` literal. The number must be an integer within the safe range, and a value that is not raises `<codec> number literal must be an integer within the safe integer range, got <value>`: a `number` past that range was already rounded before the codec saw it, so its digits no longer name the value that was written. The PSL interpreter therefore does not hand these codecs a rounded number: it reads a number `@default` from its source text, gives the codec the plain number when that decodes, and the decimal text of the literal when it does not, so `BigInt @default(0)` still arrives as the JSON number `0` while `BigInt @default(9007199254739999999)` arrives as its digits. `encode` — the wire path a query parameter travels — takes no such number; it requires the `bigint`.
 
 ### RUNTIME.EXECUTION_RESULT_MISSING
 

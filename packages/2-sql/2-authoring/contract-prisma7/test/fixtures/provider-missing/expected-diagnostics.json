@@ -1,0 +1,7 @@
+[
+  {
+    "code": "PSL.PRISMA7_PROVIDER_MISMATCH",
+    "file": "schema.prisma",
+    "message": "No datasource block found; add `datasource db { provider = \"postgresql\" }`."
+  }
+]
