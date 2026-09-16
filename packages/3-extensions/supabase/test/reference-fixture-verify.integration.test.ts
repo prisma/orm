@@ -26,11 +26,11 @@
  *          as `@internal/sql-contract/foreign-key-materialization`,
  *          `packages/2-sql/1-core/contract/src/foreign-key-materialization.ts`).
  *        - `storage.buckets.allowed_mime_types` / `storage.objects.path_tokens`
- *          are nullable `text[]` columns; PSL/Prisma-family list fields have
- *          no nullable-list syntax, so the contract can only declare them
- *          non-null, which never matches the live nullable column. Both are
- *          omitted in `scripts/generate-contract.ts`'s `COLUMN_OMISSIONS`
- *          (verify-safe under `external` control).
+ *          are nullable `text[]` columns, now authorable as `String[]?`.
+ *          Lifting their omission means regenerating and re-verifying this
+ *          contract, which is tracked separately. Both stay omitted in
+ *          `scripts/generate-contract.ts`'s `COLUMN_OMISSIONS` (verify-safe
+ *          under `external` control).
  *
  *   2. Negative: on a second database, `auth.refresh_tokens` is dropped
  *      after restoring the fixture; `dbVerify` on the `supabase` space

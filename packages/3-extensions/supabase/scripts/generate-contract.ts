@@ -62,9 +62,9 @@ const explicitUrl = readUrlFlag(process.argv.slice(2));
 //
 // Fidelity notes:
 //   - storage.buckets.allowed_mime_types, storage.objects.path_tokens: both
-//     nullable `text[]`. PSL prints and accepts these as `String[]?`, but
-//     this contract predates that and stays omitted until it is regenerated
-//     against a live Supabase database. `path_tokens` is additionally a
+//     nullable `text[]`, now authorable as `String[]?`. Lifting the omissions
+//     means regenerating and re-verifying this contract, which has not been
+//     done yet and is tracked separately. `path_tokens` is additionally a
 //     `GENERATED ALWAYS` column, so it is not user-writable either way.
 //     Under `external` control an undeclared live column is a suppressed
 //     extra, so omission is verify-safe.
