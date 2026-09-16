@@ -74,16 +74,16 @@ function interpretMongoPsl(schema: string) {
     ['ObjectId', 'mongo/objectId@1'],
     ['Float', 'mongo/double@1'],
   ]);
-  const { document, sourceFile } = parse(schema);
+  const { document, sources } = parse(schema, 'mongo-value-objects.prisma');
   const { table } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToMongoContract({
+    document,
     symbolTable: table,
-    sourceFile,
-    sourceId: 'test.prisma',
+    sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
@@ -103,16 +103,16 @@ const postgresScalarAuthoringTypes = Object.fromEntries(
 );
 
 function interpretSqlPsl(schema: string) {
-  const { document, sourceFile } = parse(schema);
+  const { document, sources } = parse(schema, 'sql-value-objects.prisma');
   const { table } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
+    document,
     symbolTable: table,
-    sourceFile,
-    sourceId: 'test.prisma',
+    sources,
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     // Mirrors the real postgres adapter declaration.

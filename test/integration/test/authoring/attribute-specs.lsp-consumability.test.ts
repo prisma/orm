@@ -12,8 +12,8 @@ const mongoConfigPath = join(
 );
 
 function modelSymbolFor(source: string) {
-  const { document, sourceFile } = parse(source);
-  const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
+  const { document, sources } = parse(source, 'attribute-specs-consumability.prisma');
+  const { table } = buildSymbolTable({ document, sources, pslBlockDescriptors: {} });
   return { table, model: table.topLevel.models['Widget'] };
 }
 

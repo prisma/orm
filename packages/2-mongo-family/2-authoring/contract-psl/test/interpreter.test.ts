@@ -15,7 +15,7 @@ import {
   MongoValidator,
 } from '@internal/mongo-contract';
 import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { JsonObject } from '@internal/utils/json';
 import { describe, expect, it } from 'vitest';
@@ -27,15 +27,15 @@ import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
 
 function buildSymbolTableInput(
   schema: string,
-  sourceId = 'test.prisma',
-): { symbolTable: SymbolTable; sourceFile: SourceFile; sourceId: string } {
-  const { document, sourceFile } = parse(schema);
+  filename = 'test.prisma',
+): { document: DocumentAst; symbolTable: SymbolTable; sources: PslSources } {
+  const { document, sources } = parse(schema, filename);
   const { table } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: {},
   });
-  return { symbolTable: table, sourceFile, sourceId };
+  return { document, symbolTable: table, sources };
 }
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
@@ -105,7 +105,7 @@ function model(ir: Contract, name: string): MongoModel {
 function interpret(
   schema: string,
   overrides?: Partial<
-    Omit<InterpretPslDocumentToMongoContractInput, 'symbolTable' | 'sourceFile' | 'sourceId'>
+    Omit<InterpretPslDocumentToMongoContractInput, 'document' | 'symbolTable' | 'sources'>
   >,
 ) {
   return interpretPslDocumentToMongoContract({
@@ -123,7 +123,7 @@ function interpret(
 function interpretOk(
   schema: string,
   overrides?: Partial<
-    Omit<InterpretPslDocumentToMongoContractInput, 'symbolTable' | 'sourceFile' | 'sourceId'>
+    Omit<InterpretPslDocumentToMongoContractInput, 'document' | 'symbolTable' | 'sources'>
   >,
 ) {
   const result = interpret(schema, overrides);

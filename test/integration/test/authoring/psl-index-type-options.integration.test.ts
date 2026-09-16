@@ -14,16 +14,16 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 ]);
 
 function interpret(schema: string) {
-  const { document, sourceFile } = parse(schema);
+  const { document, sources } = parse(schema, 'index-type-options.prisma');
   const { table } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
+    document,
     symbolTable: table,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: postgresPack,
     scalarColumnDescriptors,
     composedExtensionContracts: new Map(),

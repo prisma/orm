@@ -1,6 +1,9 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import type { ContractSourceContext } from '@internal/config/config-types';
+import type {
+  ContractSourceContext,
+  ContractSourceDiagnostic,
+} from '@internal/config/config-types';
 import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { hasPslInterpreter, type PslInterpretInput } from '@internal/psl-parser/interpret';
@@ -43,14 +46,18 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
   };
 }
 
-function buildInterpretInput(schema: string, context: ContractSourceContext): PslInterpretInput {
-  const { document, sourceFile } = parse(schema);
+function buildInterpretInput(
+  schema: string,
+  context: ContractSourceContext,
+  filename = SOURCE_ID,
+): PslInterpretInput {
+  const { document, sources } = parse(schema, filename);
   const { table: symbolTable } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });
-  return { document, sourceFile, symbolTable, sourceId: SOURCE_ID };
+  return { document, sources, symbolTable };
 }
 
 function interpretCapableSource(schemaPath: string) {
@@ -190,6 +197,72 @@ model Other {
 
     expect(result).toBeDefined();
     expect(typeof result?.ok).toBe('boolean');
+  });
+
+  it('derives cached field, default, and relation diagnostic source IDs from the parsed source name', () => {
+    const source = interpretCapableSource('./external-context.prisma');
+    const context = createMongoTestContext();
+    const cases = [
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        line: 3,
+        schema: `model User {
+  id ObjectId @id @map("_id")
+  bad Mystery
+}
+`,
+      },
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        line: 3,
+        schema: `model User {
+  id ObjectId @id @map("_id")
+  createdAt String @default("now")
+}
+`,
+      },
+      {
+        code: 'PSL_ORPHANED_BACKRELATION',
+        line: 3,
+        schema: `model User {
+  id ObjectId @id @map("_id")
+  posts Post[]
+}
+
+model Post {
+  id ObjectId @id @map("_id")
+}
+`,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const result = source.interpret(
+        buildInterpretInput(testCase.schema, context, 'memory-schema.prisma'),
+        context,
+      );
+
+      expect(result.ok, testCase.code).toBe(false);
+      if (result.ok) continue;
+      const matching = result.failure.diagnostics.filter(
+        (diagnostic): diagnostic is ContractSourceDiagnostic => diagnostic.code === testCase.code,
+      );
+      expect(matching, testCase.code).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sourceId: 'memory-schema.prisma',
+            span: expect.objectContaining({
+              start: expect.objectContaining({ line: testCase.line }),
+            }),
+          }),
+        ]),
+      );
+      expect(matching, testCase.code).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ sourceId: './external-context.prisma' }),
+        ]),
+      );
+    }
   });
 
   it('load merges parse and symbol-table seeds ahead of interpreter findings', async () => {

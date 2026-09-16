@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
-import { buildSymbolTable, rangeToPslSpan } from '@internal/psl-parser';
+import { buildSymbolTable } from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
 import type { ParseDiagnostic, SourceFile } from '@internal/psl-parser/syntax';
@@ -28,13 +28,12 @@ function collectScalarTypeCodecIds(namespace: AuthoringTypeNamespace): ReadonlyM
 function mapParseDiagnostics(
   diagnostics: readonly ParseDiagnostic[],
   sourceFile: SourceFile,
-  sourceId: string,
 ): ContractSourceDiagnostic[] {
   return diagnostics.map((diagnostic) => ({
     code: diagnostic.code,
     message: diagnostic.message,
-    sourceId,
-    span: rangeToPslSpan(diagnostic.range, sourceFile),
+    sourceId: sourceFile.filename,
+    span: sourceFile.rangeToPslSpan(diagnostic.range),
   }));
 }
 
@@ -44,9 +43,9 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
     inputs: [schemaPath],
     interpret(input, context) {
       return interpretPslDocumentToMongoContract({
+        document: input.document,
         symbolTable: input.symbolTable,
-        sourceFile: input.sourceFile,
-        sourceId: input.sourceId,
+        sources: input.sources,
         seedDiagnostics: [],
         scalarTypeCodecIds: collectScalarTypeCodecIds(context.authoringContributions.type),
         controlMutationDefaults: context.controlMutationDefaults,
@@ -80,22 +79,23 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
         });
       }
 
-      const { document, sourceFile, diagnostics: parseDiagnostics } = parse(schema);
+      const { document, sources, diagnostics: parseDiagnostics } = parse(schema, schemaPath);
+      const sourceFile = sources.sourceFileFor(document.syntax);
       const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
         document,
-        sourceFile,
+        sources,
         pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
       });
 
       // Do not short-circuit on provider-level diagnostics; recovered CST can
       // still produce interpreter diagnostics in the same response.
       const seedDiagnostics = [
-        ...mapParseDiagnostics(parseDiagnostics, sourceFile, schemaPath),
-        ...mapParseDiagnostics(symbolTableDiagnostics, sourceFile, schemaPath),
+        ...mapParseDiagnostics(parseDiagnostics, sourceFile),
+        ...mapParseDiagnostics(symbolTableDiagnostics, sourceFile),
       ];
 
       return withSeedDiagnostics(
-        this.interpret({ document, sourceFile, symbolTable, sourceId: schemaPath }, context),
+        this.interpret({ document, sources, symbolTable }, context),
         seedDiagnostics,
       );
     },
