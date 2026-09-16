@@ -23,7 +23,7 @@ overrides:
   ajv@^8.0.0: '>=8.18.0'
   '@azure/core-rest-pipeline@^1.0.0': '>=1.14.0'
   '@azure/msal-node>uuid': '>=14.0.0'
-  fast-uri@<3.1.5: '>=3.1.5 <4'
+  fast-uri@<3.1.6: '>=3.1.6 <4'
   ws@>=8.0.0 <8.20.1: '>=8.20.1'
 
 peerDependencyRules:
