@@ -157,8 +157,25 @@ class BetterSQLite3Transaction extends BetterSQLite3Queryable<StdClient> impleme
 
   rollback(): Promise<void> {
     debug(`[js::rollback]`)
+    this.#cleanupConnection()
     this.#unlockParent()
     return Promise.resolve()
+  }
+
+  /**
+   * Best-effort cleanup of the SQLite connection. The transaction manager dispatches
+   * ROLLBACK as a regular query on the ordinary rollback path, but on a failed COMMIT
+   * it calls rollback() without a ROLLBACK query, leaving the connection stuck inside
+   * the transaction unless we clean it up here.
+   */
+  #cleanupConnection(): void {
+    if (this.client.inTransaction) {
+      try {
+        this.client.exec('ROLLBACK')
+      } catch (e) {
+        debug('Error while cleaning up transaction: %O', e)
+      }
+    }
   }
 
   async createSavepoint(name: string): Promise<void> {
@@ -205,13 +222,16 @@ export class PrismaBetterSqlite3Adapter extends BetterSQLite3Queryable<StdClient
     const tag = '[js::startTransaction]'
     debug('%s options: %O', tag, options)
 
+    let release: (() => void) | undefined
+
     try {
-      const release = await this.#mutex.acquire()
+      release = await this.#mutex.acquire()
 
       this.client.prepare('BEGIN').run()
 
       return new BetterSQLite3Transaction(this.client, options, this.adapterOptions, release)
     } catch (e) {
+      release?.()
       this.onError(e)
     }
   }
