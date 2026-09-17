@@ -148,30 +148,7 @@ const sqliteTimestampTargetPack = {
           nativeType: 'text',
         },
       },
-      temporal: {
-        createdAt: {
-          kind: 'fieldPreset',
-          output: {
-            codecId: 'sqlite/datetime@1',
-            nativeType: 'text',
-            default: {
-              kind: 'function',
-              expression: 'now()',
-            },
-          },
-        },
-        updatedAt: {
-          kind: 'fieldPreset',
-          output: {
-            codecId: 'sqlite/datetime@1',
-            nativeType: 'text',
-            executionDefaults: {
-              onCreate: { kind: 'generator', id: 'timestampNow' },
-              onUpdate: { kind: 'generator', id: 'timestampNow' },
-            },
-          },
-        },
-      },
+      temporal: temporalConvenienceMirrors.sqlite,
     },
   },
 } as const satisfies TargetPackRef<'sql', 'sqlite'>;
@@ -353,7 +330,7 @@ describe('TS and PSL authoring parity', () => {
   const timestampParityPslSchema = `model User {
   id Int @id
   email String
-  createdAt DateTime @default(now())
+  createdAt temporal.createdAt()
   updatedAt temporal.updatedAt()
   @@map("user")
 }`;

@@ -909,7 +909,7 @@ export const temporalConvenienceMirrors = {
       output: {
         codecId: 'pg/timestamptz-temporal@1',
         nativeType: 'timestamptz',
-        default: { kind: 'function', expression: 'now()' },
+        executionDefaults: { onCreate: TEMPORAL_MIRROR_NOW_PHASE },
       },
     },
     updatedAt: {
@@ -930,7 +930,7 @@ export const temporalConvenienceMirrors = {
       output: {
         codecId: 'sqlite/datetime@1',
         nativeType: 'text',
-        default: { kind: 'function', expression: 'now()' },
+        executionDefaults: { onCreate: TEMPORAL_MIRROR_NOW_PHASE },
       },
     },
     updatedAt: {

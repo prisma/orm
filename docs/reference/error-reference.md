@@ -866,7 +866,7 @@ A raw-SQL tagged template interpolated a JS value whose type cannot be auto-infe
 A value that only a global `Temporal` implementation can produce or read was needed in a runtime that has none. Two paths raise it, and they carry different metadata:
 
 - A Temporal-backed codec (`pg/date-temporal@1`, `pg/timestamp-temporal@1`, `pg/timestamptz-temporal@1`, `pg/time-temporal@1`) encoding or decoding a value. Payload: `codecId`, `operation` (`'encode'` or `'decode'`).
-- The `instantNow` mutation-default generator producing a value — for `temporal.updatedAt()`, or for a `temporal.timestamptz(…)` / `timestamp(…)` preset given an `onCreate`/`onUpdate` of `'now'`. No codec is involved. Payload: `generatorId`. (`temporal.createdAt()` is unaffected: it lowers to a PostgreSQL `now()` storage default, which never reaches a client-side clock.)
+- The `instantNow` mutation-default generator producing a value — for `temporal.createdAt()`, `temporal.updatedAt()`, or for a `temporal.timestamptz(…)` / `timestamp(…)` preset given an `onCreate`/`onUpdate` of `'now'`. No codec is involved. Payload: `generatorId`.
 
 The check is lazy: registering the target, validating a contract, building a runtime, resolving a descriptor and constructing a codec instance all succeed without `Temporal`. Only producing or interpreting a value fails.
 

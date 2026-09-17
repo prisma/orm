@@ -15,7 +15,7 @@ This keeps core/CLI source-agnostic while giving PSL-first SQL users a one-line 
 
 - Interpret a PSL `SymbolTable` into SQL `Contract`
 - Interpret generic PSL attributes into SQL contract semantics (`@id`, `@unique`, `@default`, `@relation`, `@map`, `@@map`, `@@control`)
-- Interpret SQL timestamp semantics: `DateTime @default(now())` (or the equivalent `temporal.createdAt()` field-preset call) as a storage default, and `temporal.updatedAt()` as an execution mutation default
+- Interpret SQL timestamp semantics: `DateTime @default(now())` as a storage default, and `temporal.createdAt()` / `temporal.updatedAt()` as client-side execution mutation defaults
 - Lower shared constructor expressions in both `types {}` blocks and inline field positions (for example `ShortName = sql.String(length: 35)` and `embedding pgvector.Vector(length: 1536)?`)
 - Lower supported default functions through composed registry inputs
 - Resolve Postgres native storage types from bare names and constructor calls in type position (`Char`, `VarChar`, `Numeric`, `Uuid`, `Inet`, `SmallInt`, `Real`, `Timestamp`, `Timestamptz`, `Date`, `Time`, `Timetz`, `Json`, `Jsonb`, `BigIntNumber`, `UnboundedInt`)
@@ -66,8 +66,9 @@ Supported `@default(...)` surface in v1 when composed contributors provide handl
 
 Supported timestamp authoring surface:
 
-- `createdAt DateTime @default(now())` and `createdAt temporal.createdAt()` both lower to the target storage default and do not create an execution mutation default.
-- `updatedAt temporal.updatedAt()` lowers to `timestampNow` on create and on non-empty update mutations. This is application-side because update-time semantics are mutation-aware, not a database trigger.
+- `createdAt DateTime @default(now())` lowers to the target storage default and does not create an execution mutation default.
+- `createdAt temporal.createdAt()` generates a client-side timestamp on create, without a database default.
+- `updatedAt temporal.updatedAt()` uses the same execution generator on create and on non-empty update mutations. Matching representations share one generated value per operation; updates leave `createdAt` unchanged. These semantics are application-side, not database triggers.
 - The Prisma-flavored `@updatedAt` attribute is not supported; references produce `PSL_UNSUPPORTED_FIELD_ATTRIBUTE` with a migration hint pointing at `temporal.updatedAt()`. The hint is suppressed when the field already declares any `temporal.*` preset.
 - `@createdAt` is not supported as a PSL alias.
 

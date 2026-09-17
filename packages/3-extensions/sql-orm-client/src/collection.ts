@@ -147,19 +147,15 @@ function applyCreateDefaults(
   namespaceId: string,
   tableName: string,
   rows: Record<string, unknown>[],
+  defaultValueCache = new Map<string, unknown>(),
 ): void {
-  // Per-operation cache for generators with `stability: 'query'` (e.g.
-  // `timestampNow` for `temporal.updatedAt()`): one generated value
-  // shared across every row in this insert. Per-field generators
-  // (e.g. `cuid`) ignore the cache and vary per row.
-  const defaultValueCache = rows.length > 1 ? new Map<string, unknown>() : undefined;
   for (const row of rows) {
     const applied = ctx.context.applyMutationDefaults({
       op: 'create',
       table: tableName,
       namespace: namespaceId,
       values: row,
-      ...(defaultValueCache ? { defaultValueCache } : {}),
+      defaultValueCache,
     });
     for (const def of applied) {
       row[def.column] = def.value;
@@ -1645,6 +1641,7 @@ class CollectionImpl<
     const mergedFieldToColumn = { ...baseFieldToColumn, ...variantFieldToColumn };
 
     const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+      const defaultValueCache = new Map<string, unknown>();
       for (const row of data) {
         const allMapped: Record<string, unknown> = {};
         for (const [fieldName, value] of Object.entries(row)) {
@@ -1666,7 +1663,7 @@ class CollectionImpl<
         }
 
         const merged = await withMutationScope(runtime, async (scope) => {
-          applyCreateDefaults(collectionCtx, namespaceId, tableName, [baseRow]);
+          applyCreateDefaults(collectionCtx, namespaceId, tableName, [baseRow], defaultValueCache);
           const baseCompiled = compileInsertReturning(
             contract,
             namespaceId,
@@ -1696,7 +1693,13 @@ class CollectionImpl<
 
           const pkValue = baseCreated[pkColumn];
           variantRow[pkColumn] = pkValue;
-          applyCreateDefaults(collectionCtx, namespaceId, variant.table, [variantRow]);
+          applyCreateDefaults(
+            collectionCtx,
+            namespaceId,
+            variant.table,
+            [variantRow],
+            defaultValueCache,
+          );
           const variantCompiled = compileInsertReturning(
             contract,
             namespaceId,
