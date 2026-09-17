@@ -38,8 +38,24 @@ export interface SqlDriver<TBinding = void> extends SqlQueryable {
   close(): Promise<void>;
 }
 
+export type SqlIsolationLevel =
+  | 'readUncommitted'
+  | 'readCommitted'
+  | 'repeatableRead'
+  | 'serializable';
+
+export interface SqlTransactionOptions {
+  /**
+   * Isolation level for the transaction. Omit it to use the database default. A driver whose
+   * database cannot apply the requested level MUST reject with
+   * `DRIVER.ISOLATION_LEVEL_UNSUPPORTED` before it begins the transaction; it MUST NOT ignore
+   * the option.
+   */
+  readonly isolationLevel?: SqlIsolationLevel;
+}
+
 export interface SqlConnection extends SqlQueryable {
-  beginTransaction(): Promise<SqlTransaction>;
+  beginTransaction(options?: SqlTransactionOptions): Promise<SqlTransaction>;
   /**
    * Returns the connection to the pool for reuse. Must only be called when the
    * connection is known to be in a clean, reusable state. If a transaction

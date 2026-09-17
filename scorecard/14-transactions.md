@@ -15,7 +15,7 @@ Legend:
 | `transaction(fn)` (atomic commit/rollback) | ✅ | ✅ | — | `test/e2e/framework/test/transaction.test.ts` (`withTransaction`, the runtime primitive `transaction(fn)` delegates to); `test/e2e/framework/test/transaction-orm.test.ts` (`db.transaction` commit/rollback); `test/e2e/framework/test/sqlite/transaction.test.ts` (`db.transaction`) |
 | ORM operations inside a transaction (read-your-own-write) | ✅ | ✅ | — | `test/e2e/framework/test/transaction-orm.test.ts`; `test/e2e/framework/test/sqlite/transaction.test.ts` (`read-your-own-write`) |
 | Prepared statements (`prepare(decl, cb)`) | ✅ | ✅ | — | `test/e2e/framework/test/runtime.prepared.test.ts`; `test/e2e/framework/test/sqlite/prepared.test.ts` |
-| `isolationLevel` (batch + interactive) | ❌ | ❌ | — | |
+| `isolationLevel` on `transaction(fn, options)` | ✅ | — | — | `test/e2e/framework/test/transaction.test.ts` (`withTransaction` with `isolationLevel`, default unchanged); `test/e2e/framework/test/transaction-orm.test.ts` (`db.transaction(fn, { isolationLevel })`); `test/e2e/framework/test/sqlite/transaction.test.ts` (SQLite rejects a requested level with `DRIVER.ISOLATION_LEVEL_UNSUPPORTED`: every SQLite transaction is serializable) |
 | `timeout` (+ `P2028`) | ❌ | ❌ | — | |
 | `maxWait` (+ `P2028`) | ❌ | ❌ | — | |
 | Client-level `transactionOptions` defaults | ❌ | ❌ | — | |

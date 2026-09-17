@@ -27,6 +27,7 @@ Provide PostgreSQL transport and connection management. Execute SQL statements a
 
 - **Connection Management**: Acquire and release database connections
 - **Statement Execution**: Execute SQL statements with parameters
+- **Transactions**: `beginTransaction()` sends `BEGIN`; `beginTransaction({ isolationLevel })` sends `BEGIN ISOLATION LEVEL <LEVEL>` as one statement, on pooled and single-client bindings alike
 - **Query Result Parser Policy**: Configure `pg` so query rows expose temporal scalars and registered array OIDs as raw server text where the runtime or adapter owns decoding
 - **Query Explanation**: Execute EXPLAIN queries for query analysis
 - **Connection Pooling**: Manage connection pools (when applicable)

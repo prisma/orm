@@ -68,6 +68,24 @@ describe('transaction ORM integration', { timeout: timeouts.spinUpPpgDev }, () =
     });
   });
 
+  it('db.transaction runs the callback at the requested isolation level', async () => {
+    await withPostgresClient(async (db) => {
+      const showIsolation = db.raw.sql`SHOW transaction_isolation`
+        .returnsRow({ transaction_isolation: 'pg/text@1' })
+        .build();
+
+      const level = await db.transaction(
+        async (tx) => {
+          await tx.orm.public.User.create({ email: v('isolation-level@example.com') });
+          return tx.query(showIsolation);
+        },
+        { isolationLevel: 'repeatableRead' },
+      );
+
+      expect(level).toEqual([{ transaction_isolation: 'repeatable read' }]);
+    });
+  });
+
   it('ORM create with nested relation mutation rolls back everything on throw', async () => {
     await withPostgresClient(async (db) => {
       await expect(

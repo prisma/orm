@@ -289,6 +289,8 @@ await db.transaction(async (tx) => {
 
 The callback returns whatever you return from it — the transaction wrapper passes it through. The `tx` object exposes `query(plan)` (rows) and `execute(plan)` (affected count) for SQL-builder plans inside the transaction.
 
+On Postgres, `db.transaction(fn, { isolationLevel })` begins the transaction at the requested level (`'readUncommitted'`, `'readCommitted'`, `'repeatableRead'`, `'serializable'`); see *Transactions* in [`queries-postgres.md`](./queries-postgres.md). The SQLite façade's `db.transaction(fn)` takes no options: every SQLite transaction is serializable, and the SQLite driver rejects a requested level with `DRIVER.ISOLATION_LEVEL_UNSUPPORTED`.
+
 ## Workflow — Switch between Postgres, SQLite, and Mongo
 
 The concept: the façade selection is baked into `db.ts` (`@internal/postgres` or `@internal/mongo`) and `prisma.config.ts` (which target's `config` subpath `ormConfig` is imported from). To switch a project's target, re-run `prisma orm init` in the same directory and pick the other target — the init flow detects the existing scaffold and prompts to reinit (non-interactive runs grant the consent with `--confirm <directory name>`). PN re-scaffolds `prisma.config.ts` and `db.ts` for the new façade. The contract source needs to be re-authored for the new target's idioms (Mongo expresses nested documents; Postgres expresses relations).

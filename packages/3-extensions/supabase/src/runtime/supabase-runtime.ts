@@ -3,7 +3,11 @@ import type { RuntimeExecuteOptions } from '@internal/framework-components/runti
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
 import { type PostgresRuntime, PostgresRuntimeImpl } from '@internal/postgres/runtime';
 import type { SqlStorage } from '@internal/sql-contract/types';
-import type { SqlQueryable, SqlStatementStats } from '@internal/sql-relational-core/ast';
+import type {
+  SqlQueryable,
+  SqlStatementStats,
+  SqlTransactionOptions,
+} from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
   PreparedExecution,
@@ -118,8 +122,8 @@ export class SupabaseRuntimeImpl<
         );
       },
 
-      async transaction(): Promise<RuntimeTransaction> {
-        const tx = await conn.beginTransaction();
+      async transaction(options?: SqlTransactionOptions): Promise<RuntimeTransaction> {
+        const tx = await conn.beginTransaction(options);
         const roleTransaction: RuntimeTransaction &
           PreparedStatementQueryTarget &
           PreparedStatementExecuteTarget = {

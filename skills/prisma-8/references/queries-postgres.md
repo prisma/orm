@@ -360,6 +360,18 @@ await db.transaction(async (tx) => {
 
 The callback's return value passes through `db.transaction(...)`. Capture inserted ids out of the callback and use them downstream after commit.
 
+**Isolation level.** Pass it as the second argument: `db.transaction(fn, { isolationLevel })`, one of `'readUncommitted'`, `'readCommitted'`, `'repeatableRead'`, `'serializable'`. Omit it for the database default (`READ COMMITTED` unless the server is configured otherwise). The driver sends `BEGIN ISOLATION LEVEL <LEVEL>` as one statement — do not hand-write `SET TRANSACTION ISOLATION LEVEL ...` through `db.raw.sql`. `withTransaction(runtime, fn, options)` and a Supabase `RoleBoundDb.transaction(fn, options)` take the same option. PostgreSQL aborts a `repeatableRead` or `serializable` transaction that conflicts with a concurrent one (SQLSTATE `40001`); Prisma 8 does not retry it, so catch it and re-run the whole `db.transaction(...)` call.
+
+```typescript
+await db.transaction(
+  async (tx) => {
+    const user = await tx.orm.public.User.where({ id }).first();
+    if (user) await tx.orm.public.Post.where({ userId: user.id }).update({ status: 'archived' });
+  },
+  { isolationLevel: 'serializable' },
+);
+```
+
 ## Namespace-aware accessors
 
 On Postgres both `db.sql` and `db.orm` are keyed by storage namespace (the Postgres schema) — always, not only when a contract declares more than one. A model outside any `namespace { }` block is in `public`:

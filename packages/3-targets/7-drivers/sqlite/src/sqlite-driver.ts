@@ -10,6 +10,7 @@ import type {
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import { InternalError } from '@internal/utils/internal-error';
 import { normalizeSqliteError } from './normalize-error';
@@ -19,7 +20,10 @@ export type SqliteBinding = { readonly kind: 'path'; readonly path: string };
 export type SqliteRuntimeDriver = RuntimeDriverInstance<'sql', 'sqlite'> & SqlDriver<SqliteBinding>;
 
 interface DriverRuntimeError extends Error {
-  readonly code: 'DRIVER.NOT_CONNECTED' | 'DRIVER.ALREADY_CONNECTED';
+  readonly code:
+    | 'DRIVER.NOT_CONNECTED'
+    | 'DRIVER.ALREADY_CONNECTED'
+    | 'DRIVER.ISOLATION_LEVEL_UNSUPPORTED';
   readonly category: 'DRIVER';
   readonly severity: 'error';
   readonly details?: Record<string, unknown>;
@@ -108,7 +112,14 @@ abstract class SqliteQueryable implements SqlQueryable {
 }
 
 export class SqliteConnectionImpl extends SqliteQueryable implements SqlConnection {
-  async beginTransaction(): Promise<SqlTransaction> {
+  async beginTransaction(options?: SqlTransactionOptions): Promise<SqlTransaction> {
+    if (options?.isolationLevel !== undefined) {
+      throw driverError(
+        'DRIVER.ISOLATION_LEVEL_UNSUPPORTED',
+        'SQLite has no per-transaction isolation level: every SQLite transaction is serializable. Remove the isolationLevel option.',
+        { target: 'sqlite', isolationLevel: options.isolationLevel },
+      );
+    }
     try {
       this.db.exec('BEGIN');
       return new SqliteTransactionImpl(this.db);

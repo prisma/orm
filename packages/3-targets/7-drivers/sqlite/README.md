@@ -29,7 +29,7 @@ Provide SQLite transport and connection management. Execute SQL statements and m
 - **Query Explanation**: Execute `EXPLAIN QUERY PLAN` queries for query analysis
 - **Persistent Connection**: Top-level `execute()`/`query()`/`explain()` reuse a persistent connection opened at `connect()` time
 - **Scoped Connections**: `acquireConnection()` opens fresh `DatabaseSync` handles for isolated scopes (transactions)
-- **Transaction Support**: `BEGIN`/`COMMIT`/`ROLLBACK` via `SqliteTransactionImpl`
+- **Transaction Support**: `BEGIN`/`COMMIT`/`ROLLBACK` via `SqliteTransactionImpl`. `beginTransaction({ isolationLevel })` rejects with `DRIVER.ISOLATION_LEVEL_UNSUPPORTED`: every SQLite transaction is serializable, so there is no level to select
 - **PRAGMA Configuration**: Enables `PRAGMA foreign_keys = ON` and `PRAGMA busy_timeout = 5000` on every opened connection
 - **Error Normalization**: Maps SQLite extended error codes to SQL state codes (23505 unique, 23503 FK, 23502 NOT NULL) and distinguishes transient (BUSY/LOCKED) from permanent errors
 

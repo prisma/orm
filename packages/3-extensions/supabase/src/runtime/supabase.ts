@@ -15,7 +15,7 @@ import { createRawLane, sql } from '@internal/sql-builder/runtime';
 import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { orm } from '@internal/sql-orm-client';
-import type { SqlStatementStats } from '@internal/sql-relational-core/ast';
+import type { SqlStatementStats, SqlTransactionOptions } from '@internal/sql-relational-core/ast';
 import type { SqlExecutionPlan, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
   ExecutionContext,
@@ -65,7 +65,10 @@ export interface RoleBoundDb<TContract extends Contract<SqlStorage>> {
     plan: SqlExecutionPlan | SqlQueryPlan,
     options?: RuntimeExecuteOptions,
   ): Promise<SqlStatementStats>;
-  transaction<R>(fn: (tx: TransactionContext) => PromiseLike<R>): Promise<R>;
+  transaction<R>(
+    fn: (tx: TransactionContext) => PromiseLike<R>,
+    options?: SqlTransactionOptions,
+  ): Promise<R>;
 }
 
 /**
@@ -387,8 +390,15 @@ export default async function supabase<TContract extends Contract<SqlStorage>>(
       ): Promise<SqlStatementStats> {
         return roleRuntime.executeWithRole(plan, binding, execOptions);
       },
-      transaction<R>(fn: (tx: TransactionContext) => PromiseLike<R>): Promise<R> {
-        return withTransaction({ connection: () => roleRuntime.openRoleSession(binding) }, fn);
+      transaction<R>(
+        fn: (tx: TransactionContext) => PromiseLike<R>,
+        options?: SqlTransactionOptions,
+      ): Promise<R> {
+        return withTransaction(
+          { connection: () => roleRuntime.openRoleSession(binding) },
+          fn,
+          options,
+        );
       },
     };
   }

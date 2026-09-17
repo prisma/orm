@@ -369,6 +369,25 @@ describe('postgres', () => {
     expect(fakeClient.query).toHaveBeenCalledWith(expect.stringContaining('BEGIN'));
   });
 
+  it('transaction() begins at the requested isolation level', async () => {
+    const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
+    const fakeClient = {
+      query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
+      release: vi.fn(),
+      on: vi.fn(),
+    };
+    (pool as unknown as { connect: typeof vi.fn }).connect = vi.fn().mockResolvedValue(fakeClient);
+    const db = postgres({ contract, pg: pool });
+    await db.connect();
+
+    await db.transaction(async () => undefined, { isolationLevel: 'serializable' });
+
+    const transactionControl = fakeClient.query.mock.calls
+      .map(([statement]) => statement)
+      .filter((statement) => typeof statement === 'string');
+    expect(transactionControl).toEqual(['BEGIN ISOLATION LEVEL SERIALIZABLE', 'COMMIT']);
+  });
+
   it('transaction() provides sql on the transaction context', async () => {
     const pool = new Pool({ connectionString: 'postgres://localhost:5432/db' });
     const fakeClient = {

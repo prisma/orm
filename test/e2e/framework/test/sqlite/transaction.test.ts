@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
+import { withTransaction } from '@prisma/orm-sqlite/family-runtime';
 import sqlite from '@prisma/orm-sqlite/runtime';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -119,6 +120,21 @@ describe('transaction e2e via sqlite() facade', { timeout: timeouts.databaseOper
       id: number;
     }>;
     expect(rows).toHaveLength(1);
+  });
+
+  it('rejects a requested isolation level and leaves the database usable', async () => {
+    const { db, rawDb } = handle;
+
+    await expect(
+      withTransaction(db.runtime(), async () => undefined, { isolationLevel: 'serializable' }),
+    ).rejects.toMatchObject({ code: 'DRIVER.ISOLATION_LEVEL_UNSUPPORTED' });
+
+    await db.transaction(async (tx) => {
+      await tx.orm.User.create({ id: 300, name: 'AfterReject', email: 'after@example.com' });
+    });
+    expect(rawDb.prepare('SELECT name FROM users WHERE id = 300').all()).toEqual([
+      { name: 'AfterReject' },
+    ]);
   });
 
   it('escaped AsyncIterableResult rejects with TRANSACTION_CLOSED after the transaction has ended', async () => {

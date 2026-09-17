@@ -928,6 +928,10 @@ Calling `connect(binding)` on a driver — or `connect()` on a target facade cli
 
 A control-plane driver could not establish a database connection (`driver.create(url)` in the SQLite, Postgres, and Mongo control drivers). The `why` carries the underlying driver message and the original error is attached as `cause`; connection URLs in meta are redacted. Payload: `path` (SQLite); `sqlState` plus redacted URL fields (Postgres); redacted URL fields (Mongo).
 
+### DRIVER.ISOLATION_LEVEL_UNSUPPORTED
+
+A transaction was begun with an `isolationLevel` the target database cannot apply. The SQLite driver raises it for every requested level: each SQLite transaction is already serializable, so remove the option. The Postgres driver raises it for a value outside `readUncommitted`, `readCommitted`, `repeatableRead` and `serializable`, which only untyped callers can pass. The driver rejects before it begins the transaction, so the connection stays usable and `db.transaction(...)` / `withTransaction(...)` release it without calling the callback. Payload: `target`, `isolationLevel`.
+
 ### DRIVER.NOT_CONNECTED
 
 Using a driver, a target facade client, or the CLI control client before `connect(...)` has been called (or after it was closed) — surfaces from runtime `query` / `execute`, a prepared statement's `query(target, params, options?)`, `acquireConnection`, or `explain`, including lazily when iterating a query result.

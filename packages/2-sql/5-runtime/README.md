@@ -71,7 +71,8 @@ const db = postgres<Contract>({
 
 - `SqlRuntime` - Abstract family-layer base class; subclass to build a target runtime (construction happens via target factories — `postgres()` from `@internal/postgres`, `sqlite()` from `@internal/sqlite`)
 - `Runtime` - Runtime instance interface
-- `withTransaction` - Helper to run a callback inside a transaction against any `Runtime`
+- `withTransaction` - Helper to run a callback inside a transaction against any `Runtime`; the optional third argument carries `SqlTransactionOptions` (`isolationLevel`) to the driver
+- `SqlTransactionOptions`, `SqlIsolationLevel` - Options accepted by `withTransaction` and `RuntimeConnection.transaction`
 - `VerifyMarkerOption` - Marker-verification option (`'onFirstUse'` default; `false` to skip)
 - `RuntimeTelemetryEvent`, `TelemetryOutcome` - Telemetry event types
 

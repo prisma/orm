@@ -26,6 +26,7 @@ import type {
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import { collectOrderedParamRefs } from '@internal/sql-relational-core/ast';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
@@ -120,7 +121,7 @@ export interface Runtime extends RuntimeQueryable {
 }
 
 export interface RuntimeConnection extends RuntimeQueryable {
-  transaction(): Promise<RuntimeTransaction>;
+  transaction(options?: SqlTransactionOptions): Promise<RuntimeTransaction>;
   /**
    * Returns the connection to the pool for reuse. Only call this when the connection is known to be in a clean state. If a transaction commit/rollback failed or the connection is otherwise suspect, call `destroy(reason)` instead.
    */
@@ -779,8 +780,8 @@ export abstract class SqlRuntimeBase<TContract extends Contract<SqlStorage> = Co
     const wrappedConnection: RuntimeConnection &
       PreparedStatementQueryTarget &
       PreparedStatementExecuteTarget = {
-      async transaction(): Promise<RuntimeTransaction> {
-        const driverTx = await driverConn.beginTransaction();
+      async transaction(options?: SqlTransactionOptions): Promise<RuntimeTransaction> {
+        const driverTx = await driverConn.beginTransaction(options);
         return self.wrapTransaction(driverTx);
       },
       async release(): Promise<void> {
@@ -986,9 +987,16 @@ export interface ConnectionProvider {
 export async function withTransaction<R>(
   runtime: ConnectionProvider,
   fn: (tx: TransactionContext) => PromiseLike<R>,
+  options?: SqlTransactionOptions,
 ): Promise<R> {
   const connection = await runtime.connection();
-  const transaction = await connection.transaction();
+  let transaction: RuntimeTransaction;
+  try {
+    transaction = await connection.transaction(options);
+  } catch (error) {
+    await connection.release().catch(() => undefined);
+    throw error;
+  }
 
   let invalidated = false;
 

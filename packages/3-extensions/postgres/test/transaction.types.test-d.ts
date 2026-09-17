@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
+import type { SqlIsolationLevel } from '@internal/sql-relational-core/ast';
 import { expectTypeOf, test } from 'vitest';
 import type { PostgresClient, PostgresTransactionContext } from '../src/runtime/postgres';
 
@@ -32,4 +33,17 @@ test('tx.orm has the same type as db.orm', () => {
   type DbOrm = PostgresClient<TestContract>['orm'];
   type TxOrm = PostgresTransactionContext<TestContract>['orm'];
   expectTypeOf<TxOrm>().toEqualTypeOf<DbOrm>();
+});
+
+test('db.transaction accepts an optional isolation level', () => {
+  const db = {} as PostgresClient<TestContract>;
+
+  expectTypeOf(db.transaction)
+    .parameter(1)
+    .toEqualTypeOf<{ readonly isolationLevel?: SqlIsolationLevel } | undefined>();
+  expectTypeOf(db.transaction(async (_tx) => 42, { isolationLevel: 'serializable' })).toEqualTypeOf<
+    Promise<number>
+  >();
+  // @ts-expect-error snapshot is not a PostgreSQL isolation level
+  db.transaction(async (_tx) => 42, { isolationLevel: 'snapshot' });
 });

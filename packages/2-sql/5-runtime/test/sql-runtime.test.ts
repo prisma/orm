@@ -62,6 +62,7 @@ interface DriverMockSpies {
   transactionStats: ReturnType<typeof vi.fn>;
   connectionRelease: ReturnType<typeof vi.fn>;
   connectionDestroy: ReturnType<typeof vi.fn>;
+  connectionBeginTransaction: ReturnType<typeof vi.fn>;
   transactionCommit: ReturnType<typeof vi.fn>;
   transactionRollback: ReturnType<typeof vi.fn>;
   driverClose: ReturnType<typeof vi.fn>;
@@ -160,6 +161,7 @@ function createMockDriver(): MockSqlDriver {
       transactionStats,
       connectionRelease: connection.release,
       connectionDestroy: connection.destroy,
+      connectionBeginTransaction: connection.beginTransaction,
       transactionCommit: transaction.commit,
       transactionRollback: transaction.rollback,
       driverClose,
@@ -1116,6 +1118,50 @@ describe('withTransaction', () => {
     }).catch(() => {});
 
     expect(txRef!.invalidated).toBe(true);
+  });
+
+  it('begins with no options by default', async () => {
+    const { runtime, driver } = createRuntimeForTransaction();
+
+    await withTransaction(runtime, async () => undefined);
+
+    expect(driver.__spies.connectionBeginTransaction).toHaveBeenCalledExactlyOnceWith(undefined);
+  });
+
+  it('forwards the isolation level to the driver', async () => {
+    const { runtime, driver } = createRuntimeForTransaction();
+
+    await withTransaction(runtime, async () => undefined, { isolationLevel: 'serializable' });
+
+    expect(driver.__spies.connectionBeginTransaction).toHaveBeenCalledExactlyOnceWith({
+      isolationLevel: 'serializable',
+    });
+  });
+
+  it('forwards the isolation level from connection.transaction()', async () => {
+    const { runtime, driver } = createRuntimeForTransaction();
+    const connection = await runtime.connection();
+
+    await connection.transaction({ isolationLevel: 'repeatableRead' });
+
+    expect(driver.__spies.connectionBeginTransaction).toHaveBeenCalledExactlyOnceWith({
+      isolationLevel: 'repeatableRead',
+    });
+  });
+
+  it('releases the connection and skips the callback when the transaction cannot begin', async () => {
+    const { runtime, driver } = createRuntimeForTransaction();
+    const beginError = new Error('isolation level unsupported');
+    driver.__spies.connectionBeginTransaction.mockRejectedValueOnce(beginError);
+    const callback = vi.fn();
+
+    await expect(
+      withTransaction(runtime, callback, { isolationLevel: 'serializable' }),
+    ).rejects.toBe(beginError);
+
+    expect(callback).not.toHaveBeenCalled();
+    expect(driver.__spies.connectionRelease).toHaveBeenCalledOnce();
+    expect(driver.__spies.connectionDestroy).not.toHaveBeenCalled();
   });
 
   it('releases connection independently across sequential transactions', async () => {

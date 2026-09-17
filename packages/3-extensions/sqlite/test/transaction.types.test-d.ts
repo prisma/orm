@@ -33,3 +33,10 @@ test('tx.orm has the same type as db.orm', () => {
   type TxOrm = SqliteTransactionContext<TestContract>['orm'];
   expectTypeOf<TxOrm>().toEqualTypeOf<DbOrm>();
 });
+
+test('db.transaction takes no isolation level', () => {
+  const db = {} as SqliteClient<TestContract>;
+
+  // @ts-expect-error SQLite has no per-transaction isolation level to request
+  db.transaction(async (_tx) => 42, { isolationLevel: 'serializable' });
+});

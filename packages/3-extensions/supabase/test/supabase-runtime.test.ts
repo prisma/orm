@@ -12,6 +12,7 @@ import type {
   PreparedStatementHandle,
   SqlDriver,
   SqlExecuteRequest,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import {
   BinaryExpr,
@@ -102,7 +103,7 @@ interface RecordingConnection {
   query: ReturnType<typeof vi.fn>;
   release: ReturnType<typeof vi.fn>;
   destroy: ReturnType<typeof vi.fn>;
-  beginTransaction(): Promise<RecordingTransaction>;
+  beginTransaction(options?: SqlTransactionOptions): Promise<RecordingTransaction>;
   readonly transaction: RecordingTransaction;
 }
 
@@ -198,7 +199,7 @@ function createRecordingDriver(
     }),
     release: vi.fn().mockResolvedValue(undefined),
     destroy: vi.fn().mockResolvedValue(undefined),
-    beginTransaction: () => beginTransactionSpy(),
+    beginTransaction: (options) => beginTransactionSpy(options),
   };
 
   const acquireConnectionSpy = vi.fn().mockResolvedValue(connection);
@@ -514,6 +515,21 @@ describe('SupabaseRuntimeImpl', () => {
       expect(driver.connection.transaction.execute).toHaveBeenCalledOnce();
       expect(driver.connection.query).not.toHaveBeenCalled();
       expect(cleanupEvents).toEqual(['commit', 'reset', 'release']);
+    });
+  });
+
+  describe('openRoleSession — transaction options', () => {
+    it('forwards the isolation level to the driver connection', async () => {
+      const { runtime, driver } = createTestSetup();
+      const session = await runtime.openRoleSession({ role: 'authenticated' });
+
+      const tx = await session.transaction({ isolationLevel: 'serializable' });
+      await tx.commit();
+      await session.release();
+
+      expect(driver.connection.beginTransactionSpy).toHaveBeenCalledExactlyOnceWith({
+        isolationLevel: 'serializable',
+      });
     });
   });
 

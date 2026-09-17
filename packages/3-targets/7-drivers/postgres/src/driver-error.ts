@@ -1,5 +1,9 @@
 export interface DriverRuntimeError extends Error {
-  readonly code: 'DRIVER.NOT_CONNECTED' | 'DRIVER.ALREADY_CONNECTED' | 'DRIVER.PREPARE_FAILED';
+  readonly code:
+    | 'DRIVER.NOT_CONNECTED'
+    | 'DRIVER.ALREADY_CONNECTED'
+    | 'DRIVER.PREPARE_FAILED'
+    | 'DRIVER.ISOLATION_LEVEL_UNSUPPORTED';
   readonly category: 'DRIVER';
   readonly severity: 'error';
   readonly details?: Record<string, unknown>;

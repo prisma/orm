@@ -5,9 +5,11 @@ import type {
   SqlDriverState,
   SqlExecuteRequest,
   SqlExplainResult,
+  SqlIsolationLevel,
   SqlQueryable,
   SqlStatementStats,
   SqlTransaction,
+  SqlTransactionOptions,
 } from '@internal/sql-relational-core/ast';
 import { blindCast } from '@internal/utils/casts';
 import { suppressIdleConnectionErrors } from '@internal/utils/suppress-idle-connection-errors';
@@ -521,10 +523,11 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
     return this.#txState.open;
   }
 
-  async beginTransaction(): Promise<SqlTransaction> {
+  async beginTransaction(options?: SqlTransactionOptions): Promise<SqlTransaction> {
+    const beginSql = beginStatement(options?.isolationLevel);
     const releaseLock = await acquireClientQueryLock(this.#connection);
     try {
-      await this.#connection.query('BEGIN').catch(rethrowNormalizedError);
+      await this.#connection.query(beginSql).catch(rethrowNormalizedError);
     } finally {
       releaseLock();
     }
@@ -570,6 +573,27 @@ class PostgresConnectionImpl extends PostgresQueryable implements SqlConnection 
       onRelease?.();
     }
   }
+}
+
+const ISOLATION_LEVEL_SQL: Record<SqlIsolationLevel, string> = {
+  readUncommitted: 'READ UNCOMMITTED',
+  readCommitted: 'READ COMMITTED',
+  repeatableRead: 'REPEATABLE READ',
+  serializable: 'SERIALIZABLE',
+};
+
+function beginStatement(isolationLevel: SqlIsolationLevel | undefined): string {
+  if (isolationLevel === undefined) {
+    return 'BEGIN';
+  }
+  if (!Object.hasOwn(ISOLATION_LEVEL_SQL, isolationLevel)) {
+    throw driverError(
+      'DRIVER.ISOLATION_LEVEL_UNSUPPORTED',
+      `PostgreSQL has no isolation level "${String(isolationLevel)}". Use one of: ${Object.keys(ISOLATION_LEVEL_SQL).join(', ')}.`,
+      { target: 'postgres', isolationLevel },
+    );
+  }
+  return `BEGIN ISOLATION LEVEL ${ISOLATION_LEVEL_SQL[isolationLevel]}`;
 }
 
 class PostgresTransactionImpl extends PostgresQueryable implements SqlTransaction {

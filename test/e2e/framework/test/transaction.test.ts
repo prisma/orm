@@ -44,6 +44,22 @@ describe('transaction E2E', { timeout: 30000 }, () => {
     });
   });
 
+  it('applies the requested isolation level on a fresh runtime', async () => {
+    await withTestRuntime<Contract>(contractJsonPath, async ({ raw, runtime }) => {
+      const showIsolation = raw.sql`SHOW transaction_isolation`
+        .returnsRow({ transaction_isolation: 'pg/text@1' })
+        .build();
+
+      const requested = await withTransaction(runtime, (tx) => tx.query(showIsolation), {
+        isolationLevel: 'serializable',
+      });
+      const unspecified = await withTransaction(runtime, (tx) => tx.query(showIsolation));
+
+      expect(requested).toEqual([{ transaction_isolation: 'serializable' }]);
+      expect(unspecified).toEqual([{ transaction_isolation: 'read committed' }]);
+    });
+  });
+
   it('rolls back all writes on error', async () => {
     await withTestRuntime<Contract>(contractJsonPath, async ({ db, runtime, client }) => {
       await expect(

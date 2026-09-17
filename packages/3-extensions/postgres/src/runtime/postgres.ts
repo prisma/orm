@@ -7,6 +7,7 @@ import { sql as sqlBuilder } from '@internal/sql-builder/runtime';
 import type { Db, RawLane } from '@internal/sql-builder/types';
 import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import { orm as ormBuilder, type PreparedFrom, prepareQuery } from '@internal/sql-orm-client';
+import type { SqlTransactionOptions } from '@internal/sql-relational-core/ast';
 import type { CodecTypesBase } from '@internal/sql-relational-core/expression';
 import type { Preparable, SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type {
@@ -64,7 +65,10 @@ export interface PostgresClient<TContract extends Contract<SqlStorage>> {
   readonly stack: SqlExecutionStackWithDriver<PostgresTargetId>;
   connect(bindingInput?: PostgresBindingInput): Promise<Runtime>;
   runtime(): Runtime;
-  transaction<R>(fn: (tx: PostgresTransactionContext<TContract>) => PromiseLike<R>): Promise<R>;
+  transaction<R>(
+    fn: (tx: PostgresTransactionContext<TContract>) => PromiseLike<R>,
+    options?: SqlTransactionOptions,
+  ): Promise<R>;
   prepare<
     D extends Declaration<CT>,
     Q extends SqlQueryPlan | Preparable<unknown, unknown>,
@@ -347,37 +351,44 @@ export default function postgres<TContract extends Contract<SqlStorage>>(
 
     prepare,
 
-    transaction<R>(fn: (tx: PostgresTransactionContext<TContract>) => PromiseLike<R>): Promise<R> {
-      return withTransaction(getRuntime(), (txCtx) => {
-        const rawCodecInferer = stack.adapter.rawCodecInferer;
-        const txSql: Db<TContract> = sqlBuilder<TContract>({
-          context,
-          rawCodecInferer,
-        });
+    transaction<R>(
+      fn: (tx: PostgresTransactionContext<TContract>) => PromiseLike<R>,
+      options?: SqlTransactionOptions,
+    ): Promise<R> {
+      return withTransaction(
+        getRuntime(),
+        (txCtx) => {
+          const rawCodecInferer = stack.adapter.rawCodecInferer;
+          const txSql: Db<TContract> = sqlBuilder<TContract>({
+            context,
+            rawCodecInferer,
+          });
 
-        const txOrm: OrmClient<TContract> = ormBuilder({
-          runtime: {
-            query(plan) {
-              return txCtx.query(plan);
+          const txOrm: OrmClient<TContract> = ormBuilder({
+            runtime: {
+              query(plan) {
+                return txCtx.query(plan);
+              },
+              execute(plan) {
+                return txCtx.execute(plan);
+              },
             },
-            execute(plan) {
-              return txCtx.execute(plan);
-            },
-          },
-          context,
-        });
+            context,
+          });
 
-        // Use `txCtx` as the prototype instead of spreading it so that live
-        // accessors (notably the `invalidated` getter, which reads a closure
-        // variable in `withTransaction`) remain wired to the original object.
-        // Spreading would evaluate the getter once and freeze its value.
-        const tx: PostgresTransactionContext<TContract> = Object.assign(
-          castAs<TransactionContext>(Object.create(txCtx)),
-          { sql: txSql, orm: txOrm, enums, nativeEnums },
-        );
+          // Use `txCtx` as the prototype instead of spreading it so that live
+          // accessors (notably the `invalidated` getter, which reads a closure
+          // variable in `withTransaction`) remain wired to the original object.
+          // Spreading would evaluate the getter once and freeze its value.
+          const tx: PostgresTransactionContext<TContract> = Object.assign(
+            castAs<TransactionContext>(Object.create(txCtx)),
+            { sql: txSql, orm: txOrm, enums, nativeEnums },
+          );
 
-        return fn(tx);
-      });
+          return fn(tx);
+        },
+        options,
+      );
     },
 
     async close(): Promise<void> {

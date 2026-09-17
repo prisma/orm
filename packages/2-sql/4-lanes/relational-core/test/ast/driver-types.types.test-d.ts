@@ -5,6 +5,7 @@ import type {
   SqlExecuteRequest,
   SqlStatementStats,
   SqlTransaction,
+  SqlTransactionOptions,
 } from '../../src/ast/driver-types';
 
 type PoolBinding = { pool: { connect: () => Promise<unknown> } };
@@ -62,4 +63,17 @@ test('mock driver implementing SqlDriver<TestBinding> compiles and accepts bindi
   ).resolves.toEqualTypeOf<SqlStatementStats>();
   expectTypeOf(driver.connect).toBeFunction();
   expectTypeOf(driver.connect).parameter(0).toEqualTypeOf<TestBinding>();
+});
+
+test('beginTransaction takes an optional isolation level', () => {
+  expectTypeOf<SqlConnection['beginTransaction']>()
+    .parameter(0)
+    .toEqualTypeOf<SqlTransactionOptions | undefined>();
+  expectTypeOf<SqlTransactionOptions['isolationLevel']>().toEqualTypeOf<
+    'readUncommitted' | 'readCommitted' | 'repeatableRead' | 'serializable' | undefined
+  >();
+});
+
+test('a driver written without the options parameter still satisfies SqlConnection', () => {
+  expectTypeOf<() => Promise<SqlTransaction>>().toExtend<SqlConnection['beginTransaction']>();
 });

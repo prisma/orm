@@ -143,7 +143,7 @@ const updated = await userDb.orm.public.Profile
   .updateAndCount({ username: 'new-name' });
 ```
 
-Notes: `asAnon()` / `asServiceRole()` are sync; only `asUser` is async. Multi-namespace contracts address models by coordinate (`orm.public.Profile`, `sql.public.profile`) — see `references/queries.md` § *Namespace-aware accessors*. `RoleBoundDb.transaction(fn)` wraps work in a transaction on the role-bound session.
+Notes: `asAnon()` / `asServiceRole()` are sync; only `asUser` is async. Multi-namespace contracts address models by coordinate (`orm.public.Profile`, `sql.public.profile`) — see `references/queries.md` § *Namespace-aware accessors*. `RoleBoundDb.transaction(fn, options?)` wraps work in a transaction on the role-bound session; `options.isolationLevel` selects the PostgreSQL isolation level (see *Transactions* in `references/queries-postgres.md`).
 
 ## Workflow — Admin reads of `auth.*` / `storage.*`
 

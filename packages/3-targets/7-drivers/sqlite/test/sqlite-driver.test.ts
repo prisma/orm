@@ -303,3 +303,24 @@ describe('SqliteConnectionImpl cleanup retries', () => {
     expect(db.isOpen).toBe(false);
   });
 });
+
+describe('SqliteConnection isolation level', () => {
+  it('rejects a requested isolation level without beginning a transaction', async () => {
+    const driver = createDriver();
+    await executeSql(driver, 'CREATE TABLE t(id INTEGER PRIMARY KEY)');
+    const conn = await driver.acquireConnection();
+
+    await expect(conn.beginTransaction({ isolationLevel: 'serializable' })).rejects.toMatchObject({
+      code: 'DRIVER.ISOLATION_LEVEL_UNSUPPORTED',
+      details: { target: 'sqlite', isolationLevel: 'serializable' },
+    });
+
+    const tx = await conn.beginTransaction();
+    await executeSql(tx, 'INSERT INTO t VALUES (?)', [1]);
+    await tx.commit();
+    await conn.release();
+
+    expect(await queryRows<{ id: number }>(driver, 'SELECT id FROM t')).toEqual([{ id: 1 }]);
+    await driver.close();
+  });
+});
