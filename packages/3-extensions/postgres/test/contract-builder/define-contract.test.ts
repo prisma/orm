@@ -54,7 +54,7 @@ describe('postgres defineContract wrap', () => {
                   precise: { codecId: 'pg/timestamptz-date@1', typeParams: { precision: 3 } },
                   created: {
                     codecId: 'pg/timestamptz-date@1',
-                    default: { kind: 'function', expression: 'now()' },
+                    nativeType: 'timestamptz',
                   },
                   updated: { codecId: 'pg/timestamptz-date@1' },
                 },
@@ -63,6 +63,13 @@ describe('postgres defineContract wrap', () => {
           },
         },
       },
+    });
+    expect(result.storage.namespaces.public.entries.table.Event.columns.created).not.toHaveProperty(
+      'default',
+    );
+    expect(result.execution?.mutations?.defaults).toContainEqual({
+      ref: { namespace: 'public', table: 'Event', column: 'created' },
+      onCreate: { kind: 'generator', id: 'timestampNow' },
     });
   });
 
