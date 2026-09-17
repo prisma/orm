@@ -162,7 +162,7 @@
     - **Prisma uses JavaScript drivers**
     - **Query execution code is written in TypeScript in Prisma**
     - PSL parser and query compiler/planner is still written in Rust and compiled to WebAssembly. There are no native binaries or library addons in Prisma Client.
-    - Schema engine for Prisma Migrate still exists and is still a native binary.
+    - Schema engine for Prisma Migrate still exists and is still a native binary. Its `--datasource <JSON>` CLI argument (serialized `Datasource` from `PrismaConfigInternal`) is _required_ since engines PR #5683 — spawning the binary without it fails at startup with a structopt error, surfaced as `Error in Schema engine`. When no datasource is configured (e.g. schema-only `migrate diff`), `SchemaEngineCLI` passes `--datasource {}`; both fields of the engine-side `DatasourceUrls` struct are optional, so `{}` is always accepted.
 
 ## Debugging and making changes to Rust/WebAssembly code
 
