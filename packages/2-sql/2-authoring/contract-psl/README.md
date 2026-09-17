@@ -28,6 +28,7 @@ This keeps core/CLI source-agnostic while giving PSL-first SQL users a one-line 
 - Preserve parser diagnostics and add interpreter diagnostics with stable codes
 - Return `notOk` with structured diagnostics for unsupported constructs
 - Keep interpretation deterministic for equivalent AST inputs
+- Bind `@@base` through the parser's checked model-reference factory: local namespace first, then top-level, never sibling namespaces. Preserve the selected declaration through discriminator association and STI/MTI storage lowering. Missing or wrong-kind references produce source-anchored shared expression diagnostics; discriminator and inheritance semantics remain separate checks. Reference lookup does not extend the contract's supported inheritance relationships.
 
 Determinism note:
 - Relation metadata emission is intentionally **sorted by storage table name, then model name, then relation field name** (not PSL declaration order) so `contract.json` snapshots and hashes are stable across environments.

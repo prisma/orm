@@ -24,6 +24,7 @@ import type {
 import {
   bool,
   diagnosticSource,
+  createEntityResolver,
   entityRef,
   fieldAttribute,
   fieldRef,
@@ -519,17 +520,24 @@ const discriminatorModelSpec = modelAttribute('discriminator', {
     { key: 'field', type: fieldRef(), documentation: 'The discriminator field on this model.' },
   ],
 });
-const baseModelSpec = modelAttribute('base', {
-  documentation: 'Declares this model as a variant of a base model.',
-  positional: [
-    { key: 'base', type: entityRef(), documentation: 'The base model to inherit from.' },
-    {
-      key: 'value',
-      type: str(),
-      documentation: 'The discriminator value identifying this variant.',
-    },
-  ],
-});
+function baseModelSpec(ctx: AttributeSpecContext) {
+  const resolve = createEntityResolver({ symbols: ctx.symbols, owner: ctx.model });
+  return modelAttribute('base', {
+    documentation: 'Declares this model as a variant of a base model.',
+    positional: [
+      {
+        key: 'base',
+        type: entityRef({ kind: 'model' }, resolve),
+        documentation: 'The base model to inherit from.',
+      },
+      {
+        key: 'value',
+        type: str(),
+        documentation: 'The discriminator value identifying this variant.',
+      },
+    ],
+  });
+}
 
 function relationAttributeSpan(ctx: FieldAttributeCtx): PslSpan {
   const node = findFieldAttributeNode(ctx.field, 'relation');
@@ -661,7 +669,7 @@ export const sqlAttributeSpecs = {
     check: () => checkModelSpec,
     control: () => controlModelSpec,
     discriminator: () => discriminatorModelSpec,
-    base: () => baseModelSpec,
+    base: baseModelSpec,
   },
   field: {
     map: () => mapFieldSpec,

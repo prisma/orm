@@ -15,7 +15,9 @@ import { describe, expect, it } from 'vitest';
 import {
   fieldSpecContext,
   findFieldAttributeNode,
+  findModelAttributeNode,
   interpretFieldAttribute,
+  interpretModelAttribute,
   modelSpecContext,
   sqlAttributeSpecs,
 } from '../src/sql-attribute-specs';
@@ -117,6 +119,36 @@ function interpretDefault(schema: string, fieldName: string) {
   });
   return { value, diagnostics: diagnostics.toExternal() };
 }
+
+describe('checked base factory', () => {
+  it('returns the forward-declared local base identity', () => {
+    const input = buildSymbolTableInput(`model Base { id Int @id }
+namespace scoped {
+  model Variant { @@base(Base, "variant") }
+  model Base { id String @id }
+}`);
+    const namespace = input.symbolTable.topLevel.namespaces['scoped'];
+    const model = namespace?.models['Variant'];
+    if (!namespace || !model) throw new Error('missing variant');
+    const node = findModelAttributeNode(model, 'base');
+    if (!node) throw new Error('missing base attribute');
+    const diagnostics: ContractSourceDiagnostic[] = [];
+    const value = interpretModelAttribute({
+      node,
+      spec: sqlAttributeSpecs.model.base(
+        modelSpecContext({ symbols: input.symbolTable, model, controlMutationDefaults }),
+      ),
+      model,
+      sourceFile: input.sourceFile,
+      sourceId: input.sourceId,
+      diagnostics,
+    });
+    expect(diagnostics).toEqual([]);
+    expect(value?.base.declaration).toBe(namespace.models['Base']);
+    expect(value?.base.namespace).toBe(namespace);
+    expect(value?.value).toBe('variant');
+  });
+});
 
 describe('sqlAttributeSpecs', () => {
   const { symbolTable, model } = project(
