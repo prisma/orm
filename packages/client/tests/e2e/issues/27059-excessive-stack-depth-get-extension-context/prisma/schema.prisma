@@ -1,0 +1,978 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String
+  email     String   @unique
+  password  String
+
+  adminSessions            AdminSession[]
+  adminPasswordResetTokens AdminPasswordResetToken[]
+  balanceItems             BalanceItem[]
+  manualAdjustments        ManualAdjustment[]
+}
+
+model AdminSession {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  adminId   String
+  expiresAt DateTime
+
+  admin Admin @relation(references: [id], fields: [adminId], onDelete: Cascade)
+}
+
+model AdminPasswordResetToken {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  adminId   String
+  token     String   @unique
+  expiresAt DateTime
+
+  admin Admin @relation(fields: [adminId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model Salesperson {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String
+
+  groupSalespersonAllocations GroupSalespersonAllocation[]
+  enrollmentLinks             EnrollmentLink[]
+  commissions                 Commission[]
+}
+
+model Product {
+  id                String         @id @default(cuid())
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  carrier           Carrier
+  type              ProductType
+  rateType          RateType
+  internalName      String
+  displayName       String
+  commissionType    CommissionType
+  commissionRate    Int
+  /// [ProductAttributes]
+  productAttributes Json           @default("{}")
+  /// [CarrierAttributes]
+  carrierAttributes Json           @default("{}")
+  /// [RateAttributes]
+  rateAttributes    Json           @default("{}")
+  displayToUser     Boolean        @default(true)
+
+  plans              Plan[]
+  groupClassBenefits GroupClassBenefit[]
+  employeeBenefits   EmployeeBenefit[]
+  enrollmentBenefits EnrollmentBenefit[]
+}
+
+model Plan {
+  id                String      @id @default(cuid())
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  internalName      String
+  displayName       String
+  type              ProductType
+  description       String
+  groupBilled       Boolean
+  directBilled      Boolean
+  benefitSummaryUrl String?
+
+  products               Product[]
+  groupPlans             GroupPlan[]
+  planApprovedStates     PlanApprovedState[]
+  groupClassBenefits     GroupClassBenefit[]
+  employeeBenefits       EmployeeBenefit[]
+  enrollmentBenefits     EnrollmentBenefit[]
+  planImportantInfoItems PlanImportantInfoItem[]
+}
+
+model PlanApprovedState {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  planId    String
+  value     String
+
+  plan Plan @relation(fields: [planId], references: [id])
+}
+
+model PlanImportantInfoItem {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  planId    String
+  value     String
+
+  plan Plan @relation(fields: [planId], references: [id])
+}
+
+model Group {
+  id                          String                 @id @default(cuid())
+  createdAt                   DateTime               @default(now())
+  updatedAt                   DateTime               @updatedAt
+  name                        String
+  commissionTrackingType      CommissionTrackingType
+  newEnrollmentsEffectiveDate DateTime?              @db.Date
+  groupAdminFee               Int
+  employeeAdminFee            Int
+  state                       String
+  ccaMember                   Boolean                @default(false)
+  allyHealthGroupId           String?                @unique
+  contactName                 String?
+  email                       String?
+  phone                       String?
+  address                     String?
+  address2                    String?
+  city                        String?
+  zip                         String?
+  billedExternally            Boolean                @default(false)
+  startBillingOn              DateTime?              @db.Date
+  notes                       String                 @default("")
+  taxId                       String?                @unique /// @encrypted
+  taxIdHashed                 String?                @unique /// @encryption:hash(taxId)
+
+  groupClasses                GroupClass[]
+  groupSalespersonAllocations GroupSalespersonAllocation[]
+  enrollmentLinks             EnrollmentLink[]
+  groupPlans                  GroupPlan[]
+  invoices                    Invoice[]
+  paymentMethod               PaymentMethod?
+  employerContributions       EmployerContribution[]
+  groupAssociations           GroupAssociation[]
+  payments                    Payment[]
+  reenrollLinks               ReenrollLink[]
+  groupNotesHistory           GroupNotesHistory[]
+  invoiceNumbers              InvoiceNumber[]
+  balanceItems                BalanceItem[]
+  manualAdjustments           ManualAdjustment[]
+}
+
+model GroupNotesHistory {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  groupId   String
+  content   String
+
+  group Group @relation(fields: [groupId], references: [id])
+}
+
+model GroupClass {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  name      String
+  groupId   String
+
+  group                  Group                   @relation(fields: [groupId], references: [id])
+  groupClassBenefits     GroupClassBenefit[]
+  enrollmentLinks        EnrollmentLink[]
+  groupClassAssociations GroupClassAssociation[]
+  reenrollLinks          ReenrollLink[]
+}
+
+model EmployerContribution {
+  id                     String    @id @default(cuid())
+  employerContributionId String
+  currentVersion         Boolean
+  recordEffectiveFrom    DateTime  @default(now())
+  recordEffectiveTo      DateTime?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  groupId                String
+  amount                 Int
+  startDate              DateTime  @db.Date
+  endDate                DateTime? @db.Date
+
+  group Group @relation(fields: [groupId], references: [id])
+}
+
+model PaymentMethod {
+  id            String      @id @default(cuid())
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  groupId       String?     @unique
+  employeeId    String?     @unique
+  enrollmentId  String?     @unique
+  accountType   AccountType
+  bankName      String
+  nameOnAccount String
+  routingNumber String
+  accountNumber String
+  deductionDay  Int         @default(1)
+
+  group      Group?      @relation(fields: [groupId], references: [id])
+  employee   Employee?   @relation(fields: [employeeId], references: [id])
+  enrollment Enrollment? @relation(fields: [enrollmentId], references: [id])
+}
+
+model GroupSalespersonAllocation {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  groupId       String
+  salespersonId String
+  percentage    Int
+
+  group       Group       @relation(fields: [groupId], references: [id])
+  salesperson Salesperson @relation(fields: [salespersonId], references: [id])
+}
+
+model EnrollmentLink {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  groupId       String
+  groupClassId  String
+  salespersonId String?
+  code          String   @unique
+
+  group       Group        @relation(fields: [groupId], references: [id])
+  groupClass  GroupClass   @relation(fields: [groupClassId], references: [id])
+  salesperson Salesperson? @relation(fields: [salespersonId], references: [id])
+  enrollments Enrollment[]
+  employees   Employee[]
+}
+
+model ReenrollLink {
+  id                       String   @id @default(cuid())
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+  groupId                  String
+  groupClassId             String
+  employeeId               String
+  enrollmentEffectiveDate  DateTime @db.Date
+  code                     String   @unique
+  completed                Boolean  @default(false)
+  allowBackdatedEnrollment Boolean  @default(false)
+  addNewBenefits           Boolean  @default(false)
+
+  group       Group        @relation(fields: [groupId], references: [id])
+  groupClass  GroupClass   @relation(fields: [groupClassId], references: [id])
+  employee    Employee     @relation(fields: [employeeId], references: [id])
+  enrollments Enrollment[]
+}
+
+model GroupPlan {
+  id                         String                   @id @default(cuid())
+  groupPlanId                String
+  currentVersion             Boolean
+  recordEffectiveFrom        DateTime                 @default(now())
+  recordEffectiveTo          DateTime?
+  createdAt                  DateTime                 @default(now())
+  updatedAt                  DateTime                 @updatedAt
+  groupId                    String
+  planId                     String
+  employerContributionType   EmployerContributionType
+  employerContributionAmount Int
+  billType                   BillType
+  startDate                  DateTime                 @db.Date
+  endDate                    DateTime?                @db.Date
+
+  group Group @relation(fields: [groupId], references: [id])
+  plan  Plan  @relation(fields: [planId], references: [id])
+}
+
+model GroupClassBenefit {
+  id                  String      @id @default(cuid())
+  groupClassBenefitId String
+  currentVersion      Boolean
+  recordEffectiveFrom DateTime    @default(now())
+  recordEffectiveTo   DateTime?
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  groupClassId        String
+  type                ProductType
+  planId              String
+  productId           String
+  startDate           DateTime    @db.Date
+  endDate             DateTime?   @db.Date
+
+  /// [RateOptions]
+  options Json @default("{}")
+
+  groupClass             GroupClass              @relation(fields: [groupClassId], references: [id])
+  plan                   Plan                    @relation(fields: [planId], references: [id])
+  product                Product                 @relation(fields: [productId], references: [id])
+  employeeBenefits       EmployeeBenefit[]
+  beneficiaryAllocations BeneficiaryAllocation[]
+}
+
+model Employee {
+  id                       String        @id @default(cuid())
+  createdAt                DateTime      @default(now())
+  updatedAt                DateTime      @updatedAt
+  firstName                String
+  middleInitial            String?
+  lastName                 String
+  suffix                   String?
+  dateOfBirth              DateTime      @db.Date
+  gender                   Gender
+  ssn                      String?       @unique /// @encrypted
+  ssnHashed                String?       @unique /// @encryption:hash(ssn)
+  email                    String?       @unique
+  phone                    String?
+  address                  String
+  address2                 String?
+  city                     String
+  state                    String
+  zip                      String
+  tobaccoUse               Boolean
+  maritalStatus            MaritalStatus
+  enrolledAt               DateTime      @default(now()) @db.Date
+  enrollmentLinkId         String?
+  allyHealthMemberLocation String?
+
+  beneficiaries          Beneficiary[]
+  dependents             Dependent[]
+  employeeBenefits       EmployeeBenefit[]
+  lifeEvents             LifeEvent[]
+  employeeChangeEvents   EmployeeChangeEvent[]
+  invoices               Invoice[]
+  invoiceItems           InvoiceItem[]
+  paymentMethod          PaymentMethod?
+  enrollmentLink         EnrollmentLink?         @relation(fields: [enrollmentLinkId], references: [id])
+  groupAssociations      GroupAssociation[]
+  groupClassAssociations GroupClassAssociation[]
+  employments            Employment[]
+  payments               Payment[]
+  reenrollLinks          ReenrollLink[]
+  invoiceNumbers         InvoiceNumber[]
+  balanceItems           BalanceItem[]
+  manualAdjustments      ManualAdjustment[]
+}
+
+model GroupAssociation {
+  id                  String    @id @default(cuid())
+  groupAssociationId  String
+  currentVersion      Boolean
+  recordEffectiveFrom DateTime  @default(now())
+  recordEffectiveTo   DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  employeeId          String
+  groupId             String
+  startDate           DateTime  @db.Date
+  endDate             DateTime? @db.Date
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  group    Group    @relation(fields: [groupId], references: [id])
+}
+
+model GroupClassAssociation {
+  id                      String    @id @default(cuid())
+  groupClassAssociationId String
+  currentVersion          Boolean
+  recordEffectiveFrom     DateTime  @default(now())
+  recordEffectiveTo       DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+  employeeId              String
+  groupClassId            String
+  startDate               DateTime  @db.Date
+  endDate                 DateTime? @db.Date
+
+  employee   Employee   @relation(fields: [employeeId], references: [id])
+  groupClass GroupClass @relation(fields: [groupClassId], references: [id])
+}
+
+model Employment {
+  id                      String       @id @default(cuid())
+  employmentId            String
+  currentVersion          Boolean
+  recordEffectiveFrom     DateTime     @default(now())
+  recordEffectiveTo       DateTime?
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+  employeeId              String
+  startDate               DateTime     @db.Date
+  endDate                 DateTime?    @db.Date
+  employer                String?
+  jobTitle                String?
+  workState               String
+  hireDate                DateTime     @db.Date
+  payFrequency            PayFrequency
+  workStatus              WorkStatus
+  workStatusEffectiveDate DateTime     @db.Date
+  hoursPerWeek            Int
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+  salaries Salary[]
+}
+
+model Salary {
+  id                  String    @id @default(cuid())
+  salaryId            String
+  currentVersion      Boolean
+  recordEffectiveFrom DateTime  @default(now())
+  recordEffectiveTo   DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  employmentId        String
+  amount              Int
+  startDate           DateTime  @db.Date
+  endDate             DateTime? @db.Date
+
+  employment Employment @relation(fields: [employmentId], references: [id])
+}
+
+model Dependent {
+  id                  String            @id @default(cuid())
+  dependentId         String
+  currentVersion      Boolean
+  recordEffectiveFrom DateTime          @default(now())
+  recordEffectiveTo   DateTime?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  employeeId          String?
+  enrollmentId        String?
+  relation            DependentRelation
+  firstName           String
+  middleInitial       String?
+  lastName            String
+  suffix              String?
+  dateOfBirth         DateTime
+  ssn                 String? /// @encrypted
+  ssnHashed           String? /// @encryption:hash(ssn)
+  startDate           DateTime          @db.Date
+  endDate             DateTime?         @db.Date
+
+  employee           Employee?           @relation(fields: [employeeId], references: [id])
+  enrollment         Enrollment?         @relation(fields: [enrollmentId], references: [id])
+  enrollmentBenefits EnrollmentBenefit[]
+  employeeBenefits   EmployeeBenefit[]
+}
+
+model Beneficiary {
+  id            String               @id @default(cuid())
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  employeeId    String?
+  enrollmentId  String?
+  type          BeneficiaryType
+  relation      BeneficiaryRelation?
+  firstName     String
+  middleInitial String?
+  lastName      String?
+  suffix        String?
+  dateOfBirth   DateTime?            @db.Date
+
+  employee               Employee?               @relation(fields: [employeeId], references: [id])
+  enrollment             Enrollment?             @relation(fields: [enrollmentId], references: [id])
+  beneficiaryAllocations BeneficiaryAllocation[]
+}
+
+model BeneficiaryAllocation {
+  id                  String                    @id @default(cuid())
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  employeeBenefitId   String?
+  enrollmentBenefitId String?
+  groupClassBenefitId String?
+  type                BeneficiaryAllocationType
+  beneficiaryId       String
+  percentage          Int
+
+  employeeBenefit   EmployeeBenefit?   @relation(fields: [employeeBenefitId], references: [id], onDelete: Cascade)
+  enrollmentBenefit EnrollmentBenefit? @relation(fields: [enrollmentBenefitId], references: [id], onDelete: Cascade)
+  groupClassBenefit GroupClassBenefit? @relation(fields: [groupClassBenefitId], references: [id], onDelete: Cascade)
+  beneficiary       Beneficiary        @relation(fields: [beneficiaryId], references: [id])
+}
+
+model EmployeeBenefit {
+  id                  String        @id @default(cuid())
+  employeeBenefitId   String
+  currentVersion      Boolean
+  recordEffectiveFrom DateTime      @default(now())
+  recordEffectiveTo   DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  employeeId          String
+  dependentId         String?
+  type                ProductType
+  planId              String
+  productId           String
+  startDate           DateTime      @db.Date
+  endDate             DateTime?     @db.Date
+  source              BenefitSource
+  groupClassBenefitId String?
+
+  /// [RateOptions]
+  options Json @default("{}")
+
+  employee               Employee                @relation(fields: [employeeId], references: [id])
+  dependent              Dependent?              @relation(fields: [dependentId], references: [id])
+  product                Product                 @relation(fields: [productId], references: [id])
+  plan                   Plan                    @relation(fields: [planId], references: [id])
+  invoiceItems           InvoiceItem[]
+  beneficiaryAllocations BeneficiaryAllocation[]
+  groupClassBenefit      GroupClassBenefit?      @relation(fields: [groupClassBenefitId], references: [id])
+}
+
+model LifeEvent {
+  id          String        @id @default(cuid())
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  employeeId  String
+  dateOfEvent DateTime      @db.Date
+  type        LifeEventType
+  document    String
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+}
+
+model EmployeeChangeEvent {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  employeeId    String
+  updatedByType String
+  updatedById   String
+  updatedByName String
+  changes       Json
+  description   String
+
+  employee Employee @relation(fields: [employeeId], references: [id])
+}
+
+model InvoiceCutoffDate {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  month     DateTime @db.Date
+  value     DateTime
+}
+
+model Invoice {
+  id                 String        @id @default(cuid())
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  employeeId         String?
+  groupId            String?
+  invoiceNumber      Int           @default(autoincrement())
+  invoiceDate        DateTime      @db.Date
+  subtotal           Int
+  billedThroughGroup Int           @default(0)
+  adminFee           Int
+  processingFee      Int
+  creditApplied      Int           @default(0)
+  total              Int
+  status             InvoiceStatus @default(pending)
+
+  employee     Employee?     @relation(fields: [employeeId], references: [id])
+  group        Group?        @relation(fields: [groupId], references: [id])
+  invoiceItems InvoiceItem[]
+  commissions  Commission[]
+  payments     Payment[]
+  balanceItems BalanceItem[]
+
+  @@unique([invoiceNumber])
+  @@index([employeeId, invoiceDate])
+  @@index([groupId, invoiceDate])
+}
+
+model InvoiceNumber {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  employeeId  String?
+  groupId     String?
+  number      Int      @default(autoincrement())
+  invoiceDate DateTime @db.Date
+
+  employee Employee? @relation(fields: [employeeId], references: [id])
+  group    Group?    @relation(fields: [groupId], references: [id])
+
+  @@unique([number])
+  @@unique([employeeId, invoiceDate])
+  @@unique([groupId, invoiceDate])
+}
+
+model InvoiceItem {
+  id                            String    @id @default(cuid())
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+  invoiceId                     String
+  employeeBenefitId             String?
+  name                          String
+  description                   String
+  price                         Int
+  flatDollarContribution        Int
+  groupPlanContribution         Int
+  groupClassBenefitContribution Int
+  groupContribution             Int
+  employeeContribution          Int
+  billedThroughGroup            Int
+  employeeTotal                 Int
+  groupTotal                    Int
+  adjustmentMonth               DateTime? @db.Date
+
+  invoice          Invoice            @relation(fields: [invoiceId], references: [id])
+  employeeBenefit  EmployeeBenefit?   @relation(fields: [employeeBenefitId], references: [id])
+  employees        Employee[]
+  commissions      Commission[]
+  manualAdjustment ManualAdjustment[]
+}
+
+model ManualAdjustment {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  amount        Int
+  description   String
+  employeeId    String?
+  groupId       String?
+  invoiceItemId String?
+  adminId       String
+
+  employee    Employee?    @relation(fields: [employeeId], references: [id])
+  group       Group?       @relation(fields: [groupId], references: [id])
+  invoiceItem InvoiceItem? @relation(fields: [invoiceItemId], references: [id])
+  admin       Admin        @relation(fields: [adminId], references: [id])
+}
+
+model Payment {
+  id             String           @id @default(cuid())
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  employeeId     String?
+  groupId        String?
+  invoiceId      String
+  transactionId  String?
+  amount         Int
+  status         PaymentStatus
+  errorMessage   String?
+  apiResponse    String?
+  processedAt    DateTime         @default(now())
+  returnedReason String?
+  source         PaymentSource
+  notes          String?
+  createdBy      PaymentCreatedBy
+
+  employee     Employee?     @relation(fields: [employeeId], references: [id])
+  group        Group?        @relation(fields: [groupId], references: [id])
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id])
+  balanceItems BalanceItem[]
+}
+
+model BalanceItem {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  employeeId  String?
+  groupId     String?
+  amount      Int
+  invoiceId   String?
+  paymentId   String?
+  adminId     String?
+  description String?
+
+  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  group    Group?    @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  invoice  Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  payment  Payment?  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  admin    Admin?    @relation(fields: [adminId], references: [id], onDelete: Restrict)
+}
+
+enum PaymentSource {
+  authorize
+  check
+  other
+}
+
+enum PaymentStatus {
+  pending
+  completed
+  failed
+  returned
+  voided
+}
+
+model Commission {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  salesPersonId String
+  invoiceId     String
+  invoiceItemId String?
+  amount        Int
+
+  salesPerson Salesperson  @relation(fields: [salesPersonId], references: [id])
+  invoice     Invoice      @relation(fields: [invoiceId], references: [id])
+  invoiceItem InvoiceItem? @relation(fields: [invoiceItemId], references: [id])
+}
+
+model Enrollment {
+  id                          String         @id @default(cuid())
+  createdAt                   DateTime       @default(now())
+  updatedAt                   DateTime       @updatedAt
+  enrollmentLinkId            String?
+  reenrollLinkId              String?
+  completed                   Boolean        @default(false)
+  firstName                   String?
+  middleInitial               String?
+  lastName                    String?
+  suffix                      String?
+  dateOfBirth                 DateTime       @db.Date
+  tobaccoUse                  Boolean
+  gender                      Gender?
+  ssn                         String? /// @encrypted
+  ssnHashed                   String? /// @encryption:hash(ssn)
+  email                       String?
+  phone                       String?
+  address                     String?
+  address2                    String?
+  city                        String?
+  state                       String
+  zip                         String?
+  employer                    String?
+  jobTitle                    String?
+  workState                   String?
+  hireDate                    DateTime?      @db.Date
+  annualSalary                Int
+  salaryEffectiveDate         DateTime?      @db.Date
+  payFrequency                PayFrequency?
+  workStatus                  WorkStatus?
+  hoursPerWeek                Int?
+  maritalStatus               MaritalStatus?
+  /// [BenefitDependentAssignments]
+  benefitDependentAssignments Json           @default("{}")
+
+  enrollmentLink          EnrollmentLink?          @relation(fields: [enrollmentLinkId], references: [id])
+  reenrollLink            ReenrollLink?            @relation(fields: [reenrollLinkId], references: [id])
+  paymentMethod           PaymentMethod?
+  dependents              Dependent[]
+  benefits                EnrollmentBenefit[]
+  beneficiaries           Beneficiary[]
+  continueEnrollmentLinks ContinueEnrollmentLink[]
+}
+
+model ContinueEnrollmentLink {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  enrollmentId String
+  code         String   @unique
+  expiresAt    DateTime
+
+  enrollment Enrollment @relation(fields: [enrollmentId], references: [id])
+}
+
+model EnrollmentBenefit {
+  id           String      @id @default(cuid())
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  enrollmentId String
+  dependentId  String?
+  type         ProductType
+  planId       String
+  productId    String
+  /// [RateOptions]
+  options      Json
+
+  enrollment            Enrollment              @relation(fields: [enrollmentId], references: [id])
+  dependent             Dependent?              @relation(fields: [dependentId], references: [id])
+  plan                  Plan                    @relation(fields: [planId], references: [id])
+  product               Product                 @relation(fields: [productId], references: [id])
+  BeneficiaryAllocation BeneficiaryAllocation[]
+}
+
+model Settings {
+  id                     String   @id @default(cuid())
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+  metlifeCustomerCode    String
+  groupAchProcessingFee  Int
+  metlifeCCACustomerCode String
+}
+
+enum Carrier {
+  metlife
+  metlifeCCA
+  massMutual
+  allyHealth
+  hartford
+}
+
+enum ProductType {
+  accident
+  criticalIllness
+  dental
+  employeeAssistanceProgram
+  hospitalIndemnity
+  idTheft
+  legal
+  longTermDisability
+  pet
+  shortTermDisability
+  telemedicine
+  termLife
+  vision
+  wholeLife
+  groupTermLife
+  groupShortTermDisability
+  groupLongTermDisability
+}
+
+enum RateType {
+  coverageTiers
+  coverageTiersCCA
+  criticalIllness
+  external
+  flat
+  longTermDisability
+  shortTermDisability
+  termLife
+  wholeLife
+  groupTermLifeSalaryBound
+  groupShortTermDisability
+  groupLongTermDisability
+}
+
+enum CommissionTrackingType {
+  group
+  individual
+}
+
+enum AccountType {
+  checking
+  savings
+}
+
+enum EmployerContributionType {
+  percentage
+  fixed
+}
+
+enum Gender {
+  male
+  female
+  unknown
+}
+
+enum PayFrequency {
+  weekly
+  biweekly
+  semimonthly
+  monthly
+}
+
+enum WorkStatus {
+  active
+  retired
+  terminated
+  deceased
+  unpaidLeaveOfAbsence
+}
+
+enum DependentRelation {
+  spouse
+  child
+  domesticPartner
+}
+
+enum BeneficiaryRelation {
+  adoptedChild
+  auntOrUncle
+  child
+  cousin
+  domesticPartner
+  domesticPartnersChild
+  employee
+  grandchild
+  nephewOrNiece
+  parent
+  sibling
+  spouse
+  other
+}
+
+enum LifeEventType {
+  marriage
+  divorce
+  birth
+  adoption
+  death
+  other
+}
+
+enum InvoiceStatus {
+  pending
+  paid
+}
+
+enum BenefitSource {
+  group
+  direct
+}
+
+enum BillType {
+  group
+  direct
+}
+
+enum CommissionType {
+  percentage
+  fixed
+}
+
+enum BeneficiaryType {
+  allLivingChildren
+  person
+  trust
+  organization
+  estate
+  other
+}
+
+enum BeneficiaryAllocationType {
+  primary
+  contingent
+}
+
+enum MaritalStatus {
+  single
+  married
+  unknown
+}
+
+enum AdjustmentType {
+  added
+  removed
+}
+
+enum AdjustmentModel {
+  employerContribution
+  groupPlan
+  groupAssociation
+  groupClassAssociation
+  employment
+  salary
+  dependent
+  employeeBenefit
+  groupClassBenefit
+}
+
+enum PaymentCreatedBy {
+  admin
+  system
+}
