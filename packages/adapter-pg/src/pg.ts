@@ -169,7 +169,17 @@ class PgTransaction extends PgQueryable<TransactionClient> implements Transactio
 }
 
 export type PrismaPgOptions = {
-  /** The name of the schema to use in generated queries */
+  /**
+   * The name of the schema to use in generated queries and as the `search_path` of connections
+   * in pools managed by the adapter. When not set and the adapter is constructed from a
+   * connection string or a config containing one, it falls back to the `?schema=` parameter of
+   * the connection URL, if present.
+   *
+   * For externally constructed `pg.Pool` instances the pool configuration is caller-owned and
+   * left untouched: the connection URL fallback does not apply and `search_path` is not
+   * modified, but an explicit `schema` option still determines the schema used in generated
+   * queries.
+   */
   schema?: string
   /**
    * Whether to call `pool.end()` on an externally provided pool when the adapter is disposed.
@@ -288,12 +298,26 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
     if (poolOrConfig instanceof pg.Pool) {
       this.externalPool = poolOrConfig
       this.config = poolOrConfig.options
-    } else if (typeof poolOrConfig === 'string') {
-      this.externalPool = null
-      this.config = { connectionString: poolOrConfig }
-    } else {
-      this.externalPool = null
-      this.config = poolOrConfig
+      return
+    }
+
+    this.externalPool = null
+    this.config = typeof poolOrConfig === 'string' ? { connectionString: poolOrConfig } : { ...poolOrConfig }
+
+    const parsedUrl = parseConnectionUrl(this.config.connectionString)
+    const schema = this.options?.schema ?? parsedUrl.schema
+
+    if (schema) {
+      this.options = { ...options, schema }
+
+      // `pg` merges a connection string's query parameters over the config object at
+      // connect time, so an `options` embedded in the URL would override `config.options`
+      // and drop the injected `search_path`. Fold the URL's `options` (which take
+      // precedence over `config.options` in `pg`) into the effective value and drop them
+      // from the connection string so the injected `search_path` survives.
+      const baseOptions = parsedUrl.options ?? this.config.options
+      this.config.connectionString = parsedUrl.connectionString
+      this.config.options = [baseOptions, `-csearch_path=${schema}`].filter(Boolean).join(' ')
     }
   }
 
@@ -331,4 +355,40 @@ export class PrismaPgAdapterFactory implements SqlMigrationAwareDriverAdapterFac
       await client.end()
     })
   }
+}
+
+/**
+ * Extracts the `schema` and libpq `options` parameters from a connection URL and returns
+ * the connection string with the `options` parameter removed.
+ *
+ * `pg` also accepts libpq connection strings (e.g. `host=localhost dbname=test`) that are
+ * not parseable as URLs; those carry no such parameters, so parsing failures yield an empty
+ * result and the original connection string.
+ *
+ * The `options` parameter is stripped because `pg` merges a connection string's query
+ * parameters over the config object at connect time: an `options` left in the URL would
+ * override the `search_path` injected for the configured schema.
+ */
+function parseConnectionUrl(connectionString: string | undefined): {
+  schema: string | undefined
+  options: string | undefined
+  connectionString: string | undefined
+} {
+  if (connectionString === undefined) {
+    return { schema: undefined, options: undefined, connectionString }
+  }
+
+  let url: URL
+  try {
+    url = new URL(connectionString)
+  } catch {
+    return { schema: undefined, options: undefined, connectionString }
+  }
+
+  const schema = url.searchParams.get('schema') ?? undefined
+  const options = url.searchParams.get('options') ?? undefined
+
+  url.searchParams.delete('options')
+
+  return { schema, options, connectionString: url.toString() }
 }
