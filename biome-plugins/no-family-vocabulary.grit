@@ -131,8 +131,10 @@ or {
   not {
     $filename <: r".*packages/1-framework/3-tooling/language-server/src/(?:pipeline|project-artifacts)\.ts",
     $tok <: r"table",
-    $tok <: within `$SYMBOL_RESULT.table`,
-    $SYMBOL_RESULT <: r"symbolResult",
+    $tok <: JsName(),
+    $tok <: within JsStaticMemberExpression(object=$object),
+    $object <: JsCallExpression(callee=$callee),
+    $callee <: r"buildSymbolTable",
   },
   not {
     $filename <: r".*packages/1-framework/2-authoring/psl-parser/src/format/emit\.ts",

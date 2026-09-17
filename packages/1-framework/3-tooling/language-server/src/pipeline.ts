@@ -48,13 +48,13 @@ export function runPipeline(
 ): PipelineResult {
   const { document, sources, diagnostics: parseDiagnostics } = parse(text, filename);
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const symbolResult = buildSymbolTable({
+  const symbolTableInput = {
     document,
     sources,
     pslBlockDescriptors: inputs.pslBlockDescriptors,
-  });
-  const symbolTable = symbolResult.table;
-  const symbolTableDiagnostics = symbolResult.diagnostics;
+  };
+  const symbolTable = buildSymbolTable(symbolTableInput).table;
+  const symbolTableDiagnostics = buildSymbolTable(symbolTableInput).diagnostics;
 
   return {
     document,

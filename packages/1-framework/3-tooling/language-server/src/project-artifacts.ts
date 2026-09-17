@@ -156,12 +156,11 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
         // contributing input may have closed since); rebuild from the
         // artifacts without reparsing.
         if (symbolTable === undefined) {
-          const symbolResult = buildSymbolTable({
+          symbolTable = buildSymbolTable({
             document: artifacts.document,
             sources: artifacts.sources,
             pslBlockDescriptors: controlStack.pslBlockDescriptors,
-          });
-          symbolTable = symbolResult.table;
+          }).table;
         }
         return symbolTable;
       }
