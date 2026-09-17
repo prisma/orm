@@ -207,6 +207,7 @@ model Other {
       columnDescriptor: { codecId: 'pg/text@1', nativeType: 'text' },
       generatorDescriptorById: new Map(),
       defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
       codecLookup: context.codecLookup,
       diagnostics,
     });

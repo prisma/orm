@@ -11,8 +11,9 @@ function fields(
   typeConstructors?: AuthoringTypeNamespace,
 ) {
   const offset = sourceWithCursor.indexOf('|');
-  const { document, sourceFile } = parse(sourceWithCursor.replace('|', ''));
-  const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
+  const { document, sources } = parse(sourceWithCursor.replace('|', ''), 'test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { table } = buildSymbolTable({ document, sources, pslBlockDescriptors: {} });
   const context = classifyPslCompletionContext({
     document,
     sourceFile,

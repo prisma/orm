@@ -26,7 +26,7 @@ export function taggedLiteral(
       return ok({
         tag: literal.tagName(),
         canonicalization: literal.canonicalization(),
-        span: nodePslSpan(literal.syntax, ctx.sourceFile),
+        span: nodePslSpan(literal.syntax, ctx.sources),
       });
     },
   };

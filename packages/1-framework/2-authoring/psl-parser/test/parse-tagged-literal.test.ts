@@ -8,7 +8,7 @@ import { printSyntax } from '../src/syntax/ast-helpers';
 import { highlight, printTree } from './support';
 
 function firstDefaultArg(source: string) {
-  const result = parse(source);
+  const result = parse(source, 'test.psl');
   let attribute: FieldAttributeAst | undefined;
   for (const model of result.document.declarations()) {
     const m = ModelDeclarationAst.cast(model.syntax);
@@ -120,7 +120,7 @@ describe('TaggedLiteral parsing', () => {
   it('resumes at the closing brace after an unterminated backtick string, so the next model still parses', () => {
     const source =
       'model A {\n  id String @default(sql`abc\n  more\n}\n\nmodel B {\n  id Int @id\n}\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_UNTERMINATED_STRING']);
     const models = [...result.document.declarations()].map((d) =>
       ModelDeclarationAst.cast(d.syntax)?.name()?.name(),
@@ -131,20 +131,22 @@ describe('TaggedLiteral parsing', () => {
 
   it('swallows to the end of the input when no line starts with a closing brace', () => {
     const source = 'model A {\n  id String @default(sql`abc\n  more\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_UNTERMINATED_STRING');
     expect(printSyntax(result.document.syntax)).toBe(source);
   });
 
   it('reports an unterminated backtick string as PSL_UNTERMINATED_STRING at the string', () => {
     const source = 'model T {\n  id String @default(sql`abc\n}\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toHaveLength(1);
     expect(result.diagnostics[0]).toMatchObject({
       code: 'PSL_UNTERMINATED_STRING',
       message: 'Unterminated string literal',
     });
-    expect(highlight(result.sourceFile, result.diagnostics[0]!.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), result.diagnostics[0]!.range),
+    ).toMatchInlineSnapshot(`
       "
       model T {
         id String @default(sql\`abc
@@ -160,14 +162,14 @@ describe('TaggedLiteral parsing', () => {
   it('round-trips the source through printSyntax', () => {
     const source =
       'model T {\n  a String @default(sql`\n    x\n  `)\n  b String @default(pg.sql"y")\n}\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([]);
     expect(printSyntax(result.document.syntax)).toBe(source);
   });
 
   it('is accepted anywhere an expression is, including array elements and block values', () => {
     const source = 'generator g {\n  x = sql`a`\n}\nmodel T {\n  a String @x([sql`a`, t"b"])\n}\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([]);
     expect(printSyntax(result.document.syntax)).toBe(source);
   });
@@ -181,7 +183,7 @@ describe('TaggedLiteral parsing', () => {
   });
 
   it('exposes the field through the typed layer', () => {
-    const result = parse('model T {\n  id String @default(sql`x`)\n}\n');
+    const result = parse('model T {\n  id String @default(sql`x`)\n}\n', 'test.psl');
     const model = ModelDeclarationAst.cast([...result.document.declarations()][0]!.syntax);
     const field = [...model!.fields()][0];
     expect(field).toBeInstanceOf(FieldDeclarationAst);
@@ -223,9 +225,11 @@ describe('a backtick string with no tag', () => {
 
   it('is reported at the string when it is an attribute argument', () => {
     const source = 'model T {\n  id String @map(`x`)\n}\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([expect.objectContaining(requiresTag)]);
-    expect(highlight(result.sourceFile, result.diagnostics[0]!.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), result.diagnostics[0]!.range),
+    ).toMatchInlineSnapshot(`
       "
       model T {
         id String @map(\`x\`)
@@ -239,9 +243,11 @@ describe('a backtick string with no tag', () => {
 
   it('is reported at the string when it is a key-value value', () => {
     const source = 'generator g {\n  provider = `x`\n}\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([expect.objectContaining(requiresTag)]);
-    expect(highlight(result.sourceFile, result.diagnostics[0]!.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), result.diagnostics[0]!.range),
+    ).toMatchInlineSnapshot(`
       "
       generator g {
         provider = \`x\`
@@ -254,7 +260,7 @@ describe('a backtick string with no tag', () => {
 
   it('is reported alongside PSL_UNTERMINATED_STRING when it is also unterminated', () => {
     const source = 'model T {\n  id String @default(`abc\n}\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code).sort()).toEqual([
       'PSL_BACKTICK_STRING_REQUIRES_TAG',
       'PSL_UNTERMINATED_STRING',
@@ -263,8 +269,8 @@ describe('a backtick string with no tag', () => {
   });
 
   it('at the top level is reported like a double-quoted string there', () => {
-    expect(parse('`oops').diagnostics.map((d) => d.code)).toEqual(
-      parse('"oops').diagnostics.map((d) => d.code),
+    expect(parse('`oops', 'test.psl').diagnostics.map((d) => d.code)).toEqual(
+      parse('"oops', 'test.psl').diagnostics.map((d) => d.code),
     );
   });
 });
