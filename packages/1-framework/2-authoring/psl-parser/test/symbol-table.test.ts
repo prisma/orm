@@ -9,7 +9,6 @@ import { leafDiagnostic } from '../src/attribute-spec/combinators/diagnostic';
 import { str } from '../src/attribute-spec/combinators/str';
 import { validateExtensionBlockFromSymbol } from '../src/extension-block';
 import { parse } from '../src/parse';
-import { SourceFile } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
 import {
   CompositeTypeDeclarationAst,
@@ -864,7 +863,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
 
     expect(result.diagnostics).toEqual([
       {
-        sourceFile: expect.any(SourceFile),
+        filename: 'test.psl',
         code: 'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
         message: 'Unknown attribute "@@schema" in "widget" block "Gear"',
         range: { start: { line: 1, character: 2 }, end: { line: 1, character: 15 } },
@@ -904,7 +903,7 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
 
     expect(result.diagnostics).toEqual([
       {
-        sourceFile: expect.any(SourceFile),
+        filename: 'test.psl',
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message: 'Attribute "map" is missing required argument "name"',
         range: { start: { line: 1, character: 2 }, end: { line: 1, character: 9 } },
@@ -921,13 +920,13 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
 
     expect(result.diagnostics).toEqual([
       {
-        sourceFile: expect.any(SourceFile),
+        filename: 'test.psl',
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message: 'Attribute "map" is missing required argument "name"',
         range: { start: { line: 1, character: 2 }, end: { line: 1, character: 9 } },
       },
       {
-        sourceFile: expect.any(SourceFile),
+        filename: 'test.psl',
         code: 'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE',
         message: 'Duplicate attribute "@@map" in "widget" block "Gear"; first occurrence wins',
         range: { start: { line: 2, character: 2 }, end: { line: 2, character: 17 } },

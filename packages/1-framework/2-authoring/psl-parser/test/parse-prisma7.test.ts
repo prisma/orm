@@ -125,6 +125,7 @@ describe('enum member attributes', () => {
       const result = parse('enum Role {\n  USER @map("user")\n}', 'test.psl');
       expect(result.diagnostics).toEqual([
         {
+          filename: 'test.psl',
           code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
           message: 'Invalid block entry',
           range: { start: { line: 1, character: 7 }, end: { line: 1, character: 8 } },
@@ -136,6 +137,7 @@ describe('enum member attributes', () => {
       const result = parse('enum Role {\n  Admin = "admin" @map("ADMIN")\n}', 'test.psl');
       expect(result.diagnostics).toEqual([
         {
+          filename: 'test.psl',
           code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
           message: 'Invalid block entry',
           range: { start: { line: 1, character: 18 }, end: { line: 1, character: 19 } },
@@ -150,6 +152,7 @@ describe('enum member attributes', () => {
       );
       expect(result.diagnostics).toEqual([
         {
+          filename: 'test.psl',
           code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
           message: 'Invalid block entry',
           range: { start: { line: 2, character: 9 }, end: { line: 2, character: 10 } },
@@ -221,6 +224,7 @@ describe('view blocks', () => {
       const result = parse('view ActiveUsers {\n  id Int @unique\n}', 'test.psl');
       expect(result.diagnostics).toEqual([
         {
+          filename: 'test.psl',
           code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
           message: 'Invalid block entry',
           range: { start: { line: 1, character: 9 }, end: { line: 1, character: 10 } },

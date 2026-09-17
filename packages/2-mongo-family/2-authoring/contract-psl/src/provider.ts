@@ -32,7 +32,7 @@ function mapParseDiagnostics(
   return diagnostics.map((diagnostic) => ({
     code: diagnostic.code,
     message: diagnostic.message,
-    sourceId: sourceFile.filename,
+    sourceId: diagnostic.filename,
     span: sourceFile.rangeToPslSpan(diagnostic.range),
   }));
 }
@@ -89,12 +89,10 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
 
       // Do not short-circuit on provider-level diagnostics; recovered CST can
       // still produce interpreter diagnostics in the same response.
-      const seedDiagnostics = [
-        ...mapParseDiagnostics(parseDiagnostics, sourceFile),
-        ...symbolTableDiagnostics.flatMap((diagnostic) =>
-          mapParseDiagnostics([diagnostic], diagnostic.sourceFile),
-        ),
-      ];
+      const seedDiagnostics = mapParseDiagnostics(
+        [...parseDiagnostics, ...symbolTableDiagnostics],
+        sourceFile,
+      );
 
       return withSeedDiagnostics(
         this.interpret({ document, sources, symbolTable }, context),

@@ -44,12 +44,7 @@ describe('multiple-document symbol tables', () => {
       'model User { id Int }',
     );
     expect(symbolTable.topLevel.models['User']?.node.syntax.root()).toBe(documents[0]?.syntax);
-    expect(
-      diagnostics.map(({ sourceFile, ...diagnostic }) => ({
-        filename: sourceFile.filename,
-        ...diagnostic,
-      })),
-    ).toEqual([
+    expect(diagnostics).toEqual([
       {
         filename: '1.psl',
         code: 'PSL_DUPLICATE_DECLARATION',
@@ -71,10 +66,7 @@ describe('multiple-document symbol tables', () => {
     expect(reversed.symbolTable.topLevel.models['User']?.node.syntax.root()).toBe(
       documents[2]?.syntax,
     );
-    expect(reversed.diagnostics.map(({ sourceFile }) => sourceFile.filename)).toEqual([
-      '1.psl',
-      '0.psl',
-    ]);
+    expect(reversed.diagnostics.map(({ filename }) => filename)).toEqual(['1.psl', '0.psl']);
   });
 
   it('retains local field errors and does not merge repeated namespaces', () => {
@@ -83,10 +75,10 @@ describe('multiple-document symbol tables', () => {
       'model Post {\n value a.b.c\n}\nnamespace app { model Second { id Int } }',
     );
     expect(
-      diagnostics.map(({ code, range, sourceFile }) => ({
+      diagnostics.map(({ code, range, filename }) => ({
         code,
         line: range.start.line,
-        filename: sourceFile.filename,
+        filename,
       })),
     ).toEqual([
       { code: 'PSL_DUPLICATE_DECLARATION', line: 2, filename: '0.psl' },

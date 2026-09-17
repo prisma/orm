@@ -9,6 +9,7 @@ import type { SyntaxKind } from './syntax/syntax-kind';
 import { isTerminatedStringLiteral, type Token, Tokenizer, type TokenKind } from './tokenizer';
 
 export interface ParseDiagnostic {
+  readonly filename: string;
   readonly code: PslDiagnostic['code'];
   readonly message: string;
   readonly range: Range;
@@ -166,6 +167,7 @@ export class Cursor {
     const start = mark.offset;
     const end = start + mark.length;
     this.#diagnostics.push({
+      filename: this.#sourceFile.filename,
       code,
       message,
       range: {

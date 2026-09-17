@@ -10,7 +10,7 @@ import {
   readResolvedAttributes,
   readResolvedConstructorCall,
 } from './resolve';
-import type { PslSources, Range, SourceFile } from './source-file';
+import type { PslSources, Range } from './source-file';
 import {
   CompositeTypeDeclarationAst,
   type DocumentAst,
@@ -123,13 +123,9 @@ export interface BuildSymbolTableOptions {
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
 }
 
-export interface SymbolDiagnostic extends ParseDiagnostic {
-  readonly sourceFile: SourceFile;
-}
-
 export interface SymbolTableResult {
   readonly symbolTable: SymbolTable;
-  readonly diagnostics: readonly SymbolDiagnostic[];
+  readonly diagnostics: readonly ParseDiagnostic[];
 }
 
 /**
@@ -138,7 +134,7 @@ export interface SymbolTableResult {
  */
 export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableResult {
   const { documents, sources, pslBlockDescriptors } = options;
-  const symbolDiagnostics: SymbolDiagnostic[] = [];
+  const diagnostics: ParseDiagnostic[] = [];
 
   const namespaces: Record<string, NamespaceSymbol> = Object.create(null);
   const namedTypes: Record<string, NamedTypeSymbol> = {};
@@ -149,7 +145,6 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
 
   for (const document of documents) {
     const sourceFile = sources.sourceFileFor(document.syntax);
-    const diagnostics: ParseDiagnostic[] = [];
     const claim = (taken: Set<string>, name: IdentifierAst | undefined): string | undefined => {
       const text = name?.name();
       if (text === undefined) return undefined;
@@ -159,6 +154,7 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
           diagnostics.push({
             code: 'PSL_DUPLICATE_DECLARATION',
             message: `Duplicate declaration of "${text}"`,
+            filename: sourceFile.filename,
             range,
           });
         }
@@ -210,14 +206,12 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
         }
       }
     }
-
-    symbolDiagnostics.push(...diagnostics.map((diagnostic) => ({ ...diagnostic, sourceFile })));
   }
 
   const symbolTable: SymbolTable = {
     topLevel: { namespaces, namedTypes, blocks, models, compositeTypes },
   };
-  return { symbolTable, diagnostics: symbolDiagnostics };
+  return { symbolTable, diagnostics };
 }
 
 function buildModel(
@@ -294,6 +288,7 @@ function extendNamespace(
         diagnostics.push({
           code: 'PSL_DUPLICATE_DECLARATION',
           message: `Duplicate declaration of "${memberName}"`,
+          filename: sources.sourceFileFor(member.syntax).filename,
           range,
         });
       }
@@ -332,6 +327,7 @@ function buildFields(
         diagnostics.push({
           code: 'PSL_DUPLICATE_DECLARATION',
           message: `Duplicate declaration of "${name}"`,
+          filename: sources.sourceFileFor(field.syntax).filename,
           range,
         });
       }
@@ -359,6 +355,7 @@ function buildField(
     diagnostics.push({
       code: 'PSL_INVALID_QUALIFIED_TYPE',
       message: `Field "${ownerName}.${name}" has an invalid qualified type "${path.join('.')}"; use at most one namespace qualifier (e.g. "ns.TypeName")`,
+      filename: sources.sourceFileFor(typeName.syntax).filename,
       range: nodeRange(typeName.syntax, sources),
     });
     return {

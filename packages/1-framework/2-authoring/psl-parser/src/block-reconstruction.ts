@@ -72,6 +72,7 @@ export function reconstructExtensionBlock(
     const span = nodePslSpan(entry.syntax, sources);
     if (Object.hasOwn(parameters, key)) {
       diagnostics.push({
+        filename: sourceFile.filename,
         code: 'PSL_EXTENSION_DUPLICATE_PARAMETER',
         message: `Duplicate parameter "${key}" in "${keyword}" block "${blockName}"; first occurrence wins`,
         range: {
@@ -121,6 +122,7 @@ function parseBlockAttribute(
       ok: false,
       diagnostics: [
         {
+          filename: sourceFile.filename,
           code: 'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
           message: `Unknown attribute "@@${name}" in "${keyword}" block "${blockName}"`,
           range,
@@ -133,6 +135,7 @@ function parseBlockAttribute(
       ok: false,
       diagnostics: [
         {
+          filename: sourceFile.filename,
           code: 'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE',
           message: `Duplicate attribute "@@${name}" in "${keyword}" block "${blockName}"; first occurrence wins`,
           range,
@@ -150,6 +153,7 @@ function parseBlockAttribute(
     return {
       ok: false,
       diagnostics: result.failure.map((diagnostic) => ({
+        filename: sourceFile.filename,
         code: diagnostic.code,
         message: diagnostic.message,
         range: sourceFile.pslSpanToRange(diagnostic.span),
@@ -186,6 +190,7 @@ function reconstructFromExpression(
     const array = ArrayLiteralAst.cast(value.syntax);
     if (!array) {
       diagnostics?.push({
+        filename: sourceFile.filename,
         code: 'PSL_EXTENSION_INVALID_VALUE',
         message: `List parameter expects an array literal, got ${raw}`,
         range: {

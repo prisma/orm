@@ -156,7 +156,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
           ...computed.parseDiagnostics,
           ...mapParseDiagnostics(
             result.diagnostics.filter(
-              (diagnostic) => diagnostic.sourceFile === computed.sourceFile,
+              (diagnostic) => diagnostic.filename === computed.sourceFile.filename,
             ),
           ),
         ];
