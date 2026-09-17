@@ -146,7 +146,7 @@ function valueItems(
   }
   switch (type.kind) {
     case 'identifier':
-      return scalarItems(input, [type.name], type.documentation);
+      return type.name === undefined ? [] : scalarItems(input, [type.name], type.documentation);
     case 'str':
       return scalarItems(input, type.value === undefined ? [] : [JSON.stringify(type.value)]);
     case 'num':
