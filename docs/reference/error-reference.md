@@ -6,7 +6,7 @@ Recognize an error programmatically with `isStructuredError` from `@internal/uti
 
 Exit codes (CLI): an expected structured failure exits `2`, a user abort exits `3`, and `1` is reserved for internal errors (bugs). Codes on this page exit `2` unless the entry says otherwise.
 
-Some codes are not failures to run at all. `db verify`, `db sign` and `migration check` answer a question about the project, and a bad answer is still an answer: they finish, report their findings as diagnostics on a successful envelope, and exit `4`. Exit `2` is reserved for the cases where those commands could not do the job, an unknown `--space`, a migration reference that resolves to nothing, an unreachable database, a contract that has not been emitted. Every entry whose code can arrive on one of those runs says so and names the command. Each of those commands declares the numbers it can exit with, and its `--help` text spells out what each one means.
+Some codes are not failures to run at all. `db verify`, `db sign` and `migration check` answer a question about the project, and a bad answer is still an answer: they finish, report their findings as diagnostics on a successful envelope, and exit `4`. Exit `2` is reserved for the cases where those commands could not do the job: an unknown `--space`, a migration reference that resolves to nothing, an unreachable database, a contract that has not been emitted. Every entry whose code can arrive on one of those runs says so and names the command. Each of those commands declares the numbers it can exit with, and its `--help` text spells out what each one means.
 
 A command may also **complete with findings**: it ran to its end and has a result to report, and the problems it found ride that result as diagnostics carrying the codes on this page. Those runs exit with a documented per-command code in the `4`–`99` band rather than `2`, and the entry below says so. `prisma orm init` is the case today: its scaffold is on disk whatever happens next, so a failed dependency install or contract emit is a finding on a completed run at exit `4` or `5`.
 
@@ -39,7 +39,7 @@ The `contract` section is missing (or incomplete) in `prisma.config.ts` when a c
 
 ### CONFIG.DB_CONNECTION_REQUIRED
 
-A DB-connected command (`migrate`, `db init`, `db sign`, `db verify`, `db update`, `inspect-live-schema`, and the migration scaffold commands) was run with no database connection available, no `--db <url>` flag and no `db.connection` in `prisma.config.ts`. The fix text names the exact retry command when known. Payload: `missingFlags` (optional).
+A DB-connected command (`migrate`, `db init`, `db sign`, `db verify`, `db update`, `inspect-live-schema`, and the migration scaffold commands) was run with no database connection available: no `--db <url>` flag and no `db.connection` in `prisma.config.ts`. The fix text names the exact retry command when known. Payload: `missingFlags` (optional).
 
 ### CONFIG.DRIVER_REQUIRED
 
@@ -47,7 +47,7 @@ A DB-connected command was run but `prisma.config.ts` has no control-plane `driv
 
 ### CONFIG.EVALUATION_FAILED
 
-The config module could not be evaluated at all, a syntax error in `prisma.config.ts`, or the module threw during import. Raised by the config loader for any command that needs config; loading fails outright (no per-section diagnostics are possible for a module that does not evaluate) and every command exits `2` with this error. The underlying evaluation error's message is carried in `why` and the original error in `cause` (in-process only). The path, when known, is carried in `where.path`. Payload: none.
+The config module could not be evaluated at all: a syntax error in `prisma.config.ts`, or the module threw during import. Raised by the config loader for any command that needs config; loading fails outright (no per-section diagnostics are possible for a module that does not evaluate) and every command exits `2` with this error. The underlying evaluation error's message is carried in `why` and the original error in `cause` (in-process only). The path, when known, is carried in `where.path`. Payload: none.
 
 ### CONFIG.FAMILY_READ_MARKER_REQUIRED
 
@@ -71,7 +71,7 @@ Reserved: `db verify` needs `db.queryRunnerFactory` in `prisma.config.ts` and it
 
 ### CONFIG.VERSION_MARKER_MISSING
 
-The config module evaluated, but its default export was not created by the current `defineConfig`, a plain object export, a spread copy of a `defineConfig` result, or a config produced by a different `defineConfig` (for example a classic Prisma 7 config file). Raised by the config loader before validation; loading fails outright and every command exits `2` with this error. The fix is to create the config with `defineConfig` (imported from your target package's `/config` entrypoint, for example `@prisma/orm-postgres/config`) and export its return value directly. The path, when known, is carried in `where.path`. Payload: none.
+The config module evaluated, but its default export was not created by the current `defineConfig`: a plain object export, a spread copy of a `defineConfig` result, or a config produced by a different `defineConfig` (for example a classic Prisma 7 config file). Raised by the config loader before validation; loading fails outright and every command exits `2` with this error. The fix is to create the config with `defineConfig` (imported from your target package's `/config` entrypoint, for example `@prisma/orm-postgres/config`) and export its return value directly. The path, when known, is carried in `where.path`. Payload: none.
 
 ## CLI
 
@@ -161,7 +161,7 @@ Raised by the commander `init` (deleted in the S5 cutover). On the engine-hosted
 
 ### CLI.INIT_WRITE_FAILED
 
-`prisma orm init` could not write one of the files it scaffolds, a directory sitting where the file goes, permissions, a full disk. Everything that can be read and parsed is checked before the first write, so this is the failure that survives that check; the files written before it are already on disk and are listed so a follow-up run or agent knows the state it is resuming from. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `cause`, `filesWritten`.
+`prisma orm init` could not write one of the files it scaffolds: a directory sitting where the file goes, permissions, a full disk. Everything that can be read and parsed is checked before the first write, so this is the failure that survives that check; the files written before it are already on disk and are listed so a follow-up run or agent knows the state it is resuming from. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `cause`, `filesWritten`.
 
 ### CLI.INVALID_OUTPUT_FORMAT
 
@@ -189,11 +189,11 @@ A `package.json` found while resolving the project import root exists but could 
 
 ### CLI.PROMPT_REQUIRED
 
-Raised by `@prisma/cli-engine`, not by this repository: a command asked a question that has no default, and the session could not show it, stdin is not a terminal, `--no-interactive` was passed, or `--yes` was asked to answer a prompt that declares no default. The `CLI` namespace is shared with the engine (see [ADR 239](../architecture%20docs/adrs/ADR%20239%20-%20Errors%20are%20structural%20envelopes%20with%20dotted%20namespace%20codes.md)); it is listed here because it settles runs of the ORM's commands. `prisma orm init` translates it for the two prompts that stand in for a required flag, so a missing `--target` or `--authoring` still reports `CLI.INIT_MISSING_FLAGS` with the full missing list. Payload: none.
+Raised by `@prisma/cli-engine`, not by this repository: a command asked a question that has no default, and the session could not show it: stdin is not a terminal, `--no-interactive` was passed, or `--yes` was asked to answer a prompt that declares no default. The `CLI` namespace is shared with the engine (see [ADR 239](../architecture%20docs/adrs/ADR%20239%20-%20Errors%20are%20structural%20envelopes%20with%20dotted%20namespace%20codes.md)); it is listed here because it settles runs of the ORM's commands. `prisma orm init` translates it for the two prompts that stand in for a required flag, so a missing `--target` or `--authoring` still reports `CLI.INIT_MISSING_FLAGS` with the full missing list. Payload: none.
 
 ### CLI.UNEXPECTED
 
-Catch-all for an unanticipated failure inside a CLI command, an unclassified exception is wrapped in this envelope with the original message as the `why`. Thrown across nearly every command (migrate, db init/sign/update/verify, migration plan/new/show/status/log, contract emit, ref, inspect-live-schema, config loading). Payload: none.
+Catch-all for an unanticipated failure inside a CLI command: an unclassified exception is wrapped in this envelope with the original message as the `why`. Thrown across nearly every command (migrate, db init/sign/update/verify, migration plan/new/show/status/log, contract emit, ref, inspect-live-schema, config loading). Payload: none.
 
 ### CLI.UNKNOWN_FLAG
 
@@ -219,7 +219,7 @@ A composed component contributes an aggregate descriptor whose shape the framewo
 
 ### CONTRACT.AGGREGATE_OUTPUT_CODEC_MISSING
 
-The SQL emitter is asked to emit an aggregate result row whose declared result codec the composed stack does not contribute, the emitted type would name a codec absent from the contract's codec map, and every consumer reading it would resolve `never`. Contribute the codec, or declare a result codec the stack contributes. Raised while generating `contract.d.ts`. Payload: `operation`, `outputCodecId`.
+The SQL emitter is asked to emit an aggregate result row whose declared result codec the composed stack does not contribute: the emitted type would name a codec absent from the contract's codec map, and every consumer reading it would resolve `never`. Contribute the codec, or declare a result codec the stack contributes. Raised while generating `contract.d.ts`. Payload: `operation`, `outputCodecId`.
 
 ### CONTRACT.CODEC_DESCRIPTOR_MISSING
 
@@ -231,11 +231,11 @@ An authored `@@check` / `check()`'s `name:` prefix matches the shape a derived e
 
 ### CONTRACT.CHECK_ON_STI_VARIANT
 
-A model declares `@@check` / `check()` but is a single-table-inheritance variant (`@@base` with no own `@@map`), so it shares its base model's storage table and has no table of its own to declare the check on. Raised while building a SQL contract, as a backstop for the TS authoring path, the PSL surface refuses this earlier, at interpretation, with a span-anchored `PSL_CHECK_ON_STI_VARIANT` diagnostic naming the base model. The fix is to declare the check on the base model instead. Payload: `tableName`, `modelName`.
+A model declares `@@check` / `check()` but is a single-table-inheritance variant (`@@base` with no own `@@map`), so it shares its base model's storage table and has no table of its own to declare the check on. Raised while building a SQL contract, as a backstop for the TS authoring path; the PSL surface refuses this earlier, at interpretation, with a span-anchored `PSL_CHECK_ON_STI_VARIANT` diagnostic naming the base model. The fix is to declare the check on the base model instead. Payload: `tableName`, `modelName`.
 
 ### CONTRACT.CHECK_OPTOUT_INVALID
 
-A `@noCheck` / `.noCheck(...)` declaration is invalid. Either it does not apply to the column, the named kind is not derivable for the column's shape (`membership` on a column with no domain-enum value set, `elementNotNull` on a column that is not a list of scalars), or the bare form waives nothing because the column derives no generated checks, or the declaration is malformed: a kind is named twice, or `noCheck()` is called more than once on one field builder. Raised by both authoring paths (TS `defineContract` and PSL interpretation) on `managed` tables. Payload: `modelName`, `fieldName`, `reason`, and `kind` for per-kind failures.
+A `@noCheck` / `.noCheck(...)` declaration is invalid. Either it does not apply to the column: the named kind is not derivable for the column's shape (`membership` on a column with no domain-enum value set, `elementNotNull` on a column that is not a list of scalars), or the bare form waives nothing because the column derives no generated checks, or the declaration is malformed: a kind is named twice, or `noCheck()` is called more than once on one field builder. Raised by both authoring paths (TS `defineContract` and PSL interpretation) on `managed` tables. Payload: `modelName`, `fieldName`, `reason`, and `kind` for per-kind failures.
 
 ### CONTRACT.COLLECTION_INVALID
 
@@ -243,7 +243,7 @@ A Mongo model's collection attachment is wrong: the model declares `indexes`, `c
 
 ### CONTRACT.CONSTRAINT_INVALID
 
-A model declares an empty unique constraint (a unique with no fields), raised during SQL contract lowering (meta: `modelName`). Also raised when a CHECK constraint reaches SQLite migration DDL rendering, the SQLite target does not support CHECK constraints, and `sql.checkConstraint` is a Postgres-only capability. A `@@check` is refused earlier, by the PSL capability gate; a `check()` declared through the TypeScript builder is not, because capabilities reach the contract only after it is built, so this is where a SQLite `check()` is refused (meta: `constraintName`, and `tableName` where available).
+A model declares an empty unique constraint (a unique with no fields), raised during SQL contract lowering (meta: `modelName`). Also raised when a CHECK constraint reaches SQLite migration DDL rendering: the SQLite target does not support CHECK constraints, and `sql.checkConstraint` is a Postgres-only capability. A `@@check` is refused earlier, by the PSL capability gate; a `check()` declared through the TypeScript builder is not, because capabilities reach the contract only after it is built, so this is where a SQLite `check()` is refused (meta: `constraintName`, and `tableName` where available).
 
 ### CONTRACT.DEFAULT_INVALID
 
@@ -295,11 +295,11 @@ A Mongo variant model declares an index that conflicts with the discriminator sc
 
 ### CONTRACT.INFER_UNSUPPORTED
 
-`contract infer` is not available: either the configured family does not implement the `PslContractInferCapable` capability (no meta at that site), or the family supports inference but the database shape cannot be expressed yet, duplicate table names across schemas, a column typed by a native enum that an extension pack space already describes in another schema, or native enum adoption with content spanning multiple schemas. Meta at the shape sites: `tableName`, `columnName`, `schemas`.
+`contract infer` is not available: either the configured family does not implement the `PslContractInferCapable` capability (no meta at that site), or the family supports inference but the database shape cannot be expressed yet: duplicate table names across schemas, a column typed by a native enum that an extension pack space already describes in another schema, or native enum adoption with content spanning multiple schemas. Meta at the shape sites: `tableName`, `columnName`, `schemas`.
 
 ### CONTRACT.INTROSPECTION_UNSUPPORTED
 
-Introspection read an unrecognized or malformed database shape, an unknown referential action rule, or a malformed index reloption entry. Raised by the Postgres and SQLite control adapters. Payload: `rule`, `entry`, `indexName`.
+Introspection read an unrecognized or malformed database shape: an unknown referential action rule, or a malformed index reloption entry. Raised by the Postgres and SQLite control adapters. Payload: `rule`, `entry`, `indexName`.
 
 ### CONTRACT.MARKER_MISMATCH
 
@@ -311,15 +311,15 @@ No contract marker (database signature) is found in the database at all. `db ver
 
 ### CONTRACT.MARKER_READ_FAILED
 
-A driver-level failure occurred while reading the contract marker table, connectivity, permissions, or locking problems rather than bad marker content. Raised whenever a CLI/control operation reads the marker. Payload: `space`.
+A driver-level failure occurred while reading the contract marker table: connectivity, permissions, or locking problems rather than bad marker content. Raised whenever a CLI/control operation reads the marker. Payload: `space`.
 
 ### CONTRACT.MARKER_REQUIRED
 
-A command that requires a pre-signed database (marker present) as a precondition found none; also the default failure code stamped onto a non-ok verify result when no more specific code applies, which is how `db verify --strict` reports a database holding elements no contract declares. On `db verify` it is an `error` diagnostic on a completed run that exits `4`; everywhere else it is a precondition failure at exit `2`. Those are two unrelated jobs for one code, "sign the database first" and "strict mode found elements no contract declares", and splitting them would let the exit code follow from the code alone. Fix path: run `prisma db init` first, or declare the extra elements in a contract. Payload: none notable.
+A command that requires a pre-signed database (marker present) as a precondition found none; also the default failure code stamped onto a non-ok verify result when no more specific code applies, which is how `db verify --strict` reports a database holding elements no contract declares. On `db verify` it is an `error` diagnostic on a completed run that exits `4`; everywhere else it is a precondition failure at exit `2`. Those are two unrelated jobs for one code: "sign the database first" and "strict mode found elements no contract declares", and splitting them would let the exit code follow from the code alone. Fix path: run `prisma db init` first, or declare the extra elements in a contract. Payload: none notable.
 
 ### CONTRACT.MARKER_ROW_CORRUPT
 
-The marker row exists but its column values fail schema validation, the row is corrupt or written by an incompatible version. Fix path: delete the row and re-sign with `prisma db sign`. Payload: `space`.
+The marker row exists but its column values fail schema validation: the row is corrupt or written by an incompatible version. Fix path: delete the row and re-sign with `prisma db sign`. Payload: `space`.
 
 ### CONTRACT.MODEL_BASE_MISSING
 
@@ -375,7 +375,7 @@ A native type name in the contract fails the identifier-safety pattern required 
 
 ### CONTRACT.PACK_CONTRIBUTION_INVALID
 
-A composed pack's contribution is malformed or collides with another contribution, this is the extension-author-facing bucket. Covers: entity types colliding with reserved helper keys, duplicate entity kinds or index-type registrations, a registered entity kind with no `lowerEntityHandles` lowering, an invalid `indexTypes` shape, entries-slot collisions between a model attribute and a block entry kind, bad authoring-helper paths, a codec registered with an entity-ref arg but no `columnFromEntity` hook, and print-time contribution mismatches (missing/mismatched PSL block descriptor, param descriptor kind disagreeing with the AST node, unregistered codec id, raw literal that is not valid JSON). Raised during contract authoring/lowering and PSL printing. Payload: `packId`, `contribution`, `reason`, `keyword`, `paramName`, `codecId`.
+A composed pack's contribution is malformed or collides with another contribution; this is the extension-author-facing bucket. Covers: entity types colliding with reserved helper keys, duplicate entity kinds or index-type registrations, a registered entity kind with no `lowerEntityHandles` lowering, an invalid `indexTypes` shape, entries-slot collisions between a model attribute and a block entry kind, bad authoring-helper paths, a codec registered with an entity-ref arg but no `columnFromEntity` hook, and print-time contribution mismatches (missing/mismatched PSL block descriptor, param descriptor kind disagreeing with the AST node, unregistered codec id, raw literal that is not valid JSON). Raised during contract authoring/lowering and PSL printing. Payload: `packId`, `contribution`, `reason`, `keyword`, `paramName`, `codecId`.
 
 ### CONTRACT.PACK_FAMILY_MISMATCH
 
@@ -407,7 +407,7 @@ A role entity is declared more than once in the entities list, or a role name is
 
 ### CONTRACT.SCHEMA_VERIFICATION_FAILED
 
-Schema verification found that the live database schema does not satisfy the contract, missing/extra/mismatched tables, columns, or other elements. `db verify` and `db sign` both report it as an `error` diagnostic on a completed run that exits `4`: for `db verify` that is the drift verdict, and for `db sign` it is the reason no signature was written. `db verify` raises one such diagnostic per contract space whose schema failed. Fix path: `prisma db update` or adjust the contract. Payload: `space` (the contract space, on `db verify`), `issues` (the drifted element paths); the underlying operation result also carries `verificationResult`.
+Schema verification found that the live database schema does not satisfy the contract: missing/extra/mismatched tables, columns, or other elements. `db verify` and `db sign` both report it as an `error` diagnostic on a completed run that exits `4`: for `db verify` that is the drift verdict, and for `db sign` it is the reason no signature was written. `db verify` raises one such diagnostic per contract space whose schema failed. Fix path: `prisma db update` or adjust the contract. Payload: `space` (the contract space, on `db verify`), `issues` (the drifted element paths); the underlying operation result also carries `verificationResult`.
 
 ### CONTRACT.SOURCE_IMPORT_DISALLOWED
 
@@ -461,7 +461,7 @@ An authored wire-name prefix (an index name, an RLS policy prefix, or a check's 
 
 ### PSL.FORMAT_OPTION_INVALID
 
-`resolveFormatOptions` was given an invalid formatting option, a non-positive/non-integer `indent` or an unrecognized `newline` value. Raised before any PSL source is read. Payload: `option`, `received`.
+`resolveFormatOptions` was given an invalid formatting option: a non-positive/non-integer `indent` or an unrecognized `newline` value. Raised before any PSL source is read. Payload: `option`, `received`.
 
 ### PSL.PARSE_FAILED
 
@@ -575,7 +575,7 @@ An `aggregate()` or `groupBy().aggregate()` selector is not a valid aggregation 
 
 ### ORM.AGGREGATE_UNSUPPORTED
 
-An aggregate was invoked for an operation/input pair the composed target declares no descriptor for, an undeclared pair has no result identity to type or decode, so it is rejected before any SQL is built rather than executed into a driver-native value. Raised by ORM aggregate planning and decoding, and by the SQL-builder lane's aggregate functions; the typed surfaces already make such a call a type error, so reaching this at runtime means a dynamic or cast invocation. Payload: `operation`, plus `table`/`column`/`inputCodecId` where an input is involved. Contribute an aggregate descriptor for the pair, or aggregate an input the target declares.
+An aggregate was invoked for an operation/input pair the composed target declares no descriptor for: an undeclared pair has no result identity to type or decode, so it is rejected before any SQL is built rather than executed into a driver-native value. Raised by ORM aggregate planning and decoding, and by the SQL-builder lane's aggregate functions; the typed surfaces already make such a call a type error, so reaching this at runtime means a dynamic or cast invocation. Payload: `operation`, plus `table`/`column`/`inputCodecId` where an input is involved. Contribute an aggregate descriptor for the pair, or aggregate an input the target declares.
 
 ### ORM.ARGUMENT_INVALID
 
@@ -619,7 +619,7 @@ An `include()` usage is structurally invalid: the refinement callback returned s
 
 ### ORM.INCLUDE_UNSUPPORTED
 
-The include is well-formed but not supported in this position: scalar aggregations or `combine()` on a to-one relation (SQL), or including an embed relation / compound reference (Mongo, only reference relations can be included). Payload: `relation`, `kind`, `model`.
+The include is well-formed but not supported in this position: scalar aggregations or `combine()` on a to-one relation (SQL), or including an embed relation / compound reference (Mongo; only reference relations can be included). Payload: `relation`, `kind`, `model`.
 
 ### ORM.MODEL_UNKNOWN
 
@@ -631,7 +631,7 @@ The Mongo ORM client was asked to operate on a model name that is not in the con
 
 ### ORM.MUTATION_ROW_MISSING
 
-A mutation that expected the database to return a row got none, `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
+A mutation that expected the database to return a row got none: `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
 
 ### ORM.OPERATION_UNSUPPORTED
 
@@ -639,7 +639,7 @@ A valid ORM method was called in a configuration that does not support it: mutat
 
 ### ORM.RELATION_LINK_DUPLICATE
 
-A `connect()` nested mutation violated a unique constraint on the junction table, the junction link is likely already present. The original driver error is preserved as `cause`. Payload: `relation`, `junction`.
+A `connect()` nested mutation violated a unique constraint on the junction table: the junction link is likely already present. The original driver error is preserved as `cause`. Payload: `relation`, `junction`.
 
 ### ORM.RELATION_MUTATION_INVALID
 
@@ -677,7 +677,7 @@ An in-flight `query()` or `execute()` operation was cancelled via the per-operat
 
 ### RUNTIME.AGGREGATE_DESCRIPTOR_INVALID
 
-A component contributed an aggregate descriptor whose shape the SQL aggregate registry cannot read: a missing or empty `operation`, an `input` that is not `none` / `any` / `codec` / `trait` (including an unknown trait name), an `output` that is not `self` / `codec`, a non-boolean `nullable`, a `nullable: false` descriptor with no `emptyResultJson`, a `self` output on an operation that consumes no input, or a non-callable `lower`. `emptyResultJson` is the value a non-nullable operation answers with when no result row reaches the caller, stated in the result codec's canonical JSON, `0` under `pg/int8number@1`, `'0'` under `pg/int8@1`. Raised while the execution context assembles the registry. Payload: `descriptor`.
+A component contributed an aggregate descriptor whose shape the SQL aggregate registry cannot read: a missing or empty `operation`, an `input` that is not `none` / `any` / `codec` / `trait` (including an unknown trait name), an `output` that is not `self` / `codec`, a non-boolean `nullable`, a `nullable: false` descriptor with no `emptyResultJson`, a `self` output on an operation that consumes no input, or a non-callable `lower`. `emptyResultJson` is the value a non-nullable operation answers with when no result row reaches the caller, stated in the result codec's canonical JSON: `0` under `pg/int8number@1`, `'0'` under `pg/int8@1`. Raised while the execution context assembles the registry. Payload: `descriptor`.
 
 ### RUNTIME.AGGREGATE_LOWERING_MISSING
 
@@ -689,7 +689,7 @@ An aggregate descriptor names a result codec the composed stack does not registe
 
 ### RUNTIME.AMBIGUOUS_AGGREGATE_DESCRIPTOR
 
-Two trait-matching aggregate descriptors for one operation both claim a registered codec, the codec advertises both traits, so the result codec is undetermined. Contribute an exact codec descriptor for that operation, or narrow the overlapping trait contributions. Raised while the execution context assembles the aggregate registry, so it never surfaces mid-query. Payload: `operation`, `codecId`, `traits`.
+Two trait-matching aggregate descriptors for one operation both claim a registered codec: the codec advertises both traits, so the result codec is undetermined. Contribute an exact codec descriptor for that operation, or narrow the overlapping trait contributions. Raised while the execution context assembles the aggregate registry, so it never surfaces mid-query. Payload: `operation`, `codecId`, `traits`.
 
 ### RUNTIME.ANNOTATION_INAPPLICABLE
 
@@ -705,7 +705,7 @@ The authored SQL AST uses a feature this target cannot render, e.g. DEFAULT as a
 
 ### RUNTIME.BINDING_INVALID
 
-A target facade client (`@internal/postgres`, `@internal/sqlite`, `@internal/mongo`) received a connection binding whose shape is wrong for the target, malformed connection string, unsupported binding kind, or missing required fields. Raised at `connect(...)` / client construction. Payload: `received`, `reason`.
+A target facade client (`@internal/postgres`, `@internal/sqlite`, `@internal/mongo`) received a connection binding whose shape is wrong for the target: malformed connection string, unsupported binding kind, or missing required fields. Raised at `connect(...)` / client construction. Payload: `received`, `reason`.
 
 ### RUNTIME.BINDING_MISSING
 
@@ -721,7 +721,7 @@ A codec descriptor handed to a target codec-descriptor registry (Postgres, SQLit
 
 ### RUNTIME.CODEC_DESCRIPTOR_MISSING
 
-A column (or AST-carried CodecRef) references a `codecId` for which no runtime component registered a codec descriptor, usually the extension pack that owns the codec is missing from the runtime stack. Surfaces at SQL context construction during the contract codec walk, or lazily when the AST codec resolver materializes a codec at query time. Payload: `codecId`; on the column path also `table`, `column`.
+A column (or AST-carried CodecRef) references a `codecId` for which no runtime component registered a codec descriptor: usually the extension pack that owns the codec is missing from the runtime stack. Surfaces at SQL context construction during the contract codec walk, or lazily when the AST codec resolver materializes a codec at query time. Payload: `codecId`; on the column path also `table`, `column`.
 
 ### RUNTIME.CODEC_MISSING
 
@@ -737,15 +737,15 @@ Mongo middleware called `ctx.contentHash(plan)` (or `computeMongoContentHash`) d
 
 ### RUNTIME.CONTRACT_FAMILY_MISMATCH
 
-At SQL context construction, the contract's target family (e.g. `mongo`) does not match the runtime stack's family (`sql`), the contract was emitted for a different database family than the stack being assembled. Payload: `actual`, `expected`.
+At SQL context construction, the contract's target family (e.g. `mongo`) does not match the runtime stack's family (`sql`): the contract was emitted for a different database family than the stack being assembled. Payload: `actual`, `expected`.
 
 ### RUNTIME.CONTRACT_TARGET_MISMATCH
 
-At SQL context construction, the contract's target (e.g. `sqlite`) does not match the runtime stack's target descriptor (e.g. `postgres`), the contract and the adapter/driver stack disagree about the database target. Payload: `actual`, `expected`.
+At SQL context construction, the contract's target (e.g. `sqlite`) does not match the runtime stack's target descriptor (e.g. `postgres`): the contract and the adapter/driver stack disagree about the database target. Payload: `actual`, `expected`.
 
 ### RUNTIME.DDL_UNSUPPORTED
 
-`lower()` was asked to lower DDL on a surface that cannot do it: the runtime adapter (DDL lowering is a control-plane concern), or the synchronous control lowering path (DDL default literals require async codec encoding, use `lowerToExecuteRequest()`). Raised by the Postgres and SQLite adapters. Payload: `surface`.
+`lower()` was asked to lower DDL on a surface that cannot do it: the runtime adapter (DDL lowering is a control-plane concern), or the synchronous control lowering path (DDL default literals require async codec encoding; use `lowerToExecuteRequest()`). Raised by the Postgres and SQLite adapters. Payload: `surface`.
 
 ### RUNTIME.DECODE_FAILED
 
@@ -753,11 +753,11 @@ A codec's `decode` threw while converting a wire value into its output type duri
 
 Codecs also raise this code directly, as a structured envelope with `meta.codecId` and `meta.received`. The integer guards: `pg/int8number@1` and `sqlite/bigintnumber@1` (the `BigIntNumber` type) refuse a stored value outside the safe integer range ±(2^53 − 1) and any non-integral value rather than rounding it; `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` refuse a wire or JSON value that is not a decimal integer. On a flat read the codec's envelope surfaces unchanged; on an `.include()` read the ORM client wraps it in a fresh `RUNTIME.DECODE_FAILED` carrying `table`, `column`, and `codec`, with the codec's envelope on `cause`. One SQLite caveat: on a flat read, `node:sqlite` itself refuses an INTEGER outside the safe range before any codec runs, so for an out-of-band stored value the structured envelope is guaranteed on the include/JSON path, not the flat path.
 
-**Aggregates reach the same guards.** `count()` and `sum()` over integers declare a number-flavoured result codec, so a tally or total past ±(2^53 − 1) raises this code, `pg/int8number@1 value must be an integer within the safe integer range, got 9007199254740992`, instead of returning a rounded value. It fires on the wire path and on the `.include()` path alike: the include projection is a JSON number, but the guard runs after `JSON.parse`, and rounding is monotone, so a value that was outside the range is still outside it. Where the magnitude is real rather than a bug, switch that call to the lossless variant beside it, `countBigInt()`, `sumBigInt()`, or `avgDecimal()`.
+**Aggregates reach the same guards.** `count()` and `sum()` over integers declare a number-flavoured result codec, so a tally or total past ±(2^53 − 1) raises this code: `pg/int8number@1 value must be an integer within the safe integer range, got 9007199254740992`, instead of returning a rounded value. It fires on the wire path and on the `.include()` path alike: the include projection is a JSON number, but the guard runs after `JSON.parse`, and rounding is monotone, so a value that was outside the range is still outside it. Where the magnitude is real rather than a bug, switch that call to the lossless variant beside it: `countBigInt()`, `sumBigInt()`, or `avgDecimal()`.
 
 ### RUNTIME.DUPLICATE_AGGREGATE_DESCRIPTOR
 
-Two components claim the same aggregate overload, the same `(operation, input)` pair, keyed as `sum:trait:numeric`, `sum:codec:pg/int8@1`, or `count:none`. Each overload resolves to exactly one result codec, so exactly one target, adapter, or extension may contribute it. Payload: `key`.
+Two components claim the same aggregate overload: the same `(operation, input)` pair, keyed as `sum:trait:numeric`, `sum:codec:pg/int8@1`, or `count:none`. Each overload resolves to exactly one result codec, so exactly one target, adapter, or extension may contribute it. Payload: `key`.
 
 ### RUNTIME.DUPLICATE_AUTHORING_DISCRIMINATOR
 
@@ -787,7 +787,7 @@ A statistics execution completed without returning statement statistics. This in
 
 ### RUNTIME.ITERATOR_CONSUMED
 
-An `AsyncIterableResult` (the return value of `query()`) was iterated a second time, each result can be consumed only once, whether via a `for await` loop or via `toArray()`/`await`. Store the array from `toArray()` if you need to reuse the rows. Payload: `consumedBy`, `suggestion`.
+An `AsyncIterableResult` (the return value of `query()`) was iterated a second time: each result can be consumed only once, whether via a `for await` loop or via `toArray()`/`await`. Store the array from `toArray()` if you need to reuse the rows. Payload: `consumedBy`, `suggestion`.
 
 ### RUNTIME.JSON_SCHEMA_VALIDATION_FAILED
 
@@ -835,7 +835,7 @@ At query-render time a table references a namespace that is not present, or not 
 
 ### RUNTIME.PARAM_REF_CODEC_REQUIRED
 
-While building a query expression, a plain JS value was passed where no codec could be derived, `toExpr` cannot construct a ParamRef for a bare value without an explicit `CodecRef`. Provide a codec at the call site or use a column-bound builder path.
+While building a query expression, a plain JS value was passed where no codec could be derived: `toExpr` cannot construct a ParamRef for a bare value without an explicit `CodecRef`. Provide a codec at the call site or use a column-bound builder path.
 
 ### RUNTIME.PARAM_REF_MISSING_CODEC
 
@@ -847,7 +847,7 @@ An AST containing a prepared-statement bind-site reference (`PreparedParamRef`) 
 
 ### RUNTIME.PREPARE_MISSING_PARAM
 
-Executing a prepared statement without supplying a value for one of its declared parameters, the lookup fails rather than silently binding `undefined`. Payload: `name`.
+Executing a prepared statement without supplying a value for one of its declared parameters: the lookup fails rather than silently binding `undefined`. Payload: `name`.
 
 ### RUNTIME.PREPARE_UNUSED_PARAM
 
@@ -855,7 +855,7 @@ Executing a prepared statement without supplying a value for one of its declared
 
 ### RUNTIME.RAW_ROW_COLUMN_MISSING
 
-A whole-query raw statement returned a result that omits a column its row spec declares. The runtime never parses the SQL, so the spec is its only description of the result, a column the spec names and the statement does not return is a mismatch the caller has to resolve, by correcting the spec or the statement. Distinct from `RUNTIME.DECODE_FAILED`, which means a codec rejected a value the runtime did expect. Surplus result columns the spec does not declare are dropped silently and never raise this. See [ADR 247](../architecture%20docs/adrs/ADR%20247%20-%20Whole-query%20raw%20SQL%20is%20the%20fragment%20mechanism%20at%20statement%20position.md). Payload: `column`, `declaredColumns`, `resultColumns`.
+A whole-query raw statement returned a result that omits a column its row spec declares. The runtime never parses the SQL, so the spec is its only description of the result: a column the spec names and the statement does not return is a mismatch the caller has to resolve, by correcting the spec or the statement. Distinct from `RUNTIME.DECODE_FAILED`, which means a codec rejected a value the runtime did expect. Surplus result columns the spec does not declare are dropped silently and never raise this. See [ADR 247](../architecture%20docs/adrs/ADR%20247%20-%20Whole-query%20raw%20SQL%20is%20the%20fragment%20mechanism%20at%20statement%20position.md). Payload: `column`, `declaredColumns`, `resultColumns`.
 
 ### RUNTIME.RAW_SQL_UNSUPPORTED_INTERPOLATION
 
@@ -870,7 +870,7 @@ A value that only a global `Temporal` implementation can produce or read was nee
 
 The check is lazy: registering the target, validating a contract, building a runtime, resolving a descriptor and constructing a codec instance all succeed without `Temporal`. Only producing or interpreting a value fails.
 
-That covers more than an explicit write. It is raised on **reads**, because the check is the first thing a Temporal codec does on decode, selecting the column is enough. And it is raised on an **insert into a table carrying `temporal.updatedAt()`**, because that column's clock produces a `Temporal.Instant` even when your code never mentions a temporal value; that path reports `generatorId` rather than `codecId`, since no codec has been reached yet.
+That covers more than an explicit write. It is raised on **reads**, because the check is the first thing a Temporal codec does on decode: selecting the column is enough. And it is raised on an **insert into a table carrying `temporal.updatedAt()`**, because that column's clock produces a `Temporal.Instant` even when your code never mentions a temporal value; that path reports `generatorId` rather than `codecId`, since no codec has been reached yet.
 
 Install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type, `DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)`, to read and write PostgreSQL's own text, which needs no Temporal at all.
 
@@ -888,7 +888,7 @@ Rolling back a transaction after the callback threw itself failed; the connectio
 
 ### RUNTIME.TYPE_PARAMS_INVALID
 
-A parameterized codec's `paramsSchema` rejected the `typeParams` carried by a codec reference (or the schema returned a Promise, runtime validation requires a synchronous Standard Schema validator). The `arktype-json` codec also throws it when the contract's serialized schema expression does not match the rehydrated schema, indicating a stale or hand-edited contract. Payload: `codecId`, `typeParams` (plus `table`/`column` or `typeName` on the contract-walk path).
+A parameterized codec's `paramsSchema` rejected the `typeParams` carried by a codec reference (or the schema returned a Promise; runtime validation requires a synchronous Standard Schema validator). The `arktype-json` codec also throws it when the contract's serialized schema expression does not match the rehydrated schema, indicating a stale or hand-edited contract. Payload: `codecId`, `typeParams` (plus `table`/`column` or `typeName` on the contract-walk path).
 
 ## DRIVER
 
@@ -944,7 +944,7 @@ A `migration check` finding, carried as an `error` diagnostic on a completed run
 
 ### MIGRATION.CHECK_HASH_MISMATCH
 
-A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: the `migrationHash` stored in `migration.json` does not match the hash recomputed from the package contents, the package was edited or partially written since emit. Re-emit the package or restore it from version control.
+A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: the `migrationHash` stored in `migration.json` does not match the hash recomputed from the package contents: the package was edited or partially written since emit. Re-emit the package or restore it from version control.
 
 ### MIGRATION.CHECK_HEAD_REF_MISSING
 
@@ -1004,7 +1004,7 @@ A contract JSON on disk failed to deserialize into a valid contract: either a sn
 
 ### MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH
 
-While writing a contract snapshot, the contract JSON's inner `storage.storageHash` does not equal the storage hash the snapshot is being filed under, the two must agree by construction. Primarily an authoring/tooling invariant rather than something a user causes directly. Payload: `storageHash`, `actualHash`, `dir`.
+While writing a contract snapshot, the contract JSON's inner `storage.storageHash` does not equal the storage hash the snapshot is being filed under: the two must agree by construction. Primarily an authoring/tooling invariant rather than something a user causes directly. Payload: `storageHash`, `actualHash`, `dir`.
 
 ### MIGRATION.CONTRACT_SNAPSHOT_MISSING
 
@@ -1024,7 +1024,7 @@ A migration object's `endContract`/`startContract` accessor was read, but the in
 
 ### MIGRATION.DATA_TRANSFORM_CONTRACT_MISMATCH
 
-At migration authoring/emit time, a `dataTransform(endContract, …)` produced a query plan whose storage hash does not match the contract passed to `dataTransform`, the query builder was configured with a different contract reference than the migration itself. Make both use the same imported `endContract`. Payload: `dataTransformName`, `expected`, `actual`.
+At migration authoring/emit time, a `dataTransform(endContract, …)` produced a query plan whose storage hash does not match the contract passed to `dataTransform`: the query builder was configured with a different contract reference than the migration itself. Make both use the same imported `endContract`. Payload: `dataTransformName`, `expected`, `actual`.
 
 ### MIGRATION.DESCRIBE_INVALID
 
@@ -1032,7 +1032,7 @@ A migration author class's `describe()` result is unusable: it carries neither a
 
 ### MIGRATION.DESCRIPTOR_HEAD_HASH_MISMATCH
 
-An extension descriptor publishes a `contractSpace` whose `headRef.hash` does not match the hash recomputed from its `contractJson`, the descriptor was published with a stale head hash, typically because the contract was bumped without rerunning the extension's emit pipeline. Payload: `extensionId`, `recomputedHash`, `headRefHash`.
+An extension descriptor publishes a `contractSpace` whose `headRef.hash` does not match the hash recomputed from its `contractJson`: the descriptor was published with a stale head hash, typically because the contract was bumped without rerunning the extension's emit pipeline. Payload: `extensionId`, `recomputedHash`, `headRefHash`.
 
 ### MIGRATION.DESTINATION_CONTRACT_MISMATCH
 
@@ -1040,11 +1040,11 @@ Runner-level failure during apply (`db init`, `db update`, `migrate`): the plan'
 
 ### MIGRATION.DESTRUCTIVE_CHANGES
 
-The planned operations include destructive changes (e.g. DROP) and the command was run without explicit consent. `db update` asks for that consent instead of failing: interactively it asks you to type the name of the database it is about to change, and outside an interactive terminal it is granted by `--confirm <database>` (`--yes` accepts declared prompt defaults and never grants consent; `--confirm` is read only when the run is non-interactive or `--yes` is set, so a script run from a terminal needs `--no-interactive --confirm <database>`). The name is the `database` a driver connection object carries, or the connection URL's first path segment, else its host, falling back to the target id. A run with nobody to ask and no `--confirm` settles as `CLI.CONSENT_REQUIRED` at exit 2; a run whose prompt is cancelled settles as `CLI.PROMPT_CANCELLED` at exit 3. `--dry-run` never asks, it settles as this error instead. Use it to preview the operations first.
+The planned operations include destructive changes (e.g. DROP) and the command was run without explicit consent. `db update` asks for that consent instead of failing: interactively it asks you to type the name of the database it is about to change, and outside an interactive terminal it is granted by `--confirm <database>` (`--yes` accepts declared prompt defaults and never grants consent; `--confirm` is read only when the run is non-interactive or `--yes` is set, so a script run from a terminal needs `--no-interactive --confirm <database>`). The name is the `database` a driver connection object carries, or the connection URL's first path segment, else its host, falling back to the target id. A run with nobody to ask and no `--confirm` settles as `CLI.CONSENT_REQUIRED` at exit 2; a run whose prompt is cancelled settles as `CLI.PROMPT_CANCELLED` at exit 3. `--dry-run` never asks; it settles as this error instead. Use it to preview the operations first.
 
 ### MIGRATION.DIR_EXISTS
 
-`migration new`/`migration plan` refused to scaffold because the target migration directory already exists, each migration needs a unique directory. Pick a different `--name` or delete the existing directory. Payload: `dir`.
+`migration new`/`migration plan` refused to scaffold because the target migration directory already exists: each migration needs a unique directory. Pick a different `--name` or delete the existing directory. Payload: `dir`.
 
 ### MIGRATION.DUPLICATE_INVARIANT_IN_EDGE
 
@@ -1064,7 +1064,7 @@ A migration operation's SQL step failed while being executed against the databas
 
 ### MIGRATION.FILE_MISSING
 
-A required migration file is absent: either an on-disk package is missing `migration.json`/`ops.json` (migration-tools loader, re-emit via the package's `migration.ts`), or a `migration.ts` source file was expected at a package directory and not found (scaffold one with `migration new` or `migration plan`). Payload: `file`, `dir` (loader variant) or `dir` (source-file variant).
+A required migration file is absent: either an on-disk package is missing `migration.json`/`ops.json` (migration-tools loader; re-emit via the package's `migration.ts`), or a `migration.ts` source file was expected at a package directory and not found (scaffold one with `migration new` or `migration plan`). Payload: `file`, `dir` (loader variant) or `dir` (source-file variant).
 
 ### MIGRATION.FOREIGN_KEY_VIOLATION
 
@@ -1104,7 +1104,7 @@ The migration name given to `migration new`/`migration plan --name` contains no 
 
 ### MIGRATION.INVALID_OPERATION_ENTRY
 
-An operation returned by an authored migration class failed schema validation during emit, each entry of `operations` must carry `id`, `label`, and an `operationClass` of `additive`, `widening`, `destructive`, or `data`. Also raised when deserializing a persisted Mongo migration plan hits a malformed or unknown entry (filter, pipeline stage, DML/DDL/inspection command). Payload: `index`, `reason` (emit validation) or `context`, `kind` (plan deserialization).
+An operation returned by an authored migration class failed schema validation during emit: each entry of `operations` must carry `id`, `label`, and an `operationClass` of `additive`, `widening`, `destructive`, or `data`. Also raised when deserializing a persisted Mongo migration plan hits a malformed or unknown entry (filter, pipeline stage, DML/DDL/inspection command). Payload: `index`, `reason` (emit validation) or `context`, `kind` (plan deserialization).
 
 ### MIGRATION.INVALID_REF_FILE
 
@@ -1116,15 +1116,15 @@ A ref name is syntactically invalid: names must be lowercase alphanumeric with h
 
 ### MIGRATION.INVALID_REF_VALUE
 
-The value given for a ref (e.g. to `ref set`) is not a valid contract hash, it must be 64 lowercase hex chars or `empty`. Payload: `value`.
+The value given for a ref (e.g. to `ref set`) is not a valid contract hash: it must be 64 lowercase hex chars or `empty`. Payload: `value`.
 
 ### MIGRATION.INVALID_REFS
 
-A legacy `refs.json` file is invalid, it must be a flat object mapping valid ref names to contract hash strings. Payload: `path`, `reason`.
+A legacy `refs.json` file is invalid: it must be a flat object mapping valid ref names to contract hash strings. Payload: `path`, `reason`.
 
 ### MIGRATION.INVALID_SPACE_ID
 
-A contract-space id (e.g. via `--space` or in planner input) does not match the required pattern `[a-z][a-z0-9_-]{0,63}`, space ids double as directory names under `migrations/`, so the rule is conservative. Payload: `spaceId`.
+A contract-space id (e.g. via `--space` or in planner input) does not match the required pattern `[a-z][a-z0-9_-]{0,63}`: space ids double as directory names under `migrations/`, so the rule is conservative. Payload: `spaceId`.
 
 ### MIGRATION.LEGACY_MARKER_SHAPE
 
@@ -1136,11 +1136,11 @@ The database's marker table (`prisma_contract.marker` on Postgres, `_prisma_mark
 
 ### MIGRATION.MARKER_CAS_FAILURE
 
-While finalizing an apply, the compare-and-swap update of the database's contract marker found the marker had been modified by another process mid-migration, a concurrent migration raced this one. Payload: `space`, `expectedStorageHash`, `destinationStorageHash`.
+While finalizing an apply, the compare-and-swap update of the database's contract marker found the marker had been modified by another process mid-migration: a concurrent migration raced this one. Payload: `space`, `expectedStorageHash`, `destinationStorageHash`.
 
 ### MIGRATION.MARKER_MISMATCH
 
-The live database marker's contract hash is not reachable anywhere in the on-disk migration graph, the database and the local migration history have diverged. The fix depends on which side is canonical: `migration plan --from <tip>` (catch the graph up), `ref set db <markerHash>` (fix a drifted local ref), or investigate out-of-band migration. Payload: `markerHash`, `reachableHashes`, `graphTip` (when the graph has a tip).
+The live database marker's contract hash is not reachable anywhere in the on-disk migration graph: the database and the local migration history have diverged. The fix depends on which side is canonical: `migration plan --from <tip>` (catch the graph up), `ref set db <markerHash>` (fix a drifted local ref), or investigate out-of-band migration. Payload: `markerHash`, `reachableHashes`, `graphTip` (when the graph has a tip).
 
 ### MIGRATION.MARKER_NOT_IN_HISTORY
 
@@ -1148,7 +1148,7 @@ A warning diagnostic (not a hard failure) in `migration status`: the database's 
 
 ### MIGRATION.MARKER_ORIGIN_MISMATCH
 
-Runner-level failure during apply: the plan asserts an origin contract, but the database marker is missing, or its storage hash (or profile hash) differs from the plan's origin, the database is not at the state the plan was computed from. Re-plan from the database's actual state; `db init` intercepts this code to render an init-specific "already initialised at a different contract" message. Payload: `expectedOriginStorageHash` plus `markerStorageHash`/`markerProfileHash` depending on the branch.
+Runner-level failure during apply: the plan asserts an origin contract, but the database marker is missing, or its storage hash (or profile hash) differs from the plan's origin: the database is not at the state the plan was computed from. Re-plan from the database's actual state; `db init` intercepts this code to render an init-specific "already initialised at a different contract" message. Payload: `expectedOriginStorageHash` plus `markerStorageHash`/`markerProfileHash` depending on the branch.
 
 ### MIGRATION.MISSING_INVARIANTS
 
@@ -1156,7 +1156,7 @@ A diagnostic in `migration status`: the active ref requires data invariants that
 
 ### MIGRATION.NO_CHANGES
 
-`migration new` found the from and to contract hashes identical, there is nothing to migrate. Change the contract and re-run `prisma contract emit` first, or pass `--from <hash>` explicitly to author a data-only migration on the current contract hash. Payload: none.
+`migration new` found the from and to contract hashes identical: there is nothing to migrate. Change the contract and re-run `prisma contract emit` first, or pass `--from <hash>` explicitly to author a data-only migration on the current contract hash. Payload: none.
 
 ### MIGRATION.NO_INITIAL_MIGRATION
 
@@ -1176,7 +1176,7 @@ The migration history contains cycles (e.g. after a rollback migration C1→C2�
 
 ### MIGRATION.OPERATION_UNSUPPORTED
 
-A Mongo migration check uses a filter feature the check evaluator does not support, an unsupported filter operator, or an aggregation-expression filter. Payload: `operator`.
+A Mongo migration check uses a filter feature the check evaluator does not support: an unsupported filter operator, or an aggregation-expression filter. Payload: `operator`.
 
 ### MIGRATION.PACKAGE_NOT_FOUND
 
@@ -1184,7 +1184,7 @@ A Mongo migration check uses a filter feature the check evaluator does not suppo
 
 ### MIGRATION.PATH_UNREACHABLE
 
-An apply command (`migrate`/`db update`) cannot find a path through the on-disk migration graph from the database's current marker to the requested target, the connecting edge was never planned. The fix walks you through `migration plan` (with the right `--from`/`--to`) then `migrate`. Payload: carries the underlying failure's meta (`fromHash`, `targetHash`, `deadEnds`, `kind`).
+An apply command (`migrate`/`db update`) cannot find a path through the on-disk migration graph from the database's current marker to the requested target: the connecting edge was never planned. The fix walks you through `migration plan` (with the right `--from`/`--to`) then `migrate`. Payload: carries the underlying failure's meta (`fromHash`, `targetHash`, `deadEnds`, `kind`).
 
 ### MIGRATION.PLANNING_FAILED
 
@@ -1208,7 +1208,7 @@ After executing a migration operation, one of its postcheck steps (a query expec
 
 ### MIGRATION.POSTGRES_CONTROL_STACK_MISSING
 
-A `PostgresMigration` operation (e.g. `createTable`, `dataTransform`) was invoked on an instance constructed without a control stack, normal CLI-driven runs always assemble one from `prisma.config.ts`, so this indicates a test fixture or ad-hoc consumer used the no-arg constructor (valid only for introspection). Payload: `operation`.
+A `PostgresMigration` operation (e.g. `createTable`, `dataTransform`) was invoked on an instance constructed without a control stack: normal CLI-driven runs always assemble one from `prisma.config.ts`, so this indicates a test fixture or ad-hoc consumer used the no-arg constructor (valid only for introspection). Payload: `operation`.
 
 ### MIGRATION.PRECHECK_FAILED
 
@@ -1216,7 +1216,7 @@ Before executing a migration operation, one of its precheck steps (a query expec
 
 ### MIGRATION.PROVIDED_INVARIANTS_MISMATCH
 
-The `providedInvariants` stored in `migration.json` disagrees with the canonical value derived from `ops.json`, the manifest was likely hand-edited without re-emitting (a same-ids-different-order case is called out explicitly). Re-emit the package. Payload: `filePath`, `stored`, `derived`, `difference` (`{missing, extra}`).
+The `providedInvariants` stored in `migration.json` disagrees with the canonical value derived from `ops.json`: the manifest was likely hand-edited without re-emitting (a same-ids-different-order case is called out explicitly). Re-emit the package. Payload: `filePath`, `stored`, `derived`, `difference` (`{missing, extra}`).
 
 ### MIGRATION.REF_AMBIGUOUS
 
@@ -1224,7 +1224,7 @@ A contract or migration reference prefix matches more than one candidate (raised
 
 ### MIGRATION.REF_INVALID_FORMAT
 
-A contract or migration reference is syntactically invalid, it is not a hash, ref name, or migration directory name in any accepted form (raised by the shared ref-resolution mapper). Payload: `input`.
+A contract or migration reference is syntactically invalid: it is not a hash, ref name, or migration directory name in any accepted form (raised by the shared ref-resolution mapper). Payload: `input`.
 
 ### MIGRATION.REF_NOT_FOUND
 
@@ -1280,7 +1280,7 @@ A migration script declares one `targetId` but the loaded `prisma.config.ts` dec
 
 ### MIGRATION.TARGET_NOT_APP_SPACE
 
-A filesystem-path target given to a migration command does not resolve to an app-space migration directory, it points outside the app space's migrations directory, or at that directory's root itself. Pass an app-space migration directory or use a hash prefix. Payload: none.
+A filesystem-path target given to a migration command does not resolve to an app-space migration directory: it points outside the app space's migrations directory, or at that directory's root itself. Pass an app-space migration directory or use a hash prefix. Payload: none.
 
 ### MIGRATION.TARGET_UNSUPPORTED
 
@@ -1302,7 +1302,7 @@ A ref name was used (read, resolved, or deleted via `ref` commands) but no ref f
 
 ### PLAN.HASH_MISMATCH
 
-At execute time, the plan's `meta.storageHash` does not match the runtime contract's storage hash, the plan was built against a different version of the contract than the one the runtime holds. Rebuild the plan against the current contract. Payload: `planStorageHash`, `runtimeStorageHash`.
+At execute time, the plan's `meta.storageHash` does not match the runtime contract's storage hash: the plan was built against a different version of the contract than the one the runtime holds. Rebuild the plan against the current contract. Payload: `planStorageHash`, `runtimeStorageHash`.
 
 ### PLAN.TARGET_MISMATCH
 
@@ -1344,7 +1344,7 @@ The `lints` middleware found an UPDATE plan with no WHERE clause and blocks exec
 
 ### PARADEDB.ARGUMENT_INVALID
 
-A ParadeDB search-function helper received an invalid argument, a malformed query object, an out-of-range numeric option, or an option combination the function does not accept. Raised while authoring/lowering the search expression. Payload: `helper`, `argument`, `received`.
+A ParadeDB search-function helper received an invalid argument: a malformed query object, an out-of-range numeric option, or an option combination the function does not accept. Raised while authoring/lowering the search expression. Payload: `helper`, `argument`, `received`.
 
 ## POSTGIS
 
@@ -1356,11 +1356,11 @@ A PostGIS geometry constructor (`point`, `polygon`, `bboxPolygon`, …) received
 
 ### SUPABASE.CONFIG_INVALID
 
-The Supabase extension's runtime configuration is invalid, missing or contradictory connection/auth settings (formerly the `SupabaseConfigError` class, removed at 0.17). Payload: `reason`.
+The Supabase extension's runtime configuration is invalid: missing or contradictory connection/auth settings (formerly the `SupabaseConfigError` class, removed at 0.17). Payload: `reason`.
 
 ### SUPABASE.JWT_INVALID
 
-A JWT handed to the Supabase runtime failed validation, malformed token, missing claims, or signature/JWKS mismatch (formerly the `InvalidJwtError` class, removed at 0.17). Payload: `reason`.
+A JWT handed to the Supabase runtime failed validation: malformed token, missing claims, or signature/JWKS mismatch (formerly the `InvalidJwtError` class, removed at 0.17). Payload: `reason`.
 
 ## TESTKIT
 
@@ -1372,7 +1372,7 @@ A conformance case names a codec id the target's built-in descriptor registry do
 
 ### TESTKIT.CONFORMANCE_CASE_INVALID
 
-A `many` conformance case carries a value that is neither an array nor null, the harness maps element-wise over array cases and has nothing to map over. Give the case an array of element values, or null.
+A `many` conformance case carries a value that is neither an array nor null: the harness maps element-wise over array cases and has nothing to map over. Give the case an array of element values, or null.
 
 ### TESTKIT.PROJECTION_MALFORMED
 
