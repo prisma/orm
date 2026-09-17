@@ -1,3 +1,0 @@
-model User {
-  id Int @id
-}
