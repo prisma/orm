@@ -65,7 +65,7 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
       'Cascade',
       'Cascade',
     ],
-    ['entityRef', entityRef(), 'User', 'User'],
+    ['unrestricted identifier', identifier(), 'User', 'User'],
     ['fieldRef', fieldRef(), 'id', 'id'],
     ['json', json(), '"{\\"a\\":1}"', { a: 1 }],
     ['list', list(str()), '["a", "b"]', ['a', 'b']],
@@ -77,6 +77,14 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toEqual(expected);
+  });
+
+  it('entityRef accepts a node from another module copy and preserves identity', () => {
+    const { arg, ctx } = foreignArg('M');
+    const reference = { declaration: ctx.selfModel, namespace: undefined };
+    const result = entityRef({ kind: 'model' }, () => reference).parse(arg, ctx);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toBe(reference);
   });
 
   it('funcCall accepts a node from another module copy', () => {

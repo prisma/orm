@@ -52,6 +52,14 @@ Interpretation/validation (for example `@internal/sql-contract-psl`) is responsi
   - `@internal/psl-parser/syntax`
   - `@internal/psl-parser/tokenizer`
 
+## Checked references and identifier rules
+
+Attribute factories can bind `createEntityResolver({ symbols, owner })` after symbol collection, then use `entityRef(expected, resolve)` to parse a checked reference. Selectors are `{ kind: 'model' }`, `{ kind: 'compositeType' }`, `{ kind: 'namedType' }`, or `{ kind: 'block', keyword }`. The result carries the selected `declaration` and lexical `namespace` (undefined at top-level), not storage coordinates.
+
+Lookup selects the owner's namespace binding first, then top-level, never a sibling namespace. Kind checking applies to that selected binding; a wrong-kind local declaration does not cause fallback. Repeated references from one resolver retain wrapper identity for collection uniqueness. Resolution adds no symbols to expression parse contexts and emits no diagnostics itself; `entityRef` returns source-anchored failures.
+
+Use `identifier()` for unchecked names (`string`, with `name: undefined` metadata), or `identifier('Pinned', { documentation: 'Meaning of this value.' })` for a literal output and documented pinned metadata. `oneOf(entityRef(expected, resolve), identifier())` prefers a checked identity, falling back to an unchecked string without leaking failed-alternative diagnostics. Family-specific relationship support and storage lowering remain downstream responsibilities.
+
 ## Architecture
 
 ```mermaid

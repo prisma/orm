@@ -683,19 +683,19 @@ describe('fieldRef', () => {
 });
 
 describe('entityRef', () => {
-  it('parses a bare identifier into its model name', () => {
-    const { expr, ctx } = argOf('Task');
-
-    const result = entityRef().parse(expr, ctx);
+  it('parses a bare identifier into its resolved model', () => {
+    const { expr, ctx } = argOf('M');
+    const reference = { declaration: ctx.selfModel, namespace: undefined };
+    const result = entityRef({ kind: 'model' }, () => reference).parse(expr, ctx);
 
     expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe('Task');
+    if (result.ok) expect(result.value).toBe(reference);
   });
 
   it('rejects a quoted string literal', () => {
     const { expr, ctx } = argOf('"Task"');
 
-    const result = entityRef().parse(expr, ctx);
+    const result = entityRef({ kind: 'model' }, () => undefined).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -707,7 +707,7 @@ describe('entityRef', () => {
   it('rejects a number token', () => {
     const { expr, ctx } = argOf('42');
 
-    const result = entityRef().parse(expr, ctx);
+    const result = entityRef({ kind: 'model' }, () => undefined).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
@@ -716,7 +716,7 @@ describe('entityRef', () => {
   it('rejects an array literal', () => {
     const { expr, ctx } = argOf('[Task]');
 
-    const result = entityRef().parse(expr, ctx);
+    const result = entityRef({ kind: 'model' }, () => undefined).parse(expr, ctx);
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
