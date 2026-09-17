@@ -1,0 +1,185 @@
+{
+  "repo_notes": [
+    {
+      "content": ""
+    }
+  ],
+  "pages": [
+    {
+      "title": "Prisma Overview",
+      "purpose": "Introduce the Prisma monorepo, explaining its purpose as a next-generation ORM for Node.js and TypeScript, and providing a high-level overview of its architecture and key components",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Monorepo Architecture",
+      "purpose": "Detail the monorepo structure, explaining the pnpm workspace setup, core packages (@prisma/client, @prisma/cli, @prisma/migrate, @prisma/engines, etc.), their dependencies, and how they work together",
+      "parent": "Prisma Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Core Concepts and Getting Started",
+      "purpose": "Explain fundamental Prisma concepts including the Prisma schema, data models, generators, datasources, and provide guidance on getting started with Prisma Client",
+      "parent": "Prisma Overview",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Prisma Client System",
+      "purpose": "Comprehensive overview of the Prisma Client system, covering its initialization, runtime architecture, and how it provides type-safe database access",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Client Generation Pipeline",
+      "purpose": "Explain how Prisma Client code is generated from the schema, including the role of generators (prisma-client-ts, prisma-client-js), DMMF processing, and file generation",
+      "parent": "Prisma Client System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Build System and WASM Integration",
+      "purpose": "Detail the esbuild-based build pipeline, how it creates multiple runtime bundles (Node.js, browser, edge), and the WebAssembly integration strategy including base64 encoding for edge runtimes",
+      "parent": "Prisma Client System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "DMMF and Type System",
+      "purpose": "Explain the Data Model Meta Format (DMMF), how it represents the Prisma schema, and how TypeScript types are generated to provide compile-time type safety",
+      "parent": "Prisma Client System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Client Runtime and Request Handling",
+      "purpose": "Describe the PrismaClient runtime architecture, including request handling, batching via DataLoader, middleware system, and transaction management",
+      "parent": "Prisma Client System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Query Execution and Engine Integration",
+      "purpose": "Explain how queries are compiled and executed, covering the ClientEngine, query compilation via WASM, and the executor abstraction (LocalExecutor vs RemoteExecutor)",
+      "parent": "Prisma Client System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Driver Adapter System",
+      "purpose": "Document the driver adapter architecture that enables Prisma to work with various database drivers (pg, neon, planetscale, libsql, d1, etc.) and runtime environments",
+      "parent": "Prisma Client System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Extension System",
+      "purpose": "Explain the Prisma Client extension mechanism ($extends, defineExtension) that allows customization of client behavior, model methods, result transformations, and query interception",
+      "parent": "Prisma Client System",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Prisma CLI",
+      "purpose": "Overview of the Prisma command-line interface, its commands, and how it orchestrates schema management, code generation, and database operations",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Generate Command",
+      "purpose": "Detail the 'prisma generate' command, including how it discovers and executes generators, handles watch mode, and generates TypedSQL modules",
+      "parent": "Prisma CLI",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Init Command and Platform Integration",
+      "purpose": "Explain the 'prisma init' command for project setup, and the Prisma Data Platform authentication system including OAuth login flow and Management API integration",
+      "parent": "Prisma CLI",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Migration System",
+      "purpose": "Document all migration-related CLI commands (migrate dev, migrate deploy, migrate status, db push, db pull, migrate diff, migrate resolve) and the underlying Migrate class orchestration",
+      "parent": "Prisma CLI",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Development and Testing",
+      "purpose": "Overview of the development workflow, testing infrastructure, and continuous integration systems that maintain code quality in the Prisma monorepo",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "Testing Infrastructure",
+      "purpose": "Detail the functional testing framework, including matrix-based test suite generation, environment setup, driver adapter testing, and the run-tests.ts CLI wrapper",
+      "parent": "Development and Testing",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    },
+    {
+      "title": "CI/CD and Release Pipeline",
+      "purpose": "Explain the GitHub Actions workflows for testing, custom engine builds, and the publishing pipeline including version calculation, topological sorting, and multi-channel releases",
+      "parent": "Development and Testing",
+      "page_notes": [
+        {
+          "content": ""
+        }
+      ]
+    }
+  ]
+}
