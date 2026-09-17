@@ -38,16 +38,16 @@ const REPRESENTATIVE_SCHEMA = `model sample {
 `;
 
 function emit(scalarColumnDescriptors: ReadonlyMap<string, ScalarTypeConstructorOutput>) {
-  const { document, sourceFile } = parse(REPRESENTATIVE_SCHEMA);
+  const { document, sources } = parse(REPRESENTATIVE_SCHEMA, 'scalar-type-parity.test.psl');
   const { table: symbolTable } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: postgresPackRef,
     scalarColumnDescriptors,
     authoringContributions: stack.authoringContributions,

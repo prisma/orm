@@ -37,10 +37,11 @@ it.each([
     });
     const source = `model Example { value String @probe(${args}) }`;
     const offset = source.indexOf('|');
-    const { document, sourceFile } = parse(source.replace('|', ''));
+    const { document, sources } = parse(source.replace('|', ''), 'language-server-test.psl');
+    const sourceFile = sources.sourceFileFor(document.syntax);
     const { table: symbolTable } = buildSymbolTable({
       document,
-      sourceFile,
+      sources,
       pslBlockDescriptors: {},
     });
     parseIdentifier.mockClear();

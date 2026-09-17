@@ -52,25 +52,25 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 ]);
 
 function parsePsl(source: string) {
-  const { document, sourceFile } = parse(source);
+  const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
   return buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
 }
 
 function interpret(source: string) {
-  const { document, sourceFile } = parse(source);
+  const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
   const { table: symbolTable } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target: postgresTarget,
     scalarColumnDescriptors,
@@ -419,16 +419,16 @@ describe('native_enum coexists with a PSL enum block in the same namespace', () 
   };
 
   function interpretCombined(source: string) {
-    const { document, sourceFile } = parse(source);
+    const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
     const { table: symbolTable } = buildSymbolTable({
       document,
-      sourceFile,
+      sources,
       pslBlockDescriptors: combinedAssembled.pslBlockDescriptors,
     });
     return interpretPslDocumentToSqlContract({
+      document,
       symbolTable,
-      sourceFile,
-      sourceId: 'schema.prisma',
+      sources,
       capabilities: {},
       target: postgresTarget,
       scalarColumnDescriptors,

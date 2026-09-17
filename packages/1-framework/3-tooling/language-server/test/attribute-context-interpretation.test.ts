@@ -6,7 +6,8 @@ import { classifyPslSignatureContext } from '../src/signature-context';
 function input(args: string) {
   const source = `model Example { value String @relation(${args}) }`;
   const offset = source.indexOf('|');
-  const { document, sourceFile } = parse(source.replace('|', ''));
+  const { document, sources } = parse(source.replace('|', ''), 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
   return { document, sourceFile, position: sourceFile.positionAt(offset) };
 }
 
@@ -76,7 +77,8 @@ describe('attribute cursor interpretation', () => {
 
   it.each(['nested', 'unknown'])('preserves unfinished nested calls: %s', (name) => {
     const source = `model Example { value String @relation(references: [{ item: ${name}( `;
-    const { document, sourceFile } = parse(source);
+    const { document, sources } = parse(source, 'language-server-test.psl');
+    const sourceFile = sources.sourceFileFor(document.syntax);
     const cursor = { document, sourceFile, position: sourceFile.positionAt(source.length) };
     const path = [
       { kind: 'namedArgument', name: 'references' },

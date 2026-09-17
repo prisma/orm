@@ -352,10 +352,14 @@ function parseAndSymbolTableDiagnostics(source: string): {
   readonly parseDiagnostics: readonly ParseDiagnostic[];
   readonly symbolTableDiagnostics: readonly ParseDiagnostic[];
 } {
-  const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
+  const {
+    document,
+    sources,
+    diagnostics: parseDiagnostics,
+  } = parse(source, 'language-server-test.psl');
   const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: {},
   });
   return { parseDiagnostics, symbolTableDiagnostics };
@@ -753,7 +757,8 @@ function applyCompletionItem(source: string, item: CompletionItem): string {
 }
 
 function applyTextEdit(source: string, edit: TextEdit): string {
-  const { sourceFile } = parse(source);
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
   const start = sourceFile.offsetAt(edit.range.start);
   const end = sourceFile.offsetAt(edit.range.end);
   return `${source.slice(0, start)}${edit.newText}${source.slice(end)}`;
@@ -1170,6 +1175,11 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     ]);
     await republished;
     expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
+    expect(pipelineMock.runPipeline).toHaveBeenCalledWith(
+      schemaUri,
+      updated.source,
+      expect.any(Object),
+    );
   });
 
   it('returns generic block parameter completions for configured PSL descriptors', async () => {
@@ -3109,7 +3119,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
 
   function fixAwareInterpret(): PslInterpretCapable['interpret'] {
     return (input: PslInterpretInput) =>
-      input.sourceFile.text.includes('// fixed')
+      input.sources.sourceFileFor(input.document.syntax).text.includes('// fixed')
         ? ok({} as never)
         : notOk({ summary: 'Schema has 1 error', diagnostics: [unresolvedDiagnostic] });
   }
@@ -3149,7 +3159,8 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   it.each([false, true])('recovers diagnostics after edits for pull=%s', async (pull) => {
     const interpret = fixAwareInterpret();
     const { resolveInputs } = interpretationResolution((input, context) => {
-      if (input.sourceFile.text.includes('// crash')) throw new Error('interpreter failed');
+      if (input.sources.sourceFileFor(input.document.syntax).text.includes('// crash'))
+        throw new Error('interpreter failed');
       return interpret(input, context);
     });
     harness = startHarness(resolveInputs, pull ? pullDiagnosticsCapabilities : {});

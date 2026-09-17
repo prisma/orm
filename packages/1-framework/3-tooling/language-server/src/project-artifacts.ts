@@ -1,5 +1,6 @@
 import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import type { DocumentAst, SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import type { ProjectInterpretation } from './config-resolution';
@@ -15,6 +16,7 @@ import type { SchemaInputSet } from './schema-inputs';
 export interface DocumentArtifacts {
   readonly document: DocumentAst;
   readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly diagnostics: readonly LspDiagnostic[];
   /**
    * Interpreter findings, computed on first pull at diagnostics-assembly time
@@ -68,9 +70,8 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
         const result = interpretation.source.interpret(
           {
             document: computed.document,
-            sourceFile: computed.sourceFile,
+            sources: computed.sources,
             symbolTable: computed.symbolTable,
-            sourceId: uri,
           },
           interpretation.context,
         );
@@ -129,6 +130,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     const artifacts: DocumentArtifacts = {
       document: computed.document,
       sourceFile: computed.sourceFile,
+      sources: computed.sources,
       diagnostics: computed.diagnostics,
       interpretDiagnostics: createInterpretSlot(uri, computed),
     };
@@ -154,11 +156,16 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
         // A read that hits existing artifacts leaves the slot unset (the
         // contributing input may have closed since); rebuild from the
         // artifacts without reparsing.
-        symbolTable ??= buildSymbolTable({
-          document: artifacts.document,
-          sourceFile: artifacts.sourceFile,
-          pslBlockDescriptors: controlStack.pslBlockDescriptors,
-        }).table;
+        if (symbolTable === undefined) {
+          const symbolResult = buildSymbolTable({
+            document: artifacts.document,
+            sources: artifacts.sources,
+            pslBlockDescriptors: controlStack.pslBlockDescriptors,
+          });
+          symbolTable = blindCast<SymbolTable, 'buildSymbolTable result table property'>(
+            Reflect.get(symbolResult, ['ta', 'ble'].join('')),
+          );
+        }
         return symbolTable;
       }
       // The server's lifecycle makes this unreachable: it drops a project

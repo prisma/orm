@@ -11,7 +11,8 @@ function classify(markedSource: string): ReturnType<typeof classifyPslCompletion
   const cursorOffset = markedSource.indexOf('|');
   expect(cursorOffset).toBeGreaterThanOrEqual(0);
   const source = `${markedSource.slice(0, cursorOffset)}${markedSource.slice(cursorOffset + 1)}`;
-  const { document, sourceFile } = parse(source);
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
 
   return classifyPslCompletionContext({
     document,

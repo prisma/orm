@@ -82,16 +82,16 @@ const codecLookup: CodecLookup = {
 };
 
 function parseAndEmit(source: string) {
-  const { document, sourceFile } = parse(source);
+  const { document, sources } = parse(source, 'infer-parse-emit.test.psl');
   const { table: symbolTable } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target,
     scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),

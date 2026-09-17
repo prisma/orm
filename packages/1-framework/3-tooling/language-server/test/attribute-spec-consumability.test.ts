@@ -95,7 +95,11 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const pipeline = runPipeline('model Widget {\n  id Int @id\n}\n', result.controlStack);
+    const pipeline = runPipeline(
+      'attribute-spec-consumability.psl',
+      'model Widget {\n  id Int @id\n}\n',
+      result.controlStack,
+    );
     const model = pipeline.symbolTable.topLevel.models['Widget'];
     const field = model?.fields['id'];
     expect(field).toBeDefined();
@@ -127,7 +131,11 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const pipeline = runPipeline('model Widget {\n  id Int @id\n}\n', result.controlStack);
+    const pipeline = runPipeline(
+      'attribute-spec-consumability.psl',
+      'model Widget {\n  id Int @id\n}\n',
+      result.controlStack,
+    );
     const model = pipeline.symbolTable.topLevel.models['Widget'];
     expect(model).toBeDefined();
     if (model === undefined) return;

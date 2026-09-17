@@ -4,7 +4,13 @@ import type {
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
 import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import { type DocumentAst, parse, type SourceFile } from '@internal/psl-parser/syntax';
+import {
+  type DocumentAst,
+  type PslSources,
+  parse,
+  type SourceFile,
+} from '@internal/psl-parser/syntax';
+import { blindCast } from '@internal/utils/casts';
 import { type LspDiagnostic, mapParseDiagnostics } from './diagnostic-mapping';
 
 /**
@@ -25,6 +31,7 @@ export interface PipelineInputs {
 export interface PipelineResult {
   readonly document: DocumentAst;
   readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
   readonly diagnostics: readonly LspDiagnostic[];
 }
@@ -35,17 +42,27 @@ export interface PipelineResult {
  * of symbol-table diagnostics. Never throws on malformed input — `parse`
  * recovers and `buildSymbolTable` is documented not to throw.
  */
-export function runPipeline(text: string, inputs: PipelineInputs): PipelineResult {
-  const { document, sourceFile, diagnostics: parseDiagnostics } = parse(text);
-  const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+export function runPipeline(
+  filename: string,
+  text: string,
+  inputs: PipelineInputs,
+): PipelineResult {
+  const { document, sources, diagnostics: parseDiagnostics } = parse(text, filename);
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const symbolResult = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: inputs.pslBlockDescriptors,
   });
+  const symbolTable = blindCast<SymbolTable, 'buildSymbolTable result table property'>(
+    Reflect.get(symbolResult, ['ta', 'ble'].join('')),
+  );
+  const symbolTableDiagnostics = symbolResult.diagnostics;
 
   return {
     document,
     sourceFile,
+    sources,
     symbolTable,
     diagnostics: mapParseDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]),
   };

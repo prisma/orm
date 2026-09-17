@@ -8,6 +8,15 @@ const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
 const pipelineInputs = { scalarTypes, pslBlockDescriptors: {} };
 
 describe('runPipeline', () => {
+  it('registers the returned document root under the entry filename', () => {
+    const source = ['model User {', '  id Int @id', '}'].join('\n');
+
+    const result = runPipeline('file:///workspace/schema.prisma', source, pipelineInputs);
+
+    expect(result.sourceFile.filename).toBe('file:///workspace/schema.prisma');
+    expect(result.sources.sourceFileFor(result.document.syntax)).toBe(result.sourceFile);
+  });
+
   it('reports a duplicate top-level declaration as PSL_DUPLICATE_DECLARATION', () => {
     const source = [
       'model User {',
@@ -19,7 +28,7 @@ describe('runPipeline', () => {
       '}',
     ].join('\n');
 
-    const { diagnostics } = runPipeline(source, pipelineInputs);
+    const { diagnostics } = runPipeline('pipeline-test.psl', source, pipelineInputs);
 
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain('PSL_DUPLICATE_DECLARATION');
   });
@@ -27,7 +36,7 @@ describe('runPipeline', () => {
   it('reports an over-qualified field type as PSL_INVALID_QUALIFIED_TYPE', () => {
     const source = ['model Profile {', '  user a.b.c', '}'].join('\n');
 
-    const { diagnostics } = runPipeline(source, pipelineInputs);
+    const { diagnostics } = runPipeline('pipeline-test.psl', source, pipelineInputs);
 
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toContain(
       'PSL_INVALID_QUALIFIED_TYPE',
@@ -37,7 +46,7 @@ describe('runPipeline', () => {
   it('produces no symbol-table diagnostics for a clean schema', () => {
     const source = ['model User {', '  id Int @id', '}', ''].join('\n');
 
-    const { diagnostics } = runPipeline(source, pipelineInputs);
+    const { diagnostics } = runPipeline('pipeline-test.psl', source, pipelineInputs);
 
     expect(diagnostics).toEqual([]);
   });
@@ -45,7 +54,7 @@ describe('runPipeline', () => {
   it('does not throw on malformed, half-typed input and still exposes the artifacts', () => {
     const source = 'model User {\n  id ';
 
-    const result = runPipeline(source, pipelineInputs);
+    const result = runPipeline('pipeline-test.psl', source, pipelineInputs);
 
     expect(result.document).toBeDefined();
     expect(result.sourceFile).toBeDefined();
@@ -63,14 +72,14 @@ describe('runPipeline', () => {
       '}',
     ].join('\n');
 
-    const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
+    const { document, sources, diagnostics: parseDiagnostics } = parse(source, 'pipeline-test.psl');
     const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
       document,
-      sourceFile,
+      sources,
       pslBlockDescriptors: {},
     });
 
-    const { diagnostics } = runPipeline(source, pipelineInputs);
+    const { diagnostics } = runPipeline('pipeline-test.psl', source, pipelineInputs);
 
     expect(diagnostics).toEqual(
       mapParseDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]),

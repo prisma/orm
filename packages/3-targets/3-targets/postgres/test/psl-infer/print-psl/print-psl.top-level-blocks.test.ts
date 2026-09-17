@@ -105,16 +105,20 @@ function print(ast: PslDocumentAst): string {
  * only on the interpreter would accept printed text that is not valid PSL.
  */
 function parseAndInterpret(source: string) {
-  const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
+  const {
+    document,
+    sources,
+    diagnostics: parseDiagnostics,
+  } = parse(source, 'print-psl.top-level-blocks.test.psl');
   const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const interpreted = interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target,
     scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),

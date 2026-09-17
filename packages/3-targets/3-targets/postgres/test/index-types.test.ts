@@ -29,16 +29,16 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
 ]);
 
 function interpret(source: string) {
-  const { document, sourceFile } = parse(source);
+  const { document, sources } = parse(source, 'index-types.test.psl');
   const { table: symbolTable } = buildSymbolTable({
     document,
-    sourceFile,
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target: postgresTargetDescriptorMeta,
     scalarColumnDescriptors: scalarTypeDescriptors,

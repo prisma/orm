@@ -635,7 +635,7 @@ function createServerOn(connection: Connection): LanguageServer {
     if (artifacts === undefined) {
       return [];
     }
-    return computeFoldingRanges(artifacts.document, artifacts.sourceFile);
+    return computeFoldingRanges(artifacts.document, artifacts.sources);
   });
 
   documents.onDidOpen((event) => {

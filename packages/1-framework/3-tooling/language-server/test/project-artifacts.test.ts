@@ -233,10 +233,14 @@ describe('createProjectArtifacts', () => {
     const { texts, store } = projectWithMirror();
     const source = [`${directive}model Profile {`, '  user a.b.c', '}'].join('\n');
     texts.set(schemaUri, source);
-    const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
+    const {
+      document,
+      sources,
+      diagnostics: parseDiagnostics,
+    } = parse(source, 'language-server-test.psl');
     const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
       document,
-      sourceFile,
+      sources,
       pslBlockDescriptors: controlStack.pslBlockDescriptors,
     });
 
@@ -402,7 +406,7 @@ describe('interpret slot', () => {
     expect(store.document(schemaUri)?.interpretDiagnostics()).toEqual([]);
   });
 
-  it('invokes interpret as a method with the document uri as sourceId and cached artifacts', () => {
+  it('invokes interpret as a method with cached artifacts and registered sources', () => {
     const { interpretation, spy } = interpretationDouble(() => ok({} as never));
     const { texts, store } = projectWithMirror(interpretation);
     texts.set(schemaUri, cleanSource);
@@ -413,10 +417,10 @@ describe('interpret slot', () => {
     expect(spy.mock.contexts[0]).toBe(interpretation.source);
     const [input, context] = spy.mock.calls[0] ?? [];
     expect(input).toMatchObject({
-      sourceId: schemaUri,
       document: artifacts?.document,
-      sourceFile: artifacts?.sourceFile,
+      sources: artifacts?.sources,
     });
+    expect(input?.sources.sourceFileFor(input.document.syntax)).toBe(artifacts?.sourceFile);
     expect(input?.symbolTable).toBeDefined();
     expect(context).toBe(interpretation.context);
   });
