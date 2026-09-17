@@ -1,5 +1,9 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import { buildSymbolTable, type FieldSymbol } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createPslDiagnosticCollector,
+  type FieldSymbol,
+} from '@internal/psl-parser';
 import { type PslSources, parse } from '@internal/psl-parser/syntax';
 import {
   applyBackrelationCandidates,
@@ -76,9 +80,9 @@ function pairingDiagnostics(input: {
   const { modelRelations, fkRelationsByPair, fkRelationsByDeclaringModel } = indexFkRelations({
     fkRelationMetadata: input.foreignKeys,
   });
-  const diagnostics: ContractSourceDiagnostic[] = [];
   const sources = candidateSources.get(input.candidate.field);
   if (sources === undefined) throw new Error('candidate sources missing');
+  const diagnostics = createPslDiagnosticCollector(sources);
   applyBackrelationCandidates({
     backrelationCandidates: [input.candidate],
     fkRelationsByPair,
@@ -90,7 +94,12 @@ function pairingDiagnostics(input: {
     diagnostics,
     sources,
   });
-  return diagnostics;
+  const external = diagnostics.toExternal();
+  for (const diagnostic of external) {
+    expect(diagnostic.sourceId).toBe('schema.prisma');
+    expect(diagnostic.span).toEqual(input.candidate.field.span);
+  }
+  return external;
 }
 
 const list = { isList: true, optional: false };

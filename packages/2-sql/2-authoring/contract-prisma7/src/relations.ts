@@ -5,6 +5,7 @@ import type {
   ResolvedAttribute,
   ResolvedAttributeArg,
 } from '@internal/psl-parser';
+import { createPslDiagnosticCollector } from '@internal/psl-parser';
 import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import { ArrayLiteralAst, IdentifierAst, StringLiteralExprAst } from '@internal/psl-parser/syntax';
@@ -709,7 +710,6 @@ export function lowerRelations(
   }
   // Keep pairing groups per declaring file so every candidate field remains
   // covered by the document registry that owns its syntax node.
-  const pairingDiagnostics: ContractSourceDiagnostic[] = [];
   const candidatesBySourceId = new Map<
     string,
     { readonly sources: PslSources; readonly candidates: ModelBackrelationCandidate[] }
@@ -725,6 +725,7 @@ export function lowerRelations(
     group.candidates.push(candidate);
   }
   for (const { sources, candidates: backrelationCandidates } of candidatesBySourceId.values()) {
+    const pairingDiagnostics = createPslDiagnosticCollector(sources);
     applyBackrelationCandidates({
       backrelationCandidates,
       fkRelationsByPair,
@@ -736,13 +737,16 @@ export function lowerRelations(
       diagnostics: pairingDiagnostics,
       sources,
     });
-  }
-  for (const diagnostic of pairingDiagnostics) {
-    diagnostics.push(
-      RELATION_PAIRING_CODES.has(diagnostic.code)
-        ? { ...diagnostic, code: 'PSL.PRISMA7_RELATION_UNRESOLVED' satisfies Prisma7DiagnosticCode }
-        : diagnostic,
-    );
+    for (const diagnostic of pairingDiagnostics.toExternal()) {
+      diagnostics.push(
+        RELATION_PAIRING_CODES.has(diagnostic.code)
+          ? {
+              ...diagnostic,
+              code: 'PSL.PRISMA7_RELATION_UNRESOLVED' satisfies Prisma7DiagnosticCode,
+            }
+          : diagnostic,
+      );
+    }
   }
 
   const relations = new Map<string, readonly RelationNode[]>();

@@ -27,6 +27,7 @@ import type {
 } from '@internal/psl-parser';
 import {
   buildSymbolTable,
+  createPslDiagnosticCollector,
   keywordPslSpan,
   nodePslSpan,
   readResolvedAttribute,
@@ -1009,6 +1010,7 @@ function readField(args: ReadFieldArgs): void {
   }
 
   const namespaceExtensionEntities = args.namespaceEntities.get(model.namespaceId);
+  const typeDiagnostics = createPslDiagnosticCollector(model.sources);
   const resolved = resolveFieldTypeDescriptor({
     field: { ...field, typeConstructor: call },
     enumTypeDescriptors: EMPTY_DESCRIPTORS,
@@ -1018,13 +1020,14 @@ function readField(args: ReadFieldArgs): void {
     composedExtensions: args.composedExtensions,
     familyId: binding.target.familyId,
     targetId: binding.target.targetId,
-    diagnostics,
+    diagnostics: typeDiagnostics,
     sources: model.sources,
     entityLabel: label,
     namespaceId: model.namespaceId,
     ...ifDefined('namespaceExtensionEntities', namespaceExtensionEntities),
     codecLookup: input.codecLookup,
   });
+  diagnostics.push(...typeDiagnostics.toExternal());
   if (!resolved.ok) {
     if (!resolved.alreadyReported) {
       diagnostics.push(
