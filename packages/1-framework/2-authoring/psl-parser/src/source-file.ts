@@ -142,10 +142,20 @@ export class PslSources {
   }
 
   sourceFileNamed(filename: string): SourceFile {
+    let match: SourceFile | undefined;
     for (const sourceFile of this.#sourcesByRoot.values()) {
-      if (sourceFile.filename === filename) return sourceFile;
+      if (sourceFile.filename !== filename) continue;
+      if (match !== undefined && match.text !== sourceFile.text) {
+        throw new InternalError(
+          `Ambiguous PSL diagnostic filename "${filename}": registered sources have different text`,
+        );
+      }
+      match = sourceFile;
     }
-    throw new InternalError(`No SourceFile registered for PSL diagnostic filename "${filename}"`);
+    if (match === undefined) {
+      throw new InternalError(`No SourceFile registered for PSL diagnostic filename "${filename}"`);
+    }
+    return match;
   }
 
   sourceFileFor(node: SyntaxNode): SourceFile {

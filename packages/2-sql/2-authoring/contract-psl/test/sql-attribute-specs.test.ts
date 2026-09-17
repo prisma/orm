@@ -1,4 +1,3 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ArgType,
   AttributeCtx,
@@ -11,6 +10,7 @@ import type {
   ModelSymbol,
   Param,
 } from '@internal/psl-parser';
+import { createPslDiagnosticCollector } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import {
   fieldSpecContext,
@@ -100,7 +100,7 @@ function interpretDefault(schema: string, fieldName: string) {
   const target = field(model, fieldName);
   const node = findFieldAttributeNode(target, 'default');
   if (node === undefined) throw new Error('no @default on field');
-  const diagnostics: ContractSourceDiagnostic[] = [];
+  const diagnostics = createPslDiagnosticCollector(sources);
   const value = interpretFieldAttribute({
     node,
     spec: sqlAttributeSpecs.field.default(
@@ -111,7 +111,7 @@ function interpretDefault(schema: string, fieldName: string) {
     sources,
     diagnostics,
   });
-  return { value, diagnostics };
+  return { value, diagnostics: diagnostics.toExternal() };
 }
 
 describe('sqlAttributeSpecs', () => {

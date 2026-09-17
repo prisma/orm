@@ -56,6 +56,32 @@ it('leaves located external diagnostics from unregistered files untouched', () =
   expect(diagnostics.toExternal()).toEqual([external]);
 });
 
+it('rejects ambiguous filenames during serialization instead of choosing the first file', () => {
+  const first = parse('model A {}', 'same.prisma');
+  const second = parse('\nmodel A {}', 'same.prisma');
+  const sources = new PslSources([
+    [first.document.syntax, first.sources.sourceFileFor(first.document.syntax)],
+    [second.document.syntax, second.sources.sourceFileFor(second.document.syntax)],
+  ]);
+  const diagnostics = createPslDiagnosticCollector(sources);
+  diagnostics.push(leafDiagnostic({ sources }, second.document, 'Invalid attribute'));
+  expect(() => diagnostics.toExternal()).toThrow('Ambiguous PSL diagnostic filename');
+});
+
+it('preserves existing unlocated public envelopes while retaining owned internal ranges', () => {
+  const { document, sources } = parse('model A {}', 'owned.prisma');
+  const diagnostic = leafDiagnostic({ sources }, document, 'Invalid attribute');
+  const diagnostics = createPslDiagnosticCollector(sources);
+  diagnostics.pushUnlocated(diagnostic);
+  expect(diagnostic.range).toEqual({
+    start: { line: 0, character: 0 },
+    end: { line: 0, character: 10 },
+  });
+  expect(diagnostics.toExternal()).toEqual([
+    { code: diagnostic.code, message: diagnostic.message, sourceId: 'owned.prisma' },
+  ]);
+});
+
 it('creates file-local semantic diagnostics and preserves data at the output boundary', () => {
   const { document, sources } = parse('\nmodel User { id Int }', 'owned.prisma');
   const source = diagnosticSource(sources, document.syntax);

@@ -26,7 +26,7 @@ import type {
   PslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { describe, expect, it } from 'vitest';
@@ -485,7 +485,7 @@ model AuthSession {
     expect(field).toBeDefined();
     if (!field) return;
 
-    const diagnostics: Parameters<typeof resolveFieldTypeDescriptor>[0]['diagnostics'] = [];
+    const diagnostics = createPslDiagnosticCollector(sources);
     const result = resolveFieldTypeDescriptor({
       field,
       enumTypeDescriptors: new Map(),
@@ -506,7 +506,7 @@ model AuthSession {
     });
 
     expect(result.ok).toBe(false);
-    expect(diagnostics).toEqual(
+    expect(diagnostics.toExternal()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',

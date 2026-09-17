@@ -1,4 +1,3 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ArgType,
   AttributeSpec,
@@ -24,11 +23,11 @@ import {
   interpretAttribute,
   json,
   list,
-  mapPslDiagnostics,
   modelAttribute,
   num,
   oneOf,
   optional,
+  type PslDiagnosticCollector,
   record,
   referencedFieldRef,
   str,
@@ -87,7 +86,7 @@ export function interpretModelAttribute<Out>(input: {
   readonly spec: AttributeSpec<Out, ModelAttributeCtx>;
   readonly model: ModelSymbol;
   readonly sources: PslSources;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }): Out | undefined {
   const result = interpretAttribute(
     input.node,
@@ -98,7 +97,7 @@ export function interpretModelAttribute<Out>(input: {
     }),
   );
   if (!result.ok) {
-    input.diagnostics.push(...mapPslDiagnostics(result.failure, input.sources));
+    input.diagnostics.push(...result.failure);
     return undefined;
   }
   return result.value;
@@ -113,7 +112,7 @@ export function interpretFieldAttribute<Out>(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
   readonly resolveReferencedModel?: () => ModelSymbol | undefined;
 }): Out | undefined {
   const result = interpretAttribute(
@@ -127,7 +126,7 @@ export function interpretFieldAttribute<Out>(input: {
     }),
   );
   if (!result.ok) {
-    input.diagnostics.push(...mapPslDiagnostics(result.failure, input.sources));
+    input.diagnostics.push(...result.failure);
     return undefined;
   }
   return result.value;

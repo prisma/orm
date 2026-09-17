@@ -1,6 +1,7 @@
-import type { PslDiagnostic, PslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import type { PslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { UNSPECIFIED_PSL_NAMESPACE_ID } from '@internal/framework-components/psl-ast';
-import { PslSources, type Range, SourceFile } from './source-file';
+import type { PslDiagnostic } from './diagnostic';
+import { PslSources, SourceFile } from './source-file';
 import { DocumentAst } from './syntax/ast/declarations';
 import type { GreenNode } from './syntax/green';
 import { GreenNodeBuilder } from './syntax/green-builder';
@@ -8,12 +9,7 @@ import { createSyntaxTree } from './syntax/red';
 import type { SyntaxKind } from './syntax/syntax-kind';
 import { isTerminatedStringLiteral, type Token, Tokenizer, type TokenKind } from './tokenizer';
 
-export interface ParseDiagnostic {
-  readonly filename: string;
-  readonly code: PslDiagnostic['code'];
-  readonly message: string;
-  readonly range: Range;
-}
+export type ParseDiagnostic = PslDiagnostic;
 
 export interface ParseResult {
   readonly document: DocumentAst;

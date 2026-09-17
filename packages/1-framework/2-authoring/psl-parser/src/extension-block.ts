@@ -7,12 +7,12 @@ import type { CodecLookup } from '@internal/framework-components/codec';
 import {
   makePslNamespace,
   makePslNamespaceEntries,
-  type PslDiagnostic,
   type PslModel,
   type PslSpan,
   UNSPECIFIED_PSL_NAMESPACE_ID,
   validateExtensionBlock,
 } from '@internal/framework-components/psl-ast';
+import { diagnosticFromSpan, diagnosticSource, type PslDiagnostic } from './diagnostic';
 import type { PslSources } from './source-file';
 import type { BlockSymbol, ModelSymbol, SymbolTable } from './symbol-table';
 
@@ -47,6 +47,8 @@ export function validateExtensionBlockFromSymbol(input: {
     input.sources.sourceFileFor(input.block.node.syntax).filename,
     input.codecLookup,
     refCtx,
+  ).map((diagnostic) =>
+    diagnosticFromSpan(diagnostic, diagnosticSource(input.sources, input.block.node.syntax)),
   );
 }
 

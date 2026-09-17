@@ -1,4 +1,4 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import { diagnosticSource, type PslDiagnostic } from './diagnostic';
 import type { PslSources } from './source-file';
 import type { FieldSymbol } from './symbol-table';
 
@@ -41,12 +41,11 @@ export function requiredOneToOneBackrelationDiagnostic(input: {
   readonly targetModelName: string;
   readonly sources: PslSources;
   readonly recordNoun: 'row' | 'document';
-}): ContractSourceDiagnostic {
+}): PslDiagnostic {
   const { modelName, field, targetModelName, sources, recordNoun } = input;
   return {
     code: 'PSL_REQUIRED_ONE_TO_ONE_BACKRELATION',
     message: `Backrelation field "${modelName}.${field.name}" is required, but "${targetModelName}" holds the relation fields, so nothing in storage guarantees a "${targetModelName}" ${recordNoun} exists. Make it optional: "${field.name} ${targetModelName}?".`,
-    sourceId: sources.sourceFileFor(field.node.syntax).filename,
-    span: field.span,
+    ...diagnosticSource(sources, field.node.syntax).at(field.span),
   };
 }

@@ -1,11 +1,12 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import type { ContributedPslDiagnosticCode, PslSpan } from '@internal/framework-components/psl-ast';
+import type { PslSpan } from '@internal/framework-components/psl-ast';
+import { InternalError } from '@internal/utils/internal-error';
 import type { PslSources, Range } from './source-file';
 import type { SyntaxNode } from './syntax/red';
 
 export interface PslDiagnostic {
   readonly filename: string;
-  readonly code: ContributedPslDiagnosticCode;
+  readonly code: string;
   readonly message: string;
   readonly range: Range;
   readonly data?: Readonly<Record<string, unknown>>;
@@ -14,7 +15,7 @@ export interface PslDiagnostic {
 export interface DiagnosticSource {
   readonly sources: PslSources;
   readonly node: SyntaxNode;
-  at(span: PslSpan): Pick<PslDiagnostic, 'filename' | 'range'>;
+  at(span?: PslSpan): Pick<PslDiagnostic, 'filename' | 'range'>;
 }
 
 export function diagnosticSource(sources: PslSources, node: SyntaxNode): DiagnosticSource {
@@ -23,8 +24,28 @@ export function diagnosticSource(sources: PslSources, node: SyntaxNode): Diagnos
     node,
     at(span) {
       const sourceFile = sources.sourceFileFor(node);
-      return { filename: sourceFile.filename, range: sourceFile.pslSpanToRange(span) };
+      const range =
+        span === undefined
+          ? {
+              start: sourceFile.positionAt(node.offset),
+              end: sourceFile.positionAt(node.endOffset),
+            }
+          : sourceFile.pslSpanToRange(span);
+      return { filename: sourceFile.filename, range };
     },
+  };
+}
+
+export function diagnosticFromSpan(
+  diagnostic: Pick<ContractSourceDiagnostic, 'code' | 'message' | 'span' | 'data'>,
+  source: DiagnosticSource,
+): PslDiagnostic {
+  if (diagnostic.span === undefined) throw new InternalError('Owned PSL diagnostic has no span');
+  return {
+    code: diagnostic.code,
+    message: diagnostic.message,
+    ...source.at(diagnostic.span),
+    ...(diagnostic.data === undefined ? {} : { data: diagnostic.data }),
   };
 }
 
@@ -32,6 +53,7 @@ export interface PslDiagnosticCollector {
   readonly length: number;
   push(...diagnostics: readonly PslDiagnostic[]): void;
   pushExternal(...diagnostics: readonly ContractSourceDiagnostic[]): void;
+  pushUnlocated(...diagnostics: readonly PslDiagnostic[]): void;
   toExternal(): ContractSourceDiagnostic[];
 }
 
@@ -49,7 +71,7 @@ export function mapPslDiagnostics(
 }
 
 type DiagnosticEntry =
-  | { readonly kind: 'psl'; readonly diagnostic: PslDiagnostic }
+  | { readonly kind: 'psl'; readonly diagnostic: PslDiagnostic; readonly omitSpan?: boolean }
   | { readonly kind: 'external'; readonly diagnostic: ContractSourceDiagnostic };
 
 export function createPslDiagnosticCollector(sources: PslSources): PslDiagnosticCollector {
@@ -61,15 +83,22 @@ export function createPslDiagnosticCollector(sources: PslSources): PslDiagnostic
     push(...diagnostics) {
       for (const diagnostic of diagnostics) entries.push({ kind: 'psl', diagnostic });
     },
+    pushUnlocated(...diagnostics) {
+      for (const diagnostic of diagnostics)
+        entries.push({ kind: 'psl', diagnostic, omitSpan: true });
+    },
     pushExternal(...diagnostics) {
       for (const diagnostic of diagnostics) entries.push({ kind: 'external', diagnostic });
     },
     toExternal() {
-      return entries.flatMap((entry) =>
-        entry.kind === 'external'
-          ? [entry.diagnostic]
-          : mapPslDiagnostics([entry.diagnostic], sources),
-      );
+      return entries.flatMap((entry) => {
+        if (entry.kind === 'external') return [entry.diagnostic];
+        if (entry.omitSpan) {
+          const { code, message, filename, data } = entry.diagnostic;
+          return [{ code, message, sourceId: filename, ...(data === undefined ? {} : { data }) }];
+        }
+        return mapPslDiagnostics([entry.diagnostic], sources);
+      });
     },
   };
 }

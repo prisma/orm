@@ -1,6 +1,10 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
-import type { NamedTypeSymbol } from '@internal/psl-parser';
+import type {
+  DiagnosticSource,
+  NamedTypeSymbol,
+  PslDiagnosticCollector,
+} from '@internal/psl-parser';
+import { diagnosticSource } from '@internal/psl-parser';
 import type { StorageTypeInstance } from '@internal/sql-contract/types';
 import { formatDbAttributeMigrationMessage } from './psl-attribute-parsing';
 import {
@@ -14,20 +18,20 @@ import {
 
 export interface ResolveNamedTypeDeclarationsInput {
   readonly declarations: readonly NamedTypeSymbol[];
-  readonly sourceId: string;
+  readonly source: DiagnosticSource;
   readonly enumTypeDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly composedExtensions: ReadonlySet<string>;
   readonly familyId: string;
   readonly targetId: string;
   readonly authoringContributions: AuthoringContributions | undefined;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }
 
 function validateNamedTypeAttributes(input: {
   readonly declaration: NamedTypeSymbol;
-  readonly sourceId: string;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly source: DiagnosticSource;
+  readonly diagnostics: PslDiagnosticCollector;
   readonly composedExtensions: ReadonlySet<string>;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly familyId: string;
@@ -40,8 +44,7 @@ function validateNamedTypeAttributes(input: {
       input.diagnostics.push({
         code: 'PSL_UNSUPPORTED_NAMED_TYPE_ATTRIBUTE',
         message: formatDbAttributeMigrationMessage(attribute),
-        sourceId: input.sourceId,
-        span: attribute.span,
+        ...input.source.at(attribute.span),
       });
       hasUnsupportedNamedTypeAttribute = true;
       continue;
@@ -56,7 +59,7 @@ function validateNamedTypeAttributes(input: {
       reportUncomposedNamespace({
         subjectLabel: `Attribute "@${attribute.name}"`,
         namespace: uncomposedNamespace,
-        sourceId: input.sourceId,
+        source: input.source,
         span: attribute.span,
         diagnostics: input.diagnostics,
       });
@@ -67,8 +70,7 @@ function validateNamedTypeAttributes(input: {
     input.diagnostics.push({
       code: 'PSL_UNSUPPORTED_NAMED_TYPE_ATTRIBUTE',
       message: `Named type "${input.declaration.name}" uses unsupported attribute "${attribute.name}"`,
-      sourceId: input.sourceId,
-      span: attribute.span,
+      ...input.source.at(attribute.span),
     });
     hasUnsupportedNamedTypeAttribute = true;
   }
@@ -84,21 +86,21 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
   const namedTypeDescriptors = new Map<string, ColumnDescriptor>();
 
   for (const declaration of input.declarations) {
+    const source = diagnosticSource(input.source.sources, declaration.node.syntax);
     if (declaration.isConstructor) {
       const typeConstructor = declaration.typeConstructor;
       if (typeConstructor === undefined) {
         input.diagnostics.push({
           code: 'PSL_UNSUPPORTED_NAMED_TYPE_BASE',
           message: `Named type "${declaration.name}" must declare a base type or constructor`,
-          sourceId: input.sourceId,
-          span: declaration.span,
+          ...source.at(declaration.span),
         });
         continue;
       }
 
       const hasUnsupportedNamedTypeAttribute = validateNamedTypeAttributes({
         declaration,
-        sourceId: input.sourceId,
+        source,
         diagnostics: input.diagnostics,
         composedExtensions: input.composedExtensions,
         authoringContributions: input.authoringContributions,
@@ -117,7 +119,7 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
         familyId: input.familyId,
         targetId: input.targetId,
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source,
         unsupportedCode: 'PSL_UNSUPPORTED_NAMED_TYPE_CONSTRUCTOR',
         unsupportedMessage: `Named type "${declaration.name}" references unsupported constructor "${helperPath}"`,
       });
@@ -129,7 +131,7 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
         call: typeConstructor,
         descriptor,
         diagnostics: input.diagnostics,
-        sourceId: input.sourceId,
+        source,
         entityLabel: `Named type "${declaration.name}"`,
       });
       if (!storageType) {
@@ -157,8 +159,7 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
       input.diagnostics.push({
         code: 'PSL_UNSUPPORTED_NAMED_TYPE_BASE',
         message: `Named type "${declaration.name}" must declare a base type or constructor`,
-        sourceId: input.sourceId,
-        span: declaration.span,
+        ...source.at(declaration.span),
       });
       continue;
     }
@@ -169,15 +170,14 @@ export function resolveNamedTypeDeclarations(input: ResolveNamedTypeDeclarations
       input.diagnostics.push({
         code: 'PSL_UNSUPPORTED_NAMED_TYPE_BASE',
         message: `Named type "${declaration.name}" references unsupported base type "${baseType}"`,
-        sourceId: input.sourceId,
-        span: declaration.span,
+        ...source.at(declaration.span),
       });
       continue;
     }
 
     const hasUnsupportedNamedTypeAttribute = validateNamedTypeAttributes({
       declaration,
-      sourceId: input.sourceId,
+      source,
       diagnostics: input.diagnostics,
       composedExtensions: input.composedExtensions,
       authoringContributions: input.authoringContributions,

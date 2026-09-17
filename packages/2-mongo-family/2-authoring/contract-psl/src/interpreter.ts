@@ -50,7 +50,14 @@ import type {
   SymbolTable,
   TypedFuncCall,
 } from '@internal/psl-parser';
-import { nodePslSpan } from '@internal/psl-parser';
+import {
+  createPslDiagnosticCollector,
+  type DiagnosticSource,
+  diagnosticSource,
+  nodePslSpan,
+  type PslDiagnostic,
+  type PslDiagnosticCollector,
+} from '@internal/psl-parser';
 import {
   consumeInvalidFkPairing,
   fkRelationPairKey,
@@ -107,15 +114,16 @@ export interface InterpretPslDocumentToMongoContractInput {
 function validateNamespaceBlocksForMongoTarget(input: {
   readonly namespaces: readonly NamespaceSymbol[];
   readonly sources: PslSources;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }): void {
   for (const namespace of input.namespaces) {
     for (const { node, span } of namespace.declarations) {
       input.diagnostics.push({
         code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
         message: `Mongo does not support \`namespace ${namespace.name} { … }\` blocks (the database is bound by the connection string; declare models at the document top level instead).`,
-        sourceId: input.sources.sourceFileFor(node.syntax).filename,
-        span,
+        span, ... diagnosticSource(input.sources, node.syntax).at(
+        nodePslSpan(namespace.node.syntax, input.sources),
+      ),
       });
     }
   }
@@ -142,7 +150,7 @@ function reportUnknownAttributes(input: {
   readonly models: readonly ModelSymbol[];
   readonly compositeTypes: readonly CompositeTypeSymbol[];
   readonly sources: PslSources;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }): void {
   const { sources, diagnostics } = input;
   for (const model of input.models) {
@@ -151,8 +159,7 @@ function reportUnknownAttributes(input: {
       diagnostics.push({
         code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
         message: `Model "${model.name}" uses unsupported attribute "@@${attribute.name}"`,
-        sourceId: sources.sourceFileFor(model.node.syntax).filename,
-        span: attribute.span,
+        ...diagnosticSource(sources, model.node.syntax).at(attribute.span),
       });
     }
   }
@@ -163,8 +170,7 @@ function reportUnknownAttributes(input: {
         diagnostics.push({
           code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
           message: unsupportedFieldAttributeMessage(owner.name, field.name, attribute.name),
-          sourceId: sources.sourceFileFor(field.node.syntax).filename,
-          span: attribute.span,
+          ...diagnosticSource(sources, field.node.syntax).at(attribute.span),
         });
       }
     }
@@ -193,16 +199,15 @@ function relationNullabilityMismatchDiagnostic(
   modelName: string,
   field: FieldSymbol,
   sources: PslSources,
-): ContractSourceDiagnostic {
-  const sourceId = sources.sourceFileFor(field.node.syntax).filename;
+): PslDiagnostic {
+  const source = diagnosticSource(sources, field.node.syntax);
   const fieldLabel = `Relation field "${modelName}.${field.name}"`;
   return {
     code: 'PSL_RELATION_NULLABILITY_MISMATCH',
     message: field.optional
       ? `${fieldLabel} is optional but every field in @relation(fields: [...]) is required. Make one of those fields optional with "?" or remove "?" from "${field.name}".`
       : `${fieldLabel} is required but a field in @relation(fields: [...]) is optional. Add "?" to "${field.name}" or make those fields required.`,
-    sourceId,
-    span: field.span,
+    ...source.at(field.span),
   };
 }
 
@@ -210,7 +215,7 @@ function resolveFieldMappings(input: {
   readonly model: ModelSymbol;
   readonly specContext: AttributeSpecContext;
   readonly sources: PslSources;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }): FieldMappings {
   const { model, specContext, sources, diagnostics } = input;
   const pslNameToMapped = new Map<string, string>();
@@ -236,7 +241,7 @@ function resolveCollectionName(input: {
   readonly model: ModelSymbol;
   readonly specContext: AttributeSpecContext;
   readonly sources: PslSources;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }): string {
   const { model, specContext, sources, diagnostics } = input;
   const mapNode = findModelAttributeNode(model, 'map');
@@ -263,14 +268,14 @@ interface MongoModelEntry {
 
 type DiscriminatorDeclaration = {
   readonly fieldName: string;
-  readonly sourceId: string;
+  readonly source: DiagnosticSource;
   readonly span: PslSpan;
 };
 type BaseDeclaration = {
   readonly baseName: string;
   readonly value: string;
   readonly collectionName: string;
-  readonly sourceId: string;
+  readonly source: DiagnosticSource;
   readonly span: PslSpan;
 };
 
@@ -283,7 +288,7 @@ function collectPolymorphismDeclarations(
   specContextFor: (model: ModelSymbol) => AttributeSpecContext,
   modelMetadataByName: ReadonlyMap<string, MongoModelMetadata>,
   sources: PslSources,
-  diagnostics: ContractSourceDiagnostic[],
+  diagnostics: PslDiagnosticCollector,
 ): {
   discriminatorDeclarations: Map<string, DiscriminatorDeclaration>;
   baseDeclarations: Map<string, BaseDeclaration>;
@@ -310,13 +315,12 @@ function collectPolymorphismDeclarations(
           diagnostics.push({
             code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
             message: `Discriminator field "${fieldName}" on model "${model.name}" must be of type String, but is "${discField.typeName}"`,
-            sourceId: sources.sourceFileFor(discNode.syntax).filename,
-            span: nodePslSpan(discNode.syntax, sources),
+            ...diagnosticSource(sources, discNode.syntax).at(nodePslSpan(discNode.syntax, sources)),
           });
         } else {
           discriminatorDeclarations.set(model.name, {
             fieldName,
-            sourceId: sources.sourceFileFor(discNode.syntax).filename,
+            source: diagnosticSource(sources, discNode.syntax),
             span: nodePslSpan(discNode.syntax, sources),
           });
         }
@@ -338,7 +342,7 @@ function collectPolymorphismDeclarations(
           baseName: parsed.base,
           value: parsed.value,
           collectionName,
-          sourceId: sources.sourceFileFor(baseNode.syntax).filename,
+          source: diagnosticSource(sources, baseNode.syntax),
           span: nodePslSpan(baseNode.syntax, sources),
         });
       }
@@ -359,12 +363,13 @@ function resolvePolymorphism(input: {
   indexSpans: Map<MongoIndex, PslSpan>;
   modelIndexesByName: Map<string, readonly MongoIndex[]>;
   modelMetadataByName: ReadonlyMap<string, MongoModelMetadata>;
-  indexSourceIds: ReadonlyMap<MongoIndex, string>;
+  indexSources: ReadonlyMap<MongoIndex, DiagnosticSource>;
+  sources: PslSources;
 }): {
   models: Record<string, MongoModelEntry>;
   roots: Record<string, CrossReference>;
   collections: Record<string, Record<string, unknown>>;
-  diagnostics: ContractSourceDiagnostic[];
+  diagnostics: PslDiagnosticCollector;
 } {
   const {
     discriminatorDeclarations,
@@ -374,20 +379,19 @@ function resolvePolymorphism(input: {
     allModels: allModelViews,
     indexSpans,
     modelIndexesByName,
-    indexSourceIds,
+    indexSources,
   } = input;
   let patched = input.models;
   let roots = input.roots;
   let collections = input.collections;
-  const diagnostics: ContractSourceDiagnostic[] = [];
+  const diagnostics = createPslDiagnosticCollector(input.sources);
 
   for (const [modelName, decl] of discriminatorDeclarations) {
     if (baseDeclarations.has(modelName)) {
       diagnostics.push({
         code: 'PSL_DISCRIMINATOR_AND_BASE',
         message: `Model "${modelName}" cannot have both @@discriminator and @@base`,
-        sourceId: decl.sourceId,
-        span: decl.span,
+        ...decl.source.at(decl.span),
       });
       continue;
     }
@@ -403,8 +407,7 @@ function resolvePolymorphism(input: {
       diagnostics.push({
         code: 'PSL_DISCRIMINATOR_FIELD_NOT_FOUND',
         message: `Discriminator field "${decl.fieldName}" is not a field on model "${modelName}"`,
-        sourceId: decl.sourceId,
-        span: decl.span,
+        ...decl.source.at(decl.span),
       });
       continue;
     }
@@ -419,8 +422,7 @@ function resolvePolymorphism(input: {
       diagnostics.push({
         code: 'PSL_ORPHANED_DISCRIMINATOR',
         message: `Model "${modelName}" has @@discriminator but no variant models declare @@base(${modelName}, ...)`,
-        sourceId: decl.sourceId,
-        span: decl.span,
+        ...decl.source.at(decl.span),
       });
       continue;
     }
@@ -436,8 +438,7 @@ function resolvePolymorphism(input: {
       diagnostics.push({
         code: 'PSL_BASE_TARGET_NOT_FOUND',
         message: `Model "${variantName}" @@base references non-existent model "${baseDecl.baseName}"`,
-        sourceId: baseDecl.sourceId,
-        span: baseDecl.span,
+        ...baseDecl.source.at(baseDecl.span),
       });
       continue;
     }
@@ -446,8 +447,7 @@ function resolvePolymorphism(input: {
       diagnostics.push({
         code: 'PSL_ORPHANED_BASE',
         message: `Model "${variantName}" declares @@base(${baseDecl.baseName}, ...) but "${baseDecl.baseName}" has no @@discriminator`,
-        sourceId: baseDecl.sourceId,
-        span: baseDecl.span,
+        ...baseDecl.source.at(baseDecl.span),
       });
       continue;
     }
@@ -465,8 +465,7 @@ function resolvePolymorphism(input: {
       diagnostics.push({
         code: 'PSL_MONGO_VARIANT_SEPARATE_COLLECTION',
         message: `Mongo variant "${variantName}" cannot use a different collection than its base "${baseDecl.baseName}". Mongo only supports single-collection polymorphism.`,
-        sourceId: baseDecl.sourceId,
-        span: baseDecl.span,
+        ...baseDecl.source.at(baseDecl.span),
       });
       continue;
     }
@@ -513,8 +512,7 @@ function resolvePolymorphism(input: {
           diagnostics.push({
             code: 'PSL_INVALID_INDEX',
             message: `Variant "${variantName}" index conflicts with discriminator scope: ${result.reason}`,
-            sourceId: indexSourceIds.get(idx) ?? baseDecl.sourceId,
-            span,
+            ...(indexSources.get(idx) ?? baseDecl.source).at(span),
           });
           continue;
         }
@@ -671,9 +669,9 @@ interface IndexBuildContext {
   readonly pslModel: ModelSymbol;
   readonly fieldMappings: FieldMappings;
   readonly indexableFieldNames: ReadonlySet<string>;
-  readonly sourceId: string;
+  readonly source: DiagnosticSource;
   readonly span: PslSpan;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }
 
 interface ResolvedIndexKeys {
@@ -691,8 +689,7 @@ function resolveIndexKeys(
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
       message: 'An index can contain at most one wildcard() field',
-      sourceId: ctx.sourceId,
-      span: ctx.span,
+      ...ctx.source.at(ctx.span),
     });
     return undefined;
   }
@@ -703,8 +700,7 @@ function resolveIndexKeys(
       ctx.diagnostics.push({
         code: 'PSL_INDEX_FIELD_NOT_FOUND',
         message: `Index on model "${ctx.pslModel.name}" references unknown field "${fieldName}"`,
-        sourceId: ctx.sourceId,
-        span: ctx.span,
+        ...ctx.source.at(ctx.span),
       });
       return undefined;
     }
@@ -732,8 +728,7 @@ function buildProjection(
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
       message: 'Cannot specify both include and exclude on the same index',
-      sourceId: ctx.sourceId,
-      span: ctx.span,
+      ...ctx.source.at(ctx.span),
     });
     return null;
   }
@@ -743,8 +738,7 @@ function buildProjection(
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
       message: 'include/exclude options are only valid when the index contains a wildcard() field',
-      sourceId: ctx.sourceId,
-      span: ctx.span,
+      ...ctx.source.at(ctx.span),
     });
     return null;
   }
@@ -770,8 +764,7 @@ function buildNormalIndex(
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
       message: 'Unique indexes cannot use wildcard() fields',
-      sourceId: ctx.sourceId,
-      span: ctx.span,
+      ...ctx.source.at(ctx.span),
     });
     return undefined;
   }
@@ -783,8 +776,7 @@ function buildNormalIndex(
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
       message: `wildcard() fields cannot be combined with type: ${defaultDirection}`,
-      sourceId: ctx.sourceId,
-      span: ctx.span,
+      ...ctx.source.at(ctx.span),
     });
     return undefined;
   }
@@ -792,8 +784,7 @@ function buildNormalIndex(
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
       message: 'Hashed indexes must have exactly one field',
-      sourceId: ctx.sourceId,
-      span: ctx.span,
+      ...ctx.source.at(ctx.span),
     });
     return undefined;
   }
@@ -801,8 +792,7 @@ function buildNormalIndex(
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
       message: 'expireAfterSeconds cannot be combined with wildcard() fields',
-      sourceId: ctx.sourceId,
-      span: ctx.span,
+      ...ctx.source.at(ctx.span),
     });
     return undefined;
   }
@@ -819,8 +809,7 @@ function buildNormalIndex(
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
       message: 'collationLocale is required when using collation options',
-      sourceId: ctx.sourceId,
-      span: ctx.span,
+      ...ctx.source.at(ctx.span),
     });
     return undefined;
   }
@@ -849,8 +838,7 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoInd
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
       message: 'wildcard() fields cannot be combined with type: hashed/2dsphere/2d or @@textIndex',
-      sourceId: ctx.sourceId,
-      span: ctx.span,
+      ...ctx.source.at(ctx.span),
     });
     return undefined;
   }
@@ -860,8 +848,7 @@ function buildTextIndex(parsed: TextIndexArgs, ctx: IndexBuildContext): MongoInd
     ctx.diagnostics.push({
       code: 'PSL_INVALID_INDEX',
       message: 'collationLocale is required when using collation options',
-      sourceId: ctx.sourceId,
-      span: ctx.span,
+      ...ctx.source.at(ctx.span),
     });
     return undefined;
   }
@@ -882,9 +869,9 @@ function collectIndexes(
   fieldMappings: FieldMappings,
   modelNames: ReadonlySet<string>,
   sources: PslSources,
-  diagnostics: ContractSourceDiagnostic[],
+  diagnostics: PslDiagnosticCollector,
   indexSpans: Map<MongoIndex, PslSpan>,
-  indexSourceIds: Map<MongoIndex, string>,
+  indexSources: Map<MongoIndex, DiagnosticSource>,
 ): MongoIndex[] {
   const indexes: MongoIndex[] = [];
   let textIndexCount = 0;
@@ -913,7 +900,7 @@ function collectIndexes(
     });
     indexes.push(fieldUniqueIndex);
     indexSpans.set(fieldUniqueIndex, nodePslSpan(uniqueNode.syntax, sources));
-    indexSourceIds.set(fieldUniqueIndex, sources.sourceFileFor(uniqueNode.syntax).filename);
+    indexSources.set(fieldUniqueIndex, diagnosticSource(sources, uniqueNode.syntax));
   }
 
   const attributeNodes = Array.from(pslModel.node.attributes());
@@ -921,12 +908,12 @@ function collectIndexes(
     if (attr.name !== 'index' && attr.name !== 'unique' && attr.name !== 'textIndex') continue;
     const node = attributeNodes[attrIndex];
     if (!node) continue;
-    const sourceId = sources.sourceFileFor(node.syntax).filename;
+    const source = diagnosticSource(sources, node.syntax);
     const ctx: IndexBuildContext = {
       pslModel,
       fieldMappings,
       indexableFieldNames,
-      sourceId,
+      source,
       span: attr.span,
       diagnostics,
     };
@@ -946,8 +933,7 @@ function collectIndexes(
         diagnostics.push({
           code: 'PSL_INVALID_INDEX',
           message: `Only one @@textIndex is allowed per collection (model "${pslModel.name}")`,
-          sourceId,
-          span: attr.span,
+          ...source.at(attr.span),
         });
         continue;
       }
@@ -970,7 +956,7 @@ function collectIndexes(
     if (!index) continue;
     indexes.push(index);
     indexSpans.set(index, attr.span);
-    indexSourceIds.set(index, sourceId);
+    indexSources.set(index, source);
   }
   return indexes;
 }
@@ -996,7 +982,7 @@ function resolveNonRelationField(
   scalarTypeCodecIds: ReadonlyMap<string, string>,
   codecIdByEnumName: ReadonlyMap<string, string>,
   sources: PslSources,
-  diagnostics: ContractSourceDiagnostic[],
+  diagnostics: PslDiagnosticCollector,
 ): ContractField | undefined {
   if (compositeTypeNames.has(field.typeName)) {
     const result: ContractField = {
@@ -1034,8 +1020,7 @@ function resolveNonRelationField(
     diagnostics.push({
       code: 'PSL_UNSUPPORTED_FIELD_TYPE',
       message: `Field "${ownerName}.${field.name}" type "${field.typeName}" is not supported in Mongo PSL interpreter`,
-      sourceId: sources.sourceFileFor(field.node.syntax).filename,
-      span: field.span,
+      ...diagnosticSource(sources, field.node.syntax).at(field.span),
     });
     return undefined;
   }
@@ -1052,7 +1037,7 @@ function processEnumDeclarations(input: {
   readonly sources: PslSources;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly entityContext: AuthoringEntityContext;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly diagnostics: PslDiagnosticCollector;
 }): Record<string, ContractEnum> {
   const builtEnums: Record<string, ContractEnum> = {};
 
@@ -1066,12 +1051,11 @@ function processEnumDeclarations(input: {
 
   if (!enumDescriptor) {
     for (const enumSymbol of input.enumSymbols) {
-      const sourceFile = input.sources.sourceFileFor(enumSymbol.node.syntax);
+      const source = diagnosticSource(input.sources, enumSymbol.node.syntax);
       input.diagnostics.push({
         code: 'PSL_ENUM_MISSING_FACTORY',
         message: `enum "${enumSymbol.block.name}" requires an "enum" entityType factory in the active authoring contributions`,
-        sourceId: sourceFile.filename,
-        span: enumSymbol.span,
+        ...source.at(enumSymbol.span),
       });
     }
     return builtEnums;
@@ -1107,8 +1091,7 @@ export function interpretPslDocumentToMongoContract(
   input: InterpretPslDocumentToMongoContractInput,
 ): Result<Contract, ContractSourceDiagnostics> {
   const { symbolTable, sources, scalarTypeCodecIds, codecLookup } = input;
-  const sourceId = sources.sourceFileFor(input.document.syntax).filename;
-  const diagnostics: ContractSourceDiagnostic[] = [...(input.seedDiagnostics ?? [])];
+  const diagnostics = createPslDiagnosticCollector(sources);
   const topLevel = symbolTable.topLevel;
   validateNamespaceBlocksForMongoTarget({
     namespaces: Object.values(topLevel.namespaces),
@@ -1160,10 +1143,9 @@ export function interpretPslDocumentToMongoContract(
       target: 'mongo',
       ...ifDefined('enumInferenceCodecs', input.enumInferenceCodecs),
       ...ifDefined('codecLookup', codecLookup),
-      sourceId,
       diagnostics: {
         push: (d) => {
-          diagnostics.push(
+          diagnostics.pushExternal(
             blindCast<ContractSourceDiagnostic, 'sink diagnostics are span-compatible'>(d),
           );
         },
@@ -1181,7 +1163,7 @@ export function interpretPslDocumentToMongoContract(
   const roots: Record<string, CrossReference> = {};
   const allFkRelations: FkRelation[] = [];
   const indexSpans = new Map<MongoIndex, PslSpan>();
-  const indexSourceIds = new Map<MongoIndex, string>();
+  const indexSources = new Map<MongoIndex, DiagnosticSource>();
   const modelIndexesByName = new Map<string, readonly MongoIndex[]>();
 
   interface BackrelationCandidate {
@@ -1196,7 +1178,7 @@ export function interpretPslDocumentToMongoContract(
   const invalidFkPairings: InvalidFkPairing[] = [];
 
   for (const pslModel of allModels) {
-    const modelSourceId = sources.sourceFileFor(pslModel.node.syntax).filename;
+    const modelSource = diagnosticSource(sources, pslModel.node.syntax);
     const metadata = modelMetadataByName.get(pslModel.name);
     if (!metadata) continue;
     const { collectionName, fieldMappings } = metadata;
@@ -1311,10 +1293,10 @@ export function interpretPslDocumentToMongoContract(
     // Variant models inherit the base's identity and are validated through their base.
     if (!isVariantModel) {
       if (!hasIdField) {
-        diagnostics.push({
+        diagnostics.pushUnlocated({
           code: 'PSL_MISSING_ID_FIELD',
           message: `Model "${pslModel.name}" has no field with @id attribute. Every model must have exactly one @id field.`,
-          sourceId: modelSourceId,
+          ...modelSource.at(),
         });
       } else {
         // The resulting document must carry an `_id` of BSON type objectId. We
@@ -1330,10 +1312,10 @@ export function interpretPslDocumentToMongoContract(
           objectIdCodecId !== undefined &&
           idField.type.codecId === objectIdCodecId;
         if (!idIsObjectId) {
-          diagnostics.push({
+          diagnostics.pushUnlocated({
             code: 'PSL_MONGO_ID_REQUIRED',
             message: `Model "${pslModel.name}" must declare an _id field of type ObjectId (e.g. \`id ObjectId @id @map("_id")\`).`,
-            sourceId: modelSourceId,
+            ...modelSource.at(),
           });
         }
       }
@@ -1348,7 +1330,7 @@ export function interpretPslDocumentToMongoContract(
       sources,
       diagnostics,
       indexSpans,
-      indexSourceIds,
+      indexSources,
     );
     modelIndexesByName.set(pslModel.name, modelIndexes);
     const existingColl = collections[collectionName];
@@ -1392,7 +1374,7 @@ export function interpretPslDocumentToMongoContract(
   }
 
   for (const candidate of backrelationCandidates) {
-    const candidateSourceId = sources.sourceFileFor(candidate.field.node.syntax).filename;
+    const candidateSource = diagnosticSource(sources, candidate.field.node.syntax);
     const pairKey = fkRelationPairKey(candidate.targetModelName, candidate.modelName);
     const pairMatches = fkRelationsByPair.get(pairKey) ?? [];
     const matches = candidate.relationName
@@ -1406,8 +1388,7 @@ export function interpretPslDocumentToMongoContract(
       diagnostics.push({
         code: 'PSL_ORPHANED_BACKRELATION',
         message: `Backrelation list field "${candidate.modelName}.${candidate.fieldName}" has no matching FK-side relation on model "${candidate.targetModelName}". Add @relation(fields: [...], references: [...]) on the FK-side relation or use an explicit join model for many-to-many.`,
-        sourceId: candidateSourceId,
-        span: candidate.field.span,
+        ...candidateSource.at(candidate.field.span),
       });
       continue;
     }
@@ -1415,8 +1396,7 @@ export function interpretPslDocumentToMongoContract(
       diagnostics.push({
         code: 'PSL_AMBIGUOUS_BACKRELATION',
         message: `Backrelation list field "${candidate.modelName}.${candidate.fieldName}" matches multiple FK-side relations on model "${candidate.targetModelName}". Add @relation("...") to both sides to disambiguate.`,
-        sourceId: candidateSourceId,
-        span: candidate.field.span,
+        ...candidateSource.at(candidate.field.span),
       });
       continue;
     }
@@ -1456,6 +1436,7 @@ export function interpretPslDocumentToMongoContract(
     diagnostics,
   );
   const polyResult = resolvePolymorphism({
+    sources,
     models,
     roots,
     collections,
@@ -1466,13 +1447,21 @@ export function interpretPslDocumentToMongoContract(
     indexSpans,
     modelIndexesByName,
     modelMetadataByName,
-    indexSourceIds,
+    indexSources,
   });
 
-  if (diagnostics.length > 0 || polyResult.diagnostics.length > 0) {
+  if (
+    diagnostics.length > 0 ||
+    polyResult.diagnostics.length > 0 ||
+    (input.seedDiagnostics?.length ?? 0) > 0
+  ) {
     return notOk({
       summary: 'PSL to Mongo contract interpretation failed',
-      diagnostics: [...diagnostics, ...polyResult.diagnostics],
+      diagnostics: [
+        ...(input.seedDiagnostics ?? []),
+        ...diagnostics.toExternal(),
+        ...polyResult.diagnostics.toExternal(),
+      ],
     });
   }
 

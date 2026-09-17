@@ -92,7 +92,12 @@ export type {
   TypedFuncCall,
 } from '../attribute-spec/types';
 export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
-export { createPslDiagnosticCollector, diagnosticSource, mapPslDiagnostics } from '../diagnostic';
+export {
+  createPslDiagnosticCollector,
+  diagnosticFromSpan,
+  diagnosticSource,
+  mapPslDiagnostics,
+} from '../diagnostic';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
 export {
   keywordPslSpan,
