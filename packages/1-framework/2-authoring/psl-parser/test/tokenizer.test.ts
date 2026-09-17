@@ -228,6 +228,27 @@ describe('Tokenizer', () => {
       expect(peekOne).toEqual(second);
     });
 
+    it('reuses buffered lookahead after consuming an earlier token', () => {
+      const t = new Tokenizer('model User');
+      const peeked = t.peek(2);
+      expect(peeked).toEqual({ kind: 'Ident', text: 'User' });
+      expect(t.peek(2)).toBe(peeked);
+      expect(t.next()).toEqual({ kind: 'Ident', text: 'model' });
+      expect(t.peek(1)).toBe(peeked);
+      expect(t.next()).toEqual({ kind: 'Whitespace', text: ' ' });
+      expect(t.next()).toBe(peeked);
+    });
+
+    it('returns Eof beyond available lookahead without consuming buffered tokens', () => {
+      const t = new Tokenizer('a b');
+      expect(t.peek(10)).toEqual({ kind: 'Eof', text: '' });
+      expect(t.peek(3)).toEqual({ kind: 'Eof', text: '' });
+      expect(t.next()).toEqual({ kind: 'Ident', text: 'a' });
+      expect(t.next()).toEqual({ kind: 'Whitespace', text: ' ' });
+      expect(t.next()).toEqual({ kind: 'Ident', text: 'b' });
+      expect(t.peek(10)).toEqual({ kind: 'Eof', text: '' });
+    });
+
     it('returns Eof indefinitely after source is exhausted', () => {
       const t = new Tokenizer('a');
       expect(t.next().kind).toBe('Ident');

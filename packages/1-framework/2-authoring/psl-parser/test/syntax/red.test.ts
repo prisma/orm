@@ -341,6 +341,20 @@ describe('SyntaxNode.ancestors', () => {
   });
 });
 
+describe('SyntaxNode.root', () => {
+  it('returns the root itself', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    expect(root.root()).toBe(root);
+  });
+
+  it('returns the original root from a nested node', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    const field = firstNodeOfKind(root, 'FieldDeclaration');
+    const identifier = firstNodeOfKind(field, 'Identifier');
+    expect(identifier.root()).toBe(root);
+  });
+});
+
 describe('SyntaxNode.findAncestor', () => {
   it('returns the node itself when it satisfies the cast', () => {
     const root = createSyntaxTree(buildSampleTree());

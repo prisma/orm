@@ -1,4 +1,4 @@
-import { InternalError } from '@internal/utils/internal-error';
+import { blindCast } from '@internal/utils/casts';
 
 export type TokenKind =
   | 'Ident'
@@ -68,11 +68,10 @@ export class Tokenizer {
       this.#buffer.push(token);
     }
 
-    const buffered = this.#buffer[offset];
-    if (buffered === undefined) {
-      throw new InternalError('Tokenizer failed to buffer the requested lookahead token');
-    }
-    return buffered;
+    return blindCast<
+      Token,
+      'For a nonnegative integer offset, the loop fills the buffer through that offset or returns EOF'
+    >(this.#buffer[offset]);
   }
 
   #scanNext(): Token {

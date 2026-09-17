@@ -142,21 +142,13 @@ export class PslSources {
   }
 
   sourceFileFor(node: SyntaxNode): SourceFile {
-    const root = rootOf(node);
+    const root = node.root();
     const sourceFile = this.#sourcesByRoot.get(root);
     if (sourceFile === undefined) {
       throw new InternalError('No SourceFile registered for PSL syntax root');
     }
     return sourceFile;
   }
-}
-
-function rootOf(node: SyntaxNode): SyntaxNode {
-  let current = node;
-  for (const parent of node.ancestors()) {
-    current = parent;
-  }
-  return current;
 }
 
 function clamp(value: number, min: number, max: number): number {
