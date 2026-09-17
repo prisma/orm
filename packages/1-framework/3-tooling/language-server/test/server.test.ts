@@ -1554,7 +1554,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       );
       expect(items.find((item) => item.label === 'namespace')).toMatchObject({
         kind: CompletionItemKind.Keyword,
-        detail: 'Groups declarations into a database namespace, such as a PostgreSQL schema.',
+        detail: 'Groups declarations belonging to the same database schema or database.',
       });
       expect(items.map((item) => item.label)).not.toContain('datasource');
     } finally {

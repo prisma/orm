@@ -306,6 +306,7 @@ describe('postgresScalarAuthoringTypes', () => {
     for (const [name, codecId] of expectedScalars) {
       expect(namespace[name]).toEqual({
         kind: 'typeConstructor',
+        documentation: expect.stringMatching(/\S/),
         output: {
           codecId,
           nativeType: codecLookup.targetTypesFor(codecId)?.[0],

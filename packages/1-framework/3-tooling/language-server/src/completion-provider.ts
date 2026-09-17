@@ -123,7 +123,7 @@ const documentNativeDeclarationKeywords: readonly DeclarationKeywordCompletionCa
     'namespace',
     'namespace ',
     `namespace ${namespaceSnippetPlaceholder} {\n  \${0:// Models and types}\n}`,
-    'Groups declarations into a database namespace, such as a PostgreSQL schema.',
+    'Groups declarations belonging to the same database schema or database.',
   ),
 ];
 

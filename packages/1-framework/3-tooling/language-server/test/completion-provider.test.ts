@@ -358,7 +358,7 @@ describe('providePslCompletionItems', () => {
       'Defines a data model.',
       'Defines a reusable composite type.',
       'Defines reusable named types.',
-      'Groups declarations into a database namespace, such as a PostgreSQL schema.',
+      'Groups declarations belonging to the same database schema or database.',
       'Generic block keyword',
       'Defines a security policy.',
     ]);
