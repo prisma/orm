@@ -3,6 +3,7 @@ export { ColumnTypeEnum } from './const'
 export { Debug } from './debug'
 export { DriverAdapterError, isDriverAdapterError } from './error'
 export * from './mock'
+export { normalizeTimestamp, normalizeTimestamptz } from './pg-normalization'
 export { err, ok, type Result } from './result'
 export type {
   ArgScalarType,
