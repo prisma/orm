@@ -124,7 +124,7 @@ export interface BuildSymbolTableOptions {
 }
 
 export interface SymbolTableResult {
-  readonly table: SymbolTable;
+  readonly symbolTable: SymbolTable;
   readonly diagnostics: readonly ParseDiagnostic[];
 }
 
@@ -204,10 +204,10 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
     }
   }
 
-  const table: SymbolTable = {
+  const symbolTable: SymbolTable = {
     topLevel: { namespaces, namedTypes, blocks, models, compositeTypes },
   };
-  return { table, diagnostics };
+  return { symbolTable, diagnostics };
 }
 
 function buildModel(

@@ -13,7 +13,7 @@ Every parsed PSL document has a named `SourceFile` owned by the red syntax root 
 ```ts
 const { document, sources, diagnostics } = parse(schemaText, 'schema.prisma');
 const sourceFile = sources.sourceFileFor(document.syntax);
-const { table, diagnostics: symbolDiagnostics } = buildSymbolTable({
+const { symbolTable, diagnostics: symbolDiagnostics } = buildSymbolTable({
   document,
   sources,
   pslBlockDescriptors,

@@ -99,12 +99,12 @@ namespace public {
 
   function buildInput() {
     const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
-    const { table, diagnostics } = buildSymbolTable({
+    const { symbolTable, diagnostics } = buildSymbolTable({
       document,
       sources,
       pslBlockDescriptors: assembled.pslBlockDescriptors,
     });
-    return { document, sources, symbolTable: table, diagnostics };
+    return { document, sources, symbolTable, diagnostics };
   }
 
   it('parses the policy_select block without diagnostics', () => {
@@ -222,7 +222,7 @@ namespace public {
 
   it('lowers a policy_select block to entries.policy without test-side hand-lowering', () => {
     const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
-    const { table: symbolTable, diagnostics } = buildSymbolTable({
+    const { symbolTable, diagnostics } = buildSymbolTable({
       document,
       sources,
       pslBlockDescriptors: assembled.pslBlockDescriptors,

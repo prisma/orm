@@ -17,7 +17,7 @@ describe('enum @@type through the family descriptor', () => {
     const result = build('enum Role {\n  @@type("pg/text@1")\n  Admin\n}');
 
     expect(result.diagnostics).toEqual([]);
-    expect(result.table.topLevel.blocks['Role']?.block.attributes['type']?.args).toEqual({
+    expect(result.symbolTable.topLevel.blocks['Role']?.block.attributes['type']?.args).toEqual({
       codecId: 'pg/text@1',
     });
   });
@@ -31,6 +31,6 @@ describe('enum @@type through the family descriptor', () => {
         message: 'Expected a string literal',
       }),
     ]);
-    expect(result.table.topLevel.blocks['Role']?.block.attributes).toEqual({});
+    expect(result.symbolTable.topLevel.blocks['Role']?.block.attributes).toEqual({});
   });
 });

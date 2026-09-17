@@ -119,7 +119,7 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
 
       const { document, sources, diagnostics: parseDiagnostics } = parse(schema, schemaPath);
       const sourceFile = sources.sourceFileFor(document.syntax);
-      const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+      const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
         document,
         sources,
         pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,

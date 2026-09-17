@@ -75,14 +75,14 @@ function interpretMongoPsl(schema: string) {
     ['Float', 'mongo/double@1'],
   ]);
   const { document, sources } = parse(schema, 'mongo-value-objects.prisma');
-  const { table } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToMongoContract({
     document,
-    symbolTable: table,
+    symbolTable,
     sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
     controlMutationDefaults: {
@@ -104,14 +104,14 @@ const postgresScalarAuthoringTypes = Object.fromEntries(
 
 function interpretSqlPsl(schema: string) {
   const { document, sources } = parse(schema, 'sql-value-objects.prisma');
-  const { table } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
     document,
-    symbolTable: table,
+    symbolTable,
     sources,
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,

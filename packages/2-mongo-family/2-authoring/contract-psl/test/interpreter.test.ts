@@ -30,12 +30,12 @@ function buildSymbolTableInput(
   filename = 'test.prisma',
 ): { document: DocumentAst; symbolTable: SymbolTable; sources: PslSources } {
   const { document, sources } = parse(schema, filename);
-  const { table } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: {},
   });
-  return { document, symbolTable: table, sources };
+  return { document, symbolTable, sources };
 }
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
@@ -161,7 +161,10 @@ describe('interpretPslDocumentToMongoContract', () => {
     const result = interpretPslDocumentToMongoContract({
       ...input,
       scalarTypeCodecIds: mongoScalarTypeDescriptors,
-      controlMutationDefaults: new Map(),
+      controlMutationDefaults: {
+        defaultFunctionRegistry: new Map(),
+        defaultLiteralTagRegistry: new Map(),
+      },
       codecLookup: mongoCodecLookup,
     });
 

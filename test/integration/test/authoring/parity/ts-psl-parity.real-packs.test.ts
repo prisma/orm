@@ -32,14 +32,14 @@ function buildColumnDescriptorMap() {
 function interpretWithRealPacks(schema: string) {
   const scalarColumnDescriptors = buildColumnDescriptorMap();
   const { document, sources } = parse(schema, 'real-packs-parity.prisma');
-  const { table } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
     document,
-    symbolTable: table,
+    symbolTable,
     sources,
     target: postgresPack,
     scalarColumnDescriptors,

@@ -70,7 +70,7 @@ function pslToContract(schema: string): MongoContract {
     ['Float', 'mongo/double@1'],
   ]);
   const { document, sources } = parse(schema, 'mongo-migration-schema.prisma');
-  const { table: symbolTable } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: {},

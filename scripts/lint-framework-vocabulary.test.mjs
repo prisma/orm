@@ -33,16 +33,16 @@ const FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN = `${FILE_SOURCE_COORDINATES}e
 const FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN_MEMBER = `${FILE_SOURCE_COORDINATES}export const storage = { column: 'id' };\n`;
 const FILE_SOURCE_COORDINATES_WITH_STORAGE_STRING_KEY = `${FILE_SOURCE_COORDINATES}export const storage = { 'column': 'id' };\n`;
 const FILE_SYMBOL_TABLE =
-  'export interface SymbolTableResult { readonly table: SymbolTable }\nconst table = {};\nexport function buildSymbolTable() { return { table }; }\n';
+  'export interface SymbolTableResult { readonly symbolTable: SymbolTable }\nconst symbolTable = {};\nexport function buildSymbolTable() { return { symbolTable }; }\n';
 const FILE_SYMBOL_TABLE_WITH_STORAGE_TABLE = `${FILE_SYMBOL_TABLE}export const storageTable = 1;\n`;
 const FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS =
-  'const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({ document, sources });\n';
+  'const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({ document, sources });\n';
 const FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_STORAGE_TABLE_ARGUMENT =
-  'const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({\n  document,\n  sources,\n  pslBlockDescriptors: storage.table,\n});\n';
+  'const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({\n  document,\n  sources,\n  pslBlockDescriptors: storage.table,\n});\n';
 const FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_TABLE_LITERAL_ARGUMENT =
-  'const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({\n  document,\n  sources,\n  pslBlockDescriptors: {\n    table: value,\n  },\n});\n';
+  'const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({\n  document,\n  sources,\n  pslBlockDescriptors: {\n    table: value,\n  },\n});\n';
 const FILE_LANGUAGE_SERVER_DIRECT_SYMBOL_TABLE_ACCESS =
-  'const symbolTable = buildSymbolTable(symbolTableInput).table;\n';
+  'const symbolTable = buildSymbolTable(symbolTableInput).symbolTable;\n';
 const FILE_LANGUAGE_SERVER_UNRELATED_SYMBOL_RESULT_TABLE =
   'const symbolResult = getStorage();\nconst result = symbolResult.table;\n';
 const FILE_LANGUAGE_SERVER_ALIAS_TABLE =
@@ -188,8 +188,8 @@ describe('lint-framework-vocabulary — counting', () => {
     assert.match(result.stdout, /count=1 threshold=1/);
   });
 
-  it('does not count source-coordinate positions as family vocabulary', () => {
-    writeConfig(0);
+  it('counts bare column keys even in source-coordinate positions', () => {
+    writeConfig(2);
     writeRepoFile(`${SCOPE}/2-authoring/psl-parser/src/source-file.ts`, FILE_SOURCE_COORDINATES);
     writeRepoFile(
       `${SCOPE}/2-authoring/psl-parser/src/extension-block.ts`,
@@ -198,7 +198,7 @@ describe('lint-framework-vocabulary — counting', () => {
 
     const result = runScript();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
-    assert.match(result.stdout, /count=0 threshold=0/);
+    assert.match(result.stdout, /count=2 threshold=2/);
   });
 
   it('does not count parser symbol tables or formatter alignment columns as family vocabulary', () => {
@@ -335,65 +335,51 @@ describe('lint-framework-vocabulary — counting', () => {
     assert.match(result.stdout, /count=1 threshold=1/);
   });
 
-  it('still counts storage column vocabulary beside source-coordinate code', () => {
-    writeConfig(1);
-    writeRepoFile(
-      `${SCOPE}/2-authoring/psl-parser/src/source-file.ts`,
-      FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN,
-    );
+  for (const filename of ['source-file.ts', 'extension-block.ts']) {
+    for (const [kind, content] of [
+      ['identifier', FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN],
+      ['member', FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN_MEMBER],
+      ['string key', FILE_SOURCE_COORDINATES_WITH_STORAGE_STRING_KEY],
+    ]) {
+      it(`counts both coordinate and storage column ${kind} in ${filename}`, () => {
+        writeConfig(2);
+        writeRepoFile(`${SCOPE}/2-authoring/psl-parser/src/${filename}`, content);
 
-    const result = runScript();
-    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
-    assert.match(result.stdout, /count=1 threshold=1/);
-  });
+        const result = runScript();
+        assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+        assert.match(result.stdout, /count=2 threshold=2/);
+      });
+    }
+  }
 
-  it('still counts storage column object members beside source-coordinate code', () => {
-    writeConfig(1);
-    writeRepoFile(
-      `${SCOPE}/2-authoring/psl-parser/src/source-file.ts`,
-      FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN_MEMBER,
-    );
+  for (const filename of [
+    '2-authoring/psl-parser/src/symbol-table.ts',
+    '2-authoring/psl-parser/src/format/emit.ts',
+    '3-tooling/language-server/src/pipeline.ts',
+    '3-tooling/language-server/src/project-artifacts.ts',
+    'src/other.ts',
+  ]) {
+    it(`allows explicit compounds in ${filename}`, () => {
+      writeConfig(0);
+      writeRepoFile(`${SCOPE}/${filename}`, FILE_SYMBOL_TABLE + FILE_FORMATTER_ALIGNMENT_COLUMNS);
 
-    const result = runScript();
-    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
-    assert.match(result.stdout, /count=1 threshold=1/);
-  });
+      const result = runScript();
+      assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+      assert.match(result.stdout, /count=0 threshold=0/);
+    });
 
-  it('still counts storage column string keys beside source-coordinate code', () => {
-    writeConfig(1);
-    writeRepoFile(
-      `${SCOPE}/2-authoring/psl-parser/src/source-file.ts`,
-      FILE_SOURCE_COORDINATES_WITH_STORAGE_STRING_KEY,
-    );
+    it(`counts bare terms beside allowed compounds in ${filename}`, () => {
+      writeConfig(4);
+      writeRepoFile(
+        `${SCOPE}/${filename}`,
+        'const table = symbolTable;\nconst tables = symbolTable;\nconst column = alignmentColumns([]);\nconst columns = alignmentColumns([]);\n',
+      );
 
-    const result = runScript();
-    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
-    assert.match(result.stdout, /count=1 threshold=1/);
-  });
-
-  it('still counts storage column object members beside extension-block source spans', () => {
-    writeConfig(1);
-    writeRepoFile(
-      `${SCOPE}/2-authoring/psl-parser/src/extension-block.ts`,
-      FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN_MEMBER,
-    );
-
-    const result = runScript();
-    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
-    assert.match(result.stdout, /count=1 threshold=1/);
-  });
-
-  it('still counts storage column string keys beside extension-block source spans', () => {
-    writeConfig(1);
-    writeRepoFile(
-      `${SCOPE}/2-authoring/psl-parser/src/extension-block.ts`,
-      FILE_SOURCE_COORDINATES_WITH_STORAGE_STRING_KEY,
-    );
-
-    const result = runScript();
-    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
-    assert.match(result.stdout, /count=1 threshold=1/);
-  });
+      const result = runScript();
+      assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+      assert.match(result.stdout, /count=4 threshold=4/);
+    });
+  }
 
   it('still counts storage table vocabulary in parser symbol-table code', () => {
     writeConfig(1);

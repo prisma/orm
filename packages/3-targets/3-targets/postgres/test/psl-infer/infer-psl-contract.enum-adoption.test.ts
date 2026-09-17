@@ -223,7 +223,7 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
 
 function interpret(source: string) {
   const { document, sources } = parse(source, 'infer-psl-contract.enum-adoption.test.psl');
-  const { table: symbolTable } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,

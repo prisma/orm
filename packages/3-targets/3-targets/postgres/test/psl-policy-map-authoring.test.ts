@@ -67,7 +67,7 @@ function parsePsl(source: string) {
 
 function interpret(source: string) {
   const { document, sources } = parse(source, 'psl-policy-map-authoring.test.psl');
-  const { table: symbolTable, diagnostics } = buildSymbolTable({
+  const { symbolTable, diagnostics } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,

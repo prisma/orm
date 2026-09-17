@@ -200,7 +200,7 @@ function complete(markedSource: string, snippets = false, parameterHints = false
   const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { table: symbolTable } = buildSymbolTable({ document, sources, pslBlockDescriptors });
+  const { symbolTable } = buildSymbolTable({ document, sources, pslBlockDescriptors });
   const items = providePslCompletionItems({
     context: classifyPslCompletionContext({
       document,

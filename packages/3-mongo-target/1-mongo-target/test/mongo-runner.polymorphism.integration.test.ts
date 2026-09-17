@@ -112,7 +112,7 @@ const polymorphicSchema = `
 
 function makeContractFromPsl(): MongoContract {
   const { document, sources } = parse(polymorphicSchema, 'polymorphic-schema.prisma');
-  const { table: symbolTable } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: {},

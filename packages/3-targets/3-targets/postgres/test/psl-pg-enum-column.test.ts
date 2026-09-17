@@ -92,7 +92,7 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 
 function interpret(source: string, capabilities: Record<string, Record<string, boolean>> = {}) {
   const { document, sources } = parse(source, 'psl-pg-enum-column.test.psl');
-  const { table: symbolTable } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,

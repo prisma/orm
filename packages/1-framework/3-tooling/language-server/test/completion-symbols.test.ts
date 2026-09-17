@@ -13,7 +13,7 @@ function fields(
   const offset = sourceWithCursor.indexOf('|');
   const { document, sources } = parse(sourceWithCursor.replace('|', ''), 'test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { table } = buildSymbolTable({ document, sources, pslBlockDescriptors: {} });
+  const { symbolTable } = buildSymbolTable({ document, sources, pslBlockDescriptors: {} });
   const context = classifyPslCompletionContext({
     document,
     sourceFile,
@@ -23,8 +23,8 @@ function fields(
     throw new Error(`Unexpected context: ${context.kind}`);
   }
   return {
-    local: localFieldNames(context, table, scalarTypes, typeConstructors),
-    referenced: referencedFieldNames(context, table, scalarTypes, typeConstructors),
+    local: localFieldNames(context, symbolTable, scalarTypes, typeConstructors),
+    referenced: referencedFieldNames(context, symbolTable, scalarTypes, typeConstructors),
   };
 }
 

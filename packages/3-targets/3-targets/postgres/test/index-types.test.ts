@@ -30,7 +30,7 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
 
 function interpret(source: string) {
   const { document, sources } = parse(source, 'index-types.test.psl');
-  const { table: symbolTable } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,

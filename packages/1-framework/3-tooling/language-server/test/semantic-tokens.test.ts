@@ -35,7 +35,7 @@ interface TokenDetails {
 function parseSemanticTokenSource(source: string): ParsedSemanticTokenSource {
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { table: symbolTable } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: {},

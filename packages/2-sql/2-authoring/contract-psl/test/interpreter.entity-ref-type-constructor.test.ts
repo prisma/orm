@@ -476,12 +476,12 @@ model AuthSession {
 `,
       'schema.prisma',
     );
-    const { table } = buildSymbolTable({
+    const { symbolTable } = buildSymbolTable({
       document,
       sources,
       pslBlockDescriptors,
     });
-    const field = table.topLevel.models['AuthSession']?.fields['aal'];
+    const field = symbolTable.topLevel.models['AuthSession']?.fields['aal'];
     expect(field).toBeDefined();
     if (!field) return;
 

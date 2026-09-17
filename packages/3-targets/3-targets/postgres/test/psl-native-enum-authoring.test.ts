@@ -62,7 +62,7 @@ function parsePsl(source: string) {
 
 function interpret(source: string) {
   const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
-  const { table: symbolTable } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
@@ -102,8 +102,8 @@ namespace auth {
   });
 
   it('places the parsed block in the auth namespace entries under native_enum', () => {
-    const { table } = parsePsl(source);
-    const authNs = table.topLevel.namespaces['auth'];
+    const { symbolTable } = parsePsl(source);
+    const authNs = symbolTable.topLevel.namespaces['auth'];
     expect(authNs).toBeDefined();
     const blocks = Object.values(authNs!.blocks).map((b) => b.block);
     expect(blocks).toHaveLength(1);
@@ -420,7 +420,7 @@ describe('native_enum coexists with a PSL enum block in the same namespace', () 
 
   function interpretCombined(source: string) {
     const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
-    const { table: symbolTable } = buildSymbolTable({
+    const { symbolTable } = buildSymbolTable({
       document,
       sources,
       pslBlockDescriptors: combinedAssembled.pslBlockDescriptors,

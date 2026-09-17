@@ -187,7 +187,7 @@ export function interpretPrisma7Documents(
   };
 
   for (const { document, sources, sourceFile, sourceId } of input.documents) {
-    const { table, diagnostics: tableDiagnostics } = buildSymbolTable({
+    const { symbolTable, diagnostics: tableDiagnostics } = buildSymbolTable({
       document,
       sources,
       pslBlockDescriptors: {},
@@ -208,7 +208,7 @@ export function interpretPrisma7Documents(
         span,
       });
     };
-    for (const block of Object.values(table.topLevel.blocks)) {
+    for (const block of Object.values(symbolTable.topLevel.blocks)) {
       switch (block.keyword) {
         case 'datasource':
           datasources.push({ block, sourceId, sources, sourceFile });
@@ -234,18 +234,18 @@ export function interpretPrisma7Documents(
           unsupported(block.keyword, keywordPslSpan(block.node.syntax, block.keyword, sources));
       }
     }
-    for (const namespace of Object.values(table.topLevel.namespaces)) {
+    for (const namespace of Object.values(symbolTable.topLevel.namespaces)) {
       for (const { span } of namespace.declarations) {
         unsupported('namespace', span);
       }
     }
-    for (const compositeType of Object.values(table.topLevel.compositeTypes)) {
+    for (const compositeType of Object.values(symbolTable.topLevel.compositeTypes)) {
       unsupported('type', compositeType.span);
     }
-    for (const namedType of Object.values(table.topLevel.namedTypes)) {
+    for (const namedType of Object.values(symbolTable.topLevel.namedTypes)) {
       unsupported('types', namedType.span);
     }
-    for (const symbol of Object.values(table.topLevel.models)) {
+    for (const symbol of Object.values(symbolTable.topLevel.models)) {
       if (!claimName('model', symbol.name, sourceId, symbol.span)) continue;
       const declaration = readModelDeclaration(
         symbol,

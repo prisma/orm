@@ -76,7 +76,7 @@ function buildPslContract(psl: string = PSL) {
   const scalarColumnDescriptors = buildScalarTypeDescriptors();
 
   const { document, sources } = parse(psl, 'rls-migration-plan.integration.test.psl');
-  const { table: symbolTable } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,

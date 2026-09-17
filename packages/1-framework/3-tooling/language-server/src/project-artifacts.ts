@@ -161,7 +161,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
             sources: artifacts.sources,
             pslBlockDescriptors: controlStack.pslBlockDescriptors,
           };
-          symbolTable = buildSymbolTable(symbolTableInput).table;
+          symbolTable = buildSymbolTable(symbolTableInput).symbolTable;
         }
         return symbolTable;
       }

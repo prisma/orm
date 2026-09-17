@@ -65,7 +65,7 @@ function buildPslContract() {
   const scalarColumnDescriptors = buildScalarTypeDescriptors();
 
   const { document, sources } = parse(PSL, 'rls-walking-skeleton-psl.integration.test.psl');
-  const { table: symbolTable } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,

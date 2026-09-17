@@ -87,7 +87,7 @@ describe('runPipeline', () => {
     if (symbolTableCallResult === undefined || symbolTableCallResult.type !== 'return') {
       throw new Error('expected buildSymbolTable to return');
     }
-    expect(result.symbolTable).toBe(symbolTableCallResult.value.table);
+    expect(result.symbolTable).toBe(symbolTableCallResult.value.symbolTable);
     expect(result.diagnostics).toEqual(
       mapParseDiagnostics([...parseDiagnostics, ...symbolTableCallResult.value.diagnostics]),
     );

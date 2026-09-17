@@ -35,7 +35,7 @@ const REPRESENTATIVE_SCHEMA = `model sample {
 
 function emit(scalarColumnDescriptors: ReadonlyMap<string, ScalarTypeConstructorOutput>) {
   const { document, sources } = parse(REPRESENTATIVE_SCHEMA, 'scalar-type-parity.test.psl');
-  const { table: symbolTable } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,

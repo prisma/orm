@@ -12,10 +12,10 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
 
 function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
   const { document, sources } = parse(schema, 'schema.prisma');
-  const { table } = buildSymbolTable({ document, sources, pslBlockDescriptors: {} });
+  const { symbolTable } = buildSymbolTable({ document, sources, pslBlockDescriptors: {} });
   const result = interpretPslDocumentToMongoContract({
     document,
-    symbolTable: table,
+    symbolTable,
     sources,
     scalarTypeCodecIds,
     controlMutationDefaults: {

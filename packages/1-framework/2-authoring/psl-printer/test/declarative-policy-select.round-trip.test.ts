@@ -139,15 +139,15 @@ interface ParsedPolicySelect {
 
 function parsePolicySelect(schema: string): ParsedPolicySelect {
   const { document, sources } = parse(schema, 'declarative-policy-select.round-trip.test.psl');
-  const { table } = buildSymbolTable({
+  const { symbolTable } = buildSymbolTable({
     document,
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
-  const blockSymbols = Object.values(table.topLevel.blocks).filter(
+  const blockSymbols = Object.values(symbolTable.topLevel.blocks).filter(
     (block) => block.keyword === POLICY_SELECT_KEYWORD,
   );
-  return { symbolTable: table, sources, blockSymbols };
+  return { symbolTable, sources, blockSymbols };
 }
 
 function onlyBlockSymbol(parsed: ParsedPolicySelect): BlockSymbol {
