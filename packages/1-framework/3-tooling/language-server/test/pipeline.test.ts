@@ -1,11 +1,16 @@
+import * as pslParser from '@internal/psl-parser';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
 import { runPipeline } from '../src/pipeline';
 
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
 const pipelineInputs = { scalarTypes, pslBlockDescriptors: {} };
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('runPipeline', () => {
   it('registers the returned document root under the entry filename', () => {
@@ -59,6 +64,33 @@ describe('runPipeline', () => {
     expect(result.document).toBeDefined();
     expect(result.sourceFile).toBeDefined();
     expect(result.symbolTable).toBeDefined();
+  });
+
+  it('builds the symbol table once and returns the table and diagnostics from that result', () => {
+    const source = [
+      'model User {',
+      '  id Int @id',
+      '}',
+      '',
+      'model User {',
+      '  id Int @id',
+      '}',
+    ].join('\n');
+    const { diagnostics: parseDiagnostics } = parse(source, 'pipeline-test.psl');
+    const buildSymbolTableSpy = vi.spyOn(pslParser, 'buildSymbolTable');
+
+    const result = runPipeline('pipeline-test.psl', source, pipelineInputs);
+    const [symbolTableCallResult] = buildSymbolTableSpy.mock.results;
+
+    expect(buildSymbolTableSpy).toHaveBeenCalledTimes(1);
+    expect(symbolTableCallResult?.type).toBe('return');
+    if (symbolTableCallResult === undefined || symbolTableCallResult.type !== 'return') {
+      throw new Error('expected buildSymbolTable to return');
+    }
+    expect(result.symbolTable).toBe(symbolTableCallResult.value.table);
+    expect(result.diagnostics).toEqual(
+      mapParseDiagnostics([...parseDiagnostics, ...symbolTableCallResult.value.diagnostics]),
+    );
   });
 
   it('merges parse then symbol-table diagnostics, mapped the same way the build composes them', () => {
