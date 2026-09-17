@@ -26,7 +26,9 @@ export class GenericArgsInfo {
       const toVisit: ToVisitItem[] = [{ type: topLevelType }]
       const visited = new Set<DMMF.InputType>()
       let item: ToVisitItem | undefined
-      while ((item = toVisit.shift())) {
+      // read the queue by index: it grows to hundreds of thousands of items and `shift()` is linear in its length
+      let head = 0
+      while ((item = toVisit[head++])) {
         const { type: currentType } = item
         const cached = this._cache.get(currentType)
         if (cached === true) {
