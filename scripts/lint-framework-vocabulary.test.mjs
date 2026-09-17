@@ -36,7 +36,9 @@ const FILE_SYMBOL_TABLE =
   'export interface SymbolTableResult { readonly table: SymbolTable }\nconst table = {};\nexport function buildSymbolTable() { return { table }; }\n';
 const FILE_SYMBOL_TABLE_WITH_STORAGE_TABLE = `${FILE_SYMBOL_TABLE}export const storageTable = 1;\n`;
 const FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS =
-  'const symbolTable = buildSymbolTable({ document, sources }).table;\n';
+  'const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({ document, sources });\n';
+const FILE_LANGUAGE_SERVER_DIRECT_SYMBOL_TABLE_ACCESS =
+  'const symbolTable = buildSymbolTable(symbolTableInput).table;\n';
 const FILE_LANGUAGE_SERVER_UNRELATED_SYMBOL_RESULT_TABLE =
   'const symbolResult = getStorage();\nconst result = symbolResult.table;\n';
 const FILE_LANGUAGE_SERVER_ALIAS_TABLE =
@@ -216,7 +218,7 @@ describe('lint-framework-vocabulary — counting', () => {
     );
     writeRepoFile(
       `${SCOPE}/3-tooling/language-server/src/project-artifacts.ts`,
-      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS,
+      FILE_LANGUAGE_SERVER_DIRECT_SYMBOL_TABLE_ACCESS,
     );
 
     const result = runScript();

@@ -131,10 +131,15 @@ or {
   not {
     $filename <: r".*packages/1-framework/3-tooling/language-server/src/(?:pipeline|project-artifacts)\.ts",
     $tok <: r"table",
-    $tok <: JsName(),
-    $tok <: within JsStaticMemberExpression(object=$object),
-    $object <: JsCallExpression(callee=$callee),
-    $callee <: r"buildSymbolTable",
+    or {
+      $tok <: within `const { table: $TABLE, diagnostics: $DIAGNOSTICS } = buildSymbolTable($ARGS);`,
+      and {
+        $tok <: JsName(),
+        $tok <: within JsStaticMemberExpression(object=$object),
+        $object <: JsCallExpression(callee=$callee),
+        $callee <: r"buildSymbolTable",
+      },
+    },
   },
   not {
     $filename <: r".*packages/1-framework/2-authoring/psl-parser/src/format/emit\.ts",
