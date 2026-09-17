@@ -38,6 +38,7 @@
   "dependencies": {
     "@prisma/driver-adapter-utils": "workspace:*",
     "pg": "^8.16.3",
+    "pg-connection-string": "^2.9.1",
     "postgres-array": "3.0.4",
     "@types/pg": "^8.16.0"
   },

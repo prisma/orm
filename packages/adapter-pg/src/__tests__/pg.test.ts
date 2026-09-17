@@ -152,4 +152,76 @@ describe('PrismaPgAdapterFactory', () => {
 
     await adapter.dispose()
   })
+
+  it('should extract server address and port from connection config', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    const connectionInfo = adapter.getConnectionInfo()
+
+    expect(connectionInfo.serverAddress).toBe('localhost')
+    expect(connectionInfo.serverPort).toBe(5432)
+    expect(connectionInfo.supportsRelationJoins).toBe(true)
+
+    await adapter.dispose()
+  })
+
+  it('should extract server address and port from connection string', async () => {
+    const connectionString = 'postgresql://test:test@db.example.com:3456/test'
+    const factory = new PrismaPgAdapterFactory(connectionString)
+    const adapter = await factory.connect()
+
+    const connectionInfo = adapter.getConnectionInfo()
+
+    expect(connectionInfo.serverAddress).toBe('db.example.com')
+    expect(connectionInfo.serverPort).toBe(3456)
+    expect(connectionInfo.supportsRelationJoins).toBe(true)
+
+    await adapter.dispose()
+  })
+
+  it('should handle connection info without host and port', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test' }
+    const factory = new PrismaPgAdapterFactory(config)
+    const adapter = await factory.connect()
+
+    const connectionInfo = adapter.getConnectionInfo()
+
+    expect(connectionInfo.serverAddress).toBeUndefined()
+    expect(connectionInfo.serverPort).toBeUndefined()
+    expect(connectionInfo.supportsRelationJoins).toBe(true)
+
+    await adapter.dispose()
+  })
+
+  it('should include schema name in connection info when provided', async () => {
+    const config: pg.PoolConfig = { user: 'test', password: 'test', database: 'test', port: 5432, host: 'localhost' }
+    const factory = new PrismaPgAdapterFactory(config, { schema: 'custom_schema' })
+    const adapter = await factory.connect()
+
+    const connectionInfo = adapter.getConnectionInfo()
+
+    expect(connectionInfo.schemaName).toBe('custom_schema')
+    expect(connectionInfo.serverAddress).toBe('localhost')
+    expect(connectionInfo.serverPort).toBe(5432)
+    expect(connectionInfo.supportsRelationJoins).toBe(true)
+
+    await adapter.dispose()
+  })
+
+  it('should extract connection info from external Pool', async () => {
+    const pool = new pg.Pool({ user: 'test', password: 'test', database: 'test', port: 9999, host: 'external-host' })
+    const factory = new PrismaPgAdapterFactory(pool)
+    const adapter = await factory.connect()
+
+    const connectionInfo = adapter.getConnectionInfo()
+
+    expect(connectionInfo.serverAddress).toBe('external-host')
+    expect(connectionInfo.serverPort).toBe(9999)
+    expect(connectionInfo.supportsRelationJoins).toBe(true)
+
+    await adapter.dispose()
+    await pool.end()
+  })
 })
