@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'vitest'
+import { ColumnTypeEnum } from '@prisma/driver-adapter-utils'
+import { describe, expect, it, test } from 'vitest'
 
-import { ArrayColumnType, builtinParsers, ScalarColumnType } from './conversion'
+import { ArrayColumnType, builtinParsers, fieldToColumnType, ScalarColumnType } from './conversion'
 
 function getParser(oid: number) {
   const entry = builtinParsers.find((p) => p.oid === oid)
@@ -158,6 +159,17 @@ describe('conversion', () => {
       expect(Buffer.isBuffer(result![0])).toBe(true)
       expect(result![0]!.toString()).toBe('aGVsbG8=')
       expect(result![1]).toBeNull()
+    })
+  })
+
+  describe('TIMETZ[]', () => {
+    it('maps the timetz array OID to TimeArray instead of throwing', () => {
+      expect(fieldToColumnType(ArrayColumnType.TIMETZ_ARRAY)).toBe(ColumnTypeEnum.TimeArray)
+    })
+
+    it('normalizes elements the same way scalar TIMETZ does', () => {
+      const parse = getParser(ArrayColumnType.TIMETZ_ARRAY)
+      expect(parse('{10:30:00+02,11:00:00-05:00,12:00:00}')).toEqual(['10:30:00', '11:00:00', '12:00:00'])
     })
   })
 })
