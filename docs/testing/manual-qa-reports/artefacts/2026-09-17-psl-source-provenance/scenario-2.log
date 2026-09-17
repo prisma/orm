@@ -1,0 +1,27 @@
+Started: 2026-09-17T10:47:24.819409+00:00
+$    mkdir -p "$PN_QA_TMP/scenario-2"
+   pnpm --dir "$REPO_ROOT/packages/1-framework/3-tooling/language-server" exec tsx -e '
+     import { runPipeline } from "./src/pipeline.ts";
+     const filename = process.argv[1]!;
+     const unsaved = "model User {\n  id Int @id\n}\n\nmodel User {\n  id Int @id\n}\n";
+     const result = runPipeline(filename, unsaved, { scalarTypes: ["String", "Int", "Boolean", "DateTime"], pslBlockDescriptors: {} });
+     console.log(JSON.stringify({ filename: result.sourceFile.filename, codes: result.diagnostics.map((diagnostic) => diagnostic.code) }, null, 2));
+   ' "$PN_QA_TMP/scenario-2/schema.prisma"
+{
+  "filename": "/tmp/psl-source-provenance-qa-Di310F/scenario-2/schema.prisma",
+  "codes": [
+    "PSL_DUPLICATE_DECLARATION"
+  ]
+}
+
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+process-exit=0
+$ git rev-parse HEAD; git status --short
+793f8ade15d5430bb0d09094441da5f0fcef01bb
+ M packages/1-framework/3-tooling/migration/src/aggregate/loader.ts
+ M packages/1-framework/3-tooling/migration/src/aggregate/strategies/plan-from-diff.ts
+ M packages/1-framework/3-tooling/migration/src/aggregate/unclaimed-elements.ts
+?? docs/testing/manual-qa-reports/
+
+wallclock=2.896s

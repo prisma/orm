@@ -1,0 +1,34 @@
+Started: 2026-09-17T10:47:24.819070+00:00
+$    mkdir -p "$PN_QA_TMP/scenario-1"
+   cp -R "$REPO_ROOT/examples/prisma-8-demo/." "$PN_QA_TMP/scenario-1/"
+   printf '\nmodel Broken {\n  id Int @id\n  name\n}\n' >> "$PN_QA_TMP/scenario-1/src/prisma/contract.prisma"
+
+
+process-exit=0
+$    cd "$PN_QA_TMP/scenario-1"
+   node "$REPO_ROOT/packages/1-framework/3-tooling/cli/dist/bin.mjs" contract emit --json >out.json 2>err.txt; status=$?; printf 'exit=%s\n' "$status"
+exit=2
+
+
+process-exit=0
+--- /tmp/psl-source-provenance-qa-Di310F/scenario-1/out.json ---
+{"kind":"result","envelope":{"ok":false,"commandId":"contract.emit","error":{"code":"CONFIG.EVALUATION_FAILED","severity":"error","summary":"Config file could not be evaluated","why":"Cannot find module 'dotenv/config'\nRequire stack:\n- /tmp/psl-source-provenance-qa-Di310F/scenario-1/prisma.config.ts","nextActions":[{"kind":"user-choice","label":"Fix the error in your prisma.config.ts so the module evaluates, then rerun the command"}],"docsUrl":"https://docs.prisma.io/docs/orm/v8/reference/error-reference#CONFIG.EVALUATION_FAILED"},"diagnostics":[],"nextActions":[{"kind":"user-choice","label":"Fix the error in your prisma.config.ts so the module evaluates, then rerun the command"}]},"commandId":"contract.emit","timestamp":"2026-09-17T10:47:25.948Z"}
+
+--- /tmp/psl-source-provenance-qa-Di310F/scenario-1/err.txt ---
+
+--- final schema lines ---
+116:   @@map("feature")
+117: }
+118: 
+119: model Broken {
+120:   id Int @id
+121:   name
+122: }
+$ git rev-parse HEAD; git status --short
+793f8ade15d5430bb0d09094441da5f0fcef01bb
+ M packages/1-framework/3-tooling/migration/src/aggregate/loader.ts
+ M packages/1-framework/3-tooling/migration/src/aggregate/strategies/plan-from-diff.ts
+ M packages/1-framework/3-tooling/migration/src/aggregate/unclaimed-elements.ts
+?? docs/testing/manual-qa-reports/
+
+wallclock=2.543s

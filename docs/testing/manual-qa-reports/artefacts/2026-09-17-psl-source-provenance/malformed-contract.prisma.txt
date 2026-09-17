@@ -1,0 +1,122 @@
+// use prisma-8
+
+types {
+  Embedding1536 = pgvector.Vector(1536)
+}
+
+type Address {
+  street  String
+  city    String
+  zip     String?
+  country String
+}
+
+enum user_type {
+  @@type("pg/text@1")
+  admin
+  user
+}
+
+enum Priority {
+  @@type("pg/int4@1")
+  Low    = 0
+  High   = 1
+  Urgent = 2
+}
+
+model User {
+  id          Uuid      @id @default(uuid())
+  email       String
+  displayName String
+  createdAt   DateTime  @default(now())
+  kind        user_type
+  address     Address?
+  posts       Post[]
+  tasks       Task[]
+
+  @@map("user")
+}
+
+model Post {
+  id        Uuid           @id @default(uuid())
+  title     String
+  userId    Uuid
+  priority  Priority @default(Low)
+  createdAt DateTime       @default(now())
+  embedding Embedding1536?
+
+  // Three engagement counters, one per integer representation. They are
+  // optional because the analytics pipeline backfills them: a post has no
+  // counters until it has been served at least once.
+  //
+  // viewCount is the number a page renders, so it is BigIntNumber: int8
+  // storage read as a JS `number`, throwing rather than rounding outside
+  // ±(2^53 − 1). impressionCount counts every feed appearance, which runs
+  // far ahead of views, so it keeps the default lossless BigInt and reads
+  // as a `bigint`. reachScore sums impressions × audience size over every
+  // syndication event; a sum of products of two large counts outgrows 64
+  // bits, so it is UnboundedInt — unconstrained `numeric` storage read as
+  // an exact `bigint`.
+  viewCount       BigIntNumber?
+  impressionCount BigInt?
+  reachScore      UnboundedInt?
+
+  user User  @relation(fields: [userId], references: [id])
+  tags Tag[]
+
+  @@map("post")
+}
+
+model Tag {
+  id    Uuid   @id @default(uuid())
+  label String @unique
+
+  posts Post[]
+
+  @@map("tag")
+}
+
+model PostTag {
+  postId Uuid
+  tagId  Uuid
+
+  post Post @relation(fields: [postId], references: [id])
+  tag  Tag  @relation(fields: [tagId], references: [id])
+
+  @@id([postId, tagId])
+  @@map("post_tag")
+}
+
+model Task {
+  id          Uuid     @id @default(uuid())
+  title       String
+  description String?
+  status      String   @default("open")
+  type        String
+  userId      Uuid
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@discriminator(type)
+  @@map("task")
+}
+
+model Bug {
+  severity     String
+  stepsToRepro String?
+  @@base(Task, "bug")
+  @@map("bug")
+}
+
+model Feature {
+  priority      String
+  targetRelease String?
+  @@base(Task, "feature")
+  @@map("feature")
+}
+
+model Broken {
+  id Int @id
+  name
+}

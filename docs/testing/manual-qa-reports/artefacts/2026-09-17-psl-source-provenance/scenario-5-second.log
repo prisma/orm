@@ -1,0 +1,44 @@
+Started: 2026-09-17T10:53:07.749514+00:00
+$ pnpm --dir "$REPO_ROOT/packages/1-framework/3-tooling/language-server" exec tsx -e '
+import fs from "node:fs";
+import { syncBuiltinESMExports } from "node:module";
+import { runPipeline } from "./src/pipeline.ts";
+import { parse, createSyntaxTree } from "@internal/psl-parser/syntax";
+const filename = process.argv[1]!;
+let attemptedReads = 0;
+const rejectRead = () => { attemptedReads++; throw new Error("QA prohibited disk reread"); };
+fs.readFileSync = rejectRead;
+fs.readFile = rejectRead;
+fs.promises.readFile = rejectRead;
+syncBuiltinESMExports();
+const text = "model User {\n  id Int @id\n}\n\nmodel User {\n  id Int @id\n}\n";
+const result = runPipeline(filename, text, { scalarTypes: ["Int"], pslBlockDescriptors: {} });
+console.log(JSON.stringify({ probe: "no-disk-read", filename: result.sourceFile.filename, providedText: text, retainedText: result.sourceFile.text, attemptedReads, diagnostics: result.diagnostics }));
+const original = parse("model Item {\n  id Int @id\n}\n", "memory:original.prisma");
+const detached = createSyntaxTree(original.document.syntax.green);
+try { original.sources.sourceFileFor(detached); console.log("ERROR: detached same-green root silently accepted"); }
+catch (error) { console.log(JSON.stringify({ probe: "detached-same-green-root", sharedGreen: original.document.syntax.green === detached.green, name: error.name, message: error.message })); }
+' "$PN_QA_TMP/scenario-2/schema.prisma"
+{"probe":"no-disk-read","filename":"/tmp/psl-source-provenance-qa-Di310F/scenario-2/schema.prisma","providedText":"model User {\n  id Int @id\n}\n\nmodel User {\n  id Int @id\n}\n","retainedText":"model User {\n  id Int @id\n}\n\nmodel User {\n  id Int @id\n}\n","attemptedReads":0,"diagnostics":[{"range":{"start":{"line":4,"character":6},"end":{"line":4,"character":10}},"message":"Duplicate declaration of \"User\"","code":"PSL_DUPLICATE_DECLARATION","severity":1}]}
+{"probe":"detached-same-green-root","sharedGreen":true,"name":"InternalError","message":"No SourceFile registered for PSL syntax root"}
+
+[WARN] The "pnpm" field in package.json is no longer read by pnpm. The following keys were ignored: "pnpm.overrides". See https://pnpm.io/settings for the new home of each setting.
+
+process-exit=0
+$ git rev-parse HEAD; git status --short
+793f8ade15d5430bb0d09094441da5f0fcef01bb
+ M packages/1-framework/3-tooling/migration/src/aggregate/loader.ts
+ M packages/1-framework/3-tooling/migration/src/aggregate/strategies/plan-from-diff.ts
+ M packages/1-framework/3-tooling/migration/src/aggregate/unclaimed-elements.ts
+ M packages/1-framework/3-tooling/migration/src/assert-descriptor-self-consistency.ts
+ M packages/1-framework/3-tooling/migration/src/contract-space-from-json.ts
+ M packages/1-framework/3-tooling/migration/src/graph-ops.ts
+ M packages/1-framework/3-tooling/migration/src/invariants.ts
+ M packages/1-framework/3-tooling/migration/src/io.ts
+ M packages/1-framework/3-tooling/migration/src/read-contract-space-head-ref.ts
+ M packages/1-framework/3-tooling/migration/src/refs.ts
+ M packages/1-framework/3-tooling/migration/src/runtime-detection.ts
+ M packages/1-framework/3-tooling/migration/src/verify-contract-spaces.ts
+?? docs/testing/manual-qa-reports/
+
+wallclock=2.002s

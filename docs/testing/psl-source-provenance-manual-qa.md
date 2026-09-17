@@ -32,6 +32,7 @@
 2. Build the packages the scenarios import if the handoff did not already do so: `pnpm --filter @internal/psl-parser build && pnpm --filter @internal/language-server build && pnpm --filter @internal/sql-contract-psl build && pnpm --filter @internal/cli build`.
 3. Create a scratch root: `export PN_QA_TMP="$(mktemp -d -t psl-source-provenance-qa-XXXXXX)"`.
 4. Set `REPO_ROOT` to this repository root if the runner is not already there: `export REPO_ROOT="$(pwd)"`.
+5. When the run is complete, remove the scratch root with `rm -rf "$PN_QA_TMP"`. Each scenario also has a restore note for its own scratch directory.
 
 ## Scenario 1 — Emit a malformed copied demo schema
 
@@ -41,7 +42,7 @@
 
 **Isolation:** `tmpdir`
 
-**Oracle:** The diagnostic envelope for a malformed PSL schema must name the scratch `schema.prisma` path and line/column of the malformed declaration. The copied demo is only a source template; no demo path should appear in the reported diagnostic.
+**Oracle:** The diagnostic envelope for a malformed PSL schema must name the scratch `src/prisma/contract.prisma` path and line/column of the malformed declaration. The copied demo is only a source template; no demo path should appear in the reported diagnostic.
 
 **Preconditions:**
 
@@ -55,6 +56,8 @@
    ```bash
    mkdir -p "$PN_QA_TMP/scenario-1"
    cp -R "$REPO_ROOT/examples/prisma-8-demo/." "$PN_QA_TMP/scenario-1/"
+   rm -rf "$PN_QA_TMP/scenario-1/node_modules"
+   ln -s "$REPO_ROOT/examples/prisma-8-demo/node_modules" "$PN_QA_TMP/scenario-1/node_modules"
    printf '\nmodel Broken {\n  id Int @id\n  name\n}\n' >> "$PN_QA_TMP/scenario-1/src/prisma/contract.prisma"
    ```
 
@@ -62,7 +65,7 @@
 
    ```bash
    cd "$PN_QA_TMP/scenario-1"
-   node "$REPO_ROOT/packages/1-framework/3-tooling/cli/dist/bin.mjs" contract emit --json >out.json 2>err.txt; status=$?; printf 'exit=%s\n' "$status"; cat out.json; cat err.txt
+   PRISMA_TELEMETRY_DISABLED=1 node "$REPO_ROOT/packages/1-framework/3-tooling/cli/dist/bin.mjs" contract emit --json >out.json 2>err.txt; status=$?; printf 'exit=%s\n' "$status"; cat out.json; cat err.txt
    ```
 
 ### What you should see
@@ -76,6 +79,14 @@
 - Diagnostic path is missing, synthetic, or points at the repository demo instead of the scratch copy.
 - The diagnostic line/column is absent or clearly points at a different declaration.
 - The CLI crashes without a structured diagnostic envelope.
+
+### Restore
+
+Remove the copied app when finished if you are not removing the whole scratch root:
+
+```bash
+rm -rf "$PN_QA_TMP/scenario-1"
+```
 
 ## Scenario 2 — Parse live editor text without rereading disk
 
@@ -122,6 +133,14 @@
 - The filename is not the scratch schema path.
 - The script reads or mutates the on-disk schema to produce the diagnostic.
 
+### Restore
+
+Remove the scenario scratch directory when finished if you are not removing the whole scratch root:
+
+```bash
+rm -rf "$PN_QA_TMP/scenario-2"
+```
+
 ## Scenario 3 — Exercise an extension-style attribute diagnostic
 
 **What you're proving from the user's seat:** A diagnostic created while interpreting an attribute receives the source file associated with the attribute node, matching how extension authors receive `AttributeCtx` diagnostics.
@@ -143,31 +162,37 @@
    ```bash
    mkdir -p "$PN_QA_TMP/scenario-3"
    pnpm --dir "$REPO_ROOT/packages/1-framework/2-authoring/psl-parser" exec tsx -e '
-     import { modelAttribute } from "./src/attribute-spec/types.ts";
-     import { interpretAttribute } from "./src/attribute-spec/interpret.ts";
+     import { modelAttribute, interpretAttribute, nodePslSpan } from "./src/exports/index.ts";
      import { parse } from "./src/parse.ts";
+     import { ModelDeclarationAst } from "./src/syntax/ast/declarations.ts";
      const filename = process.argv[1]!;
      const { document, sources } = parse("model User {\n  id Int @id\n\n  @@qa\n}\n", filename);
-     const model = document.namespaces[0]!.models[0]!;
-     const attribute = model.attributes.find((item) => item.name === "qa")!;
-     const sourceFile = sources.sourceFileFor(attribute.node.syntax);
-     const spec = modelAttribute("qa", { refine: (_parsed, ctx) => [{ code: "QA_ATTRIBUTE", message: "qa diagnostic", sourceId: ctx.sourceId, span: sourceFile.rangeToPslSpan(attribute.node.range) }] });
-     const diagnostics = interpretAttribute(spec, attribute, { sourceId: sourceFile.filename, sourceFile });
-     console.log(JSON.stringify(diagnostics, null, 2));
+     const model = [...document.declarations()].find((item) => item instanceof ModelDeclarationAst)!;
+     const attribute = [...model.attributes()][0]!;
+     const spec = modelAttribute("qa", { documentation: "QA diagnostic probe", refine: (_parsed, ctx, node) => [{ code: "QA_ATTRIBUTE", message: "qa diagnostic", sourceId: ctx.sources.sourceFileFor(node.syntax).filename, span: nodePslSpan(node.syntax, ctx.sources) }] });
+     console.log(JSON.stringify(interpretAttribute(attribute, spec, { sources }), null, 2));
    ' "$PN_QA_TMP/scenario-3/extension-author.prisma"
    ```
 
 ### What you should see
 
-- The diagnostic has `code: "QA_ATTRIBUTE"`.
-- Its `sourceId` is `$PN_QA_TMP/scenario-3/extension-author.prisma`.
+- The result is `ok: false` with a `_failure` diagnostic whose `code` is `QA_ATTRIBUTE`.
+- The diagnostic `sourceId` is `$PN_QA_TMP/scenario-3/extension-author.prisma`.
 - Its span points at the `@@qa` attribute, not the model header or a default filename.
 
 ### Failure modes
 
 - `sourceId` is missing or different from the supplied filename.
 - The diagnostic span points at the wrong syntax node.
-- The probe must invent a separate semantic filename unrelated to `sourceFile.filename` to work.
+- The probe must invent a separate semantic filename unrelated to `ctx.sources.sourceFileFor(node.syntax).filename` to work.
+
+### Restore
+
+Remove the scenario scratch directory when finished if you are not removing the whole scratch root:
+
+```bash
+rm -rf "$PN_QA_TMP/scenario-3"
+```
 
 ## Scenario 4 — Load an unreadable schema path
 
@@ -193,8 +218,7 @@
      import { prismaContract } from "./src/provider.ts";
      const schemaPath = process.argv[1]!;
      const source = prismaContract(schemaPath, { target: { id: "qa-target", family: "sql", control: {} }, createNamespace: () => ({ models: {}, views: {}, enums: {}, relations: {}, valueSets: {}, nativeEnums: {}, roles: {}, policies: {} }) as never });
-     const result = await source.source.load({ resolvedInputs: [schemaPath], authoringContributions: { pslBlockDescriptors: {}, type: {} } } as never);
-     console.log(JSON.stringify(result, null, 2));
+     void source.source.load({ resolvedInputs: [schemaPath], authoringContributions: { pslBlockDescriptors: {}, type: {} } } as never).then((result) => console.log(JSON.stringify(result, null, 2)));
    ' "$PN_QA_TMP/scenario-4/missing/schema.prisma"
    ```
 
@@ -210,6 +234,14 @@
 - The provider throws instead of returning a structured read-error result.
 - A post-parse diagnostic appears even though no source was readable.
 
+### Restore
+
+Remove the scenario scratch directory when finished if you are not removing the whole scratch root:
+
+```bash
+rm -rf "$PN_QA_TMP/scenario-4"
+```
+
 ## Scenario 5 — Exploratory: provenance edge probes
 
 **Charter.** Explore nearby PSL source-provenance edges for 20 minutes using scratch files and direct package APIs. Focus on malformed blocks, detached-node ownership, same-text schemas under different filenames, and editor/live-buffer combinations that the scripted scenarios do not cover.
@@ -221,6 +253,23 @@
 **Time budget:** 20 minutes
 
 **Notes capture:** Record each command, the source text used, and any surprising diagnostic path, line, or fallback behaviour. Findings are classified in the QA run report, not in this script.
+
+### Restore
+
+Remove the scenario scratch directory when finished if you are not removing the whole scratch root:
+
+```bash
+rm -rf "$PN_QA_TMP/scenario-5"
+```
+
+## Final cleanup
+
+After all scenarios and evidence capture are complete, remove the scratch root and verify cleanup:
+
+```bash
+rm -rf "$PN_QA_TMP"
+test ! -e "$PN_QA_TMP" && printf 'scratch cleanup verified\n'
+```
 
 ## Scenarios deliberately not in this script
 
