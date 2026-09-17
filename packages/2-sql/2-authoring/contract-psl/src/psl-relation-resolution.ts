@@ -360,8 +360,9 @@ function relationsForModel(
 
 /**
  * A set of columns is unique when it exactly matches one of the model's unique
- * column sets — its primary key or any single- or multi-column `@unique` /
- * `@@unique` constraint. Set equality (not subset) is required: a singular
+ * column sets — its primary key, any single- or multi-column `@unique` /
+ * `@@unique` constraint, or any unique index. Set equality (not subset) is
+ * required: a singular
  * back-relation means at most one child per parent, which a unique constraint
  * covering exactly the FK columns guarantees.
  */

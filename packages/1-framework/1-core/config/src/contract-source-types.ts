@@ -49,7 +49,7 @@ export interface ContractSourceContext {
 }
 
 /** Lets format-aware tooling avoid file-extension sniffing and opaque loader introspection. */
-export type ContractSourceFormat = 'psl' | 'typescript';
+export type ContractSourceFormat = 'psl' | 'typescript' | 'prisma7';
 
 export interface ContractSourceProviderBase {
   readonly inputs?: readonly string[];
@@ -66,6 +66,11 @@ export interface TypeScriptContractSourceProvider extends ContractSourceProvider
   readonly format: 'typescript';
 }
 
+/** A Prisma 7 `schema.prisma` read as the contract source; `prisma contract convert` writes its Prisma 8 equivalent. */
+export interface Prisma7ContractSourceProvider extends ContractSourceProviderBase {
+  readonly format: 'prisma7';
+}
+
 /**
  * Third-party or unspecified source formats. Absent (or unrecognized)
  * `format` means format-aware tooling must leave the source untouched.
@@ -79,4 +84,5 @@ export interface OpaqueContractSourceProvider extends ContractSourceProviderBase
 export type ContractSourceProvider =
   | PslContractSourceProvider
   | TypeScriptContractSourceProvider
+  | Prisma7ContractSourceProvider
   | OpaqueContractSourceProvider;

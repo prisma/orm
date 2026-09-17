@@ -14,6 +14,7 @@ import type {
   ContractSourceFormat,
   ContractSourceProvider,
   OpaqueContractSourceProvider,
+  Prisma7ContractSourceProvider,
   PslContractSourceProvider,
   TypeScriptContractSourceProvider,
 } from '../src/contract-source-types';
@@ -131,13 +132,18 @@ test('accepts contract source providers with declared inputs', () => {
 
 test('contract source providers form a format-keyed union', () => {
   expectTypeOf<ContractSourceProvider>().toEqualTypeOf<
-    PslContractSourceProvider | TypeScriptContractSourceProvider | OpaqueContractSourceProvider
+    | PslContractSourceProvider
+    | TypeScriptContractSourceProvider
+    | Prisma7ContractSourceProvider
+    | OpaqueContractSourceProvider
   >();
   expectTypeOf<PslContractSourceProvider['format']>().toEqualTypeOf<'psl'>();
   expectTypeOf<TypeScriptContractSourceProvider['format']>().toEqualTypeOf<'typescript'>();
+  expectTypeOf<Prisma7ContractSourceProvider['format']>().toEqualTypeOf<'prisma7'>();
   expectTypeOf<OpaqueContractSourceProvider['format']>().toEqualTypeOf<string | undefined>();
   expectTypeOf<PslContractSourceProvider['format']>().toExtend<ContractSourceFormat>();
   expectTypeOf<TypeScriptContractSourceProvider['format']>().toExtend<ContractSourceFormat>();
+  expectTypeOf<Prisma7ContractSourceProvider['format']>().toExtend<ContractSourceFormat>();
 });
 
 test('provider literals remain assignable to the union without casts', () => {
@@ -149,11 +155,13 @@ test('provider literals remain assignable to the union without casts', () => {
     load,
   };
   const typescript: ContractSourceProvider = { format: 'typescript', load };
+  const prisma7: ContractSourceProvider = { format: 'prisma7', inputs: ['./schema.prisma'], load };
   const absent: ContractSourceProvider = { load };
   const thirdParty: ContractSourceProvider = { format: 'made-up-format', load };
 
   expectTypeOf(psl).toExtend<ContractSourceProvider>();
   expectTypeOf(typescript).toExtend<ContractSourceProvider>();
+  expectTypeOf(prisma7).toExtend<ContractSourceProvider>();
   expectTypeOf(absent).toExtend<ContractSourceProvider>();
   expectTypeOf(thirdParty).toExtend<ContractSourceProvider>();
 });

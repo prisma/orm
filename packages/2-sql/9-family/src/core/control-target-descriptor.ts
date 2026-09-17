@@ -63,6 +63,15 @@ export interface SqlControlTargetDescriptor<
     describedContracts?: readonly SqlDescribedContractSpace[],
   ) => PslDocumentAst;
   /**
+   * Contract→PSL printing for `contract convert`. The reverse of
+   * {@link inferPslContract}: it takes an already-assembled family contract and
+   * returns the PSL document that reads back as the same contract. Target logic
+   * for the same reason — it owns the dialect maps — so it lives beside its
+   * sibling on the descriptor. Optional: targets without `contract convert`
+   * omit it, and the family instance throws when it is absent.
+   */
+  readonly printPslContract?: (contract: TContract) => PslDocumentAst;
+  /**
    * The full-tree node diff the family verify verdict derives from —
    * expected-tree derivation, pre-diff normalization, the generic differ,
    * and ownership scoping, all target-side. The family applies strict

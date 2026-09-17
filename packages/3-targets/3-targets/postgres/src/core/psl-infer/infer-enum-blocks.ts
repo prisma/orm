@@ -66,7 +66,8 @@ export function buildNativeEnumBlocks(
   return { enumNameMap, enumBlocks };
 }
 
-function buildNativeEnumBlock(
+/** One `native_enum <name> { … }` block, with `@@map` when the type name differs from the block name. */
+export function buildNativeEnumBlock(
   name: string,
   typeName: string,
   values: readonly string[],

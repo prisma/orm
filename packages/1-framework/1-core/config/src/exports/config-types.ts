@@ -14,6 +14,7 @@ export type {
   ContractSourceProvider,
   ContractSourceProviderBase,
   OpaqueContractSourceProvider,
+  Prisma7ContractSourceProvider,
   PslContractSourceProvider,
   TypeScriptContractSourceProvider,
 } from '../contract-source-types';

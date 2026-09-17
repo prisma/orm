@@ -1009,6 +1009,15 @@ export interface ControlClient {
   inferPslContract(schemaIR: unknown): PslDocumentAst | undefined;
 
   /**
+   * Prints a family contract as a PSL contract AST.
+   * Delegates to the family instance's printPslContract method.
+   *
+   * @param contract - The family contract to print
+   * @returns PslDocumentAst if the family supports the capability, undefined otherwise
+   */
+  printPslContract(contract: unknown): PslDocumentAst | undefined;
+
+  /**
    * Returns the assembled PSL block descriptors from the control stack — the full
    * set of extension-contributed top-level block descriptors. The CLI's
    * `contract infer` command threads these through to `printPsl` so

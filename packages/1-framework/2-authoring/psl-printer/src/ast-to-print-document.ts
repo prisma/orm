@@ -25,7 +25,10 @@ import type { PrinterField, PrinterModel, PrinterNamedType } from './types';
 const DEFAULT_AST_PRINT_HEADER =
   '// use prisma-8\n// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.';
 
-export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
+export function astDocumentToPrintDocument(
+  ast: PslDocumentAst,
+  headerComment: string = DEFAULT_AST_PRINT_HEADER,
+): PrintDocument {
   // FK dependencies are resolved across the whole document — a model in one
   // namespace can reference a model in another, and the topo-sort needs to
   // see every model to produce a stable order. After sorting, we re-bucket by
@@ -98,7 +101,7 @@ export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
   });
 
   return {
-    headerComment: DEFAULT_AST_PRINT_HEADER,
+    headerComment,
     namedTypes,
     namespaces: namespaceSections,
   };

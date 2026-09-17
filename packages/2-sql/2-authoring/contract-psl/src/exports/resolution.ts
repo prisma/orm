@@ -5,6 +5,7 @@ export {
   type ResolveFieldTypeResult,
   resolveFieldTypeDescriptor,
 } from '../psl-column-resolution';
+export { pslFieldMapName, pslModelMapName } from '../psl-name-mapping';
 export {
   applyBackrelationCandidates,
   type FkRelationMetadata,

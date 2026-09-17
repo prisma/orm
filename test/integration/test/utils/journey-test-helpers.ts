@@ -292,6 +292,14 @@ export async function runContractInfer(
   return runOnEngine(ctx, ['contract', 'infer', ...extraArgs], options);
 }
 
+export async function runContractConvert(
+  ctx: JourneyContext,
+  extraArgs: readonly string[] = [],
+  options?: RunCommandOptions,
+): Promise<EngineCommandResult> {
+  return runOnEngine(ctx, ['contract', 'convert', ...extraArgs], options);
+}
+
 export async function runDbInit(
   ctx: JourneyContext,
   extraArgs: readonly string[] = [],

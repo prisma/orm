@@ -103,6 +103,9 @@ Family instances implement domain actions:
 - **`toSchemaView(schema)`**: Projects `SqlSchemaIR` into `CoreSchemaView` for human-readable display. Always displays native database types (e.g., `int4`, `text`) rather than mapped codec IDs (e.g., `pg/int4@1`) to reflect actual database state.
 - **`emitContract({ contract })`**: Emits contract JSON and DTS as strings. Handles stripping mappings and validation internally. Uses preassembled state (operation registry, type imports, extension IDs).
 
+- **`inferPslContract(schemaIR)`**: Infers a PSL contract AST from an introspected schema, for `contract infer`. Delegates to the target descriptor's optional `inferPslContract` hook; throws `CONTRACT.INFER_UNSUPPORTED` when the target has none.
+- **`printPslContract(contract)`**: Prints an assembled contract as the PSL document that reads back as the same contract, for `contract convert`. Delegates to the target descriptor's optional `printPslContract` hook; throws `CONTRACT.CONVERT_UNSUPPORTED` when the target has none.
+
 The descriptor is "pure data + factory" - it only provides the hook and factory method. All family-specific logic lives on the instance.
 
 ## Package Structure

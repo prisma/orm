@@ -30,10 +30,15 @@ export interface PrintPslOptions {
    * emitted as-is.
    */
   readonly codecLookup?: CodecLookup;
+  /**
+   * The comment block the printed file opens with, written as PSL comment
+   * lines. When absent the printer writes the `contract infer` header.
+   */
+  readonly headerComment?: string;
 }
 
 export function printPslFromAst(ast: PslDocumentAst, options: PrintPslOptions = {}): string {
-  const doc = astDocumentToPrintDocument(ast);
+  const doc = astDocumentToPrintDocument(ast, options.headerComment);
   return serializePrintDocument(doc, {
     ...ifDefined('pslBlockDescriptors', options.pslBlockDescriptors),
     ...ifDefined('codecLookup', options.codecLookup),

@@ -17,8 +17,8 @@ Output begins:
 
 ## Chosen design
 
-- **Contract-to-PSL printer.** A new target-descriptor hook beside `inferPslContract`, implemented for Postgres and Mongo, that takes the family contract and returns a `PslDocumentAst`. It emits native enum blocks, namespaces, `temporal.timestamp(p, onCreate: now, onUpdate: now)` for the update-generator pair, explicit `map:` only where Prisma 8's derived name would differ from the contract's, explicit `onDelete`/`onUpdate`, and explicit junction models. Text comes from the existing `printPslFromAst`, which gains no options; the header is prepended by the command.
-- **Command** `contract convert` in `packages/1-framework/3-tooling/cli/src/orm/contract/convert.ts`, registered in `family.ts` and `cli.ts`. It requires the configured contract source to be a Prisma 7 source, loads the contract through it, prints, and writes with `publishTextArtifact`. Output path resolution reuses `inferredContractPathFor`. Refusals exit 4 and write nothing.
+- **Contract-to-PSL printer.** A new target-descriptor hook beside `inferPslContract`, implemented for Postgres and Mongo, that takes the family contract and returns a `PslDocumentAst`. It emits native enum blocks, namespaces, `temporal.timestamp(p, onCreate: now, onUpdate: now)` for the update-generator pair, explicit `map:` only where Prisma 8's derived name would differ from the contract's, explicit `onDelete`/`onUpdate`, and explicit junction models. Text comes from the existing `printPslFromAst`, which gains a `headerComment` option the command passes; its default leaves `contract infer` output unchanged.
+- **Command** `contract convert` in `packages/1-framework/3-tooling/cli/src/orm/contract/convert.ts`, registered in `family.ts` and `cli.ts`. It requires the configured contract source to be a Prisma 7 source, loads the contract through it, prints, and writes with `publishTextArtifact`. Output path resolution reuses `inferredContractPathFor`. Refusals exit 2 and write nothing.
 - **Round trip test.** For every fixture from slices 1 and 2: interpret the Prisma 7 file, convert, interpret the output with the PSL source, compare contract hashes.
 
 ## Edge cases

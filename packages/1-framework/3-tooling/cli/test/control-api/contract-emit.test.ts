@@ -176,6 +176,18 @@ describe('executeContractEmit', () => {
       expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
       expectedSubstring: 'malformed success result',
     },
+    {
+      label: 'rejects a success result whose value is undefined',
+      source: createSourceProvider(async () => ({ ok: true, value: undefined }) as unknown),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'malformed success result',
+    },
+    {
+      label: 'rejects a success result whose value is null',
+      source: createSourceProvider(async () => ({ ok: true, value: null }) as unknown),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'malformed success result',
+    },
   ])('source provider validation', ({ label, source, expectedCode, expectedSubstring }) => {
     it(label, async () => {
       await expect(

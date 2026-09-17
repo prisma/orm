@@ -245,6 +245,18 @@ A Mongo model's collection attachment is wrong: the model declares `indexes`, `c
 
 A model declares an empty unique constraint (a unique with no fields), raised during SQL contract lowering (meta: `modelName`). Also raised when a CHECK constraint reaches SQLite migration DDL rendering — the SQLite target does not support CHECK constraints, and `sql.checkConstraint` is a Postgres-only capability. A `@@check` is refused earlier, by the PSL capability gate; a `check()` declared through the TypeScript builder is not, because capabilities reach the contract only after it is built, so this is where a SQLite `check()` is refused (meta: `constraintName`, and `tableName` where available).
 
+### CONTRACT.CONVERT_OUTPUT_IS_SOURCE
+
+`prisma contract convert` was asked to write its output over the Prisma 7 schema it reads: the resolved output path is one of the contract source's inputs, or sits inside a directory of schema files the source reads. Writing there would destroy the schema the conversion is made from. Pick another `--output` path, outside the Prisma 7 schema the config names. Raised before the schema is read, so nothing is written and the source file is untouched. Payload: `output` and `source`, both relative to the invocation directory.
+
+### CONTRACT.CONVERT_SOURCE_NOT_PRISMA7
+
+`prisma contract convert` applies only to a Prisma 7 source, and the configured contract source is a PSL or TypeScript one, or names no format at all. A contract already authored the Prisma 8 way has nothing to convert. Point `contract` at `prisma7Schema("./schema.prisma")` to convert a Prisma 7 schema. Raised by `contract convert` before it reads anything, so nothing is written. Payload: `format` (the format the configured source declares, `null` when it declares none).
+
+### CONTRACT.CONVERT_UNSUPPORTED
+
+`contract convert` cannot print the loaded contract as a Prisma 8 PSL file: either the configured target has no `printPslContract` hook on its descriptor (meta: `targetId`), or the contract holds something that cannot be written in a Prisma 8 PSL file — a column whose native type is outside the target's type map, a generated value the target cannot author, a column that takes a wall-clock-now generator in one phase and a different generator in the other, a nullable list column or a list column carrying type parameters (both would read back with a different type), a to-one relation with no foreign key behind it, or one model name declared in more than one namespace (a relation's target is resolved by model name alone, so the two would read back as one). Meta at the shape sites: `coordinate`, `nativeType`, `typeParams`, `onCreate`, `onUpdate`, `model`, `field`, `modelName`, `namespaces`.
+
 ### CONTRACT.DEFAULT_INVALID
 
 A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`.

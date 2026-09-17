@@ -2527,6 +2527,13 @@ export function interpretPslDocumentToSqlContract(
     for (const unique of modelNode.uniques ?? []) {
       uniqueColumnSets.push(unique.columns);
     }
+    // A unique index constrains its columns exactly as a unique constraint
+    // does, so a singular back-relation over those columns is just as sound.
+    for (const index of modelNode.indexes ?? []) {
+      if (index.unique === true && index.columns !== undefined && index.where === undefined) {
+        uniqueColumnSets.push(index.columns);
+      }
+    }
     modelUniqueColumnSets.set(modelNode.modelName, uniqueColumnSets);
   }
   applyBackrelationCandidates({

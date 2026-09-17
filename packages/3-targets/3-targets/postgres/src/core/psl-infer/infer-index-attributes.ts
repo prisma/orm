@@ -3,7 +3,6 @@ import type {
   PslModelAttribute,
 } from '@internal/framework-components/psl-ast';
 import { computeIndexContentHash, parseWireName } from '@internal/sql-schema-ir/naming';
-import type { SqlCheckConstraintIR, SqlIndexIR } from '@internal/sql-schema-ir/types';
 import { assertDefined } from '@internal/utils/assertions';
 import { buildAttribute, escapePslString, namedArg, positionalArg } from './psl-literals';
 
@@ -20,13 +19,27 @@ export function buildModelConstraintAttribute(
 }
 
 /**
+ * The parts of an index `@@index` reads. Both the schema IR node and the
+ * contract's storage node carry them, and both sides print indexes.
+ */
+export interface IndexAttributeSource {
+  readonly name: string;
+  readonly unique: boolean;
+  readonly columns?: readonly string[];
+  readonly expression?: string;
+  readonly where?: string;
+  readonly type?: string;
+  readonly options?: Record<string, unknown>;
+}
+
+/**
  * Emits one `@@index` attribute at full fidelity. The index's identity is
  * re-detected rather than trusted: `name:` is emitted only when the live name
  * parses as a wire name AND that hash recomputes from the introspected
  * content; otherwise the live name is adopted verbatim with `map:`.
  */
 export function buildIndexAttribute(
-  index: SqlIndexIR,
+  index: IndexAttributeSource,
   fieldNames: readonly string[] | undefined,
 ): PslModelAttribute {
   const args: PslAttributeArgument[] = [];
@@ -61,17 +74,25 @@ export function buildIndexAttribute(
   if (index.unique) {
     args.push(namedArg('unique', 'true'));
   }
-  const hasOptions = index.options !== undefined && Object.keys(index.options).length > 0;
-  if (index.type !== undefined || hasOptions) {
+  if (index.type !== undefined || index.options !== undefined) {
     args.push(namedArg('type', `"${escapePslString(index.type ?? 'btree')}"`));
   }
-  if (hasOptions) {
+  if (index.options !== undefined) {
     const entries = Object.entries(index.options ?? {})
       .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
       .map(([key, value]) => `${key}: "${escapePslString(String(value))}"`);
     args.push(namedArg('options', `{ ${entries.join(', ')} }`));
   }
   return buildAttribute('model', 'index', args);
+}
+
+/**
+ * The parts of a check constraint `@@check` reads. Both the schema IR node and
+ * the contract's storage node carry them, and both sides print checks.
+ */
+export interface CheckAttributeSource {
+  readonly name: string;
+  readonly expression: string;
 }
 
 /**
@@ -85,7 +106,7 @@ export function buildIndexAttribute(
  * zero pending operations. `buildPolicyBlocks` makes the same call for
  * `@@map` on adopted RLS policies, for the same reason.
  */
-export function buildCheckAttribute(check: SqlCheckConstraintIR): PslModelAttribute {
+export function buildCheckAttribute(check: CheckAttributeSource): PslModelAttribute {
   return buildAttribute('model', 'check', [
     namedArg('expression', `"${escapePslString(check.expression)}"`),
     namedArg('map', `"${escapePslString(check.name)}"`),
