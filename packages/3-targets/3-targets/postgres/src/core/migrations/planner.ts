@@ -162,7 +162,12 @@ export class PostgresMigrationPlanner implements MigrationPlanner<'sql', 'postgr
      */
     readonly snapshotsImportPath: string;
   }): PostgresPlanResult {
-    return this.planSql(options as SqlMigrationPlannerPlanOptions);
+    return this.planSql(
+      blindCast<
+        SqlMigrationPlannerPlanOptions,
+        'framework planner options are the SQL-specific planner options for the Postgres planner implementation'
+      >(options),
+    );
   }
 
   emptyMigration(

@@ -400,7 +400,10 @@ export const storageTypePlanCallStrategy: CallMigrationStrategy = (issues, ctx) 
   for (const [typeName, typeInstance] of Object.entries(storageTypes).sort(([a], [b]) =>
     a.localeCompare(b),
   )) {
-    const codecInstance = typeInstance as StorageTypeInstance;
+    const codecInstance = blindCast<
+      StorageTypeInstance,
+      'Postgres storage type registry values are StorageTypeInstance entries'
+    >(typeInstance);
     const hook = ctx.codecHooks.get(codecInstance.codecId);
     if (!hook?.planTypeOperations) continue;
     const planResult = hook.planTypeOperations({
@@ -414,13 +417,18 @@ export const storageTypePlanCallStrategy: CallMigrationStrategy = (issues, ctx) 
     if (!planResult) continue;
     for (const op of planResult.operations) {
       calls.push(
-        new RawSqlCall({
-          ...op,
-          target: {
-            id: op.target.id,
-            details: buildTargetDetails('type', typeName, ctx.schemaName),
-          },
-        } as SqlMigrationPlanOperation<PostgresPlanTargetDetails>),
+        new RawSqlCall(
+          blindCast<
+            SqlMigrationPlanOperation<PostgresPlanTargetDetails>,
+            'codec type operation target details are rewritten to Postgres type target details'
+          >({
+            ...op,
+            target: {
+              id: op.target.id,
+              details: buildTargetDetails('type', typeName, ctx.schemaName),
+            },
+          }),
+        ),
       );
     }
   }
@@ -451,8 +459,14 @@ export const notNullAddColumnCallStrategy: CallMigrationStrategy = (issues, ctx)
 
   const schemaLookups = buildSchemaLookupMap(ctx.schema);
 
-  const mutableCodecHooks = ctx.codecHooks as Map<string, CodecControlHooks>;
-  const mutableStorageTypes = ctx.storageTypes as Record<string, StorageTypeInstance>;
+  const mutableCodecHooks = blindCast<
+    Map<string, CodecControlHooks>,
+    'strategy context owns a mutable codec hook map during planning'
+  >(ctx.codecHooks);
+  const mutableStorageTypes = blindCast<
+    Record<string, StorageTypeInstance>,
+    'strategy context owns mutable storage type entries during planning'
+  >(ctx.storageTypes);
 
   for (const issue of issues) {
     if (issueOutcome(issue) !== 'not-found') continue;

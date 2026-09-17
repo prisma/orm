@@ -7,6 +7,7 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { MigrationContractViews } from '@internal/migration-tools/migration';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { DdlColumn, DdlTableConstraint } from '@internal/sql-relational-core/ast';
+import { blindCast } from '@internal/utils/casts';
 import { errorPostgresMigrationStackMissing } from '../errors';
 import { PostgresContractView } from '../postgres-contract-view';
 import { PostgresRlsPolicy, type RenderedRlsPolicyLiteral } from '../postgres-rls-policy';
@@ -105,7 +106,10 @@ export abstract class PostgresMigration<
     // the Postgres descriptor concretely returns a `SqlControlAdapter<'postgres'>`,
     // so the cast holds for any Postgres-target stack assembled at runtime.
     this.controlAdapter = stack?.adapter
-      ? (stack.adapter.create(stack) as SqlControlAdapter<'postgres'>)
+      ? blindCast<
+          SqlControlAdapter<'postgres'>,
+          'Postgres control stacks are assembled with a Postgres SQL control adapter'
+        >(stack.adapter.create(stack))
       : undefined;
   }
 
