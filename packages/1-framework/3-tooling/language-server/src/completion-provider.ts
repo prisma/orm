@@ -1,4 +1,5 @@
 import {
+  type AuthoringPslBlockDescriptor,
   type AuthoringPslBlockDescriptorNamespace,
   isAuthoringPslBlockDescriptor,
   isAuthoringTypeConstructorDescriptor,
@@ -385,14 +386,32 @@ function nativeDeclarationKeyword(
 function genericBlockDeclarationKeywordCandidates(
   descriptors: AuthoringPslBlockDescriptorNamespace,
 ): readonly DeclarationKeywordCompletionCandidate[] {
-  return descriptorBlockKeywords(descriptors).map((keyword) => ({
-    category: 'genericBlock',
-    label: keyword,
-    insertText: `${keyword} `,
-    snippetText: `${keyword} ${nameSnippetPlaceholder} {\n  \${0:// Block parameters and attributes}\n}`,
-    detail: findBlockDescriptor(descriptors, keyword)?.documentation || 'Generic block keyword',
-    kind: CompletionItemKind.Keyword,
-  }));
+  return descriptorBlockKeywords(descriptors).map((keyword) => {
+    const descriptor = findBlockDescriptor(descriptors, keyword);
+    return {
+      category: 'genericBlock',
+      label: keyword,
+      insertText: `${keyword} `,
+      snippetText: genericBlockSnippet(keyword, descriptor),
+      detail: descriptor?.documentation || 'Generic block keyword',
+      kind: CompletionItemKind.Keyword,
+    };
+  });
+}
+
+function genericBlockSnippet(
+  keyword: string,
+  descriptor: AuthoringPslBlockDescriptor | undefined,
+): string {
+  const parameters = Object.entries(descriptor?.parameters ?? {})
+    .filter(([, parameter]) => parameter.required === true)
+    .map(([name, parameter], index) => {
+      const placeholder = `\${${index + 2}:${name}}`;
+      const value = parameter.kind === 'list' ? `[${placeholder}]` : placeholder;
+      return `  ${name} = ${value}`;
+    });
+  const cursor = parameters.length === 0 ? '$' + '{0:// Block parameters and attributes}' : '$0';
+  return [`${keyword} ${nameSnippetPlaceholder} {`, ...parameters, `  ${cursor}`, '}'].join('\n');
 }
 
 function descriptorBlockKeywords(

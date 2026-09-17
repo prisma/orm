@@ -440,6 +440,54 @@ describe('providePslCompletionItems', () => {
     });
   });
 
+  it.each([true, false])(
+    'inserts only required generic block parameters, snippets=%s',
+    (snippets) => {
+      const { items } = completeWithSource({
+        markedSource: '|',
+        clientSupportsSnippets: snippets,
+        pslBlockDescriptors: {
+          security: {
+            policy: {
+              kind: 'pslBlock',
+              keyword: 'policy',
+              discriminator: 'policy',
+              name: { required: true },
+              parameters: {
+                target: { kind: 'ref', refKind: 'model', scope: 'same-space', required: true },
+                optional: { kind: 'value', codecId: 'fixture/text@1' },
+                using: { kind: 'value', codecId: 'fixture/text@1', required: true },
+                roles: {
+                  kind: 'list',
+                  of: { kind: 'ref', refKind: 'role', scope: 'same-space' },
+                  required: true,
+                },
+                mode: { kind: 'option', values: ['permissive', 'restrictive'], required: true },
+                omitted: { kind: 'value', codecId: 'fixture/text@1', required: false },
+              },
+              attributes: { audit: () => auditAttribute },
+            },
+          },
+        },
+      });
+      const item = completionItemByLabel(items, 'policy');
+      expect(item.textEdit?.newText).toBe(
+        snippets
+          ? [
+              `policy ${nameSnippetPlaceholder} {`,
+              '  target = $' + '{2:target}',
+              '  using = $' + '{3:using}',
+              '  roles = [$' + '{4:roles}]',
+              '  mode = $' + '{5:mode}',
+              '  $0',
+              '}',
+            ].join('\n')
+          : 'policy ',
+      );
+      expect(item.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
+    },
+  );
+
   it('returns registry-backed attribute name completions as function items', () => {
     const fieldItems = complete(['model Post {', '  id Int @|', '}'].join('\n')).items;
     expect(fieldItems.map((item) => item.label)).toEqual(['marker', 'orderFixture', 'ownerAware']);

@@ -6,7 +6,7 @@ The Prisma 8 language server provides diagnostics, formatting, code completion, 
 
 Attribute, argument, function, identifier-value, registered scalar, generic block, and block parameter completions use contribution documentation as their detail when available. Scalar constructors, generic block descriptors, and block parameter descriptors can supply this text through their optional `documentation` property. Undocumented descriptors retain their generic completion details.
 
-Required argument snippets use argument names as editable placeholders; block snippets include a comment hint describing their contents. Field-reference completions suggest scalar fields only, excluding relation and composite fields.
+Required argument snippets use argument names as editable placeholders. Generic block snippets insert required parameters with named placeholders, omitting optional parameters and attributes. Blocks without required parameters include a comment hint describing their contents. Field-reference completions suggest scalar fields only, excluding relation and composite fields.
 
 ## Signature help
 
