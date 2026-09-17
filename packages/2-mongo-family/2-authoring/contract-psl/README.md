@@ -10,6 +10,10 @@ PSL-to-Mongo contract interpreter for Prisma 8. Transforms Prisma Schema Languag
 - **Contract provider**: `mongoContract()` (exported from `./provider`) integrates with the CLI's `prisma contract emit` command, reading a `.prisma` schema file and producing a `ContractConfig`
 - **Diagnostics**: Emits structured diagnostics for unsupported field types (`PSL_UNSUPPORTED_FIELD_TYPE`), missing `@id` fields (`PSL_MISSING_ID_FIELD`), orphaned backrelations (`PSL_ORPHANED_BACKRELATION`), ambiguous backrelations (`PSL_AMBIGUOUS_BACKRELATION`), and attribute names outside the registered namespace (`PSL_UNSUPPORTED_MODEL_ATTRIBUTE`, `PSL_UNSUPPORTED_FIELD_ATTRIBUTE`)
 
+`@@base` uses a context-bound checked model reference and preserves the selected declaration through discriminator, collection, root and index lowering. Missing or wrong-kind targets produce shared source-anchored expression diagnostics; Mongo's namespace prohibition and single-collection inheritance checks remain separate.
+
+Wildcard scope is an unchecked identifier expression (`wildcard(field)`), not a model reference. Field existence/indexability and mapped field paths are still checked during index lowering; `wildcard()` continues to index `$**`.
+
 ## Known limitations
 
 - **Per-index `collation`**: PSL authoring does not support the `collation` index option. Users requiring per-index collation must use the TypeScript contract builder (`@internal/mongo-contract-ts`).

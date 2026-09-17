@@ -14,6 +14,7 @@ import type {
 } from '@internal/psl-parser';
 import {
   bool,
+  createEntityResolver,
   entityRef,
   fieldAttribute,
   fieldRef,
@@ -183,17 +184,24 @@ export const discriminatorModelSpec = modelAttribute('discriminator', {
     { key: 'field', type: fieldRef(), documentation: 'The discriminator field on this model.' },
   ],
 });
-export const baseModelSpec = modelAttribute('base', {
-  documentation: 'Declares this model as a variant of a base model.',
-  positional: [
-    { key: 'base', type: entityRef(), documentation: 'The base model to inherit from.' },
-    {
-      key: 'value',
-      type: str(),
-      documentation: 'The discriminator value identifying this variant.',
-    },
-  ],
-});
+export function baseModelSpec(ctx: AttributeSpecContext) {
+  const resolve = createEntityResolver({ symbols: ctx.symbols, owner: ctx.model });
+  return modelAttribute('base', {
+    documentation: 'Declares this model as a variant of a base model.',
+    positional: [
+      {
+        key: 'base',
+        type: entityRef({ kind: 'model' }, resolve),
+        documentation: 'The base model to inherit from.',
+      },
+      {
+        key: 'value',
+        type: str(),
+        documentation: 'The discriminator value identifying this variant.',
+      },
+    ],
+  });
+}
 
 const sortSig = {
   documentation: 'Selects an index field with an explicit sort direction.',
@@ -221,7 +229,7 @@ function indexFieldElement(
       positional: [
         {
           key: 'scope',
-          type: optional(entityRef()),
+          type: optional(identifier()),
           documentation: 'The field path to index recursively. Omit to index all document fields.',
         },
       ],
@@ -384,7 +392,7 @@ export const mongoAttributeSpecs = {
   model: {
     map: staticModelSpec(mapModelSpec),
     discriminator: staticModelSpec(discriminatorModelSpec),
-    base: staticModelSpec(baseModelSpec),
+    base: baseModelSpec,
     index: (ctx) => buildIndexModelSpec('index', modelFieldElement(ctx)),
     unique: (ctx) => buildIndexModelSpec('unique', modelFieldElement(ctx)),
     textIndex: (ctx) => buildTextIndexModelSpec(modelFieldElement(ctx)),

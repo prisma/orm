@@ -1,3 +1,4 @@
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ArgType,
   AttributeCtx,
@@ -5,12 +6,18 @@ import type {
   FieldAttributeSpecContext,
   FuncCallSig,
   ModelAttributeCtx,
+  ModelSymbol,
   Param,
+  ResolvedEntityReference,
 } from '@internal/psl-parser';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
-import { describe, expect, it } from 'vitest';
-import { mongoAttributeSpecs } from '../src/mongo-attribute-specs';
+import { describe, expect, expectTypeOf, it } from 'vitest';
+import {
+  findModelAttributeNode,
+  interpretModelAttribute,
+  mongoAttributeSpecs,
+} from '../src/mongo-attribute-specs';
 
 interface ListMetadata<T, Ctx extends AttributeCtx> extends ArgType<readonly T[], Ctx> {
   readonly kind: 'list';
@@ -100,6 +107,33 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
 }
 
 describe('mongoAttributeSpecs', () => {
+  it('returns the selected forward base declaration instead of a name', () => {
+    const { document, sourceFile } = parse(`model Variant { @@base(Base, "v") }
+model Other { id Int }
+model Base { id String }`);
+    const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
+    const model = table.topLevel.models['Variant'];
+    if (!model) throw new Error('missing variant');
+    const node = findModelAttributeNode(model, 'base');
+    if (!node) throw new Error('missing base');
+    const ctx = { ...contexts().model, symbols: table, model };
+    const diagnostics: ContractSourceDiagnostic[] = [];
+    const value = interpretModelAttribute({
+      node,
+      spec: mongoAttributeSpecs.model.base(ctx),
+      model,
+      sourceFile,
+      sourceId: 'test.prisma',
+      diagnostics,
+    });
+    expectTypeOf(value).toEqualTypeOf<
+      { base: ResolvedEntityReference<ModelSymbol>; value: string } | undefined
+    >();
+    expect(diagnostics).toEqual([]);
+    expect(value?.base.declaration).toBe(table.topLevel.models['Base']);
+    expect(value?.base.namespace).toBeUndefined();
+    expect(value?.value).toBe('v');
+  });
   it('registers every Mongo built-in at its level', () => {
     expect({
       model: Object.keys(mongoAttributeSpecs.model).sort(),
@@ -166,7 +200,8 @@ describe('mongoAttributeSpecs', () => {
     expect(wildcard).toMatchObject({ kind: 'funcCall', name: 'wildcard' });
     expect(wildcard.signature.positional?.[0]).toMatchObject({ key: 'scope' });
     expect(wildcard.signature.positional?.[0]?.type).toMatchObject({
-      kind: 'entityRef',
+      kind: 'identifier',
+      name: undefined,
       optional: true,
     });
     expect(
