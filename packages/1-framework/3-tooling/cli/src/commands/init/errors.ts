@@ -13,6 +13,8 @@ import { CliStructuredError } from '../../utils/cli-errors';
 export function errorInitMissingFlags(options: {
   readonly missing: readonly string[];
   readonly why: string;
+  /** The Prisma 7 schema detection found, when the run could have adopted it instead. */
+  readonly prisma7SchemaPath: string | undefined;
 }): CliStructuredError {
   const flagList = options.missing.map((flag) => `--${flag}`).join(', ');
   const fixList = options.missing
@@ -29,11 +31,15 @@ export function errorInitMissingFlags(options: {
       }
     })
     .join(' ');
+  const prisma7 =
+    options.prisma7SchemaPath === undefined
+      ? ''
+      : ` This looks like a Prisma 7 project; to use ${options.prisma7SchemaPath} as the contract source instead, pass \`--from-prisma7-schema ${options.prisma7SchemaPath}\`.`;
   return new CliStructuredError('CLI.INIT_MISSING_FLAGS', 'Missing required flags', {
-    why: `${options.why} Missing required flag(s): ${flagList}.`,
+    why: `${options.why} Missing required flag(s): ${flagList}.${prisma7}`,
     fix: `Re-run with the missing flag(s) supplied, e.g. \`prisma orm init --yes ${fixList}\`. Use \`prisma orm init --help\` to see every flag.`,
     docsUrl: docsUrlFor('CLI.INIT_MISSING_FLAGS'),
-    meta: { missingFlags: options.missing },
+    meta: { missingFlags: options.missing, prisma7SchemaPath: options.prisma7SchemaPath ?? null },
   });
 }
 
@@ -267,11 +273,155 @@ export function errorInitWriteFailed(options: {
   readonly path: string;
   readonly cause: string;
   readonly filesWritten: readonly string[];
+  readonly filesRenamed: readonly { readonly from: string; readonly to: string }[];
 }): CliStructuredError {
+  const renamed = options.filesRenamed.map((entry) => `${entry.from} → ${entry.to}`);
+  const renamedNote =
+    renamed.length === 0
+      ? ''
+      : ` Before the failure this run renamed ${renamed.join(', ')}; that rename stays, and a re-run writes the missing files beside it.`;
   return new CliStructuredError('CLI.INIT_WRITE_FAILED', `Failed to write ${options.path}`, {
-    why: `\`${options.path}\` could not be written: ${options.cause}`,
+    why: `\`${options.path}\` could not be written: ${options.cause}${renamedNote}`,
     fix: 'Fix what stopped the write — a directory sitting where the file goes, permissions, a full disk — then run `prisma orm init` again. Interactive runs ask before replacing the files this run already wrote (listed in `meta.filesWritten`); non-interactive runs grant that consent with `--confirm <directory name>`.',
     docsUrl: docsUrlFor('CLI.INIT_WRITE_FAILED'),
-    meta: { path: options.path, cause: options.cause, filesWritten: options.filesWritten },
+    meta: {
+      path: options.path,
+      cause: options.cause,
+      filesWritten: options.filesWritten,
+      filesRenamed: options.filesRenamed,
+    },
   });
+}
+
+/**
+ * Two flags were given that ask for different things: `--from-prisma7-schema`
+ * names an existing schema as the contract source, while `--schema-path` and
+ * `--authoring` describe a starter schema to write. Raised before anything is
+ * read or written.
+ */
+export function errorInitFlagConflict(options: {
+  readonly flags: readonly [string, string];
+}): CliStructuredError {
+  const [first, second] = options.flags;
+  return new CliStructuredError('CLI.INIT_FLAG_CONFLICT', 'Conflicting flags', {
+    why: `\`--${first}\` and \`--${second}\` cannot be combined: the first reads an existing schema as the contract source, the second describes a starter schema to write.`,
+    fix: `Pass one or the other. Use \`--${first}\` to adopt an existing Prisma 7 schema, or \`--${second}\` to scaffold a new one.`,
+    docsUrl: docsUrlFor('CLI.INIT_FLAG_CONFLICT'),
+    meta: { flags: [first, second] },
+  });
+}
+
+// biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the supported list a user-facing error shows
+const PRISMA7_SUPPORTED_PROVIDERS = ['postgresql'] as const;
+
+/** The Prisma 7 schema's provider is `mongodb`, which the Prisma 7 path does not support yet. */
+// biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the user-facing refusal of a MongoDB Prisma 7 schema
+export function errorInitPrisma7MongoUnsupported(options: {
+  readonly schemaPath: string;
+}): CliStructuredError {
+  return new CliStructuredError(
+    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the refusal's public error code
+    'CLI.INIT_PRISMA7_MONGO_UNSUPPORTED',
+    // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — user-facing error about the schema's datasource
+    'MongoDB Prisma 7 schemas are not supported yet',
+    {
+      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — user-facing error text
+      why: `\`${options.schemaPath}\` declares \`provider = "mongodb"\`. Using a Prisma 7 schema as the Prisma 8 contract source is available for PostgreSQL first; MongoDB support is coming.`,
+      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — user-facing error text
+      fix: 'Run `prisma orm init` without `--from-prisma7-schema` to start a fresh Prisma 8 contract, or wait for the MongoDB Prisma 7 source.',
+      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the refusal's public error code
+      docsUrl: docsUrlFor('CLI.INIT_PRISMA7_MONGO_UNSUPPORTED'),
+      // biome-ignore lint/plugin/no-family-vocabulary: names the provider on purpose — the provider in the error payload
+      meta: { schemaPath: options.schemaPath, provider: 'mongodb' },
+    },
+  );
+}
+
+/** The Prisma 7 schema's provider is one Prisma 8 has no target for. */
+export function errorInitPrisma7ProviderUnsupported(options: {
+  readonly schemaPath: string;
+  readonly provider: string | undefined;
+}): CliStructuredError {
+  const declared =
+    options.provider === undefined ? 'no string provider' : `\`provider = "${options.provider}"\``;
+  return new CliStructuredError(
+    'CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED',
+    'Unsupported Prisma 7 datasource provider',
+    {
+      why: `\`${options.schemaPath}\` declares ${declared}. The Prisma 7 path supports: ${PRISMA7_SUPPORTED_PROVIDERS.join(', ')}.`,
+      fix: 'Pass `--target` to choose the Prisma 8 target yourself, or run `prisma orm init` without `--from-prisma7-schema`.',
+      docsUrl: docsUrlFor('CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED'),
+      meta: {
+        schemaPath: options.schemaPath,
+        provider: options.provider ?? null,
+        supported: [...PRISMA7_SUPPORTED_PROVIDERS],
+      },
+    },
+  );
+}
+
+/** The path given as a Prisma 7 schema does not exist or has no `datasource` block. */
+export function errorInitPrisma7SchemaInvalid(options: {
+  readonly schemaPath: string;
+  readonly reason: 'absent' | 'no-datasource';
+}): CliStructuredError {
+  const why =
+    options.reason === 'absent'
+      ? `\`${options.schemaPath}\` does not exist.`
+      : `\`${options.schemaPath}\` has no \`datasource\` block, so it is not a Prisma 7 schema.`;
+  return new CliStructuredError('CLI.INIT_PRISMA7_SCHEMA_INVALID', 'Not a Prisma 7 schema', {
+    why,
+    fix: 'Point `--from-prisma7-schema` at the `schema.prisma` file (or schema directory) whose `datasource` block names your database, or run `prisma orm init` without it.',
+    docsUrl: docsUrlFor('CLI.INIT_PRISMA7_SCHEMA_INVALID'),
+    meta: { schemaPath: options.schemaPath, reason: options.reason },
+  });
+}
+
+/** A Prisma 7 `prisma.config.*` sits beside a `prisma7.config.*`, so neither can be renamed onto the other. */
+export function errorInitPrisma7ConfigCollision(options: {
+  readonly prismaConfigPath: string;
+  readonly prisma7ConfigPath: string;
+}): CliStructuredError {
+  return new CliStructuredError('CLI.INIT_PRISMA7_CONFIG_COLLISION', 'Two Prisma 7 config files', {
+    why: `\`${options.prismaConfigPath}\` is a Prisma 7 config and \`${options.prisma7ConfigPath}\` already exists. Init renames the Prisma 7 config to \`prisma7.config.*\` so Prisma 8 can write its own, and cannot rename onto an existing file.`,
+    fix: `Keep one of them: delete \`${options.prisma7ConfigPath}\` if \`${options.prismaConfigPath}\` is the config Prisma 7 should use, or delete \`${options.prismaConfigPath}\` if the move to \`${options.prisma7ConfigPath}\` is already done. Then re-run \`prisma orm init\`.`,
+    docsUrl: docsUrlFor('CLI.INIT_PRISMA7_CONFIG_COLLISION'),
+    meta: {
+      prismaConfigPath: options.prismaConfigPath,
+      prisma7ConfigPath: options.prisma7ConfigPath,
+    },
+  });
+}
+
+/**
+ * `prisma.config.*` exists but did not evaluate, so init cannot tell whether
+ * it is Prisma 7's (to rename) or its own (to replace). Refused rather than
+ * guessed: replacing a Prisma 7 config would destroy the user's file.
+ */
+export function errorInitPrisma7ConfigUnreadable(options: {
+  readonly path: string;
+  readonly why: string;
+  /** A `prisma7.config.*` already beside it: the unreadable file is then Prisma 8's own. */
+  readonly prisma7ConfigPath: string | undefined;
+}): CliStructuredError {
+  const extension = options.path.slice(options.path.lastIndexOf('.') + 1);
+  const versioned = options.prisma7ConfigPath;
+  const why =
+    versioned === undefined
+      ? `\`${options.path}\` failed to evaluate, so init cannot tell whether it is a Prisma 7 config to rename or a Prisma 8 config to replace: ${options.why}`
+      : `\`${options.path}\` failed to evaluate: ${options.why}. \`${versioned}\` already exists, so init leaves \`${options.path}\` alone.`;
+  const fix =
+    versioned === undefined
+      ? `Install the project's dependencies so \`${options.path}\` can be evaluated (a Prisma 7 config imports \`prisma/config\`), or rename it to \`prisma7.config.${extension}\` by hand, then re-run \`prisma orm init\`.`
+      : `Install the project's dependencies and fix the error in \`${options.path}\` (a missing export usually means the package it imports from needs updating), then re-run \`prisma orm init\`.`;
+  return new CliStructuredError(
+    'CLI.INIT_PRISMA7_CONFIG_UNREADABLE',
+    `Could not evaluate ${options.path}`,
+    {
+      why,
+      fix,
+      docsUrl: docsUrlFor('CLI.INIT_PRISMA7_CONFIG_UNREADABLE'),
+      meta: { path: options.path, why: options.why, prisma7ConfigPath: versioned ?? null },
+    },
+  );
 }

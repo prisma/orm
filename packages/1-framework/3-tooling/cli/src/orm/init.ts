@@ -12,6 +12,7 @@ import {
   InitOutputSchema,
   type InstallStatus,
 } from '../commands/init/output';
+import { versionMajor } from '../commands/init/prisma7-detect';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
 import { targetPackageName } from '../commands/init/templates/code-templates';
 import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
@@ -71,7 +72,10 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         'and emits the contract. Gets you from zero to typed queries in one step.\n' +
         '\n' +
         'Run it interactively for a guided setup, or supply --target and --authoring\n' +
-        'for a fully scriptable run (CI, AI coding agents, automation).',
+        'for a fully scriptable run (CI, AI coding agents, automation).\n' +
+        '\n' +
+        'In a Prisma 7 project, pass --from-prisma7-schema (or answer yes when asked)\n' +
+        'to use the existing schema.prisma as the contract source.',
       examples: [
         'orm init',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
@@ -81,6 +85,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         'orm init --skip-install',
         // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — user-facing help showing what to pass to --target
         'orm init --target postgres --keep-previous-facade',
+        'orm init --from-prisma7-schema prisma/schema.prisma --confirm my-app',
       ],
     },
     args: {
@@ -109,6 +114,10 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         keepPreviousFacade: flag.boolean({
           brief: 'Keep the previous target package in package.json when switching targets',
         }),
+        fromPrisma7Schema: flag.string({
+          brief: 'Use an existing Prisma 7 schema.prisma as the contract source',
+          placeholder: 'path',
+        }),
       },
     },
     exitCodes: INIT_EXIT_CODES,
@@ -125,6 +134,9 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         flags: args.flags,
         prompt: ctx.prompt,
       });
+      for (const warning of inputs.warnings) {
+        warn(warning);
+      }
 
       const packageManager = await resolveScaffoldPackageManager({ cwd: ctx.cwd, env: ctx.env });
       const scaffold = scaffoldProject({ cwd: ctx.cwd, inputs, packageManager });
@@ -135,7 +147,21 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         ctx.report({ kind: 'message', severity: 'info', text: note });
       }
 
-      const deps = [targetPackageName(inputs.target, scaffold.resolveImportSpecifier), 'dotenv'];
+      // Prisma 7 requires CLI and client at the same version, so when the CLI
+      // moves aside as @prisma/prisma7 a client below the 7 line moves with it.
+      const movePackages = inputs.sideBySide?.movePackages ?? null;
+      const clientMajor =
+        movePackages?.clientVersion === undefined
+          ? undefined
+          : versionMajor(movePackages.clientVersion);
+      // A client the project never declared, or one it links through a
+      // workspace or catalog, is left alone: only a declared major below 7 moves.
+      const moveClient = movePackages !== null && clientMajor !== undefined && clientMajor < 7;
+      const deps = [
+        targetPackageName(inputs.target, scaffold.resolveImportSpecifier),
+        'dotenv',
+        ...(moveClient ? ['@prisma/client@7'] : []),
+      ];
       // The CLI the scaffolded scripts run is `prisma`, the unified CLI's
       // published name, whose v8 line publishes under the `latest` dist-tag (the
       // standalone shim is no longer published). It is the package that
@@ -148,7 +174,17 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // Node's ambient types present; a project that already pins @types/node
       // keeps its own major.
       const cliDevDeps = ['prisma@latest'];
-      const devDeps: string[] = scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node'];
+      const devDeps: string[] = [
+        ...(scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node']),
+        ...(movePackages !== null ? ['@prisma/prisma7@7'] : []),
+      ];
+
+      const packagesMoved = [
+        ...(moveClient ? ['@prisma/client@7'] : []),
+        ...(movePackages !== null ? ['@prisma/prisma7@7'] : []),
+      ];
+      const adoptsPrisma7 = inputs.contractSource.kind === 'prisma7-schema';
+      const prisma7Steps = adoptsPrisma7 ? { packagesMoved, clientMoved: moveClient } : null;
 
       const findings: Diagnostic[] = [];
       const extraActions: NextAction[] = [];
@@ -160,22 +196,32 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         const document: InitOutput = {
           ok: true,
           target: inputs.target === 'mongo' ? 'mongodb' : 'postgres',
-          authoring: inputs.authoring,
+          authoring: adoptsPrisma7 ? 'prisma7' : inputs.authoring,
           schemaPath: inputs.schemaPath,
           filesWritten: scaffold.filesWritten,
           filesDeleted: scaffold.filesDeleted,
+          filesRenamed: scaffold.filesRenamed,
           packagesInstalled: {
             status: packagesInstalled,
             deps: installed ? deps : [],
             devDeps: installed ? devDeps : [],
           },
           contractEmitted,
+          prisma7: adoptsPrisma7
+            ? {
+                schemaPath: inputs.schemaPath,
+                configRenamedTo: scaffold.filesRenamed[0]?.to ?? null,
+                scriptsRewritten: [...scaffold.scriptsRewritten],
+                packagesMoved,
+              }
+            : null,
           nextSteps: buildNextSteps({
             target: inputs.target === 'mongo' ? 'mongodb' : 'postgres',
             packagesInstalled,
             contractEmitted,
             emitCommand: EMIT_COMMAND,
             schemaPath: inputs.schemaPath,
+            prisma7: prisma7Steps,
           }),
           warnings,
         };
@@ -206,6 +252,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
                 ...buildInitNextActions({
                   contractEmitted,
                   schemaPath: inputs.schemaPath,
+                  prisma7: prisma7Steps,
                 }),
               ],
             }),

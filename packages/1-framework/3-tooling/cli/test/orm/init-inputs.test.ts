@@ -25,6 +25,7 @@ function flags(overrides: Partial<InitFlagValues> = {}): InitFlagValues {
     strictProbe: false,
     skipInstall: true,
     keepPreviousFacade: false,
+    fromPrisma7Schema: undefined,
     ...overrides,
   };
 }

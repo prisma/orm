@@ -64,6 +64,61 @@ Each engine command declares a `brief` (one-liner used in command trees and head
 
 ## Commands
 
+### `prisma orm init`
+
+Sets a project up for Prisma ORM 8: writes `prisma.config.ts`, a starter schema (PSL or TypeScript), `src/prisma/db.ts`, `prisma-8.md`, and `.env.example`; merges `tsconfig.json`, `.gitignore`, `.gitattributes`, and `package.json`; installs the target package, `dotenv`, and `prisma@latest`; then runs `prisma contract emit`. Interactively it asks for the target, the authoring style, and the schema path; `--target` and `--authoring` make it scriptable.
+
+**Canonical command:**
+```bash
+prisma orm init [--target postgres|mongodb] [--authoring psl|typescript] [--schema-path <path>] [--from-prisma7-schema <path>] [--confirm <dir>] [--skip-install] [--write-env] [--probe-db] [--json]
+```
+
+**On a Prisma 7 project.** Init behaves like `git init`: it sets up what Prisma 8 needs to operate in the project and stops. It never connects to the database beyond the opt-in `--probe-db` version check, never writes to it, and never edits Prisma 7's schema or migrations. The Prisma 7 path is entered only through `--from-prisma7-schema <path>` or a yes to the question init asks when it finds a Prisma 7 config (`prisma.config.*` without the `$prismaConfig` marker) or a `.prisma` file with a `datasource` block at `prisma/schema.prisma`:
+
+```
+? prisma/schema.prisma is a Prisma 7 schema. Use it as the Prisma 8 contract source? (y/n)
+? Prisma 7 is installed as `prisma`. Keep it as @prisma/prisma7 (binary prisma7) and move `prisma` to Prisma 8, and rename prisma.config.ts to prisma7.config.ts? Type <dir> to confirm.
+```
+
+A no, `--yes`, or a session that cannot ask runs init as today. The second question is the consent token; `--confirm <dir>` answers it non-interactively. Under it init:
+
+- renames the Prisma 7 config to `prisma7.config.<same extension>` and points its `prisma/config` import at `@prisma/prisma7/config`;
+- rewrites every `package.json` script that invokes `prisma` to invoke `prisma7` (scripts init adds keep `prisma`);
+- installs `@prisma/prisma7@7` as a development dependency alongside `prisma@latest`, and `@prisma/client@7` when the project declares a client below the 7 line.
+
+It then writes `prisma.config.ts` with `contract: prisma7Schema("<schema path>")` and `output: "src/prisma"`, `src/prisma/db.ts`, and a `prisma-8.md` that describes the transition loop; no starter schema is written and `prisma/` stays byte-identical. The target comes from the schema's `datasource.provider` unless `--target` is given; `postgresql` is the provider supported today (`CLI.INIT_PRISMA7_MONGO_UNSUPPORTED`, `CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`). The next steps are the transition routine: set `DATABASE_URL`, `prisma db sign`, move routes one at a time, re-run `prisma contract emit` then `prisma db sign` after each `prisma7 migrate dev`, and follow the upgrade guide's cutover section when the last route has moved.
+
+**Exit codes:**
+- `0`: set up (and, unless skipped, installed and emitted)
+- `2`: precondition — an invalid flag, a refusal on the Prisma 7 path (`CLI.INIT_FLAG_CONFLICT`, `CLI.INIT_PRISMA7_SCHEMA_INVALID`, `CLI.INIT_PRISMA7_CONFIG_COLLISION`, `CLI.INIT_PRISMA7_CONFIG_UNREADABLE`, the provider codes above), a consent not granted, or a write that failed; nothing is written before a refusal
+- `3`: an interactive prompt was cancelled
+- `4`: scaffold written; dependency install failed
+- `5`: scaffold written and installed; contract emit failed
+
+**`--json`:** the success document names every file written, deleted, or renamed, every package installed, and the next steps. On the Prisma 7 path `authoring` is `prisma7`, `schemaPath` is the Prisma 7 schema, and `prisma7` records the adoption; on a normal run `filesRenamed` is `[]` and `prisma7` is `null`.
+
+```json
+{
+  "ok": true,
+  "target": "postgres",
+  "authoring": "prisma7",
+  "schemaPath": "prisma/schema.prisma",
+  "filesWritten": ["prisma.config.ts", "src/prisma/db.ts", "prisma-8.md", ".env.example", "tsconfig.json", ".gitignore", ".gitattributes", "package.json"],
+  "filesDeleted": [],
+  "filesRenamed": [{ "from": "prisma.config.ts", "to": "prisma7.config.ts" }],
+  "packagesInstalled": { "status": "skipped", "deps": [], "devDeps": [] },
+  "contractEmitted": false,
+  "prisma7": {
+    "schemaPath": "prisma/schema.prisma",
+    "configRenamedTo": "prisma7.config.ts",
+    "scriptsRewritten": ["generate", "migrate", "studio"],
+    "packagesMoved": ["@prisma/prisma7@7"]
+  },
+  "nextSteps": ["1. Set DATABASE_URL in your environment (export it or add it to .env).", "…"],
+  "warnings": []
+}
+```
+
 ### `prisma contract emit` (canonical)
 
 Emit `contract.json` and `contract.d.ts` from `config.contract`.
