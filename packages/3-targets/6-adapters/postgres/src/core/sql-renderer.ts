@@ -197,7 +197,17 @@ function renderLimitOffset(
   pim: ParamIndexMap,
 ): string {
   if (value === undefined) return '';
-  if (typeof value === 'number') return `${keyword} ${value}`;
+  if (typeof value === 'number') {
+    // NaN/±Infinity stringify into SQL identifiers (`LIMIT NaN`) and crash the engine.
+    if (!Number.isFinite(value)) {
+      throw adapterError(
+        'RUNTIME.AST_INVALID',
+        `${keyword} requires a finite number, got ${String(value)}`,
+        { meta: { node: 'select', clause: keyword } },
+      );
+    }
+    return `${keyword} ${value}`;
+  }
   return `${keyword} ${renderExpr(value, contract, pim)}`;
 }
 
