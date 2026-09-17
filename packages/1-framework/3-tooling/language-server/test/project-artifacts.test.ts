@@ -83,6 +83,7 @@ describe('createProjectArtifacts', () => {
     expect(artifacts?.document).toBeDefined();
     expect(artifacts?.sourceFile).toBeDefined();
     expect(artifacts?.diagnostics).toEqual([]);
+    expect(artifacts).not.toHaveProperty('sources');
   });
 
   it('returns the same artifacts for repeated reads without an intervening event', () => {
@@ -209,6 +210,59 @@ describe('createProjectArtifacts', () => {
     expect(Object.keys(store.symbolTable().topLevel.models)).toContain('User');
   });
 
+  it('owns immutable registry snapshots matching cached roots through edits and closes', () => {
+    const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
+    const texts = new Map([
+      [schemaUri, cleanSource],
+      [siblingUri, twoModelSource],
+    ]);
+    const store = createProjectArtifacts({
+      inputs: resolveSchemaInputs({
+        contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
+      }),
+      controlStack,
+      getText: (uri) => texts.get(uri),
+      onInterpretationError: vi.fn(),
+    });
+    const first = store.document(schemaUri)!;
+    const sibling = store.document(siblingUri)!;
+    const snapshot = store.sources;
+    expect(snapshot.sourceFileFor(first.document.syntax)).toBe(first.sourceFile);
+    expect(snapshot.sourceFileFor(sibling.document.syntax)).toBe(sibling.sourceFile);
+    expect(store.symbolTable()).toBe(store.symbolTable());
+
+    texts.set(schemaUri, twoModelSource);
+    store.documentChanged(schemaUri);
+    expect(() => store.sources.sourceFileFor(first.document.syntax)).toThrow(/No SourceFile/);
+    expect(store.sources.sourceFileFor(sibling.document.syntax)).toBe(sibling.sourceFile);
+    const edited = store.document(schemaUri)!;
+    expect(store.sources.sourceFileFor(edited.document.syntax)).toBe(edited.sourceFile);
+    expect(snapshot.sourceFileFor(first.document.syntax)).toBe(first.sourceFile);
+    expect(() => snapshot.sourceFileFor(edited.document.syntax)).toThrow(/No SourceFile/);
+
+    texts.delete(schemaUri);
+    store.documentClosed(schemaUri);
+    expect(store.document(schemaUri)).toBeUndefined();
+    expect(() => store.sources.sourceFileFor(edited.document.syntax)).toThrow(/No SourceFile/);
+    expect(store.sources.sourceFileFor(sibling.document.syntax)).toBe(sibling.sourceFile);
+    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(3);
+  });
+
+  it('a replacement project rejects roots from the previous configuration', () => {
+    const previous = projectWithMirror();
+    previous.texts.set(schemaUri, cleanSource);
+    const old = previous.store.document(schemaUri)!;
+    const replacement = projectWithMirror();
+    replacement.texts.set(schemaUri, cleanSource);
+    const current = replacement.store.document(schemaUri)!;
+    expect(() => replacement.store.sources.sourceFileFor(old.document.syntax)).toThrow(
+      /No SourceFile/,
+    );
+    expect(replacement.store.sources.sourceFileFor(current.document.syntax)).toBe(
+      current.sourceFile,
+    );
+  });
+
   it('throws when no configured input is open instead of fabricating a table', () => {
     const { store } = projectWithMirror();
 
@@ -310,12 +364,16 @@ describe('interpret slot', () => {
     LSPErrorCodes.ContentModified,
   ])('preserves protocol control-flow error %s', (code) => {
     const error = new ResponseError(code, 'cancelled', { retriggerRequest: false });
-    const { interpretation } = interpretationDouble(() => {
+    const { interpretation, spy } = interpretationDouble(() => ok({} as never));
+    spy.mockImplementationOnce(() => {
       throw error;
     });
     const { texts, store, onInterpretationError } = projectWithMirror(interpretation);
     texts.set(schemaUri, cleanSource);
     expect(() => store.document(schemaUri)?.interpretDiagnostics()).toThrow(error);
+    expect(store.document(schemaUri)?.interpretDiagnostics()).toEqual([]);
+    expect(store.document(schemaUri)?.interpretDiagnostics()).toEqual([]);
+    expect(spy).toHaveBeenCalledTimes(2);
     expect(onInterpretationError).not.toHaveBeenCalled();
   });
 
@@ -374,6 +432,56 @@ describe('interpret slot', () => {
     expect(spy).toHaveBeenCalledTimes(2);
   });
 
+  it('invalidates retained semantic memos and shared symbols when registry membership changes', () => {
+    const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
+    const texts = new Map([
+      [schemaUri, cleanSource],
+      [siblingUri, twoModelSource],
+    ]);
+    const { interpretation, spy } = interpretationDouble(() => ok({} as never));
+    const store = createProjectArtifacts({
+      inputs: resolveSchemaInputs({
+        contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
+      }),
+      controlStack,
+      getText: (uri) => texts.get(uri),
+      onInterpretationError: vi.fn(),
+      interpretation,
+    });
+    const first = store.document(schemaUri)!;
+    first.interpretDiagnostics();
+    const initialSymbols = store.symbolTable();
+    const sibling = store.document(siblingUri)!;
+    first.interpretDiagnostics();
+    first.interpretDiagnostics();
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(spy.mock.calls[1]?.[0].sources).toBe(store.sources);
+    expect(spy.mock.calls[1]?.[0].sources.sourceFileFor(sibling.document.syntax)).toBe(
+      sibling.sourceFile,
+    );
+    expect(store.symbolTable()).not.toBe(initialSymbols);
+    const siblingSymbols = store.symbolTable();
+    texts.delete(siblingUri);
+    store.documentClosed(siblingUri);
+    first.interpretDiagnostics();
+    expect(spy).toHaveBeenCalledTimes(3);
+    expect(spy.mock.calls[2]?.[0].sources).toBe(store.sources);
+    expect(spy.mock.calls[2]?.[0].symbolTable).toBe(store.symbolTable());
+    expect(store.symbolTable()).not.toBe(siblingSymbols);
+    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(2);
+
+    texts.set(siblingUri, twoModelSource);
+    store.document(siblingUri);
+    first.interpretDiagnostics();
+    texts.set(siblingUri, cleanSource);
+    store.documentChanged(siblingUri);
+    first.interpretDiagnostics();
+    expect(spy).toHaveBeenCalledTimes(5);
+    expect(spy.mock.calls[4]?.[0].sources).toBe(store.sources);
+    expect(() => store.sources.sourceFileFor(sibling.document.syntax)).toThrow(/No SourceFile/);
+    expect(store.document(schemaUri)).toBe(first);
+  });
+
   it('unwraps a failing interpretation into mapped diagnostics', () => {
     const { interpretation } = interpretationDouble(() =>
       notOk({ summary: 'Schema has 1 error', diagnostics: [spanned] }),
@@ -418,7 +526,7 @@ describe('interpret slot', () => {
     const [input, context] = spy.mock.calls[0] ?? [];
     expect(input).toMatchObject({
       document: artifacts?.document,
-      sources: artifacts?.sources,
+      sources: store.sources,
     });
     expect(input?.sources.sourceFileFor(input.document.syntax)).toBe(artifacts?.sourceFile);
     expect(input?.symbolTable).toBeDefined();

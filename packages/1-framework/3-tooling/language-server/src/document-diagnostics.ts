@@ -1,5 +1,5 @@
 import type { SymbolTable } from '@internal/psl-parser';
-import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, SourceFile } from '@internal/psl-parser/syntax';
 import type { LspDiagnostic } from './diagnostic-mapping';
 import { type PipelineInputs, runPipeline } from './pipeline';
 import { isPrismaNextSchema } from './schema-directive';
@@ -9,7 +9,6 @@ export interface DocumentDiagnostics {
   readonly diagnostics: readonly LspDiagnostic[];
   readonly document: DocumentAst;
   readonly sourceFile: SourceFile;
-  readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
 }
 
@@ -28,10 +27,6 @@ export function computeDocumentDiagnostics(
   if (!inputs.includes(uri) || !isPrismaNextSchema(text)) {
     return null;
   }
-  const { document, sourceFile, sources, symbolTable, diagnostics } = runPipeline(
-    uri,
-    text,
-    controlStack,
-  );
-  return { diagnostics, document, sourceFile, sources, symbolTable };
+  const { document, sourceFile, symbolTable, diagnostics } = runPipeline(uri, text, controlStack);
+  return { diagnostics, document, sourceFile, symbolTable };
 }

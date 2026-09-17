@@ -635,7 +635,7 @@ function createServerOn(connection: Connection): LanguageServer {
     if (artifacts === undefined) {
       return [];
     }
-    return computeFoldingRanges(artifacts.document, artifacts.sources);
+    return computeFoldingRanges(artifacts.document, project.artifacts.sources);
   });
 
   documents.onDidOpen((event) => {
@@ -677,7 +677,10 @@ function createServerOn(connection: Connection): LanguageServer {
       return undefined;
     }
     const entry = managedProjects.get(configPath);
-    return entry?.status === 'loaded' ? entry.project.artifacts : undefined;
+    if (entry?.status === 'loaded') {
+      return entry.project.artifacts;
+    }
+    return entry?.status === 'loading' ? entry.lastGood?.artifacts : undefined;
   }
 
   function hasManagedDocuments(configPath: string): boolean {

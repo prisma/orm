@@ -3431,6 +3431,57 @@ describe('language server config failure surfacing', {
     expect(fullReportItems(after).map((d) => d.code)).toContain('PSL_INTERPRETER_FINDING');
   });
 
+  it.each(['edit', 'close'])(
+    'invalidates last-good source roots on %s during a failed reload',
+    async (event) => {
+      const siblingPath = join(root, 'sibling.psl');
+      const siblingUri = pathToFileURL(siblingPath).toString();
+      const resolution = {
+        ...interpretingResolution(),
+        inputs: resolveSchemaInputs({
+          contract: { source: { format: 'psl', inputs: [schemaPath, siblingPath] } },
+        }),
+      };
+      const spy = vi.spyOn(resolution.interpretation!.source, 'interpret');
+      const gate = deferredSettleable<ConfigResolution>();
+      let calls = 0;
+      harness = startHarness(() => {
+        calls += 1;
+        return calls === 1 ? Promise.resolve(resolution) : gate.promise;
+      }, pullDiagnosticsCapabilities);
+      await harness.initialize();
+      openDocument(harness, schemaUri, cleanSchema);
+      await requestPullDiagnostics(harness, schemaUri);
+      openDocument(harness, siblingUri, cleanSchema);
+      await requestPullDiagnostics(harness, siblingUri);
+      const previous = spy.mock.calls.at(-1)![0];
+
+      harness.notifyConfigChanged();
+      await waitUntil(() => calls === 2);
+      if (event === 'close') {
+        closeDocument(harness, siblingUri);
+      } else {
+        harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+          textDocument: { uri: siblingUri, version: 2 },
+          contentChanges: [{ text: `${cleanSchema}\nmodel Post {\n id Int\n}\n` }],
+        });
+      }
+      await settle();
+      gate.reject(new Error('config exploded'));
+      await harness.waitForDiagnosticsMatching(configUri, (diagnostics) => diagnostics.length > 0);
+      if (event === 'edit') {
+        await requestPullDiagnostics(harness, siblingUri);
+      }
+      await requestPullDiagnostics(harness, schemaUri);
+      const current = spy.mock.calls.at(-1)![0];
+      expect(() => current.sources.sourceFileFor(previous.document.syntax)).toThrow(
+        /No SourceFile/,
+      );
+      expect(current.sources.sourceFileFor(current.document.syntax).filename).toBe(schemaUri);
+      expect(current.document).toBe(spy.mock.calls[0]![0].document);
+    },
+  );
+
   it('clears the config diagnostic when the last managed document closes', async () => {
     let broken = false;
     harness = startHarness(async () => {
