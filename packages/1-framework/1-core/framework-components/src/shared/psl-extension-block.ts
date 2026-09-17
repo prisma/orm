@@ -149,6 +149,7 @@ export type PslBlockParam =
   | PslBlockParamList;
 
 export interface PslBlockParamRef {
+  readonly documentation?: string;
   readonly kind: 'ref';
   readonly refKind: string;
   readonly scope: 'same-namespace' | 'same-space' | 'cross-space';
@@ -156,16 +157,19 @@ export interface PslBlockParamRef {
 }
 
 export interface PslBlockParamValue {
+  readonly documentation?: string;
   readonly kind: 'value';
   readonly codecId: string;
   readonly required?: boolean;
 }
 
 export interface PslBlockParamOption extends AuthoringOption {
+  readonly documentation?: string;
   readonly required?: boolean;
 }
 
 export interface PslBlockParamList {
+  readonly documentation?: string;
   readonly kind: 'list';
   readonly of: PslBlockParam;
   readonly required?: boolean;

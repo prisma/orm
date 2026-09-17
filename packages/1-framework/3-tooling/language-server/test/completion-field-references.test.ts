@@ -91,7 +91,7 @@ namespace unrelated { model Missing { unrelatedOnly String } }`;
 
 describe('scoped field-reference completion', () => {
   it('uses declaring-model fields for local references', () => {
-    expect(complete(schema('remote.Target', 'local: [|]')).labels).toEqual(['ownOnly', 'relation']);
+    expect(complete(schema('remote.Target', 'local: [|]')).labels).toEqual(['ownOnly']);
   });
 
   it('uses explicitly referenced fields rather than declaring-model fields', () => {
@@ -138,7 +138,6 @@ namespace unrelated { model Target { unrelatedOnly String } }`;
   it('retains the declaring model inside a function and list', () => {
     expect(complete(schema('remote.Target', 'nested: fields(local: [|])')).labels).toEqual([
       'ownOnly',
-      'relation',
     ]);
   });
 

@@ -34,13 +34,17 @@ function requiredArguments(signature: ArgumentSignature): readonly RequiredArgum
 
 function requiredArgumentSnippet(argument: RequiredArgument, tabStop: number): string {
   if (argument.kind === 'positional') {
-    return argSnippetPlaceholder(argument.argument.type, tabStop);
+    return argSnippetPlaceholder(argument.argument.type, tabStop, argument.argument.key);
   }
-  return `${argument.key}: ${argSnippetPlaceholder(argument.type, tabStop)}`;
+  return `${argument.key}: ${argSnippetPlaceholder(argument.type, tabStop, argument.key)}`;
 }
 
-function argSnippetPlaceholder(param: ArgType<unknown, never>, tabStop: number): string {
-  const placeholder = `\${${tabStop.toString()}:}`;
+function argSnippetPlaceholder(
+  param: ArgType<unknown, never>,
+  tabStop: number,
+  key: string,
+): string {
+  const placeholder = `\${${tabStop.toString()}:${key}}`;
   if (param.kind === 'str') return `"${placeholder}"`;
   if (param.kind === 'list') return `[${placeholder}]`;
   if (param.kind === 'record') return `{ ${placeholder} }`;

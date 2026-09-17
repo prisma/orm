@@ -1,6 +1,7 @@
 import {
   type AuthoringPslBlockDescriptorNamespace,
   isAuthoringPslBlockDescriptor,
+  isAuthoringTypeConstructorDescriptor,
 } from '@internal/framework-components/authoring';
 import {
   type AttributeSpec,
@@ -94,20 +95,35 @@ const declarationKeywordCategoryOrder: Record<
 const nameSnippetPlaceholder = '$' + '{1:Name}';
 const namespaceSnippetPlaceholder = '$' + '{1:name}';
 
-const documentNativeDeclarationKeywords: readonly DeclarationKeywordCompletionCandidate[] = [
-  nativeDeclarationKeyword('model', 'model ', `model ${nameSnippetPlaceholder} {\n  $0\n}`),
-  nativeDeclarationKeyword('type', 'type ', `type ${nameSnippetPlaceholder} {\n  $0\n}`),
-  nativeDeclarationKeyword('types', 'types ', 'types {\n  $0\n}'),
+const namespaceNativeDeclarationKeywords: readonly DeclarationKeywordCompletionCandidate[] = [
   nativeDeclarationKeyword(
-    'namespace',
-    'namespace ',
-    `namespace ${namespaceSnippetPlaceholder} {\n  $0\n}`,
+    'model',
+    'model ',
+    `model ${nameSnippetPlaceholder} {\n  \${0:// Fields}\n}`,
+    'Defines a data model.',
+  ),
+  nativeDeclarationKeyword(
+    'type',
+    'type ',
+    `type ${nameSnippetPlaceholder} {\n  \${0:// Fields}\n}`,
+    'Defines a reusable composite type.',
   ),
 ];
 
-const namespaceNativeDeclarationKeywords: readonly DeclarationKeywordCompletionCandidate[] = [
-  nativeDeclarationKeyword('model', 'model ', `model ${nameSnippetPlaceholder} {\n  $0\n}`),
-  nativeDeclarationKeyword('type', 'type ', `type ${nameSnippetPlaceholder} {\n  $0\n}`),
+const documentNativeDeclarationKeywords: readonly DeclarationKeywordCompletionCandidate[] = [
+  ...namespaceNativeDeclarationKeywords,
+  nativeDeclarationKeyword(
+    'types',
+    'types ',
+    'types {\n  $' + '{0:// Type aliases}\n}',
+    'Defines reusable named types.',
+  ),
+  nativeDeclarationKeyword(
+    'namespace',
+    'namespace ',
+    `namespace ${namespaceSnippetPlaceholder} {\n  \${0:// Models and types}\n}`,
+    'Groups declarations into a database namespace, such as a PostgreSQL schema.',
+  ),
 ];
 
 export function providePslCompletionItems(
@@ -169,8 +185,18 @@ export function providePslCompletionItems(
                 input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
-                  ? localFieldNames(context, input.candidates.symbolTable)
-                  : referencedFieldNames(context, input.candidates.symbolTable),
+                  ? localFieldNames(
+                      context,
+                      input.candidates.symbolTable,
+                      input.candidates.scalarTypes,
+                      input.candidates.authoringContributions?.type,
+                    )
+                  : referencedFieldNames(
+                      context,
+                      input.candidates.symbolTable,
+                      input.candidates.scalarTypes,
+                      input.candidates.authoringContributions?.type,
+                    ),
             },
             spec,
           );
@@ -190,8 +216,18 @@ export function providePslCompletionItems(
                 input.clientSupportsTriggerParameterHintsCommand === true,
               fieldNames: (kind) =>
                 kind === 'fieldRef'
-                  ? localFieldNames(context, input.candidates.symbolTable)
-                  : referencedFieldNames(context, input.candidates.symbolTable),
+                  ? localFieldNames(
+                      context,
+                      input.candidates.symbolTable,
+                      input.candidates.scalarTypes,
+                      input.candidates.authoringContributions?.type,
+                    )
+                  : referencedFieldNames(
+                      context,
+                      input.candidates.symbolTable,
+                      input.candidates.scalarTypes,
+                      input.candidates.authoringContributions?.type,
+                    ),
             },
             spec,
           );
@@ -228,16 +264,17 @@ function provideAttributeNameCompletionItems(
   const resolveSpec = attributeSpecResolver(context, source);
 
   return names.map((name) => {
+    const spec = resolveSpec(name);
     const newText = attributeNameEditText({
       name,
-      spec: resolveSpec(name),
+      spec,
       hasArgumentList: context.hasArgumentList,
       clientSupportsSnippets,
     });
     return {
       label: name,
       kind: CompletionItemKind.Function,
-      detail: 'PSL attribute',
+      detail: spec?.documentation || 'PSL attribute',
       sortText: name,
       filterText: name,
       textEdit: { range: replacementRange, newText },
@@ -333,13 +370,14 @@ function nativeDeclarationKeyword(
   label: string,
   insertText: string,
   snippetText: string,
+  documentation: string,
 ): DeclarationKeywordCompletionCandidate {
   return {
     category: 'native',
     label,
     insertText,
     snippetText,
-    detail: 'PSL declaration keyword',
+    detail: documentation,
     kind: CompletionItemKind.Keyword,
   };
 }
@@ -351,8 +389,8 @@ function genericBlockDeclarationKeywordCandidates(
     category: 'genericBlock',
     label: keyword,
     insertText: `${keyword} `,
-    snippetText: `${keyword} ${nameSnippetPlaceholder} {\n  $0\n}`,
-    detail: 'Generic block keyword',
+    snippetText: `${keyword} ${nameSnippetPlaceholder} {\n  \${0:// Block parameters and attributes}\n}`,
+    detail: findBlockDescriptor(descriptors, keyword)?.documentation || 'Generic block keyword',
     kind: CompletionItemKind.Keyword,
   }));
 }
@@ -403,7 +441,7 @@ function provideGenericBlockKeyCompletionItems(
     .map((parameterName, index) => ({
       label: parameterName,
       kind: CompletionItemKind.Property,
-      detail: 'Generic block parameter',
+      detail: descriptor.parameters[parameterName]?.documentation || 'Generic block parameter',
       sortText: genericBlockParameterSortText(index, parameterName),
       filterText: parameterName,
       textEdit: {
@@ -436,7 +474,7 @@ function provideModelTypeCompletionItems(
   source: PslCompletionCandidateSource,
 ): readonly CompletionItem[] {
   return modelTypeCompletionItems(context, sourceFile, [
-    ...configuredScalarCandidates(source.scalarTypes),
+    ...configuredScalarCandidates(source),
     ...topLevelSymbolCandidates(source.symbolTable, source.scalarTypes),
     ...allNamespaceCandidates(source.symbolTable),
   ]);
@@ -483,14 +521,18 @@ function modelTypeCompletionItems(
 }
 
 function configuredScalarCandidates(
-  scalarTypes: readonly string[],
+  source: PslCompletionCandidateSource,
 ): readonly ModelTypeCompletionCandidate[] {
-  return sortedUnique(scalarTypes).map((name) => ({
+  const constructors = source.authoringContributions?.type ?? {};
+  return sortedUnique(source.scalarTypes).map((name) => ({
     category: 'configuredScalar',
     label: name,
     insertText: name,
     filterText: name,
-    detail: 'Configured scalar type',
+    detail:
+      constructors[name] !== undefined && isAuthoringTypeConstructorDescriptor(constructors[name])
+        ? constructors[name].documentation || 'Configured scalar type'
+        : 'Configured scalar type',
     kind: CompletionItemKind.Keyword,
   }));
 }

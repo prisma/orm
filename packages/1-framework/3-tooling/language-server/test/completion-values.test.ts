@@ -35,7 +35,7 @@ import {
 } from '../src/completion-values';
 
 const emptyTabStop1 = '$' + '{1:}';
-const emptyTabStop2 = '$' + '{2:}';
+const namedTabStop = (index: number, name: string) => `\${${index}:${name}}`;
 const rejectedParse = vi.fn(() => {
   throw new Error('completion must not parse');
 });
@@ -262,7 +262,7 @@ describe('classified positions without cursor AST', () => {
       const item = items.find((candidate) => candidate.label === 'mode');
       expect(item?.textEdit).toEqual({
         range: { start: { line: 0, character: 0 }, end: { line: 0, character: 4 } },
-        newText: hasColon ? 'mode' : `mode: ${emptyTabStop1}`,
+        newText: hasColon ? 'mode' : `mode: ${namedTabStop(1, 'mode')}`,
       });
       expect(item?.command).toEqual(
         hasColon
@@ -389,15 +389,38 @@ describe('classified positions without cursor AST', () => {
   });
 });
 
+describe('completion details', () => {
+  it.each([
+    ['mode: |', 'Asc', 'An accepted identifier in this test grammar.'],
+    ['|', 'First', 'An accepted identifier in this test grammar.'],
+    ['choice: |', 'ordered', 'Orders boolean values in a selected direction.'],
+    ['choice: or|dered(Asc)', 'ordered', 'Orders boolean values in a selected direction.'],
+    ['|', 'mode', 'The ascending or descending mode.'],
+    ['mo|de: Asc', 'mode', 'The ascending or descending mode.'],
+    ['choice: ordered(|)', 'required', 'The values to order.'],
+    ['choice: ordered(|)', 'optional', 'An optional label for the ordering.'],
+    [
+      'nested: wrap([ordered(direction: |)])',
+      'Desc',
+      'An accepted identifier in this test grammar.',
+    ],
+    ['scalar: |', 'true', 'PSL argument value'],
+  ])('uses grammar documentation for %s (%s)', (args, label, detail) => {
+    for (const snippets of [false, true]) {
+      expect(field(args, snippets).items.find((item) => item.label === label)?.detail).toBe(detail);
+    }
+  });
+});
+
 describe('named key separators', () => {
   it.each(['|', 'mo|de', 'choice: ordered(|)', 'choice: ordered(dir|ection)'])(
-    'inserts a separator and empty value stop for %s',
+    'inserts a separator and named value stop for %s',
     (args) => {
       const name = args.includes('ordered') ? 'direction' : 'mode';
       for (const snippets of [false, true]) {
         const result = field(args, snippets);
         const item = result.items.find((candidate) => candidate.label === name);
-        expect(item?.textEdit?.newText).toBe(`${name}: ${snippets ? emptyTabStop1 : ''}`);
+        expect(item?.textEdit?.newText).toBe(`${name}: ${snippets ? namedTabStop(1, name) : ''}`);
         expect(item?.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
         expect(result.apply(name)).not.toContain(`${name}de`);
       }
@@ -642,23 +665,23 @@ describe('recursive function arguments', () => {
     expect(field('choice: |').labels).toEqual(['ordered', 'empty']);
   });
 
-  it('inserts only required arguments with empty tab stops', () => {
+  it('inserts only required arguments with named tab stops', () => {
     const result = field('choice: |', true);
     expect(result.items.map((item) => [item.label, item.insertTextFormat])).toEqual([
       ['ordered', InsertTextFormat.Snippet],
       ['empty', InsertTextFormat.Snippet],
     ]);
     expect(result.apply('ordered')).toBe(
-      `model Example {\n  value String @probe(choice: ordered(${emptyTabStop1}, required: [${emptyTabStop2}]))\n}`,
+      `model Example {\n  value String @probe(choice: ordered(${namedTabStop(1, 'direction')}, required: [${namedTabStop(2, 'required')}]))\n}`,
     );
     expect(result.apply('empty')).toBe(
       'model Example {\n  value String @probe(choice: empty())\n}',
     );
   });
 
-  it('uses empty string and record tab stops and omits optional defaults', () => {
+  it('uses named string and record tab stops and omits optional defaults', () => {
     expect(field('format: |', true).apply('format')).toBe(
-      `model Example {\n  value String @probe(format: format(text: "${emptyTabStop1}", options: { ${emptyTabStop2} }))\n}`,
+      `model Example {\n  value String @probe(format: format(text: "${namedTabStop(1, 'text')}", options: { ${namedTabStop(2, 'options')} }))\n}`,
     );
   });
 
@@ -721,8 +744,8 @@ describe('recursive function arguments', () => {
   it('keeps same-name alternatives with different snippet edits', () => {
     const result = field('overlap: |', true);
     expect(result.items.map((item) => item.textEdit?.newText)).toEqual([
-      `same(first: ${emptyTabStop1})`,
-      `same(second: ${emptyTabStop1})`,
+      `same(first: ${namedTabStop(1, 'first')})`,
+      `same(second: ${namedTabStop(1, 'second')})`,
     ]);
   });
 

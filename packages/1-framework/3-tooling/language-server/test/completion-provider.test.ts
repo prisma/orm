@@ -29,7 +29,6 @@ import { providePslCompletionItems } from '../src/completion-provider';
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
 const nameSnippetPlaceholder = '$' + '{1:Name}';
 const emptySnippetPlaceholder1 = '$' + '{1:}';
-const emptySnippetPlaceholder2 = '$' + '{2:}';
 const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const markerAttribute = fieldAttribute('marker', {
@@ -107,11 +106,12 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
   policy: {
     kind: 'pslBlock',
     keyword: 'policy',
+    documentation: 'Defines a security policy.',
     discriminator: 'fixture-policy',
     name: { required: true },
     parameters: {
       on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      where: { kind: 'value', codecId: 'fixture/text@1' },
+      where: { kind: 'value', codecId: 'fixture/text@1', documentation: 'The policy predicate.' },
       mode: { kind: 'option', values: ['permissive', 'restrictive'] },
       using: { kind: 'value', codecId: 'fixture/text@1' },
     },
@@ -355,12 +355,12 @@ describe('providePslCompletionItems', () => {
       'policy',
     ]);
     expect(items.map((item) => item.detail)).toEqual([
-      'PSL declaration keyword',
-      'PSL declaration keyword',
-      'PSL declaration keyword',
-      'PSL declaration keyword',
+      'Defines a data model.',
+      'Defines a reusable composite type.',
+      'Defines reusable named types.',
+      'Groups declarations into a database namespace, such as a PostgreSQL schema.',
       'Generic block keyword',
-      'Generic block keyword',
+      'Defines a security policy.',
     ]);
     expect(items[0]).toMatchObject({
       kind: CompletionItemKind.Keyword,
@@ -430,17 +430,22 @@ describe('providePslCompletionItems', () => {
 
     expect(items.find((item) => item.label === 'model')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  $0\n}` },
+      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  \${0:// Fields}\n}` },
     });
     expect(items.find((item) => item.label === 'policy')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `policy ${nameSnippetPlaceholder} {\n  $0\n}` },
+      textEdit: {
+        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block parameters and attributes}\n}`,
+      },
     });
   });
 
   it('returns registry-backed attribute name completions as function items', () => {
     const fieldItems = complete(['model Post {', '  id Int @|', '}'].join('\n')).items;
     expect(fieldItems.map((item) => item.label)).toEqual(['marker', 'orderFixture', 'ownerAware']);
+    expect(fieldItems.find((item) => item.label === 'marker')?.detail).toBe(
+      'Attaches a named marker to a target.',
+    );
     expect(fieldItems.map((item) => item.kind)).toEqual([
       CompletionItemKind.Function,
       CompletionItemKind.Function,
@@ -591,14 +596,14 @@ describe('providePslCompletionItems', () => {
     expect(item).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
-        newText: `marker("${emptySnippetPlaceholder1}", name: "${emptySnippetPlaceholder2}")`,
+        newText: `marker("\${1:target}", name: "\${2:name}")`,
       },
     });
     expect(applyCompletionItem({ sourceFile, item })).toEqual(
       [
         candidateSource,
         'model Post {',
-        `  id Int @marker("${emptySnippetPlaceholder1}", name: "${emptySnippetPlaceholder2}") // keep`,
+        `  id Int @marker("\${1:target}", name: "\${2:name}") // keep`,
         '}',
       ].join('\n'),
     );
@@ -719,10 +724,10 @@ describe('providePslCompletionItems', () => {
     const mapItem = completionItemByLabel(mapCompletion.items, 'map');
     expect(mapItem).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `map("${emptySnippetPlaceholder1}")` },
+      textEdit: { newText: `map("\${1:name}")` },
     });
     expect(applyCompletionItem({ sourceFile: mapCompletion.sourceFile, item: mapItem })).toEqual(
-      ['model Post {', `  id Int @map("${emptySnippetPlaceholder1}") // keep`, '}'].join('\n'),
+      ['model Post {', `  id Int @map("\${1:name}") // keep`, '}'].join('\n'),
     );
 
     const checkCompletion = completeWithActualStack(
@@ -733,17 +738,14 @@ describe('providePslCompletionItems', () => {
     const checkItem = completionItemByLabel(checkCompletion.items, 'check');
     expect(checkItem).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `check(expression: "${emptySnippetPlaceholder1}")` },
+      textEdit: { newText: `check(expression: "\${1:expression}")` },
     });
     expect(
       applyCompletionItem({ sourceFile: checkCompletion.sourceFile, item: checkItem }),
     ).toEqual(
-      [
-        'model Post {',
-        '  id Int',
-        `  @@check(expression: "${emptySnippetPlaceholder1}") // keep`,
-        '}',
-      ].join('\n'),
+      ['model Post {', '  id Int', `  @@check(expression: "\${1:expression}") // keep`, '}'].join(
+        '\n',
+      ),
     );
   }, 5_000);
 
@@ -817,10 +819,10 @@ describe('providePslCompletionItems', () => {
     const mapItem = completionItemByLabel(mapCompletion.items, 'map');
     expect(mapItem).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `map("${emptySnippetPlaceholder1}")` },
+      textEdit: { newText: `map("\${1:name}")` },
     });
     expect(applyCompletionItem({ sourceFile: mapCompletion.sourceFile, item: mapItem })).toEqual(
-      ['model Post {', `  id String @map("${emptySnippetPlaceholder1}") // keep`, '}'].join('\n'),
+      ['model Post {', `  id String @map("\${1:name}") // keep`, '}'].join('\n'),
     );
   }, 5_000);
 
@@ -980,7 +982,7 @@ describe('providePslCompletionItems', () => {
     expect(items.map((item) => item.label)).toEqual(['on', 'where', 'mode', 'using']);
     expect(items.map((item) => item.detail)).toEqual([
       'Generic block parameter',
-      'Generic block parameter',
+      'The policy predicate.',
       'Generic block parameter',
       'Generic block parameter',
     ]);
@@ -1011,6 +1013,12 @@ describe('providePslCompletionItems', () => {
     });
   });
 
+  it('uses generic block parameter documentation with a fallback for undocumented parameters', () => {
+    const { items } = complete('policy Rule { | }');
+    expect(completionItemByLabel(items, 'where').detail).toBe('The policy predicate.');
+    expect(completionItemByLabel(items, 'on').detail).toBe('Generic block parameter');
+  });
+
   it('still offers the in-progress key while excluding an already-present sibling key', () => {
     const { items } = complete(['policy Rule {', '  where = "x"', '  on|', '}'].join('\n'));
 
@@ -1027,6 +1035,30 @@ describe('providePslCompletionItems', () => {
     const { items } = complete(['model Post {', '  // @|', '}'].join('\n'));
 
     expect(items).toEqual([]);
+  });
+
+  it('uses registered scalar documentation for completion details', () => {
+    const { items } = completeWithSource({
+      markedSource: 'model Post { value | }',
+      pslBlockDescriptors: {},
+      authoringContributions: assembleAuthoringContributions([
+        {
+          id: 'documented-scalars',
+          authoring: {
+            type: {
+              String: {
+                kind: 'typeConstructor',
+                documentation: 'Variable-length Unicode text.',
+                output: { codecId: 'fixture/text@1', nativeType: 'text' },
+              },
+            },
+          },
+        },
+      ]),
+      controlMutationDefaults,
+    });
+    expect(completionItemByLabel(items, 'String').detail).toBe('Variable-length Unicode text.');
+    expect(completionItemByLabel(items, 'Int').detail).toBe('Configured scalar type');
   });
 
   it('uses actual SQL enum metadata and rejects an empty enum without invented values', async () => {
@@ -1085,10 +1117,10 @@ describe('providePslCompletionItems', () => {
       `uuid(${emptySnippetPlaceholder1})`,
     );
     expect(completionItemByLabel(snippetItems, 'cuid').textEdit?.newText).toBe(
-      `cuid(${emptySnippetPlaceholder1})`,
+      'cuid($' + '{1:version})',
     );
     expect(completionItemByLabel(snippetItems, 'dbgenerated').textEdit?.newText).toBe(
-      `dbgenerated("${emptySnippetPlaceholder1}")`,
+      `dbgenerated("\${1:expression}")`,
     );
   }, 5_000);
 
@@ -1098,7 +1130,7 @@ describe('providePslCompletionItems', () => {
       `model Target { topOnly Int }\nnamespace remote { model Target { remoteOnly Int } }\nmodel Owner { ownOnly Int\n relation remote.Target @relation(${args}) }`;
     expect(
       completeWithActualStack(schema('fields: [|]'), stack).items.map((item) => item.label),
-    ).toEqual(['ownOnly', 'relation']);
+    ).toEqual(['ownOnly']);
     expect(
       completeWithActualStack(schema('references: [|]'), stack).items.map((item) => item.label),
     ).toEqual(['remoteOnly']);
@@ -1119,8 +1151,8 @@ describe('providePslCompletionItems', () => {
       ['title', 'title'],
       ['slug', 'slug'],
       ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
-      ['title', `title(sort: ${emptySnippetPlaceholder1})`],
-      ['slug', `slug(sort: ${emptySnippetPlaceholder1})`],
+      ['title', 'title(sort: $' + '{1:sort})'],
+      ['slug', 'slug(sort: $' + '{1:sort})'],
     ]);
     expect(
       completeWithActualStack(schema('[title(|)]'), stack).items.map((item) => item.label),
@@ -1146,7 +1178,7 @@ describe('providePslCompletionItems', () => {
     ).toEqual([
       ['scopedOnly', 'scopedOnly'],
       ['wildcard', `wildcard(${emptySnippetPlaceholder1})`],
-      ['scopedOnly', `scopedOnly(sort: ${emptySnippetPlaceholder1})`],
+      ['scopedOnly', 'scopedOnly(sort: $' + '{1:sort})'],
     ]);
   }, 5_000);
 

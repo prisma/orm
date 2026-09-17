@@ -66,14 +66,21 @@ function namedKeyItems(
   input: CompletionInput<AttributeNamedKeyPosition>,
   signature: ArgumentSignature,
 ): readonly CompletionItem[] {
-  return Object.keys(signature.named ?? {})
-    .filter((name) => !input.context.existingNamedKeys.includes(name))
-    .map((name) => {
+  return Object.entries(signature.named ?? {})
+    .filter(([name]) => !input.context.existingNamedKeys.includes(name))
+    .map(([name, param]) => {
       const snippet = input.clientSupportsSnippets && !input.context.hasColon;
-      const value = snippet ? '$' + '{1:}' : '';
+      const value = snippet ? `\${1:${name}}` : '';
       const text = input.context.hasColon ? name : `${name}: ${value}`;
       return {
-        ...completionItem(input, name, text, CompletionItemKind.Property, snippet),
+        ...completionItem(
+          input,
+          name,
+          text,
+          CompletionItemKind.Property,
+          snippet,
+          param.documentation,
+        ),
         ...(!input.context.hasColon && input.clientSupportsTriggerSuggestCommand === true
           ? {
               command: {
@@ -105,7 +112,14 @@ function valueItems(
     const text = snippet ? `${type.name}(${args})` : type.name;
     return [
       {
-        ...completionItem(input, type.name, text, CompletionItemKind.Function, snippet),
+        ...completionItem(
+          input,
+          type.name,
+          text,
+          CompletionItemKind.Function,
+          snippet,
+          type.signature.documentation,
+        ),
         ...(snippet && input.clientSupportsTriggerParameterHintsCommand === true && hasParameters
           ? {
               command: {
@@ -120,7 +134,7 @@ function valueItems(
   if (syntax === 'functionName') return [];
   switch (type.kind) {
     case 'identifier':
-      return scalarItems(input, [type.name]);
+      return scalarItems(input, [type.name], type.documentation);
     case 'str':
       return scalarItems(input, type.value === undefined ? [] : [JSON.stringify(type.value)]);
     case 'num':
@@ -143,8 +157,11 @@ function valueItems(
 function scalarItems(
   input: CompletionInput<AttributeArgumentPosition>,
   labels: readonly string[],
+  documentation?: string,
 ): readonly CompletionItem[] {
-  return labels.map((label) => completionItem(input, label, label, CompletionItemKind.Value));
+  return labels.map((label) =>
+    completionItem(input, label, label, CompletionItemKind.Value, false, documentation),
+  );
 }
 
 function completionItem(
@@ -153,11 +170,14 @@ function completionItem(
   newText: string,
   kind: CompletionItemKind,
   snippet = false,
+  documentation?: string,
 ): CompletionItem {
   return {
     label,
     kind,
-    detail: kind === CompletionItemKind.Property ? 'Attribute argument' : 'PSL argument value',
+    detail:
+      documentation ??
+      (kind === CompletionItemKind.Property ? 'Attribute argument' : 'PSL argument value'),
     filterText: label,
     textEdit: {
       range: {
