@@ -1,4 +1,4 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
+import type { PslDiagnostic } from '../diagnostic';
 import type { AstNode } from '../syntax/ast-helpers';
 import type {
   AttributeOut,

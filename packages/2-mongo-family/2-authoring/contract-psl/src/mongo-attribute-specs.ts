@@ -24,6 +24,7 @@ import {
   interpretAttribute,
   json,
   list,
+  mapPslDiagnostics,
   modelAttribute,
   num,
   oneOf,
@@ -97,7 +98,7 @@ export function interpretModelAttribute<Out>(input: {
     }),
   );
   if (!result.ok) {
-    for (const failure of result.failure) input.diagnostics.push(failure);
+    input.diagnostics.push(...mapPslDiagnostics(result.failure, input.sources));
     return undefined;
   }
   return result.value;
@@ -126,7 +127,7 @@ export function interpretFieldAttribute<Out>(input: {
     }),
   );
   if (!result.ok) {
-    for (const failure of result.failure) input.diagnostics.push(failure);
+    input.diagnostics.push(...mapPslDiagnostics(result.failure, input.sources));
     return undefined;
   }
   return result.value;

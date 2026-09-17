@@ -1,6 +1,7 @@
-import type { PslDiagnostic, PslSpan } from '@internal/framework-components/psl-ast';
+import type { PslSpan } from '@internal/framework-components/psl-ast';
 import { blindCast } from '@internal/utils/casts';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import { diagnosticSource, type PslDiagnostic } from '../diagnostic';
 import { nodePslSpan } from '../resolve';
 import type { FieldAttributeAst, ModelAttributeAst } from '../syntax/ast/attributes';
 import type { AttributeArgAst } from '../syntax/ast/expressions';
@@ -200,7 +201,6 @@ function diagnostic(
   return {
     code: ATTRIBUTE_DIAGNOSTIC_CODE,
     message,
-    sourceId: ctx.sources.sourceFileFor(sourceNode).filename,
-    span,
+    ...diagnosticSource(ctx.sources, sourceNode).at(span),
   };
 }

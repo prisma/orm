@@ -1,6 +1,6 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { ok, type Result } from '@internal/utils/result';
 import { expectTypeOf, test } from 'vitest';
+import type { PslDiagnostic } from '../src/diagnostic';
 import type { ArgType, ArgTypeKind, AttributeCtx, InferAttr } from '../src/exports';
 import { fieldAttribute, modelAttribute, optional } from '../src/exports';
 

@@ -1,7 +1,8 @@
 import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
-import type { PslDiagnostic, PslSpan } from '@internal/framework-components/psl-ast';
+import type { PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
+import type { PslDiagnostic } from '../diagnostic';
 import type { PslSources } from '../source-file';
 import type { FieldSymbol, ModelSymbol } from '../symbol-table';
 import type { ExpressionAst } from '../syntax/ast/expressions';

@@ -152,12 +152,7 @@ function parseBlockAttribute(
   if (!result.ok) {
     return {
       ok: false,
-      diagnostics: result.failure.map((diagnostic) => ({
-        filename: sourceFile.filename,
-        code: diagnostic.code,
-        message: diagnostic.message,
-        range: sourceFile.pslSpanToRange(diagnostic.span),
-      })),
+      diagnostics: result.failure,
     };
   }
   return { ok: true, value: { args: result.value, span } };

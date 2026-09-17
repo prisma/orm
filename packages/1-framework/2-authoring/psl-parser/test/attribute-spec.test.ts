@@ -1,6 +1,6 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { diagnosticSource, type PslDiagnostic } from '../src/diagnostic';
 import type { ArgType, AttributeCtx, FieldAttributeCtx } from '../src/exports';
 import {
   fieldAttribute,
@@ -57,8 +57,7 @@ function str(): ArgType<string, AttributeCtx> {
         {
           code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
           message: 'expected a quoted string',
-          sourceId: ctx.sources.sourceFileFor(arg.syntax).filename,
-          span: nodePslSpan(arg.syntax, ctx.sources),
+          ...diagnosticSource(ctx.sources, arg.syntax).at(nodePslSpan(arg.syntax, ctx.sources)),
         },
       ]);
     },
@@ -68,8 +67,8 @@ function str(): ArgType<string, AttributeCtx> {
 const FAILING_DIAGNOSTIC: PslDiagnostic = {
   code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
   message: 'this leaf always fails',
-  sourceId: 'schema.prisma',
-  span: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } },
+  filename: 'schema.prisma',
+  range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
 };
 
 function failing(): ArgType<never, AttributeCtx> {
@@ -115,7 +114,11 @@ describe('interpretAttribute positional binding', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).toEqual(nodePslSpan(node.syntax, ctx.sources));
+      expect(result.failure[0]?.range).toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 });
@@ -151,7 +154,11 @@ describe('interpretAttribute named binding', () => {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
       expect(result.failure[0]?.message).toContain('foo');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sources));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 });
@@ -177,7 +184,11 @@ describe('interpretAttribute positional-or-named duplicate', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sources));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 
@@ -201,7 +212,11 @@ describe('interpretAttribute positional-or-named duplicate', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sources));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 });
@@ -220,7 +235,11 @@ describe('interpretAttribute duplicate named arguments', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sources));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 
@@ -312,8 +331,9 @@ describe('interpretAttribute refine', () => {
           {
             code: 'PSL_INVALID_RELATION_ATTRIBUTE',
             message: 'refine rejected the value',
-            sourceId: refineCtx.sources.sourceFileFor(node.syntax).filename,
-            span: nodePslSpan(node.syntax, refineCtx.sources),
+            ...diagnosticSource(refineCtx.sources, node.syntax).at(
+              nodePslSpan(node.syntax, refineCtx.sources),
+            ),
           },
         ];
       },
@@ -422,7 +442,9 @@ describe('interpretArgs', () => {
       expect(result.failure[0]?.message).toBe(
         'Attribute "rel" is missing required argument "size"',
       );
-      expect(result.failure[0]?.span).toEqual(span);
+      expect(result.failure[0]?.range).toEqual(
+        ctx.sources.sourceFileFor(node.syntax).pslSpanToRange(span),
+      );
     }
   });
 });

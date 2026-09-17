@@ -1,12 +1,11 @@
 import { readFile } from 'node:fs/promises';
-import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
+import type { ContractConfig } from '@internal/config/config-types';
 import type { ControlPolicy } from '@internal/contract/types';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, mapPslDiagnostics } from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
-import type { ParseDiagnostic, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { applySqlSpecifierControlPolicy } from '@internal/sql-contract-ts/contract-builder';
@@ -47,18 +46,6 @@ function defaultOutputFromSchemaPath(schemaPath: string): string {
     return `${base.slice(0, -'schema'.length)}contract.json`;
   }
   return `${base}.json`;
-}
-
-function mapParseDiagnostics(
-  diagnostics: readonly ParseDiagnostic[],
-  sourceFile: SourceFile,
-): ContractSourceDiagnostic[] {
-  return diagnostics.map((diagnostic) => ({
-    code: diagnostic.code,
-    message: diagnostic.message,
-    sourceId: diagnostic.filename,
-    span: sourceFile.rangeToPslSpan(diagnostic.range),
-  }));
 }
 
 export function prismaContract(schemaPath: string, options: PrismaContractOptions): ContractConfig {
@@ -118,7 +105,6 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
       }
 
       const { document, sources, diagnostics: parseDiagnostics } = parse(schema, schemaPath);
-      const sourceFile = sources.sourceFileFor(document.syntax);
       const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
         documents: [document],
         sources,
@@ -127,9 +113,9 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
 
       // Do not short-circuit on provider-level diagnostics; recovered CST can
       // still produce interpreter diagnostics in the same response.
-      const seedDiagnostics = mapParseDiagnostics(
+      const seedDiagnostics = mapPslDiagnostics(
         [...parseDiagnostics, ...symbolTableDiagnostics],
-        sourceFile,
+        sources,
       );
 
       const interpreted = withSeedDiagnostics(

@@ -13,7 +13,7 @@ In the provider-based authoring model, PSL providers call `parse` to obtain the 
 - Parse PSL source text with a required explicit filename and deterministic ordering.
 - Return AST nodes with source spans for models, fields, enums, and `types { ... }`.
 - Preserve raw PSL relation action tokens (for example `Cascade`) without semantic normalization.
-- Return parser and symbol diagnostics as `{ filename, code, message, range }`, with zero-based, file-local ranges and filenames derived from the owning `SourceFile`. No source object is retained in these diagnostics. Providers translate them to the external `sourceId`/`span` contract; the attribute interpretation and extension callback APIs still use that contract.
+- Return parser, symbol, and attribute-kit diagnostics as `{ filename, code, message, range }`, with optional `data`, zero-based file-local ranges, and filenames derived from the owning `SourceFile`. No source object is retained in these diagnostics. `mapPslDiagnostics` translates these into the external `sourceId`/`span` contract. The SQL/Mongo interpreter helpers currently perform that translation when draining attribute failures; their other semantic diagnostics and extension callback APIs still use the external contract.
 - Enforce strict error behavior for unsupported syntax (no warning or best-effort mode).
 - Parse attributes generically (namespaced or not), including optional argument lists; target semantics live downstream.
 - Emit attribute nodes with explicit target (`field` / `model` / `namedType`), attribute name, and parsed argument list with spans.
@@ -47,8 +47,7 @@ Interpretation/validation (for example `@internal/sql-contract-psl`) is responsi
   (a `BlockSymbol`) and run the framework's standalone `validateExtensionBlock`
   over it, building the ref-resolution context from the symbol table.
 - `parseQuotedStringLiteral` / `getPositionalArgument` in `src/attribute-helpers.ts`.
-- AST/diagnostic/span types live in `@internal/framework-components/psl-ast`
-  and are re-exported from this package's root entry for convenience.
+- Legacy AST/span types live in `@internal/framework-components/psl-ast` and are re-exported from this package's root entry. The attribute kit's `PslDiagnostic` lives in `src/diagnostic.ts`; framework contribution diagnostics retain their separate external contract.
 - Subpath exports:
   - `@internal/psl-parser/syntax`
   - `@internal/psl-parser/tokenizer`

@@ -612,7 +612,11 @@ describe('oneOf', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).toEqual(nodePslSpan(expr.syntax, ctx.sources));
+      expect(result.failure[0]?.range).toEqual(
+        ctx.sources
+          .sourceFileFor(expr.syntax)
+          .pslSpanToRange(nodePslSpan(expr.syntax, ctx.sources)),
+      );
       expect(result.failure[0]?.message).toContain('Cascade');
       expect(result.failure[0]?.message).toContain('SetNull');
     }

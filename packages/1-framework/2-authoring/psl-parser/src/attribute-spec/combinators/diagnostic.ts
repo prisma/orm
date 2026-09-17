@@ -1,4 +1,5 @@
-import type { PslDiagnostic, PslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import type { PslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import { diagnosticSource, type PslDiagnostic } from '../../diagnostic';
 import { nodePslSpan } from '../../resolve';
 import type { AstNode } from '../../syntax/ast-helpers';
 import type { AttributeCtx } from '../types';
@@ -14,7 +15,6 @@ export function leafDiagnostic(
   return {
     code,
     message,
-    sourceId: ctx.sources.sourceFileFor(node.syntax).filename,
-    span: nodePslSpan(node.syntax, ctx.sources),
+    ...diagnosticSource(ctx.sources, node.syntax).at(nodePslSpan(node.syntax, ctx.sources)),
   };
 }

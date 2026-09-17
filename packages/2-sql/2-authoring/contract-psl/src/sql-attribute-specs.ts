@@ -1,9 +1,6 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
-import type {
-  ContributedPslDiagnosticCode,
-  PslDiagnostic,
-} from '@internal/framework-components/psl-ast';
+import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
   ArgType,
   AttributeCtx,
@@ -19,6 +16,7 @@ import type {
   ModelSymbol,
   NumLiteral,
   ParsedTaggedLiteral,
+  PslDiagnostic,
   PslSpan,
   RejectingArgType,
   SymbolTable,
@@ -26,6 +24,7 @@ import type {
 } from '@internal/psl-parser';
 import {
   bool,
+  diagnosticSource,
   entityRef,
   fieldAttribute,
   fieldRef,
@@ -34,6 +33,7 @@ import {
   interpretAttribute,
   leafDiagnostic,
   list,
+  mapPslDiagnostics,
   modelAttribute,
   nodePslSpan,
   numLiteral,
@@ -116,7 +116,7 @@ export function interpretModelAttribute<Out>(input: {
     }),
   );
   if (!result.ok) {
-    for (const failure of result.failure) input.diagnostics.push(failure);
+    input.diagnostics.push(...mapPslDiagnostics(result.failure, input.sources));
     return undefined;
   }
   return result.value;
@@ -145,7 +145,7 @@ export function interpretFieldAttribute<Out>(input: {
     }),
   );
   if (!result.ok) {
-    for (const failure of result.failure) input.diagnostics.push(failure);
+    input.diagnostics.push(...mapPslDiagnostics(result.failure, input.sources));
     return undefined;
   }
   return result.value;
@@ -554,8 +554,7 @@ function relationInvariants(
       {
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message: `Relation field "${ctx.selfModel.name}.${ctx.field.name}" requires fields and references arguments`,
-        sourceId: ctx.sources.sourceFileFor(ctx.field.node.syntax).filename,
-        span: relationAttributeSpan(ctx),
+        ...diagnosticSource(ctx.sources, ctx.field.node.syntax).at(relationAttributeSpan(ctx)),
       },
     ];
   }

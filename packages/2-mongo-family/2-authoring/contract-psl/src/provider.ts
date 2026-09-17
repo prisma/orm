@@ -1,11 +1,10 @@
 import { readFile } from 'node:fs/promises';
-import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
+import type { ContractConfig } from '@internal/config/config-types';
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, mapPslDiagnostics } from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
-import type { ParseDiagnostic, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -23,18 +22,6 @@ function collectScalarTypeCodecIds(namespace: AuthoringTypeNamespace): ReadonlyM
   return new Map(
     [...collectScalarTypeConstructors(namespace)].map(([name, output]) => [name, output.codecId]),
   );
-}
-
-function mapParseDiagnostics(
-  diagnostics: readonly ParseDiagnostic[],
-  sourceFile: SourceFile,
-): ContractSourceDiagnostic[] {
-  return diagnostics.map((diagnostic) => ({
-    code: diagnostic.code,
-    message: diagnostic.message,
-    sourceId: diagnostic.filename,
-    span: sourceFile.rangeToPslSpan(diagnostic.range),
-  }));
 }
 
 export function mongoContract(schemaPath: string, options?: MongoContractOptions): ContractConfig {
@@ -80,7 +67,6 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
       }
 
       const { document, sources, diagnostics: parseDiagnostics } = parse(schema, schemaPath);
-      const sourceFile = sources.sourceFileFor(document.syntax);
       const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
         documents: [document],
         sources,
@@ -89,9 +75,9 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
 
       // Do not short-circuit on provider-level diagnostics; recovered CST can
       // still produce interpreter diagnostics in the same response.
-      const seedDiagnostics = mapParseDiagnostics(
+      const seedDiagnostics = mapPslDiagnostics(
         [...parseDiagnostics, ...symbolTableDiagnostics],
-        sourceFile,
+        sources,
       );
 
       return withSeedDiagnostics(

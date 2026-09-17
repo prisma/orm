@@ -62,7 +62,7 @@ describe('blockAttribute', () => {
       expect.objectContaining({
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message: 'Attribute "map" is missing required argument "name"',
-        sourceId: 'schema.prisma',
+        filename: 'schema.prisma',
       }),
     ]);
   });

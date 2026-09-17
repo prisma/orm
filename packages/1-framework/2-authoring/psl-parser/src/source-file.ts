@@ -141,6 +141,13 @@ export class PslSources {
     }
   }
 
+  sourceFileNamed(filename: string): SourceFile {
+    for (const sourceFile of this.#sourcesByRoot.values()) {
+      if (sourceFile.filename === filename) return sourceFile;
+    }
+    throw new InternalError(`No SourceFile registered for PSL diagnostic filename "${filename}"`);
+  }
+
   sourceFileFor(node: SyntaxNode): SourceFile {
     const root = node.root();
     const sourceFile = this.#sourcesByRoot.get(root);
