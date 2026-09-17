@@ -590,3 +590,89 @@ test('executes a generator', () => {
     },
   ])
 })
+
+test('deduplicates duplicate values in IN clause preserving first-occurrence order (#29478)', () => {
+  expect(
+    renderQuery(
+      {
+        type: 'templateSql',
+        fragments: [
+          { type: 'stringChunk', chunk: 'SELECT * FROM users WHERE "userId" IN ' },
+          { type: 'parameterTuple', itemPrefix: '', itemSeparator: ',', itemSuffix: '' },
+        ],
+        placeholderFormat: {
+          prefix: '$',
+          hasNumbering: true,
+        } satisfies PlaceholderFormat,
+        args: [[3, 1, 3, 2, 1, 2, 3]],
+        argTypes: [{ arity: 'scalar', scalarType: 'int' }],
+        chunkable: true,
+      } satisfies QueryPlanDbQuery,
+      {} as ScopeBindings,
+      {},
+    ),
+  ).toEqual([
+    {
+      sql: 'SELECT * FROM users WHERE "userId" IN ($1,$2,$3)',
+      args: [3, 1, 2],
+      argTypes: Array.from({ length: 3 }, () => ({ arity: 'scalar', scalarType: 'int' })),
+    },
+  ])
+})
+
+test('chunking a SELECT..IN with a large parameterTuple containing duplicates (#29478)', () => {
+  expect(
+    renderQuery(
+      {
+        type: 'templateSql',
+        fragments: [
+          { type: 'stringChunk', chunk: 'SELECT FROM "public"."User" WHERE "banned" = ' },
+          { type: 'parameter' },
+          { type: 'stringChunk', chunk: ' AND "id" IN ' },
+          { type: 'parameterTuple', itemPrefix: '', itemSeparator: ',', itemSuffix: '' },
+          { type: 'stringChunk', chunk: ' AND "name" = ' },
+          { type: 'parameter' },
+        ],
+        placeholderFormat: {
+          prefix: '$',
+          hasNumbering: true,
+        } satisfies PlaceholderFormat,
+        // 24 values, each of 1..12 twice: deduplication must happen before chunking,
+        // so the 12 unique values are split into chunks of 8 and 4.
+        args: [false, Array.from({ length: 24 }, (_, i) => (i % 12) + 1), 'John Doe'],
+        argTypes: [
+          { arity: 'scalar', scalarType: 'boolean' },
+          { arity: 'scalar', scalarType: 'int' },
+          { arity: 'scalar', scalarType: 'string' },
+        ],
+        chunkable: true,
+      } satisfies QueryPlanDbQuery,
+      {} as ScopeBindings,
+      {},
+      TEST_MAX_CHUNK_SIZE,
+    ),
+  ).toMatchObject([
+    {
+      sql: expect.stringMatching(
+        /^SELECT FROM "public"\."User" WHERE "banned" = \$1 AND "id" IN \((\$[0-9]+,?){8}\) AND "name" = \$10$/,
+      ),
+      args: [false, ...Array.from({ length: 8 }, (_, i) => i + 1), 'John Doe'],
+      argTypes: [
+        { arity: 'scalar', scalarType: 'boolean' },
+        ...Array.from({ length: 8 }, () => ({ arity: 'scalar', scalarType: 'int' })),
+        { arity: 'scalar', scalarType: 'string' },
+      ],
+    },
+    {
+      sql: expect.stringMatching(
+        /^SELECT FROM "public"\."User" WHERE "banned" = \$1 AND "id" IN \((\$[0-9]+,?){4}\) AND "name" = \$6$/,
+      ),
+      args: [false, ...Array.from({ length: 4 }, (_, i) => i + 9), 'John Doe'],
+      argTypes: [
+        { arity: 'scalar', scalarType: 'boolean' },
+        ...Array.from({ length: 4 }, () => ({ arity: 'scalar', scalarType: 'int' })),
+        { arity: 'scalar', scalarType: 'string' },
+      ],
+    },
+  ])
+})
