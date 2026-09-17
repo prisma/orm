@@ -4,16 +4,16 @@ Reusable PSL parser for Prisma 8.
 
 ## Overview
 
-`@internal/psl-parser` parses Prisma Schema Language (PSL) source into a deterministic CST with source spans and stable machine-readable diagnostics, then offers shared symbol-table resolution for the target-agnostic semantics every PSL interpreter needs. Normalization to contract IR and emit integration stay in downstream target packages.
+`@internal/psl-parser` parses Prisma Schema Language (PSL) source into a deterministic CST with source spans and stable machine-readable diagnostics, then offers shared symbol-table resolution for the target-agnostic semantics every PSL interpreter needs. Normalization to contract IR and emit integration stay in downstream target packages. Source provenance is owned by the returned red syntax root; see [ADR 253 — PSL red-root source ownership](../../../../docs/architecture%20docs/adrs/ADR%20253%20-%20PSL%20red-root%20source%20ownership.md).
 
 In the provider-based authoring model, PSL providers call `parse` to obtain the CST and then `buildSymbolTable` to obtain a scope-aware view, before returning `Result<Contract, ContractSourceDiagnostics>` to the framework emit pipeline.
 
 ## Responsibilities
 
-- Parse PSL source text with an explicit filename and deterministic ordering.
+- Parse PSL source text with a required explicit filename and deterministic ordering.
 - Return AST nodes with source spans for models, fields, enums, and `types { ... }`.
 - Preserve raw PSL relation action tokens (for example `Cascade`) without semantic normalization.
-- Return stable diagnostics (`code`, `message`, `span`, `sourceId`) for invalid and unsupported constructs; parser-local semantic diagnostics derive `sourceId` from the owning `SourceFile.filename`.
+- Return stable diagnostics (`code`, `message`, `span`, `sourceId`) for invalid and unsupported constructs; parser-local semantic diagnostics derive `sourceId` from the owning `SourceFile.filename`, never from a fallback singleton file.
 - Enforce strict error behavior for unsupported syntax (no warning or best-effort mode).
 - Parse attributes generically (namespaced or not), including optional argument lists; target semantics live downstream.
 - Emit attribute nodes with explicit target (`field` / `model` / `namedType`), attribute name, and parsed argument list with spans.
