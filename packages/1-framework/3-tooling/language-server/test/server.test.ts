@@ -37,6 +37,7 @@ import {
   CompletionItemKind,
   type CompletionList,
   CompletionRequest,
+  type ConnectionOptions,
   createConnection,
   type Diagnostic,
   DiagnosticRefreshRequest,
@@ -65,6 +66,7 @@ import {
   type RegistrationParams,
   RegistrationRequest,
   type SemanticTokens,
+  ShutdownRequest,
   type SignatureHelpContext,
   SignatureHelpRequest,
   SignatureHelpTriggerKind,
@@ -402,7 +404,8 @@ interface Harness {
   readonly notifyConfigChanged: (uri?: string) => void;
   readonly getDocumentAst: (uri: string) => DocumentArtifacts | undefined;
   readonly getProjectSymbolTable: (uri: string) => SymbolTable | undefined;
-  dispose: () => void;
+  dispose: () => Promise<void>;
+  disconnect: () => void;
 }
 
 function startHarness(
@@ -414,10 +417,29 @@ function startHarness(
   configLoaderMock.findNearestConfigPathForFile.mockImplementation(findNearestConfigPathForFile);
   const clientToServer = new PassThrough();
   const serverToClient = new PassThrough();
+  const pendingMessages = new Set<Promise<void>>();
+  const connectionOptions: ConnectionOptions = {
+    messageStrategy: {
+      handleMessage: (message, next) => {
+        const preceding = [...pendingMessages];
+        const task = Promise.resolve()
+          .then(async () => {
+            if ('method' in message && message.method === ShutdownRequest.type.method) {
+              await Promise.all(preceding);
+            }
+            await next(message);
+          })
+          .finally(() => pendingMessages.delete(task));
+        pendingMessages.add(task);
+        return task;
+      },
+    },
+  };
 
   const serverConnection = createConnection(
     new StreamMessageReader(clientToServer),
     new StreamMessageWriter(serverToClient),
+    connectionOptions,
   );
   const server = createServer(serverConnection);
 
@@ -427,6 +449,7 @@ function startHarness(
     createConnection(
       new StreamMessageReader(serverToClient),
       new StreamMessageWriter(clientToServer),
+      connectionOptions,
     ),
   );
 
@@ -525,6 +548,13 @@ function startHarness(
   });
   client.listen();
 
+  function disconnect(): void {
+    server.dispose();
+    client.dispose();
+    clientToServer.end();
+    serverToClient.end();
+  }
+
   return {
     client,
     registrations,
@@ -618,17 +648,14 @@ function startHarness(
     },
     getDocumentAst: (uri) => server.getDocumentAst(uri),
     getProjectSymbolTable: (uri) => server.getProjectSymbolTable(uri),
-    dispose: () => {
-      // Dispose the server first, so its connection is gone before the
-      // transport dies. Sends made after that point — an in-flight `publish`
-      // reporting diagnostics, or `publishSafely` logging a failure — go
-      // through the guarded connection, which drops a send the connection
-      // refuses rather than letting it throw inside a fire-and-forget call.
-      server.dispose();
-      client.dispose();
-      clientToServer.end();
-      serverToClient.end();
+    dispose: async () => {
+      await client.sendRequest(ShutdownRequest.type);
+      while (pendingMessages.size > 0) {
+        await Promise.all(pendingMessages);
+      }
+      disconnect();
     },
+    disconnect,
   };
 }
 
@@ -797,14 +824,7 @@ function deferredSettleable<T>(): {
 let harness: Harness | undefined;
 
 afterEach(async () => {
-  // The harness disposes the server before the client (see `dispose` above),
-  // so the server's `disposed` guard is raised before the transport dies and
-  // an in-flight `publish` can never log through a dead connection. This tick
-  // is a separate concern: it lets any in-flight JSON-RPC request/response
-  // write flush before the streams are torn down, so vscode-jsonrpc's own
-  // internal error logging doesn't reject a notification mid-transmission.
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  harness?.dispose();
+  await harness?.dispose();
   harness = undefined;
   configResolutionMock.resolveConfigInputs.mockReset();
   configLoaderMock.findNearestConfigPathForFile.mockReset();
@@ -3008,6 +3028,41 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
 });
 
 describe('language server disposal', { timeout: timeouts.databaseOperation }, () => {
+  it.each([
+    { method: RegistrationRequest.method, capabilities: watchedFilesCapabilities },
+    {
+      method: DiagnosticRefreshRequest.method,
+      capabilities: pullDiagnosticsWithRefreshCapabilities,
+    },
+  ])(
+    'finishes an outstanding $method response before disposing the transport',
+    async ({ method, capabilities }) => {
+      const entered = deferred<void>();
+      const response = deferred<void>();
+      harness = startHarness(resolveToSchema, capabilities);
+      harness.client.onRequest(method, () => {
+        entered.resolve();
+        return response.promise;
+      });
+      let disposed = false;
+      await harness.initialize();
+      harness.notifyConfigChanged();
+      await entered.promise;
+
+      const disposal = harness.dispose().then(() => {
+        disposed = true;
+      });
+      await requestFormatting(harness, schemaUri);
+      const disposedBeforeResponse = disposed;
+      response.resolve();
+      await disposal;
+      harness = undefined;
+
+      expect(disposedBeforeResponse).toBe(false);
+      expect(disposed).toBe(true);
+    },
+  );
+
   async function assertNoUnhandledRejection(
     settle: (load: {
       readonly resolve: (value: ConfigResolution) => void;
@@ -3027,7 +3082,7 @@ describe('language server disposal', { timeout: timeouts.databaseOperation }, ()
       openDocument(harness, schemaUri, duplicateModelSource);
       await waitUntil(() => configResolutionMock.resolveConfigInputs.mock.calls.length > 0);
 
-      harness.dispose();
+      harness.disconnect();
       harness = undefined;
 
       settle(load);
@@ -3070,7 +3125,7 @@ describe('language server disposal', { timeout: timeouts.databaseOperation }, ()
         textDocument: { uri: schemaUri, version: 2 },
         contentChanges: [{ text: duplicateModelSource }],
       });
-      harness.dispose();
+      harness.disconnect();
       harness = undefined;
 
       await new Promise((resolve) => setTimeout(resolve, 0));
