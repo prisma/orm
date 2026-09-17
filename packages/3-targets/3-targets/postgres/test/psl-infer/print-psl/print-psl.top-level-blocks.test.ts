@@ -111,7 +111,7 @@ function parseAndInterpret(source: string) {
     diagnostics: parseDiagnostics,
   } = parse(source, 'print-psl.top-level-blocks.test.psl');
   const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });

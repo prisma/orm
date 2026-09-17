@@ -112,6 +112,7 @@ export type {
   ResolvedAttributeArg,
   ResolvedNamedTypeBinding,
   ResolvedTypeConstructorCall,
+  SymbolDiagnostic,
   SymbolTable,
   SymbolTableResult,
   TopLevelScope,

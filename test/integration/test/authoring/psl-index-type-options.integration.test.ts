@@ -16,7 +16,7 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 function interpret(schema: string) {
   const { document, sources } = parse(schema, 'index-type-options.prisma');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: {},
   });

@@ -75,6 +75,50 @@ function interpretationDouble(interpret: PslInterpretCapable['interpret']): {
 }
 
 describe('createProjectArtifacts', () => {
+  it('loads all live inputs in configured order and scopes duplicate diagnostics to their owner', () => {
+    const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
+    const texts = new Map([
+      [schemaUri, cleanSource],
+      [siblingUri, twoModelSource],
+    ]);
+    const { interpretation, spy } = interpretationDouble(() => ok({} as never));
+    const store = createProjectArtifacts({
+      inputs: resolveSchemaInputs({
+        contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
+      }),
+      controlStack,
+      getText: (uri) => texts.get(uri),
+      onInterpretationError: vi.fn(),
+      interpretation,
+    });
+    const sibling = store.document(siblingUri)!;
+    expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User', 'Post']);
+    const first = store.document(schemaUri)!;
+    expect(store.symbolTable().topLevel.models['User']?.node.syntax.root()).toBe(
+      first.document.syntax,
+    );
+    expect(first.diagnostics).toEqual([]);
+    expect(sibling.diagnostics).toEqual([
+      {
+        code: 'PSL_DUPLICATE_DECLARATION',
+        message: 'Duplicate declaration of "User"',
+        severity: 1,
+        range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+      },
+    ]);
+    first.interpretDiagnostics();
+    expect(spy.mock.calls[0]?.[0].symbolTable).toBe(store.symbolTable());
+    texts.set(siblingUri, `${directive}model Other { id Int }`);
+    store.documentChanged(siblingUri);
+    first.interpretDiagnostics();
+    expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User', 'Other']);
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(store.document(siblingUri)?.diagnostics).toEqual([]);
+    texts.delete(schemaUri);
+    store.documentClosed(schemaUri);
+    expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['Other']);
+    expect(() => store.sources.sourceFileFor(first.document.syntax)).toThrow(/No SourceFile/);
+  });
   it('parses the mirrored text on first read', () => {
     const { texts, store } = projectWithMirror();
     texts.set(schemaUri, cleanSource);
@@ -84,6 +128,24 @@ describe('createProjectArtifacts', () => {
     expect(artifacts?.sourceFile).toBeDefined();
     expect(artifacts?.diagnostics).toEqual([]);
     expect(artifacts).not.toHaveProperty('sources');
+  });
+
+  it('reloads edited live inputs whose URI spelling differs from configured input spelling', () => {
+    const liveUri = 'file:///abs/%73chema.psl';
+    const { texts, store } = projectWithMirror();
+    texts.set(liveUri, cleanSource);
+    const first = store.document(liveUri)!;
+    expect(store.symbolTable().topLevel.models['User']?.node.syntax.root()).toBe(
+      first.document.syntax,
+    );
+    texts.set(liveUri, twoModelSource);
+    store.documentChanged(liveUri);
+    expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User', 'Post']);
+    expect(store.document(schemaUri)).toBe(store.document(liveUri));
+    expect(() => store.sources.sourceFileFor(first.document.syntax)).toThrow(/No SourceFile/);
+    texts.delete(liveUri);
+    store.documentClosed(liveUri);
+    expect(store.document(schemaUri)).toBeUndefined();
   });
 
   it('returns the same artifacts for repeated reads without an intervening event', () => {
@@ -293,7 +355,7 @@ describe('createProjectArtifacts', () => {
       diagnostics: parseDiagnostics,
     } = parse(source, 'language-server-test.psl');
     const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-      document,
+      documents: [document],
       sources,
       pslBlockDescriptors: controlStack.pslBlockDescriptors,
     });
@@ -434,10 +496,7 @@ describe('interpret slot', () => {
 
   it('invalidates retained semantic memos and shared symbols when registry membership changes', () => {
     const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
-    const texts = new Map([
-      [schemaUri, cleanSource],
-      [siblingUri, twoModelSource],
-    ]);
+    const texts = new Map([[schemaUri, cleanSource]]);
     const { interpretation, spy } = interpretationDouble(() => ok({} as never));
     const store = createProjectArtifacts({
       inputs: resolveSchemaInputs({
@@ -451,8 +510,9 @@ describe('interpret slot', () => {
     const first = store.document(schemaUri)!;
     first.interpretDiagnostics();
     const initialSymbols = store.symbolTable();
-    const sibling = store.document(siblingUri)!;
+    texts.set(siblingUri, twoModelSource);
     first.interpretDiagnostics();
+    const sibling = store.document(siblingUri)!;
     first.interpretDiagnostics();
     expect(spy).toHaveBeenCalledTimes(2);
     expect(spy.mock.calls[1]?.[0].sources).toBe(store.sources);
@@ -497,6 +557,44 @@ describe('interpret slot', () => {
         severity: 1,
       },
     ]);
+  });
+
+  it('filters semantic findings from sibling files before mapping their local spans', () => {
+    const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
+    const { interpretation } = interpretationDouble(() =>
+      notOk({
+        summary: 'Two source errors',
+        diagnostics: [
+          { ...spanned, sourceId: schemaUri },
+          { ...spanned, code: 'SIBLING_ERROR', sourceId: siblingUri },
+        ],
+      }),
+    );
+    const texts = new Map([
+      [schemaUri, cleanSource],
+      [siblingUri, twoModelSource],
+    ]);
+    const store = createProjectArtifacts({
+      inputs: resolveSchemaInputs({
+        contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
+      }),
+      controlStack,
+      getText: (uri) => texts.get(uri),
+      onInterpretationError: vi.fn(),
+      interpretation,
+    });
+    expect(
+      store
+        .document(schemaUri)
+        ?.interpretDiagnostics()
+        .map(({ code }) => code),
+    ).toEqual(['PSL_UNRESOLVED_RELATION']);
+    expect(
+      store
+        .document(siblingUri)
+        ?.interpretDiagnostics()
+        .map(({ code }) => code),
+    ).toEqual(['SIBLING_ERROR']);
   });
 
   it('returns no diagnostics for a successful interpretation', () => {

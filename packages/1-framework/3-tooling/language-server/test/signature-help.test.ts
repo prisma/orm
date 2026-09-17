@@ -123,7 +123,7 @@ function help(markedSource: string, labelOffsets = true) {
   expect(offset).toBeGreaterThanOrEqual(0);
   const { document, sources } = parse(markedSource.replace('|', ''), 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({ document, sources, pslBlockDescriptors });
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources, pslBlockDescriptors });
   parseArgument.mockClear();
   const result = providePslSignatureHelp({
     document,

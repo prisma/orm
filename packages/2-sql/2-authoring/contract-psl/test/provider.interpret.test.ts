@@ -28,7 +28,7 @@ function buildInterpretInput(
 ): PslInterpretInput {
   const { document, sources } = parse(schema, filename);
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });

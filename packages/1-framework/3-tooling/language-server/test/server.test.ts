@@ -358,7 +358,7 @@ function parseAndSymbolTableDiagnostics(source: string): {
     diagnostics: parseDiagnostics,
   } = parse(source, 'language-server-test.psl');
   const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: {},
   });
@@ -2819,7 +2819,9 @@ describe('language server project lifecycle', { timeout: timeouts.databaseOperat
     openDocument(harness, schemaUri, duplicateModelSource);
     expect((await harness.waitForDiagnostics(schemaUri)).length).toBeGreaterThan(0);
     openDocument(harness, schema2Uri, formattedPsl);
-    expect(await harness.waitForDiagnostics(schema2Uri)).toEqual([]);
+    expect(await harness.waitForDiagnostics(schema2Uri)).toEqual([
+      expect.objectContaining({ code: 'PSL_DUPLICATE_DECLARATION' }),
+    ]);
 
     const cleared = harness.waitForDiagnosticsMatching(
       schema2Uri,

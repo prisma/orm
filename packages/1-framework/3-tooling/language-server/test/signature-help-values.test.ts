@@ -40,7 +40,7 @@ it.each([
     const { document, sources } = parse(source.replace('|', ''), 'language-server-test.psl');
     const sourceFile = sources.sourceFileFor(document.syntax);
     const { symbolTable } = buildSymbolTable({
-      document,
+      documents: [document],
       sources,
       pslBlockDescriptors: {},
     });

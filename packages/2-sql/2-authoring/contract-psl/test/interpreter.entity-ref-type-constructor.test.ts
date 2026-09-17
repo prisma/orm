@@ -477,7 +477,7 @@ model AuthSession {
       'schema.prisma',
     );
     const { symbolTable } = buildSymbolTable({
-      document,
+      documents: [document],
       sources,
       pslBlockDescriptors,
     });

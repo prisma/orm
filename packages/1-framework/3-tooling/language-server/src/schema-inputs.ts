@@ -46,7 +46,7 @@ function isFileUri(input: string): boolean {
   }
 }
 
-function canonicalFileIdentity(uri: string): string {
+export function canonicalFileIdentity(uri: string): string {
   let url: URL;
   try {
     url = new URL(uri);

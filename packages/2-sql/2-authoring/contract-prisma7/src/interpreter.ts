@@ -188,7 +188,7 @@ export function interpretPrisma7Documents(
 
   for (const { document, sources, sourceFile, sourceId } of input.documents) {
     const { symbolTable, diagnostics: tableDiagnostics } = buildSymbolTable({
-      document,
+      documents: [document],
       sources,
       pslBlockDescriptors: {},
     });

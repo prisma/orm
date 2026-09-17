@@ -140,7 +140,7 @@ interface ParsedPolicySelect {
 function parsePolicySelect(schema: string): ParsedPolicySelect {
   const { document, sources } = parse(schema, 'declarative-policy-select.round-trip.test.psl');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });

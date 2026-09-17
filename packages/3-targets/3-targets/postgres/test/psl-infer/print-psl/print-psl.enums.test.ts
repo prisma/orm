@@ -215,7 +215,7 @@ describe('emitted PSL parses', () => {
   function parseDiagnostics(source: string) {
     const { document, sources } = parse(source, 'print-psl.enums.test.psl');
     const { diagnostics } = buildSymbolTable({
-      document,
+      documents: [document],
       sources,
       pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
     });

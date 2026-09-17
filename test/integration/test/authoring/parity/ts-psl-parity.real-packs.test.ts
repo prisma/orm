@@ -33,7 +33,7 @@ function interpretWithRealPacks(schema: string) {
   const scalarColumnDescriptors = buildColumnDescriptorMap();
   const { document, sources } = parse(schema, 'real-packs-parity.prisma');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });

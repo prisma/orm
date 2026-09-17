@@ -54,7 +54,7 @@ function complete(markedSource: string) {
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: {},
   });

@@ -33,6 +33,7 @@ export interface PipelineResult {
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
   readonly diagnostics: readonly LspDiagnostic[];
+  readonly parseDiagnostics: readonly LspDiagnostic[];
 }
 
 /**
@@ -49,7 +50,7 @@ export function runPipeline(
   const { document, sources, diagnostics: parseDiagnostics } = parse(text, filename);
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: inputs.pslBlockDescriptors,
   });
@@ -59,6 +60,7 @@ export function runPipeline(
     sourceFile,
     sources,
     symbolTable,
+    parseDiagnostics: mapParseDiagnostics(parseDiagnostics),
     diagnostics: mapParseDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]),
   };
 }

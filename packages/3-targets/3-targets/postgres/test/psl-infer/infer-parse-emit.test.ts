@@ -84,7 +84,7 @@ const codecLookup: CodecLookup = {
 function parseAndEmit(source: string) {
   const { document, sources } = parse(source, 'infer-parse-emit.test.psl');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });

@@ -38,7 +38,7 @@ const REPRESENTATIVE_SCHEMA = `model sample {
 function emit(scalarTypeCodecIds: ReadonlyMap<string, string>) {
   const { document, sources } = parse(REPRESENTATIVE_SCHEMA, 'representative-schema.prisma');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });

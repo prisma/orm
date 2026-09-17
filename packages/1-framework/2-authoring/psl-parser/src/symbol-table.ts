@@ -10,7 +10,7 @@ import {
   readResolvedAttributes,
   readResolvedConstructorCall,
 } from './resolve';
-import type { PslSources, Range } from './source-file';
+import type { PslSources, Range, SourceFile } from './source-file';
 import {
   CompositeTypeDeclarationAst,
   type DocumentAst,
@@ -118,14 +118,18 @@ export interface FieldSymbol {
 }
 
 export interface BuildSymbolTableOptions {
-  readonly document: DocumentAst;
+  readonly documents: readonly DocumentAst[];
   readonly sources: PslSources;
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
 }
 
+export interface SymbolDiagnostic extends ParseDiagnostic {
+  readonly sourceFile: SourceFile;
+}
+
 export interface SymbolTableResult {
   readonly symbolTable: SymbolTable;
-  readonly diagnostics: readonly ParseDiagnostic[];
+  readonly diagnostics: readonly SymbolDiagnostic[];
 }
 
 /**
@@ -133,8 +137,8 @@ export interface SymbolTableResult {
  * should consume first-wins symbols rather than re-emitting duplicate diagnostics.
  */
 export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableResult {
-  const { document, sources, pslBlockDescriptors } = options;
-  const diagnostics: ParseDiagnostic[] = [];
+  const { documents, sources, pslBlockDescriptors } = options;
+  const symbolDiagnostics: SymbolDiagnostic[] = [];
 
   const namespaces: Record<string, NamespaceSymbol> = Object.create(null);
   const namedTypes: Record<string, NamedTypeSymbol> = {};
@@ -143,71 +147,77 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   const compositeTypes: Record<string, CompositeTypeSymbol> = {};
   const topLevelNames = new Set<string>();
 
-  const claim = (taken: Set<string>, name: IdentifierAst | undefined): string | undefined => {
-    const text = name?.name();
-    if (text === undefined) return undefined;
-    if (taken.has(text)) {
-      const range = nameRange(name, sources);
-      if (range) {
-        diagnostics.push({
-          code: 'PSL_DUPLICATE_DECLARATION',
-          message: `Duplicate declaration of "${text}"`,
-          range,
-        });
+  for (const document of documents) {
+    const sourceFile = sources.sourceFileFor(document.syntax);
+    const diagnostics: ParseDiagnostic[] = [];
+    const claim = (taken: Set<string>, name: IdentifierAst | undefined): string | undefined => {
+      const text = name?.name();
+      if (text === undefined) return undefined;
+      if (taken.has(text)) {
+        const range = nameRange(name, sources);
+        if (range) {
+          diagnostics.push({
+            code: 'PSL_DUPLICATE_DECLARATION',
+            message: `Duplicate declaration of "${text}"`,
+            range,
+          });
+        }
+        return undefined;
       }
-      return undefined;
-    }
-    taken.add(text);
-    return text;
-  };
+      taken.add(text);
+      return text;
+    };
 
-  for (const declaration of document.declarations()) {
-    if (declaration instanceof ModelDeclarationAst) {
-      const name = claim(topLevelNames, declaration.name());
-      if (name !== undefined) models[name] = buildModel(name, declaration, sources, diagnostics);
-    } else if (declaration instanceof CompositeTypeDeclarationAst) {
-      const name = claim(topLevelNames, declaration.name());
-      if (name !== undefined) {
-        compositeTypes[name] = buildCompositeType(name, declaration, sources, diagnostics);
-      }
-    } else if (declaration instanceof GenericBlockDeclarationAst) {
-      const name = claim(topLevelNames, declaration.name());
-      if (name !== undefined) {
-        blocks[name] = buildBlock(name, declaration, sources, pslBlockDescriptors, diagnostics);
-      }
-    } else if (declaration instanceof NamespaceDeclarationAst) {
-      const declaredName = declaration.name()?.name();
-      if (declaredName === undefined) continue;
-      let namespace = namespaces[declaredName];
-      if (namespace === undefined) {
+    for (const declaration of document.declarations()) {
+      if (declaration instanceof ModelDeclarationAst) {
         const name = claim(topLevelNames, declaration.name());
-        if (name === undefined) continue;
-        namespace = {
-          kind: 'namespace',
-          name,
-          declarations: [],
-          models: Object.create(null),
-          compositeTypes: Object.create(null),
-          blocks: Object.create(null),
-        };
-        namespaces[name] = namespace;
-      }
-      extendNamespace(namespace, declaration, diagnostics, sources, pslBlockDescriptors);
-    } else if (declaration instanceof TypesBlockAst) {
-      for (const binding of declaration.declarations()) {
-        const name = claim(topLevelNames, binding.name());
-        if (name === undefined) continue;
-        const resolved = resolveNamedTypeBinding(binding, sources);
-        const span = nodePslSpan(binding.syntax, sources);
-        namedTypes[name] = { kind: 'namedType', name, node: binding, span, ...resolved };
+        if (name !== undefined) models[name] = buildModel(name, declaration, sources, diagnostics);
+      } else if (declaration instanceof CompositeTypeDeclarationAst) {
+        const name = claim(topLevelNames, declaration.name());
+        if (name !== undefined) {
+          compositeTypes[name] = buildCompositeType(name, declaration, sources, diagnostics);
+        }
+      } else if (declaration instanceof GenericBlockDeclarationAst) {
+        const name = claim(topLevelNames, declaration.name());
+        if (name !== undefined) {
+          blocks[name] = buildBlock(name, declaration, sources, pslBlockDescriptors, diagnostics);
+        }
+      } else if (declaration instanceof NamespaceDeclarationAst) {
+        const declaredName = declaration.name()?.name();
+        if (declaredName === undefined) continue;
+        let namespace = namespaces[declaredName];
+        if (namespace === undefined) {
+          const name = claim(topLevelNames, declaration.name());
+          if (name === undefined) continue;
+          namespace = {
+            kind: 'namespace',
+            name,
+            declarations: [],
+            models: Object.create(null),
+            compositeTypes: Object.create(null),
+            blocks: Object.create(null),
+          };
+          namespaces[name] = namespace;
+        }
+        extendNamespace(namespace, declaration, diagnostics, sources, pslBlockDescriptors);
+      } else if (declaration instanceof TypesBlockAst) {
+        for (const binding of declaration.declarations()) {
+          const name = claim(topLevelNames, binding.name());
+          if (name === undefined) continue;
+          const resolved = resolveNamedTypeBinding(binding, sources);
+          const span = nodePslSpan(binding.syntax, sources);
+          namedTypes[name] = { kind: 'namedType', name, node: binding, span, ...resolved };
+        }
       }
     }
+
+    symbolDiagnostics.push(...diagnostics.map((diagnostic) => ({ ...diagnostic, sourceFile })));
   }
 
   const symbolTable: SymbolTable = {
     topLevel: { namespaces, namedTypes, blocks, models, compositeTypes },
   };
-  return { symbolTable, diagnostics };
+  return { symbolTable, diagnostics: symbolDiagnostics };
 }
 
 function buildModel(

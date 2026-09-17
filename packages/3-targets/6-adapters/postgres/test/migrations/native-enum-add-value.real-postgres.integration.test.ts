@@ -99,7 +99,7 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
     'native-enum-add-value.real-postgres.integration.test.psl',
   );
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });

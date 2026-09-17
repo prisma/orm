@@ -82,7 +82,7 @@ describe('computeDocumentDiagnostics', () => {
       diagnostics: parseDiagnostics,
     } = parse(source, 'language-server-test.psl');
     const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-      document,
+      documents: [document],
       sources,
       pslBlockDescriptors: controlStack.pslBlockDescriptors,
     });

@@ -21,7 +21,7 @@ const stack = createControlStack({
 function emit(schema: string) {
   const { document, sources } = parse(schema, 'native-type-parity.test.psl');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });

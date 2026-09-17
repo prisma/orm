@@ -477,7 +477,7 @@ export function buildSymbolTableInput(
   const { document, sources } = parse(schema, sourceId);
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable, diagnostics } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors,
   });

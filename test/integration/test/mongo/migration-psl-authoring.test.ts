@@ -71,7 +71,7 @@ function pslToContract(schema: string): MongoContract {
   ]);
   const { document, sources } = parse(schema, 'mongo-migration-schema.prisma');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: {},
   });

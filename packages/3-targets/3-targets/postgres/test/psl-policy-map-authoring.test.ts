@@ -59,7 +59,7 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 function parsePsl(source: string) {
   const { document, sources } = parse(source, 'psl-policy-map-authoring.test.psl');
   return buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
@@ -68,7 +68,7 @@ function parsePsl(source: string) {
 function interpret(source: string) {
   const { document, sources } = parse(source, 'psl-policy-map-authoring.test.psl');
   const { symbolTable, diagnostics } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });

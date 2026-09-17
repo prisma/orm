@@ -76,7 +76,7 @@ function interpretMongoPsl(schema: string) {
   ]);
   const { document, sources } = parse(schema, 'mongo-value-objects.prisma');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: {},
   });
@@ -105,7 +105,7 @@ const postgresScalarAuthoringTypes = Object.fromEntries(
 function interpretSqlPsl(schema: string) {
   const { document, sources } = parse(schema, 'sql-value-objects.prisma');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: {},
   });

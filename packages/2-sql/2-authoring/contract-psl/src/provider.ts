@@ -120,7 +120,7 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
       const { document, sources, diagnostics: parseDiagnostics } = parse(schema, schemaPath);
       const sourceFile = sources.sourceFileFor(document.syntax);
       const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-        document,
+        documents: [document],
         sources,
         pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
       });
@@ -129,7 +129,9 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
       // still produce interpreter diagnostics in the same response.
       const seedDiagnostics = [
         ...mapParseDiagnostics(parseDiagnostics, sourceFile),
-        ...mapParseDiagnostics(symbolTableDiagnostics, sourceFile),
+        ...symbolTableDiagnostics.flatMap((diagnostic) =>
+          mapParseDiagnostics([diagnostic], diagnostic.sourceFile),
+        ),
       ];
 
       const interpreted = withSeedDiagnostics(

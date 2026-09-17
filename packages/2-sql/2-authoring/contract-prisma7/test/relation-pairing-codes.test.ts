@@ -23,7 +23,11 @@ function fieldSymbol(
     `model Test {\n  id Int @id\n  ${fieldName} ${targetModelName}${list}${optional}\n}`,
     'schema.prisma',
   );
-  const { symbolTable } = buildSymbolTable({ document, sources, pslBlockDescriptors: {} });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
   const field = symbolTable.topLevel.models['Test']?.fields[fieldName];
   if (field === undefined) throw new Error(`field ${fieldName} missing`);
   candidateSources.set(field, sources);

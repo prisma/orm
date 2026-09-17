@@ -66,7 +66,7 @@ function buildPslContract() {
 
   const { document, sources } = parse(PSL, 'rls-walking-skeleton-psl.integration.test.psl');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });

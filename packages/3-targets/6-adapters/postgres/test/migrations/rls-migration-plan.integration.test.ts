@@ -77,7 +77,7 @@ function buildPslContract(psl: string = PSL) {
 
   const { document, sources } = parse(psl, 'rls-migration-plan.integration.test.psl');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });

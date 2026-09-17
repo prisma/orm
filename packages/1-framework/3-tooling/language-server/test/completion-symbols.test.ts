@@ -13,7 +13,11 @@ function fields(
   const offset = sourceWithCursor.indexOf('|');
   const { document, sources } = parse(sourceWithCursor.replace('|', ''), 'test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable } = buildSymbolTable({ document, sources, pslBlockDescriptors: {} });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
   const context = classifyPslCompletionContext({
     document,
     sourceFile,

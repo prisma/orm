@@ -27,7 +27,7 @@ const postgresScalarTypeDescriptors = new Map([
 function symbolTableInput(schema: string) {
   const { document, sources } = parse(schema, 'psl-namespace-qualifier-routing.test.psl');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: {},
   });

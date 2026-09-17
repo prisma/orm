@@ -20,7 +20,7 @@ import { createSyntaxTree } from '../src/syntax/red';
 function makeCtx(sources: PslSources): FieldAttributeCtx {
   const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources: modelSources,
     pslBlockDescriptors: {},
   });

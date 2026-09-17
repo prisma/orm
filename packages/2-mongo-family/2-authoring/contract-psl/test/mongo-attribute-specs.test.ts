@@ -80,7 +80,11 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
   `,
     'test.prisma',
   );
-  const { symbolTable } = buildSymbolTable({ document, sources, pslBlockDescriptors: {} });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
   const model = symbolTable.topLevel.models['Widget'];
   const field = model?.fields['name'];
   if (!model || !field) throw new Error('fixture declares Widget.name');

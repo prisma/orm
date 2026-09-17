@@ -14,7 +14,7 @@ Every parsed PSL document has a named `SourceFile` owned by the red syntax root 
 const { document, sources, diagnostics } = parse(schemaText, 'schema.prisma');
 const sourceFile = sources.sourceFileFor(document.syntax);
 const { symbolTable, diagnostics: symbolDiagnostics } = buildSymbolTable({
-  document,
+  documents: [document],
   sources,
   pslBlockDescriptors,
 });
@@ -30,7 +30,7 @@ PSL source ownership is attached to the returned red syntax root. `parse(source,
 
 `PslSources.sourceFileFor(node)` walks from any red `SyntaxNode` to its root and looks up that root. A node whose root is not registered is an internal error. A structurally identical tree, a detached copy, or a node from another parse result is not accepted. The registry never falls back to “the only registered file,” because that would make ownership depend on current single-file scope rather than node identity.
 
-This records a one-file parsing scope, not multi-file schema semantics. The registry exists so single-file consumers stop threading a parallel filename through semantic code; it does not load directories, merge schemas, or resolve cross-file symbols.
+Parsing remains file-local. `buildSymbolTable` accepts an ordered `readonly DocumentAst[]` and a shared registry containing every supplied root, including empty documents. It collects declarations into one scope in caller order; duplicate names remain first-wins, including repeated namespaces rather than merging their members. An empty collection produces an empty scope. Neither API discovers files or loads directories.
 
 ## Why red-root identity owns the file
 
@@ -45,6 +45,8 @@ This keeps diagnostics honest in three important cases:
 ## Diagnostic provenance
 
 Parser diagnostics are emitted while the parser still holds the parse input, so they are mapped through the `SourceFile` that `parse` created. Post-parse diagnostics are different: symbol-table checks, interpreter checks, attribute combinators, extension-block validators, and language-server projections all process AST nodes after parsing. Those diagnostics derive their filename from `sources.sourceFileFor(node.syntax).filename` for the node being diagnosed.
+
+Symbol-table diagnostics carry their owning `SourceFile` alongside the file-local `ParseDiagnostic` fields. The builder associates each document's findings with the file registered for that document's root, so a duplicate points to the offending declaration's file, not the winning declaration's file. Parser diagnostics remain unchanged.
 
 The output envelope may still contain a field named `sourceId`, because diagnostics need a stable serialized filename. The ownership rule is about the origin of that value: it comes from the node's owning `SourceFile`, not from a separate semantic context parameter. File-read errors are the exception, because they occur before there is source text or a `SourceFile`; those diagnostics may report the attempted input path directly.
 
@@ -62,15 +64,16 @@ Node-based helpers receive `PslSources` and resolve the file through the node be
 
 Language-server semantic tokens remain explicitly file-local: `SemanticTokensBuilder` encodes offsets against one resolved `SourceFile`. The pipeline resolves that file from the parsed document's red root and passes it to the builder. The builder does not choose a filename and does not consult a singleton registry.
 
-## One-file scope boundary
+## File-loading boundary
 
 This decision intentionally preserves existing single-file behavior. A caller gives `parse` exactly one filename and one text buffer, and the returned registry contains exactly the returned document root. Unsaved editor content is parsed with the document URI and live text buffer. CLI/provider code reads one configured source file at a time and passes that display path as the parse filename.
+
+The language server builds shared symbols from the current open, configured inputs and its project registry. It uses configured input order, filters symbol diagnostics by owning file, and invalidates symbols and semantic memos when roots change. It does not read unopened inputs from disk.
 
 The following remain outside this decision:
 
 - glob expansion or filesystem discovery for PSL sources;
 - loading multiple PSL files into one schema;
-- cross-file symbol-table merging or name resolution;
 - green-tree ownership;
 - fallback ownership for detached nodes.
 

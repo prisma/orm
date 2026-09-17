@@ -62,7 +62,7 @@ function buildSymbolTableInput(schema: string): {
 } {
   const { document, sources } = parse(schema, 'test.prisma');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: {},
   });

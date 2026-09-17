@@ -142,7 +142,7 @@ function buildContractFromPsl(psl: string): Contract<SqlStorage> {
 
   const { document, sources } = parse(psl, 'rls-lifecycle-e2e.integration.test.psl');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });

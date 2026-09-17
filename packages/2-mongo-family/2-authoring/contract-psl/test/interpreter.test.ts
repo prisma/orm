@@ -31,7 +31,7 @@ function buildSymbolTableInput(
 ): { document: DocumentAst; symbolTable: SymbolTable; sources: PslSources } {
   const { document, sources } = parse(schema, filename);
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: {},
   });

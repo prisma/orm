@@ -106,7 +106,7 @@ describe('runPipeline', () => {
 
     const { document, sources, diagnostics: parseDiagnostics } = parse(source, 'pipeline-test.psl');
     const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-      document,
+      documents: [document],
       sources,
       pslBlockDescriptors: {},
     });

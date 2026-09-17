@@ -36,7 +36,11 @@ function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCt
   const value = Array.from(node?.argList()?.args() ?? [])[0]?.value();
   if (value === undefined) throw new Error('expected one argument');
   const { document, sources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
-  const { symbolTable } = buildSymbolTable({ document, sources, pslBlockDescriptors: {} });
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
   const selfModel = symbolTable.topLevel.models['M'];
   if (selfModel === undefined) throw new Error('expected model M');
   return {

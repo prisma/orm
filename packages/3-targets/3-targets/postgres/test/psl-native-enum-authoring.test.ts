@@ -54,7 +54,7 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 function parsePsl(source: string) {
   const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
   return buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
@@ -63,7 +63,7 @@ function parsePsl(source: string) {
 function interpret(source: string) {
   const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
@@ -421,7 +421,7 @@ describe('native_enum coexists with a PSL enum block in the same namespace', () 
   function interpretCombined(source: string) {
     const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
     const { symbolTable } = buildSymbolTable({
-      document,
+      documents: [document],
       sources,
       pslBlockDescriptors: combinedAssembled.pslBlockDescriptors,
     });

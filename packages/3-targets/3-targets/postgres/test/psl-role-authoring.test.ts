@@ -58,7 +58,7 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
 function interpret(source: string) {
   const { document, sources } = parse(source, 'psl-role-authoring.test.psl');
   const { symbolTable, diagnostics } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });

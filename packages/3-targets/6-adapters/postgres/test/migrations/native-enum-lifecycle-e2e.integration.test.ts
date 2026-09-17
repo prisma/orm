@@ -212,7 +212,7 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
 
   const { document, sources } = parse(psl, 'native-enum-lifecycle-e2e.integration.test.psl');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });

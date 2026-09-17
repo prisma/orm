@@ -63,7 +63,7 @@ function interpret(
   const descriptors = contributions?.pslBlockDescriptors;
   const { document, sources } = parse(schema, 'mongo-enum-schema.prisma');
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: descriptors ?? {},
   });

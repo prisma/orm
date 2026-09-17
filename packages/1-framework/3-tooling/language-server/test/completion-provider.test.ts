@@ -228,7 +228,7 @@ function completeWithSource(input: {
   const { document, sources } = parse(source, 'language-server-test.psl');
   const sourceFile = sources.sourceFileFor(document.syntax);
   const { symbolTable } = buildSymbolTable({
-    document,
+    documents: [document],
     sources,
     pslBlockDescriptors: input.pslBlockDescriptors,
   });
@@ -534,7 +534,7 @@ describe('providePslCompletionItems', () => {
     const { document, sources } = parse(source, 'language-server-test.psl');
     const sourceFile = sources.sourceFileFor(document.syntax);
     const { symbolTable } = buildSymbolTable({
-      document,
+      documents: [document],
       sources,
       pslBlockDescriptors,
     });
