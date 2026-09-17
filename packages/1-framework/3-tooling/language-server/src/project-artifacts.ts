@@ -1,6 +1,5 @@
 import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
 import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
-import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
 import type { ProjectInterpretation } from './config-resolution';
@@ -162,9 +161,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
             sources: artifacts.sources,
             pslBlockDescriptors: controlStack.pslBlockDescriptors,
           });
-          symbolTable = blindCast<SymbolTable, 'buildSymbolTable result table property'>(
-            Reflect.get(symbolResult, ['ta', 'ble'].join('')),
-          );
+          symbolTable = symbolResult.table;
         }
         return symbolTable;
       }

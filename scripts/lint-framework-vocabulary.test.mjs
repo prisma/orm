@@ -35,6 +35,9 @@ const FILE_SOURCE_COORDINATES_WITH_STORAGE_STRING_KEY = `${FILE_SOURCE_COORDINAT
 const FILE_SYMBOL_TABLE =
   'export interface SymbolTableResult { readonly table: SymbolTable }\nconst table = {};\nexport function buildSymbolTable() { return { table }; }\n';
 const FILE_SYMBOL_TABLE_WITH_STORAGE_TABLE = `${FILE_SYMBOL_TABLE}export const storageTable = 1;\n`;
+const FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS =
+  'const symbolResult = buildSymbolTable({ document, sources });\nconst symbolTable = symbolResult.table;\n';
+const FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_STORAGE_TABLE = `${FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS}const storage = getStorage();\nconst storageTable = storage.table;\n`;
 const FILE_FORMATTER_ALIGNMENT_COLUMNS =
   'export function alignmentColumns(rows) { const typeColumn = 1; return { typeColumn, attributeColumn: 2 }; }\n';
 const FILE_FORMATTER_ALIGNMENT_WITH_STORAGE_COLUMN = `${FILE_FORMATTER_ALIGNMENT_COLUMNS}export const storageColumn = 1;\n`;
@@ -198,6 +201,38 @@ describe('lint-framework-vocabulary — counting', () => {
     const result = runScript();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
     assert.match(result.stdout, /count=0 threshold=0/);
+  });
+
+  it('does not count language-server buildSymbolTable result access as family vocabulary', () => {
+    writeConfig(0);
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/pipeline.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS,
+    );
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/project-artifacts.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=0 threshold=0/);
+  });
+
+  it('still counts storage table vocabulary beside language-server symbol-table access', () => {
+    writeConfig(2);
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/pipeline.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_STORAGE_TABLE,
+    );
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/project-artifacts.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_STORAGE_TABLE,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=2 threshold=2/);
   });
 
   it('still counts genuine storage vocabulary in framework code', () => {

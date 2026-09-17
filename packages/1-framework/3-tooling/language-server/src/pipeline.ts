@@ -10,7 +10,6 @@ import {
   parse,
   type SourceFile,
 } from '@internal/psl-parser/syntax';
-import { blindCast } from '@internal/utils/casts';
 import { type LspDiagnostic, mapParseDiagnostics } from './diagnostic-mapping';
 
 /**
@@ -54,9 +53,7 @@ export function runPipeline(
     sources,
     pslBlockDescriptors: inputs.pslBlockDescriptors,
   });
-  const symbolTable = blindCast<SymbolTable, 'buildSymbolTable result table property'>(
-    Reflect.get(symbolResult, ['ta', 'ble'].join('')),
-  );
+  const symbolTable = symbolResult.table;
   const symbolTableDiagnostics = symbolResult.diagnostics;
 
   return {
