@@ -1137,6 +1137,66 @@ model users {
 
 exports[`introspection: findUnique where unique: warnings 1`] = `null`;
 
+exports[`introspection: queryRaw - basic validation in custom schema: datamodel 1`] = `
+"generator client {
+  provider = "prisma-client-js"
+  output = "***"
+}
+
+datasource postgresql {
+  provider = "postgresql"
+}
+
+model posts {
+  id    Int    @id @default(autoincrement())
+  title String
+  data  Json
+}
+"
+`;
+
+exports[`introspection: queryRaw - basic validation in custom schema: warnings 1`] = `null`;
+
+exports[`introspection: queryRaw: datamodel 1`] = `
+"generator client {
+  provider = "prisma-client-js"
+  output = "***"
+}
+
+datasource postgresql {
+  provider = "postgresql"
+}
+
+model posts {
+  id    Int    @id @default(autoincrement())
+  title String
+  data  Json
+}
+"
+`;
+
+exports[`introspection: queryRaw: warnings 1`] = `null`;
+
+exports[`introspection: rawQuery: datamodel 1`] = `
+"generator client {
+  provider = "prisma-client-js"
+  output = "***"
+}
+
+datasource postgresql {
+  provider = "postgresql"
+}
+
+model posts {
+  id    Int    @id @default(autoincrement())
+  title String
+  data  Json
+}
+"
+`;
+
+exports[`introspection: rawQuery: warnings 1`] = `null`;
+
 exports[`introspection: update where composite PK: datamodel 1`] = `
 "generator client {
   provider = "prisma-client-js"
