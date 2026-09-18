@@ -118,6 +118,43 @@ describe('emitScaffoldedContract', () => {
   );
 
   it(
+    'reports the error from the result envelope on stdout, not a notice on stderr',
+    async () => {
+      const lines = [
+        { kind: 'step-started', step: 'Resolving contract source...' },
+        {
+          kind: 'result',
+          envelope: {
+            ok: false,
+            commandId: 'contract.emit',
+            error: {
+              code: 'CLI.CONFIG_UNREADABLE',
+              severity: 'error',
+              summary:
+                "prisma.config.ts could not be evaluated: Cannot find module '@prisma/cli-engine'",
+            },
+          },
+        },
+      ];
+      installFakePrismaCli(
+        [
+          `for (const line of ${JSON.stringify(lines)}) process.stdout.write(JSON.stringify(line) + '\\n');`,
+          "process.stderr.write('Prisma agent skills are out of date (installed @prisma/orm-postgres 8.0.0-rc.9, synced none). Run: prisma skills sync\\n');",
+          'process.exit(2);',
+          '',
+        ].join('\n'),
+      );
+
+      const error = await emitFailure();
+
+      expect(error.message).toBe(
+        "`prisma contract emit` exited with code 2: CLI.CONFIG_UNREADABLE: prisma.config.ts could not be evaluated: Cannot find module '@prisma/cli-engine'",
+      );
+    },
+    timeouts.databaseOperation,
+  );
+
+  it(
     'accepts a string-form bin field',
     async () => {
       installFakePrismaCli(
