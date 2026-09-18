@@ -62,16 +62,6 @@ export default defineConfig({
 })
 ```
 
-### Tarball test coordination
-
-`packShell` and `packShellAtVersion` coordinate testkit callers around the **entire** `pnpm pack` operation, including lifecycle scripts and archive creation. Different real package directories remain parallel; symlink aliases share ownership. This does **not** coordinate arbitrary external `pnpm pack` commands or concurrent builds/staging writes.
-
-The source-only `shell-pack.ts` worker runs in its own POSIX process group. A per-package Lamport bakery queue lives under `node_modules/.cache/shell-pack` (excluded from archives): each attempt publishes a unique PID/UUID directory before choosing a ticket, then atomically publishes its ticket. Choosing attempts and earlier ticket/ID pairs block entry. Attempts never reuse paths or remove the shared queue, so concurrent stale-record cleanup cannot delete a successor's ownership.
-
-Acquisition is bounded to 30 seconds; `packShell` accepts `{ lockTimeoutMs }` to set a smaller caller budget (zero means fail on contention). Timeout errors identify the package and blocking process groups. Acquisition failures remove their own attempt. After pnpm starts, ownership lasts until the **whole process group** disappears, on success or failure; the next caller reclaims the inactive record. This also protects against a killed caller/supervisor or a failed lifecycle leaving a child alive. Age alone never expires ownership; uncertain liveness or PID reuse fails closed rather than stealing a live pack's input tree.
-
-This test infrastructure requires a local filesystem and POSIX process groups (Linux/macOS); lifecycle descendants must not detach into other groups. A stuck/suspended/orphaned live group causes a bounded acquisition failure, not unsafe takeover. The subprocess regression suite in `@prisma/orm-postgres` uses lifecycle barriers and verifies archived file names and bytes, including regenerated skill metadata.
-
 ### Migration from tsup
 
 `tsup` is no longer actively maintained. Migrate a monorepo package by uninstalling `tsup` - `pnpm uninstall tsup`.

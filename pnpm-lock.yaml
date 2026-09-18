@@ -5000,9 +5000,6 @@ importers:
       '@internal/publish-surface':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../0-shared/publish-surface
-      '@repo/test-utils':
-        specifier: workspace:8.0.0-rc.11
-        version: link:../../../../test/utils
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../0-config/tsconfig
