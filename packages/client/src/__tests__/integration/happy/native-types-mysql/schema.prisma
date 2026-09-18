@@ -37,7 +37,7 @@ model D {
   id    String   @id @default(cuid())
   date  DateTime @db.Date
   time  DateTime @db.Time(5)
-  dtime DateTime @db.DateTime
+  dtime DateTime @db.DateTime(0)
   ts    DateTime @db.Timestamp
   year  Int      @db.Year
 }
