@@ -14,6 +14,7 @@ import type {
 } from '@prisma/cli-engine';
 import { defineCommand } from '@prisma/cli-engine';
 import { notOk } from '@prisma/cli-engine/protocol';
+import { dirname } from 'pathe';
 import { normalizeError } from './normalize-error';
 
 /**
@@ -42,17 +43,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * bin finalizes them in its loader. Anchoring here, on the section every ORM
  * command reads, makes both hosts hand handlers the same absolute paths.
  *
- * The anchor is the working directory: the engine discovers the config in the
- * working directory only, so that is the file's own directory. (A `--config`
- * pointing into another directory is not visible from a command context; a
- * relative path inside such a file resolves against the invocation directory,
- * which is also what the file's author sees the command run from.)
- * Finalization is idempotent — an already-absolute path resolves to itself —
- * so a config that arrived finalized passes through unchanged.
+ * A relative path in the file is relative to the file, so the anchor is the
+ * directory of the config file the engine loaded; the working directory is the
+ * anchor only when no file was loaded. Finalization is idempotent — an
+ * already-absolute path resolves to itself — so a config that arrived
+ * finalized passes through unchanged.
  */
-function finalizedConfigContext<TCtx extends { readonly cwd: string; readonly config: unknown }>(
-  ctx: TCtx,
-): TCtx {
+function finalizedConfigContext<
+  TCtx extends {
+    readonly cwd: string;
+    readonly configFile: string | null;
+    readonly config: unknown;
+  },
+>(ctx: TCtx): TCtx {
   if (!isRecord(ctx.config)) {
     return ctx;
   }
@@ -60,7 +63,8 @@ function finalizedConfigContext<TCtx extends { readonly cwd: string; readonly co
     PrismaNextConfig,
     'every ORM command that declares needs.config reads the orm section, whose validated value is PrismaNextConfig'
   >(ctx.config);
-  return { ...ctx, config: finalizeConfig(config, ctx.cwd) };
+  const configDir = ctx.configFile === null ? ctx.cwd : dirname(ctx.configFile);
+  return { ...ctx, config: finalizeConfig(config, configDir) };
 }
 
 export function defineOrmCommand<

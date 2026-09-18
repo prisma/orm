@@ -3,8 +3,9 @@ import { readdir, readFile } from 'node:fs/promises';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { notOk } from '@internal/utils/result';
+import type { LoadedConfig } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
-import { join } from 'pathe';
+import { basename, dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import {
@@ -81,6 +82,60 @@ async function upToDateProject(): Promise<OfflineProject> {
   await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_TO });
   return project;
 }
+
+/** The engine's own loader leaves the paths inside the file as authored. */
+function relativeConfigLoader(
+  project: OfflineProject,
+): (configPath?: string) => Promise<LoadedConfig> {
+  return async (configPath) => ({
+    path: join(project.dir, configPath === undefined ? 'prisma.config.ts' : basename(configPath)),
+    sections: {
+      orm: {
+        ...offlineConfig({ project }),
+        contract: {
+          source: { format: 'typescript', inputs: [], load: async () => contractJson('unused') },
+          output: './output/contract.json',
+        },
+        migrations: { dir: './migrations' },
+      },
+    },
+    diagnostics: [],
+  });
+}
+
+describe('migration plan --config naming a file in a subdirectory', () => {
+  it('reads the contract from and plans into the config file directory', async () => {
+    const project = await plannableProject();
+    const cli = createTestCli({
+      commands: OFFLINE_COMMANDS,
+      groups: BIN_GROUPS,
+      loadConfig: relativeConfigLoader(project),
+    });
+
+    const run = await cli.run(
+      [
+        'migration',
+        'plan',
+        '--name',
+        'add-users',
+        '--config',
+        join(basename(project.dir), 'prisma.config.ts'),
+      ],
+      { cwd: dirname(project.dir) },
+    );
+    const dirs = await plannedDirs(project);
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.data).toMatchObject({
+      ok: true,
+      noOp: false,
+      from: HASH_FROM,
+      to: HASH_TO,
+    });
+    expect(dirs).toHaveLength(2);
+    expect(dirs.at(-1)).toMatch(/_add_users$/);
+  });
+});
 
 describe('migration plan', () => {
   it('settles as a completed envelope carrying the plan document', async () => {

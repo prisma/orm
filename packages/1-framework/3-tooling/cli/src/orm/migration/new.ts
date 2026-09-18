@@ -90,7 +90,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
       const scaffolded = await executeMigrationNewCommand({
         config: ctx.config,
         cwd: ctx.cwd,
-        configPath: projectConfigPathFor(ctx.cwd),
+        configPath: projectConfigPathFor(ctx),
         ...ifDefined('name', args.flags.name),
         ...ifDefined('from', args.flags.from),
         client: createClient({

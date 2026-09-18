@@ -191,7 +191,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           name: refName,
           contractJson,
           contractJsonPath: snapshotContractPath,
-          configPath: projectConfigPathFor(ctx.cwd),
+          configPath: projectConfigPathFor(ctx),
           client,
         });
         if (!preflight.ok) {

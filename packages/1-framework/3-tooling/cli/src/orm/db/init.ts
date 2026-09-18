@@ -156,7 +156,7 @@ export function createDbInitCommand(createClient: CreateControlClient) {
           name: refName,
           contractJson,
           contractJsonPath: contractPath,
-          configPath: projectConfigPathFor(ctx.cwd),
+          configPath: projectConfigPathFor(ctx),
           client,
         });
         if (!preflight.ok) {

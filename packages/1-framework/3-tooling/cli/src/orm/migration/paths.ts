@@ -4,9 +4,9 @@ import { spaceMigrationDirectory } from '@internal/migration-tools/spaces';
 import { relative, resolve } from 'pathe';
 
 /**
- * Where migrations live for this project. Resolved against the invocation
- * directory, which is also the config file's directory for every default
- * invocation.
+ * Where migrations live for this project. The command boundary has already
+ * resolved `migrations.dir` against the config file's directory, so `cwd`
+ * only anchors a config handed in raw, as tests do.
  */
 export function migrationsDirFor(config: PrismaNextConfig, cwd: string): string {
   return resolve(cwd, config.migrations?.dir ?? 'migrations');
@@ -18,14 +18,15 @@ export function appMigrationsDirFor(config: PrismaNextConfig, cwd: string): stri
 }
 
 /**
- * The config file an operation should anchor its project paths on. The engine
- * loads the config and hands a handler the value but not the path, and
- * `--config` is an engine flag the handler never sees, so a handler names the
- * invocation directory's file. That equals the loaded file for every
- * invocation whose config sits in the invocation directory.
+ * The config file an operation should anchor its project paths on: the file
+ * the engine loaded, which `--config` may have placed outside the invocation
+ * directory. With no loaded file it is the invocation directory's own.
  */
-export function projectConfigPathFor(cwd: string): string {
-  return resolve(cwd, 'prisma.config.ts');
+export function projectConfigPathFor(ctx: {
+  readonly cwd: string;
+  readonly configFile: string | null;
+}): string {
+  return ctx.configFile ?? resolve(ctx.cwd, 'prisma.config.ts');
 }
 
 /**

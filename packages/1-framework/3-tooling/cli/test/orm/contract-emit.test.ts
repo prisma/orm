@@ -141,6 +141,42 @@ describe('contract emit', () => {
     });
   });
 
+  it('anchors relative config paths on the --config file, not the working directory', async () => {
+    const configDir = join(PROJECT_DIR, 'sub');
+    const config = ormConfig({
+      contract: {
+        source: {
+          format: 'psl',
+          inputs: ['./contract.prisma'],
+          load: () => ({ ok: true, value: {} }),
+        },
+        output: './generated/contract.json',
+      },
+    });
+    const loadConfig = (configPath?: string) =>
+      Promise.resolve({
+        path: join(PROJECT_DIR, configPath ?? 'prisma.config.ts'),
+        sections: { orm: config },
+        diagnostics: [],
+      });
+
+    const run = await createTestCli({ commands, groups, loadConfig }).run(
+      ['contract', 'emit', '--json', '--config', 'sub/prisma.config.ts'],
+      { cwd: PROJECT_DIR },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(executeContractEmit.mock.calls[0]?.[0]).toMatchObject({
+      config: {
+        contract: {
+          source: { inputs: [join(configDir, 'contract.prisma')] },
+          output: join(configDir, 'generated', 'contract.json'),
+        },
+      },
+      cwd: PROJECT_DIR,
+    });
+  });
+
   it('loads the config exactly once for a run', async () => {
     const loader = countingLoader();
 

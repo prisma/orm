@@ -423,7 +423,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             name: args.flags.advanceRef,
             contractJson: snapshotContractJson,
             contractJsonPath: snapshotContractPath,
-            configPath: projectConfigPathFor(ctx.cwd),
+            configPath: projectConfigPathFor(ctx),
             client,
           });
           if (!preflight.ok) {

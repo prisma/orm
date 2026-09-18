@@ -307,7 +307,7 @@ export function createDbSignCommand(
           name: refName,
           contractJson: signedSource.json,
           contractJsonPath: signedSource.jsonPath,
-          configPath: projectConfigPathFor(ctx.cwd),
+          configPath: projectConfigPathFor(ctx),
           client,
         });
         if (!preflight.ok) {

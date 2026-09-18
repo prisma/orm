@@ -24,10 +24,11 @@ export interface ContractConfig {
    */
   readonly source: ContractSourceProvider;
   /**
-   * Path to contract.json artifact. Providers that know an input path (PSL,
-   * `typescriptContractFromPath`) derive an output colocated with that input
-   * so this rarely needs to be set explicitly. The `.d.ts` types file is
-   * always emitted next to the JSON (e.g., `contract.json` → `contract.d.ts`).
+   * Path to contract.json artifact, relative to the config file. Providers
+   * that know an input path (PSL, `typescriptContractFromPath`) derive an
+   * output colocated with that input so this rarely needs to be set
+   * explicitly. The `.d.ts` types file is always emitted next to the JSON
+   * (e.g., `contract.json` → `contract.d.ts`).
    */
   readonly output?: string;
 }
@@ -107,7 +108,7 @@ export interface PrismaNextConfig<
    * Migration configuration. Controls where on-disk migration packages are stored.
    */
   readonly migrations?: {
-    /** Directory for migration packages, relative to config file. Defaults to 'migrations'. */
+    /** Directory for migration packages, relative to the config file. Defaults to 'migrations'. */
     readonly dir?: string;
   };
   readonly formatter?: FormatterConfig;
