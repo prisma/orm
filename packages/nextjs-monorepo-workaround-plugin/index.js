@@ -1,48 +1,164 @@
 // @ts-check
 
-const path = require('path')
-const fs = require('fs/promises')
+const path = require('path');
+const fs = require('fs/promises');
 
-// when client is bundled this gets its output path
-// regex works both on escaped and non-escaped code
-const prismaDirRegex =
-  /\\?"?output\\?"?:\s*{(?:\\n?|\s)*\\?"?value\\?"?:(?:\\n?|\s)*\\?"(.*?)\\?",(?:\\n?|\s)*\\?"?fromEnvVar\\?"?/g
+const prismaDirRegex = /\\?"?output\\?"?:\s*{(?:\\n?|\s)*\\?"?value\\?"?:(?:\\n?|\s)*\\?"(.*?)\\?",(?:\\n?|\s)*\\?"?fromEnvVar\\?"?/g;
 
-async function getPrismaDir(from) {
-  // if we can find schema.prisma in the path, we are done
-  if (await fs.stat(path.join(from, 'schema.prisma')).catch(() => false)) {
-    return from
+/**
+ * Parse the schema.prisma file to extract the output path from the generator block
+ */
+async function getOutputPathFromSchema(schemaPath) {
+  try {
+    const schemaContent = await fs.readFile(schemaPath, 'utf-8');
+    const outputMatch = schemaContent.match(/generator\s+client\s*{[^}]*output\s*=\s*"([^"]+)"/);
+    if (outputMatch && outputMatch[1]) {
+      return outputMatch[1];
+    }
+  } catch (error) {
+    console.warn(`[PrismaPlugin] Could not read schema at ${schemaPath}:`, error.message);
   }
-
-  // otherwise we need to find the generated prisma client
-  return path.dirname(require.resolve('.prisma/client', { paths: [from] }))
+  return null;
 }
 
-// get all required prisma files (schema + engine)
-async function getPrismaFiles(from) {
-  const prismaDir = await getPrismaDir(from)
-  const filterRegex = /schema\.prisma|engine/
-  const prismaFiles = await fs.readdir(prismaDir)
+/**
+ * Find the schema.prisma file by traversing up the directory tree
+ */
+async function findSchemaFile(from) {
+  const possiblePaths = [
+    path.join(from, 'schema.prisma'),
+    path.join(from, '../schema.prisma'),
+    path.join(from, '../../schema.prisma'),
+    path.join(from, '../../../schema.prisma'),
+    path.join(from, '../../../../schema.prisma'),
+    path.join(from, '../../prisma/schema.prisma'),
+    path.join(from, '../../../prisma/schema.prisma'),
+    path.join(from, '../../../../prisma/schema.prisma'),
+    path.join(from, '../../../prisma/schema/schema.prisma'),
+    path.join(from, '../../../../prisma/schema/schema.prisma'),
+    path.join(from, '../../../../../prisma/schema/schema.prisma'),
+  ];
 
-  return prismaFiles.filter((file) => file.match(filterRegex))
+  for (const possiblePath of possiblePaths) {
+    if (await fs.stat(possiblePath).catch(() => false)) {
+      return possiblePath;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Resolves the Prisma directory for custom output paths in a monorepo
+ * @param {string} from - The output path from the bundled code
+ */
+async function getPrismaDir(from) {
+  if (await fs.stat(path.join(from, 'schema.prisma')).catch(() => false)) {
+    return from;
+  }
+
+  const schemaFile = await findSchemaFile(from);
+  if (schemaFile) {
+    return path.dirname(schemaFile);
+  }
+
+  console.warn(`[PrismaPlugin] Could not find schema.prisma from: ${from}`);
+  return from;
+}
+
+/**
+ * Get all Prisma files (schema + engine binaries) from the generated client directory
+ * @param {string} from - The output path from the bundled code
+ */
+async function getPrismaFiles(from) {
+  try {
+    console.log(`[PrismaPlugin] >>> Getting Prisma files from: ${from}`);
+
+    // If 'from' already points to a generated client directory, use it directly
+    // This happens when webpack bundles code that imports from the generated client
+    if (from.includes('/generated/') && from.includes('-client')) {
+      console.log(`[PrismaPlugin] ✓ Using existing generated client path: ${from}`);
+
+      // Check if directory exists
+      const dirExists = await fs.stat(from).catch(() => false);
+      if (!dirExists) {
+        console.error(`[PrismaPlugin] ✗ Client directory does not exist: ${from}`);
+        return { files: [], clientDir: from, schemaDir: from };
+      }
+
+      // Look for schema.prisma and all engine binaries (.node files)
+      const filterRegex = /schema\.prisma$|libquery_engine.*\.node$|query_engine.*\.node$/;
+      const allFiles = await fs.readdir(from);
+      const prismaFiles = allFiles.filter((file) => file.match(filterRegex));
+
+      console.log(`[PrismaPlugin] ✓ Found ${prismaFiles.length} Prisma files:`, prismaFiles);
+
+      return {
+        files: prismaFiles,
+        clientDir: from,
+        schemaDir: path.dirname(from), // We don't have the schema dir, but this is close enough
+      };
+    }
+
+    // Otherwise, find the schema and resolve the client path
+    const schemaFile = await findSchemaFile(from);
+    if (!schemaFile) {
+      console.warn(`[PrismaPlugin] ✗ No schema file found for: ${from}`);
+      return { files: [], clientDir: from, schemaDir: from };
+    }
+    console.log(`[PrismaPlugin] ✓ Found schema file: ${schemaFile}`);
+
+    const outputPath = await getOutputPathFromSchema(schemaFile);
+    if (!outputPath) {
+      console.warn(`[PrismaPlugin] ✗ No output path found in schema: ${schemaFile}`);
+      return { files: [], clientDir: from, schemaDir: from };
+    }
+    console.log(`[PrismaPlugin] ✓ Output path from schema: ${outputPath}`);
+
+    const schemaDir = path.dirname(schemaFile);
+    const generatedClientDir = path.resolve(schemaDir, outputPath);
+
+    console.log(`[PrismaPlugin] ✓ Resolved client directory: ${generatedClientDir}`);
+
+    // Check if directory exists
+    const dirExists = await fs.stat(generatedClientDir).catch(() => false);
+    if (!dirExists) {
+      console.error(`[PrismaPlugin] ✗ Client directory does not exist: ${generatedClientDir}`);
+      return { files: [], clientDir: generatedClientDir, schemaDir: path.dirname(schemaFile) };
+    }
+
+    // Look for schema.prisma and all engine binaries (.node files)
+    const filterRegex = /schema\.prisma$|libquery_engine.*\.node$|query_engine.*\.node$/;
+    const allFiles = await fs.readdir(generatedClientDir);
+    const prismaFiles = allFiles.filter((file) => file.match(filterRegex));
+
+    console.log(`[PrismaPlugin] ✓ Found ${prismaFiles.length} Prisma files:`, prismaFiles);
+
+    return {
+      files: prismaFiles,
+      clientDir: generatedClientDir,
+      schemaDir: path.dirname(schemaFile),
+    };
+  } catch (error) {
+    console.error(`[PrismaPlugin] ✗ Error getting Prisma files from: ${from}`);
+    console.error(`[PrismaPlugin] Error details:`, error.message);
+    console.error(`[PrismaPlugin] Stack:`, error.stack);
+    return { files: [], clientDir: from, schemaDir: from };
+  }
 }
 
 class PrismaPlugin {
   constructor(options = {}) {
-    this.options = options
+    this.options = options;
   }
 
-  /**
-   * @param {import('webpack').Compiler} compiler
-   */
   apply(compiler) {
-    const { webpack } = compiler
-    const { Compilation, sources } = webpack
+    const { webpack } = compiler;
+    const { Compilation, sources } = webpack;
 
-    const originAssetsToCopies = {} // { [original]: [dest1, dest2, ...] }
-    const origins = []
+    const originAssetsToCopies = {};
+    const origins = [];
 
-    // read bundles to find which prisma files to copy (for all users)
     compiler.hooks.compilation.tap('PrismaPlugin', (compilation) => {
       compilation.hooks.processAssets.tapPromise(
         {
@@ -50,67 +166,73 @@ class PrismaPlugin {
           stage: Compilation.PROCESS_ASSETS_STAGE_ANALYSE,
         },
         async (assets) => {
-          const jsAssetNames = Object.keys(assets).filter((k) => k.endsWith('.js'))
+          const jsAssetNames = Object.keys(assets).filter((k) => k.endsWith('.js'));
           const jsAsyncActions = jsAssetNames.map(async (assetName) => {
-            // prepare paths
-            const outputDir = compiler.outputPath
-            const assetPath = path.resolve(outputDir, assetName)
-            const assetDir = path.dirname(assetPath)
+            const outputDir = compiler.outputPath;
+            const assetPath = path.resolve(outputDir, assetName);
+            const assetDir = path.dirname(assetPath);
 
-            // get sources
-            const oldSourceAsset = compilation.getAsset(assetName)
-            const oldSourceContents = oldSourceAsset.source.source() + ''
+            const oldSourceAsset = compilation.getAsset(assetName);
+            const oldSourceContents = oldSourceAsset.source.source() + '';
 
-            // update sources
             for (const match of oldSourceContents.matchAll(prismaDirRegex)) {
-              const prismaDir = await getPrismaDir(match[1])
-              const prismaFiles = await getPrismaFiles(match[1])
+              try {
+                const result = await getPrismaFiles(match[1]);
+                const { files: prismaFiles, clientDir, schemaDir } = result;
 
-              prismaFiles.forEach((f) => {
-                // build the asset original path
-                const from = path.join(prismaDir, f)
-                // look for an existing origin to get its index (origin = prisma directory)
-                const originIndexLookup = origins.indexOf(prismaDir)
-                const originIndex =
-                  originIndexLookup !== -1
-                    ? // if origin exist, take the index as the unique key for this origin,
-                      originIndexLookup
-                    : // else push the new origin and get it's index as well
-                      // (push returns new length of the array, we subtract 1 to get 0-based index)
-                      origins.push(prismaDir) - 1
-                // get the existing copies for this origin asset or set to an empty array
-                const assetCopies = (originAssetsToCopies[from] = originAssetsToCopies[from] || [])
-
-                // build the copy filename
-                // only the schema.prisma asset filename should be suffixed by originIndex
-                // as the rest should be the same across all the origins
-                const copyFilename = f === 'schema.prisma' ? `${f}${originIndex}` : f
-                // build the copy path by appending filename to the destination folder
-                // (where the asset we are copying this for will be emitted)
-                const copyPath = path.join(assetDir, copyFilename)
-                // if this copy is new for the origin asset, we add it to the copies array
-                if (!assetCopies.includes(copyPath)) {
-                  assetCopies.push(copyPath)
+                if (prismaFiles.length === 0) {
+                  continue;
                 }
 
-                // finally, we update the reference to schema.prisma file to point
-                // to the updated filename in the emitted asset
-                if (f === 'schema.prisma') {
-                  // update "schema.prisma" to "schema.prisma{originIndex}" in the sources
-                  const newSourceString = oldSourceContents.replace(/schema\.prisma/g, copyFilename)
-                  const newRawSource = new sources.RawSource(newSourceString)
-                  compilation.updateAsset(assetName, newRawSource)
-                }
-              })
+                const schemaFile = await findSchemaFile(match[1]);
+                const schemaFilename = schemaFile ? path.basename(schemaFile) : 'schema.prisma';
+
+                console.log(`[PrismaPlugin] Processing ${prismaFiles.length} files from ${clientDir}`);
+
+                prismaFiles.forEach((f) => {
+                  const from = path.join(clientDir, f);
+                  const originIndexLookup = origins.indexOf(clientDir);
+                  const originIndex = originIndexLookup !== -1 ? originIndexLookup : origins.push(clientDir) - 1;
+                  const assetCopies = (originAssetsToCopies[from] = originAssetsToCopies[from] || []);
+
+                  // Copy schema.prisma with suffix, but engine binaries without suffix
+                  const copyFilename = f === schemaFilename ? `${f}${originIndex}` : f;
+                  const copyPath = path.join(assetDir, copyFilename);
+
+                  if (!assetCopies.includes(copyPath)) {
+                    assetCopies.push(copyPath);
+                    console.log(`[PrismaPlugin] Will copy ${f} to ${copyPath}`);
+                  }
+
+                  // For engine binaries, also copy to the central chunks directory
+                  // This is where Prisma looks first according to the error logs
+                  if (f.match(/\.node$/)) {
+                    const outputDir = compiler.outputPath;
+                    const chunksDir = path.join(outputDir, 'chunks');
+                    const chunksPath = path.join(chunksDir, f);
+                    if (!assetCopies.includes(chunksPath)) {
+                      assetCopies.push(chunksPath);
+                      console.log(`[PrismaPlugin] Will also copy ${f} to chunks directory: ${chunksPath}`);
+                    }
+                  }
+
+                  if (f === schemaFilename) {
+                    const newSourceString = oldSourceContents.replace(new RegExp(schemaFilename, 'g'), copyFilename);
+                    const newRawSource = new sources.RawSource(newSourceString);
+                    compilation.updateAsset(assetName, newRawSource);
+                  }
+                });
+              } catch (error) {
+                console.warn(`[PrismaPlugin] Error processing asset ${assetName}:`, error.message);
+              }
             }
-          })
+          });
 
-          await Promise.all(jsAsyncActions)
+          await Promise.all(jsAsyncActions);
         },
-      )
-    })
+      );
+    });
 
-    // update nft.json files to include prisma files (only for next.js)
     compiler.hooks.compilation.tap('PrismaPlugin', (compilation) => {
       compilation.hooks.processAssets.tapPromise(
         {
@@ -118,51 +240,57 @@ class PrismaPlugin {
           stage: Compilation.PROCESS_ASSETS_STAGE_ANALYSE,
         },
         (assets) => {
-          const nftAssetNames = Object.keys(assets).filter((k) => k.endsWith('.nft.json'))
+          const nftAssetNames = Object.keys(assets).filter((k) => k.endsWith('.nft.json'));
           nftAssetNames.forEach((assetName) => {
-            // prepare paths
-            const outputDir = compiler.outputPath
-            const assetPath = path.resolve(outputDir, assetName)
-            const assetDir = path.dirname(assetPath)
+            const outputDir = compiler.outputPath;
+            const assetPath = path.resolve(outputDir, assetName);
+            const assetDir = path.dirname(assetPath);
 
-            // get sources
-            const oldSourceAsset = compilation.getAsset(assetName)
-            const oldSourceContents = oldSourceAsset.source.source() + ''
-            const ntfLoadedAsJson = JSON.parse(oldSourceContents)
+            const oldSourceAsset = compilation.getAsset(assetName);
+            const oldSourceContents = oldSourceAsset.source.source() + '';
+            const ntfLoadedAsJson = JSON.parse(oldSourceContents);
 
-            // update sources
             Object.values(originAssetsToCopies).forEach((copies) => {
-              const copiesPaths = copies.map((copy) => path.relative(assetDir, copy))
-              ntfLoadedAsJson.files.push(...copiesPaths)
-            })
+              const copiesPaths = copies.map((copy) => path.relative(assetDir, copy));
+              ntfLoadedAsJson.files.push(...copiesPaths);
+            });
 
-            // persist sources
-            const newSourceString = JSON.stringify(ntfLoadedAsJson)
-            const newRawSource = new sources.RawSource(newSourceString)
-            compilation.updateAsset(assetName, newRawSource)
-          })
+            const newSourceString = JSON.stringify(ntfLoadedAsJson);
+            const newRawSource = new sources.RawSource(newSourceString);
+            compilation.updateAsset(assetName, newRawSource);
+          });
 
-          return Promise.resolve()
+          return Promise.resolve();
         },
-      )
-    })
+      );
+    });
 
-    // copy prisma files to output as the final step (for all users)
     compiler.hooks.done.tapPromise('PrismaPlugin', async () => {
+      console.log(`[PrismaPlugin] Copying ${Object.keys(originAssetsToCopies).length} Prisma files...`);
+
       const asyncActions = Object.entries(originAssetsToCopies).map(async ([from, copies]) => {
         await Promise.all(
           copies.map(async (copy) => {
-            // only copy if file doesn't exist, necessary for watch mode
             if ((await fs.access(copy).catch(() => false)) === false) {
-              return fs.copyFile(from, copy)
+              await fs.mkdir(path.dirname(copy), { recursive: true }).catch(() => {});
+              return fs
+                .copyFile(from, copy)
+                .then(() => {
+                  console.log(`[PrismaPlugin] ✓ Copied ${path.basename(from)} to ${copy}`);
+                })
+                .catch((error) => {
+                  console.error(`[PrismaPlugin] ✗ Failed to copy ${from} to ${copy}:`, error.message);
+                });
             }
+            console.log(`[PrismaPlugin] ⊙ Skipped ${path.basename(from)} (already exists)`);
           }),
-        )
-      })
+        );
+      });
 
-      await Promise.all(asyncActions)
-    })
+      await Promise.all(asyncActions);
+      console.log('[PrismaPlugin] Done copying Prisma files');
+    });
   }
 }
 
-module.exports = { PrismaPlugin }
+module.exports = { PrismaPlugin };
