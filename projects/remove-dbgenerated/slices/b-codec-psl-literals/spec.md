@@ -1,3 +1,5 @@
+> **Superseded 2026-09-17.** Project spec decisions D9 and D10 were amended: every literal default has a literal type, codec descriptors declare the literal types they are compatible with, and PSL writes a literal of a type as a PSL scalar or with a tag. This spec's `encodePsl`/`decodePsl` design (B1, B2, B3, B4) is withdrawn. The design is recorded in ADR 253 (`docs/architecture docs/adrs/ADR 253 - Literal types for column defaults.md`); this spec is rewritten to match it before implementation.
+
 # Slice B — Codec-owned PSL literals (the PSL half of ADR 184)
 
 **Project:** [Remove `dbgenerated`](../../spec.md). **Linear:** not yet created. **Branch:** `remove-dbgenerated-codec-psl-literals` off `main`. **Shape:** one PR. **Runs in parallel with:** [slice A](../a-sql-default-literal/spec.md). **Touches nothing slice A touches** except the `@default` argument arms in `sql-attribute-specs.ts`, where each slice adds its own arm.
