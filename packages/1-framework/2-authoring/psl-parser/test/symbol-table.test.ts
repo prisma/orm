@@ -105,6 +105,240 @@ describe('buildSymbolTable() — AC3 namespace nesting', () => {
   });
 });
 
+describe('buildSymbolTable() — namespace reopening', () => {
+  const policy: AuthoringPslBlockDescriptor = {
+    kind: 'pslBlock',
+    keyword: 'policy',
+    discriminator: 'fixture-policy',
+    name: { required: true },
+    parameters: {
+      target: { kind: 'ref', refKind: 'model', scope: 'same-namespace', required: true },
+    },
+  };
+  const descriptors = { policy };
+  const wrap = (body: string, name = 'blog') => `namespace ${name} {\n${body}\n}`;
+  const members = [
+    'model Article {\n  id Int @id\n  address Address?\n}',
+    'type Address {\n  street String\n}',
+    'policy ReadArticles {\n  target = Article\n}',
+    'policy WriteArticles {\n  target = Article\n}',
+  ];
+
+  function collect(source: string) {
+    const parsed = parse(source);
+    expect(parsed.diagnostics).toEqual([]);
+    return {
+      ...parsed,
+      ...buildSymbolTable({ ...parsed, pslBlockDescriptors: descriptors }),
+    };
+  }
+
+  function semantics(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(semantics);
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value)
+          .filter(([key]) => key !== 'node' && key !== 'span')
+          .map(([key, child]) => [key, semantics(child)]),
+      );
+    }
+    return value;
+  }
+
+  it('collects consolidated, split and reversed blocks with original declaration provenance', () => {
+    const consolidated = collect(wrap(members.join('\n')));
+    expect(consolidated.diagnostics).toEqual([]);
+    for (const ordered of [members, [...members].reverse()]) {
+      const source = [
+        wrap(ordered[0] ?? ''),
+        wrap('model Other {\n id Int\n}', 'elsewhere'),
+        ...ordered.slice(1).map((member) => wrap(member)),
+        wrap(''),
+        wrap('model CaseDistinct {\n id Int\n}', 'Blog'),
+      ].join('\n');
+      const result = collect(source);
+      expect(result.diagnostics).toEqual([]);
+      const namespace = result.table.topLevel.namespaces['blog'];
+      expect(semantics(namespace)).toEqual(
+        semantics(consolidated.table.topLevel.namespaces['blog']),
+      );
+      expect(Object.keys(result.table.topLevel.namespaces)).toEqual(['blog', 'elsewhere', 'Blog']);
+      const nodes = [...result.document.declarations()]
+        .filter((node) => node instanceof NamespaceDeclarationAst)
+        .filter((node) => node.name()?.name() === 'blog');
+      expect(namespace?.node.syntax.green).toBe(nodes[0]?.syntax.green);
+      expect(namespace?.node.syntax.offset).toBe(nodes[0]?.syntax.offset);
+      for (const node of nodes) {
+        for (const member of node.declarations()) {
+          const name = member.name()?.name() ?? '';
+          const symbol =
+            namespace?.models[name] ?? namespace?.compositeTypes[name] ?? namespace?.blocks[name];
+          expect(symbol?.node.syntax.green).toBe(member.syntax.green);
+          expect(symbol?.node.syntax.offset).toBe(member.syntax.offset);
+          expect(symbol?.span).toEqual({
+            start: {
+              offset: member.syntax.offset,
+              line: result.sourceFile.positionAt(member.syntax.offset).line + 1,
+              column: result.sourceFile.positionAt(member.syntax.offset).character + 1,
+            },
+            end: {
+              offset: member.syntax.offset + member.syntax.green.textLength,
+              line:
+                result.sourceFile.positionAt(member.syntax.offset + member.syntax.green.textLength)
+                  .line + 1,
+              column:
+                result.sourceFile.positionAt(member.syntax.offset + member.syntax.green.textLength)
+                  .character + 1,
+            },
+          });
+        }
+      }
+    }
+  });
+
+  it.each(['model-first', 'block-first', 'other-namespace'])(
+    'resolves same-namespace references: %s',
+    (order) => {
+      const model = wrap(members[0] ?? '', order === 'other-namespace' ? 'elsewhere' : 'blog');
+      const blockSource = wrap(members[2] ?? '');
+      const result = collect(
+        (order === 'model-first' ? [model, blockSource] : [blockSource, model]).join('\n'),
+      );
+      expect(result.diagnostics).toEqual([]);
+      const block = result.table.topLevel.namespaces['blog']?.blocks['ReadArticles'];
+      expect(block).toBeDefined();
+      if (block === undefined) throw new Error('Missing policy block');
+      const diagnostics = validateExtensionBlockFromSymbol({
+        block,
+        descriptor: policy,
+        symbolTable: result.table,
+        sourceFile: result.sourceFile,
+        sourceId: 'schema.prisma',
+        codecLookup: emptyCodecLookup,
+      });
+      if (order === 'other-namespace') {
+        expect(diagnostics).toEqual([
+          expect.objectContaining({ code: 'PSL_EXTENSION_UNRESOLVED_REF' }),
+        ]);
+      } else {
+        expect(diagnostics).toEqual([]);
+      }
+    },
+  );
+
+  const kinds = ['model', 'type', 'policy'] as const;
+  const declaration = (kind: (typeof kinds)[number], body: string) =>
+    `${kind} Shared {\n  ${kind === 'policy' ? `target = ${body}` : `${body} Int`}\n}`;
+
+  it.each(
+    kinds.flatMap((first) =>
+      kinds.flatMap((later) => ['first', 'other'].map((body) => ({ first, later, body }))),
+    ),
+  )('keeps the whole first $first against later $later ($body)', ({ first, later, body }) => {
+    const initial = wrap(declaration(first, 'first'));
+    const source = `${initial}\n${wrap(declaration(later, body))}`;
+    const result = collect(source);
+    const offset = source.lastIndexOf('Shared');
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'PSL_DUPLICATE_DECLARATION',
+        message: 'Duplicate declaration of "Shared"',
+        range: {
+          start: result.sourceFile.positionAt(offset),
+          end: result.sourceFile.positionAt(offset + 'Shared'.length),
+        },
+      },
+    ]);
+    expect(semantics(result.table)).toEqual(semantics(collect(initial).table));
+  });
+
+  it.each(
+    ['Shared', '__proto__'].flatMap((name) =>
+      ['model', 'type', 'policy', 'binding'].flatMap((kind) =>
+        [true, false].map((namespaceFirst) => ({ name, kind, namespaceFirst })),
+      ),
+    ),
+  )(
+    'preserves top-level $kind $name collision (namespace first: $namespaceFirst)',
+    ({ name, kind, namespaceFirst }) => {
+      const namespace = wrap('model Inside {\n id Int\n}', name);
+      const other = kind === 'binding' ? `types {\n ${name} = String\n}` : `${kind} ${name} {\n}`;
+      const first = namespaceFirst ? namespace : other;
+      const source = `${first}\n${namespaceFirst ? other : namespace}`;
+      const result = collect(source);
+      const offset = source.lastIndexOf(name);
+      expect(result.diagnostics).toEqual([
+        {
+          code: 'PSL_DUPLICATE_DECLARATION',
+          message: `Duplicate declaration of "${name}"`,
+          range: {
+            start: result.sourceFile.positionAt(offset),
+            end: result.sourceFile.positionAt(offset + name.length),
+          },
+        },
+      ]);
+      expect(semantics(result.table)).toEqual(semantics(collect(first).table));
+      expect(Object.keys(result.table.topLevel.namespaces)).toEqual(namespaceFirst ? [name] : []);
+    },
+  );
+
+  it.each(['consolidated', 'split', 'reversed'])(
+    'collects __proto__ as one enumerable namespace: %s',
+    (form) => {
+      const first = 'model A {\n id Int\n}';
+      const second = 'model B {\n id Int\n}';
+      const consolidated = collect(wrap(`${first}\n${second}`, '__proto__'));
+      const source =
+        form === 'consolidated'
+          ? wrap(`${first}\n${second}`, '__proto__')
+          : (form === 'split' ? [first, second] : [second, first])
+              .map((member) => wrap(member, '__proto__'))
+              .join('\n');
+      const result = collect(source);
+      expect(result.diagnostics).toEqual([]);
+      expect(Object.keys(result.table.topLevel.namespaces)).toEqual(['__proto__']);
+      expect(
+        Object.keys(Object.values(result.table.topLevel.namespaces)[0]?.models ?? {}).sort(),
+      ).toEqual(['A', 'B']);
+      expect(semantics(result.table)).toEqual(semantics(consolidated.table));
+    },
+  );
+
+  it('retains duplicate detection for names inherited by object dictionaries', () => {
+    const result = collect(wrap('model __proto__ {\n}\nmodel __proto__ {\n}'));
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'PSL_DUPLICATE_DECLARATION',
+        message: 'Duplicate declaration of "__proto__"',
+        range: { start: { line: 3, character: 6 }, end: { line: 3, character: 15 } },
+      },
+    ]);
+  });
+
+  it('retains field and parameter errors in later distinct members', () => {
+    const result = collect(
+      [
+        wrap(members[0] ?? ''),
+        wrap('model Later {\n value String\n value Int\n}'),
+        wrap('type LaterType {\n value String\n value Int\n}'),
+        wrap('policy LaterPolicy {\n target = Article\n target = Other\n}'),
+      ].join('\n'),
+    );
+    expect(result.diagnostics.map(({ code }) => code)).toEqual([
+      'PSL_DUPLICATE_DECLARATION',
+      'PSL_DUPLICATE_DECLARATION',
+      'PSL_EXTENSION_DUPLICATE_PARAMETER',
+    ]);
+    const namespace = result.table.topLevel.namespaces['blog'];
+    expect(namespace?.models['Later']?.fields['value']?.typeName).toBe('String');
+    expect(namespace?.compositeTypes['LaterType']?.fields['value']?.typeName).toBe('String');
+    expect(namespace?.blocks['LaterPolicy']?.block.parameters['target']).toMatchObject({
+      kind: 'ref',
+      identifier: 'Article',
+    });
+  });
+});
+
 describe('buildSymbolTable() — AC4 field nesting', () => {
   it('keys fields by name and back-references the FieldDeclarationAst', () => {
     const source = ['model User {', '  id Int', '  email String', '}'].join('\n');

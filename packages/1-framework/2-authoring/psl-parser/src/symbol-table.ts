@@ -140,6 +140,7 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   const models: Record<string, ModelSymbol> = {};
   const compositeTypes: Record<string, CompositeTypeSymbol> = {};
   const topLevelNames = new Set<string>();
+  const namespaceMemberNames = new Map<string, Set<string>>();
 
   const claim = (taken: Set<string>, name: IdentifierAst | undefined): string | undefined => {
     const text = name?.name();
@@ -174,15 +175,29 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
         blocks[name] = buildBlock(name, declaration, sourceFile, pslBlockDescriptors, diagnostics);
       }
     } else if (declaration instanceof NamespaceDeclarationAst) {
-      const name = claim(topLevelNames, declaration.name());
+      const declaredName = declaration.name()?.name();
+      const existing =
+        declaredName !== undefined && Object.hasOwn(namespaces, declaredName)
+          ? namespaces[declaredName]
+          : undefined;
+      const name = existing?.name ?? claim(topLevelNames, declaration.name());
       if (name !== undefined) {
-        namespaces[name] = buildNamespace(
-          name,
-          declaration,
-          diagnostics,
-          sourceFile,
-          pslBlockDescriptors,
-        );
+        const taken = namespaceMemberNames.get(name) ?? new Set<string>();
+        namespaceMemberNames.set(name, taken);
+        Object.defineProperty(namespaces, name, {
+          value: buildNamespace(
+            name,
+            declaration,
+            diagnostics,
+            sourceFile,
+            pslBlockDescriptors,
+            existing,
+            taken,
+          ),
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       }
     } else if (declaration instanceof TypesBlockAst) {
       for (const binding of declaration.declarations()) {
@@ -258,11 +273,12 @@ function buildNamespace(
   diagnostics: ParseDiagnostic[],
   sourceFile: SourceFile,
   pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
+  existing: NamespaceSymbol | undefined,
+  taken: Set<string>,
 ): NamespaceSymbol {
-  const models: Record<string, ModelSymbol> = {};
-  const compositeTypes: Record<string, CompositeTypeSymbol> = {};
-  const blocks: Record<string, BlockSymbol> = {};
-  const taken = new Set<string>();
+  const models: Record<string, ModelSymbol> = existing?.models ?? {};
+  const compositeTypes: Record<string, CompositeTypeSymbol> = existing?.compositeTypes ?? {};
+  const blocks: Record<string, BlockSymbol> = existing?.blocks ?? {};
 
   for (const member of node.declarations()) {
     const memberName = member.name()?.name();
@@ -294,15 +310,17 @@ function buildNamespace(
     }
   }
 
-  return {
-    kind: 'namespace',
-    name,
-    node,
-    span: nodePslSpan(node.syntax, sourceFile),
-    models,
-    compositeTypes,
-    blocks,
-  };
+  return (
+    existing ?? {
+      kind: 'namespace',
+      name,
+      node,
+      span: nodePslSpan(node.syntax, sourceFile),
+      models,
+      compositeTypes,
+      blocks,
+    }
+  );
 }
 
 function buildFields(

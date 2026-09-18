@@ -17,7 +17,7 @@ In the provider-based authoring model, PSL providers call `parse` to obtain the 
 - Enforce strict error behavior for unsupported syntax (no warning or best-effort mode).
 - Parse attributes generically (namespaced or not), including optional argument lists; target semantics live downstream.
 - Emit attribute nodes with explicit target (`field` / `model` / `namedType`), attribute name, and parsed argument list with spans.
-- Build a scope-aware symbol table from the CST, including duplicate-declaration diagnostics, target-supplied scalar/type-alias classification, and descriptor-driven generic-block reconstruction.
+- Build a scope-aware symbol table from the CST, including duplicate-declaration diagnostics, unclassified named-type bindings, and descriptor-driven generic-block reconstruction.
 
 ## Attributes (generic parsing boundary)
 
@@ -39,7 +39,7 @@ Interpretation/validation (for example `@internal/sql-contract-psl`) is responsi
 ## Public API
 
 - `parse(schema)` in `src/parse.ts` (also at `@internal/psl-parser/syntax`) — the CST parser: returns the `DocumentAst`, its backing `SourceFile`, and syntactic diagnostics. The recursive-descent / lossless-CST path supersedes the legacy `parsePslDocument`.
-- `buildSymbolTable({ document, sourceFile, scalarTypes, pslBlockDescriptors })` in `src/symbol-table.ts` — a pure, fault-tolerant pass over a parsed CST `DocumentAst` that returns a scope-aware `SymbolTable` (top-level namespaces / scalars / type-aliases / blocks / models / composite-types as keyed records discriminated by `kind`, namespace members and block fields nested under their owner, every symbol carrying its CST AST `node` plus its declaration `span`) plus its own duplicate-name diagnostics (`PSL_DUPLICATE_DECLARATION`, first-wins, colliding across kinds within one scope). `scalarTypes` is supplied by the target to classify `types { ... }` bindings, while `pslBlockDescriptors` is supplied from authoring contributions so generic/extension blocks can be reconstructed once into `BlockSymbol.block`. The pass also **resolves** the field/named-type read set once: each `FieldSymbol` carries the split type (`typeName`/`typeNamespaceId`/`typeContractSpaceId`), `optional`/`list`, `typeConstructor?`, rendered `attributes`, and `malformedType?` (set, with a `PSL_INVALID_QUALIFIED_TYPE` diagnostic, when the type is over-qualified); `ScalarSymbol`/`TypeAliasSymbol` carry the resolved binding (`baseType`/`typeConstructor`/`isConstructor`). Interpreters consume this resolved shape directly — there is no per-package field/attribute view layer.
+- `buildSymbolTable({ document, sourceFile, pslBlockDescriptors })` in `src/symbol-table.ts` — a pure, fault-tolerant pass over a parsed `DocumentAst` that returns a scope-aware `SymbolTable` (top-level `namespaces`, `namedTypes`, `blocks`, `models`, and `compositeTypes` dictionaries) plus duplicate-name diagnostics (`PSL_DUPLICATE_DECLARATION`, first-wins across kinds within one scope). Repeated exact-name namespace blocks share member dictionaries. Each contributed declaration retains its authored `node` and `span`; the namespace's representative `node`/`span` identify its first block, not a synthesized combined block. `pslBlockDescriptors` reconstruct generic/extension blocks once into `BlockSymbol.block`. Each `FieldSymbol` carries its split type (`typeName`/`typeNamespaceId`/`typeContractSpaceId`), modifiers, optional constructor, resolved attributes, and malformed-qualification marker. `NamedTypeSymbol` carries the resolved `types { ... }` binding (`baseType`/`typeConstructor`/`isConstructor`); downstream interpreters classify it. Interpreters consume this resolved shape directly.
 - `readResolvedAttribute(s)` / `readResolvedConstructorCall` + the span maps
   (`nodePslSpan`, `rangeToPslSpan`, `keywordPslSpan`) in `src/resolve.ts` — the
   shared CST read helpers `buildSymbolTable` uses and that consumers (e.g.
@@ -56,6 +56,28 @@ Interpretation/validation (for example `@internal/sql-contract-psl`) is responsi
   - `@internal/psl-parser/syntax`
   - `@internal/psl-parser/tokenizer`
 
+## Reopening namespaces in one source file
+
+Blocks with exactly the same namespace name contribute distinct, whole declarations to one logical scope:
+
+```prisma
+namespace blog {
+  model Post {
+    id Int @id
+    authorId Int
+    author User @relation(fields: [authorId], references: [id])
+  }
+}
+
+namespace blog {
+  model User {
+    id Int @id
+  }
+}
+```
+
+The symbol scope is equivalent to one block containing both models, in either block order. Collection completes before downstream reference resolution; target restrictions and reference rules still apply. Names are case-sensitive. Members remain unique across models, composite types, and extension blocks; a repeated member is an error at the later name, and the first whole declaration wins. Bodies are never merged or overridden. A namespace name still cannot collide with another top-level declaration. This is single-file organization, not multi-file loading or partial declarations.
+
 ## Architecture
 
 ```mermaid
@@ -64,7 +86,6 @@ flowchart LR
   Parse --> CST[DocumentAst + SourceFile]
   Parse --> ParseDiagnostics[Parser diagnostics]
   CST --> Symbols[buildSymbolTable]
-  Scalars[target scalarTypes] --> Symbols
   Descriptors[pslBlockDescriptors] --> Symbols
   Symbols --> SymbolTable[SymbolTable]
   Symbols --> SymbolDiagnostics[Symbol-table diagnostics]
