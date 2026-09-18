@@ -21,9 +21,9 @@ const authoringTypes = {
   Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
   Uuid: { kind: 'typeConstructor', output: { codecId: 'pg/uuid@1', nativeType: 'uuid' } },
   Inet: { kind: 'typeConstructor', output: { codecId: 'pg/inet@1', nativeType: 'inet' } },
-  Timestamptz: {
+  TimestamptzString: {
     kind: 'typeConstructor',
-    output: { codecId: 'pg/timestamptz-temporal@1', nativeType: 'timestamptz' },
+    output: { codecId: 'pg/timestamptz-string@1', nativeType: 'timestamptz' },
   },
   VarChar: {
     kind: 'typeConstructor',
@@ -136,7 +136,7 @@ describe('Postgres PSL inference round trip', () => {
     expect(inferred).not.toContain('bareAmount Numeric()');
     expect(inferred).toMatch(/jsonValue\s+Json/);
     expect(inferred).toMatch(/jsonbValue\s+Jsonb/);
-    expect(inferred).toMatch(/occurredAt\s+Timestamptz/);
+    expect(inferred).toMatch(/occurredAt\s+TimestamptzString/);
     expect(inferred).toMatch(/label\s+VarChar\(191\)/);
 
     const emitted = parseAndEmit(inferred);
@@ -164,7 +164,7 @@ describe('Postgres PSL inference round trip', () => {
               json_value: { codecId: 'pg/json@1', nativeType: 'json', nullable: false },
               jsonb_value: { codecId: 'pg/jsonb@1', nativeType: 'jsonb', nullable: false },
               occurred_at: {
-                codecId: 'pg/timestamptz-temporal@1',
+                codecId: 'pg/timestamptz-string@1',
                 nativeType: 'timestamptz',
                 nullable: false,
               },
