@@ -1,118 +1,156 @@
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import type { EntitySelector } from '../src/exports';
-import { createEntityResolver, entityRef, identifier, list, oneOf } from '../src/exports';
-import { Cursor, parse, parseAttribute } from '../src/parse';
+import { blockAttribute, entityRef, identifier, list, oneOf } from '../src/exports';
+import { parse } from '../src/parse';
 import { buildSymbolTable } from '../src/symbol-table';
-import { FieldAttributeAst } from '../src/syntax/ast/attributes';
-import { createSyntaxTree } from '../src/syntax/red';
+import { ModelAttributeAst } from '../src/syntax/ast/attributes';
+import { IdentifierAst } from '../src/syntax/ast/identifier';
+import { SyntaxNode } from '../src/syntax/red';
 
-function symbols(source: string) {
-  const { document, sourceFile } = parse(source);
-  const result = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
-  expect(result.diagnostics).toEqual([]);
-  return result.table;
-}
-
-function argument(source: string) {
-  const cursor = new Cursor(`@test(${source})`);
-  const attribute = FieldAttributeAst.cast(createSyntaxTree(parseAttribute(cursor)));
-  const expression = [...(attribute?.argList()?.args() ?? [])][0]?.value();
-  if (!expression) throw new Error('Missing expression');
-  return { expression, ctx: { sourceId: 'references.prisma', sourceFile: cursor.sourceFile } };
-}
-
-const declarations = [
-  'model Owner {}',
-  'model Shared {}',
-  'model Global {}',
-  'model Fallback {}',
-  'type Address {}',
-  'types { Email = String }',
-  'permission Reader {}',
-  'namespace Local {\n model Owner {}\n model Shared {}\n type Global {}\n permission Writer {}\n}',
-  'namespace Sibling {\n model Hidden {}\n model Shared {}\n}',
-];
-
-function fixture(reverse = false) {
-  const table = symbols((reverse ? [...declarations].reverse() : declarations).join('\n'));
-  const namespace = table.topLevel.namespaces['Local'];
-  const owner = namespace?.models['Owner'];
-  const topOwner = table.topLevel.models['Owner'];
-  if (!namespace || !owner || !topOwner) throw new Error('Missing owner');
-  return {
-    table,
-    namespace,
-    resolve: createEntityResolver({ symbols: table, owner }),
-    topResolve: createEntityResolver({ symbols: table, owner: topOwner }),
-  };
-}
-
-describe('factory-bound entity resolution', () => {
-  it.each([false, true])(
-    'selects lexical identities independently of declaration order (%s)',
-    (reverse) => {
-      const { table, namespace, resolve, topResolve } = fixture(reverse);
-      expect(resolve('Shared')).toEqual({ declaration: namespace.models['Shared'], namespace });
-      expect(resolve('Shared')?.declaration).toBe(namespace.models['Shared']);
-      expect(resolve('Address')).toEqual({
-        declaration: table.topLevel.compositeTypes['Address'],
-        namespace: undefined,
-      });
-      expect(resolve('Email')?.declaration).toBe(table.topLevel.namedTypes['Email']);
-      expect(resolve('Fallback')?.declaration).toBe(table.topLevel.models['Fallback']);
-      expect(resolve('Fallback')?.namespace).toBeUndefined();
-      expect(resolve('Hidden')).toBeUndefined();
-      expect(topResolve('Shared')?.declaration).toBe(table.topLevel.models['Shared']);
-      expect(topResolve('Writer')).toBeUndefined();
-      expect(resolve('Missing')).toBeUndefined();
-      expect(resolve('toString')).toBeUndefined();
-      expect(resolve('Shared')).toBe(resolve('Shared'));
-    },
+function fixture(value: string, local = true, reverse = false) {
+  const members = [
+    ...(local ? [`model Owner {\n @@test(${value})\n}`] : []),
+    'model Shared {}',
+    'type Global {}',
+    'permission Writer {}',
+  ];
+  const declarations = [
+    'model Shared {}',
+    'model Global {}',
+    'model Fallback {}',
+    'type Address {}',
+    'types { Email = String }',
+    'permission Reader {}',
+    `namespace Local {\n${(reverse ? members.reverse() : members).join('\n')}\n}`,
+    'namespace Sibling {\n model Hidden {}\n model Shared {}\n}',
+    ...(local ? [] : [`model Owner {\n @@test(${value})\n}`]),
+  ];
+  const { document, sourceFile } = parse(
+    (reverse ? declarations.reverse() : declarations).join('\n'),
   );
-
-  it('binds composite and block owners by identity rather than matching top-level names', () => {
-    const { table, namespace } = fixture();
-    const composite = namespace.compositeTypes['Global'];
-    const block = namespace.blocks['Writer'];
-    if (!composite || !block) throw new Error('Missing owner');
-    for (const owner of [composite, block]) {
-      const resolve = createEntityResolver({ symbols: table, owner });
-      expect(resolve('Shared')?.declaration).toBe(namespace.models['Shared']);
-    }
+  const { table, diagnostics } = buildSymbolTable({
+    document,
+    sourceFile,
+    pslBlockDescriptors: {},
   });
+  expect(diagnostics).toEqual([]);
+  const namespace = table.topLevel.namespaces['Local'];
+  if (!namespace) throw new Error('Missing namespace');
+  for (const syntax of document.syntax.descendants()) {
+    if (!(syntax instanceof SyntaxNode)) continue;
+    const attribute = ModelAttributeAst.cast(syntax);
+    const expression = attribute?.argList()?.args()[Symbol.iterator]().next().value?.value();
+    if (expression)
+      return {
+        expression,
+        ctx: { sourceId: 'references.prisma', sourceFile, symbols: table },
+        table,
+        namespace,
+      };
+  }
+  throw new Error('Missing expression');
+}
 
-  it('rejects the selected wrong-kind shadow instead of falling back', () => {
-    const { resolve, namespace } = fixture();
-    const { expression, ctx } = argument('Global');
-    expect(resolve('Global')?.declaration).toBe(namespace.compositeTypes['Global']);
-    expect(entityRef({ kind: 'model' }, resolve).parse(expression, ctx)).toMatchObject({
-      ok: false,
-      failure: [
-        {
-          message: 'Expected model reference "Global", found compositeType',
-          sourceId: 'references.prisma',
-          span: { start: { offset: 6 }, end: { offset: 12 } },
-        },
+describe('syntax-scoped entity resolution', () => {
+  it('supplies the completed table to existing block attribute rules', () => {
+    const { document, sourceFile } = parse(
+      'namespace Local {\n permission Reader {\n @@target(Later)\n }\n model Later {}\n}',
+    );
+    const target = blockAttribute('target', {
+      documentation: 'Names a model.',
+      positional: [
+        { key: 'model', type: entityRef({ kind: 'model' }), documentation: 'The selected model.' },
       ],
     });
+    const result = buildSymbolTable({
+      document,
+      sourceFile,
+      pslBlockDescriptors: {
+        permission: {
+          name: { required: true },
+          kind: 'pslBlock',
+          keyword: 'permission',
+          discriminator: 'permission',
+          parameters: {},
+          attributes: { target: () => target },
+        },
+      },
+    });
+    expect(result.diagnostics).toEqual([]);
+    const namespace = result.table.topLevel.namespaces['Local'];
+    expect(namespace?.blocks['Reader']?.block.attributes['target']?.args).toEqual({
+      model: { declaration: namespace?.models['Later'], namespace },
+    });
   });
-});
+  it.each([false, true])('selects local declarations regardless of order (%s)', (reverse) => {
+    const { expression, ctx, namespace } = fixture('Shared', true, reverse);
+    expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toEqual(
+      ok({
+        declaration: namespace.models['Shared'],
+        namespace,
+      }),
+    );
+  });
 
-describe('checked references and unchecked identifiers', () => {
   it.each<[EntitySelector, string]>([
-    [{ kind: 'model' }, 'Shared'],
+    [{ kind: 'model' }, 'Fallback'],
     [{ kind: 'compositeType' }, 'Address'],
     [{ kind: 'namedType' }, 'Email'],
     [{ kind: 'block', keyword: 'permission' }, 'Reader'],
-  ])('returns the selected identity for %j', (selector, name) => {
-    const { topResolve } = fixture();
-    const { expression, ctx } = argument(name);
-    const rule = entityRef(selector, topResolve);
+  ])('falls back to top-level %j', (selector, name) => {
+    const { expression, ctx } = fixture(name);
+    const rule = entityRef(selector);
     expect(rule.expected).toEqual(selector);
-    const result = rule.parse(expression, ctx);
-    expect(result.ok).toBe(true);
-    if (result.ok) expect(result.value).toBe(topResolve(name));
+    expect(rule.parse(expression, ctx)).toMatchObject({
+      ok: true,
+      value: { declaration: { name, kind: selector.kind }, namespace: undefined },
+    });
+  });
+
+  it('selects only top-level declarations outside namespaces', () => {
+    const { expression, ctx, table } = fixture('Shared', false);
+    expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toEqual(
+      ok({
+        declaration: table.topLevel.models['Shared'],
+        namespace: undefined,
+      }),
+    );
+  });
+
+  it.each(['Hidden', 'Missing', 'toString', 'constructor', '__proto__'])(
+    'rejects unavailable and inherited names: %s',
+    (name) => {
+      const { expression, ctx } = fixture(name);
+      expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toMatchObject({
+        ok: false,
+        failure: [
+          {
+            message: `Unknown model reference "${name}"`,
+            sourceId: 'references.prisma',
+            span: {
+              start: { offset: expression.syntax.offset },
+              end: { offset: expression.syntax.endOffset },
+            },
+          },
+        ],
+      });
+    },
+  );
+
+  it('does not search child namespaces from top-level', () => {
+    const { expression, ctx } = fixture('Writer', false);
+    expect(entityRef({ kind: 'block', keyword: 'permission' }).parse(expression, ctx).ok).toBe(
+      false,
+    );
+  });
+
+  it('checks kind after selecting the local binding', () => {
+    const { expression, ctx } = fixture('Global');
+    expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toMatchObject({
+      ok: false,
+      failure: [{ message: 'Expected model reference "Global", found compositeType' }],
+    });
   });
 
   it.each<EntitySelector>([
@@ -121,71 +159,83 @@ describe('checked references and unchecked identifiers', () => {
     { kind: 'namedType' },
     { kind: 'block', keyword: 'permission' },
   ])('rejects a different declaration kind for %j', (selector) => {
-    const { topResolve } = fixture();
-    const name = selector.kind === 'model' ? 'Address' : 'Shared';
-    const { expression, ctx } = argument(name);
-    const result = entityRef(selector, topResolve).parse(expression, ctx);
+    const { expression, ctx } = fixture(selector.kind === 'model' ? 'Address' : 'Shared');
+    const result = entityRef(selector).parse(expression, ctx);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure).toHaveLength(1);
   });
 
+  it('reuses one grammar across documents without retaining another scope', () => {
+    const rule = entityRef({ kind: 'model' });
+    const local = fixture('Shared');
+    const top = fixture('Shared', false);
+    expect(rule.parse(local.expression, local.ctx)).toEqual(
+      ok({
+        declaration: local.namespace.models['Shared'],
+        namespace: local.namespace,
+      }),
+    );
+    expect(rule.parse(top.expression, top.ctx)).toEqual(
+      ok({
+        declaration: top.table.topLevel.models['Shared'],
+        namespace: undefined,
+      }),
+    );
+  });
+
   it('checks contributed block keywords', () => {
-    const { topResolve } = fixture();
-    const { expression, ctx } = argument('Reader');
-    expect(
-      entityRef({ kind: 'block', keyword: 'other' }, topResolve).parse(expression, ctx),
-    ).toMatchObject({
+    const { expression, ctx } = fixture('Reader');
+    expect(entityRef({ kind: 'block', keyword: 'other' }).parse(expression, ctx)).toMatchObject({
       ok: false,
       failure: [{ message: 'Expected other reference "Reader", found permission' }],
     });
   });
 
-  it('anchors missing references at the expression', () => {
-    const { resolve } = fixture();
-    const { expression, ctx } = argument('Missing');
-    expect(entityRef({ kind: 'model' }, resolve).parse(expression, ctx)).toMatchObject({
-      ok: false,
-      failure: [
-        {
-          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-          message: 'Unknown model reference "Missing"',
-          sourceId: 'references.prisma',
-          span: { start: { offset: 6 }, end: { offset: 13 } },
-        },
-      ],
-    });
-  });
-
-  it('preserves wrapper identity so repeated list entries fail uniqueness', () => {
-    const { resolve } = fixture();
-    const rule = list(entityRef({ kind: 'model' }, resolve), { unique: true });
-    const { expression, ctx } = argument('[Shared, Shared]');
-    expect(rule.parse(expression, ctx)).toMatchObject({
+  it('shares wrapper identity across rules and repeated expressions', () => {
+    const { expression, ctx } = fixture('[Shared, Shared]');
+    expect(
+      list(entityRef({ kind: 'model' }), { unique: true }).parse(expression, ctx),
+    ).toMatchObject({
       ok: false,
       failure: [{ message: 'Duplicate list entry' }],
     });
-    const distinct = argument('[Shared, Owner]');
-    expect(rule.parse(distinct.expression, distinct.ctx)).toEqual(
-      ok([resolve('Shared'), resolve('Owner')]),
+    const single = fixture('Shared');
+    const first = entityRef({ kind: 'model' }).parse(single.expression, single.ctx);
+    const second = entityRef({ kind: 'model' }).parse(single.expression, single.ctx);
+    if (!first.ok || !second.ok) throw new Error('Missing reference');
+    expect(first.value).toBe(second.value);
+  });
+
+  it('accepts structural expressions from another AST copy', () => {
+    const { expression, ctx, namespace } = fixture('Shared');
+    const identifier = IdentifierAst.cast(expression.syntax);
+    if (!identifier) throw new Error('Missing identifier');
+    const foreign = {
+      syntax: identifier.syntax,
+      name: () => identifier.name(),
+      token: () => identifier.token(),
+    };
+    expect(foreign).not.toBeInstanceOf(IdentifierAst);
+    expect(entityRef({ kind: 'model' }).parse(foreign, ctx)).toEqual(
+      ok({
+        declaration: namespace.models['Shared'],
+        namespace,
+      }),
+    );
+  });
+});
+
+describe('checked references and unchecked identifiers', () => {
+  it.each(['Shared', 'Missing', 'Global'])('keeps alternatives diagnostic-pure for %s', (name) => {
+    const { expression, ctx, namespace } = fixture(name);
+    expect(oneOf(entityRef({ kind: 'model' }), identifier()).parse(expression, ctx)).toEqual(
+      ok(name === 'Shared' ? { declaration: namespace.models['Shared'], namespace } : name),
     );
   });
 
-  it.each(['Shared', 'Missing', 'Global'])(
-    'keeps reference-first alternatives diagnostic-pure for %s',
-    (name) => {
-      const { resolve } = fixture();
-      const rule = oneOf(entityRef({ kind: 'model' }, resolve), identifier());
-      const { expression, ctx } = argument(name);
-      expect(rule.parse(expression, ctx)).toEqual(ok(name === 'Shared' ? resolve(name) : name));
-    },
-  );
-
   it('aggregates all-failure alternatives at their source', () => {
-    const { resolve } = fixture();
-    const { expression, ctx } = argument('42');
-    expect(
-      oneOf(entityRef({ kind: 'model' }, resolve), identifier()).parse(expression, ctx),
-    ).toMatchObject({
+    const { expression, ctx } = fixture('42');
+    expect(oneOf(entityRef({ kind: 'model' }), identifier()).parse(expression, ctx)).toMatchObject({
       ok: false,
       failure: [
         { message: 'Expected one of: model reference | identifier', sourceId: 'references.prisma' },
@@ -193,8 +243,8 @@ describe('checked references and unchecked identifiers', () => {
     });
   });
 
-  it('exposes unrestricted metadata and preserves exact names', () => {
-    const { expression, ctx } = argument('External');
+  it('preserves unrestricted identifier metadata and names', () => {
+    const { expression, ctx } = fixture('External');
     expect(identifier()).toMatchObject({
       kind: 'identifier',
       name: undefined,
@@ -204,11 +254,10 @@ describe('checked references and unchecked identifiers', () => {
   });
 
   it.each(['"Shared"', '42', '[Shared]', 'Shared()', 'true'])(
-    'rejects non-identifier syntax %s',
-    (source) => {
-      const { resolve } = fixture();
-      const { expression, ctx } = argument(source);
-      expect(entityRef({ kind: 'model' }, resolve).parse(expression, ctx).ok).toBe(false);
+    'rejects non-identifiers: %s',
+    (value) => {
+      const { expression, ctx } = fixture(value);
+      expect(entityRef({ kind: 'model' }).parse(expression, ctx).ok).toBe(false);
       expect(identifier().parse(expression, ctx).ok).toBe(false);
     },
   );

@@ -789,6 +789,7 @@ export function lowerDefaultForField(input: {
     }),
   );
   const interpreted = interpretFieldAttribute({
+    symbols: input.symbolTable,
     node,
     spec,
     model: input.model,

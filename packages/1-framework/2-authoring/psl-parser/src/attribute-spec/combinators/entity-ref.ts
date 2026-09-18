@@ -2,17 +2,16 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import type { PslDiagnostic } from '../../diagnostic';
 import type {
   DeclarationFor,
-  EntityResolver,
   EntitySelector,
   ResolvedEntityReference,
 } from '../../entity-reference';
+import { resolveEntityReference } from '../../entity-reference';
 import { IdentifierAst } from '../../syntax/ast/identifier';
 import type { AttributeCtx, EntityRefArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
 export function entityRef<const S extends EntitySelector>(
   expected: S,
-  resolve: EntityResolver,
 ): EntityRefArgType<DeclarationFor<S>, AttributeCtx> {
   const label = `${expected.kind === 'block' ? expected.keyword : expected.kind} reference`;
   return {
@@ -27,7 +26,7 @@ export function entityRef<const S extends EntitySelector>(
       if (name === undefined) {
         return notOk([leafDiagnostic(ctx, arg, `Expected ${label}`)]);
       }
-      const reference = resolve(name);
+      const reference = resolveEntityReference(arg, name, ctx.symbols);
       if (reference === undefined) {
         return notOk([leafDiagnostic(ctx, arg, `Unknown ${label} "${name}"`)]);
       }

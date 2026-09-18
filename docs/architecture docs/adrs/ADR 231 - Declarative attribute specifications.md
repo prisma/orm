@@ -4,7 +4,7 @@
 **Date:** 2026-06-29
 **Accepted:** 2026-08-27
 
-**Reference API update:** The reference, identifier, factory-context and wildcard sections below describe the current checked-reference API. Existing attribute completion and signature help now inspect these specs; the interpreter-only delivery and language-tooling follow-up discussion elsewhere in this ADR records the original acceptance boundary, not the current editor feature inventory. This update adds no editor semantic diagnostics or generic-block value features.
+**Reference API update:** The reference, identifier, parse-context and wildcard sections below describe the current checked-reference API. Existing attribute completion and signature help now inspect these specs; the interpreter-only delivery and language-tooling follow-up discussion elsewhere in this ADR records the original acceptance boundary, not the current editor feature inventory. This update adds no editor semantic diagnostics or generic-block value features.
 
 ---
 
@@ -52,7 +52,7 @@ The SQL and Mongo family interpreters are the first consumers. They define their
 
 The kit consumes `ExpressionAst` directly. No intermediate argument representation is introduced, and no combinator reparses flattened source text except `json()`, the deliberate quoted-JSON-object exception.
 
-Attributes are a PSL authoring concern, so the kit is in `psl-parser` rather than framework core. Field, model, and block attributes are all constructed through it. A block descriptor declares which attributes its block accepts, and the generic block reconstruction interprets them at parse time.
+Attributes are a PSL authoring concern, so the kit is in `psl-parser` rather than framework core. Field, model, and block attributes are all constructed through it. A block descriptor declares which attributes its block accepts, and symbol-table construction interprets them after collecting all declarations.
 
 ---
 
@@ -87,6 +87,7 @@ A combinator declares what it reads. The contexts nest by what the site being pa
 interface AttributeCtx {
   readonly sourceId: string;
   readonly sourceFile: SourceFile;
+  readonly symbols: SymbolTable;
 }
 
 interface ModelAttributeCtx extends AttributeCtx {
@@ -99,7 +100,7 @@ interface FieldAttributeCtx extends ModelAttributeCtx {
 }
 ```
 
-A block has no model, so a block attribute is parsed with only the source context. A combinator is usable at any level that carries the facts it declares, and rejected where those facts do not exist. Checked entity references bind their resolver in the spec factory, not in these parse contexts: `AttributeSpecContext` supplies `symbols`, `model`, and `controlMutationDefaults` to model factories. The symbol table is not added to `AttributeCtx`. This does not change block-attribute factory timing.
+A block has no model, so a block attribute receives source information and the complete symbol table without a model context. A combinator is usable at any level that carries the facts it declares, and rejected where those facts do not exist. Checked references derive lexical scope from the expression's syntax ancestry; the parse context carries no owner or scope field. Spec factories may still use `AttributeSpecContext` for dynamic grammars, but do not inject reference resolvers. Existing block attributes are interpreted after declaration collection so their parse contexts also support forward references; block-value grammars remain separate.
 
 A spec fixes the attribute level and name, declares its arguments, and may refine the parsed result:
 
@@ -160,27 +161,24 @@ These leaves perform direct AST checks. They do not wrap arktype schemas.
 
 `fieldRef()` parses a field-name identifier and validates it against the declaring model, so it is available to model and field attributes alike. `referencedFieldRef()` validates against the relation target, which only a field can resolve; cross-space references may defer the existence check when no referenced model is locally available. Both return the authored field name as a string.
 
-`entityRef(expected, resolve)` checks existence and the selected declaration's kind. Selectors are `{ kind: 'model' }`, `{ kind: 'compositeType' }`, `{ kind: 'namedType' }`, or `{ kind: 'block', keyword }` for the contributed block keyword. Its inferred output is `ResolvedEntityReference<DeclarationFor<typeof expected>>`: the selected `declaration` plus its lexical `namespace` (undefined at top-level), not physical storage coordinates.
+`entityRef(expected)` checks existence and the selected declaration's kind. Selectors are `{ kind: 'model' }`, `{ kind: 'compositeType' }`, `{ kind: 'namedType' }`, or `{ kind: 'block', keyword }` for the contributed block keyword. Its inferred output is `ResolvedEntityReference<DeclarationFor<typeof expected>>`: the selected `declaration` plus its lexical `namespace` (undefined at top-level), not physical storage coordinates.
 
-Model factories bind the complete symbol table and owner identity before interpreting expressions:
+Reference rules need only the expected selector when defining the grammar:
 
 ```ts
-function baseSpec(ctx: AttributeSpecContext) {
-  const resolve = createEntityResolver({ symbols: ctx.symbols, owner: ctx.model });
-  return modelAttribute('base', {
-    documentation: 'Declares the base model.',
-    positional: [
-      { key: 'base', type: entityRef({ kind: 'model' }, resolve), documentation: 'The model to inherit from.' },
-    ],
-  });
-}
+const baseSpec = modelAttribute('base', {
+  documentation: 'Declares the base model.',
+  positional: [
+    { key: 'base', type: entityRef({ kind: 'model' }), documentation: 'The model to inherit from.' },
+  ],
+});
 ```
 
-Resolution selects the containing namespace's binding first, then top-level, never a sibling namespace; top-level owners see only top-level declarations. Kind checking applies after selection, so a wrong-kind local binding does not trigger fallback. Collection before factory interpretation permits forward references. Missing/wrong-kind failures are source-anchored shared expression diagnostics. The resolver itself emits no diagnostics, and repeated references from one resolver retain wrapper identity for collection uniqueness.
+At parse time, a shared helper derives the containing namespace through `expression.syntax.findAncestor(NamespaceDeclarationAst.cast)` and selects the collected namespace by name, not red-wrapper identity. Expressions must retain their syntax ancestry and correspond to the supplied symbol table. Own-property-safe lookup selects that namespace's binding first, then top-level, never a sibling namespace; top-level expressions see only top-level declarations. Kind checking applies after selection, so a wrong-kind local binding does not trigger fallback. Collection before interpretation permits forward references. Missing/wrong-kind failures are source-anchored shared expression diagnostics. The helper itself emits no diagnostics. Wrappers are cached at the symbol-scope/declaration boundary, so repeated references retain identity across rules and list elements for collection uniqueness.
 
-`oneOf(entityRef(expected, resolve), identifier())` prefers a checked identity and otherwise returns an unchecked name without leaking failed-alternative diagnostics. SQL and Mongo base attributes consume the selected model identity through lowering rather than re-resolving its bare name. Family-specific relationship and storage constraints remain separate: checked lookup does not promise cross-namespace inheritance support or change persisted variants. No document-path scope or codec reference combinator is added.
+`oneOf(entityRef(expected), identifier())` prefers a checked identity and otherwise returns an unchecked name without leaking failed-alternative diagnostics. SQL and Mongo base attributes consume the selected model identity through lowering rather than re-resolving its bare name. Family-specific relationship and storage constraints remain separate: checked lookup does not promise cross-namespace inheritance support or change persisted variants. No document-path scope or codec reference combinator is added.
 
-Existing attribute tooling inspects reference metadata and labels without invoking its parser/resolver. Checked references add no completion candidates or navigation feature. The parse-only editor pipeline still does not execute SQL/Mongo family reference diagnostics.
+Existing attribute tooling inspects reference metadata and labels without invoking its parser. Checked references add no completion candidates or navigation feature. The parse-only editor pipeline still does not execute SQL/Mongo family reference diagnostics.
 
 ### Native collections
 
@@ -344,7 +342,7 @@ The current implementation is sufficient for interpreter consumption but not yet
 ## Follow-up work
 
 - Add central spec discovery and traversable combinator metadata for language-tooling consumers.
-- Declaration-bearing entity references and factory-bound resolution are implemented as described above; broader reference navigation and generic-block value consumers remain separate work.
+- Declaration-bearing entity references and parse-context resolution are implemented as described above; broader reference navigation and generic-block value consumers remain separate work.
 - Revisit signature-derived `TypedFuncCall` output types if downstream code needs statically discriminated call unions.
 - Decide whether literal-to-field-type compatibility should remain in lowering or gain a dedicated field-context combinator.
 

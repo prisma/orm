@@ -116,11 +116,11 @@ model Base { id String }`);
     if (!model) throw new Error('missing variant');
     const node = findModelAttributeNode(model, 'base');
     if (!node) throw new Error('missing base');
-    const ctx = { ...contexts().model, symbols: table, model };
     const diagnostics: ContractSourceDiagnostic[] = [];
     const value = interpretModelAttribute({
       node,
-      spec: mongoAttributeSpecs.model.base(ctx),
+      symbols: table,
+      spec: mongoAttributeSpecs.model.base(),
       model,
       sourceFile,
       sourceId: 'test.prisma',

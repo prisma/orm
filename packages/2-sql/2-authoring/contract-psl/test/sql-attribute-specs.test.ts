@@ -108,6 +108,7 @@ function interpretDefault(schema: string, fieldName: string) {
   if (node === undefined) throw new Error('no @default on field');
   const diagnostics = createPslDiagnosticCollector(sources);
   const value = interpretFieldAttribute({
+    symbols: symbolTable,
     node,
     spec: sqlAttributeSpecs.field.default(
       fieldSpecContext({ symbols: symbolTable, model, field: target, controlMutationDefaults }),
@@ -135,9 +136,8 @@ namespace scoped {
     const diagnostics: ContractSourceDiagnostic[] = [];
     const value = interpretModelAttribute({
       node,
-      spec: sqlAttributeSpecs.model.base(
-        modelSpecContext({ symbols: input.symbolTable, model, controlMutationDefaults }),
-      ),
+      symbols: input.symbolTable,
+      spec: sqlAttributeSpecs.model.base(),
       model,
       sourceFile: input.sourceFile,
       sourceId: input.sourceId,

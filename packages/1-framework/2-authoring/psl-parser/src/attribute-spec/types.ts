@@ -9,7 +9,7 @@ import type {
   ResolvedEntityReference,
 } from '../entity-reference';
 import type { PslSources } from '../source-file';
-import type { FieldSymbol, ModelSymbol } from '../symbol-table';
+import type { FieldSymbol, ModelSymbol, SymbolTable } from '../symbol-table';
 import type { ExpressionAst } from '../syntax/ast/expressions';
 import type { AstNode } from '../syntax/ast-helpers';
 
@@ -17,6 +17,7 @@ export type AttributeLevel = 'field' | 'model' | 'block';
 
 export interface AttributeCtx {
   readonly sources: PslSources;
+  readonly symbols: SymbolTable;
 }
 
 export interface ModelAttributeCtx extends AttributeCtx {

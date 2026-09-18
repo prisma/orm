@@ -5,7 +5,6 @@ import type {
   AttributeCtx,
   BlockSymbol,
   CompositeTypeSymbol,
-  EntityResolver,
   FieldAttributeCtx,
   InspectableArgType,
   ModelAttributeCtx,
@@ -42,11 +41,10 @@ test('inspectable lists and records expose ArgType children', () => {
 });
 
 test('checked reference selectors and wrappers preserve inferred outputs', () => {
-  const resolve: EntityResolver = () => undefined;
-  const model = entityRef({ kind: 'model' }, resolve);
-  const composite = entityRef({ kind: 'compositeType' }, resolve);
-  const named = entityRef({ kind: 'namedType' }, resolve);
-  const block = entityRef({ kind: 'block', keyword: 'permission' }, resolve);
+  const model = entityRef({ kind: 'model' });
+  const composite = entityRef({ kind: 'compositeType' });
+  const named = entityRef({ kind: 'namedType' });
+  const block = entityRef({ kind: 'block', keyword: 'permission' });
   const names = identifier();
   const optionalModel = optional(model);
   const models = list(model);
@@ -65,10 +63,11 @@ test('checked reference selectors and wrappers preserve inferred outputs', () =>
     ResolvedEntityReference<ModelSymbol> | string
   >();
   expectTypeOf(model.parse).parameter(1).toEqualTypeOf<AttributeCtx>();
-  // @ts-expect-error checked references require an expected selector and resolver
+  expectTypeOf<keyof AttributeCtx>().toEqualTypeOf<'sourceId' | 'sourceFile' | 'symbols'>();
+  // @ts-expect-error checked references require an expected selector
   entityRef();
-  // @ts-expect-error checked references require a resolver
-  entityRef({ kind: 'model' });
+  // @ts-expect-error checked references do not accept injected resolvers
+  entityRef({ kind: 'model' }, () => undefined);
 });
 
 test('identifier requires semantic value documentation', () => {
@@ -451,7 +450,7 @@ test('optional wrappers retain child metadata and optional markers', () => {
 test('field references have distinct inspectable kinds', () => {
   expectTypeOf(fieldRef().kind).toEqualTypeOf<'fieldRef'>();
   expectTypeOf(referencedFieldRef().kind).toEqualTypeOf<'referencedFieldRef'>();
-  expectTypeOf(entityRef({ kind: 'model' }, () => undefined).kind).toEqualTypeOf<'entityRef'>();
+  expectTypeOf(entityRef({ kind: 'model' }).kind).toEqualTypeOf<'entityRef'>();
 });
 
 test('runtime context metadata is rejected from arg types', () => {

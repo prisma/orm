@@ -46,7 +46,7 @@ const rejecting: RejectingArgType<never, AttributeCtx> = {
   parse: rejectedParse,
 };
 const unchecked = { ...identifier(), parse: rejectedParse };
-const checked = entityRef({ kind: 'model' }, rejectedParse);
+const checked = { ...entityRef({ kind: 'model' }), parse: rejectedParse };
 const direction = oneOf(
   identifier('Asc', { documentation: 'An accepted identifier in this test grammar.' }),
   identifier('Desc', { documentation: 'An accepted identifier in this test grammar.' }),

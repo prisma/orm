@@ -17,8 +17,9 @@ import { expect, it, vi } from 'vitest';
 import { MarkupKind } from 'vscode-languageserver';
 import { providePslSignatureHelp } from '../src/signature-help';
 
-const resolveReference = vi.fn(() => undefined);
-const reference = entityRef({ kind: 'model' }, resolveReference);
+const referenceRule = entityRef({ kind: 'model' });
+const parseReference = vi.fn(referenceRule.parse);
+const reference = { ...referenceRule, parse: parseReference };
 const ascending = identifier('Asc', { documentation: 'Sort ascending.' });
 const parseIdentifier = vi.fn(ascending.parse);
 const asc = { ...ascending, parse: parseIdentifier };
@@ -85,6 +86,6 @@ it.each([
         : '**value**\n\nThe declared value.',
     });
     expect(parseIdentifier).not.toHaveBeenCalled();
-    expect(resolveReference).not.toHaveBeenCalled();
+    expect(parseReference).not.toHaveBeenCalled();
   },
 );
