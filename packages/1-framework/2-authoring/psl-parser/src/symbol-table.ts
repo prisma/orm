@@ -135,6 +135,7 @@ export interface SymbolTableResult {
 export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableResult {
   const { documents, sources, pslBlockDescriptors } = options;
   const diagnostics: ParseDiagnostic[] = [];
+  const collectedBlocks: BlockSymbol[] = [];
 
   const namespaces: Record<string, NamespaceSymbol> = Object.create(null);
   const namedTypes: Record<string, NamedTypeSymbol> = {};
@@ -176,7 +177,13 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
       } else if (declaration instanceof GenericBlockDeclarationAst) {
         const name = claim(topLevelNames, declaration.name());
         if (name !== undefined) {
-          blocks[name] = buildBlock(name, declaration, sources, pslBlockDescriptors, diagnostics);
+          blocks[name] = buildBlock(
+            name,
+            declaration, sources,
+            pslBlockDescriptors,
+            diagnostics,
+            collectedBlocks,
+          );
         }
       } else if (declaration instanceof NamespaceDeclarationAst) {
         const declaredName = declaration.name()?.name();
@@ -195,7 +202,13 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
           };
           namespaces[name] = namespace;
         }
-        extendNamespace(namespace, declaration, diagnostics, sources, pslBlockDescriptors);
+        extendNamespace(
+          namespace,
+          declaration,
+          diagnostics, sources,
+          pslBlockDescriptors,
+          collectedBlocks,
+        );
       } else if (declaration instanceof TypesBlockAst) {
         for (const binding of declaration.declarations()) {
           const name = claim(topLevelNames, binding.name());
@@ -211,12 +224,10 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   const symbolTable: SymbolTable = {
     topLevel: { namespaces, namedTypes, blocks, models, compositeTypes },
   };
-  for (const scope of [table.topLevel, ...Object.values(namespaces)]) {
-    for (const block of Object.values(scope.blocks)) {
-      const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
-      if (descriptor !== undefined) {
-        interpretBlockAttributes(block, descriptor, sourceFile, table, diagnostics);
-      }
+  for (const block of collectedBlocks) {
+    const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
+    if (descriptor !== undefined) {
+      interpretBlockAttributes(block, descriptor, sourceFile, table, diagnostics);
     }
   }
   return { symbolTable, diagnostics };
@@ -260,10 +271,11 @@ function buildBlock(
   sources: PslSources,
   pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
   diagnostics: ParseDiagnostic[],
+  collectedBlocks: BlockSymbol[],
 ): BlockSymbol {
   const keyword = node.keyword()?.text ?? '';
   const descriptor = findBlockDescriptor(pslBlockDescriptors, keyword);
-  return {
+  const symbol: BlockSymbol = {
     kind: 'block',
     name,
     keyword,
@@ -271,6 +283,8 @@ function buildBlock(
     span: nodePslSpan(node.syntax, sources),
     block: reconstructExtensionBlock(node, descriptor, sources, diagnostics),
   };
+  collectedBlocks.push(symbol);
+  return symbol;
 }
 
 function extendNamespace(
@@ -279,6 +293,7 @@ function extendNamespace(
   diagnostics: ParseDiagnostic[],
   sources: PslSources,
   pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
+  collectedBlocks: BlockSymbol[],
 ): void {
   const { models, compositeTypes, blocks } = namespace;
   namespace.declarations.push({ node, span: nodePslSpan(node.syntax, sources) });
@@ -313,6 +328,7 @@ function extendNamespace(
         sources,
         pslBlockDescriptors,
         diagnostics,
+        collectedBlocks,
       );
     }
   }
