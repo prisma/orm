@@ -146,6 +146,7 @@ export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
 export {
   canonicalizeTaggedLiteralBody,
   describeTaggedLiteralFailure,
-  resolveBacktickEscapes,
+  resolvePslBacktickEscapes,
+  resolveTemplateTagEscapes,
   TAGGED_LITERAL_MAX_BYTES,
 } from '../shared/tagged-literal';

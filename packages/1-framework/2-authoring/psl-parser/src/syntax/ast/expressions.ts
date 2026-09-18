@@ -1,7 +1,7 @@
 import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
 import {
   canonicalizeTaggedLiteralBody,
-  resolveBacktickEscapes,
+  resolvePslBacktickEscapes,
 } from '@internal/framework-components/control';
 import { isTerminatedStringLiteral } from '../../tokenizer';
 import type { AstNode } from '../ast-helpers';
@@ -180,7 +180,7 @@ export class StringLiteralExprAst implements AstNode {
     const tok = this.token();
     if (!tok) return undefined;
     const raw = isTerminatedStringLiteral(tok.text) ? tok.text.slice(1, -1) : tok.text.slice(1);
-    return this.quote() === '`' ? resolveBacktickEscapes(raw) : decodeStringLiteral(raw);
+    return this.quote() === '`' ? resolvePslBacktickEscapes(raw) : decodeStringLiteral(raw);
   }
 
   static cast(node: SyntaxNode): StringLiteralExprAst | undefined {
