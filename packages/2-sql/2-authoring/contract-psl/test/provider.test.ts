@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { applySpecifierDefaultControlPolicy } from '@internal/contract/apply-specifier-default-control-policy';
@@ -448,6 +449,38 @@ model Other {
       const codes = result.failure.diagnostics.map((d) => d.code);
       expect(codes).toContain('PSL_DUPLICATE_DECLARATION');
       expect(codes).toContain('PSL_UNSUPPORTED_FIELD_TYPE');
+    });
+
+    it('returns PSL_SCHEMA_READ_FAILED diagnostic when schema file contains invalid UTF-8 bytes', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-utf8-'));
+      tempDirs.push(tempDir);
+      const schemaPath = join(tempDir, 'schema.prisma');
+      await writeFile(
+        schemaPath,
+        Buffer.concat([
+          Buffer.from('model User {\n  id Int @id // comment with invalid byte: ', 'utf-8'),
+          Buffer.from([0x97]),
+          Buffer.from('\n}\n', 'utf-8'),
+        ]),
+      );
+
+      process.chdir(tempDir);
+      const contract = prismaContract('./schema.prisma', baseOptions);
+      const result = await contract.source.load(
+        createPostgresTestContext({ resolvedInputs: [schemaPath] }),
+      );
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.summary).toBe('Failed to read Prisma schema at "./schema.prisma"');
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_SCHEMA_READ_FAILED',
+            sourceId: './schema.prisma',
+          }),
+        ]),
+      );
     });
   });
 
