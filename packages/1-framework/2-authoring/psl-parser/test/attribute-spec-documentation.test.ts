@@ -62,6 +62,9 @@ describe('declaration documentation', () => {
     const result = interpretAttribute(node, spec, {
       sourceId: 'schema.prisma',
       sourceFile: cursor.sourceFile,
+      symbols: {
+        topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+      },
     });
     expect(result.assertOk()).toStrictEqual({
       value: {

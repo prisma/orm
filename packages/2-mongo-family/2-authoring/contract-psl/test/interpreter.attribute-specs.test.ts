@@ -1,4 +1,5 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
+import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
@@ -10,10 +11,10 @@ const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
   ['ObjectId', 'mongo/objectId@1'],
 ]);
 
-function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
+function interpret(schema: string) {
   const { document, sourceFile } = parse(schema);
   const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
-  const result = interpretPslDocumentToMongoContract({
+  return interpretPslDocumentToMongoContract({
     symbolTable: table,
     sourceFile,
     sourceId: 'schema.prisma',
@@ -23,8 +24,61 @@ function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
       defaultLiteralTagRegistry: new Map(),
     },
   });
+}
+
+function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
+  const result = interpret(schema);
   return result.ok ? [] : result.failure.diagnostics;
 }
+
+describe('wildcard scope is an unchecked identifier with independent field validation', () => {
+  it.each([
+    ['metadata', 'stored.$**'],
+    ['', '$**'],
+  ])('accepts scope %s without a matching model', (scope, path) => {
+    const result = interpret(`model Event {
+ id ObjectId @id @map("_id")
+ metadata String @map("stored")
+ @@map("events")
+ @@index([wildcard(${scope})])
+}`);
+    expect(result.ok).toBe(true);
+    if (result.ok)
+      expect(result.value.storage).toMatchObject({
+        namespaces: {
+          [UNBOUND_NAMESPACE_ID]: {
+            entries: {
+              collection: {
+                events: {
+                  indexes: [expect.objectContaining({ keys: [{ field: path, direction: 1 }] })],
+                },
+              },
+            },
+          },
+        },
+      });
+  });
+
+  it.each(['missing', 'related'])('retains field/indexability validation for %s', (scope) => {
+    const diagnostics = diagnosticsOf(`model Related { id ObjectId @id @map("_id") }
+model Event {
+ id ObjectId @id @map("_id")
+ related Related
+ @@index([wildcard(${scope})])
+}`);
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_INDEX_FIELD_NOT_FOUND',
+          message: expect.stringContaining(scope),
+        }),
+      ]),
+    );
+    expect(
+      diagnostics.some((diagnostic) => diagnostic.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX'),
+    ).toBe(false);
+  });
+});
 
 describe('field-level @id and @unique are interpreted against their specs', () => {
   it('rejects an argument on @id and no longer counts the field as the id', () => {

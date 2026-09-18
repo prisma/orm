@@ -11,7 +11,13 @@ function blockAttr(source: string): { node: ModelAttributeAst; ctx: AttributeCtx
   if (!node) throw new Error('expected a block attribute');
   return {
     node,
-    ctx: { sourceId: 'schema.prisma', sourceFile: cursor.sourceFile },
+    ctx: {
+      sourceId: 'schema.prisma',
+      sourceFile: cursor.sourceFile,
+      symbols: {
+        topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+      },
+    },
   };
 }
 

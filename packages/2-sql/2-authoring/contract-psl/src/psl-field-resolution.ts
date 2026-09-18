@@ -80,6 +80,7 @@ function lowerEnumDefaultForField(input: {
   const interpreted = interpretFieldAttribute({
     node,
     spec,
+    symbols: input.symbolTable,
     model,
     field,
     sourceFile,
@@ -275,6 +276,7 @@ function validateFieldAttributes(input: {
 }
 
 function extractFieldConstraintNames(input: {
+  readonly symbolTable: SymbolTable;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sourceFile: SourceFile;
@@ -294,6 +296,7 @@ function extractFieldConstraintNames(input: {
       ? undefined
       : interpretFieldAttribute({
           node: idNode,
+          symbols: input.symbolTable,
           spec: sqlAttributeSpecs.field.id(),
           model: input.model,
           field: input.field,
@@ -307,6 +310,7 @@ function extractFieldConstraintNames(input: {
       ? undefined
       : interpretFieldAttribute({
           node: uniqueNode,
+          symbols: input.symbolTable,
           spec: sqlAttributeSpecs.field.unique(),
           model: input.model,
           field: input.field,
@@ -329,6 +333,7 @@ type NoCheckKind = 'membership' | 'elementNotNull';
  * the only form the definition tree carries.
  */
 function lowerNoCheckForField(input: {
+  readonly symbolTable: SymbolTable;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sourceFile: SourceFile;
@@ -342,6 +347,7 @@ function lowerNoCheckForField(input: {
   const interpreted = interpretFieldAttribute({
     node,
     spec: sqlAttributeSpecs.field.noCheck(),
+    symbols: input.symbolTable,
     model: input.model,
     field: input.field,
     sourceFile: input.sourceFile,
@@ -650,6 +656,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     }
     const mappedColumnName = mapping.fieldColumns.get(field.name) ?? field.name;
     const { idAttribute, uniqueAttribute, idName, uniqueName } = extractFieldConstraintNames({
+      symbolTable: input.symbolTable,
       model,
       field,
       sourceFile: input.sourceFile,
@@ -699,6 +706,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     const fieldDefaultValue = presetContributions?.default ?? loweredDefault.defaultValue;
     const noCheckKinds = modelDerivesChecks
       ? lowerNoCheckForField({
+          symbolTable: input.symbolTable,
           model,
           field,
           sourceFile: input.sourceFile,
@@ -734,6 +742,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
 }
 
 export function buildModelMappings(
+  symbols: SymbolTable,
   modelEntries: readonly ModelNamespaceEntry[],
   defaultNamespaceId: string,
   diagnostics: ContractSourceDiagnostic[],
@@ -748,6 +757,7 @@ export function buildModelMappings(
         ? defaultTableName(model.name)
         : (interpretModelAttribute({
             node: mapNode,
+            symbols,
             spec: sqlAttributeSpecs.model.map(),
             model,
             sourceFile,
@@ -762,6 +772,7 @@ export function buildModelMappings(
           ? field.name
           : (interpretFieldAttribute({
               node: fieldMapNode,
+              symbols,
               spec: sqlAttributeSpecs.field.map(),
               model,
               field,

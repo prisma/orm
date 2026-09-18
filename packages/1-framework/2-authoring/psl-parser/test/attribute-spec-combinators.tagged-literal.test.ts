@@ -22,6 +22,7 @@ function makeCtx(sourceFile: SourceFile): FieldAttributeCtx {
   return {
     sourceId: 'schema.prisma',
     sourceFile,
+    symbols: table,
     selfModel,
     field,
     resolveReferencedModel: () => undefined,

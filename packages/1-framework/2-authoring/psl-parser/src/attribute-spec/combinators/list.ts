@@ -17,7 +17,7 @@ export function list<T, Ctx extends AttributeCtx>(
   const unique = opts?.unique ?? false;
   return {
     kind: 'list',
-    label: `${of.label}[]`,
+    label: of.label.includes(' | ') ? `(${of.label})[]` : `${of.label}[]`,
     of,
     allowEmpty,
     unique,
