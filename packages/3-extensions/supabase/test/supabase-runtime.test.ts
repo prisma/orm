@@ -216,7 +216,7 @@ function createRecordingDriver(
   return driver;
 }
 
-function createStubAdapter() {
+function createStubAdapter(readMarker?: () => Promise<{ kind: 'absent' }>) {
   const codec: Codec<string> = {
     id: 'pg/int4@1',
     targetTypes: ['int4'],
@@ -233,7 +233,7 @@ function createStubAdapter() {
       id: 'test-profile',
       target: 'postgres',
       capabilities: {},
-      readMarker: async () => ({ kind: 'absent' as const }),
+      readMarker: readMarker ?? (async () => ({ kind: 'absent' as const })),
     },
     lower(ast: Parameters<SqlRuntimeAdapterInstance<'postgres'>['lower']>[0]) {
       const params = [...new Set(ast.collectParamRefs())].map((ref) =>
@@ -284,8 +284,9 @@ function createTestTargetDescriptor(): SqlRuntimeTargetDescriptor<'postgres'> {
 function createTestSetup(options?: {
   middleware?: readonly SqlMiddleware[];
   affectedRows?: number;
+  readMarker?: () => Promise<{ kind: 'absent' }>;
 }) {
-  const adapter = createStubAdapter();
+  const adapter = createStubAdapter(options?.readMarker);
   const driver = createRecordingDriver(undefined, options?.affectedRows);
   const targetDescriptor = createTestTargetDescriptor();
   const adapterDescriptor = createTestAdapterDescriptor(adapter);
@@ -314,7 +315,7 @@ function createTestSetup(options?: {
     context,
     adapter: stackInstance.adapter,
     driver: driver as unknown as SqlDriver,
-    verifyMarker: false,
+    verifyMarker: options?.readMarker === undefined ? false : 'onFirstUse',
     middleware: options?.middleware ?? [],
   };
 
@@ -513,6 +514,30 @@ describe('SupabaseRuntimeImpl', () => {
       expect(driver.connection.transaction.execute).toHaveBeenCalledOnce();
       expect(driver.connection.query).not.toHaveBeenCalled();
       expect(cleanupEvents).toEqual(['commit', 'reset', 'release']);
+    });
+  });
+
+  describe('openRoleSession — marker verification', () => {
+    it('reads the marker before the role session transaction begins', async () => {
+      const events: string[] = [];
+      const { runtime, driver } = createTestSetup({
+        readMarker: async () => {
+          events.push('marker');
+          return { kind: 'absent' };
+        },
+      });
+      driver.connection.beginTransactionSpy.mockImplementation(async () => {
+        events.push('begin');
+        return driver.connection.transaction;
+      });
+      const session = await runtime.openRoleSession({ role: 'authenticated' });
+
+      const tx = await session.transaction();
+      await tx.query(stubPlan()).toArray();
+      await tx.commit();
+      await session.release();
+
+      expect(events).toEqual(['marker', 'begin']);
     });
   });
 

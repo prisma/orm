@@ -38,12 +38,6 @@ async function withPostgresClient(
     try {
       runtime = await db.connect();
 
-      // Warm up the runtime so that contract verification (which acquires its
-      // own connection) runs before the first transaction.  PGlite only allows
-      // one concurrent connection, so verification inside a transaction would
-      // deadlock.
-      await db.orm.public.User.first();
-
       await callback(db);
     } finally {
       await runtime?.close();
