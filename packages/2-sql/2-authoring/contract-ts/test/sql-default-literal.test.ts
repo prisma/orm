@@ -65,7 +65,7 @@ describe('sql template tag', () => {
     expect(sql`a\\b`).toEqual({ kind: 'function', expression: 'a\\b' });
     expect(sql`'Home | \${user}'`).toEqual({
       kind: 'function',
-      expression: "'Home | ${user}'",
+      expression: `'Home | $${'{user}'}'`,
     });
     expect(sql`\\$x`).toEqual({ kind: 'function', expression: '\\$x' });
   });

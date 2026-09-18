@@ -58,8 +58,8 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
   it.each([
     [
       'a dollar-brace sequence, which PSL needs no escape for',
-      "v String @default(sql`'Home | ${user}'`)",
-      "'Home | ${user}'",
+      `v String @default(sql\`'Home | $${'{user}'}'\`)`,
+      `'Home | $${'{user}'}'`,
     ],
     [
       'a backslash before a dollar, kept as both characters',
