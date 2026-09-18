@@ -1,4 +1,4 @@
-import type { ControlPolicy } from '@internal/contract/types';
+import type { Contract, ControlPolicy } from '@internal/contract/types';
 import type { ForeignKeyDefaultsState } from '@internal/contract-authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type {
@@ -10,6 +10,7 @@ import type { PackEntityHandle } from '@internal/sql-contract/entity-handle-lowe
 import type {
   SqlNamespaceBase,
   SqlNamespaceInput,
+  SqlStorage,
   StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import { blindCast } from '@internal/utils/casts';
@@ -590,7 +591,7 @@ export function defineContract(
     Record<string, ModelLike>,
     Record<string, ExtensionPackRef<'sql', string>> | undefined
   >,
-): SqlContractResult<ContractInput> {
+): Contract<SqlStorage> {
   if (!isContractInput(definition)) {
     throw contractError(
       'CONTRACT.ARGUMENT_INVALID',

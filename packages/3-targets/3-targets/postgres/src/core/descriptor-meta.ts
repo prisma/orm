@@ -1,4 +1,5 @@
 import type { CodecTypes } from '../exports/codec-types';
+import type { postgresAggregateDescriptors } from './aggregates';
 import {
   postgresAuthoringEntityTypes,
   postgresAuthoringFieldPresets,
@@ -34,4 +35,5 @@ const postgresTargetDescriptorMetaBase = {
 
 export const postgresTargetDescriptorMeta: typeof postgresTargetDescriptorMetaBase & {
   readonly __codecTypes?: CodecTypes;
+  readonly __aggregateDescriptors?: typeof postgresAggregateDescriptors;
 } = postgresTargetDescriptorMetaBase;

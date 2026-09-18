@@ -1,8 +1,10 @@
+import type { Contract } from '@internal/contract/types';
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { ExtensionPackRef } from '@internal/framework-components/components';
 import type {
   SqlNamespaceBase,
   SqlNamespaceInput,
+  SqlStorage,
   StorageTypeInstance,
 } from '@internal/sql-contract/types';
 import type {
@@ -29,6 +31,8 @@ type PostgresResult<
   Models extends ModelsConstraint,
   Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined,
   Enums extends EnumsConstraint,
+  Naming extends ContractInput['naming'] | undefined,
+  Namespaces extends readonly string[] | undefined,
 > = ReturnType<
   typeof buildBoundContract<
     SqlFamily,
@@ -39,6 +43,8 @@ type PostgresResult<
       readonly extensions?: Extensions;
       readonly enums?: Enums;
       readonly createNamespace: (input: SqlNamespaceInput) => SqlNamespaceBase;
+      readonly naming?: Naming;
+      readonly namespaces?: Namespaces;
     }
   >
 >;
@@ -84,9 +90,17 @@ export function defineContract<
   const Models extends ModelsConstraint = Record<never, never>,
   const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
   const Enums extends EnumsConstraint = Record<never, never>,
+  const Naming extends ContractInput['naming'] | undefined = undefined,
+  const Namespaces extends readonly string[] | undefined = undefined,
 >(
-  definition: PostgresDefinition<Types, Models, Extensions, Enums>,
-): PostgresResult<Types, Models, Extensions, Enums>;
+  definition: Omit<
+    PostgresDefinition<Types, Models, Extensions, Enums>,
+    'naming' | 'namespaces'
+  > & {
+    readonly naming?: Naming;
+    readonly namespaces?: Namespaces;
+  },
+): PostgresResult<Types, Models, Extensions, Enums, Naming, Namespaces>;
 
 export function defineContract<
   const Types extends TypesConstraint = Record<never, never>,
@@ -94,14 +108,26 @@ export function defineContract<
   const Extensions extends Record<string, ExtensionPackRef<'sql', string>> | undefined = undefined,
   const ScaffoldEnums extends EnumsConstraint = Record<never, never>,
   const FactoryEnums extends EnumsConstraint = Record<never, never>,
+  const Naming extends ContractInput['naming'] | undefined = undefined,
+  const Namespaces extends readonly string[] | undefined = undefined,
 >(
-  scaffold: PostgresScaffold<Extensions, ScaffoldEnums>,
+  scaffold: Omit<PostgresScaffold<Extensions, ScaffoldEnums>, 'naming' | 'namespaces'> & {
+    readonly naming?: Naming;
+    readonly namespaces?: Namespaces;
+  },
   factory: (helpers: ComposedAuthoringHelpers<SqlFamily, PostgresPack, Extensions>) => {
     readonly types?: Types;
     readonly models?: Models;
     readonly enums?: FactoryEnums;
   },
-): PostgresResult<Types, Models, Extensions, MergeEnums<ScaffoldEnums, FactoryEnums>>;
+): PostgresResult<
+  Types,
+  Models,
+  Extensions,
+  MergeEnums<ScaffoldEnums, FactoryEnums>,
+  Naming,
+  Namespaces
+>;
 
 // Implementation — delegates to buildBoundContract which pre-binds family/target,
 // carrying zero casts and zero entity-kind logic at this layer: the generic
@@ -113,7 +139,7 @@ export function defineContract(
     readonly models?: ModelsConstraint;
     readonly enums?: EnumsConstraint;
   },
-): PostgresResult<TypesConstraint, ModelsConstraint, undefined, EnumsConstraint> {
+): Contract<SqlStorage> {
   const bound = { ...definition, createNamespace: postgresCreateNamespace };
   if (factory !== undefined) {
     return buildBoundContract(sqlFamilyPack, postgresPack, bound, factory);
