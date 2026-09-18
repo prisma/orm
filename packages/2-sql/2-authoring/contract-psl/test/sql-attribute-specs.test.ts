@@ -21,7 +21,7 @@ import {
 } from '../src/sql-attribute-specs';
 import { buildSymbolTableInput, createBuiltinLikeControlMutationDefaults } from './fixtures';
 
-const controlMutationDefaults = createBuiltinLikeControlMutationDefaults().defaultFunctionRegistry;
+const controlMutationDefaults = createBuiltinLikeControlMutationDefaults();
 
 function project(schema: string, modelName: string) {
   const input = buildSymbolTableInput(schema);
@@ -250,6 +250,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       'funcCall',
       'funcCall',
       'funcCall',
+      'taggedLiteral',
     ]);
     const uuid = value.alternatives.find(
       (alt): alt is FuncCallMetadata<FieldAttributeCtx> =>
@@ -266,6 +267,21 @@ describe('sqlAttributeSpecs.field.default', () => {
     ]);
   });
 
+  it('omits the tagged-literal arm when no tag is registered', () => {
+    const noTags = fieldSpecContext({
+      symbols: symbolTable,
+      model,
+      field: field(model, 'id'),
+      controlMutationDefaults: {
+        defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
+        defaultLiteralTagRegistry: new Map(),
+      },
+    });
+    const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(noTags)));
+    expect(value.alternatives.map((alt) => alt.kind)).not.toContain('taggedLiteral');
+    expect(value.label).not.toContain('`...`');
+  });
+
   it('exposes list default alternatives without hiding registry function calls', () => {
     const listCtx = fieldSpecContext({
       symbols: symbolTable,
@@ -279,8 +295,16 @@ describe('sqlAttributeSpecs.field.default', () => {
     expect(listDefault).toMatchObject({ kind: 'list' });
     expect(listDefault.of).toMatchObject({ kind: 'oneOf' });
     expect(
-      value.alternatives.slice(1).map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
+      value.alternatives
+        .filter((alt) => alt.kind === 'funcCall')
+        .map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
     ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid', 'dbgenerated']);
+    expect(value.alternatives.at(-1)).toMatchObject({
+      kind: 'taggedLiteral',
+      label: 'sql`...`',
+      tags: ['sql', 'pg.sql'],
+      documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
+    });
   });
 
   it('exposes enum default alternatives and empty-enum rejection metadata', () => {

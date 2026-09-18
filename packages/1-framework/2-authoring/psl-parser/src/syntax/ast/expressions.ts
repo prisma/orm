@@ -1,3 +1,9 @@
+import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
+import {
+  canonicalizeTaggedLiteralBody,
+  resolveBacktickEscapes,
+} from '@internal/framework-components/control';
+import { isTerminatedStringLiteral } from '../../tokenizer';
 import type { AstNode } from '../ast-helpers';
 import { filterChildren, findChildToken, findFirstChild } from '../ast-helpers';
 import { SyntaxNode, type SyntaxToken } from '../red';
@@ -148,6 +154,8 @@ function decodeStringLiteral(raw: string): string {
   return out;
 }
 
+export type StringLiteralQuote = '"' | "'" | '`';
+
 export class StringLiteralExprAst implements AstNode {
   readonly syntax: SyntaxNode;
 
@@ -159,14 +167,65 @@ export class StringLiteralExprAst implements AstNode {
     return findChildToken(this.syntax, 'StringLiteral');
   }
 
+  quote(): StringLiteralQuote | undefined {
+    const quote = this.token()?.text.charAt(0);
+    return quote === '"' || quote === "'" || quote === '`' ? quote : undefined;
+  }
+
+  /**
+   * The decoded string. A `"` or `'` string resolves the usual escapes; a backtick string resolves
+   * only `` \` `` and `\\`, keeping every other backslash sequence as written.
+   */
   value(): string | undefined {
     const tok = this.token();
     if (!tok) return undefined;
-    return decodeStringLiteral(tok.text.slice(1, -1));
+    const raw = isTerminatedStringLiteral(tok.text) ? tok.text.slice(1, -1) : tok.text.slice(1);
+    return this.quote() === '`' ? resolveBacktickEscapes(raw) : decodeStringLiteral(raw);
   }
 
   static cast(node: SyntaxNode): StringLiteralExprAst | undefined {
     return node.kind === 'StringLiteralExpr' ? new StringLiteralExprAst(node) : undefined;
+  }
+}
+
+/** `` tag`body` ``, `tag"body"`, or `tag'body'`: a qualified-name tag followed by a string literal. */
+export class TaggedLiteralExprAst implements AstNode {
+  readonly syntax: SyntaxNode;
+
+  constructor(syntax: SyntaxNode) {
+    this.syntax = syntax;
+  }
+
+  tag(): QualifiedNameAst | undefined {
+    return findFirstChild(this.syntax, QualifiedNameAst.cast);
+  }
+
+  /** The tag without trivia, e.g. `pg.sql`. */
+  tagName(): string {
+    const tag = this.tag();
+    const space = tag?.space()?.name();
+    const namespace = tag?.namespace()?.name();
+    const spacePrefix = space === undefined ? '' : `${space}:`;
+    const namespacePrefix = namespace === undefined ? '' : `${namespace}.`;
+    return spacePrefix + namespacePrefix + (tag?.identifier()?.name() ?? '');
+  }
+
+  literal(): StringLiteralExprAst | undefined {
+    return findFirstChild(this.syntax, StringLiteralExprAst.cast);
+  }
+
+  canonicalization(): TaggedLiteralCanonicalization {
+    return canonicalizeTaggedLiteralBody(this.literal()?.value() ?? '');
+  }
+
+  /** The canonical body shared with the TypeScript `sql` tag, or `undefined` when canonicalization fails. */
+  body(): string | undefined {
+    const result = this.canonicalization();
+    return result.ok ? result.body : undefined;
+  }
+
+  static cast(node: SyntaxNode): TaggedLiteralExprAst | undefined {
+    return node.kind === 'TaggedLiteral' ? new TaggedLiteralExprAst(node) : undefined;
   }
 }
 
@@ -309,6 +368,7 @@ export type ExpressionAst =
   | FunctionCallAst
   | ArrayLiteralAst
   | StringLiteralExprAst
+  | TaggedLiteralExprAst
   | NumberLiteralExprAst
   | BooleanLiteralExprAst
   | ObjectLiteralExprAst
@@ -319,6 +379,7 @@ export function castExpression(node: SyntaxNode): ExpressionAst | undefined {
     FunctionCallAst.cast(node) ??
     ArrayLiteralAst.cast(node) ??
     StringLiteralExprAst.cast(node) ??
+    TaggedLiteralExprAst.cast(node) ??
     NumberLiteralExprAst.cast(node) ??
     BooleanLiteralExprAst.cast(node) ??
     ObjectLiteralExprAst.cast(node) ??

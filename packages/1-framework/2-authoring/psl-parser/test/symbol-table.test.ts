@@ -99,9 +99,134 @@ describe('buildSymbolTable() — AC3 namespace nesting', () => {
     const { topLevel } = result.table;
 
     expect(topLevel.namespaces['Foo']?.kind).toBe('namespace');
-    expect(topLevel.namespaces['Foo']?.node).toBeInstanceOf(NamespaceDeclarationAst);
+    expect(topLevel.namespaces['Foo']?.declarations[0]?.node).toBeInstanceOf(
+      NamespaceDeclarationAst,
+    );
     expect(topLevel.namespaces['Foo']?.models['A']?.kind).toBe('model');
     expect(topLevel.models['A']).toBeUndefined();
+  });
+});
+
+describe('buildSymbolTable() — namespace reopening', () => {
+  it('accumulates distinct members in interleaved namespaces', () => {
+    const result = build(`namespace blog {
+  model Post { id Int }
+}
+namespace auth {
+  model User { id Int }
+}
+namespace blog {
+  type Address { street String }
+  policy ReadPosts {}
+}
+namespace auth {
+  model Session { id Int }
+}`);
+    expect(result.diagnostics).toEqual([]);
+    const { blog, auth } = result.table.topLevel.namespaces;
+    expect(Object.keys(blog?.models ?? {})).toEqual(['Post']);
+    expect(Object.keys(blog?.compositeTypes ?? {})).toEqual(['Address']);
+    expect(Object.keys(blog?.blocks ?? {})).toEqual(['ReadPosts']);
+    expect(Object.keys(auth?.models ?? {})).toEqual(['User', 'Session']);
+    expect(Object.keys(auth?.compositeTypes ?? {})).toEqual([]);
+    expect(Object.keys(auth?.blocks ?? {})).toEqual([]);
+  });
+
+  it('keeps the first whole member and diagnoses the later name', () => {
+    const result = build(`namespace blog {
+  model Post { id Int }
+}
+namespace blog {
+  model Post { other String }
+}`);
+    expect(result.diagnostics).toEqual([
+      {
+        code: 'PSL_DUPLICATE_DECLARATION',
+        message: 'Duplicate declaration of "Post"',
+        range: { start: { line: 4, character: 8 }, end: { line: 4, character: 12 } },
+      },
+    ]);
+    expect(
+      Object.keys(result.table.topLevel.namespaces['blog']?.models['Post']?.fields ?? {}),
+    ).toEqual(['id']);
+  });
+
+  it('rejects a cross-kind duplicate across blocks', () => {
+    const result = build(`namespace blog {
+  model Post { id Int }
+}
+namespace blog {
+  type Post { title String }
+}`);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_DUPLICATE_DECLARATION',
+        message: 'Duplicate declaration of "Post"',
+      }),
+    ]);
+    expect(result.table.topLevel.namespaces['blog']?.models['Post']?.kind).toBe('model');
+    expect(result.table.topLevel.namespaces['blog']?.compositeTypes).toEqual({});
+  });
+
+  it('retains every authored namespace node and span, including empty blocks', () => {
+    const result = build(`namespace blog {}
+namespace auth {}
+namespace blog {}`);
+    const declarations = result.table.topLevel.namespaces['blog']?.declarations;
+    expect(declarations).toHaveLength(2);
+    expect(declarations?.[0]?.node).toBeInstanceOf(NamespaceDeclarationAst);
+    expect(declarations?.[1]?.node).toBeInstanceOf(NamespaceDeclarationAst);
+    expect(declarations?.[0]?.node.syntax.offset).toBe(0);
+    expect(declarations?.[1]?.node.syntax.offset).toBe(36);
+    expect(declarations?.[0]?.span).toEqual({
+      start: { offset: 0, line: 1, column: 1 },
+      end: { offset: 17, line: 1, column: 18 },
+    });
+    expect(declarations?.[1]?.span).toEqual({
+      start: { offset: 36, line: 3, column: 1 },
+      end: { offset: 53, line: 3, column: 18 },
+    });
+  });
+
+  it('stores prototype-sensitive namespace and member names as enumerable own keys', () => {
+    const result = build(`namespace __proto__ {
+  model __proto__ { id Int }
+}
+namespace __proto__ {
+  model constructor { id Int }
+}
+namespace types {
+  type __proto__ { value String }
+}
+namespace blocks {
+  policy __proto__ {}
+}`);
+    expect(result.diagnostics).toEqual([]);
+    const namespaces = result.table.topLevel.namespaces;
+    expect(Object.keys(namespaces)).toEqual(['__proto__', 'types', 'blocks']);
+    const prototypeNamedNamespace = Object.values(namespaces)[0];
+    expect(Object.keys(prototypeNamedNamespace?.models ?? {})).toEqual([
+      '__proto__',
+      'constructor',
+    ]);
+    expect(Object.keys(namespaces['types']?.compositeTypes ?? {})).toEqual(['__proto__']);
+    expect(Object.keys(namespaces['blocks']?.blocks ?? {})).toEqual(['__proto__']);
+    expect(Object.values(prototypeNamedNamespace?.models ?? {}).map((model) => model.name)).toEqual(
+      ['__proto__', 'constructor'],
+    );
+  });
+
+  it('preserves collisions between namespaces and other top-level declarations', () => {
+    const result = build(`model First {}
+namespace First {}
+namespace Second {}
+model Second {}`);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      'Duplicate declaration of "First"',
+      'Duplicate declaration of "Second"',
+    ]);
+    expect(Object.keys(result.table.topLevel.models)).toEqual(['First']);
+    expect(Object.keys(result.table.topLevel.namespaces)).toEqual(['Second']);
   });
 });
 

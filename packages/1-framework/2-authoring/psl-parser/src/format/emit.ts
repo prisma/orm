@@ -111,6 +111,8 @@ function spaceBetween(
 ): boolean {
   if (prev === undefined) return false;
   if (inQualifiedName) return false;
+  // Only a tagged literal puts a string directly after an identifier, and its tag and string hug.
+  if (prev === 'Ident' && cur === 'StringLiteral') return false;
 
   switch (cur) {
     case 'LParen':

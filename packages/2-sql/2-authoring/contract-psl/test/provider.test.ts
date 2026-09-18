@@ -713,6 +713,7 @@ model Document {
       const result = await contract.source.load(
         createPostgresTestContext({
           controlMutationDefaults: {
+            defaultLiteralTagRegistry: new Map(),
             defaultFunctionRegistry: new Map(),
             generatorDescriptors: [],
           },

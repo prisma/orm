@@ -1,7 +1,11 @@
 import type { ExecutionMutationDefaultValue } from '@internal/contract/types';
-import { timestampNowControlDescriptor } from '@internal/family-sql/control';
+import {
+  sqlDefaultLiteralTagEntry,
+  timestampNowControlDescriptor,
+} from '@internal/family-sql/control';
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type {
+  ControlDefaultLiteralTagEntry,
   ControlMutationDefaultEntry,
   DefaultFunctionLoweringContext,
   LoweredDefaultResult,
@@ -217,34 +221,42 @@ const sqliteDefaultFunctionRegistryEntries = [
 export const sqliteScalarAuthoringTypes = {
   String: {
     kind: 'typeConstructor',
+    documentation: 'Variable-length text stored as SQLite text.',
     output: { codecId: SQLITE_TEXT_CODEC_ID, nativeType: 'text' },
   },
   Int: {
     kind: 'typeConstructor',
+    documentation: 'An integer stored as SQLite integer and represented as a JavaScript number.',
     output: { codecId: SQLITE_INTEGER_CODEC_ID, nativeType: 'integer' },
   },
   BigInt: {
     kind: 'typeConstructor',
+    documentation: 'An integer stored as SQLite integer and represented as a JavaScript bigint.',
     output: { codecId: SQLITE_BIGINT_CODEC_ID, nativeType: 'integer' },
   },
   Float: {
     kind: 'typeConstructor',
+    documentation: 'A floating-point number stored as SQLite real.',
     output: { codecId: SQLITE_REAL_CODEC_ID, nativeType: 'real' },
   },
   Decimal: {
     kind: 'typeConstructor',
+    documentation: 'A decimal value stored and represented as text to preserve precision.',
     output: { codecId: SQLITE_TEXT_CODEC_ID, nativeType: 'text' },
   },
   DateTime: {
     kind: 'typeConstructor',
+    documentation: 'A date and time stored as SQLite text.',
     output: { codecId: SQLITE_DATETIME_CODEC_ID, nativeType: 'text' },
   },
   Json: {
     kind: 'typeConstructor',
+    documentation: 'A JSON value serialized to SQLite text.',
     output: { codecId: SQLITE_JSON_CODEC_ID, nativeType: 'text' },
   },
   Bytes: {
     kind: 'typeConstructor',
+    documentation: 'Binary data stored as a SQLite blob.',
     output: { codecId: SQLITE_BLOB_CODEC_ID, nativeType: 'blob' },
   },
 } as const satisfies AuthoringTypeNamespace;
@@ -254,6 +266,16 @@ export function createSqliteDefaultFunctionRegistry(): ReadonlyMap<
   ControlMutationDefaultEntry
 > {
   return new Map(sqliteDefaultFunctionRegistryEntries);
+}
+
+export function createSqliteDefaultLiteralTagRegistry(): ReadonlyMap<
+  string,
+  ControlDefaultLiteralTagEntry
+> {
+  return new Map([
+    ['sql', sqlDefaultLiteralTagEntry('sql`...`')],
+    ['sqlite.sql', sqlDefaultLiteralTagEntry('sqlite.sql`...`')],
+  ]);
 }
 
 export function createSqliteMutationDefaultGeneratorDescriptors(): readonly MutationDefaultGeneratorDescriptor[] {

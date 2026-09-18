@@ -13,6 +13,7 @@ import sqlFamilyPack from '@internal/family-sql/pack';
 import type { ResultType } from '@internal/framework-components/runtime';
 import { sql } from '@internal/sql-builder/runtime';
 import {
+  autoincrement,
   defineContract,
   enumType,
   field,
@@ -218,7 +219,7 @@ test('integrated callback authoring exposes composition-shaped type helpers', ()
         models: {
           User: model('User', {
             fields: {
-              id: field.int().defaultSql('autoincrement()').id(),
+              id: field.int().default(autoincrement()).id(),
               email: field.text().unique(),
               age: field.int(),
               isActive: field.boolean().default(true),

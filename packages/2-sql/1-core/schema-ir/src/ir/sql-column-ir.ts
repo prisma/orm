@@ -43,6 +43,12 @@ export interface SqlColumnIRInput {
    */
   readonly resolvedDefault?: ColumnDefault;
   /**
+   * The contract's default exactly as authored, before the target's `resolveDefault` hook. The
+   * planner's DDL builders render this one, so the DDL carries the authored expression while
+   * `resolvedDefault` is what the diff compares. Absent on the introspected side.
+   */
+  readonly authoredDefault?: ColumnDefault;
+  /**
    * The column's resolved codec reference — the identity the migration
    * planner's op-builders resolve DDL type rendering against at plan time
    * (parameterized type expansion, e.g. `character` + `{ length: 36 }` →
@@ -103,6 +109,8 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
   declare readonly many?: boolean;
   declare readonly resolvedNativeType?: string;
   declare readonly resolvedDefault?: ColumnDefault;
+  /** See {@link SqlColumnIRInput.authoredDefault}. Non-enumerable so it stays out of JSON and structural equality. */
+  declare readonly authoredDefault?: ColumnDefault;
   /** See {@link SqlColumnIRInput.codecRef}. Non-enumerable so it stays out of JSON and structural equality. */
   declare readonly codecRef?: CodecRef;
   /** See {@link SqlColumnIRInput.codecBaseNativeType}. Non-enumerable, same reason as {@link codecRef}. */
@@ -120,6 +128,7 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
     if (input.many !== undefined) this.many = input.many;
     if (input.resolvedNativeType !== undefined) this.resolvedNativeType = input.resolvedNativeType;
     if (input.resolvedDefault !== undefined) this.resolvedDefault = input.resolvedDefault;
+    defineNonEnumerable(this, 'authoredDefault', input.authoredDefault);
     defineNonEnumerable(this, 'codecRef', input.codecRef);
     defineNonEnumerable(this, 'codecBaseNativeType', input.codecBaseNativeType);
     defineNonEnumerable(this, 'codecNamedType', input.codecNamedType);
@@ -144,6 +153,7 @@ export class SqlColumnIR extends SqlSchemaIRNode implements DiffableNode {
       new SqlColumnDefaultIR({
         ...ifDefined('resolved', this.resolvedDefault),
         ...ifDefined('raw', this.default),
+        ...ifDefined('authored', this.authoredDefault),
         ...ifDefined('nativeTypeContext', this.resolvedNativeType),
         // Contract-derived and introspected columns both set `this.many`
         // directly (with `nativeType` as the bare element type; array-ness

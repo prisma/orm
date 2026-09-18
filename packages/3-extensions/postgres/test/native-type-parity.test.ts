@@ -365,20 +365,27 @@ describe('native types as bare scalar types — parity with the live bare-type p
     });
   });
 
-  it('lowers a Date creation preset to a database now default', () => {
+  it('lowers the Date createdAt shorthand identically to an explicit create clock phase', () => {
     const result = emit(`model sample {
       id Int @id
       at temporal.createdAtJsDate()
     }`);
+    const explicit = emit(`model sample {
+      id Int @id
+      at temporal.timestamptzJsDate(onCreate: now)
+    }`);
     expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(
-      storageOf(result.value).namespaces['public']?.entries.table['sample']?.columns['at'],
-    ).toMatchObject({
+    expect(explicit.ok).toBe(true);
+    if (!result.ok || !explicit.ok) return;
+    expect(result.value).toEqual(explicit.value);
+    const column = storageOf(result.value).namespaces['public']?.entries.table['sample']?.columns[
+      'at'
+    ];
+    expect(column).toMatchObject({
       codecId: 'pg/timestamptz-date@1',
       nativeType: 'timestamptz',
-      default: { kind: 'function', expression: 'now()' },
     });
+    expect(column).not.toHaveProperty('default');
   });
 
   it('rejects VarChar(0) in field position via the declarative minimum', () => {

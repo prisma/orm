@@ -108,8 +108,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       symbols: pipeline.symbolTable,
       model,
       field,
-      controlMutationDefaults:
-        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      controlMutationDefaults: interpretation.context.controlMutationDefaults,
     });
     expect(spec).toMatchObject({
       name: 'marker',
@@ -136,8 +135,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     const ctx: AttributeSpecContext = {
       symbols: pipeline.symbolTable,
       model,
-      controlMutationDefaults:
-        interpretation.context.controlMutationDefaults.defaultFunctionRegistry,
+      controlMutationDefaults: interpretation.context.controlMutationDefaults,
     };
 
     const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).model[

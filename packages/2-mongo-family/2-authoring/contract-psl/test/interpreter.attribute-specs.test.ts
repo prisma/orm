@@ -18,7 +18,10 @@ function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
     sourceFile,
     sourceId: 'schema.prisma',
     scalarTypeCodecIds,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   });
   return result.ok ? [] : result.failure.diagnostics;
 }

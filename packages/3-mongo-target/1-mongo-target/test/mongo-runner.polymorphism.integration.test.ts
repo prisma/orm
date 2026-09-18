@@ -122,7 +122,10 @@ function makeContractFromPsl(): MongoContract {
     sourceFile,
     sourceId: 'tasks.prisma',
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
     codecLookup: mongoCodecLookup,
   });
   if (!result.ok) {

@@ -47,7 +47,10 @@ function emit(scalarTypeCodecIds: ReadonlyMap<string, string>) {
     sourceFile,
     sourceId: 'schema.prisma',
     scalarTypeCodecIds,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
     codecLookup: stack.codecLookup,
     authoringContributions: stack.authoringContributions,
   });

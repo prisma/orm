@@ -70,7 +70,10 @@ function interpret(
     sourceFile,
     sourceId: 'test.prisma',
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
     codecLookup: mongoCodecLookup,
     authoringContributions: contributions,
     enumInferenceCodecs: { text: MONGO_STRING_CODEC_ID, int: MONGO_INT32_CODEC_ID },

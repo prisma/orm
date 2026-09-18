@@ -34,9 +34,9 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'3448bd5734489469aeba4316018605f866734dfa3d6fb31e60bc27b4d6d52781'>;
+  StorageHashBase<'d3f95a150d399e4a6bcc77a9b9efd8a1e1d2df2a99338dc1630fa5b420c41b1e'>;
 export type ExecutionHash =
-  ExecutionHashBase<'d1e832917869d55b7ba731e320b560c6a3e558f260978aa11e018daf79a7439e'>;
+  ExecutionHashBase<'08cb57fc09b1864b51c6f891de7b82a1259231c25c6a8761b8542d622cc7ac54'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -339,13 +339,11 @@ type ContractBase = Omit<
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                 };
                 readonly createdAtText: {
                   readonly nativeType: 'timestamptz';
                   readonly codecId: 'pg/timestamptz-string@1';
                   readonly nullable: false;
-                  readonly default: { readonly kind: 'function'; readonly expression: 'now()' };
                 };
                 readonly id: {
                   readonly nativeType: 'int4';
@@ -470,6 +468,22 @@ type ContractBase = Omit<
     readonly executionHash: ExecutionHash;
     readonly mutations: {
       readonly defaults: readonly [
+        {
+          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly column: 'createdAt';
+            readonly namespace: 'public';
+            readonly table: 'reading';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'timestampNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly column: 'createdAtText';
+            readonly namespace: 'public';
+            readonly table: 'reading';
+          };
+        },
         {
           readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
           readonly onUpdate: { readonly id: 'instantNow'; readonly kind: 'generator' };

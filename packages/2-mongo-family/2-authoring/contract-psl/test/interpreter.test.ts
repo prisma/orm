@@ -111,7 +111,10 @@ function interpret(
   return interpretPslDocumentToMongoContract({
     ...buildSymbolTableInput(schema),
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
     codecLookup: mongoCodecLookup,
     ...overrides,
   });
@@ -2179,7 +2182,10 @@ describe('interpretPslDocumentToMongoContract', () => {
           'schema.prisma',
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
-        controlMutationDefaults: new Map(),
+        controlMutationDefaults: {
+          defaultFunctionRegistry: new Map(),
+          defaultLiteralTagRegistry: new Map(),
+        },
       });
 
       expect(result.ok).toBe(false);
@@ -2210,7 +2216,10 @@ describe('interpretPslDocumentToMongoContract', () => {
           'schema.prisma',
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
-        controlMutationDefaults: new Map(),
+        controlMutationDefaults: {
+          defaultFunctionRegistry: new Map(),
+          defaultLiteralTagRegistry: new Map(),
+        },
       });
 
       expect(result.ok).toBe(false);
@@ -2233,7 +2242,10 @@ describe('interpretPslDocumentToMongoContract', () => {
           'schema.prisma',
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
-        controlMutationDefaults: new Map(),
+        controlMutationDefaults: {
+          defaultFunctionRegistry: new Map(),
+          defaultLiteralTagRegistry: new Map(),
+        },
       });
 
       expect(result.ok).toBe(true);

@@ -157,6 +157,8 @@ export const sqlFamilyPslBlockDescriptors = {
   enum: {
     kind: 'pslBlock',
     keyword: 'enum',
+    documentation:
+      'Defines an enum with named values and an inferred or explicitly selected storage codec.',
     discriminator: 'enum',
     name: { required: true },
     parameters: {},

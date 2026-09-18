@@ -1,4 +1,5 @@
 import type { CodecControlHooks } from '@internal/family-sql/control';
+import { checkSqlDefaultBody } from '@internal/family-sql/control';
 import type { StorageColumn, StorageTypeInstance } from '@internal/sql-contract/types';
 import { ifDefined } from '@internal/utils/defined';
 import { isPgEnumParams } from '../codecs';
@@ -31,7 +32,7 @@ function assertSafeNativeType(nativeType: string): void {
  * Not a comprehensive security boundary — the contract is developer-authored.
  */
 function assertSafeDefaultExpression(expression: string): void {
-  if (expression.includes(';') || /--|\/\*|\$\$|\bSELECT\b/i.test(expression)) {
+  if (checkSqlDefaultBody(expression) !== undefined) {
     throw postgresError(
       'CONTRACT.DEFAULT_INVALID',
       `Unsafe default expression in contract: "${expression}". ` +

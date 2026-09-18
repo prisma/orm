@@ -25,7 +25,7 @@ export {
   NamespaceDeclarationAst,
   TypesBlockAst,
 } from '../syntax/ast/declarations';
-export type { ExpressionAst } from '../syntax/ast/expressions';
+export type { ExpressionAst, StringLiteralQuote } from '../syntax/ast/expressions';
 export {
   ArrayLiteralAst,
   AttributeArgAst,
@@ -36,6 +36,7 @@ export {
   ObjectFieldAst,
   ObjectLiteralExprAst,
   StringLiteralExprAst,
+  TaggedLiteralExprAst,
 } from '../syntax/ast/expressions';
 // AST wrappers
 export { IdentifierAst } from '../syntax/ast/identifier';

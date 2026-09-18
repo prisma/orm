@@ -163,6 +163,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       composedExtensionContracts: new Map(),
       capabilities: { sql: { scalarList: true } },
       controlMutationDefaults: {
+        defaultLiteralTagRegistry: new Map(),
         defaultFunctionRegistry: new Map([
           [
             'slugid',

@@ -23,14 +23,19 @@ import {
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
-import type {
-  ControlMutationDefaultRegistry,
-  MutationDefaultGeneratorDescriptor,
+import {
+  type ControlDefaultLiteralTagRegistry,
+  type ControlMutationDefaultRegistry,
+  type DefaultFunctionLoweringContext,
+  describeTaggedLiteralFailure,
+  type LoweredDefaultResult,
+  type MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
 import type {
   FieldSymbol,
   ModelSymbol,
   NumLiteral,
+  ParsedTaggedLiteral,
   PslSpan,
   ResolvedTypeConstructorCall,
   SymbolTable,
@@ -698,6 +703,40 @@ export function resolveFieldTypeDescriptor(input: {
   return { ok: true, descriptor };
 }
 
+const TAGGED_LITERAL_CANONICALIZATION_CODES = {
+  nul: 'PSL_TAGGED_LITERAL_NUL',
+  'too-large': 'PSL_TAGGED_LITERAL_TOO_LARGE',
+} as const;
+
+function lowerTaggedLiteral(
+  literal: ParsedTaggedLiteral,
+  registry: ControlDefaultLiteralTagRegistry,
+  context: DefaultFunctionLoweringContext,
+): LoweredDefaultResult {
+  const reject = (code: string, message: string): LoweredDefaultResult => ({
+    ok: false,
+    diagnostic: { code, message, sourceId: context.sourceId, span: literal.span },
+  });
+  const entry = registry.get(literal.tag);
+  if (entry === undefined) {
+    return reject(
+      'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
+      `Unknown literal tag "${literal.tag}". Known tags: ${[...registry.keys()].join(', ')}.`,
+    );
+  }
+  const { canonicalization } = literal;
+  if (!canonicalization.ok) {
+    return reject(
+      TAGGED_LITERAL_CANONICALIZATION_CODES[canonicalization.reason],
+      describeTaggedLiteralFailure(canonicalization.reason),
+    );
+  }
+  return entry.lower({
+    literal: { tag: literal.tag, body: canonicalization.body, span: literal.span },
+    context,
+  });
+}
+
 export function lowerDefaultForField(input: {
   readonly modelName: string;
   readonly fieldName: string;
@@ -709,6 +748,7 @@ export function lowerDefaultForField(input: {
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly sourceId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
+  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly codecLookup: CodecLookup | undefined;
   readonly diagnostics: ContractSourceDiagnostic[];
 }): {
@@ -722,7 +762,10 @@ export function lowerDefaultForField(input: {
       symbols: input.symbolTable,
       model: input.model,
       field: input.field,
-      controlMutationDefaults: input.defaultFunctionRegistry,
+      controlMutationDefaults: {
+        defaultFunctionRegistry: input.defaultFunctionRegistry,
+        defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+      },
     }),
   );
   const interpreted = interpretFieldAttribute({
@@ -753,16 +796,20 @@ export function lowerDefaultForField(input: {
   }
 
   if (typeof value === 'object') {
-    const lowered = lowerDefaultFunctionWithRegistry({
-      call: value,
-      registry: input.defaultFunctionRegistry,
-      context: {
-        sourceId: input.sourceId,
-        modelName: input.modelName,
-        fieldName: input.fieldName,
-        columnCodecId: input.columnDescriptor.codecId,
-      },
-    });
+    const context: DefaultFunctionLoweringContext = {
+      sourceId: input.sourceId,
+      modelName: input.modelName,
+      fieldName: input.fieldName,
+      columnCodecId: input.columnDescriptor.codecId,
+    };
+    const lowered =
+      'tag' in value
+        ? lowerTaggedLiteral(value, input.defaultLiteralTagRegistry, context)
+        : lowerDefaultFunctionWithRegistry({
+            call: value,
+            registry: input.defaultFunctionRegistry,
+            context,
+          });
 
     if (!lowered.ok) {
       input.diagnostics.push(lowered.diagnostic);

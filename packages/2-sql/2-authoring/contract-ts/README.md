@@ -61,18 +61,20 @@ Direct imports expose the base structural helpers. Use this surface when you wan
 
 Built-in ID helpers from `@internal/ids` already return the generated-field spec accepted by `field.generated(...)`, so `field.generated(uuidv4())` is a valid structural DSL call.
 
+Storage defaults are values passed to `.default(...)`: a literal, `now()`, `autoincrement()`, or raw SQL written with the `sql` template tag, such as `` .default(sql`gen_random_uuid()`) `` or `` .default(sql`(now() + interval '7 days')`) ``. The `sql` body is canonicalized like PSL's `` @default(sql`...`) `` and used verbatim; JavaScript interpolation is a type error. A body cannot contain `${`, because in a template literal that starts JavaScript interpolation. As in PSL, `` sql`now()` `` and `` sql`autoincrement()` `` are refused with `CONTRACT.DEFAULT_INVALID`: write `.default(now())` or `.default(autoincrement())`. `.defaultSql('...')` still works but is deprecated and is removed in 8.0.0.
+
 ```typescript
 import { textColumn, timestamptzColumn } from '@internal/adapter-postgres/column-types';
 import sqlFamily from '@internal/family-sql/pack';
 import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model, rel } from '@internal/sql-contract-ts/contract-builder';
+import { defineContract, field, model, now, rel } from '@internal/sql-contract-ts/contract-builder';
 import postgresPack from '@internal/target-postgres/pack';
 
 const User = model('User', {
   fields: {
     id: field.generated(uuidv4()).id(),
     email: field.column(textColumn).unique(),
-    createdAt: field.column(timestamptzColumn).defaultSql('now()'),
+    createdAt: field.column(timestamptzColumn).default(now()),
   },
 })
   .relations({
@@ -250,7 +252,7 @@ constraints.index({ expression: 'eql_v3.eq_term(email)', name: 'users_email_eq' 
 - Structural helpers: `field.column(...)`, `field.generated(...)`, `field.namedType(...)`, plus `model(...)` and `rel.*`
 - Callback helper presets: `field.id.uuidv4String()`, `field.id.uuidv7String()`, `field.id.nanoid({ size })`, `field.uuidString()`, `field.text()`, `field.temporal.createdAt()`, `field.temporal.updatedAt()`, and `type.*` (Postgres also adds `field.uuidNative()`, `field.id.uuidv4Native()`, `field.id.uuidv7Native()` — these emit `pg/uuid@1`)
 - Integer representation types: register composed `type.BigIntNumber()` / `type.UnboundedInt()` instances in the returned `types` map and reference those same instances with `field.namedType(...)`, or use the direct per-codec column helpers with `field.column(...)`. `BigIntNumber` emits `pg/int8number@1` on PostgreSQL or `sqlite/bigintnumber@1` on SQLite and throws outside ±(2^53 − 1); PostgreSQL-only `UnboundedInt` emits `pg/unboundedint@1` and reads and writes exact `bigint` values. Bare `field.bigint()` keeps the lossless `pg/int8@1`. See [Integer Representation Types](#integer-representation-types) for the TypeScript forms and [Integer representation types](../../../../docs/reference/integer-representation-types.md) for the canonical selection, runtime, JSON, and aggregate behavior reference.
-- Timestamp helpers mirror PSL semantics: `field.temporal.createdAt()` lowers to a target storage `now()` default, while `field.temporal.updatedAt()` lowers to the target-owned `timestampNow` execution default for create and non-empty update mutations.
+- Timestamp helpers mirror PSL presets: `field.temporal.createdAt()` generates a client-side timestamp on create, while `field.temporal.updatedAt()` uses the same execution generator on create and non-empty update mutations. Neither creates a database default; matching representations share one generated value per operation.
 - Keep field-local and FK-local storage overrides next to the authoring site with `field.sql(...)` and `rel.belongsTo(...).sql({ fk })`
 - Prefer typed local refs such as `field.namedType(types.Role)`, `User.refs.id`, and `User.ref('id')` when those tokens are available
 - See [API.md](./API.md) for generated-field spec semantics, validation rules, and typed-reference warning behavior

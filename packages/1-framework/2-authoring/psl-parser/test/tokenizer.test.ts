@@ -245,6 +245,96 @@ describe('Tokenizer', () => {
   });
 });
 
+describe('backtick strings', () => {
+  it('scans a backtick string as a StringLiteral token, quotes included', () => {
+    expect(tokenize('sql`gen_random_uuid()`')).toMatchInlineSnapshot(`
+      "Ident          "sql"
+      StringLiteral  "\`gen_random_uuid()\`"
+      Eof            """
+    `);
+  });
+
+  it('spans multiple lines', () => {
+    const source = 'sql`\n  now()\n`';
+    assertLossless(source);
+    expect(tokenize(source)).toMatchInlineSnapshot(`
+      "Ident          "sql"
+      StringLiteral  "\`\\n  now()\\n\`"
+      Eof            """
+    `);
+  });
+
+  it('treats a backslash-escaped backtick as part of the string', () => {
+    expect(tokenize('`a\\`b`')).toMatchInlineSnapshot(`
+      "StringLiteral  "\`a\\\\\`b\`"
+      Eof            """
+    `);
+  });
+
+  it('lets an escaped backslash precede the closing backtick', () => {
+    expect(tokenize('`a\\\\` x')).toMatchInlineSnapshot(`
+      "StringLiteral  "\`a\\\\\\\\\`"
+      Whitespace     " "
+      Ident          "x"
+      Eof            """
+    `);
+  });
+
+  it('keeps an unterminated backtick string to the end of the source', () => {
+    const source = '`abc\n  more\n';
+    assertLossless(source);
+    expect(tokenize(source)).toMatchInlineSnapshot(`
+      "StringLiteral  "\`abc\\n  more\\n"
+      Eof            """
+    `);
+  });
+
+  it('ends an unterminated backtick string before the first line that opens with a closing brace', () => {
+    const source = '`abc\n  more\n  }\nnext';
+    assertLossless(source);
+    expect(collectAll(source).map((t) => t.kind)).toEqual([
+      'StringLiteral',
+      'Whitespace',
+      'RBrace',
+      'Newline',
+      'Ident',
+      'Eof',
+    ]);
+    expect(collectAll(source)[0]?.text).toBe('`abc\n  more\n');
+  });
+
+  it.each([
+    ['CR', '\r'],
+    ['CRLF', '\r\n'],
+  ])('recognises %s line breaks when ending an unterminated backtick string', (_name, eol) => {
+    const source = `\`abc${eol}  more${eol}  }${eol}next`;
+    assertLossless(source);
+    expect(collectAll(source).map((t) => t.kind)).toEqual([
+      'StringLiteral',
+      'Whitespace',
+      'RBrace',
+      'Newline',
+      'Ident',
+      'Eof',
+    ]);
+    expect(collectAll(source)[0]?.text).toBe(`\`abc${eol}  more${eol}`);
+  });
+
+  it('still ends an unterminated double- or single-quoted string at the newline', () => {
+    expect(collectAll('"abc\n}').map((t) => t.kind)).toEqual([
+      'StringLiteral',
+      'Newline',
+      'RBrace',
+      'Eof',
+    ]);
+    expect(collectAll("'abc\n}")[0]?.text).toBe("'abc");
+  });
+
+  it('is lossless with a dotted tag, whitespace before the string, and a double-quoted string', () => {
+    assertLossless('pg.sql `a` sql"b"');
+  });
+});
+
 describe('isTerminatedStringLiteral', () => {
   it('treats a literal with a closing quote as terminated', () => {
     expect(isTerminatedStringLiteral('"ok"')).toBe(true);
@@ -264,5 +354,18 @@ describe('isTerminatedStringLiteral', () => {
 
   it('treats a real closing quote after an escaped quote as terminated', () => {
     expect(isTerminatedStringLiteral('"a\\""')).toBe(true);
+  });
+
+  it.each([
+    ["'ok'", true],
+    ['`ok`', true],
+    ['``', true],
+    ['`a\\\\`', true],
+    ['`', false],
+    ['`oops', false],
+    ['`a\\`', false],
+    ['"ok\'', false],
+  ])('reads %s as terminated: %s', (text, terminated) => {
+    expect(isTerminatedStringLiteral(text)).toBe(terminated);
   });
 });

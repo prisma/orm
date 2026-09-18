@@ -196,14 +196,27 @@ export function parseExpression(cursor: Cursor): GreenNode | undefined {
     parseNumberLiteralExpr(cursor) ??
     parseArrayLiteral(cursor) ??
     parseObjectLiteralExpr(cursor) ??
+    parseTaggedLiteral(cursor) ??
     parseFunctionCall(cursor) ??
     parseBooleanLiteralExpr(cursor) ??
     parseIdentifierExpr(cursor)
   );
 }
 
+/** A string literal outside a tagged literal, where a backtick string is refused. */
 export function parseStringLiteralExpr(cursor: Cursor): GreenNode | undefined {
   if (cursor.peekKind() !== 'StringLiteral') return undefined;
+  if (cursor.peekToken().text.startsWith('`')) {
+    cursor.diagnostic(
+      'PSL_BACKTICK_STRING_REQUIRES_TAG',
+      'A backtick string must follow a tag, as in tag`...`.',
+      cursor.mark(),
+    );
+  }
+  return parseStringLiteral(cursor);
+}
+
+function parseStringLiteral(cursor: Cursor): GreenNode {
   const stringMark = cursor.mark();
   const text = cursor.peekToken().text;
   cursor.startNode('StringLiteralExpr');
@@ -265,6 +278,30 @@ function parseQualifiedSegments(cursor: Cursor, separator: 'Colon' | 'Dot'): voi
       );
     }
   }
+}
+
+/**
+ * Whether the next tokens open a tagged literal: a bare `Ident` or a
+ * namespace-qualified `Ident.Ident`, then a string. Trivia may sit anywhere
+ * between them. Bounded like {@link isCallAhead}.
+ */
+function isTaggedLiteralAhead(cursor: Cursor): boolean {
+  if (cursor.peekKind() !== 'Ident') return false;
+  if (cursor.peekKind(1) === 'StringLiteral') return true;
+  return (
+    cursor.peekKind(1) === 'Dot' &&
+    cursor.peekKind(2) === 'Ident' &&
+    cursor.peekKind(3) === 'StringLiteral'
+  );
+}
+
+/** Parses `` tag`body` ``, `tag"body"`, or `tag'body'`: a qualified name, then a string literal. */
+export function parseTaggedLiteral(cursor: Cursor): GreenNode | undefined {
+  if (!isTaggedLiteralAhead(cursor)) return undefined;
+  cursor.startNode('TaggedLiteral');
+  parseQualifiedName(cursor);
+  parseStringLiteral(cursor);
+  return cursor.finishNode();
 }
 
 // Ordering among the `Ident`-leading alternatives is load-bearing: the

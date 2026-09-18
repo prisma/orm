@@ -25,7 +25,7 @@ import {
   isAuthoringEntityTypeDescriptor,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
-import type { ControlMutationDefaultRegistry } from '@internal/framework-components/control';
+import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   applyPolymorphicScopeToMongoIndex,
@@ -92,7 +92,7 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly sourceFile: SourceFile;
   readonly sourceId: string;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
-  readonly controlMutationDefaults: ControlMutationDefaultRegistry;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
   readonly codecLookup?: CodecLookup;
   readonly seedDiagnostics?: readonly ContractSourceDiagnostic[];
   readonly authoringContributions?: AuthoringContributions;
@@ -111,12 +111,14 @@ function validateNamespaceBlocksForMongoTarget(input: {
   readonly diagnostics: ContractSourceDiagnostic[];
 }): void {
   for (const namespace of input.namespaces) {
-    input.diagnostics.push({
-      code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
-      message: `Mongo does not support \`namespace ${namespace.name} { … }\` blocks (the database is bound by the connection string; declare models at the document top level instead).`,
-      sourceId: input.sourceId,
-      span: nodePslSpan(namespace.node.syntax, input.sourceFile),
-    });
+    for (const { span } of namespace.declarations) {
+      input.diagnostics.push({
+        code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
+        message: `Mongo does not support \`namespace ${namespace.name} { … }\` blocks (the database is bound by the connection string; declare models at the document top level instead).`,
+        sourceId: input.sourceId,
+        span,
+      });
+    }
   }
 }
 

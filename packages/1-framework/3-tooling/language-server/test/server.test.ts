@@ -126,8 +126,9 @@ const formattedPsl = '// use prisma-8\nmodel User {\n  id Int\n}\n';
 
 const scalarTypes = ['String', 'Int', 'Boolean', 'DateTime'] as const;
 const nameSnippetPlaceholder = '$' + '{1:Name}';
-const emptySnippetPlaceholder1 = '$' + '{1:}';
-const emptySnippetPlaceholder2 = '$' + '{2:}';
+const targetSnippetPlaceholder = '$' + '{1:target}';
+const nameArgumentSnippetPlaceholder = '$' + '{2:name}';
+const modeSnippetPlaceholder = '$' + '{1:mode}';
 
 const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
   policy: {
@@ -1269,14 +1270,14 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     expect(item).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
-        newText: `marker("${emptySnippetPlaceholder1}", name: "${emptySnippetPlaceholder2}")`,
+        newText: `marker("${targetSnippetPlaceholder}", name: "${nameArgumentSnippetPlaceholder}")`,
       },
     });
     expect(applyCompletionItem(completion.source, item)).toEqual(
       [
         '// use prisma-8',
         'model User {',
-        `  id Int @marker("${emptySnippetPlaceholder1}", name: "${emptySnippetPlaceholder2}") // keep`,
+        `  id Int @marker("${targetSnippetPlaceholder}", name: "${nameArgumentSnippetPlaceholder}") // keep`,
         '}',
       ].join('\n'),
     );
@@ -1389,7 +1390,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
         'choose',
       );
       expect(item.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
-      const inserted = snippets ? `choose(mode: ${emptySnippetPlaceholder1})` : 'choose';
+      const inserted = snippets ? `choose(mode: ${modeSnippetPlaceholder})` : 'choose';
       expect(applyCompletionItem(completion.source, item)).toBe(
         `// use prisma-next\nmodel User { id Int @probe(value: ${inserted}) // keep\n}`,
       );
@@ -1412,11 +1413,11 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
         completionItems(await requestCompletion(harness, schemaUri, completion.position)),
         'mode',
       );
-      expect(item.textEdit?.newText).toBe(`mode: ${snippets ? emptySnippetPlaceholder1 : ''}`);
+      expect(item.textEdit?.newText).toBe(`mode: ${snippets ? modeSnippetPlaceholder : ''}`);
       expect(item.insertTextFormat).toBe(snippets ? InsertTextFormat.Snippet : undefined);
       expect(item.command).toBeUndefined();
       expect(applyCompletionItem(completion.source, item)).toBe(
-        `// use prisma-8\nmodel User { id Int @probe(value: choose(mode: ${snippets ? emptySnippetPlaceholder1 : ''})) }`,
+        `// use prisma-8\nmodel User { id Int @probe(value: choose(mode: ${snippets ? modeSnippetPlaceholder : ''})) }`,
       );
     },
     5_000,
@@ -1485,7 +1486,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
             : undefined,
         );
         if (retrigger)
-          expect(item.textEdit?.newText).toBe(`mode: ${snippets ? emptySnippetPlaceholder1 : ''}`);
+          expect(item.textEdit?.newText).toBe(`mode: ${snippets ? modeSnippetPlaceholder : ''}`);
       }
     },
     5_000,
@@ -1553,7 +1554,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       );
       expect(items.find((item) => item.label === 'namespace')).toMatchObject({
         kind: CompletionItemKind.Keyword,
-        detail: 'PSL declaration keyword',
+        detail: 'Groups declarations belonging to the same database schema or database.',
       });
       expect(items.map((item) => item.label)).not.toContain('datasource');
     } finally {
@@ -1571,11 +1572,13 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     const items = completionItems(await requestCompletion(harness, schemaUri, position));
     expect(items.find((item) => item.label === 'model')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  $0\n}` },
+      textEdit: { newText: `model ${nameSnippetPlaceholder} {\n  \${0:// Fields}\n}` },
     });
     expect(items.find((item) => item.label === 'policy')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
-      textEdit: { newText: `policy ${nameSnippetPlaceholder} {\n  $0\n}` },
+      textEdit: {
+        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block parameters and attributes}\n}`,
+      },
     });
   });
 

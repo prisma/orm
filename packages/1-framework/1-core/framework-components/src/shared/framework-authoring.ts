@@ -118,6 +118,7 @@ export interface AuthoringTypeConstructorEntityRef {
 
 export interface AuthoringTypeConstructorDescriptor {
   readonly kind: 'typeConstructor';
+  readonly documentation?: string;
   readonly args?: readonly AuthoringArgumentDescriptor[];
   readonly output: AuthoringStorageTypeTemplate;
   /** Present when one of this constructor's positional arguments names another document-local entity instead of carrying a literal value. Absent for ordinary literal-argument constructors. */
@@ -420,6 +421,7 @@ export type AuthoringEntityTypeNamespace = {
  */
 export interface AuthoringPslBlockDescriptor {
   readonly kind: 'pslBlock';
+  readonly documentation?: string;
   readonly keyword: string;
   readonly discriminator: string;
   readonly name: { readonly required: boolean };

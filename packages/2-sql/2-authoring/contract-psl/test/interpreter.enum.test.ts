@@ -292,6 +292,25 @@ model Post {
 // ---------------------------------------------------------------------------
 
 describe('enum diagnostics', () => {
+  it('rejects a tagged literal default on an enum column: an enum column takes a member name', () => {
+    const result = interpret(`
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low"
+  High = "high"
+}
+model Post {
+  id       Int      @id
+  priority Priority @default(sql\`'low'\`)
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_SYNTAX', sourceId: 'schema.prisma' }),
+    ]);
+  });
+
   it('missing @@type with non-inferable members emits PSL_ENUM_CANNOT_INFER_TYPE', () => {
     const result = interpret(`
 enum Priority {

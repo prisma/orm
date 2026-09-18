@@ -25,6 +25,7 @@ import {
   type SourceFile,
   StringLiteralExprAst,
   type SyntaxToken,
+  TaggedLiteralExprAst,
   type TypeAnnotationAst,
   TypesBlockAst,
 } from '@internal/psl-parser/syntax';
@@ -445,6 +446,10 @@ function collectExpression(
       addIdentifier(field.key(), 'property', tokens);
       collectExpression(field.value(), source, tokens, namespace);
     }
+    return;
+  }
+
+  if (expression instanceof TaggedLiteralExprAst) {
     return;
   }
 

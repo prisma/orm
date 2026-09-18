@@ -84,7 +84,10 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
   const modelContext: AttributeSpecContext = {
     symbols: table,
     model,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   };
   return { model: modelContext, field: { ...modelContext, field } };
 }

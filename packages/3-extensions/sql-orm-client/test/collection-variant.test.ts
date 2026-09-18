@@ -592,6 +592,41 @@ describe('STI variant upsert (discriminator auto-injection)', () => {
 });
 
 describe('MTI variant create (two-INSERT orchestration)', () => {
+  it.each([1, 2])('shares a defaults cache across both tables and all %i rows', async (count) => {
+    const contract = withReturningCapability(buildMixedPolyContract());
+    const baseContext = getTestContext();
+    const applyMutationDefaults = vi.fn(baseContext.applyMutationDefaults);
+    const context = { ...baseContext, contract, applyMutationDefaults };
+    const runtime = createMockRuntime();
+    const collection = new Collection({ runtime, context }, 'Task', { namespaceId: 'public' });
+    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    const input = Array.from({ length: count }, (_, index) => ({
+      title: `Feature ${index}`,
+      priority: index,
+    }));
+    const results = input.flatMap((row, index) => [
+      [{ id: index + 1, title: row.title, type: 'feature' }],
+      [{ id: index + 1, priority: row.priority }],
+    ]);
+    runtime.setNextResults(results);
+
+    await narrowed.createAll(input as never).toArray();
+
+    const calls = applyMutationDefaults.mock.calls.map(([options]) => options);
+    expect(calls.map(({ table }) => table)).toEqual(input.flatMap(() => ['tasks', 'features']));
+    const cache = calls[0]!.defaultValueCache;
+    expect(cache).toBeInstanceOf(Map);
+    for (const call of calls) {
+      expect(call.defaultValueCache).toBe(cache);
+    }
+
+    applyMutationDefaults.mockClear();
+    runtime.setNextResults(results);
+    await narrowed.createAll(input as never).toArray();
+    expect(applyMutationDefaults.mock.calls[0]![0].defaultValueCache).toBeInstanceOf(Map);
+    expect(applyMutationDefaults.mock.calls[0]![0].defaultValueCache).not.toBe(cache);
+  });
+
   it('executes two INSERTs: base table then variant table', async () => {
     const { collection, runtime } = createReturningMixedPolyCollection();
     runtime.setNextResults([

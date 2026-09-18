@@ -11,10 +11,12 @@
 import { timestampTemporalColumn } from '@internal/adapter-postgres/column-types';
 import { describe, expect, it } from 'vitest';
 import {
+  autoincrement,
   defineContract,
   field,
   int4Column,
   model,
+  now,
   runSchemaVerify,
   textColumn,
   timeouts,
@@ -54,7 +56,7 @@ describe('db verify against the DDL Prisma 7 generates', () => {
         models: {
           Tag: model('Tag', {
             fields: {
-              id: field.column(int4Column).defaultSql('autoincrement()').id(),
+              id: field.column(int4Column).default(autoincrement()).id(),
               name: field.column(textColumn),
             },
           }).sql({ table: 'Tag' }),
@@ -90,8 +92,8 @@ describe('db verify against the DDL Prisma 7 generates', () => {
         models: {
           Timestamps: model('Timestamps', {
             fields: {
-              id: field.column(int4Column).defaultSql('autoincrement()').id(),
-              createdAt: field.column(prisma7Timestamp3).defaultSql('now()'),
+              id: field.column(int4Column).default(autoincrement()).id(),
+              createdAt: field.column(prisma7Timestamp3).default(now()),
             },
           }).sql({ table: 'Timestamps' }),
         },
@@ -104,8 +106,8 @@ describe('db verify against the DDL Prisma 7 generates', () => {
         models: {
           Timestamps: model('Timestamps', {
             fields: {
-              id: field.column(int4Column).defaultSql('autoincrement()').id(),
-              createdAt: field.column(timestampTemporalColumn).defaultSql('now()'),
+              id: field.column(int4Column).default(autoincrement()).id(),
+              createdAt: field.column(timestampTemporalColumn).default(now()),
             },
           }).sql({ table: 'Timestamps' }),
         },
@@ -159,13 +161,13 @@ describe('db verify against the DDL Prisma 7 generates', () => {
         models: {
           User: model('User', {
             fields: {
-              id: field.column(int4Column).defaultSql('autoincrement()').id(),
+              id: field.column(int4Column).default(autoincrement()).id(),
               email: field.column(textColumn),
             },
           }).sql({ table: 'User' }),
           Post: model('Post', {
             fields: {
-              id: field.column(int4Column).defaultSql('autoincrement()').id(),
+              id: field.column(int4Column).default(autoincrement()).id(),
               title: field.column(textColumn),
             },
           }).sql({ table: 'Post' }),

@@ -80,6 +80,8 @@ const PSL_ROLE_BLOCK_OUTSIDE_UNBOUND_NAMESPACE: ContributedPslDiagnosticCode =
 export const postgresAuthoringTypes = {
   BigIntNumber: {
     kind: 'typeConstructor',
+    documentation:
+      'A PostgreSQL 64-bit integer represented as a JavaScript number within its safe integer range.',
     output: {
       codecId: 'pg/int8number@1',
       nativeType: 'int8',
@@ -87,6 +89,8 @@ export const postgresAuthoringTypes = {
   },
   UnboundedInt: {
     kind: 'typeConstructor',
+    documentation:
+      'An arbitrary-precision integer stored as PostgreSQL numeric and represented as bigint.',
     output: {
       codecId: 'pg/unboundedint@1',
       nativeType: 'numeric',
@@ -505,16 +509,28 @@ export const postgresAuthoringEntityTypes = {
  */
 const policyTargetParam = {
   kind: 'ref',
+  documentation: 'The model protected by this policy; it must declare @@rls.',
   refKind: 'model',
   scope: 'same-namespace',
   required: true,
 } as const;
 const policyRolesParam = {
   kind: 'list',
+  documentation: 'The database roles to which this policy applies.',
   of: { kind: 'ref', refKind: 'role', scope: 'cross-space' },
 } as const;
-const policyPredicateParam = { kind: 'value', codecId: 'pg/text@1', required: true } as const;
-const policyPermissiveParam = { kind: 'value', codecId: 'pg/bool@1' } as const;
+const policyPredicateParam = {
+  kind: 'value',
+  codecId: 'pg/text@1',
+  required: true,
+  documentation: 'A SQL predicate controlling which rows this policy permits.',
+} as const;
+const policyPermissiveParam = {
+  kind: 'value',
+  codecId: 'pg/bool@1',
+  documentation:
+    'Whether the policy is permissive (combined with OR) rather than restrictive (combined with AND).',
+} as const;
 // A policy may only target an RLS-controlled model: the model named by
 // `target` must declare `@@rls`, or the load fails with a diagnostic naming
 // the model and the policy prefix.
@@ -553,6 +569,7 @@ export const postgresAuthoringPslBlockDescriptors = {
   policy_select: {
     kind: 'pslBlock',
     keyword: 'policy_select',
+    documentation: 'Defines a row-level security policy controlling which rows can be selected.',
     discriminator: 'policy',
     name: { required: true },
     parameters: {
@@ -567,6 +584,7 @@ export const postgresAuthoringPslBlockDescriptors = {
   policy_delete: {
     kind: 'pslBlock',
     keyword: 'policy_delete',
+    documentation: 'Defines a row-level security policy controlling which rows can be deleted.',
     discriminator: 'policy',
     name: { required: true },
     parameters: {
@@ -581,6 +599,7 @@ export const postgresAuthoringPslBlockDescriptors = {
   policy_insert: {
     kind: 'pslBlock',
     keyword: 'policy_insert',
+    documentation: 'Defines a row-level security policy checking rows being inserted.',
     discriminator: 'policy',
     name: { required: true },
     parameters: {
@@ -595,6 +614,8 @@ export const postgresAuthoringPslBlockDescriptors = {
   policy_update: {
     kind: 'pslBlock',
     keyword: 'policy_update',
+    documentation:
+      'Defines a row-level security policy controlling row visibility and checks for updates.',
     discriminator: 'policy',
     name: { required: true },
     parameters: {
@@ -610,6 +631,7 @@ export const postgresAuthoringPslBlockDescriptors = {
   policy_all: {
     kind: 'pslBlock',
     keyword: 'policy_all',
+    documentation: 'Defines a row-level security policy applying to all operations.',
     discriminator: 'policy',
     name: { required: true },
     parameters: {
@@ -635,6 +657,7 @@ export const postgresAuthoringPslBlockDescriptors = {
   native_enum: {
     kind: 'pslBlock',
     keyword: 'native_enum',
+    documentation: 'Defines a PostgreSQL enum type with named string-valued members.',
     discriminator: 'native_enum',
     name: { required: true },
     parameters: {},
@@ -650,6 +673,8 @@ export const postgresAuthoringPslBlockDescriptors = {
   role: {
     kind: 'pslBlock',
     keyword: 'role',
+    documentation:
+      'Declares an existing database role in namespace unbound for use in security policies.',
     discriminator: 'role',
     name: { required: true },
     parameters: {},

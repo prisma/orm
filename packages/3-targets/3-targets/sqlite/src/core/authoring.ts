@@ -7,6 +7,8 @@ import type {
 export const sqliteAuthoringTypes = {
   BigIntNumber: {
     kind: 'typeConstructor',
+    documentation:
+      'A SQLite integer represented as a JavaScript number within its safe integer range.',
     output: {
       codecId: 'sqlite/bigintnumber@1',
       nativeType: 'integer',

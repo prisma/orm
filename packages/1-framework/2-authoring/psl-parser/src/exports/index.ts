@@ -54,6 +54,7 @@ export { numLiteral } from '../attribute-spec/combinators/num-literal';
 export { oneOf } from '../attribute-spec/combinators/one-of';
 export { record } from '../attribute-spec/combinators/record';
 export { str } from '../attribute-spec/combinators/str';
+export { taggedLiteral } from '../attribute-spec/combinators/tagged-literal';
 export { fieldAttribute } from '../attribute-spec/field-attribute';
 export type { ArgBindingSpec } from '../attribute-spec/interpret';
 export { interpretArgs, interpretAttribute } from '../attribute-spec/interpret';
@@ -84,9 +85,11 @@ export type {
   OptionalArgType,
   OutOf,
   Param,
+  ParsedTaggedLiteral,
   PositionalParam,
   PosOut,
   RejectingArgType,
+  TaggedLiteralArgType,
   TypedFuncCall,
 } from '../attribute-spec/types';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';

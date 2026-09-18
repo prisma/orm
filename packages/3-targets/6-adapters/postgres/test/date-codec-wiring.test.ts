@@ -19,6 +19,8 @@ describe('Postgres Date adapter wiring', () => {
     expect(postgresAuthoringTypes).not.toHaveProperty('TimestamptzDate');
     expect(postgresAuthoringTypes).toHaveProperty('TimestamptzJsDate', {
       kind: 'typeConstructor',
+      documentation:
+        'An instant stored as PostgreSQL timestamptz and represented as a JavaScript Date.',
       args: [{ kind: 'number', name: 'precision', integer: true, minimum: 0, optional: true }],
       output: {
         codecId,

@@ -16,7 +16,9 @@ const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults(
 
 function stampScopeFrom(ctx: Parameters<ModelAttributeSpecFactory>[0]): string {
   const declaredModels = Object.keys(ctx.symbols.topLevel.models).sort().join('+');
-  const defaultFunctions = [...ctx.controlMutationDefaults.keys()].sort().join('+');
+  const defaultFunctions = [...ctx.controlMutationDefaults.defaultFunctionRegistry.keys()]
+    .sort()
+    .join('+');
   return `${ctx.model.name}|${declaredModels}|${defaultFunctions}`;
 }
 

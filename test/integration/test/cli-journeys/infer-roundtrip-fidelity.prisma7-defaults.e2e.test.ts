@@ -147,15 +147,6 @@ interface SchemaVerifyResult {
   readonly schema: { readonly issues: readonly VerifyIssue[] };
 }
 
-interface SourceLoadError {
-  readonly meta?: {
-    readonly diagnostics?: readonly {
-      readonly code: string;
-      readonly span?: { readonly start: { readonly line: number } };
-    }[];
-  };
-}
-
 function readContractPsl(ctx: JourneyContext): string {
   return readFileSync(join(ctx.testDir, 'contract.prisma'), 'utf-8');
 }
@@ -316,7 +307,7 @@ withTempDir(({ createTempDir }) => {
       });
 
       it(
-        'infer prints them as dbgenerated, which emit rejects at each field',
+        'infer prints them as dbgenerated, which emit accepts: a list column takes any storage default',
         async () => {
           const ctx = setupJourney({
             connectionString: db.connectionString,
@@ -338,13 +329,7 @@ withTempDir(({ createTempDir }) => {
           `);
 
           const emit = await runContractEmit(ctx, ['--json']);
-          expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(2);
-          expect(parseJsonOutput<SourceLoadError>(emit).meta?.diagnostics).toEqual([
-            expect.objectContaining({
-              code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
-              span: expect.objectContaining({ start: expect.objectContaining({ line: 6 }) }),
-            }),
-          ]);
+          expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
         },
         timeouts.spinUpPpgDev,
       );

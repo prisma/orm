@@ -5,6 +5,7 @@ import { validateSqlContractFully } from '@internal/sql-contract/validators';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { type ContractInput, defineContract, field, model, rel } from '../src/contract-builder';
+import { now } from '../src/default-functions';
 import { modelsMapForAssertions, modelsOf } from './contract-test-helpers';
 import { crossRef } from './cross-ref-helpers';
 
@@ -109,7 +110,7 @@ describe('contract DSL authoring surface', () => {
           .id({ name: 'app_user_pkey' }),
         email: field.column(textColumn).unique({ name: 'app_user_email_key' }),
         role: field.namedType(types.Role),
-        createdAt: field.column(timestamptzTemporalColumn).column('created_at').defaultSql('now()'),
+        createdAt: field.column(timestamptzTemporalColumn).column('created_at').default(now()),
       },
     }).sql({
       table: 'app_user',

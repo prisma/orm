@@ -8,6 +8,7 @@
  * see `StorageColumn` or `storageTypes`.
  */
 
+import { checkSqlDefaultBody } from '@internal/family-sql/control';
 import type {
   StorageColumn,
   StorageTable,
@@ -32,11 +33,11 @@ function assertSafeNativeType(nativeType: string): void {
 }
 
 function assertSafeDefaultExpression(expression: string): void {
-  if (expression.includes(';') || /--|\/\*|\bSELECT\b/i.test(expression)) {
+  if (checkSqlDefaultBody(expression) !== undefined) {
     throw sqliteError(
       'CONTRACT.DEFAULT_INVALID',
       `Unsafe default expression in contract: "${expression}". ` +
-        'Default expressions must not contain semicolons, SQL comment tokens, or subqueries.',
+        'Default expressions must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
       { meta: { expression } },
     );
   }

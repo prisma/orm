@@ -12,6 +12,8 @@ export interface SqlColumnDefaultIRInput {
   readonly resolved?: ColumnDefault;
   /** Raw database default expression, when known (introspected side). */
   readonly raw?: string;
+  /** See {@link import('./sql-column-ir').SqlColumnIRInput.authoredDefault}. */
+  readonly authored?: ColumnDefault;
   /**
    * Native-type context for temporal literal normalization — the owning
    * column's resolved native type.
@@ -54,6 +56,8 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
 
   declare readonly resolved?: ColumnDefault;
   declare readonly raw?: string;
+  /** See {@link SqlColumnDefaultIRInput.authored}. Non-enumerable, same reason as {@link many}. */
+  declare readonly authored?: ColumnDefault;
   declare readonly nativeTypeContext?: string;
   /** See {@link SqlColumnDefaultIRInput.many}. Non-enumerable so it stays out of JSON and structural equality. */
   declare readonly many?: boolean;
@@ -69,6 +73,7 @@ export class SqlColumnDefaultIR extends SqlSchemaIRNode implements DiffableNode 
     if (input.resolved !== undefined) this.resolved = input.resolved;
     if (input.raw !== undefined) this.raw = input.raw;
     if (input.nativeTypeContext !== undefined) this.nativeTypeContext = input.nativeTypeContext;
+    defineNonEnumerable(this, 'authored', input.authored);
     defineNonEnumerable(this, 'many', input.many);
     defineNonEnumerable(this, 'codecRef', input.codecRef);
     defineNonEnumerable(this, 'codecBaseNativeType', input.codecBaseNativeType);

@@ -16,7 +16,14 @@ import { beforeAll } from 'vitest';
 
 // Re-export common imports for test files
 export { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
-export { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+export {
+  autoincrement,
+  defineContract,
+  field,
+  model,
+  now,
+  rel,
+} from '@internal/postgres/contract-builder';
 export type { CodecTypes } from '@internal/target-postgres/codec-types';
 export { pgvector } from './family.schema-verify.extensions';
 export type { Contract, SqlStorage };

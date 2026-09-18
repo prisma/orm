@@ -22,6 +22,7 @@ const emptyContext: ContractSourceContext = {
   },
   codecLookup: emptyCodecLookup,
   controlMutationDefaults: {
+    defaultLiteralTagRegistry: new Map(),
     defaultFunctionRegistry: new Map(),
     generatorDescriptors: [],
   },

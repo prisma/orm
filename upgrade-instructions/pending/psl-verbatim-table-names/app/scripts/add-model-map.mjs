@@ -7,12 +7,16 @@
  * Usage:
  *   node scripts/codemods/add-model-map.mjs <file-or-glob> [...more]
  *
+ * Globs never descend into `node_modules` or `dist`.
+ *
  * A model with `@@base(...)` and no `@@map` shares its base's storage, so it
  * is left alone: adding `@@map` there would split it into its own table or
  * collection.
  *
- * Files are rewritten in place; changed paths are printed. Running it twice is
- * a no-op.
+ * Files are rewritten in place; every mapped model is printed as
+ * `<file>: model <Name> -> @@map("<name>")` for review. Running it twice is a
+ * no-op. Only run it on a schema written against the previous release: a
+ * schema inferred after upgrading already names its tables verbatim.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -94,9 +98,26 @@ function readModelStart(lines, index) {
   };
 }
 
+/** The line without a trailing `//` comment; a `//` inside a double-quoted string is content. */
+function stripLineComment(text) {
+  let quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    if (quoted) {
+      if (char === '\\') i += 1;
+      else if (char === '"') quoted = false;
+    } else if (char === '"') {
+      quoted = true;
+    } else if (char === '/' && text[i + 1] === '/') {
+      return text.slice(0, i).trimEnd();
+    }
+  }
+  return text;
+}
+
 /** Index of a `}` that ends the block on this line (only whitespace or a `//` comment may follow), else -1. */
 function closingBraceIndex(text) {
-  const code = text.replace(/\s*\/\/.*$/, '');
+  const code = stripLineComment(text);
   const closeAt = code.lastIndexOf('}');
   return closeAt !== -1 && /^\s*$/.test(code.slice(closeAt + 1)) ? closeAt : -1;
 }
@@ -117,11 +138,18 @@ export class UnhandledModelError extends Error {
   }
 }
 
-export function addModelMaps(source) {
+/**
+ * Rewrites `source` and also returns the models that received an `@@map`, so a
+ * caller can show the user what was mapped. The codemod cannot see storage:
+ * it assumes every unmapped model was written against the release whose
+ * default lowered the first letter.
+ */
+export function addModelMapsWithReport(source) {
   const newline = source.includes('\r\n') ? '\r' : '';
   const lines = source.split('\n');
   const out = [];
   const unhandled = [];
+  const mapped = [];
   let i = 0;
   while (i < lines.length) {
     if (!MODEL_LINE.test(lines[i]) || !isModelDeclaration(lines, i)) {
@@ -137,7 +165,9 @@ export function addModelMaps(source) {
       continue;
     }
     if (start.singleLine) {
-      out.push(addMapToSingleLineModel(lines[i], start.modelName));
+      const rewritten = addMapToSingleLineModel(lines[i], start.modelName);
+      if (rewritten !== lines[i]) mapped.push(start.modelName);
+      out.push(rewritten);
       i += 1;
       continue;
     }
@@ -153,18 +183,29 @@ export function addModelMaps(source) {
     if (!body.some((line) => MAP_ATTRIBUTE.test(line) || BASE_ATTRIBUTE.test(line))) {
       const indent = bodyIndent(lines, start.bodyStart, close, start.indent);
       out.push(`${indent}@@map("${lowerFirst(start.modelName)}")${newline}`);
+      mapped.push(start.modelName);
     }
     out.push(lines[close]);
     i = close + 1;
   }
   if (unhandled.length > 0) throw new UnhandledModelError(unhandled);
-  return out.join('\n');
+  return { source: out.join('\n'), mapped };
 }
+
+export function addModelMaps(source) {
+  return addModelMapsWithReport(source).source;
+}
+
+const SKIPPED_DIRECTORIES = /(^|\/)(node_modules|dist)\//;
 
 async function expandPatterns(patterns) {
   const files = new Set();
   for (const pattern of patterns) {
-    for await (const match of glob(pattern)) files.add(match);
+    for await (const match of glob(pattern, {
+      exclude: (path) => SKIPPED_DIRECTORIES.test(`${path}/`),
+    })) {
+      files.add(match);
+    }
   }
   return [...files].sort();
 }
@@ -177,11 +218,12 @@ async function main() {
   }
   const files = await expandPatterns(patterns);
   let failed = false;
+  let mappedCount = 0;
   for (const file of files) {
     const before = readFileSync(file, 'utf8');
-    let after;
+    let result;
     try {
-      after = addModelMaps(before);
+      result = addModelMapsWithReport(before);
     } catch (error) {
       if (!(error instanceof UnhandledModelError)) throw error;
       for (const line of error.lineNumbers)
@@ -189,10 +231,18 @@ async function main() {
       failed = true;
       continue;
     }
-    if (after !== before) {
-      writeFileSync(file, after);
-      stdout.write(`${file}\n`);
+    if (result.source !== before) {
+      writeFileSync(file, result.source);
+      for (const modelName of result.mapped) {
+        stdout.write(`${file}: model ${modelName} -> @@map("${lowerFirst(modelName)}")\n`);
+      }
+      mappedCount += result.mapped.length;
     }
+  }
+  if (mappedCount > 0) {
+    stdout.write(
+      `${mappedCount} model(s) mapped. Review the list: every one must be a model whose table or collection was created under the previous release's lowered-first-letter default. A schema written or inferred after upgrading must not be run through this codemod.\n`,
+    );
   }
   if (failed) exit(1);
 }

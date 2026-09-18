@@ -101,7 +101,7 @@ A file the command needs does not exist at the given path. Produced by several c
 
 ### CLI.FILE_WRITE_FAILED
 
-Writing a file failed, currently raised when `format` cannot write the formatted PSL source back to disk (e.g. the file is not writable). The underlying failure is attached as `cause`. Payload: none.
+Writing a file failed: currently raised when `format` cannot write the formatted PSL source back to disk (e.g. the file is not writable). The underlying failure is attached as `cause`. Payload: none.
 
 ### CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH
 
@@ -247,7 +247,11 @@ A model declares an empty unique constraint (a unique with no fields), raised du
 
 ### CONTRACT.DEFAULT_INVALID
 
-A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`.
+A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized, with the same message as the PSL diagnostics `PSL_TAGGED_LITERAL_NUL` and `PSL_TAGGED_LITERAL_TOO_LARGE` (meta: `reason`, `offset`) or is exactly `now()` or `autoincrement()` (`` Write .default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. ``; meta: `reason: 'reserved-function'`, `expression`), or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`).
+
+### CONTRACT.DEFAULT_SQL_INTERPOLATION
+
+The TypeScript `sql` template tag was called with interpolated values: `` sql`...` does not support interpolation; write the SQL as one literal. `` Interpolation is already a type error (`...values: readonly never[]`); this is the runtime backstop. Meta: `interpolations` (how many values were passed).
 
 ### CONTRACT.ENTITY_KIND_INVALID
 
@@ -555,6 +559,30 @@ A `@default` value the source cannot read: an unknown function, an enum member o
 
 A `view` block; Prisma 8 has no views. Remove the view, or replace it with a model over the underlying table. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
+### PSL_BACKTICK_STRING_REQUIRES_TAG
+
+A backtick string appears somewhere other than after a tag, for example `` @map(`x`) `` or `` provider = `x` ``: `` A backtick string must follow a tag, as in tag`...`. `` Reported at the string. Write a `"` or `'` string there, or put the tag in front of it, as in `` @default(sql`...`) ``.
+
+### PSL_UNKNOWN_DEFAULT_LITERAL_TAG
+
+A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal when the default is lowered.
+
+### PSL_TAGGED_LITERAL_NUL
+
+A tagged literal's body contains a NUL character: `Tagged literals must not contain NUL characters.` Reported at the literal when the default is lowered.
+
+### PSL_TAGGED_LITERAL_TOO_LARGE
+
+A tagged literal's canonical body is larger than 65536 UTF-8 bytes: `Tagged literal exceeds 65536 bytes.` Reported at the literal when the default is lowered.
+
+### PSL_LIST_AUTOINCREMENT_UNSUPPORTED
+
+A list column declares `@default(autoincrement())`: `Field "<Model>.<field>" is a list and cannot use autoincrement(); it is a Prisma marker for a sequence-backed scalar column, not SQL.` Every other storage default lowers on a list column. Reported at the attribute.
+
+### PSL_INVALID_DEFAULT_SQL
+
+A `` @default(sql`...`) `` body fails the SQL family's body check: `Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.` (the rule the migration planners apply at DDL time, run at authoring time so it has a source span), or is exactly `now()` or `autoincrement()`: `` Write @default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. `` The message names the tag as written (`sql`, `pg.sql` or `sqlite.sql`). Reported at the literal.
+
 ## ORM
 
 ### ORM.AGGREGATE_OPERATION_RESERVED
@@ -693,7 +721,7 @@ Two trait-matching aggregate descriptors for one operation both claim a register
 
 ### RUNTIME.ANNOTATION_INAPPLICABLE
 
-A lane terminal (SQL DSL `.build()`, ORM collection terminal) received an annotation whose declared `applicableTo` set does not include the operation kind being built, the runtime check that backs up the type-level annotation validation when it is bypassed via casts or dynamic invocation. Payload: `namespace`, `terminalName`, `kind`, `applicableTo`.
+A lane terminal (SQL DSL `.build()`, ORM collection terminal) received an annotation whose declared `applicableTo` set does not include the operation kind being built: the runtime check that backs up the type-level annotation validation when it is bypassed via casts or dynamic invocation. Payload: `namespace`, `terminalName`, `kind`, `applicableTo`.
 
 ### RUNTIME.AST_INVALID
 
@@ -777,7 +805,7 @@ A codec's `encode` threw while converting a user-supplied parameter value to dri
 
 Codecs also raise this code directly, as a structured envelope with `meta.codecId` and `meta.received`, which surfaces unchanged: writing a value outside ±(2^53 − 1), or a non-integral number, through `pg/int8number@1` or `sqlite/bigintnumber@1` (the `BigIntNumber` type) raises it before any SQL executes.
 
-The integer codecs also check the JS type of the value they are given, and report that separately from the range: `pg/int8number@1` and `sqlite/bigintnumber@1` read a `number`, while `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` read a `bigint`. A value of the other type raises `<codec> value must be a <number|bigint>, got <type> <value>` with `meta.received` naming the type that arrived, the message you get from passing `9n` where a `number` is read, rather than a range complaint about a value plainly inside the range.
+The integer codecs also check the JS type of the value they are given, and report that separately from the range: `pg/int8number@1` and `sqlite/bigintnumber@1` read a `number`, while `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` read a `bigint`. A value of the other type raises `<codec> value must be a <number|bigint>, got <type> <value>` with `meta.received` naming the type that arrived: the message you get from passing `9n` where a `number` is read, rather than a range complaint about a value plainly inside the range.
 
 The exact integer codecs make one exception, and only on the JSON side. `encodeJson` on `pg/int8@1`, `pg/unboundedint@1`, and `sqlite/bigint@1` also accepts a `number`, because a schema language writes no `bigint` literal. The number must be an integer within the safe range, and a value that is not raises `<codec> number literal must be an integer within the safe integer range, got <value>`: a `number` past that range was already rounded before the codec saw it, so its digits no longer name the value that was written. The PSL interpreter therefore does not hand these codecs a rounded number: it reads a number `@default` from its source text, gives the codec the plain number when that decodes, and the decimal text of the literal when it does not, so `BigInt @default(0)` still arrives as the JSON number `0` while `BigInt @default(9007199254739999999)` arrives as its digits. `encode`, the wire path a query parameter travels, takes no such number; it requires the `bigint`.
 
@@ -866,13 +894,13 @@ A raw-SQL tagged template interpolated a JS value whose type cannot be auto-infe
 A value that only a global `Temporal` implementation can produce or read was needed in a runtime that has none. Two paths raise it, and they carry different metadata:
 
 - A Temporal-backed codec (`pg/date-temporal@1`, `pg/timestamp-temporal@1`, `pg/timestamptz-temporal@1`, `pg/time-temporal@1`) encoding or decoding a value. Payload: `codecId`, `operation` (`'encode'` or `'decode'`).
-- The `instantNow` mutation-default generator producing a value, for `temporal.updatedAt()`, or for a `temporal.timestamptz(…)` / `timestamp(…)` preset given an `onCreate`/`onUpdate` of `'now'`. No codec is involved. Payload: `generatorId`. (`temporal.createdAt()` is unaffected: it lowers to a PostgreSQL `now()` storage default, which never reaches a client-side clock.)
+- The `instantNow` mutation-default generator producing a value, for `temporal.createdAt()`, `temporal.updatedAt()`, or for a `temporal.timestamptz(…)` / `timestamp(…)` preset given an `onCreate`/`onUpdate` of `'now'`. No codec is involved. Payload: `generatorId`.
 
 The check is lazy: registering the target, validating a contract, building a runtime, resolving a descriptor and constructing a codec instance all succeed without `Temporal`. Only producing or interpreting a value fails.
 
 That covers more than an explicit write. It is raised on **reads**, because the check is the first thing a Temporal codec does on decode: selecting the column is enough. And it is raised on an **insert into a table carrying `temporal.updatedAt()`**, because that column's clock produces a `Temporal.Instant` even when your code never mentions a temporal value; that path reports `generatorId` rather than `codecId`, since no codec has been reached yet.
 
-Install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type, `DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)`, to read and write PostgreSQL's own text, which needs no Temporal at all.
+Install a global implementation before any query runs (`import 'temporal-polyfill/full/global'`), or author the column with its `*String` type (`DateString`, `TimestampString(p)`, `TimestamptzString(p)`, `TimeString(p)`) to read and write PostgreSQL's own text, which needs no Temporal at all.
 
 ### RUNTIME.TRANSACTION_CLOSED
 
@@ -894,7 +922,7 @@ A parameterized codec's `paramsSchema` rejected the `typeParams` carried by a co
 
 ### DRIVER.ALREADY_CONNECTED
 
-Calling `connect(binding)` on a driver, or `connect()` on a target facade client (Postgres, SQLite, Mongo) or the CLI control client, that is already connected. Close with `close()` before reconnecting with a new binding. Payload: `bindingKind`.
+Calling `connect(binding)` on a driver, or `connect()` on a target facade client (Postgres, SQLite, Mongo) or the CLI control client, when it is already connected. Close with `close()` before reconnecting with a new binding. Payload: `bindingKind`.
 
 ### DRIVER.CONNECTION_FAILED
 
@@ -1212,7 +1240,7 @@ A `PostgresMigration` operation (e.g. `createTable`, `dataTransform`) was invoke
 
 ### MIGRATION.PRECHECK_FAILED
 
-Before executing a migration operation, one of its precheck steps (a query expected to return true) did not hold, the database is not in the state the operation requires, so the apply stops and rolls back. Payload: `operationId`, `phase`, `stepDescription`.
+Before executing a migration operation, one of its precheck steps (a query expected to return true) did not hold: the database is not in the state the operation requires, so the apply stops and rolls back. Payload: `operationId`, `phase`, `stepDescription`.
 
 ### MIGRATION.PROVIDED_INVARIANTS_MISMATCH
 

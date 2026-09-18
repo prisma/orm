@@ -85,7 +85,10 @@ function interpretMongoPsl(schema: string) {
     sourceFile,
     sourceId: 'test.prisma',
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   });
 }
 

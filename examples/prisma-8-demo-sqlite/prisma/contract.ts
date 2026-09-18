@@ -1,5 +1,5 @@
 import { bigintColumn, datetimeColumn, textColumn } from '@prisma/orm-sqlite/adapter/column-types';
-import { defineContract, rel } from '@prisma/orm-sqlite/contract-builder';
+import { defineContract, now, rel } from '@prisma/orm-sqlite/contract-builder';
 
 export const contract = defineContract({}, ({ field, model, type }) => {
   // SQLite contributes `BigIntNumber` — INTEGER storage read as a JS `number`,
@@ -14,7 +14,7 @@ export const contract = defineContract({}, ({ field, model, type }) => {
       id: field.id.uuidv4String(),
       email: field.column(textColumn),
       displayName: field.column(textColumn),
-      createdAt: field.column(datetimeColumn).defaultSql('now()'),
+      createdAt: field.column(datetimeColumn).default(now()),
     },
   });
 
@@ -23,7 +23,7 @@ export const contract = defineContract({}, ({ field, model, type }) => {
       id: field.id.uuidv4String(),
       title: field.column(textColumn),
       userId: field.uuidString(),
-      createdAt: field.column(datetimeColumn).defaultSql('now()'),
+      createdAt: field.column(datetimeColumn).default(now()),
       // Two engagement counters, both INTEGER in the database and each read
       // back as a different JavaScript type. They are optional because the
       // analytics pipeline backfills them.

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
   createSqliteDefaultFunctionRegistry,
+  createSqliteDefaultLiteralTagRegistry,
   createSqliteMutationDefaultGeneratorDescriptors,
   sqliteScalarAuthoringTypes,
 } from '../src/core/control-mutation-defaults';
@@ -79,6 +80,61 @@ describe('createSqliteDefaultFunctionRegistry — dbgenerated canonicalization',
   });
 });
 
+describe('createSqliteDefaultLiteralTagRegistry', () => {
+  const tagRegistry = createSqliteDefaultLiteralTagRegistry();
+
+  it('registers sql and sqlite.sql, in that order', () => {
+    expect([...tagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
+    expect(tagRegistry.get('sqlite.sql')?.usage).toBe('sqlite.sql`...`');
+  });
+
+  it('lowers sql`CURRENT_TIMESTAMP` verbatim, with no rewrite to now()', () => {
+    const result = tagRegistry.get('sql')!.lower({
+      literal: { tag: 'sql', body: 'CURRENT_TIMESTAMP', span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        kind: 'storage',
+        defaultValue: { kind: 'function', expression: 'CURRENT_TIMESTAMP' },
+      },
+    });
+  });
+
+  it('is wired as the adapter descriptor tag registry', () => {
+    const registries = sqliteAdapterDescriptor.controlMutationDefaults;
+    if (registries === undefined)
+      throw new Error('the adapter descriptor declares mutation defaults');
+    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
+  });
+
+  it.each([
+    ['sql', 'now'],
+    ['sqlite.sql', 'autoincrement'],
+  ])('refuses %s`%s()`, which is a Prisma default function', (tag, name) => {
+    const result = tagRegistry.get(tag)!.lower({
+      literal: { tag, body: `${name}()`, span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostic: {
+        code: 'PSL_INVALID_DEFAULT_SQL',
+        message: `Write @default(${name}()) instead of ${tag}\`${name}()\`; ${name}() is a Prisma default function, not raw SQL.`,
+      },
+    });
+  });
+
+  it("accepts sql`now() + interval '1 day'`", () => {
+    const result = tagRegistry.get('sql')!.lower({
+      literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toMatchObject({ ok: true });
+  });
+});
+
 describe('createSqliteMutationDefaultGeneratorDescriptors', () => {
   const descriptors = createSqliteMutationDefaultGeneratorDescriptors();
 
@@ -125,6 +181,7 @@ describe('sqliteScalarAuthoringTypes', () => {
     for (const [name, codecId] of expectedScalars) {
       expect(namespace[name]).toEqual({
         kind: 'typeConstructor',
+        documentation: expect.stringMatching(/\S/),
         output: { codecId, nativeType: codecLookup.targetTypesFor(codecId)?.[0] },
       });
     }

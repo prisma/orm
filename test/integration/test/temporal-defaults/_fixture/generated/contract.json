@@ -97,19 +97,11 @@
               "columns": {
                 "createdAt": {
                   "codecId": "pg/timestamptz-temporal@1",
-                  "default": {
-                    "expression": "now()",
-                    "kind": "function"
-                  },
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
                 "createdAtText": {
                   "codecId": "pg/timestamptz-string@1",
-                  "default": {
-                    "expression": "now()",
-                    "kind": "function"
-                  },
                   "nativeType": "timestamptz",
                   "nullable": false
                 },
@@ -149,12 +141,34 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "3448bd5734489469aeba4316018605f866734dfa3d6fb31e60bc27b4d6d52781"
+    "storageHash": "d3f95a150d399e4a6bcc77a9b9efd8a1e1d2df2a99338dc1630fa5b420c41b1e"
   },
   "execution": {
-    "executionHash": "d1e832917869d55b7ba731e320b560c6a3e558f260978aa11e018daf79a7439e",
+    "executionHash": "08cb57fc09b1864b51c6f891de7b82a1259231c25c6a8761b8542d622cc7ac54",
     "mutations": {
       "defaults": [
+        {
+          "onCreate": {
+            "id": "instantNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "createdAt",
+            "namespace": "public",
+            "table": "reading"
+          }
+        },
+        {
+          "onCreate": {
+            "id": "timestampNow",
+            "kind": "generator"
+          },
+          "ref": {
+            "column": "createdAtText",
+            "namespace": "public",
+            "table": "reading"
+          }
+        },
         {
           "onCreate": {
             "id": "instantNow",

@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
   createPostgresDefaultFunctionRegistry,
+  createPostgresDefaultLiteralTagRegistry,
   createPostgresMutationDefaultGeneratorDescriptors,
   postgresAuthoringTypes,
   postgresNativeAuthoringTypes,
@@ -62,6 +63,10 @@ describe('createPostgresDefaultFunctionRegistry', () => {
         },
       ],
     });
+  });
+
+  it('registers no named gen_random_uuid function; raw database functions use sql`...`', () => {
+    expect(registry.has('gen_random_uuid')).toBe(false);
   });
 
   it('lowers autoincrement() to a storage default', () => {
@@ -306,6 +311,7 @@ describe('postgresScalarAuthoringTypes', () => {
     for (const [name, codecId] of expectedScalars) {
       expect(namespace[name]).toEqual({
         kind: 'typeConstructor',
+        documentation: expect.stringMatching(/\S/),
         output: {
           codecId,
           nativeType: codecLookup.targetTypesFor(codecId)?.[0],
@@ -395,5 +401,72 @@ describe('postgresNativeAuthoringTypes', () => {
         [-1],
       ),
     ).toThrow('must be >= 0');
+  });
+});
+
+describe('createPostgresDefaultLiteralTagRegistry', () => {
+  const tagRegistry = createPostgresDefaultLiteralTagRegistry();
+
+  it('registers sql and pg.sql, in that order', () => {
+    expect([...tagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+    expect(tagRegistry.get('sql')?.usage).toBe('sql`...`');
+    expect(tagRegistry.get('pg.sql')?.usage).toBe('pg.sql`...`');
+  });
+
+  it('lowers a body verbatim as a function default', () => {
+    const result = tagRegistry.get('pg.sql')!.lower({
+      literal: { tag: 'pg.sql', body: "'{}'::jsonb", span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: { kind: 'storage', defaultValue: { kind: 'function', expression: "'{}'::jsonb" } },
+    });
+  });
+
+  it('is wired as the adapter descriptor tag registry', () => {
+    const registries = postgresAdapterDescriptor.controlMutationDefaults;
+    if (registries === undefined)
+      throw new Error('the adapter descriptor declares mutation defaults');
+    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+  });
+
+  it.each([
+    ['sql', 'now'],
+    ['pg.sql', 'autoincrement'],
+  ])('refuses %s`%s()`, which is a Prisma default function', (tag, name) => {
+    const result = tagRegistry.get(tag)!.lower({
+      literal: { tag, body: `${name}()`, span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostic: {
+        code: 'PSL_INVALID_DEFAULT_SQL',
+        message: `Write @default(${name}()) instead of ${tag}\`${name}()\`; ${name}() is a Prisma default function, not raw SQL.`,
+      },
+    });
+  });
+
+  it('lowers sql`gen_random_uuid()` verbatim', () => {
+    const result = tagRegistry.get('sql')!.lower({
+      literal: { tag: 'sql', body: 'gen_random_uuid()', span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        kind: 'storage',
+        defaultValue: { kind: 'function', expression: 'gen_random_uuid()' },
+      },
+    });
+  });
+
+  it("accepts sql`now() + interval '1 day'`", () => {
+    const result = tagRegistry.get('sql')!.lower({
+      literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toMatchObject({ ok: true });
   });
 });

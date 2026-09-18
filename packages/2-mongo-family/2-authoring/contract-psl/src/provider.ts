@@ -49,7 +49,7 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
         sourceId: input.sourceId,
         seedDiagnostics: [],
         scalarTypeCodecIds: collectScalarTypeCodecIds(context.authoringContributions.type),
-        controlMutationDefaults: context.controlMutationDefaults.defaultFunctionRegistry,
+        controlMutationDefaults: context.controlMutationDefaults,
         codecLookup: context.codecLookup,
         authoringContributions: context.authoringContributions,
         ...ifDefined('enumInferenceCodecs', options?.enumInferenceCodecs),
