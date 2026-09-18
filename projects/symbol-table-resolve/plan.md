@@ -41,8 +41,8 @@ Four slices: one foundation slice delivering the eager binder in `psl-parser` (w
 
 ## Dependencies (external)
 
-- [ ] PR #30335 (`multifiile-psl`) merges — open at planning time; operator judges it will not stall. All slices stack on it; no independent landing path (spec transitional-shape constraint).
-- [ ] Base-branch escapee, surfaced during D1: `integration-tests` typecheck is broken at the branch point itself — `test/integration/test/authoring/lsp-emit-parity.integration.test.ts:8` imports `createDocumentStore`, removed by `multifiile-psl`'s own commit `a54c338980`. Belongs to PR #30335 to fix; our stack inherits the red CI until it does. Not fixed here (out of scope; operator may wish to flag it on the PR themselves).
+- [x] PR #30335 (`multifiile-psl`) — **merged 2026-09-18** (squash `e943c959e8`); `binder-core` rebased onto `origin/main` cleanly, all gates re-run green (base drift: one renamed helper + one added test, neither ours). Slices now target `main` directly.
+- [x] Base-branch escapee (`integration-tests` typecheck) — **fixed by the squash itself**: `lsp-emit-parity.integration.test.ts` now constructs `new DocumentStore()`; 66/66 pass on `origin/main`. The `--filter='!integration-tests'` gate exclusion is retired; only the environmental `prisma7-adoption` exclusion remains.
 
 ## Open items
 
