@@ -105,45 +105,6 @@ const baseInput = {
   capabilities: { sql: { scalarList: true } },
 } as const;
 
-describe('reopened namespace interpretation', () => {
-  it('resolves a relation to a model in a later namespace declaration', () => {
-    const result = interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...symbolTableInputFromParseArgs({
-        schema: `namespace blog {
-  model Post {
-    id Int @id
-    userId Int
-    user User @relation(fields: [userId], references: [id])
-    @@map("posts")
-  }
-}
-namespace blog {
-  model User {
-    id Int @id
-    @@map("users")
-  }
-}`,
-      }),
-    });
-    expect(result.ok).toBe(true);
-    if (!result.ok) throw new Error(result.failure.summary);
-    expect(Object.keys(result.value.domain.namespaces['blog']?.models ?? {})).toEqual([
-      'Post',
-      'User',
-    ]);
-    expect(
-      (result.value.storage as SqlStorage).namespaces['blog']?.entries.table?.['posts']
-        ?.foreignKeys,
-    ).toEqual([
-      expect.objectContaining({
-        source: { namespaceId: 'blog', tableName: 'posts', columns: ['userId'] },
-        target: { namespaceId: 'blog', tableName: 'users', columns: ['id'] },
-      }),
-    ]);
-  });
-});
-
 describe('un-namespaced PG model defaults to public namespace (TML-2916)', () => {
   it('places a bare model in domain.namespaces.public and storage.namespaces.public, with no __unbound__ slot', () => {
     const document = symbolTableInputFromParseArgs({

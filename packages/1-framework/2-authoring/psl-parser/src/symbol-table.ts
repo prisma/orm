@@ -274,7 +274,11 @@ function extendNamespace(
   for (const member of node.declarations()) {
     const memberName = member.name()?.name();
     if (memberName === undefined) continue;
-    if (memberName in models || memberName in compositeTypes || memberName in blocks) {
+    if (
+      Object.hasOwn(models, memberName) ||
+      Object.hasOwn(compositeTypes, memberName) ||
+      Object.hasOwn(blocks, memberName)
+    ) {
       const range = nameRange(member.name(), sourceFile);
       if (range) {
         diagnostics.push({
