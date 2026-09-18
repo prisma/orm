@@ -1,4 +1,5 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { diagnosticSource } from './diagnostic';
 import type { ParseDiagnostic } from './parse';
 import type { PslSources } from './source-file';
@@ -15,7 +16,8 @@ import type {
 import type { SyntaxNode } from './syntax/red';
 import { type UniverseScope, type UniverseSymbol, universeScope } from './universe-scope';
 
-export const PSL_UNRESOLVED_REFERENCE = 'PSL_UNRESOLVED_REFERENCE';
+export const PSL_UNRESOLVED_REFERENCE =
+  'PSL_UNRESOLVED_REFERENCE' satisfies ContributedPslDiagnosticCode;
 
 export type PslSymbol =
   | ModelSymbol
