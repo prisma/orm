@@ -1758,7 +1758,7 @@ function collectPolymorphismDeclarations(
         const base = identities.get(parsed.base.declaration);
         invariant(
           base !== undefined,
-          'A checked base declaration has a collected SQL model identity',
+          `Resolved base model "${parsed.base.declaration.name}" is missing from the collected model identities`,
         );
         baseDeclarations.set(key, {
           source,
@@ -1817,7 +1817,10 @@ function resolvePolymorphism(
     for (const [variantKey, baseDecl] of baseDeclarations) {
       if (baseDecl.base.key !== modelKey) continue;
       const variantName = modelMappings.get(variantKey)?.model.name;
-      invariant(variantName !== undefined, 'A collected variant has a model mapping');
+      invariant(
+        variantName !== undefined,
+        `Variant "${variantKey}" is missing from the model mappings`,
+      );
 
       const existingVariant = seenValues.get(baseDecl.value);
       if (existingVariant) {

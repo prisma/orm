@@ -4,8 +4,6 @@
 **Date:** 2026-06-29
 **Accepted:** 2026-08-27
 
-**Reference API update:** The reference, identifier, parse-context and wildcard sections below describe the current checked-reference API. Existing attribute completion and signature help now inspect these specs; the interpreter-only delivery and language-tooling follow-up discussion elsewhere in this ADR records the original acceptance boundary, not the current editor feature inventory. This update adds no editor semantic diagnostics or generic-block value features.
-
 ---
 
 ## At a glance
@@ -25,11 +23,11 @@ const sqlRelation = fieldAttribute('relation', {
       documentation: 'The referential action when the referenced row is deleted.',
       type: optional(
         oneOf(
-          identifier('NoAction', { documentation: 'Checks the constraint without propagating changes.' }),
-          identifier('Restrict', { documentation: 'Rejects changes while referencing rows exist.' }),
-          identifier('Cascade', { documentation: 'Propagates changes to referencing rows.' }),
-          identifier('SetNull', { documentation: 'Sets referencing fields to null.' }),
-          identifier('SetDefault', { documentation: 'Sets referencing fields to their defaults.' }),
+          identifier('NoAction'),
+          identifier('Restrict'),
+          identifier('Cascade'),
+          identifier('SetNull'),
+          identifier('SetDefault'),
         ),
       ),
     },
@@ -100,7 +98,7 @@ interface FieldAttributeCtx extends ModelAttributeCtx {
 }
 ```
 
-A block has no model, so a block attribute receives source information and the complete symbol table without a model context. A combinator is usable at any level that carries the facts it declares, and rejected where those facts do not exist. Checked references derive lexical scope from the expression's syntax ancestry; the parse context carries no owner or scope field. Spec factories may still use `AttributeSpecContext` for dynamic grammars, but do not inject reference resolvers. Existing block attributes are interpreted after declaration collection so their parse contexts also support forward references; block-value grammars remain separate.
+A block has no model, so a block attribute is parsed without a model context. A combinator is usable at any level that carries the facts it declares, and rejected where those facts do not exist. Checked references derive their lexical scope from the expression's syntax ancestry; the parse context carries no owner or scope field.
 
 A spec fixes the attribute level and name, declares its arguments, and may refine the parsed result:
 
@@ -139,8 +137,8 @@ Positionals are fixed slots with an output key. Variadic positionals are not sup
 - `numLiteral()` parses any number literal and keeps its source text, for consumers that must not round it through a JavaScript number.
 - `int({ min, max })` parses an integer with optional inclusive bounds.
 - `bool()` parses a boolean literal.
-- `identifier()` accepts an unchecked bare identifier and returns `string`, with `name: undefined` metadata.
-- `identifier(name, { documentation })` matches one exact bare identifier and preserves its literal type and documented pinned metadata. Existing completion offers pinned names only, not candidates for unrestricted names.
+- `identifier()` accepts any bare identifier and returns its name as a string.
+- `identifier(name)` matches one exact bare identifier and preserves its literal type.
 
 There is no enum-specific combinator. A fixed vocabulary is a `oneOf` over pinned matchers, making the source spelling explicit:
 
@@ -161,9 +159,7 @@ These leaves perform direct AST checks. They do not wrap arktype schemas.
 
 `fieldRef()` parses a field-name identifier and validates it against the declaring model, so it is available to model and field attributes alike. `referencedFieldRef()` validates against the relation target, which only a field can resolve; cross-space references may defer the existence check when no referenced model is locally available. Both return the authored field name as a string.
 
-`entityRef(expected)` checks existence and the selected declaration's kind. Selectors are `{ kind: 'model' }`, `{ kind: 'compositeType' }`, `{ kind: 'namedType' }`, or `{ kind: 'block', keyword }` for the contributed block keyword. Its inferred output is `ResolvedEntityReference<DeclarationFor<typeof expected>>`: the selected `declaration` plus its lexical `namespace` (undefined at top-level), not physical storage coordinates.
-
-Reference rules need only the expected selector when defining the grammar:
+`entityRef(expected)` checks that the referenced declaration exists and has the expected kind: `{ kind: 'model' }`, `{ kind: 'compositeType' }`, `{ kind: 'namedType' }`, or `{ kind: 'block', keyword }`. It returns the selected declaration plus its lexical namespace (undefined at top level). Resolution prefers the containing namespace's declaration, then top level, never a sibling namespace; forward references are allowed, and missing or wrong-kind targets produce source-anchored expression diagnostics.
 
 ```ts
 const baseSpec = modelAttribute('base', {
@@ -174,11 +170,9 @@ const baseSpec = modelAttribute('base', {
 });
 ```
 
-At parse time, a shared helper derives the containing namespace through `expression.syntax.findAncestor(NamespaceDeclarationAst.cast)` and selects the collected namespace by name, not red-wrapper identity. Expressions must retain their syntax ancestry and correspond to the supplied symbol table. Own-property-safe lookup selects that namespace's binding first, then top-level, never a sibling namespace; top-level expressions see only top-level declarations. Kind checking applies after selection, so a wrong-kind local binding does not trigger fallback. Collection before interpretation permits forward references. Missing/wrong-kind failures are source-anchored shared expression diagnostics. The helper itself emits no diagnostics. Wrappers are cached at the symbol-scope/declaration boundary, so repeated references retain identity across rules and list elements for collection uniqueness.
+`oneOf(entityRef(expected), identifier())` prefers a checked identity and otherwise returns an unchecked name, without leaking failed-alternative diagnostics.
 
-`oneOf(entityRef(expected), identifier())` prefers a checked identity and otherwise returns an unchecked name without leaking failed-alternative diagnostics. SQL and Mongo base attributes consume the selected model identity through lowering rather than re-resolving its bare name. Family-specific relationship and storage constraints remain separate: checked lookup does not promise cross-namespace inheritance support or change persisted variants. No document-path scope or codec reference combinator is added.
-
-Existing attribute tooling inspects reference metadata and labels without invoking its parser. Checked references add no completion candidates or navigation feature. The parse-only editor pipeline still does not execute SQL/Mongo family reference diagnostics.
+The current kit does not provide a document-path scope or include a codec reference combinator. Those would be separate additions if a future consumer requires them.
 
 ### Native collections
 
@@ -234,7 +228,7 @@ A spec may be assembled from context known by the owning family before interpret
 
 ### SQL defaults
 
-SQL constructs `@default` specs per field. Scalar fields accept flexible string, number, and boolean literals plus one pinned `funcCall(name, signature)` arm for every active default-function registry entry. List fields accept a list of those scalar literals plus the registry calls. Enum fields use one documented pinned `identifier(member, { documentation })` arm per enum member.
+SQL constructs `@default` specs per field. Scalar fields accept flexible string, number, and boolean literals plus one pinned `funcCall(name, signature)` arm for every active default-function registry entry. List fields accept a list of those scalar literals plus the registry calls. Enum fields use one pinned `identifier(member)` arm per enum member.
 
 ```ts
 const functionArms = registryEntries.map(([name, entry]) =>
@@ -242,10 +236,7 @@ const functionArms = registryEntries.map(([name, entry]) =>
 );
 
 const scalarDefault = oneOf(str(), numLiteral(), bool(), ...functionArms);
-const enumDefault = oneOf(
-  identifier('Active', { documentation: 'An active item.' }),
-  identifier('Archived', { documentation: 'An archived item.' }),
-);
+const enumDefault = oneOf(...enumMembers.map(identifier));
 ```
 
 The number arm is `numLiteral()`, not `num()`. `num()` yields a JavaScript number, which rounds a literal past the safe integer range and drops trailing zeros; `numLiteral()` yields the literal's source text, so a `Decimal` or `BigInt` default keeps every digit as written. What to do with that text is the lowering concern below: the plain number goes to a codec that reads one, and the decimal text to a codec that does not.
@@ -259,7 +250,7 @@ Mongo constructs its index field-element grammar from the declaring model's fiel
 ```ts
 const sortSig = {
   documentation: 'Selects an index field with an explicit sort direction.',
-  named: { sort: { type: oneOf(identifier('Asc', { documentation: 'Sort ascending.' }), identifier('Desc', { documentation: 'Sort descending.' })), documentation: 'The index order for this field: `Asc` or `Desc`.' } },
+  named: { sort: { type: oneOf(identifier('Asc'), identifier('Desc')), documentation: 'The index order for this field: `Asc` or `Desc`.' } },
 } satisfies FuncCallSig;
 
 const indexFieldElement = oneOf(
@@ -272,7 +263,7 @@ const indexFieldElement = oneOf(
 );
 ```
 
-This composition covers bare fields, sorted field calls, and wildcard calls without dedicated `sortedFieldRef` or `wildcardPath` combinators. Wildcard scope deliberately accepts an unchecked name, not a model reference. Index lowering still checks field existence/indexability and applies field mappings; omitted scope remains `$**`.
+This composition covers bare fields, sorted field calls, and wildcard calls without dedicated `sortedFieldRef` or `wildcardPath` combinators.
 
 ---
 
@@ -342,7 +333,6 @@ The current implementation is sufficient for interpreter consumption but not yet
 ## Follow-up work
 
 - Add central spec discovery and traversable combinator metadata for language-tooling consumers.
-- Declaration-bearing entity references and parse-context resolution are implemented as described above; broader reference navigation and generic-block value consumers remain separate work.
 - Revisit signature-derived `TypedFuncCall` output types if downstream code needs statically discriminated call unions.
 - Decide whether literal-to-field-type compatibility should remain in lowering or gain a dedicated field-context combinator.
 

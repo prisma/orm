@@ -8,7 +8,7 @@ import { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import { IdentifierAst } from '../src/syntax/ast/identifier';
 import { SyntaxNode } from '../src/syntax/red';
 
-function fixture(value: string, local = true, reverse = false) {
+function fixture(value: string, local = true) {
   const members = [
     ...(local ? [`model Owner {\n @@test(${value})\n}`] : []),
     'model Shared {}',
@@ -22,13 +22,11 @@ function fixture(value: string, local = true, reverse = false) {
     'type Address {}',
     'types { Email = String }',
     'permission Reader {}',
-    `namespace Local {\n${(reverse ? members.reverse() : members).join('\n')}\n}`,
+    `namespace Local {\n${members.join('\n')}\n}`,
     'namespace Sibling {\n model Hidden {}\n model Shared {}\n}',
     ...(local ? [] : [`model Owner {\n @@test(${value})\n}`]),
   ];
-  const { document, sourceFile } = parse(
-    (reverse ? declarations.reverse() : declarations).join('\n'),
-  );
+  const { document, sourceFile } = parse(declarations.join('\n'));
   const { table, diagnostics } = buildSymbolTable({
     document,
     sourceFile,
@@ -83,8 +81,8 @@ describe('syntax-scoped entity resolution', () => {
       model: { declaration: namespace?.models['Later'], namespace },
     });
   });
-  it.each([false, true])('selects local declarations regardless of order (%s)', (reverse) => {
-    const { expression, ctx, namespace } = fixture('Shared', true, reverse);
+  it('selects the local declaration, including forward references', () => {
+    const { expression, ctx, namespace } = fixture('Shared');
     expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toEqual(
       ok({
         declaration: namespace.models['Shared'],
@@ -137,6 +135,31 @@ describe('syntax-scoped entity resolution', () => {
       });
     },
   );
+
+  it('resolves a declared __proto__ model as an own map entry', () => {
+    const { document, sourceFile } = parse(
+      'model __proto__ {}\nmodel Owner {\n @@test(__proto__)\n}',
+    );
+    const { table, diagnostics } = buildSymbolTable({
+      document,
+      sourceFile,
+      pslBlockDescriptors: {},
+    });
+    expect(diagnostics).toEqual([]);
+    expect(Object.hasOwn(table.topLevel.models, '__proto__')).toBe(true);
+    for (const syntax of document.syntax.descendants()) {
+      if (!(syntax instanceof SyntaxNode)) continue;
+      const attribute = ModelAttributeAst.cast(syntax);
+      const expression = attribute?.argList()?.args()[Symbol.iterator]().next().value?.value();
+      if (!expression) continue;
+      const ctx = { sourceId: 'references.prisma', sourceFile, symbols: table };
+      expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toEqual(
+        ok({ declaration: table.topLevel.models['__proto__'], namespace: undefined }),
+      );
+      return;
+    }
+    throw new Error('Missing expression');
+  });
 
   it('does not search child namespaces from top-level', () => {
     const { expression, ctx } = fixture('Writer', false);

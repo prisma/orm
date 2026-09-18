@@ -49,7 +49,7 @@ function fixture(
   const result = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: descriptors });
   const scope =
     namespace === undefined ? result.table.topLevel : result.table.topLevel.namespaces[namespace];
-  return { ...result, block: scope?.blocks[name], factory, interpretedSymbols };
+  return { ...result, scope, block: scope?.blocks[name], factory, interpretedSymbols };
 }
 
 describe.each(locations)(
@@ -77,6 +77,7 @@ describe.each(locations)(
       ]);
       expect(result.block?.block.attributes['map']?.args).toEqual({ name: 'first' });
       expect(result.factory).toHaveBeenCalledTimes(1);
+      expect(result.scope && Object.hasOwn(result.scope.blocks, name)).toBe(true);
     });
 
     it('retains failed-first attribute recovery without retrying its duplicate', () => {

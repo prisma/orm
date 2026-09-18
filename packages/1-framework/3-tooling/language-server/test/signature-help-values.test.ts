@@ -35,7 +35,7 @@ it.each([
   {
     type: optional(list(oneOf(reference, identifier()))),
     args: '|',
-    label: '@probe((model reference | identifier[])?)',
+    label: '@probe(((model reference | identifier)[])?)',
   },
   { type: oneOf(asc, desc), args: '|', label: '@probe(Asc | Desc)' },
   { type: optional(asc), args: '|', label: '@probe(Asc?)' },

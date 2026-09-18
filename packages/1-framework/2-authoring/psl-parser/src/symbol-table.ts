@@ -138,10 +138,10 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   const collectedBlocks: BlockSymbol[] = [];
 
   const namespaces: Record<string, NamespaceSymbol> = Object.create(null);
-  const namedTypes: Record<string, NamedTypeSymbol> = {};
-  const blocks: Record<string, BlockSymbol> = {};
-  const models: Record<string, ModelSymbol> = {};
-  const compositeTypes: Record<string, CompositeTypeSymbol> = {};
+  const namedTypes: Record<string, NamedTypeSymbol> = Object.create(null);
+  const blocks: Record<string, BlockSymbol> = Object.create(null);
+  const models: Record<string, ModelSymbol> = Object.create(null);
+  const compositeTypes: Record<string, CompositeTypeSymbol> = Object.create(null);
   const topLevelNames = new Set<string>();
 
   for (const document of documents) {
@@ -340,7 +340,7 @@ function buildFields(
   sources: PslSources,
   diagnostics: ParseDiagnostic[],
 ): Record<string, FieldSymbol> {
-  const result: Record<string, FieldSymbol> = {};
+  const result: Record<string, FieldSymbol> = Object.create(null);
   for (const field of fields) {
     const nameNode = field.name();
     const name = nameNode?.name();

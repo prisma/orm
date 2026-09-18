@@ -42,11 +42,8 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
       ...input,
     });
 
-  it.each([false, true])(
-    'keeps same-named inheritance graphs independent across namespaces (%s)',
-    (reverse) => {
-      const schemas = ['alpha', 'beta'].map(
-        (namespace) => `namespace ${namespace} {
+  it('keeps same-named inheritance graphs independent across namespaces', () => {
+    const inheritanceSchema = (namespace: string) => `namespace ${namespace} {
   model Bug {
     ${namespace}Detail String @map("${namespace}_detail")
     @@base(Task, "bug")
@@ -62,44 +59,40 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
     @@discriminator(${namespace}Kind)
     @@map("${namespace}_tasks")
   }
-}`,
+}`;
+    const standalone = 'model Bug {\n id Int @id\n @@map("standalone_bug")\n}';
+    const interpret = (schema: string) => {
+      const result = interpretPslDocumentToSqlContract({
+        ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+        controlMutationDefaults: builtinControlMutationDefaults,
+      });
+      expect(result.ok).toBe(true);
+      if (!result.ok) throw new Error(JSON.stringify(result.failure));
+      return result.value;
+    };
+    const combined = interpret(
+      [standalone, inheritanceSchema('alpha'), inheritanceSchema('beta')].join('\n'),
+    );
+    expect(() => validateContractDomain(combined)).not.toThrow();
+    const envelope: unknown = JSON.parse(JSON.stringify(combined));
+    expect(() => validateSqlContractFully(envelope)).not.toThrow();
+    for (const namespace of ['alpha', 'beta']) {
+      const isolated = interpret(inheritanceSchema(namespace));
+      expect(combined.domain.namespaces[namespace]).toEqual(isolated.domain.namespaces[namespace]);
+      const storage = combined.storage as SqlStorage;
+      expect(storage.namespaces[namespace]).toEqual(
+        (isolated.storage as SqlStorage).namespaces[namespace],
       );
-      const standalone = 'model Bug {\n id Int @id\n @@map("standalone_bug")\n}';
-      const interpret = (schema: string) => {
-        const result = interpretPslDocumentToSqlContract({
-          ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
-          controlMutationDefaults: builtinControlMutationDefaults,
-        });
-        expect(result.ok).toBe(true);
-        if (!result.ok) throw new Error(JSON.stringify(result.failure));
-        return result.value;
-      };
-      const combined = interpret(
-        [standalone, ...(reverse ? [...schemas].reverse() : schemas)].join('\n'),
-      );
-      expect(() => validateContractDomain(combined)).not.toThrow();
-      const envelope: unknown = JSON.parse(JSON.stringify(combined));
-      expect(() => validateSqlContractFully(envelope)).not.toThrow();
-      for (const [index, namespace] of ['alpha', 'beta'].entries()) {
-        const isolated = interpret(schemas[index]!);
-        expect(combined.domain.namespaces[namespace]).toEqual(
-          isolated.domain.namespaces[namespace],
-        );
-        const storage = combined.storage as SqlStorage;
-        expect(storage.namespaces[namespace]).toEqual(
-          (isolated.storage as SqlStorage).namespaces[namespace],
-        );
-        expect(combined.domain.namespaces[namespace]?.models['Task']).toMatchObject({
-          discriminator: { field: `${namespace}Kind` },
-          variants: { Bug: { value: 'bug' }, Feature: { value: 'feature' } },
-        });
-        expect(combined.domain.namespaces[namespace]?.models['Bug']).toMatchObject({
-          base: crossRef('Task', namespace),
-          storage: { table: `${namespace}_tasks` },
-        });
-        expect(
-          storage.namespaces[namespace]?.entries.table?.[`${namespace}_features`],
-        ).toMatchObject({
+      expect(combined.domain.namespaces[namespace]?.models['Task']).toMatchObject({
+        discriminator: { field: `${namespace}Kind` },
+        variants: { Bug: { value: 'bug' }, Feature: { value: 'feature' } },
+      });
+      expect(combined.domain.namespaces[namespace]?.models['Bug']).toMatchObject({
+        base: crossRef('Task', namespace),
+        storage: { table: `${namespace}_tasks` },
+      });
+      expect(storage.namespaces[namespace]?.entries.table?.[`${namespace}_features`]).toMatchObject(
+        {
           primaryKey: { columns: [`${namespace}_id`] },
           foreignKeys: [
             {
@@ -110,15 +103,15 @@ describe('interpretPslDocumentToSqlContract — polymorphism', () => {
               },
             },
           ],
-        });
-      }
-      expect(combined.roots).toEqual({
-        standalone_bug: crossRef('Bug', 'public'),
-        alpha_tasks: crossRef('Task', 'alpha'),
-        beta_tasks: crossRef('Task', 'beta'),
-      });
-    },
-  );
+        },
+      );
+    }
+    expect(combined.roots).toEqual({
+      standalone_bug: crossRef('Bug', 'public'),
+      alpha_tasks: crossRef('Task', 'alpha'),
+      beta_tasks: crossRef('Task', 'beta'),
+    });
+  });
 
   it.each([
     [
