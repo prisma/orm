@@ -5,7 +5,7 @@ import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it, vi } from 'vitest';
 import { resolveConfigInputs } from '../../../../packages/1-framework/3-tooling/language-server/src/config-resolution';
-import { createDocumentStore } from '../../../../packages/1-framework/3-tooling/language-server/src/document-store';
+import { DocumentStore } from '../../../../packages/1-framework/3-tooling/language-server/src/document-store';
 import { createProjectArtifacts } from '../../../../packages/1-framework/3-tooling/language-server/src/project-artifacts';
 import { startServer } from '../../../../packages/1-framework/3-tooling/language-server/src/start-server';
 import { withTempDir } from '../utils/cli-test-helpers';
@@ -184,7 +184,7 @@ model Widget {
         const resolution = await resolveConfigInputs(ctx.configPath);
         expect(resolution.interpretation).toBeDefined();
         const onInterpretationError = vi.fn();
-        const documents = createDocumentStore();
+        const documents = new DocumentStore();
         documents.open({ uri, languageId: 'prisma', version: 1, text });
         const project = createProjectArtifacts({
           ...resolution,
