@@ -3370,7 +3370,9 @@ describe('language server config failure surfacing', {
       interpret: () =>
         notOk({
           summary: 'Schema has 1 error',
-          diagnostics: [{ code: 'PSL_INTERPRETER_FINDING', message: 'finding' }],
+          diagnostics: [
+            { code: 'PSL_INTERPRETER_FINDING', message: 'finding', sourceId: schemaUri },
+          ],
         }),
     } as unknown as PslInterpretCapable;
     return {
@@ -3631,6 +3633,51 @@ describe('language server config failure surfacing', {
     await settle();
     expect(harness.nonEmptyPublishCount(configUri)).toBe(0);
   });
+});
+
+describe('project symbol diagnostics assembly', () => {
+  it.each(['push', 'pull'] as const)(
+    'routes cross-file duplicates once to their owning document over %s',
+    async (mode) => {
+      const siblingPath = join(root, 'sibling.psl');
+      const siblingUri = pathToFileURL(siblingPath)
+        .toString()
+        .replace('sibling.psl', '%73ibling.psl');
+      harness = startHarness(
+        async () => resolutionForInputs([schemaPath, siblingPath]),
+        mode === 'pull' ? pullDiagnosticsCapabilities : undefined,
+      );
+      await harness.initialize();
+      const source = '// use prisma-8\nmodel User {\n  id Int @id\n}\n';
+      openDocument(harness, schemaUri, source);
+      if (mode === 'push') await harness.waitForDiagnostics(schemaUri);
+      else await requestPullDiagnostics(harness, schemaUri);
+      openDocument(harness, siblingUri, source);
+      const expected = [
+        {
+          code: 'PSL_DUPLICATE_DECLARATION',
+          message: 'Duplicate declaration of "User"',
+          severity: DiagnosticSeverity.Error,
+          source: 'prisma',
+          range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+        },
+      ];
+      if (mode === 'push') {
+        expect(await harness.waitForDiagnostics(siblingUri)).toEqual(expected);
+        expect(harness.latestDiagnostics(schemaUri)).toEqual([]);
+      } else {
+        expect(await requestPullDiagnostics(harness, siblingUri)).toEqual({
+          kind: DocumentDiagnosticReportKind.Full,
+          items: expected,
+        });
+        expect(await requestPullDiagnostics(harness, schemaUri)).toEqual({
+          kind: DocumentDiagnosticReportKind.Full,
+          items: [],
+        });
+      }
+      expect(harness.getDocumentAst(siblingUri)?.diagnostics).toEqual([]);
+    },
+  );
 });
 
 describe('language server prisma-8 directive gating', {

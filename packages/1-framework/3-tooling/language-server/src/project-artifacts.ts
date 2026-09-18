@@ -1,4 +1,9 @@
-import { buildSymbolTable, type SymbolTable, type SymbolTableResult } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  type PslDiagnostic,
+  type SymbolTable,
+  type SymbolTableResult,
+} from '@internal/psl-parser';
 import { type DocumentAst, PslSources, type SourceFile } from '@internal/psl-parser/syntax';
 import { InternalError } from '@internal/utils/internal-error';
 import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
@@ -6,7 +11,6 @@ import type { ProjectInterpretation } from './config-resolution';
 import {
   type LspDiagnostic,
   mapInterpreterDiagnostics,
-  mapParseDiagnostics,
   ParseDiagnosticSeverity,
 } from './diagnostic-mapping';
 import { computeDocumentDiagnostics } from './document-diagnostics';
@@ -47,6 +51,7 @@ export interface ProjectArtifacts {
    */
   document(uri: string): DocumentArtifacts | undefined;
   symbolTable(): SymbolTable;
+  symbolDiagnostics(): readonly PslDiagnostic[];
   documentChanged(uri: string): void;
   documentClosed(uri: string): void;
 }
@@ -54,7 +59,7 @@ export interface ProjectArtifacts {
 export function createProjectArtifacts(options: ProjectArtifactsOptions): ProjectArtifacts {
   const { inputs, controlStack, getText, interpretation } = options;
   const documents = new Map<string, DocumentArtifacts>();
-  const liveUris = new Map<string, string>();
+  const openDocumentUris = new Map<string, string>();
   let symbolTableResult: SymbolTableResult | undefined;
   let sources = new PslSources([]);
 
@@ -92,8 +97,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
         const diagnostics = result.ok
           ? []
           : result.failure.diagnostics.filter(
-              (diagnostic) =>
-                diagnostic.sourceId === undefined || diagnostic.sourceId === sourceFile.filename,
+              (diagnostic) => diagnostic.sourceId === sourceFile.filename,
             );
         memo = mapInterpreterDiagnostics(diagnostics, sourceFile);
         memoSources = sources;
@@ -138,32 +142,26 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     if (existing !== undefined) {
       return existing;
     }
-    const liveUri = liveUris.get(identity) ?? uri;
-    const text = getText(liveUri);
+    const openDocumentUri = openDocumentUris.get(identity) ?? uri;
+    const text = getText(openDocumentUri);
     if (text === undefined) {
       return undefined;
     }
-    const computed = computeDocumentDiagnostics(liveUri, text, inputs, controlStack);
+    const computed = computeDocumentDiagnostics(openDocumentUri, text, inputs, controlStack);
     if (computed === null) {
       return undefined;
     }
     const artifacts: DocumentArtifacts = {
       document: computed.document,
       sourceFile: computed.sourceFile,
-      get diagnostics() {
-        const result = readSymbolTableResult();
-        return [
-          ...computed.parseDiagnostics,
-          ...mapParseDiagnostics(
-            result.diagnostics.filter(
-              (diagnostic) => diagnostic.filename === computed.sourceFile.filename,
-            ),
-          ),
-        ];
-      },
-      interpretDiagnostics: createInterpretSlot(liveUri, computed.document, computed.sourceFile),
+      diagnostics: computed.parseDiagnostics,
+      interpretDiagnostics: createInterpretSlot(
+        openDocumentUri,
+        computed.document,
+        computed.sourceFile,
+      ),
     };
-    liveUris.set(identity, liveUri);
+    openDocumentUris.set(identity, openDocumentUri);
     documents.set(identity, artifacts);
     refreshSources();
     return artifacts;
@@ -198,10 +196,11 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     },
     document: readDocument,
     symbolTable: readSymbolTable,
+    symbolDiagnostics: () => readSymbolTableResult().diagnostics,
     documentChanged: drop,
     documentClosed(uri) {
       drop(uri);
-      liveUris.delete(canonicalFileIdentity(uri));
+      openDocumentUris.delete(canonicalFileIdentity(uri));
     },
   };
 }

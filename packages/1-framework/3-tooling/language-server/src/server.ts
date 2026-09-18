@@ -34,7 +34,11 @@ import {
   type ProjectInterpretation,
   resolveConfigInputs,
 } from './config-resolution';
-import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mapping';
+import {
+  type LspDiagnostic,
+  mapParseDiagnostics,
+  ParseDiagnosticSeverity,
+} from './diagnostic-mapping';
 import { computeFoldingRanges } from './folding-ranges';
 import { guardedConnection } from './guarded-connection';
 import type { PipelineInputs } from './pipeline';
@@ -138,13 +142,23 @@ function createServerOn(connection: Connection): LanguageServer {
       sendDiagnostics({ uri, diagnostics: [] });
       return;
     }
-    sendDiagnostics({ uri, diagnostics: combinedDiagnostics(artifacts) });
+    sendDiagnostics({ uri, diagnostics: combinedDiagnostics(project.artifacts, artifacts) });
   }
 
   // The single diagnostics assembly — push and pull must serve the same
   // combined response, and interpretation runs only from here.
-  function combinedDiagnostics(artifacts: DocumentArtifacts): Diagnostic[] {
-    return toDiagnostics([...artifacts.diagnostics, ...artifacts.interpretDiagnostics()]);
+  function combinedDiagnostics(
+    project: ProjectArtifacts,
+    artifacts: DocumentArtifacts,
+  ): Diagnostic[] {
+    const symbolDiagnostics = project
+      .symbolDiagnostics()
+      .filter((diagnostic) => diagnostic.filename === artifacts.sourceFile.filename);
+    return toDiagnostics([
+      ...artifacts.diagnostics,
+      ...mapParseDiagnostics(symbolDiagnostics),
+      ...artifacts.interpretDiagnostics(),
+    ]);
   }
 
   /**
@@ -158,7 +172,7 @@ function createServerOn(connection: Connection): LanguageServer {
     const artifacts = project.artifacts.document(uri);
     return {
       kind: DocumentDiagnosticReportKind.Full,
-      items: artifacts === undefined ? [] : combinedDiagnostics(artifacts),
+      items: artifacts === undefined ? [] : combinedDiagnostics(project.artifacts, artifacts),
     };
   }
 

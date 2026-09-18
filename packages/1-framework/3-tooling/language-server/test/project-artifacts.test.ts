@@ -75,7 +75,7 @@ function interpretationDouble(interpret: PslInterpretCapable['interpret']): {
 }
 
 describe('createProjectArtifacts', () => {
-  it('loads all live inputs in configured order and scopes duplicate diagnostics to their owner', () => {
+  it('owns symbol diagnostics at project level in configured order with source filenames', () => {
     const siblingUri = pathToFileURL('/abs/sibling.psl').toString();
     const texts = new Map([
       [schemaUri, cleanSource],
@@ -92,17 +92,22 @@ describe('createProjectArtifacts', () => {
       interpretation,
     });
     const sibling = store.document(siblingUri)!;
+    expect(sibling.diagnostics).toEqual([]);
+    expect(pipelineMock.runPipeline).toHaveBeenCalledTimes(1);
     expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User', 'Post']);
     const first = store.document(schemaUri)!;
     expect(store.symbolTable().topLevel.models['User']?.node.syntax.root()).toBe(
       first.document.syntax,
     );
     expect(first.diagnostics).toEqual([]);
-    expect(sibling.diagnostics).toEqual([
+    expect(sibling.diagnostics).toEqual([]);
+    const symbolDiagnostics = store.symbolDiagnostics();
+    expect(store.symbolDiagnostics()).toBe(symbolDiagnostics);
+    expect(symbolDiagnostics).toEqual([
       {
+        filename: siblingUri,
         code: 'PSL_DUPLICATE_DECLARATION',
         message: 'Duplicate declaration of "User"',
-        severity: 1,
         range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
       },
     ]);
@@ -114,9 +119,14 @@ describe('createProjectArtifacts', () => {
     expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User', 'Other']);
     expect(spy).toHaveBeenCalledTimes(2);
     expect(store.document(siblingUri)?.diagnostics).toEqual([]);
+    expect(store.symbolDiagnostics()).toEqual([]);
+    texts.set(siblingUri, twoModelSource);
+    store.documentChanged(siblingUri);
+    expect(store.symbolDiagnostics()).toEqual(symbolDiagnostics);
     texts.delete(schemaUri);
     store.documentClosed(schemaUri);
-    expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['Other']);
+    expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User', 'Post']);
+    expect(store.symbolDiagnostics()).toEqual([]);
     expect(() => store.sources.sourceFileFor(first.document.syntax)).toThrow(/No SourceFile/);
   });
   it('parses the mirrored text on first read', () => {
@@ -146,6 +156,9 @@ describe('createProjectArtifacts', () => {
     texts.delete(liveUri);
     store.documentClosed(liveUri);
     expect(store.document(schemaUri)).toBeUndefined();
+    texts.set(schemaUri, cleanSource);
+    expect(store.document(schemaUri)?.sourceFile.filename).toBe(schemaUri);
+    expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User']);
   });
 
   it('returns the same artifacts for repeated reads without an intervening event', () => {
@@ -345,24 +358,19 @@ describe('createProjectArtifacts', () => {
     expect(store.document(schemaUri)).toBeUndefined();
   });
 
-  it('returns diagnostics with parity to parse + buildSymbolTable for the same inputs', () => {
+  it('keeps document parse diagnostics separate from project symbol diagnostics', () => {
     const { texts, store } = projectWithMirror();
     const source = [`${directive}model Profile {`, '  user a.b.c', '}'].join('\n');
     texts.set(schemaUri, source);
-    const {
-      document,
-      sources,
-      diagnostics: parseDiagnostics,
-    } = parse(source, 'language-server-test.psl');
+    const { document, sources, diagnostics: parseDiagnostics } = parse(source, schemaUri);
     const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
       documents: [document],
       sources,
       pslBlockDescriptors: controlStack.pslBlockDescriptors,
     });
 
-    expect(store.document(schemaUri)?.diagnostics).toEqual(
-      mapParseDiagnostics([...parseDiagnostics, ...symbolTableDiagnostics]),
-    );
+    expect(store.document(schemaUri)?.diagnostics).toEqual(mapParseDiagnostics(parseDiagnostics));
+    expect(store.symbolDiagnostics()).toEqual(symbolTableDiagnostics);
   });
 
   it('does not throw on a malformed, half-typed buffer', () => {
@@ -449,6 +457,7 @@ describe('interpret slot', () => {
         diagnostics: [
           {
             code: 'TEST',
+            sourceId: schemaUri,
             get message(): string {
               throw error;
             },
