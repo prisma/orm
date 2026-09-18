@@ -15,6 +15,7 @@ Normative pseudo-code and API live in the parent spec — `projects/symbol-table
 - **Binder** (new module in `psl-parser`, interface + factory per repo pattern): two-phase eager pass over the symbol table (phase 1 declarations + type references, phase 2 attribute references reading phase-1 results); side tables are `WeakMap<SyntaxNode, …>`; queries `declaredSymbol(node)` / `symbolForNode(node)`; diagnostics returned beside the binder, `PSL_UNRESOLVED_REFERENCE` code family, cross-space references yield an explicit cross-space result kind with no diagnostic.
 - **Attribute-ctx helper**: `psl-parser` exports a helper that builds the ADR 249 parse-time context from a binder, so each conversion slice wires `resolveReferencedModel` as one map read. Consumers are not modified in this slice — the four existing hand-rolled implementations keep working (parent spec, transitional-shape constraint).
 - **Exports** via `src/exports/index.ts`; tests written before implementation per repo rule.
+- **Combinator wiring (D5, operator-decreed after D4 closed):** the parse-time `AttributeCtx` carries the whole `Binder` as an optional member, populated by the context builders; the reference combinators (`fieldRef`, `referencedFieldRef`, `entityRef`) consume the binder's already-computed resolutions via `symbolForNode` (one map read, never a re-resolution) and, when the binder is present, emit **no** resolution diagnostics of their own — the binder's returned diagnostics are the sole voice (parent spec, cross-cutting requirement 2). Without a binder, legacy behavior is byte-for-byte unchanged, preserving the transitional constraint for unconverted consumers. Without this, a converted consumer would report each resolution failure twice — once from the binder, once from the combinator's own existence check.
 
 ## Coherence rationale
 
@@ -22,7 +23,7 @@ One package, one subject: the binder and the node-identity substrate it requires
 
 ## Scope
 
-**In:** `packages/1-framework/2-authoring/psl-parser` — `src/syntax/red.ts`, new binder + universe-scope modules, attribute-ctx helper, `src/exports/index.ts`, package tests; branch stacks on `origin/multifiile-psl` (PR #30335).
+**In:** `packages/1-framework/2-authoring/psl-parser` — `src/syntax/red.ts`, new binder + universe-scope modules, attribute-ctx helper, the D5 combinator wiring (`src/attribute-spec/` ctx types + reference combinators), `src/exports/index.ts`, package tests; branch originally stacked on `origin/multifiile-psl` (PR #30335), rebased onto `main` after its squash-merge.
 
 **Out:** any change to SQL/Mongo interpreters, language server, or `contract-prisma7` (later slices / non-goals); laziness or cross-snapshot memo retention; incremental reparse; new LSP features.
 
@@ -41,6 +42,7 @@ One package, one subject: the binder and the node-identity substrate it requires
 
 - [ ] Diff touches only `psl-parser` and `projects/symbol-table-resolve/` (verifiable via `git diff --stat` against `origin/multifiile-psl`).
 - [ ] The attribute-ctx helper is exported and covered by a test demonstrating `resolveReferencedModel` as a binder map read.
+- [ ] With a binder-backed context, a resolution failure inside an attribute argument yields exactly one diagnostic — the binder's; the combinators emit none. Without a binder, the legacy path is pinned unchanged by the existing suite.
 
 ## Open Questions
 

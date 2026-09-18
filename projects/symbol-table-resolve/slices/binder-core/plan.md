@@ -30,4 +30,11 @@ Slice spec: `projects/symbol-table-resolve/slices/binder-core/spec.md`. Branch: 
 - **Hands to:** the slice-DoD state — the stable API surface the three conversion slices consume.
 - **Focus:** exports, helper, docs, final gates. No new resolution logic.
 
-Sizes: D1 S, D2 L, D3 M, D4 S. Sequential; no parallel-within-slice.
+### Dispatch 5: combinator-binder-wiring (added by operator decree after D4 closed)
+
+- **Outcome:** `AttributeCtx` carries an optional `binder: Binder`; the D4 context builders populate it; `fieldRef`/`referencedFieldRef`/`entityRef` consume the binder's phase-2 resolutions via `symbolForNode` (map read, no re-resolution) and emit no resolution diagnostics when the binder is present — the binder's diagnostics are the sole voice; legacy no-binder behavior byte-for-byte unchanged and pinned by the existing suite; README's binder section documents the ctx wiring; full gates green (workspace typecheck now excluding only `prisma7-adoption`).
+- **Builds on:** dispatch 3's phase-2 resolutions and dispatch 4's context builders.
+- **Hands to:** the slice-DoD state, now including single-voice diagnostics through the spec-interpretation path — conversion slices become pure deletions with no double-diagnostic intermediate state.
+- **Focus:** `src/attribute-spec/` ctx types + the three reference combinators + `binder-context.ts` + tests. No consumer packages; no binder-semantics changes.
+
+Sizes: D1 S, D2 L, D3 M, D4 S, D5 M. Sequential; no parallel-within-slice.
