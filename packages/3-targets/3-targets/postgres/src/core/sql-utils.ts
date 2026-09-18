@@ -14,13 +14,25 @@ import { postgresError } from './errors';
 
 const MAX_IDENTIFIER_LENGTH = 63;
 
+const utf8 = new TextEncoder();
+
+/**
+ * UTF-8 byte length — the unit PostgreSQL measures identifiers and enum labels
+ * in. `NAMEDATALEN - 1` is 63 *bytes*, so a name written in non-ASCII
+ * characters can sit well under 63 characters and still overrun. Both length
+ * checks in this module read through here so they cannot drift apart.
+ */
+function byteLength(value: string): number {
+  return utf8.encode(value).length;
+}
+
 /**
  * Validates and quotes a PostgreSQL identifier (table, column, type, schema names).
  *
  * Security validations:
  * - Rejects null bytes which could cause truncation or unexpected behavior
  * - Rejects empty identifiers
- * - Warns on identifiers exceeding PostgreSQL's 63-character limit
+ * - Warns on identifiers exceeding PostgreSQL's 63-byte limit
  *
  * @throws `CONTRACT.IDENTIFIER_INVALID` structured error If the identifier contains null bytes or is empty
  */
@@ -35,9 +47,9 @@ export function quoteIdentifier(identifier: string): string {
       meta: { value: identifier.replace(/\0/g, '\\0'), context: 'identifier' },
     });
   }
-  if (identifier.length > MAX_IDENTIFIER_LENGTH) {
+  if (byteLength(identifier) > MAX_IDENTIFIER_LENGTH) {
     console.warn(
-      `Identifier "${identifier.slice(0, 20)}..." exceeds PostgreSQL's ${MAX_IDENTIFIER_LENGTH}-character limit and will be truncated`,
+      `Identifier "${identifier.slice(0, 20)}..." exceeds PostgreSQL's ${MAX_IDENTIFIER_LENGTH}-byte limit and will be truncated`,
     );
   }
   return `"${identifier.replace(/"/g, '""')}"`;
@@ -95,7 +107,7 @@ export function quoteQualifiedName(name: string): string {
  * @throws `CONTRACT.IDENTIFIER_INVALID` structured error If the value exceeds the maximum length
  */
 export function validateEnumValueLength(value: string, enumTypeName: string): void {
-  if (new TextEncoder().encode(value).length > MAX_IDENTIFIER_LENGTH) {
+  if (byteLength(value) > MAX_IDENTIFIER_LENGTH) {
     throw postgresError(
       'CONTRACT.IDENTIFIER_INVALID',
       `Enum value "${value.slice(0, 20)}..." for type "${enumTypeName}" exceeds PostgreSQL's ` +
