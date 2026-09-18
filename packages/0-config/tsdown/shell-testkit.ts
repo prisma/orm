@@ -1,6 +1,7 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, type SpawnOptions } from 'node:child_process';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { publicShells } from '@internal/publish-surface/shells';
 import { init as initLexer, parse as parseModule } from 'es-module-lexer';
 
@@ -50,11 +51,33 @@ function manifestName(packageDir: string, manifest: Record<string, unknown>): st
   return name;
 }
 
-/** `pnpm pack` a shell package into `outDir`, returning the published name + tarball path. */
-export function packShell(shellDir: string, outDir: string): PackedShell {
+export interface PackOptions {
+  readonly lockTimeoutMs?: number | undefined;
+}
+
+function runPack(packageDir: string, tarball: string, options: PackOptions): void {
+  const childOptions = { detached: true, stdio: 'pipe' } satisfies SpawnOptions;
+  execFileSync(
+    process.execPath,
+    [
+      fileURLToPath(new URL('./shell-pack.ts', import.meta.url)),
+      packageDir,
+      tarball,
+      String(options.lockTimeoutMs ?? 30_000),
+    ],
+    childOptions,
+  );
+}
+
+/** `pnpm pack` a shell package, coordinating testkit callers through archive completion. */
+export function packShell(
+  shellDir: string,
+  outDir: string,
+  options: PackOptions = {},
+): PackedShell {
   const name = manifestName(shellDir, readManifest(shellDir));
   const tarball = join(outDir, `${name.replaceAll(/[@/]/g, '-').replace(/^-/, '')}.tgz`);
-  execFileSync('pnpm', ['pack', '--out', tarball], { cwd: shellDir, stdio: 'pipe' });
+  runPack(shellDir, tarball, options);
   return { name, tarball };
 }
 
@@ -94,7 +117,7 @@ export function packShellAtVersion(shellDir: string, outDir: string, version: st
   delete staged['devDependencies'];
   writeFileSync(join(stageDir, 'package.json'), `${JSON.stringify(staged, null, 2)}\n`);
   const tarball = join(outDir, `${name.replaceAll(/[@/]/g, '-').replace(/^-/, '')}-${version}.tgz`);
-  execFileSync('pnpm', ['pack', '--out', tarball], { cwd: stageDir, stdio: 'pipe' });
+  runPack(stageDir, tarball, {});
   return { name, tarball, override: false };
 }
 
