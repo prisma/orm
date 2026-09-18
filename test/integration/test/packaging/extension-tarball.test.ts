@@ -17,7 +17,7 @@ import {
 } from '@repo/tsdown/shell-testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const workspaceVersion = (
   JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as { version: string }
 ).version;
