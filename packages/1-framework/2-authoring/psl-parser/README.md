@@ -115,6 +115,8 @@ Shape and arity stay the combinator's voice in both modes — "Expected a field 
 
 This lookup rests on red-node identity (below): the combinator receives the very `SyntaxNode` the binder keyed its result under.
 
+**Precondition.** The binder on the context must be built over the *same snapshot* — the same symbol table and `PslSources` — and the same `typeConstructors` / `attributeSpecs` registries as the interpretation consuming it. The combinators defer to the binder whenever one is present, not only when the lookup hits, so a binder from a different snapshot or from registries that disagree with the specs being interpreted silently forgoes existence diagnostics: neither voice reports the unknown name. Build the binder and run interpretation over one snapshot.
+
 ### Snapshot lifetime
 
 The binder is snapshot-scoped: an edit produces a new document, symbol table, and binder, and the old set is dropped whole. There is no invalidation protocol.
