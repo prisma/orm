@@ -27,6 +27,11 @@ interface ScriptedResult {
   readonly exitCode: number;
   readonly stderr: string;
   readonly addsToManifest?: boolean;
+  /**
+   * The directory pnpm writes its modules manifest in — the project itself, or
+   * the workspace root it links from — and what it names as skipped there.
+   */
+  readonly modulesManifest?: { readonly dir: string; readonly ignoredBuilds: readonly string[] };
 }
 
 let projectDir: string;
@@ -72,11 +77,24 @@ function addToManifest(cwd: string, args: readonly string[]): void {
   );
 }
 
+/** The modules manifest pnpm writes beside the tree it linked, naming what it skipped. */
+function writeModulesManifest(dir: string, ignoredBuilds: readonly string[]): void {
+  const modulesDir = join(dir, 'node_modules');
+  mkdirSync(modulesDir, { recursive: true });
+  writeFileSync(
+    join(modulesDir, '.modules.yaml'),
+    JSON.stringify({ ignoredBuilds, pendingBuilds: [] }),
+  );
+}
+
 const runner: PackageManagerRunner = async (request) => {
   calls.push({ file: request.file, args: [...request.args], cwd: request.cwd });
   const result = script.shift() ?? { exitCode: 0, stderr: '' };
   if (result.addsToManifest === true) {
     addToManifest(request.cwd, request.args);
+  }
+  if (result.modulesManifest !== undefined) {
+    writeModulesManifest(result.modulesManifest.dir, result.modulesManifest.ignoredBuilds);
   }
   return { exitCode: result.exitCode, stderr: result.stderr };
 };
@@ -379,19 +397,21 @@ describe('init installs', () => {
     );
 
     it(
-      'completes when pnpm 11 exits non-zero after adding the packages',
+      'completes when pnpm 11 records skipped scripts and exits non-zero after adding the packages',
       async () => {
         script = [
           {
             exitCode: 1,
             stderr: 'Command failed with exit code 1: pnpm add @prisma/orm-postgres dotenv',
             addsToManifest: true,
+            modulesManifest: { dir: projectDir, ignoredBuilds: ['esbuild@0.28.2'] },
           },
           {
             exitCode: 1,
             stderr:
               'Command failed with exit code 1: pnpm add -D prisma@latest @types/node @prisma/cli-engine@latest',
             addsToManifest: true,
+            modulesManifest: { dir: projectDir, ignoredBuilds: ['esbuild@0.28.2'] },
           },
         ];
 
@@ -408,9 +428,58 @@ describe('init installs', () => {
     );
 
     it(
-      'still fails a pnpm add that exits non-zero without touching package.json',
+      'reads the record pnpm writes at the workspace root, not in the project',
       async () => {
-        script = [{ exitCode: 1, stderr: '' }];
+        const workspaceProject = join(projectDir, 'packages', 'database');
+        mkdirSync(workspaceProject, { recursive: true });
+        const record = { dir: projectDir, ignoredBuilds: ['esbuild@0.28.2'] };
+        script = [
+          { exitCode: 1, stderr: '', addsToManifest: true, modulesManifest: record },
+          { exitCode: 1, stderr: '', addsToManifest: true, modulesManifest: record },
+        ];
+
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: workspaceProject });
+
+        expect(run.exitCode).toBe(0);
+        expect(emit).toHaveBeenCalledWith({ cwd: workspaceProject });
+        expect(run.presented?.data).toMatchObject({
+          packagesInstalled: { status: 'installed' },
+          warnings: expect.arrayContaining([expect.stringContaining('pnpm approve-builds')]),
+        });
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'still fails a pnpm add that rewrites package.json while its record names nothing skipped',
+      async () => {
+        script = [
+          {
+            exitCode: 1,
+            stderr: '',
+            addsToManifest: true,
+            modulesManifest: { dir: projectDir, ignoredBuilds: [] },
+          },
+        ];
+
+        const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
+
+        expect(run.exitCode).toBe(4);
+        expect(emit).not.toHaveBeenCalled();
+      },
+      timeouts.coldTransformImport,
+    );
+
+    it(
+      'still fails a pnpm add that records skipped scripts without adding the packages',
+      async () => {
+        script = [
+          {
+            exitCode: 7,
+            stderr: '',
+            modulesManifest: { dir: projectDir, ignoredBuilds: ['esbuild@0.28.2'] },
+          },
+        ];
 
         const run = await harness('pnpm').run(scaffoldArgv(), { cwd: projectDir });
 
