@@ -32,33 +32,6 @@ This keeps core/CLI source-agnostic while giving PSL-first SQL users a one-line 
 Determinism note:
 - Relation metadata emission is intentionally **sorted by storage table name, then model name, then relation field name** (not PSL declaration order) so `contract.json` snapshots and hashes are stable across environments.
 
-## Reopening namespaces
-
-In a single PSL source file, blocks with exactly the same namespace name share one logical scope. For example, PostgreSQL authors can separate related models:
-
-```prisma
-namespace blog {
-  model Post {
-    id Int @id
-    authorId Int
-    author User @relation(fields: [authorId], references: [id])
-  }
-}
-
-namespace blog {
-  model User {
-    id Int @id
-    @@map("users")
-  }
-}
-```
-
-This has the same interpreted contract semantics as one `namespace blog` block containing both declarations, including the foreign key to `blog.users`; reversing the blocks does not change resolution. Composite types and supported descriptor-backed extension blocks likewise contribute to the complete scope. Extension model references and required model attributes see members from every reopening.
-
-The [parser's symbol collection](../../../1-framework/2-authoring/psl-parser/README.md#reopening-namespaces-in-one-source-file) owns scope assembly. Names remain case-sensitive and member names remain unique across declaration kinds. Even identical repeated members are errors at the later name; declarations are not partial, merged, or overridden. This does not add multi-file loading.
-
-Target and validation rules are unchanged: SQLite rejects explicit namespace blocks; PostgreSQL rejects an unbound namespace containing models alongside named sibling namespaces, even if the model occurs only in a later reopening. Namespace-local enums remain unsupported. Unknown blocks, invalid extension parameters, and missing required model attributes are still errors.
-
 ## Non-responsibilities
 
 - Canonical artifact emission (`contract.json`, `contract.d.ts`) and hashing

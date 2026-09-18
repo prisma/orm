@@ -111,12 +111,14 @@ function validateNamespaceBlocksForMongoTarget(input: {
   readonly diagnostics: ContractSourceDiagnostic[];
 }): void {
   for (const namespace of input.namespaces) {
-    input.diagnostics.push({
-      code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
-      message: `Mongo does not support \`namespace ${namespace.name} { … }\` blocks (the database is bound by the connection string; declare models at the document top level instead).`,
-      sourceId: input.sourceId,
-      span: nodePslSpan(namespace.node.syntax, input.sourceFile),
-    });
+    for (const { span } of namespace.declarations) {
+      input.diagnostics.push({
+        code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
+        message: `Mongo does not support \`namespace ${namespace.name} { … }\` blocks (the database is bound by the connection string; declare models at the document top level instead).`,
+        sourceId: input.sourceId,
+        span,
+      });
+    }
   }
 }
 

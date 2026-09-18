@@ -233,7 +233,9 @@ export function interpretPrisma7Documents(
       }
     }
     for (const namespace of Object.values(table.topLevel.namespaces)) {
-      unsupported('namespace', namespace.span);
+      for (const { span } of namespace.declarations) {
+        unsupported('namespace', span);
+      }
     }
     for (const compositeType of Object.values(table.topLevel.compositeTypes)) {
       unsupported('type', compositeType.span);

@@ -45,8 +45,10 @@ export interface TopLevelScope {
 export interface NamespaceSymbol {
   readonly kind: 'namespace';
   readonly name: string;
-  readonly node: NamespaceDeclarationAst;
-  readonly span: PslSpan;
+  readonly declarations: {
+    readonly node: NamespaceDeclarationAst;
+    readonly span: PslSpan;
+  }[];
   readonly models: Record<string, ModelSymbol>;
   readonly compositeTypes: Record<string, CompositeTypeSymbol>;
   readonly blocks: Record<string, BlockSymbol>;
@@ -134,13 +136,12 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   const { document, sourceFile, pslBlockDescriptors } = options;
   const diagnostics: ParseDiagnostic[] = [];
 
-  const namespaces: Record<string, NamespaceSymbol> = {};
+  const namespaces: Record<string, NamespaceSymbol> = Object.create(null);
   const namedTypes: Record<string, NamedTypeSymbol> = {};
   const blocks: Record<string, BlockSymbol> = {};
   const models: Record<string, ModelSymbol> = {};
   const compositeTypes: Record<string, CompositeTypeSymbol> = {};
   const topLevelNames = new Set<string>();
-  const namespaceMemberNames = new Map<string, Set<string>>();
 
   const claim = (taken: Set<string>, name: IdentifierAst | undefined): string | undefined => {
     const text = name?.name();
@@ -176,29 +177,22 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
       }
     } else if (declaration instanceof NamespaceDeclarationAst) {
       const declaredName = declaration.name()?.name();
-      const existing =
-        declaredName !== undefined && Object.hasOwn(namespaces, declaredName)
-          ? namespaces[declaredName]
-          : undefined;
-      const name = existing?.name ?? claim(topLevelNames, declaration.name());
-      if (name !== undefined) {
-        const taken = namespaceMemberNames.get(name) ?? new Set<string>();
-        namespaceMemberNames.set(name, taken);
-        Object.defineProperty(namespaces, name, {
-          value: buildNamespace(
-            name,
-            declaration,
-            diagnostics,
-            sourceFile,
-            pslBlockDescriptors,
-            existing,
-            taken,
-          ),
-          enumerable: true,
-          configurable: true,
-          writable: true,
-        });
+      if (declaredName === undefined) continue;
+      let namespace = namespaces[declaredName];
+      if (namespace === undefined) {
+        const name = claim(topLevelNames, declaration.name());
+        if (name === undefined) continue;
+        namespace = {
+          kind: 'namespace',
+          name,
+          declarations: [],
+          models: Object.create(null),
+          compositeTypes: Object.create(null),
+          blocks: Object.create(null),
+        };
+        namespaces[name] = namespace;
       }
+      extendNamespace(namespace, declaration, diagnostics, sourceFile, pslBlockDescriptors);
     } else if (declaration instanceof TypesBlockAst) {
       for (const binding of declaration.declarations()) {
         const name = claim(topLevelNames, binding.name());
@@ -267,23 +261,20 @@ function buildBlock(
   };
 }
 
-function buildNamespace(
-  name: string,
+function extendNamespace(
+  namespace: NamespaceSymbol,
   node: NamespaceDeclarationAst,
   diagnostics: ParseDiagnostic[],
   sourceFile: SourceFile,
   pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
-  existing: NamespaceSymbol | undefined,
-  taken: Set<string>,
-): NamespaceSymbol {
-  const models: Record<string, ModelSymbol> = existing?.models ?? {};
-  const compositeTypes: Record<string, CompositeTypeSymbol> = existing?.compositeTypes ?? {};
-  const blocks: Record<string, BlockSymbol> = existing?.blocks ?? {};
+): void {
+  const { models, compositeTypes, blocks } = namespace;
+  namespace.declarations.push({ node, span: nodePslSpan(node.syntax, sourceFile) });
 
   for (const member of node.declarations()) {
     const memberName = member.name()?.name();
     if (memberName === undefined) continue;
-    if (taken.has(memberName)) {
+    if (memberName in models || memberName in compositeTypes || memberName in blocks) {
       const range = nameRange(member.name(), sourceFile);
       if (range) {
         diagnostics.push({
@@ -294,7 +285,6 @@ function buildNamespace(
       }
       continue;
     }
-    taken.add(memberName);
     if (member instanceof ModelDeclarationAst) {
       models[memberName] = buildModel(memberName, member, sourceFile, diagnostics);
     } else if (member instanceof CompositeTypeDeclarationAst) {
@@ -309,18 +299,6 @@ function buildNamespace(
       );
     }
   }
-
-  return (
-    existing ?? {
-      kind: 'namespace',
-      name,
-      node,
-      span: nodePslSpan(node.syntax, sourceFile),
-      models,
-      compositeTypes,
-      blocks,
-    }
-  );
 }
 
 function buildFields(

@@ -273,12 +273,14 @@ function validateNamespaceBlocksForSqlTarget(input: {
 }): void {
   if (input.targetId === 'sqlite') {
     for (const namespace of input.namespaces) {
-      input.diagnostics.push({
-        code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
-        message: `SQLite does not support \`namespace ${namespace.name} { … }\` blocks (SQLite has no schema concept; declare models at the document top level instead).`,
-        sourceId: input.sourceId,
-        span: nodePslSpan(namespace.node.syntax, input.sourceFile),
-      });
+      for (const { span } of namespace.declarations) {
+        input.diagnostics.push({
+          code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
+          message: `SQLite does not support \`namespace ${namespace.name} { … }\` blocks (SQLite has no schema concept; declare models at the document top level instead).`,
+          sourceId: input.sourceId,
+          span,
+        });
+      }
     }
     return;
   }
@@ -301,14 +303,16 @@ function validateNamespaceBlocksForSqlTarget(input: {
     // `role`) carry no such conflict — a blocks-only unbound namespace is
     // legal next to named namespaces and lowers into the unbound bucket.
     if (unboundBlock !== undefined && hasSibling) {
-      input.diagnostics.push({
-        code: 'PSL_RESERVED_NAMESPACE_NAME',
-        message:
-          'Namespace "unbound" is reserved for the late-binding sentinel mapping; a `namespace unbound { … }` containing models cannot appear alongside other named namespace blocks. ' +
-          'Use `namespace unbound { … }` alone (no sibling named namespaces) for late-binding multi-tenant contracts.',
-        sourceId: input.sourceId,
-        span: nodePslSpan(unboundBlock.node.syntax, input.sourceFile),
-      });
+      for (const { span } of unboundBlock.declarations) {
+        input.diagnostics.push({
+          code: 'PSL_RESERVED_NAMESPACE_NAME',
+          message:
+            'Namespace "unbound" is reserved for the late-binding sentinel mapping; a `namespace unbound { … }` containing models cannot appear alongside other named namespace blocks. ' +
+            'Use `namespace unbound { … }` alone (no sibling named namespaces) for late-binding multi-tenant contracts.',
+          sourceId: input.sourceId,
+          span,
+        });
+      }
     }
   }
 }

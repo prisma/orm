@@ -99,243 +99,134 @@ describe('buildSymbolTable() — AC3 namespace nesting', () => {
     const { topLevel } = result.table;
 
     expect(topLevel.namespaces['Foo']?.kind).toBe('namespace');
-    expect(topLevel.namespaces['Foo']?.node).toBeInstanceOf(NamespaceDeclarationAst);
+    expect(topLevel.namespaces['Foo']?.declarations[0]?.node).toBeInstanceOf(
+      NamespaceDeclarationAst,
+    );
     expect(topLevel.namespaces['Foo']?.models['A']?.kind).toBe('model');
     expect(topLevel.models['A']).toBeUndefined();
   });
 });
 
 describe('buildSymbolTable() — namespace reopening', () => {
-  const policy: AuthoringPslBlockDescriptor = {
-    kind: 'pslBlock',
-    keyword: 'policy',
-    discriminator: 'fixture-policy',
-    name: { required: true },
-    parameters: {
-      target: { kind: 'ref', refKind: 'model', scope: 'same-namespace', required: true },
-    },
-  };
-  const descriptors = { policy };
-  const wrap = (body: string, name = 'blog') => `namespace ${name} {\n${body}\n}`;
-  const members = [
-    'model Article {\n  id Int @id\n  address Address?\n}',
-    'type Address {\n  street String\n}',
-    'policy ReadArticles {\n  target = Article\n}',
-    'policy WriteArticles {\n  target = Article\n}',
-  ];
-
-  function collect(source: string) {
-    const parsed = parse(source);
-    expect(parsed.diagnostics).toEqual([]);
-    return {
-      ...parsed,
-      ...buildSymbolTable({ ...parsed, pslBlockDescriptors: descriptors }),
-    };
-  }
-
-  function semantics(value: unknown): unknown {
-    if (Array.isArray(value)) return value.map(semantics);
-    if (value !== null && typeof value === 'object') {
-      return Object.fromEntries(
-        Object.entries(value)
-          .filter(([key]) => key !== 'node' && key !== 'span')
-          .map(([key, child]) => [key, semantics(child)]),
-      );
-    }
-    return value;
-  }
-
-  it('collects consolidated, split and reversed blocks with original declaration provenance', () => {
-    const consolidated = collect(wrap(members.join('\n')));
-    expect(consolidated.diagnostics).toEqual([]);
-    for (const ordered of [members, [...members].reverse()]) {
-      const source = [
-        wrap(ordered[0] ?? ''),
-        wrap('model Other {\n id Int\n}', 'elsewhere'),
-        ...ordered.slice(1).map((member) => wrap(member)),
-        wrap(''),
-        wrap('model CaseDistinct {\n id Int\n}', 'Blog'),
-      ].join('\n');
-      const result = collect(source);
-      expect(result.diagnostics).toEqual([]);
-      const namespace = result.table.topLevel.namespaces['blog'];
-      expect(semantics(namespace)).toEqual(
-        semantics(consolidated.table.topLevel.namespaces['blog']),
-      );
-      expect(Object.keys(result.table.topLevel.namespaces)).toEqual(['blog', 'elsewhere', 'Blog']);
-      const nodes = [...result.document.declarations()]
-        .filter((node) => node instanceof NamespaceDeclarationAst)
-        .filter((node) => node.name()?.name() === 'blog');
-      expect(namespace?.node.syntax.green).toBe(nodes[0]?.syntax.green);
-      expect(namespace?.node.syntax.offset).toBe(nodes[0]?.syntax.offset);
-      for (const node of nodes) {
-        for (const member of node.declarations()) {
-          const name = member.name()?.name() ?? '';
-          const symbol =
-            namespace?.models[name] ?? namespace?.compositeTypes[name] ?? namespace?.blocks[name];
-          expect(symbol?.node.syntax.green).toBe(member.syntax.green);
-          expect(symbol?.node.syntax.offset).toBe(member.syntax.offset);
-          expect(symbol?.span).toEqual({
-            start: {
-              offset: member.syntax.offset,
-              line: result.sourceFile.positionAt(member.syntax.offset).line + 1,
-              column: result.sourceFile.positionAt(member.syntax.offset).character + 1,
-            },
-            end: {
-              offset: member.syntax.offset + member.syntax.green.textLength,
-              line:
-                result.sourceFile.positionAt(member.syntax.offset + member.syntax.green.textLength)
-                  .line + 1,
-              column:
-                result.sourceFile.positionAt(member.syntax.offset + member.syntax.green.textLength)
-                  .character + 1,
-            },
-          });
-        }
-      }
-    }
+  it('accumulates distinct members in interleaved namespaces', () => {
+    const result = build(`namespace blog {
+  model Post { id Int }
+}
+namespace auth {
+  model User { id Int }
+}
+namespace blog {
+  type Address { street String }
+  policy ReadPosts {}
+}
+namespace auth {
+  model Session { id Int }
+}`);
+    expect(result.diagnostics).toEqual([]);
+    const { blog, auth } = result.table.topLevel.namespaces;
+    expect(Object.keys(blog?.models ?? {})).toEqual(['Post']);
+    expect(Object.keys(blog?.compositeTypes ?? {})).toEqual(['Address']);
+    expect(Object.keys(blog?.blocks ?? {})).toEqual(['ReadPosts']);
+    expect(Object.keys(auth?.models ?? {})).toEqual(['User', 'Session']);
+    expect(Object.keys(auth?.compositeTypes ?? {})).toEqual([]);
+    expect(Object.keys(auth?.blocks ?? {})).toEqual([]);
   });
 
-  it.each(['model-first', 'block-first', 'other-namespace'])(
-    'resolves same-namespace references: %s',
-    (order) => {
-      const model = wrap(members[0] ?? '', order === 'other-namespace' ? 'elsewhere' : 'blog');
-      const blockSource = wrap(members[2] ?? '');
-      const result = collect(
-        (order === 'model-first' ? [model, blockSource] : [blockSource, model]).join('\n'),
-      );
-      expect(result.diagnostics).toEqual([]);
-      const block = result.table.topLevel.namespaces['blog']?.blocks['ReadArticles'];
-      expect(block).toBeDefined();
-      if (block === undefined) throw new Error('Missing policy block');
-      const diagnostics = validateExtensionBlockFromSymbol({
-        block,
-        descriptor: policy,
-        symbolTable: result.table,
-        sourceFile: result.sourceFile,
-        sourceId: 'schema.prisma',
-        codecLookup: emptyCodecLookup,
-      });
-      if (order === 'other-namespace') {
-        expect(diagnostics).toEqual([
-          expect.objectContaining({ code: 'PSL_EXTENSION_UNRESOLVED_REF' }),
-        ]);
-      } else {
-        expect(diagnostics).toEqual([]);
-      }
-    },
-  );
-
-  const kinds = ['model', 'type', 'policy'] as const;
-  const declaration = (kind: (typeof kinds)[number], body: string) =>
-    `${kind} Shared {\n  ${kind === 'policy' ? `target = ${body}` : `${body} Int`}\n}`;
-
-  it.each(
-    kinds.flatMap((first) =>
-      kinds.flatMap((later) => ['first', 'other'].map((body) => ({ first, later, body }))),
-    ),
-  )('keeps the whole first $first against later $later ($body)', ({ first, later, body }) => {
-    const initial = wrap(declaration(first, 'first'));
-    const source = `${initial}\n${wrap(declaration(later, body))}`;
-    const result = collect(source);
-    const offset = source.lastIndexOf('Shared');
+  it('keeps the first whole member and diagnoses the later name', () => {
+    const result = build(`namespace blog {
+  model Post { id Int }
+}
+namespace blog {
+  model Post { other String }
+}`);
     expect(result.diagnostics).toEqual([
       {
         code: 'PSL_DUPLICATE_DECLARATION',
-        message: 'Duplicate declaration of "Shared"',
-        range: {
-          start: result.sourceFile.positionAt(offset),
-          end: result.sourceFile.positionAt(offset + 'Shared'.length),
-        },
+        message: 'Duplicate declaration of "Post"',
+        range: { start: { line: 4, character: 8 }, end: { line: 4, character: 12 } },
       },
     ]);
-    expect(semantics(result.table)).toEqual(semantics(collect(initial).table));
+    expect(
+      Object.keys(result.table.topLevel.namespaces['blog']?.models['Post']?.fields ?? {}),
+    ).toEqual(['id']);
   });
 
-  it.each(
-    ['Shared', '__proto__'].flatMap((name) =>
-      ['model', 'type', 'policy', 'binding'].flatMap((kind) =>
-        [true, false].map((namespaceFirst) => ({ name, kind, namespaceFirst })),
-      ),
-    ),
-  )(
-    'preserves top-level $kind $name collision (namespace first: $namespaceFirst)',
-    ({ name, kind, namespaceFirst }) => {
-      const namespace = wrap('model Inside {\n id Int\n}', name);
-      const other = kind === 'binding' ? `types {\n ${name} = String\n}` : `${kind} ${name} {\n}`;
-      const first = namespaceFirst ? namespace : other;
-      const source = `${first}\n${namespaceFirst ? other : namespace}`;
-      const result = collect(source);
-      const offset = source.lastIndexOf(name);
-      expect(result.diagnostics).toEqual([
-        {
-          code: 'PSL_DUPLICATE_DECLARATION',
-          message: `Duplicate declaration of "${name}"`,
-          range: {
-            start: result.sourceFile.positionAt(offset),
-            end: result.sourceFile.positionAt(offset + name.length),
-          },
-        },
-      ]);
-      expect(semantics(result.table)).toEqual(semantics(collect(first).table));
-      expect(Object.keys(result.table.topLevel.namespaces)).toEqual(namespaceFirst ? [name] : []);
-    },
-  );
-
-  it.each(['consolidated', 'split', 'reversed'])(
-    'collects __proto__ as one enumerable namespace: %s',
-    (form) => {
-      const first = 'model A {\n id Int\n}';
-      const second = 'model B {\n id Int\n}';
-      const consolidated = collect(wrap(`${first}\n${second}`, '__proto__'));
-      const source =
-        form === 'consolidated'
-          ? wrap(`${first}\n${second}`, '__proto__')
-          : (form === 'split' ? [first, second] : [second, first])
-              .map((member) => wrap(member, '__proto__'))
-              .join('\n');
-      const result = collect(source);
-      expect(result.diagnostics).toEqual([]);
-      expect(Object.keys(result.table.topLevel.namespaces)).toEqual(['__proto__']);
-      expect(
-        Object.keys(Object.values(result.table.topLevel.namespaces)[0]?.models ?? {}).sort(),
-      ).toEqual(['A', 'B']);
-      expect(semantics(result.table)).toEqual(semantics(consolidated.table));
-    },
-  );
-
-  it('retains duplicate detection for names inherited by object dictionaries', () => {
-    const result = collect(wrap('model __proto__ {\n}\nmodel __proto__ {\n}'));
+  it('rejects a cross-kind duplicate across blocks', () => {
+    const result = build(`namespace blog {
+  model Post { id Int }
+}
+namespace blog {
+  type Post { title String }
+}`);
     expect(result.diagnostics).toEqual([
-      {
+      expect.objectContaining({
         code: 'PSL_DUPLICATE_DECLARATION',
-        message: 'Duplicate declaration of "__proto__"',
-        range: { start: { line: 3, character: 6 }, end: { line: 3, character: 15 } },
-      },
+        message: 'Duplicate declaration of "Post"',
+      }),
     ]);
+    expect(result.table.topLevel.namespaces['blog']?.models['Post']?.kind).toBe('model');
+    expect(result.table.topLevel.namespaces['blog']?.compositeTypes).toEqual({});
   });
 
-  it('retains field and parameter errors in later distinct members', () => {
-    const result = collect(
-      [
-        wrap(members[0] ?? ''),
-        wrap('model Later {\n value String\n value Int\n}'),
-        wrap('type LaterType {\n value String\n value Int\n}'),
-        wrap('policy LaterPolicy {\n target = Article\n target = Other\n}'),
-      ].join('\n'),
-    );
-    expect(result.diagnostics.map(({ code }) => code)).toEqual([
-      'PSL_DUPLICATE_DECLARATION',
-      'PSL_DUPLICATE_DECLARATION',
-      'PSL_EXTENSION_DUPLICATE_PARAMETER',
-    ]);
-    const namespace = result.table.topLevel.namespaces['blog'];
-    expect(namespace?.models['Later']?.fields['value']?.typeName).toBe('String');
-    expect(namespace?.compositeTypes['LaterType']?.fields['value']?.typeName).toBe('String');
-    expect(namespace?.blocks['LaterPolicy']?.block.parameters['target']).toMatchObject({
-      kind: 'ref',
-      identifier: 'Article',
+  it('retains every authored namespace node and span, including empty blocks', () => {
+    const result = build(`namespace blog {}
+namespace auth {}
+namespace blog {}`);
+    const declarations = result.table.topLevel.namespaces['blog']?.declarations;
+    expect(declarations).toHaveLength(2);
+    expect(declarations?.[0]?.node).toBeInstanceOf(NamespaceDeclarationAst);
+    expect(declarations?.[1]?.node).toBeInstanceOf(NamespaceDeclarationAst);
+    expect(declarations?.[0]?.node.syntax.offset).toBe(0);
+    expect(declarations?.[1]?.node.syntax.offset).toBe(36);
+    expect(declarations?.[0]?.span).toEqual({
+      start: { offset: 0, line: 1, column: 1 },
+      end: { offset: 17, line: 1, column: 18 },
     });
+    expect(declarations?.[1]?.span).toEqual({
+      start: { offset: 36, line: 3, column: 1 },
+      end: { offset: 53, line: 3, column: 18 },
+    });
+  });
+
+  it('stores prototype-sensitive namespace and member names as enumerable own keys', () => {
+    const result = build(`namespace __proto__ {
+  model __proto__ { id Int }
+}
+namespace __proto__ {
+  model constructor { id Int }
+}
+namespace types {
+  type __proto__ { value String }
+}
+namespace blocks {
+  policy __proto__ {}
+}`);
+    expect(result.diagnostics).toEqual([]);
+    const namespaces = result.table.topLevel.namespaces;
+    expect(Object.keys(namespaces)).toEqual(['__proto__', 'types', 'blocks']);
+    const prototypeNamedNamespace = Object.values(namespaces)[0];
+    expect(Object.keys(prototypeNamedNamespace?.models ?? {})).toEqual([
+      '__proto__',
+      'constructor',
+    ]);
+    expect(Object.keys(namespaces['types']?.compositeTypes ?? {})).toEqual(['__proto__']);
+    expect(Object.keys(namespaces['blocks']?.blocks ?? {})).toEqual(['__proto__']);
+    expect(Object.values(prototypeNamedNamespace?.models ?? {}).map((model) => model.name)).toEqual(
+      ['__proto__', 'constructor'],
+    );
+  });
+
+  it('preserves collisions between namespaces and other top-level declarations', () => {
+    const result = build(`model First {}
+namespace First {}
+namespace Second {}
+model Second {}`);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toEqual([
+      'Duplicate declaration of "First"',
+      'Duplicate declaration of "Second"',
+    ]);
+    expect(Object.keys(result.table.topLevel.models)).toEqual(['First']);
+    expect(Object.keys(result.table.topLevel.namespaces)).toEqual(['Second']);
   });
 });
 

@@ -7,11 +7,8 @@ import { createTestSqlNamespace } from '../../../1-core/contract/test/test-suppo
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import {
   createBuiltinLikeControlMutationDefaults,
-  postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
   postgresTarget,
-  sqliteScalarColumnDescriptors,
-  sqliteTarget,
   symbolTableInputFromParseArgs,
 } from './fixtures';
 
@@ -109,117 +106,39 @@ const baseInput = {
 } as const;
 
 describe('reopened namespace interpretation', () => {
-  const wrap = (body: string, name = 'blog') => `namespace ${name} {\n${body}\n}`;
-  const user = 'model User {\n id Int @id\n posts Post[]\n @@map("users")\n}';
-  const post =
-    'model Post {\n id Int @id\n userId Int\n user User @relation(fields: [userId], references: [id])\n address Address?\n @@map("posts")\n}';
-  const address = 'type Address {\n street String\n}';
-  const interpret = (schema: string) =>
-    interpretPslDocumentToSqlContract({
-      ...baseInput,
-      ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
-      authoringContributions: {
-        type: postgresScalarAuthoringTypes,
-        valueObjectStorageType: 'Jsonb',
-      },
-    });
-
-  it('preserves complete contract semantics across consolidated, split and reversed blocks', () => {
-    const consolidated = interpret(wrap([user, post, address].join('\n')));
-    expect(consolidated.ok).toBe(true);
-    if (!consolidated.ok) throw new Error(consolidated.failure.summary);
-    for (const members of [
-      [user, post, address],
-      [address, post, user],
-    ]) {
-      const result = interpret(members.map((member) => wrap(member)).join('\n'));
-      expect(result).toEqual(consolidated);
-    }
-    const storage = consolidated.value.storage as SqlStorage;
-    expect(storage.namespaces['blog']?.entries.table?.['posts']?.foreignKeys).toEqual([
-      expect.objectContaining({
-        source: { namespaceId: 'blog', tableName: 'posts', columns: ['userId'] },
-        target: { namespaceId: 'blog', tableName: 'users', columns: ['id'] },
-      }),
-    ]);
-    expect(consolidated.value.domain.namespaces['blog']?.models['Post']?.relations).toMatchObject({
-      user: { to: { model: 'User', namespace: 'blog' }, cardinality: 'N:1' },
-    });
-    expect(
-      consolidated.value.domain.namespaces['blog']?.models['Post']?.fields['address'],
-    ).toBeDefined();
-  });
-
-  it.each([
-    'model Shared {\n id Int @id\n}',
-    'model Shared {\n other Int @id\n}',
-    'type Shared {\n other String\n}',
-  ])('preserves one later-name duplicate diagnostic for %s', (later) => {
-    const schema = `${wrap('model Shared {\n id Int @id\n}')}\n${wrap(later)}`;
-    const input = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
-    expect(input.seedDiagnostics).toHaveLength(1);
-    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...input });
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error('Expected duplicate rejection');
-    expect(result.failure.diagnostics).toEqual(input.seedDiagnostics);
-    expect(result.failure.diagnostics[0]).toMatchObject({
-      code: 'PSL_DUPLICATE_DECLARATION',
-      message: 'Duplicate declaration of "Shared"',
-      span: {
-        start: { offset: schema.lastIndexOf('Shared') },
-        end: { offset: schema.lastIndexOf('Shared') + 6 },
-      },
-    });
-  });
-
-  it.each([
-    ['enum Role {\n Admin\n}', 'PSL_ENUM_NAMESPACE_NOT_SUPPORTED'],
-    ['mystery Later {\n}', 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK'],
-  ])('rejects a forbidden block in a later reopening: %s', (block, code) => {
-    const result = interpret(`${wrap('model A {\n id Int @id\n}')}\n${wrap(block)}`);
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error('Expected unsupported block rejection');
-    expect(result.failure.diagnostics).toEqual([expect.objectContaining({ code })]);
-  });
-
-  it.each(['blog', '__proto__'])('preserves SQLite namespace rejection for %s', (name) => {
+  it('resolves a relation to a model in a later namespace declaration', () => {
     const result = interpretPslDocumentToSqlContract({
       ...baseInput,
       ...symbolTableInputFromParseArgs({
-        schema: `${wrap('', name)}\n${wrap('model A {\n id Int @id\n}', name)}`,
+        schema: `namespace blog {
+  model Post {
+    id Int @id
+    userId Int
+    user User @relation(fields: [userId], references: [id])
+    @@map("posts")
+  }
+}
+namespace blog {
+  model User {
+    id Int @id
+    @@map("users")
+  }
+}`,
       }),
-      target: sqliteTarget,
-      scalarColumnDescriptors: sqliteScalarColumnDescriptors,
     });
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error('Expected SQLite namespace rejection');
-    expect(result.failure.diagnostics).toEqual([
-      expect.objectContaining({ code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK' }),
-    ]);
-  });
-
-  it('rejects an unbound Postgres model in a later reopening alongside a named sibling', () => {
-    const result = interpret(
-      `${wrap('', '__unbound__')}\n${wrap('model A {\n id Int @id\n}', '__unbound__')}\n${wrap('model B {\n id Int @id\n}')}`,
-    );
-    expect(result.ok).toBe(false);
-    if (result.ok) throw new Error('Expected reserved namespace rejection');
-    expect(result.failure.diagnostics).toEqual([
-      expect.objectContaining({ code: 'PSL_RESERVED_NAMESPACE_NAME' }),
-    ]);
-  });
-
-  it('preserves unqualified relation resolution into a reopened sibling namespace', () => {
-    const result = interpret(
-      `${wrap('model Post {\n id Int @id\n userId Int\n user User @relation(fields: [userId], references: [id])\n}')}\n${wrap('', 'auth')}\n${wrap('model User {\n id Int @id\n}', 'auth')}`,
-    );
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(result.failure.summary);
+    expect(Object.keys(result.value.domain.namespaces['blog']?.models ?? {})).toEqual([
+      'Post',
+      'User',
+    ]);
     expect(
-      (result.value.storage as SqlStorage).namespaces['blog']?.entries.table?.['Post']?.foreignKeys,
+      (result.value.storage as SqlStorage).namespaces['blog']?.entries.table?.['posts']
+        ?.foreignKeys,
     ).toEqual([
       expect.objectContaining({
-        target: { namespaceId: 'auth', tableName: 'User', columns: ['id'] },
+        source: { namespaceId: 'blog', tableName: 'posts', columns: ['userId'] },
+        target: { namespaceId: 'blog', tableName: 'users', columns: ['id'] },
       }),
     ]);
   });

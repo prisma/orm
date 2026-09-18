@@ -1098,6 +1098,37 @@ model User {
   });
 
   describe('per-target namespace dispatch', () => {
+    it('locates every rejected namespace declaration separately', () => {
+      const result = interpretPslDocumentToSqlContract({
+        ...baseInput,
+        ...symbolTableInputFromParseArgs({
+          schema: `namespace auth {}
+namespace auth {}`,
+          sourceId: 'schema.prisma',
+        }),
+        target: sqliteTarget,
+        scalarColumnDescriptors: sqliteScalarColumnDescriptors,
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error('Expected namespace rejection');
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
+          span: {
+            start: { offset: 0, line: 1, column: 1 },
+            end: { offset: 17, line: 1, column: 18 },
+          },
+        }),
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
+          span: {
+            start: { offset: 18, line: 2, column: 1 },
+            end: { offset: 35, line: 2, column: 18 },
+          },
+        }),
+      ]);
+    });
+
     it('SQLite rejects every explicit `namespace { … }` block with a SQLite-flavoured diagnostic', () => {
       const document = symbolTableInputFromParseArgs({
         schema: `namespace auth {
