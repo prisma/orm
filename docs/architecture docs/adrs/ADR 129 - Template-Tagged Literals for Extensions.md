@@ -67,7 +67,7 @@ c DateTime @default(sql`
 `)
 ```
 
-The TypeScript `sql` template tag reads its raw template text, resolves the same two backtick escapes, and runs the same function, so a TypeScript contract and a PSL contract that write the same SQL emit byte-identical contracts.
+The TypeScript `sql` template tag reads its raw template text and runs the same function, so a TypeScript contract and a PSL contract that write the same SQL emit byte-identical contracts. It resolves one escape PSL does not: `\$` becomes `$`. JavaScript reads `${` in a template literal as the start of an interpolation, which the tag refuses, and `\${` is the only way to write those two characters; PSL has no interpolation, so a PSL body writes `${` as it is. The two languages therefore differ for the sequence `\$` alone.
 
 ## Who owns a tag
 
@@ -112,7 +112,8 @@ The planners render the authored expression, never a normalised form of it. Plan
 - **Require the string to follow the tag with no whitespace.** Rejected. It adds a rule and a diagnostic for no benefit; TypeScript allows the space, and the formatter normalises it away.
 - **Check the tag against the registry while parsing the attribute argument.** Rejected. A registry-dependent failure during parsing had to be told apart from an argument of the wrong shape, which meant special-casing one diagnostic code when choosing between alternatives. Lowering already has the registry.
 - **Give common database functions Prisma names, such as `@default(gen_random_uuid())`.** Rejected. It dresses a target's SQL function as a Prisma function, and it sits beside Prisma's own `uuid()`, which generates the value in the client before the insert, while `gen_random_uuid()` makes the database generate it; nothing in the names shows that difference. Named defaults are kept for Prisma concepts that work on every target and that the planners treat specially: `now()` and `autoincrement()`.
-- **Refuse `${` in a body.** Rejected. A PSL tagged literal has no interpolation, so `${` is ordinary text. The TypeScript `sql` tag refuses a real JavaScript interpolation, which is a different thing.
+- **Refuse `${` in a body.** Rejected. A PSL tagged literal has no interpolation, so `${` is ordinary text. The TypeScript `sql` tag refuses a real JavaScript interpolation, which is a different thing, and accepts `\${` for the literal characters.
+- **Resolve `\$` in PSL too, so both languages escape alike.** Rejected. PSL needs no escape there, and adding one would make every PSL author who writes a backslash before a dollar sign escape it, to serve a body that only JavaScript has trouble writing.
 - **The SQL family, not each target, registers the unprefixed `sql` tag.** Rejected. It would assert that the tag can never differ between targets. Sharing the implementation through the family gives the same result without the assertion.
 - **Store a raw default as a pack-owned envelope with a content hash and compare it by hash, the way index expressions and check constraints are compared by their content-addressed names.** Not adopted for column defaults. A column default has no name in the database catalog to carry a hash, so verification would still have to compare the database's reprint of the expression, and the contract shape would change for every consumer. The function-kind default already does the job.
 
