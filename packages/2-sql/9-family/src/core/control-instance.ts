@@ -270,9 +270,14 @@ export interface SqlControlFamilyInstance
     readonly configPath?: string;
   }): Promise<SignDatabaseResult>;
 
+  /**
+   * Reads the live database schema. `schema` names the single schema to read
+   * and only applies when no `contract` is given; see `SqlControlAdapter.introspect`.
+   */
   introspect(options: {
     readonly driver: SqlControlDriverInstance<string>;
     readonly contract?: unknown;
+    readonly schema?: string;
   }): Promise<SqlSchemaIRNode>;
 
   inferPslContract(schemaIR: SqlSchemaIRNode): PslDocumentAst;
@@ -996,8 +1001,9 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     async introspect(options: {
       readonly driver: SqlControlDriverInstance<string>;
       readonly contract?: unknown;
+      readonly schema?: string;
     }): Promise<SqlSchemaIRNode> {
-      return getControlAdapter().introspect(options.driver, options.contract);
+      return getControlAdapter().introspect(options.driver, options.contract, options.schema);
     },
 
     inferPslContract(schemaIR: SqlSchemaIRNode): PslDocumentAst {
