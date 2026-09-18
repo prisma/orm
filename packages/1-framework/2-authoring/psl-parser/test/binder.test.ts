@@ -4,10 +4,23 @@ import type {
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
 import { describe, expect, it } from 'vitest';
-import { createBinder, typeReferenceNode } from '../src/binder';
+import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
+import { fieldRef, referencedFieldRef } from '../src/attribute-spec/combinators/field-ref';
+import { list } from '../src/attribute-spec/combinators/list';
+import { fieldAttribute } from '../src/attribute-spec/field-attribute';
+import { modelAttribute } from '../src/attribute-spec/model-attribute';
+import { type AttributeSpecRegistry, createBinder, typeReferenceNode } from '../src/binder';
 import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
-import { buildSymbolTable, type FieldSymbol, type SymbolTable } from '../src/symbol-table';
+import {
+  buildSymbolTable,
+  type CompositeTypeSymbol,
+  type FieldSymbol,
+  type ModelSymbol,
+  type SymbolTable,
+} from '../src/symbol-table';
+import { ArrayLiteralAst } from '../src/syntax/ast/expressions';
+import type { SyntaxNode } from '../src/syntax/red';
 import { universeScope } from '../src/universe-scope';
 
 const ENUM_DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
@@ -32,6 +45,64 @@ const TYPE_CONSTRUCTORS: AuthoringTypeNamespace = {
   pgvector: { Vector: scalar('vector') },
 };
 
+const fieldRefList = { kind: 'list', of: { kind: 'fieldRef' } } as const;
+const referencedFieldRefList = { kind: 'list', of: { kind: 'referencedFieldRef' } } as const;
+
+const MODEL_SPECS: Readonly<Record<string, ReturnType<AttributeSpecRegistry['model']>>> = {
+  id: { positional: [{ key: 'fields', type: fieldRefList }], named: {} },
+  index: { positional: [{ key: 'fields', type: fieldRefList }], named: {} },
+  unique: { positional: [{ key: 'fields', type: fieldRefList }], named: {} },
+  base: { positional: [{ key: 'model', type: { kind: 'entityRef' } }], named: {} },
+  map: { positional: [{ key: 'name', type: { kind: 'str' } }], named: {} },
+};
+
+const FIELD_SPECS: Readonly<Record<string, ReturnType<AttributeSpecRegistry['field']>>> = {
+  id: { positional: [], named: {} },
+  relation: {
+    positional: [],
+    named: {
+      fields: { type: fieldRefList },
+      references: { type: referencedFieldRefList },
+      name: { type: { kind: 'str' } },
+    },
+  },
+};
+
+const ATTRIBUTE_SPECS: AttributeSpecRegistry = {
+  model: (name) => MODEL_SPECS[name],
+  field: (name) => FIELD_SPECS[name],
+};
+
+function attributeNodes(
+  owner: ModelSymbol | CompositeTypeSymbol | FieldSymbol,
+  attributeName: string,
+  argName?: string,
+): readonly SyntaxNode[] {
+  for (const attribute of owner.node.attributes()) {
+    if (attribute.name()?.path().join('.') !== attributeName) continue;
+    for (const arg of attribute.argList()?.args() ?? []) {
+      if (arg.name()?.name() !== argName) continue;
+      const value = arg.value();
+      if (value === undefined) return [];
+      const array = ArrayLiteralAst.cast(value.syntax);
+      if (array === undefined) return [value.syntax];
+      return Array.from(array.elements(), (element) => element.syntax);
+    }
+  }
+  return [];
+}
+
+function attributeNameNode(
+  owner: ModelSymbol | CompositeTypeSymbol | FieldSymbol,
+  attributeName: string,
+): SyntaxNode {
+  for (const attribute of owner.node.attributes()) {
+    const name = attribute.name();
+    if (name?.path().join('.') === attributeName) return name.syntax;
+  }
+  throw new Error(`no @${attributeName}`);
+}
+
 function build(...texts: string[]) {
   const parsed = texts.map((text, index) => parse(text, `${index}.psl`));
   const documents = parsed.map(({ document }) => document);
@@ -52,7 +123,12 @@ function bind(...texts: string[]) {
   const { sources, symbolTable } = build(...texts);
   return {
     symbolTable,
-    ...createBinder({ sources, symbolTable, typeConstructors: TYPE_CONSTRUCTORS }),
+    ...createBinder({
+      sources,
+      symbolTable,
+      typeConstructors: TYPE_CONSTRUCTORS,
+      attributeSpecs: ATTRIBUTE_SPECS,
+    }),
   };
 }
 
@@ -377,6 +453,391 @@ describe('universe scope', () => {
     expect(firstSymbol).not.toBe(secondSymbol);
     if (firstSymbol?.kind === 'universe' && secondSymbol?.kind === 'universe') {
       expect(firstSymbol.symbol).toBe(secondSymbol.symbol);
+    }
+  });
+});
+
+const RELATION_SCHEMA = [
+  'model User {',
+  '  id Int @id',
+  '  email String',
+  '}',
+  'model Post {',
+  '  id Int @id',
+  '  authorId Int',
+  '  author User @relation(fields: [authorId], references: [id])',
+  '}',
+].join('\n');
+
+describe('createBinder — attribute names', () => {
+  it('resolves an attribute name to its spec', () => {
+    const { symbolTable, binder, diagnostics } = bind(RELATION_SCHEMA);
+    const post = symbolTable.topLevel.models['Post']!;
+
+    expect(diagnostics).toEqual([]);
+    expect(binder.symbolForNode(attributeNameNode(post.fields['author']!, 'relation'))).toEqual({
+      kind: 'attributeSpec',
+      spec: FIELD_SPECS['relation'],
+    });
+    expect(binder.symbolForNode(attributeNameNode(post.fields['id']!, 'id'))).toEqual({
+      kind: 'attributeSpec',
+      spec: FIELD_SPECS['id'],
+    });
+  });
+
+  it('reports an unknown attribute name at model and field level', () => {
+    const { symbolTable, binder, diagnostics } = bind('model User {\n  id Int @bogus\n  @@nope\n}');
+    const user = symbolTable.topLevel.models['User']!;
+
+    expect(binder.symbolForNode(attributeNameNode(user.fields['id']!, 'bogus'))).toEqual({
+      kind: 'unresolved',
+      name: 'bogus',
+    });
+    expect(binder.symbolForNode(attributeNameNode(user, 'nope'))).toEqual({
+      kind: 'unresolved',
+      name: 'nope',
+    });
+    expect(diagnostics.map(({ code, message }) => [code, message])).toEqual([
+      ['PSL_UNRESOLVED_ATTRIBUTE', 'Cannot find attribute "@@nope"'],
+      ['PSL_UNRESOLVED_ATTRIBUTE', 'Cannot find attribute "@bogus"'],
+    ]);
+  });
+
+  it('records nothing for a non-reference argument', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      'model User {\n  id Int\n  @@map("users")\n}',
+    );
+    const user = symbolTable.topLevel.models['User']!;
+    const [nameNode] = attributeNodes(user, 'map');
+
+    expect(diagnostics).toEqual([]);
+    expect(nameNode).toBeDefined();
+    expect(nameNode === undefined ? undefined : binder.symbolForNode(nameNode)).toBeUndefined();
+  });
+});
+
+describe('createBinder — fieldRef arguments', () => {
+  it('resolves @relation(fields:) against the declaring owner', () => {
+    const { symbolTable, binder, diagnostics } = bind(RELATION_SCHEMA);
+    const post = symbolTable.topLevel.models['Post']!;
+    const [node] = attributeNodes(post.fields['author']!, 'relation', 'fields');
+
+    expect(diagnostics).toEqual([]);
+    expect(node === undefined ? undefined : binder.symbolForNode(node)).toEqual({
+      kind: 'field',
+      symbol: post.fields['authorId'],
+    });
+  });
+
+  it('resolves @@id, @@unique, and @@index lists and reports one unknown name', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      [
+        'model User {',
+        '  id Int',
+        '  name String',
+        '  @@id([id])',
+        '  @@unique([name])',
+        '  @@index([name, missing])',
+        '}',
+      ].join('\n'),
+    );
+    const user = symbolTable.topLevel.models['User']!;
+    const resolved = (attribute: string, index: number) => {
+      const node = attributeNodes(user, attribute)[index];
+      return node === undefined ? undefined : binder.symbolForNode(node);
+    };
+
+    expect(resolved('id', 0)).toEqual({ kind: 'field', symbol: user.fields['id'] });
+    expect(resolved('unique', 0)).toEqual({ kind: 'field', symbol: user.fields['name'] });
+    expect(resolved('index', 0)).toEqual({ kind: 'field', symbol: user.fields['name'] });
+    expect(resolved('index', 1)).toEqual({ kind: 'unresolved', name: 'missing' });
+    expect(diagnostics.map(({ code, message }) => [code, message])).toEqual([
+      ['PSL_UNRESOLVED_REFERENCE', 'Cannot find field "missing" on "User"'],
+    ]);
+  });
+});
+
+describe('createBinder — referencedFieldRef arguments', () => {
+  it('resolves @relation(references:) against the phase-1 type target', () => {
+    const { symbolTable, binder, diagnostics } = bind(RELATION_SCHEMA);
+    const post = symbolTable.topLevel.models['Post']!;
+    const user = symbolTable.topLevel.models['User']!;
+    const [node] = attributeNodes(post.fields['author']!, 'relation', 'references');
+
+    expect(diagnostics).toEqual([]);
+    expect(node === undefined ? undefined : binder.symbolForNode(node)).toEqual({
+      kind: 'field',
+      symbol: user.fields['id'],
+    });
+  });
+
+  it('yields cross-space without a diagnostic when the field type is cross-space', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      [
+        'model Cart {',
+        '  id Int',
+        '  userId Int',
+        '  user auth:User @relation(fields: [userId], references: [id])',
+        '}',
+      ].join('\n'),
+    );
+    const cart = symbolTable.topLevel.models['Cart']!;
+    const [referenced] = attributeNodes(cart.fields['user']!, 'relation', 'references');
+    const [local] = attributeNodes(cart.fields['user']!, 'relation', 'fields');
+
+    expect(diagnostics).toEqual([]);
+    expect(referenced === undefined ? undefined : binder.symbolForNode(referenced)).toEqual({
+      kind: 'crossSpace',
+    });
+    expect(local === undefined ? undefined : binder.symbolForNode(local)).toEqual({
+      kind: 'field',
+      symbol: cart.fields['userId'],
+    });
+  });
+
+  it('reports a referenced field when the declaring field type is unresolved', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      [
+        'model Cart {',
+        '  id Int',
+        '  ownerId Int',
+        '  owner Ghost @relation(fields: [ownerId], references: [id])',
+        '}',
+      ].join('\n'),
+    );
+    const cart = symbolTable.topLevel.models['Cart']!;
+    const [referenced] = attributeNodes(cart.fields['owner']!, 'relation', 'references');
+
+    expect(referenced === undefined ? undefined : binder.symbolForNode(referenced)).toEqual({
+      kind: 'unresolved',
+      name: 'id',
+    });
+    expect(diagnostics.map(({ code, message }) => [code, message])).toEqual([
+      ['PSL_UNRESOLVED_REFERENCE', 'Cannot find type "Ghost"'],
+      ['PSL_UNRESOLVED_REFERENCE', 'Cannot find field "id" on the type of "Cart.owner"'],
+    ]);
+  });
+
+  it('reports a referenced field missing on a resolved target', () => {
+    const { diagnostics } = bind(
+      [
+        'model User {',
+        '  id Int',
+        '}',
+        'model Cart {',
+        '  userId Int',
+        '  user User @relation(fields: [userId], references: [absent])',
+        '}',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.map(({ message }) => message)).toEqual([
+      'Cannot find field "absent" on the type of "Cart.user"',
+    ]);
+  });
+});
+
+describe('createBinder — entityRef arguments', () => {
+  it('resolves @@base to a model through the scope chain', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      [
+        'model Base {',
+        '  id Int',
+        '}',
+        'namespace app {',
+        '  model Base {',
+        '    id Int',
+        '  }',
+        '  model Child {',
+        '    id Int',
+        '    @@base(Base)',
+        '  }',
+        '}',
+      ].join('\n'),
+    );
+    const child = symbolTable.topLevel.namespaces['app']!.models['Child']!;
+    const [node] = attributeNodes(child, 'base');
+
+    expect(diagnostics).toEqual([]);
+    expect(node === undefined ? undefined : binder.symbolForNode(node)).toEqual({
+      kind: 'model',
+      symbol: symbolTable.topLevel.namespaces['app']!.models['Base'],
+    });
+  });
+
+  it('reports a missing entity and refuses a universe symbol as an entity', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      [
+        'model Orphan {',
+        '  id Int',
+        '  @@base(Ghost)',
+        '}',
+        'model Scalarish {',
+        '  id Int',
+        '  @@base(String)',
+        '}',
+        'enum Role {',
+        '  Admin',
+        '}',
+        'model Enumish {',
+        '  id Int',
+        '  @@base(Role)',
+        '}',
+      ].join('\n'),
+    );
+    const resolvedBase = (model: string) => {
+      const owner = symbolTable.topLevel.models[model]!;
+      const node = attributeNodes(owner, 'base')[0];
+      return node === undefined ? undefined : binder.symbolForNode(node);
+    };
+
+    expect(resolvedBase('Orphan')).toEqual({ kind: 'unresolved', name: 'Ghost' });
+    expect(resolvedBase('Scalarish')).toEqual({ kind: 'unresolved', name: 'String' });
+    expect(resolvedBase('Enumish')).toEqual({ kind: 'unresolved', name: 'Role' });
+    expect(diagnostics.map(({ message }) => message)).toEqual([
+      'Cannot find entity "Ghost"',
+      'Cannot find entity "String"',
+      'Cannot find entity "Role"',
+    ]);
+  });
+});
+
+describe('createBinder — diagnostics completeness', () => {
+  it('reports every phase-1 and phase-2 failure exactly once', () => {
+    const { diagnostics } = bind(
+      [
+        'model User {',
+        '  id Int',
+        '}',
+        'model Post {',
+        '  id Int',
+        '  authorId Int',
+        '  ghost Phantom',
+        '  author User @relation(fields: [missingLocal], references: [absent])',
+        '  @@index([id, alsoMissing])',
+        '  @@base(NoSuchModel)',
+        '  @@mystery',
+        '}',
+      ].join('\n'),
+    );
+
+    expect(
+      diagnostics.map(({ code, message, filename, range }) => [
+        code,
+        message,
+        filename,
+        range.start.line,
+      ]),
+    ).toEqual([
+      ['PSL_UNRESOLVED_REFERENCE', 'Cannot find type "Phantom"', '0.psl', 6],
+      ['PSL_UNRESOLVED_REFERENCE', 'Cannot find field "alsoMissing" on "Post"', '0.psl', 8],
+      ['PSL_UNRESOLVED_REFERENCE', 'Cannot find entity "NoSuchModel"', '0.psl', 9],
+      ['PSL_UNRESOLVED_ATTRIBUTE', 'Cannot find attribute "@@mystery"', '0.psl', 10],
+      ['PSL_UNRESOLVED_REFERENCE', 'Cannot find field "missingLocal" on "Post"', '0.psl', 7],
+      [
+        'PSL_UNRESOLVED_REFERENCE',
+        'Cannot find field "absent" on the type of "Post.author"',
+        '0.psl',
+        7,
+      ],
+    ]);
+  });
+
+  it('leaves phase-1 type resolution unchanged when attributes are present', () => {
+    const { symbolTable, binder, diagnostics } = bind(RELATION_SCHEMA);
+
+    expect(diagnostics).toEqual([]);
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'Post', 'author'))).toEqual({
+      kind: 'model',
+      symbol: symbolTable.topLevel.models['User'],
+    });
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'User', 'email'))).toMatchObject({
+      kind: 'universe',
+    });
+  });
+});
+
+describe('attribute-spec registry shape', () => {
+  it('accepts a spec assembled from the combinators in this package', () => {
+    const assembled = modelAttribute('index', {
+      documentation: 'fixture',
+      positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
+    });
+    const base = modelAttribute('base', {
+      documentation: 'fixture',
+      positional: [{ key: 'model', type: entityRef(), documentation: 'fixture' }],
+    });
+    const relation = fieldAttribute('relation', {
+      documentation: 'fixture',
+      named: {
+        fields: { type: list(fieldRef()), documentation: 'fixture' },
+        references: { type: list(referencedFieldRef()), documentation: 'fixture' },
+      },
+    });
+    const registry: AttributeSpecRegistry = {
+      model: (name) => (name === 'index' ? assembled : name === 'base' ? base : undefined),
+      field: (name) => (name === 'relation' ? relation : undefined),
+    };
+
+    const { sources, symbolTable } = build(
+      [
+        'model User {',
+        '  id Int',
+        '  @@index([id, missing])',
+        '}',
+        'model Post {',
+        '  userId Int',
+        '  user User @relation(fields: [userId], references: [id])',
+        '}',
+      ].join('\n'),
+    );
+    const { binder, diagnostics } = createBinder({
+      sources,
+      symbolTable,
+      typeConstructors: TYPE_CONSTRUCTORS,
+      attributeSpecs: registry,
+    });
+    const user = symbolTable.topLevel.models['User']!;
+    const post = symbolTable.topLevel.models['Post']!;
+    const resolve = (node: SyntaxNode | undefined) =>
+      node === undefined ? undefined : binder.symbolForNode(node);
+
+    expect(resolve(attributeNodes(user, 'index')[0])).toEqual({
+      kind: 'field',
+      symbol: user.fields['id'],
+    });
+    expect(resolve(attributeNodes(post.fields['user']!, 'relation', 'fields')[0])).toEqual({
+      kind: 'field',
+      symbol: post.fields['userId'],
+    });
+    expect(resolve(attributeNodes(post.fields['user']!, 'relation', 'references')[0])).toEqual({
+      kind: 'field',
+      symbol: user.fields['id'],
+    });
+    expect(diagnostics.map(({ message }) => message)).toEqual([
+      'Cannot find field "missing" on "User"',
+    ]);
+  });
+});
+
+describe('referencedFieldRef on a cross-space list', () => {
+  it('marks every element of the list cross-space', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      [
+        'model Cart {',
+        '  aId Int',
+        '  bId Int',
+        '  user auth:User @relation(fields: [aId, bId], references: [a, b])',
+        '}',
+      ].join('\n'),
+    );
+    const cart = symbolTable.topLevel.models['Cart']!;
+    const nodes = attributeNodes(cart.fields['user']!, 'relation', 'references');
+
+    expect(diagnostics).toEqual([]);
+    expect(nodes).toHaveLength(2);
+    for (const node of nodes) {
+      expect(binder.symbolForNode(node)).toEqual({ kind: 'crossSpace' });
     }
   });
 });
