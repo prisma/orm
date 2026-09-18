@@ -12,7 +12,10 @@ import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { interpretPslDocumentToMongoContract } from '../src/interpreter';
-import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
+import {
+  expectInvalidAttributeSyntax,
+  expectUnresolvedReference,
+} from './interpreter-test-helpers';
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
@@ -382,7 +385,12 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       expect(result.ok).toBe(false);
       if (result.ok) return;
       expect(result.failure.diagnostics).toEqual(
-        expect.arrayContaining([expect.objectContaining({ code: 'PSL_BASE_TARGET_NOT_FOUND' })]),
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: expect.stringContaining('Cannot find entity'),
+          }),
+        ]),
       );
     });
 
@@ -677,7 +685,7 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
         }
       `);
 
-      const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
+      const diag = expectUnresolvedReference(result, /Cannot find field "title"/);
       expect(diag.span?.start.offset).toBeGreaterThan(0);
     });
   });

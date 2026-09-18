@@ -443,14 +443,7 @@ function resolvePolymorphism(input: {
   }
 
   for (const [variantName, baseDecl] of baseDeclarations) {
-    if (!modelNames.has(baseDecl.baseName)) {
-      diagnostics.push({
-        code: 'PSL_BASE_TARGET_NOT_FOUND',
-        message: `Model "${variantName}" @@base references non-existent model "${baseDecl.baseName}"`,
-        ...baseDecl.source.at(baseDecl.span),
-      });
-      continue;
-    }
+    if (!modelNames.has(baseDecl.baseName)) continue;
 
     if (!discriminatorDeclarations.has(baseDecl.baseName)) {
       diagnostics.push({

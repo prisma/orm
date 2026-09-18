@@ -23,7 +23,10 @@ import {
   type InterpretPslDocumentToMongoContractInput,
   interpretPslDocumentToMongoContract,
 } from '../src/interpreter';
-import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
+import {
+  expectInvalidAttributeSyntax,
+  expectUnresolvedReference,
+} from './interpreter-test-helpers';
 
 function buildSymbolTableInput(
   schema: string,
@@ -1859,7 +1862,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([nonexistent])
         }
       `);
-      const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
+      const diag = expectUnresolvedReference(result, /Cannot find field "nonexistent"/);
       expect(diag.span?.start.offset).toBeGreaterThan(0);
       expect(diag.span?.end.offset).toBeGreaterThan(diag.span?.start.offset ?? 0);
     });
@@ -1872,7 +1875,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([nonexistent])
         }
       `);
-      expectInvalidAttributeSyntax(result, /Expected one of/);
+      expectUnresolvedReference(result, /Cannot find field/);
     });
 
     it('rejects @@textIndex that references an undeclared field', () => {
@@ -1883,7 +1886,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@textIndex([nonexistent])
         }
       `);
-      expectInvalidAttributeSyntax(result, /Expected one of/);
+      expectUnresolvedReference(result, /Cannot find field "nonexistent"/);
     });
 
     it('rejects @@index wildcard scope referencing an undeclared field', () => {

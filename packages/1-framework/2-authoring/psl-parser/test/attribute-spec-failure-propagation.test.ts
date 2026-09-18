@@ -1,6 +1,7 @@
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
 import { list } from '../src/attribute-spec/combinators/list';
+import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { record } from '../src/attribute-spec/combinators/record';
 import { interpretAttribute } from '../src/attribute-spec/interpret';
 import { modelAttribute } from '../src/attribute-spec/model-attribute';
@@ -124,5 +125,69 @@ describe('ModelSymbol fixture sanity', () => {
   it('builds the model the failure tests lean on', () => {
     const { model }: { model: ModelSymbol } = build('model User {\n  id Int\n}');
     expect(model.name).toBe('User');
+  });
+});
+
+describe('oneOf and a silently failing alternative', () => {
+  const silentAlt: ArgType<string, ModelAttributeCtx> = {
+    kind: 'fieldRef',
+    label: 'field name',
+    parse: (): Result<string, readonly PslDiagnostic[]> => notOk([]),
+  };
+
+  const loudAlt: ArgType<string, ModelAttributeCtx> = {
+    kind: 'identifier',
+    label: 'a four-character name',
+    parse: (arg): Result<string, readonly PslDiagnostic[]> =>
+      arg.syntax.green.textLength === 4
+        ? ok('matched')
+        : notOk([
+            {
+              code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+              message: 'not four characters',
+              filename: 'schema.psl',
+              range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+            },
+          ]),
+  };
+
+  const specOf = (type: ArgType<string, ModelAttributeCtx>) =>
+    modelAttribute('index', {
+      documentation: 'fixture',
+      positional: [{ key: 'fields', type, documentation: 'fixture' }],
+    });
+
+  it('adds no diagnostic of its own when an alternative failed silently', () => {
+    const result = interpretFirst(
+      'model User {\n  id Int\n  @@index(sevench)\n}',
+      specOf(oneOf(silentAlt, loudAlt)),
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toEqual([]);
+  });
+
+  it('still lets a later alternative match what an earlier one refused silently', () => {
+    const result = interpretFirst(
+      'model User {\n  id Int\n  @@index(Keep)\n}',
+      specOf(oneOf(silentAlt, loudAlt)),
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual({ fields: 'matched' });
+  });
+
+  it('keeps its own diagnostic when every alternative failed loudly', () => {
+    const result = interpretFirst(
+      'model User {\n  id Int\n  @@index(sevench)\n}',
+      specOf(oneOf(loudAlt, loudAlt)),
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.map(({ message }) => message)).toEqual([
+        'Expected one of: a four-character name | a four-character name',
+      ]);
+    }
   });
 });
