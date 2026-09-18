@@ -1,0 +1,37 @@
+{
+  "name": "computed-fields-guide",
+  "version": "1.0.0",
+  "description": "Example demonstrating computed/generated fields with Prisma",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "seed": "tsx prisma/seed.ts",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:reset": "prisma migrate reset",
+    "generate": "prisma generate",
+    "studio": "prisma studio"
+  },
+  "keywords": [
+    "prisma",
+    "computed-fields",
+    "generated-columns",
+    "postgresql",
+    "mysql",
+    "sqlite"
+  ],
+  "author": "Prisma",
+  "license": "MIT",
+  "dependencies": {
+    "@prisma/client": "^5.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "prisma": "^5.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
