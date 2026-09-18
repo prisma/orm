@@ -106,16 +106,23 @@ The binder owns resolution failures and nothing else. Failures come back under `
 
 ### Attribute contexts and the single voice
 
-`modelAttributeContext` / `fieldAttributeContext` put the whole `Binder` on the parse-time `AttributeCtx` (`binder`), alongside the legacy `resolveReferencedModel`. The reference combinators — `fieldRef`, `referencedFieldRef`, `entityRef` — check for it:
+`modelAttributeContext` / `fieldAttributeContext` put the whole `Binder` on the parse-time context. `ModelAttributeCtx` **requires** it, so every context that can reach a reference combinator carries one by construction — there is no binder-less path to fall back to and no dual behavior to reason about.
 
-- **With a binder**, the combinator reads the argument's resolution straight out of the binder (`symbolForNode(argumentNode)` — a map read of results already computed at creation, never a second resolution) and emits **no** existence diagnostic. An unknown name is reported once, by the binder, as `PSL_UNRESOLVED_REFERENCE`. The attribute still parses to its usual value, so the interpreter keeps receiving what it always received.
-- **Without a binder**, behavior is exactly as before: the combinator checks the model itself and raises its own "does not exist" diagnostic. Unconverted call sites keep working untouched.
+`fieldRef` and `referencedFieldRef` resolve solely through it: they read the argument's resolution out of the binder (`symbolForNode(argumentNode)` — a map read of results already computed at creation, never a second resolution) and
 
-Shape and arity stay the combinator's voice in both modes — "Expected a field name", "Expected a list of field name", wrong argument counts. Only *existence* moved. The split is the point: resolution is the binder's, shape is the spec's, and no schema error is ever reported twice.
+- return the bound field's name when the binder resolved a field;
+- return the written name for a `crossSpace` reference, which is deferred by design;
+- **fail the argument, carrying no diagnostics of their own**, when the binder bound nothing or bound something that is not a field. The binder has already reported that name as `PSL_UNRESOLVED_REFERENCE`, so a second complaint would be a duplicate. A failed argument fails its attribute rather than quietly yielding a short list or a missing key.
+
+`entityRef` is unchanged: it never checked existence, so it still returns the written name and leaves the verdict to the binder's diagnostics and to downstream lowering.
+
+Shape and arity stay the combinator's voice — "Expected a field name", "Expected a list of field name", wrong argument counts. Only *existence* belongs to the binder. The split is the point: resolution is the binder's, shape is the spec's, and no schema error is ever reported twice.
+
+`AttributeCtx` itself stays binder-free: block attributes are interpreted during `buildSymbolTable`, before a binder can exist, and no block attribute takes a reference argument.
 
 This lookup rests on red-node identity (below): the combinator receives the very `SyntaxNode` the binder keyed its result under.
 
-**Precondition.** The binder on the context must be built over the *same snapshot* — the same symbol table and `PslSources` — and the same `typeConstructors` / `attributeSpecs` registries as the interpretation consuming it. The combinators defer to the binder whenever one is present, not only when the lookup hits, so a binder from a different snapshot or from registries that disagree with the specs being interpreted silently forgoes existence diagnostics: neither voice reports the unknown name. Build the binder and run interpretation over one snapshot.
+**Precondition.** The binder on the context must be built over the *same snapshot* — the same symbol table and `PslSources` — and the same `typeConstructors` / `attributeSpecs` registries as the interpretation consuming it. The combinators trust the binder's answer rather than re-deriving it, so a binder from a different snapshot or from registries that disagree with the specs being interpreted will bind nothing for those nodes: every reference argument fails to parse while the binder's own diagnostics describe a different document. Build the binder and run interpretation over one snapshot.
 
 ### Snapshot lifetime
 

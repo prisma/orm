@@ -13,11 +13,7 @@ import { modelAttribute } from '../src/attribute-spec/model-attribute';
 import { optional } from '../src/attribute-spec/optional';
 import type { AttributeSpecRegistry } from '../src/binder';
 import { createBinder } from '../src/binder';
-import {
-  fieldAttributeContext,
-  modelAttributeContext,
-  referencedModel,
-} from '../src/binder-context';
+import { fieldAttributeContext, modelAttributeContext } from '../src/binder-context';
 import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import { buildSymbolTable, type FieldSymbol, type ModelSymbol } from '../src/symbol-table';
@@ -110,18 +106,11 @@ const RELATION_SCHEMA = [
   '}',
 ].join('\n');
 
-function interpretRelation(text: string, withBinder: boolean) {
+function interpretRelation(text: string) {
   const { sources, symbolTable, binder, binderDiagnostics } = bind(text);
   const post = symbolTable.topLevel.models['Post']!;
   const field = post.fields['author']!;
-  const ctx = withBinder
-    ? fieldAttributeContext({ binder, sources, model: post, field })
-    : {
-        sources,
-        selfModel: post,
-        field,
-        resolveReferencedModel: () => referencedModel(binder, field),
-      };
+  const ctx = fieldAttributeContext({ binder, sources, model: post, field });
   return {
     binderDiagnostics,
     result: interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx),
@@ -129,15 +118,13 @@ function interpretRelation(text: string, withBinder: boolean) {
 }
 
 describe('reference combinators with a binder-backed context', () => {
-  it('parses a valid relation to the same output as the legacy path', () => {
-    const legacy = interpretRelation(RELATION_SCHEMA, false);
-    const bound = interpretRelation(RELATION_SCHEMA, true);
+  it('parses a valid relation into the bound field names', () => {
+    const bound = interpretRelation(RELATION_SCHEMA);
 
-    const expected = { fields: ['authorId'], references: ['id'] };
-    expect(legacy.result.ok).toBe(true);
     expect(bound.result.ok).toBe(true);
-    if (legacy.result.ok) expect(legacy.result.value).toEqual(expected);
-    if (bound.result.ok) expect(bound.result.value).toEqual(expected);
+    if (bound.result.ok) {
+      expect(bound.result.value).toEqual({ fields: ['authorId'], references: ['id'] });
+    }
     expect(bound.binderDiagnostics).toEqual([]);
   });
 
@@ -151,11 +138,10 @@ describe('reference combinators with a binder-backed context', () => {
       '  author User @relation(fields: [authorId], references: [absent])',
       '}',
     ].join('\n');
-    const legacy = interpretRelation(schema, false);
-    const bound = interpretRelation(schema, true);
+    const bound = interpretRelation(schema);
 
-    expect(legacy.result.ok).toBe(false);
-    expect(bound.result.ok).toBe(true);
+    expect(bound.result.ok).toBe(false);
+    if (!bound.result.ok) expect(bound.result.failure).toEqual([]);
     expect(bound.binderDiagnostics.map(({ code, message }) => [code, message])).toEqual([
       ['PSL_UNRESOLVED_REFERENCE', 'Cannot find field "absent" on the type of "Post.author"'],
     ]);
@@ -171,9 +157,10 @@ describe('reference combinators with a binder-backed context', () => {
       '  author User @relation(fields: [nope], references: [id])',
       '}',
     ].join('\n');
-    const bound = interpretRelation(schema, true);
+    const bound = interpretRelation(schema);
 
-    expect(bound.result.ok).toBe(true);
+    expect(bound.result.ok).toBe(false);
+    if (!bound.result.ok) expect(bound.result.failure).toEqual([]);
     expect(bound.binderDiagnostics.map(({ code, message }) => [code, message])).toEqual([
       ['PSL_UNRESOLVED_REFERENCE', 'Cannot find field "nope" on "Post"'],
     ]);
@@ -245,42 +232,32 @@ describe('reference combinators with a binder-backed context', () => {
   });
 });
 
-describe('reference combinators without a binder', () => {
-  it('still reports an unknown local field itself', () => {
-    const { sources, symbolTable } = bind('model User {\n  id Int\n  @@index([nope])\n}');
+describe('the binder is the only resolution path', () => {
+  it('fails a model-level field list the binder did not bind, with no diagnostic of its own', () => {
+    const { sources, symbolTable, binder, binderDiagnostics } = bind(
+      'model User {\n  id Int\n  @@index([nope])\n}',
+    );
     const user = symbolTable.topLevel.models['User']!;
-    const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, {
-      sources,
-      selfModel: user,
-    });
+    const ctx = modelAttributeContext({ binder, sources, model: user });
+    const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, ctx);
 
     expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.failure.map(({ message }) => message)).toEqual([
-        'Field "nope" does not exist on model "User"',
-      ]);
-    }
+    if (!result.ok) expect(result.failure).toEqual([]);
+    expect(binderDiagnostics.map(({ code, message }) => [code, message])).toEqual([
+      ['PSL_UNRESOLVED_REFERENCE', 'Cannot find field "nope" on "User"'],
+    ]);
   });
 
-  it('still reports an unknown referenced field itself', () => {
-    const legacy = interpretRelation(
-      [
-        'model User {',
-        '  id Int',
-        '}',
-        'model Post {',
-        '  authorId Int',
-        '  author User @relation(fields: [authorId], references: [absent])',
-        '}',
-      ].join('\n'),
-      false,
+  it('binds a model-level field list the binder resolved', () => {
+    const { sources, symbolTable, binder, binderDiagnostics } = bind(
+      'model User {\n  id Int\n  @@index([id])\n}',
     );
+    const user = symbolTable.topLevel.models['User']!;
+    const ctx = modelAttributeContext({ binder, sources, model: user });
+    const result = interpretAttribute(modelAttributeNode(user, 'index'), indexSpec, ctx);
 
-    expect(legacy.result.ok).toBe(false);
-    if (!legacy.result.ok) {
-      expect(legacy.result.failure.map(({ message }) => message)).toEqual([
-        'Field "absent" does not exist on model "User"',
-      ]);
-    }
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual({ fields: ['id'] });
+    expect(binderDiagnostics).toEqual([]);
   });
 });

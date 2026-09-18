@@ -384,6 +384,7 @@ describe('createBinder — diagnostics', () => {
       {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message: 'Cannot find type "Dog"',
+        data: { reference: 'type' },
         filename: '1.psl',
         range: { start: { line: 1, character: 6 }, end: { line: 1, character: 9 } },
       },
@@ -870,5 +871,68 @@ describe('createBinder — reference slots the binder stays silent about', () =>
       expect(binder.symbolForNode(node)).toBeUndefined();
     }
     expect(diagnostics).toEqual([]);
+  });
+});
+
+describe('owner-aware attribute-spec registry', () => {
+  it('passes the owner and field so a context-dependent spec is visible', () => {
+    const seen: string[] = [];
+    const { sources, symbolTable } = build(
+      ['model User {', '  id Int', '  name String @contextual', '  @@index([id])', '}'].join('\n'),
+    );
+    const registry: AttributeSpecRegistry = {
+      model: (name, owner) => {
+        seen.push(`model:${name}:${owner.name}`);
+        return name === 'index'
+          ? { positional: [{ key: 'fields', type: fieldRefList }], named: {} }
+          : undefined;
+      },
+      field: (name, owner, field) => {
+        seen.push(`field:${name}:${owner.name}.${field.name}`);
+        return name === 'contextual' ? { positional: [], named: {} } : undefined;
+      },
+    };
+    const { binder, diagnostics } = createBinder({
+      sources,
+      symbolTable,
+      typeConstructors: TYPE_CONSTRUCTORS,
+      attributeSpecs: registry,
+    });
+    const user = symbolTable.topLevel.models['User']!;
+
+    expect(seen).toContain('model:index:User');
+    expect(seen).toContain('field:contextual:User.name');
+    expect(diagnostics).toEqual([]);
+    expect(binder.symbolForNode(attributeNameNode(user.fields['name']!, 'contextual'))).toEqual({
+      kind: 'attributeSpec',
+      spec: { positional: [], named: {} },
+    });
+    expect(binder.symbolForNode(attributeNodes(user, 'index')[0]!)).toEqual({
+      kind: 'field',
+      symbol: user.fields['id'],
+    });
+  });
+});
+
+describe('binder diagnostics carry their reference class', () => {
+  it('tags type, field, entity and attribute failures distinctly', () => {
+    const { diagnostics } = bind(
+      [
+        'model Post {',
+        '  ghost Phantom',
+        '  id Int',
+        '  @@index([missingField])',
+        '  @@base(NoSuchModel)',
+        '  @@mystery',
+        '}',
+      ].join('\n'),
+    );
+
+    expect(diagnostics.map(({ code, data }) => [code, data?.['reference']])).toEqual([
+      ['PSL_UNRESOLVED_REFERENCE', 'type'],
+      ['PSL_UNRESOLVED_REFERENCE', 'field'],
+      ['PSL_UNRESOLVED_REFERENCE', 'entity'],
+      ['PSL_UNRESOLVED_ATTRIBUTE', 'attribute'],
+    ]);
   });
 });

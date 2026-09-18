@@ -13,16 +13,15 @@ export type AttributeLevel = 'field' | 'model' | 'block';
 
 export interface AttributeCtx {
   readonly sources: PslSources;
-  readonly binder?: Binder;
 }
 
 export interface ModelAttributeCtx extends AttributeCtx {
   readonly selfModel: ModelSymbol;
+  readonly binder: Binder;
 }
 
 export interface FieldAttributeCtx extends ModelAttributeCtx {
   readonly field: FieldSymbol;
-  resolveReferencedModel(): ModelSymbol | undefined;
 }
 
 export type ArgTypeKind =

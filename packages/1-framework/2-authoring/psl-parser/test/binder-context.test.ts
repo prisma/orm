@@ -135,7 +135,7 @@ describe('referencedModel', () => {
 });
 
 describe('fieldAttributeContext', () => {
-  it('serves resolveReferencedModel as a binder map read', () => {
+  it('carries the binder and the declaring symbols', () => {
     const { sources, symbolTable, binder } = bind(RELATION_SCHEMA);
     const post = symbolTable.topLevel.models['Post']!;
     const ctx = fieldAttributeContext({
@@ -148,11 +148,11 @@ describe('fieldAttributeContext', () => {
     expect(ctx.sources).toBe(sources);
     expect(ctx.selfModel).toBe(post);
     expect(ctx.field).toBe(post.fields['author']);
-    expect(ctx.resolveReferencedModel()).toBe(symbolTable.topLevel.models['User']);
-    expect(ctx.resolveReferencedModel()).toBe(ctx.resolveReferencedModel());
+    expect(ctx.binder).toBe(binder);
+    expect(referencedModel(ctx.binder, ctx.field)).toBe(symbolTable.topLevel.models['User']);
   });
 
-  it('resolves to undefined without throwing for a cross-space relation', () => {
+  it('carries a binder that resolves no model for a cross-space relation', () => {
     const { sources, symbolTable, binder } = bind(
       'model Cart {\n  userId Int\n  user auth:User @relation(fields: [userId], references: [id])\n}',
     );
@@ -164,7 +164,7 @@ describe('fieldAttributeContext', () => {
       field: cart.fields['user']!,
     });
 
-    expect(ctx.resolveReferencedModel()).toBeUndefined();
+    expect(referencedModel(ctx.binder, ctx.field)).toBeUndefined();
   });
 });
 

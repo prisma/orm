@@ -30,6 +30,5 @@ export function fieldAttributeContext(input: FieldAttributeContextInput): FieldA
     binder: input.binder,
     selfModel: input.model,
     field: input.field,
-    resolveReferencedModel: () => referencedModel(input.binder, input.field),
   };
 }

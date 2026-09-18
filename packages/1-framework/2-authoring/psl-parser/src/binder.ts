@@ -65,8 +65,12 @@ export interface AttributeSpecView {
 }
 
 export interface AttributeSpecRegistry {
-  model(name: string): AttributeSpecView | undefined;
-  field(name: string): AttributeSpecView | undefined;
+  model(name: string, owner: ModelSymbol | CompositeTypeSymbol): AttributeSpecView | undefined;
+  field(
+    name: string,
+    owner: ModelSymbol | CompositeTypeSymbol,
+    field: FieldSymbol,
+  ): AttributeSpecView | undefined;
 }
 
 export interface Binder {
@@ -151,6 +155,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
         diagnostics.push({
           code: PSL_UNRESOLVED_REFERENCE,
           message: `Cannot find type "${resolution.name}"`,
+          data: { reference: 'type' },
           ...diagnosticSource(sources, node).at(),
         });
       }
@@ -166,12 +171,12 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       symbolTable,
       sources,
     };
-    bindAttributes(symbol, symbol.attributes, (name) => attributeSpecs.model(name), {
+    bindAttributes(symbol, symbol.attributes, (name) => attributeSpecs.model(name, symbol), {
       ...context,
       field: undefined,
     });
     for (const field of Object.values(symbol.fields)) {
-      bindAttributes(field, field.attributes, (name) => attributeSpecs.field(name), {
+      bindAttributes(field, field.attributes, (name) => attributeSpecs.field(name, symbol, field), {
         ...context,
         field,
       });
@@ -209,6 +214,7 @@ function bindAttributes(
         ctx.diagnostics.push({
           code: PSL_UNRESOLVED_ATTRIBUTE,
           message: `Cannot find attribute "${marker}${attribute.name}"`,
+          data: { reference: 'attribute' },
           ...diagnosticSource(ctx.sources, nameNode).at(),
         });
       } else {
@@ -254,7 +260,7 @@ function resolveArgument(
 function resolveOwnerField(name: string, node: SyntaxNode, ctx: BindContext): Resolution {
   const field = own(ctx.owner.fields, name);
   if (field !== undefined) return { kind: 'field', symbol: field };
-  report(`Cannot find field "${name}" on "${ctx.owner.name}"`, node, ctx);
+  report(`Cannot find field "${name}" on "${ctx.owner.name}"`, node, ctx, 'field');
   return { kind: 'unresolved', name };
 }
 
@@ -275,6 +281,7 @@ function resolveReferencedField(
     `Cannot find field "${name}" on the type of "${ctx.owner.name}.${declaring.name}"`,
     node,
     ctx,
+    'field',
   );
   return { kind: 'unresolved', name };
 }
@@ -290,7 +297,7 @@ function targetFields(
 function resolveEntity(name: string, node: SyntaxNode, ctx: BindContext): Resolution {
   const entity = entityNamed(name, ctx);
   if (entity !== undefined) return entity;
-  report(`Cannot find entity "${name}"`, node, ctx);
+  report(`Cannot find entity "${name}"`, node, ctx, 'entity');
   return { kind: 'unresolved', name };
 }
 
@@ -309,10 +316,16 @@ function entityNamed(name: string, ctx: BindContext): Resolution | undefined {
   return undefined;
 }
 
-function report(message: string, node: SyntaxNode, ctx: BindContext): void {
+function report(
+  message: string,
+  node: SyntaxNode,
+  ctx: BindContext,
+  reference: 'field' | 'entity',
+): void {
   ctx.diagnostics.push({
     code: PSL_UNRESOLVED_REFERENCE,
     message,
+    data: { reference },
     ...diagnosticSource(ctx.sources, node).at(),
   });
 }

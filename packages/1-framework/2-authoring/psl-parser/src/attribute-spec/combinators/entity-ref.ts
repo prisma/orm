@@ -19,8 +19,7 @@ export function entityRef(): EntityRefArgType<AttributeCtx> {
       if (name === undefined) {
         return notOk([leafDiagnostic(ctx, arg, 'Expected a model name')]);
       }
-      const resolution = ctx.binder?.symbolForNode(arg.syntax);
-      return ok(resolution?.kind === 'model' ? resolution.symbol.name : name);
+      return ok(name);
     },
   };
 }
