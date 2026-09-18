@@ -1,16 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { createDocumentStore } from '../src/document-store';
+import { DocumentStore } from '../src/document-store';
 
 const uri = 'file:///abs/schema.psl';
 const alias = 'file:///abs/%73chema.psl';
 
-function open(store: ReturnType<typeof createDocumentStore>, openedUri = alias, text = 'first') {
+function open(store: DocumentStore, openedUri = alias, text = 'first') {
   return store.open({ uri: openedUri, languageId: 'prisma', version: 1, text });
 }
 
 describe('document store', () => {
+  it('keeps document lookup bound when passed as a callback', () => {
+    const store = new DocumentStore();
+    const { getDocument } = store;
+    expect(getDocument(uri)).toBeUndefined();
+    const document = open(store);
+    expect([uri, alias].map(getDocument)).toEqual([document, document]);
+    store.close(alias);
+    expect(getDocument(uri)).toBeUndefined();
+  });
+
   it('owns one document per identity, preserving the latest opened URI', () => {
-    const store = createDocumentStore();
+    const store = new DocumentStore();
     const first = open(store);
     expect(store.getDocument(uri)).toBe(first);
     expect(store.getDocument(alias)).toBe(first);
@@ -27,7 +37,7 @@ describe('document store', () => {
   });
 
   it('applies ordered incremental and full edits through aliases with UTF-16 and CRLF indexing', () => {
-    const store = createDocumentStore();
+    const store = new DocumentStore();
     const document = open(store, alias, '// 😀\r\nmodel User {}\r\n');
     expect(document.positionAt(7)).toEqual({ line: 1, character: 0 });
     const changed = store.change({ uri, version: 2 }, [
@@ -49,7 +59,7 @@ describe('document store', () => {
   });
 
   it('ignores unopened changes and closes and skips empty edits without advancing versions', () => {
-    const store = createDocumentStore();
+    const store = new DocumentStore();
     expect(store.change({ uri, version: 2 }, [{ text: 'ignored' }])).toBeUndefined();
     expect(store.close(uri)).toBeUndefined();
     const document = open(store);

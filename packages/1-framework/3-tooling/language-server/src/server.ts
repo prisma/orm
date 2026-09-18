@@ -37,7 +37,7 @@ import {
   mapParseDiagnostics,
   ParseDiagnosticSeverity,
 } from './diagnostic-mapping';
-import { createDocumentStore } from './document-store';
+import { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
 import { guardedConnection } from './guarded-connection';
 import type { PipelineInputs } from './pipeline';
@@ -111,7 +111,7 @@ export function createServer(connection: Connection): LanguageServer {
 }
 
 function createServerOn(connection: Connection): LanguageServer {
-  const documents = createDocumentStore();
+  const documents = new DocumentStore();
   const { getDocument } = documents;
   const managedProjects = new Map<string, ManagedProject>();
   const documentConfigPaths = new Map<string, string>();
