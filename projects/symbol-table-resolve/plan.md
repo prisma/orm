@@ -50,6 +50,8 @@ Four slices: one foundation slice delivering the eager binder in `psl-parser` (w
 - ADR 163 line 49 carries the genuinely stale `buildSymbolTable({ document, sourceFile, scalarTypes, pslBlockDescriptors })` signature (the psl-parser README's copy was already fixed on the base branch; D4 verified rather than invented a correction). Out of every slice's scope — route as a small direct change after this project, or fold into whichever slice next touches `docs/`.
 - Spec amendment (D2, implementer-discovered, orchestrator-accepted): `createBinder` takes `{ sources, symbolTable, typeConstructors, attributeSpecs }` — the `documents` option was unread (phase 1 reaches every node through the symbol table) and a dead parameter would falsely claim a dependency. Operator may veto.
 
+- Flaky under concurrent load, seen in two dispatches, passes in isolation every time: `integration-tests` typecheck (`Cannot find module '@prisma/orm-postgres/...'` — build-ordering in the turbo wave) and two npm-tarball test files. Worth an operator-filed ticket rather than per-round re-diagnosis.
+
 ## Sequencing rationale
 
 The dependency graph alone would allow the LSP conversion to run parallel with the interpreter conversions — all three depend only on `binder-core`. The serialization of LSP after both interpreters is an explicit operator decree (design-decisions.md § 7), not a graph constraint: the interpreters exercise the binder's resolution semantics most deeply, so their conversions surface any semantic fault before the LSP builds on it. `sql-conversion` and `mongo-conversion` stay parallel — different packages, no shared files, no ordering decree between them. `prisma-7` appears nowhere by decree; its untouched status is a project-DoD condition, not a slice.

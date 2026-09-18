@@ -37,4 +37,11 @@ Slice spec: `projects/symbol-table-resolve/slices/binder-core/spec.md`. Branch: 
 - **Hands to:** the slice-DoD state, now including single-voice diagnostics through the spec-interpretation path — conversion slices become pure deletions with no double-diagnostic intermediate state.
 - **Focus:** `src/attribute-spec/` ctx types + the three reference combinators + `binder-context.ts` + tests. No consumer packages; no binder-semantics changes.
 
-Sizes: D1 S, D2 L, D3 M, D4 S, D5 M. Sequential; no parallel-within-slice.
+### Dispatch 6: required-binder-threading (added by operator decree after D5 closed)
+
+- **Outcome:** `AttributeCtx.binder` is required; `resolveReferencedModel` is deleted from the context types; the combinators' binder-less fallback paths are removed; every context construction site — SQL (`sql-attribute-specs.ts`), Mongo (`mongo-attribute-specs.ts`), language server (`attribute-spec-resolution.ts`), plus whatever the compiler surfaces — threads a same-snapshot binder; `fieldRef`/`referencedFieldRef` arguments resolving to a non-field fail their parse without a second diagnostic; cross-space still parses; all affected package suites green.
+- **Builds on:** dispatch 5's wiring.
+- **Hands to:** the slice-DoD state under decision 10 — no dual path anywhere; conversion slices inherit consumers that already hold a binder.
+- **Focus (widened by operator decree mid-dispatch):** ctx types + combinators + parse-machinery failure tracking + owner-aware registry view in `psl-parser`; in the three consumer packages: ctx-construction threading AND binder-diagnostic surfacing (collectors gain the binder's diagnostics; duplicate resolution-class emissions removed; registries completed). NOT the consumers' hand-rolled type-reference/relation machinery beyond what the threading already deleted (their slices, now correspondingly smaller). `contract-prisma7` verified clear.
+
+Sizes: D1 S, D2 L, D3 M, D4 S, D5 M, D6 L. Sequential; no parallel-within-slice.

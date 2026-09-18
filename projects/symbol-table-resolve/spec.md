@@ -85,14 +85,7 @@ function createBinder({ sources, symbolTable, typeConstructors, attributeSpecs }
 }
 ```
 
-Consumer wiring: the attribute-spec parse-time context keeps its ADR 249 shape, but `resolveReferencedModel` stops being a consumer-supplied callback with four implementations and becomes one map read:
-
-```ts
-const ctx: FieldAttributeCtx = {
-  ...,
-  resolveReferencedModel: () => modelOf(binder.symbolForNode(typeNode(field))),
-};
-```
+Consumer wiring (amended by operator decree after the first slice's D5): the attribute-spec parse-time context carries the binder as a **required** member — `resolveReferencedModel` is deleted from the context types, its four consumer-supplied implementations with it. Every context construction site (SQL, Mongo, language server) supplies a binder built over the same snapshot; the reference combinators have no binder-less path. A `fieldRef`/`referencedFieldRef` argument whose binder resolution is not a field **fails the parse** (without a second diagnostic — the binder's is the voice); cross-space stays a successful parse with resolution deferred to where that space is known.
 
 Interpreters still run spec interpretation for argument **values**; the binder owns only name-reference resolution within attribute arguments. Query timing is not part of the binder's contract — `declaredSymbol` and `symbolForNode` reveal nothing about when resolution ran; the factory's eagerly-returned diagnostics are the contract's one timing commitment, owned and revisable by the future incremental-reparse project.
 
@@ -128,7 +121,7 @@ Interpreters still run spec interpretation for argument **values**; the binder o
 
 - Work stacks on the unmerged PR #30335 and lands after it; no cherry-picking its content into `main` independently.
 - A consumer converts wholly within its slice: no consumer carries both a hand-rolled resolver and binder calls for the same question across slice boundaries.
-- Unconverted consumers keep working unmodified at every intermediate state; the binder is additive until a conversion slice claims its consumer.
+- Unconverted consumers keep working at every intermediate state. Amended by operator decree: the attribute-argument question converts across ALL consumers at once (the required-binder threading) — per-question wholeness supersedes per-consumer wholeness for that question; each consumer's remaining hand-rolled resolution (type references, relation targets) still converts wholly in its own slice.
 
 ## Project Definition of Done
 
@@ -137,7 +130,7 @@ Interpreters still run spec interpretation for argument **values**; the binder o
 - [ ] Cross-space references resolve to an explicit cross-space result kind with no binder diagnostic, replacing today's silent skip in `referencedFieldRef`.
 - [ ] A red-layer test pins within-snapshot identity: traversing to the same child twice yields the same object.
 - [ ] SQL and Mongo interpreters answer type-reference, relation-target, and entity-reference questions exclusively through the binder; their local resolvers (`resolveReferencedModel` in `psl-relation-resolution.ts`, Mongo's `allModels.find`) are deleted.
-- [ ] The attribute-spec contexts' `resolveReferencedModel` is served by the binder; consumer-supplied resolution callbacks are gone.
+- [ ] `resolveReferencedModel` is removed from the attribute-spec context types; the context's `binder` member is required; every construction site (SQL, Mongo, language server) threads a same-snapshot binder; the combinators have no binder-less path; a field reference resolving to a non-field fails its parse without a second diagnostic.
 - [ ] The language server's span-scan reverse binding (`modelSymbolForNode`) and both duplicated name-classification cascades (`completion-symbols.ts`, `semantic-tokens.ts`) are replaced by binder queries.
 - [ ] The shadowing schema (same name declared in a namespace and at top level) resolves identically — namespace-local first — in parser tests, both interpreter test suites, and LSP tests.
 - [ ] Unresolved-reference diagnostics are emitted only by the binder; converted consumers contain no unresolved-reference emission of their own.
