@@ -25,7 +25,7 @@ Slice spec: `projects/symbol-table-resolve/slices/binder-core/spec.md`. Branch: 
 
 ### Dispatch 4: public-surface
 
-- **Outcome:** the binder, its types, and an attribute-ctx helper (builds the ADR 249 parse-time context with `resolveReferencedModel` as a binder map read, demonstrated by test) are exported from `src/exports/index.ts`; the `psl-parser` README documents the binder and its scope chain (and corrects the stale `scalarTypes`/`ScalarSymbol` text while touching that section); `pnpm build` + full package tests green; diff confined to `psl-parser` + `projects/symbol-table-resolve/`.
+- **Outcome:** the binder, its types, and an attribute-ctx helper (builds the ADR 249 parse-time context with `resolveReferencedModel` as a binder map read, demonstrated by test) are exported from `src/exports/index.ts`; the `psl-parser` README documents the binder and its scope chain, the now-public `SyntaxNode.childAt` with its identity guarantee (reviewer note, D1), and corrects the stale `scalarTypes`/`ScalarSymbol` text while touching that section; `pnpm build` + full package tests green; diff confined to `psl-parser` + `projects/symbol-table-resolve/`.
 - **Builds on:** dispatch 3's semantically-whole binder.
 - **Hands to:** the slice-DoD state — the stable API surface the three conversion slices consume.
 - **Focus:** exports, helper, docs, final gates. No new resolution logic.

@@ -42,6 +42,13 @@ Four slices: one foundation slice delivering the eager binder in `psl-parser` (w
 ## Dependencies (external)
 
 - [ ] PR #30335 (`multifiile-psl`) merges — open at planning time; operator judges it will not stall. All slices stack on it; no independent landing path (spec transitional-shape constraint).
+- [ ] Base-branch escapee, surfaced during D1: `integration-tests` typecheck is broken at the branch point itself — `test/integration/test/authoring/lsp-emit-parity.integration.test.ts:8` imports `createDocumentStore`, removed by `multifiile-psl`'s own commit `a54c338980`. Belongs to PR #30335 to fix; our stack inherits the red CI until it does. Not fixed here (out of scope; operator may wish to flag it on the PR themselves).
+
+## Open items
+
+- `PSL_UNRESOLVED_REFERENCE` is exported as a constant from the binder module but is not yet a member of the `PslDiagnosticCode` union (`framework-components/src/shared/psl-extension-block.ts`, where its sibling `PSL_DUPLICATE_DECLARATION` lives) — that file is outside the binder-core slice's walls. Land the union member in whichever slice or follow-up first lawfully touches `framework-components`; compilation is unaffected meanwhile (`ContributedPslDiagnosticCode` is `` `PSL_${string}` ``).
+- ADR 163 line 49 carries the genuinely stale `buildSymbolTable({ document, sourceFile, scalarTypes, pslBlockDescriptors })` signature (the psl-parser README's copy was already fixed on the base branch; D4 verified rather than invented a correction). Out of every slice's scope — route as a small direct change after this project, or fold into whichever slice next touches `docs/`.
+- Spec amendment (D2, implementer-discovered, orchestrator-accepted): `createBinder` takes `{ sources, symbolTable, typeConstructors, attributeSpecs }` — the `documents` option was unread (phase 1 reaches every node through the symbol table) and a dead parameter would falsely claim a dependency. Operator may veto.
 
 ## Sequencing rationale
 

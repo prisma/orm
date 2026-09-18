@@ -16,7 +16,7 @@ Today, resolving a field's type name is answered four different ways:
 After this project, one service answers, lazily, with memoized results:
 
 ```ts
-const { binder, diagnostics } = createBinder({ documents, sources, symbolTable, typeConstructors, attributeSpecs });
+const { binder, diagnostics } = createBinder({ sources, symbolTable, typeConstructors, attributeSpecs });
 
 binder.declaredSymbol(modelDeclarationNode); // declaration node -> the symbol it declares
 binder.symbolForNode(typeReferenceNode);     // reference node -> the symbol it denotes
@@ -30,7 +30,7 @@ Resolution follows a single decreed rule — declaring namespace → top level �
 ### The eager pass (normative pseudo-code)
 
 ```ts
-function createBinder({ documents, sources, symbolTable, typeConstructors, attributeSpecs }) {
+function createBinder({ sources, symbolTable, typeConstructors, attributeSpecs }) {
   const universe = universeScope(typeConstructors);   // config scope: type names, shared across snapshots
   const specs = attributeSpecs;                       // config scope: attribute names (target-contributed, ADR 236)
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();   // decl node -> its symbol
