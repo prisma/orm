@@ -680,6 +680,20 @@ describe('fieldRef', () => {
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
   });
+
+  it('names the sort-argument problem instead of "Expected a field name"', () => {
+    const { expr, ctx } = argOf('id(sort: Desc)');
+
+    const result = fieldRef().parse(expr, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure).toHaveLength(1);
+      expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
+      expect(result.failure[0]?.message).toMatch(/sort/i);
+      expect(result.failure[0]?.message).not.toBe('Expected a field name');
+    }
+  });
 });
 
 describe('entityRef', () => {
