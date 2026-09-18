@@ -376,6 +376,7 @@ describe('interpret slot', () => {
   const spanned = {
     code: 'PSL_UNRESOLVED_RELATION',
     message: 'relation target not found',
+    sourceId: schemaUri,
     span: { start: { offset: 31, line: 3, column: 3 }, end: { offset: 37, line: 3, column: 9 } },
   };
 

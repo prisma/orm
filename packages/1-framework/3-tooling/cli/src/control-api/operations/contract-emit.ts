@@ -3,6 +3,7 @@ import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
 import { createControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
 import type { Diagnostic } from '@internal/utils/structured-error';
@@ -188,6 +189,19 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
       ),
     };
   }
+  if (
+    failure['diagnostics'].some(
+      (diagnostic: unknown) => !isRecord(diagnostic) || typeof diagnostic['sourceId'] !== 'string',
+    )
+  ) {
+    return {
+      ok: false,
+      error: failedToResolveContractSource(
+        'Contract source provider returned malformed failure result: each diagnostic must include a string sourceId.',
+        'Include the source filename in each diagnostic returned by contract.source.load.',
+      ),
+    };
+  }
   return {
     ok: false,
     error: failedToResolveContractSource(
@@ -325,7 +339,10 @@ export async function executeContractEmit(
       // can decorate first; the subsequent serialize→deserialize round-trip
       // re-narrows the envelope into the precise type.
       const enrichedIR = enrichContract(
-        validatedContract.value as unknown as Contract,
+        blindCast<
+          Contract,
+          'Provider payload is enriched before target serialization and family validation'
+        >(validatedContract.value),
         frameworkComponents,
       );
       const rawContractJson = config.target.contractSerializer.serializeContract(enrichedIR);

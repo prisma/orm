@@ -322,6 +322,7 @@ async function recursiveCompletionResolution(): Promise<ConfigResolution> {
               {
                 code: 'PSL_TEST_INTERPRETATION_FAILED',
                 message: 'Incomplete authoring buffer',
+                sourceId: schemaUri,
                 span: {
                   start: { offset: 0, line: 1, column: 1 },
                   end: { offset: 1, line: 1, column: 2 },
@@ -3146,6 +3147,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   const unresolvedDiagnostic = {
     code: 'PSL_UNRESOLVED_RELATION',
     message: 'relation target not found',
+    sourceId: schemaUri,
     span: { start: { offset: 22, line: 2, column: 7 }, end: { offset: 26, line: 2, column: 11 } },
   };
   const expectedUnresolved: Diagnostic = {
@@ -3279,7 +3281,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
     const { resolveInputs } = interpretationResolution(() =>
       notOk({
         summary: 'Schema has 1 error',
-        diagnostics: [{ code: 'PSL_SPANLESS', message: 'no span available' }],
+        diagnostics: [{ code: 'PSL_SPANLESS', message: 'no span available', sourceId: schemaUri }],
       }),
     );
     harness = startHarness(resolveInputs, pullDiagnosticsCapabilities);

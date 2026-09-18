@@ -18,7 +18,7 @@ export interface SourceSpan {
 export interface SourceDiagnostic {
   readonly code: string;
   readonly message: string;
-  readonly sourceId?: string;
+  readonly sourceId: string;
   readonly span?: SourceSpan;
   readonly data?: Readonly<Record<string, unknown>>;
 }

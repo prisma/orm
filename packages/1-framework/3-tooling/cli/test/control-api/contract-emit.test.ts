@@ -149,6 +149,7 @@ describe('executeContractEmit', () => {
     {
       label: 'rejects non-provider source object',
       source: { invalid: true },
+      expectedCode: undefined,
       expectedSubstring: 'valid source provider object',
     },
     {
@@ -157,13 +158,27 @@ describe('executeContractEmit', () => {
         ok: false,
         failure: {
           summary: 'Provider parse failed',
-          diagnostics: [{ code: 'PSL_PARSE_ERROR', message: 'Unexpected token' }],
+          diagnostics: [
+            { code: 'PSL_PARSE_ERROR', message: 'Unexpected token', sourceId: 'schema.prisma' },
+          ],
           meta: { sourceId: 'schema.prisma' },
         },
       })),
       expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
       expectedSubstring: 'Provider parse failed',
     },
+    ...[undefined, 42].map((sourceId) => ({
+      label: `rejects diagnostic with invalid sourceId ${sourceId}`,
+      source: createSourceProvider(async () => ({
+        ok: false,
+        failure: {
+          summary: 'Provider parse failed',
+          diagnostics: [{ code: 'PSL_PARSE_ERROR', message: 'Unexpected token', sourceId }],
+        },
+      })),
+      expectedCode: 'CONTRACT.SOURCE_LOAD_FAILED',
+      expectedSubstring: 'each diagnostic must include a string sourceId',
+    })),
     {
       label: 'rejects malformed failure result',
       source: createSourceProvider(async () => ({ ok: false }) as unknown),
@@ -206,7 +221,7 @@ describe('executeContractEmit', () => {
         },
       },
       { code: 'PSL.PRISMA7_SCHEMA_READ_FAILED', message: 'ENOENT', sourceId: 'prisma/schema' },
-      { code: 'PSL_PARSE_ERROR', message: 'Unexpected token' },
+      { code: 'PSL_PARSE_ERROR', message: 'Unexpected token', sourceId: 'prisma/models.prisma' },
     ];
 
     function emitFailure(): Promise<unknown> {
@@ -254,8 +269,9 @@ describe('executeContractEmit', () => {
         {
           code: 'CONTRACT.SOURCE_DIAGNOSTIC',
           severity: 'error',
-          summary: 'PSL_PARSE_ERROR: Unexpected token',
+          summary: 'prisma/models.prisma PSL_PARSE_ERROR: Unexpected token',
           nextActions: [],
+          where: { path: 'prisma/models.prisma' },
           meta: { code: 'PSL_PARSE_ERROR' },
         },
       ]);
@@ -271,7 +287,7 @@ describe('executeContractEmit', () => {
               'View "ActiveUsers" is not supported; Prisma 8 has no views. (prisma/schema.prisma:9:1)',
           },
           { kind: 'PSL.PRISMA7_SCHEMA_READ_FAILED', message: 'ENOENT (prisma/schema)' },
-          { kind: 'PSL_PARSE_ERROR', message: 'Unexpected token' },
+          { kind: 'PSL_PARSE_ERROR', message: 'Unexpected token (prisma/models.prisma)' },
         ],
         providerMeta: { schemaPath: 'prisma/schema.prisma' },
       });

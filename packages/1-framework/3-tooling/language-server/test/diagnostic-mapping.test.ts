@@ -42,6 +42,7 @@ describe('mapInterpreterDiagnostics', () => {
     const diagnostic: ContractSourceDiagnostic = {
       code: 'PSL_UNRESOLVED_RELATION',
       message: 'relation target not found',
+      sourceId: 'diagnostic-mapping-test.psl',
       span: {
         start: { offset: 28, line: 3, column: 3 },
         end: { offset: 33, line: 3, column: 8 },
@@ -63,7 +64,7 @@ describe('mapInterpreterDiagnostics', () => {
     const span = sourceFile.rangeToPslSpan(range);
 
     const [mapped] = mapInterpreterDiagnostics(
-      [{ code: 'PSL_DEMO', message: 'demo', span }],
+      [{ code: 'PSL_DEMO', message: 'demo', sourceId: 'diagnostic-mapping-test.psl', span }],
       sourceFile,
     );
 
@@ -72,7 +73,13 @@ describe('mapInterpreterDiagnostics', () => {
 
   it('anchors a span-less diagnostic at document start instead of dropping it', () => {
     const [mapped] = mapInterpreterDiagnostics(
-      [{ code: 'PSL_SPANLESS', message: 'no span available' }],
+      [
+        {
+          code: 'PSL_SPANLESS',
+          message: 'no span available',
+          sourceId: 'diagnostic-mapping-test.psl',
+        },
+      ],
       sourceFile,
     );
 
