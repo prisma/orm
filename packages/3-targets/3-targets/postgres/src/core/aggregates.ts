@@ -52,40 +52,55 @@ import {
 /** The input matches available to an overload that consumes a value — the only ones these helpers build, since every aggregate here but `count` needs something to fold. */
 type ValueInput = ValueInputAggregateDescriptor['input'];
 
-const overCodec = (codecId: string): ValueInput => ({ kind: 'codec', codecId });
-const overTrait = (trait: CodecTrait): ValueInput => ({ kind: 'trait', trait });
+const overCodec = <const CodecId extends string>(codecId: CodecId) =>
+  ({ kind: 'codec', codecId }) as const;
+const overTrait = <const Trait extends CodecTrait>(trait: Trait) =>
+  ({ kind: 'trait', trait }) as const;
 
 /**
  * An aggregate whose result is one of the input values, so it carries the input's codec — type parameters included, since a `numeric(10,3)` minimum is still a `numeric(10,3)`.
  */
-const preservesInput = (operation: string, input: ValueInput): SqlAggregateDescriptor => ({
-  operation,
-  input,
-  output: { kind: 'self' },
-  nullable: true,
-});
+const preservesInput = <const Operation extends string, const Input extends ValueInput>(
+  operation: Operation,
+  input: Input,
+) =>
+  ({
+    operation,
+    input,
+    output: { kind: 'self' },
+    nullable: true,
+  }) as const;
 
 /**
  * An aggregate whose result is a new value. It names its result codec without type parameters: a sum leaves the input's width behind (a `numeric(10,3)` column sums to an unconstrained `numeric`), so carrying the input's parameters into the result would understate the range.
  */
-const produces = (
-  operation: string,
-  input: ValueInput,
-  codecId: string,
-): SqlAggregateDescriptor => ({
-  operation,
-  input,
-  output: { kind: 'codec', codecId },
-  nullable: true,
-});
+const produces = <
+  const Operation extends string,
+  const Input extends ValueInput,
+  const CodecId extends string,
+>(
+  operation: Operation,
+  input: Input,
+  codecId: CodecId,
+) =>
+  ({
+    operation,
+    input,
+    output: { kind: 'codec', codecId },
+    nullable: true,
+  }) as const;
 
 /** The same, for an operation that builds its own expression. */
-const producesVia = (
-  operation: string,
-  input: ValueInput,
-  codecId: string,
+const producesVia = <
+  const Operation extends string,
+  const Input extends ValueInput,
+  const CodecId extends string,
+>(
+  operation: Operation,
+  input: Input,
+  codecId: CodecId,
   lower: SqlAggregateLowering,
-): SqlAggregateDescriptor => ({ ...produces(operation, input, codecId), lower });
+) => ({ ...produces(operation, input, codecId), lower });
 
 /** The SQL aggregate a lossless variant computes with. `sumBigInt` is a `sum` read exactly, `countBigInt` a `count`, `avgDecimal` an `avg`: the variants differ in how the result is read, never in what the database computes. */
 const computedWith =
@@ -145,7 +160,7 @@ const MIN_MAX_PRESERVING_CODECS = [
  */
 const MIN_MAX_WIDENS_TO_TEXT = [PG_VARCHAR_CODEC_ID, SQL_VARCHAR_CODEC_ID] as const;
 
-const orderingDescriptors = (operation: 'min' | 'max'): ReadonlyArray<SqlAggregateDescriptor> => [
+const orderingDescriptors = <const Operation extends 'min' | 'max'>(operation: Operation) => [
   preservesInput(operation, overTrait('numeric')),
   preservesInput(operation, overTrait('textual')),
   ...MIN_MAX_WIDENS_TO_TEXT.map((codecId) =>
@@ -157,7 +172,7 @@ const orderingDescriptors = (operation: 'min' | 'max'): ReadonlyArray<SqlAggrega
 /**
  * Every aggregate overload the PostgreSQL target contributes. The adapter lists these on `types.aggregateDescriptors`, from where emission derives result types and the runtime builds its resolution registry.
  */
-export const postgresAggregateDescriptors: ReadonlyArray<SqlAggregateDescriptor> = [
+export const postgresAggregateDescriptors = [
   // PostgreSQL's `count` returns `bigint` whether it counts entries or non-null values, which is what makes it input-agnostic rather than merely input-less. A row count is a `number` to a JS developer, so that is what the bare operation reads it as — and outside ±(2^53 − 1) it throws rather than answer with a rounded tally.
   {
     operation: 'count',
@@ -221,4 +236,4 @@ export const postgresAggregateDescriptors: ReadonlyArray<SqlAggregateDescriptor>
 
   ...orderingDescriptors('min'),
   ...orderingDescriptors('max'),
-];
+] as const satisfies ReadonlyArray<SqlAggregateDescriptor>;

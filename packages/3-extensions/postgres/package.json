@@ -11,7 +11,7 @@
     "emit": "cd ../../../test/integration && node ../../packages/1-framework/3-tooling/cli/dist/bin.mjs contract emit --config test/sql-builder/fixtures/prisma.config.no-pgvector.ts && cp test/sql-builder/fixtures/generated-no-pgvector/contract.json test/sql-builder/fixtures/generated-no-pgvector/contract.d.ts ../../packages/3-extensions/postgres/test/fixtures/generated/",
     "emit:check": "pnpm emit && git diff --exit-code test/fixtures/generated/",
     "test": "vitest run",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.native-contract.json --noEmit",
     "lint": "biome check . --error-on-warnings",
     "lint:fix": "biome check --write .",
     "lint:fix:unsafe": "biome check --write --unsafe .",

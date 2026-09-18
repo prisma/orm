@@ -37,6 +37,7 @@ This is the current SQL TypeScript authoring implementation. Shared descriptor t
 - **Composed helper namespaces**: `defineContract(config, (helpers) => ...)` synthesizes `helpers.field.*` and `helpers.type.*` from the selected family, target, and extension packs
 - **SQL resolution and contract generation**: internal resolution normalizes names, relations, indexes, and FK materialization before producing the canonical SQL contract artifacts
 - **Shared descriptor layer**: `@internal/contract-authoring` provides the target-neutral descriptor types used by the DSL and by authoring-adjacent packs
+- **Native query inference**: `SqlContractResult` preserves scalar/list channels, relation cardinality, and literal model namespaces for clients consuming the contract directly. Packs can carry literal aggregate descriptors through `__aggregateDescriptors`, alongside `__codecTypes`; aggregate type maps resolve exact-codec overloads before trait fallbacks without duplicating the runtime result matrix.
 
 Contributor-facing lowering notes and detailed warning semantics live in [DEVELOPING.md](./DEVELOPING.md).
 

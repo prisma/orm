@@ -115,18 +115,42 @@ type PackAwareModel<IndexTypes extends IndexTypeMap> = {
     const ModelName extends string,
     Fields extends Record<string, ScalarFieldBuilder>,
     Relations extends Record<string, AnyRelationBuilder> = Record<never, never>,
+    const TNamespace extends string | undefined = undefined,
   >(
     modelName: ModelName,
-    input: { readonly fields: Fields; readonly relations?: Relations; readonly namespace?: string },
-  ): ContractModelBuilder<ModelName, Fields, Relations, undefined, undefined, IndexTypes>;
+    input: {
+      readonly fields: Fields;
+      readonly relations?: Relations;
+      readonly namespace?: TNamespace;
+    },
+  ): ContractModelBuilder<
+    ModelName,
+    Fields,
+    Relations,
+    undefined,
+    undefined,
+    IndexTypes,
+    '<self>',
+    NoInfer<TNamespace>
+  >;
   <
     Fields extends Record<string, ScalarFieldBuilder>,
     Relations extends Record<string, AnyRelationBuilder> = Record<never, never>,
+    const TNamespace extends string | undefined = undefined,
   >(input: {
     readonly fields: Fields;
     readonly relations?: Relations;
-    readonly namespace?: string;
-  }): ContractModelBuilder<undefined, Fields, Relations, undefined, undefined, IndexTypes>;
+    readonly namespace?: TNamespace;
+  }): ContractModelBuilder<
+    undefined,
+    Fields,
+    Relations,
+    undefined,
+    undefined,
+    IndexTypes,
+    '<self>',
+    NoInfer<TNamespace>
+  >;
 };
 
 export type ComposedAuthoringHelpers<

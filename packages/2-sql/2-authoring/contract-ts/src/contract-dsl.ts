@@ -1448,6 +1448,7 @@ export class ContractModelBuilder<
   SqlSpec extends SqlStageSpec | undefined = undefined,
   IndexTypes extends IndexTypeMap = Record<never, never>,
   TSpaceId extends string = '<self>',
+  TNamespace extends string | undefined = string | undefined,
 > {
   declare readonly __name: ModelName;
   declare readonly __fields: Fields;
@@ -1461,7 +1462,7 @@ export class ContractModelBuilder<
   constructor(
     readonly stageOne: {
       readonly modelName?: ModelName;
-      readonly namespace?: string;
+      readonly namespace?: Exclude<TNamespace, undefined>;
       readonly fields: Fields;
       readonly relations: Relations;
     },
@@ -1519,7 +1520,8 @@ export class ContractModelBuilder<
     AttributesSpec,
     SqlSpec,
     IndexTypes,
-    TSpaceId
+    TSpaceId,
+    TNamespace
   > {
     const duplicateRelationName = findDuplicateRelationName(this.stageOne.relations, relations);
     if (duplicateRelationName) {
@@ -1563,7 +1565,8 @@ export class ContractModelBuilder<
     NextAttributesSpec,
     SqlSpec,
     IndexTypes,
-    TSpaceId
+    TSpaceId,
+    TNamespace
   > {
     return new ContractModelBuilder(
       this.stageOne,
@@ -1584,7 +1587,8 @@ export class ContractModelBuilder<
         AttributesSpec,
         never,
         IndexTypes,
-        TSpaceId
+        TSpaceId,
+        TNamespace
       >
     : ContractModelBuilder<
         ModelName,
@@ -1593,7 +1597,8 @@ export class ContractModelBuilder<
         AttributesSpec,
         NextSqlSpec,
         IndexTypes,
-        TSpaceId
+        TSpaceId,
+        TNamespace
       > {
     // Conditional return type cannot be verified by the implementation; the runtime value is always a valid ContractModelBuilder regardless of the validation outcome (validation is type-level only).
     // When specOrFactory is a static object (not a function), extract tableName for the cross-space coordinate.
@@ -1815,23 +1820,43 @@ export function model<
   const ModelName extends string,
   Fields extends Record<string, ScalarFieldBuilder>,
   Relations extends Record<string, AnyRelationBuilder> = Record<never, never>,
+  const TNamespace extends string | undefined = undefined,
 >(
   modelName: ModelName,
   input: {
     readonly fields: Fields;
     readonly relations?: Relations;
-    readonly namespace?: string;
+    readonly namespace?: TNamespace;
   },
-): ContractModelBuilder<ModelName, Fields, Relations>;
+): ContractModelBuilder<
+  ModelName,
+  Fields,
+  Relations,
+  undefined,
+  undefined,
+  Record<never, never>,
+  '<self>',
+  NoInfer<TNamespace>
+>;
 
 export function model<
   Fields extends Record<string, ScalarFieldBuilder>,
   Relations extends Record<string, AnyRelationBuilder> = Record<never, never>,
+  const TNamespace extends string | undefined = undefined,
 >(input: {
   readonly fields: Fields;
   readonly relations?: Relations;
-  readonly namespace?: string;
-}): ContractModelBuilder<undefined, Fields, Relations>;
+  readonly namespace?: TNamespace;
+}): ContractModelBuilder<
+  undefined,
+  Fields,
+  Relations,
+  undefined,
+  undefined,
+  Record<never, never>,
+  '<self>',
+  NoInfer<TNamespace>
+>;
 
 export function model<
   const ModelName extends string,
