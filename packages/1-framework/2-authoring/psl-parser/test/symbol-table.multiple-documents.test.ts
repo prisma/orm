@@ -69,8 +69,8 @@ describe('multiple-document symbol tables', () => {
     expect(reversed.diagnostics.map(({ filename }) => filename)).toEqual(['1.psl', '0.psl']);
   });
 
-  it('retains local field errors and does not merge repeated namespaces', () => {
-    const { symbolTable, diagnostics } = build(
+  it('retains local field errors while reopening namespaces across documents', () => {
+    const { symbolTable, diagnostics, sources } = build(
       'model User {\n id Int\n id String\n}\nnamespace app { model First { id Int } }',
       'model Post {\n value a.b.c\n}\nnamespace app { model Second { id Int } }',
     );
@@ -83,9 +83,12 @@ describe('multiple-document symbol tables', () => {
     ).toEqual([
       { code: 'PSL_DUPLICATE_DECLARATION', line: 2, filename: '0.psl' },
       { code: 'PSL_INVALID_QUALIFIED_TYPE', line: 1, filename: '1.psl' },
-      { code: 'PSL_DUPLICATE_DECLARATION', line: 3, filename: '1.psl' },
     ]);
-    expect(Object.keys(symbolTable.topLevel.namespaces['app']!.models)).toEqual(['First']);
+    const namespace = symbolTable.topLevel.namespaces['app']!;
+    expect(Object.keys(namespace.models)).toEqual(['First', 'Second']);
+    expect(
+      namespace.declarations.map(({ node }) => sources.sourceFileFor(node.syntax).filename),
+    ).toEqual(['0.psl', '1.psl']);
   });
 
   it('accepts no documents as an empty scope', () => {

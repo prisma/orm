@@ -121,9 +121,7 @@ function validateNamespaceBlocksForMongoTarget(input: {
       input.diagnostics.push({
         code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
         message: `Mongo does not support \`namespace ${namespace.name} { … }\` blocks (the database is bound by the connection string; declare models at the document top level instead).`,
-        span, ... diagnosticSource(input.sources, node.syntax).at(
-        nodePslSpan(namespace.node.syntax, input.sources),
-      ),
+        ...diagnosticSource(input.sources, node.syntax).at(span),
       });
     }
   }

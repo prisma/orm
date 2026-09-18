@@ -130,7 +130,7 @@ namespace auth {
   model Session { id Int }
 }`);
     expect(result.diagnostics).toEqual([]);
-    const { blog, auth } = result.table.topLevel.namespaces;
+    const { blog, auth } = result.symbolTable.topLevel.namespaces;
     expect(Object.keys(blog?.models ?? {})).toEqual(['Post']);
     expect(Object.keys(blog?.compositeTypes ?? {})).toEqual(['Address']);
     expect(Object.keys(blog?.blocks ?? {})).toEqual(['ReadPosts']);
@@ -150,11 +150,12 @@ namespace blog {
       {
         code: 'PSL_DUPLICATE_DECLARATION',
         message: 'Duplicate declaration of "Post"',
+        filename: 'test.psl',
         range: { start: { line: 4, character: 8 }, end: { line: 4, character: 12 } },
       },
     ]);
     expect(
-      Object.keys(result.table.topLevel.namespaces['blog']?.models['Post']?.fields ?? {}),
+      Object.keys(result.symbolTable.topLevel.namespaces['blog']?.models['Post']?.fields ?? {}),
     ).toEqual(['id']);
   });
 
@@ -171,15 +172,15 @@ namespace blog {
         message: 'Duplicate declaration of "Post"',
       }),
     ]);
-    expect(result.table.topLevel.namespaces['blog']?.models['Post']?.kind).toBe('model');
-    expect(result.table.topLevel.namespaces['blog']?.compositeTypes).toEqual({});
+    expect(result.symbolTable.topLevel.namespaces['blog']?.models['Post']?.kind).toBe('model');
+    expect(result.symbolTable.topLevel.namespaces['blog']?.compositeTypes).toEqual({});
   });
 
   it('retains every authored namespace node and span, including empty blocks', () => {
     const result = build(`namespace blog {}
 namespace auth {}
 namespace blog {}`);
-    const declarations = result.table.topLevel.namespaces['blog']?.declarations;
+    const declarations = result.symbolTable.topLevel.namespaces['blog']?.declarations;
     expect(declarations).toHaveLength(2);
     expect(declarations?.[0]?.node).toBeInstanceOf(NamespaceDeclarationAst);
     expect(declarations?.[1]?.node).toBeInstanceOf(NamespaceDeclarationAst);
@@ -209,7 +210,7 @@ namespace blocks {
   policy __proto__ {}
 }`);
     expect(result.diagnostics).toEqual([]);
-    const namespaces = result.table.topLevel.namespaces;
+    const namespaces = result.symbolTable.topLevel.namespaces;
     expect(Object.keys(namespaces)).toEqual(['__proto__', 'types', 'blocks']);
     const prototypeNamedNamespace = Object.values(namespaces)[0];
     expect(Object.keys(prototypeNamedNamespace?.models ?? {})).toEqual([
@@ -232,8 +233,8 @@ model Second {}`);
       'Duplicate declaration of "First"',
       'Duplicate declaration of "Second"',
     ]);
-    expect(Object.keys(result.table.topLevel.models)).toEqual(['First']);
-    expect(Object.keys(result.table.topLevel.namespaces)).toEqual(['Second']);
+    expect(Object.keys(result.symbolTable.topLevel.models)).toEqual(['First']);
+    expect(Object.keys(result.symbolTable.topLevel.namespaces)).toEqual(['Second']);
   });
 });
 
