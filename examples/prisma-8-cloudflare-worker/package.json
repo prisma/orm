@@ -24,7 +24,7 @@
     "@prisma/orm-postgres": "workspace:8.0.0-rc.11",
     "arktype": "catalog:",
     "pg": "catalog:",
-    "temporal-polyfill": "^1.0.4"
+    "temporal-polyfill": "^1.0.5"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "0.20.3",
@@ -35,7 +35,7 @@
     "@types/pg": "catalog:",
     "tsx": "catalog:",
     "typescript": "catalog:",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.11",
     "wrangler": "4.119.0"
   },
   "version": "8.0.0-rc.11"
