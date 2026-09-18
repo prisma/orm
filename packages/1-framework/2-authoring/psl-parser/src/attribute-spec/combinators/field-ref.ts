@@ -15,7 +15,7 @@ import { leafDiagnostic } from './diagnostic';
 function parseFieldName(
   arg: ExpressionAst,
   ctx: AttributeCtx,
-  model: ModelSymbol | undefined,
+  model: () => ModelSymbol | undefined,
 ): Result<string, readonly PslDiagnostic[]> {
   const identifier = IdentifierAst.cast(arg.syntax);
   if (identifier === undefined) {
@@ -25,10 +25,15 @@ function parseFieldName(
   if (name === undefined) {
     return notOk([leafDiagnostic(ctx, arg, 'Expected a field name')]);
   }
+  if (ctx.binder !== undefined) {
+    const resolution = ctx.binder.symbolForNode(arg.syntax);
+    return ok(resolution?.kind === 'field' ? resolution.symbol.name : name);
+  }
   // A referenced model in another space can't be resolved here (resolveReferencedModel returns undefined); skip the existence check — it runs where that model is known.
-  if (model !== undefined && !Object.hasOwn(model.fields, name)) {
+  const owner = model();
+  if (owner !== undefined && !Object.hasOwn(owner.fields, name)) {
     return notOk([
-      leafDiagnostic(ctx, arg, `Field "${name}" does not exist on model "${model.name}"`),
+      leafDiagnostic(ctx, arg, `Field "${name}" does not exist on model "${owner.name}"`),
     ]);
   }
   return ok(name);
@@ -38,7 +43,7 @@ export function fieldRef(): FieldRefArgType<ModelAttributeCtx> {
   return {
     kind: 'fieldRef',
     label: 'field name',
-    parse: (arg, ctx) => parseFieldName(arg, ctx, ctx.selfModel),
+    parse: (arg, ctx) => parseFieldName(arg, ctx, () => ctx.selfModel),
   };
 }
 
@@ -46,6 +51,6 @@ export function referencedFieldRef(): ReferencedFieldRefArgType<FieldAttributeCt
   return {
     kind: 'referencedFieldRef',
     label: 'field name',
-    parse: (arg, ctx) => parseFieldName(arg, ctx, ctx.resolveReferencedModel()),
+    parse: (arg, ctx) => parseFieldName(arg, ctx, () => ctx.resolveReferencedModel()),
   };
 }

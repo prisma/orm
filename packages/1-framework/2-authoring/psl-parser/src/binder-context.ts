@@ -21,12 +21,13 @@ export interface FieldAttributeContextInput extends ModelAttributeContextInput {
 }
 
 export function modelAttributeContext(input: ModelAttributeContextInput): ModelAttributeCtx {
-  return { sources: input.sources, selfModel: input.model };
+  return { sources: input.sources, binder: input.binder, selfModel: input.model };
 }
 
 export function fieldAttributeContext(input: FieldAttributeContextInput): FieldAttributeCtx {
   return {
     sources: input.sources,
+    binder: input.binder,
     selfModel: input.model,
     field: input.field,
     resolveReferencedModel: () => referencedModel(input.binder, input.field),
