@@ -46,12 +46,12 @@ export class SyntaxToken implements Token {
 
   /** The sibling element immediately after this token within its parent. */
   get nextSiblingOrToken(): SyntaxElement | undefined {
-    return childAt(this.parent, this.index + 1);
+    return this.parent.childAt(this.index + 1);
   }
 
   /** The sibling element immediately before this token within its parent. */
   get prevSiblingOrToken(): SyntaxElement | undefined {
-    return childAt(this.parent, this.index - 1);
+    return this.parent.childAt(this.index - 1);
   }
 
   /** The next token in document order, crossing node boundaries. */
@@ -143,12 +143,39 @@ export class SyntaxNode {
   readonly parent: SyntaxNode | undefined;
   /** Position within the parent's children, enabling O(1) sibling navigation without rescanning the green layer. */
   readonly index: number;
+  #childSlots: ReadonlyArray<SyntaxElement> | undefined;
 
   constructor(green: GreenNode, offset: number, parent: SyntaxNode | undefined, index: number) {
     this.green = green;
     this.offset = offset;
     this.parent = parent;
     this.index = index;
+  }
+
+  #slots(): ReadonlyArray<SyntaxElement> {
+    let slots = this.#childSlots;
+    if (slots === undefined) {
+      const created: SyntaxElement[] = [];
+      let offset = this.offset;
+      let index = 0;
+      for (const child of this.green.children) {
+        created.push(wrapElement(child, offset, this, index));
+        offset += elementTextLength(child);
+        index++;
+      }
+      slots = created;
+      this.#childSlots = slots;
+    }
+    return slots;
+  }
+
+  /**
+   * The child at `index`, or `undefined` when out of range. Every traversal
+   * reaching the same position within one tree returns the identical wrapper,
+   * so red elements are usable as `WeakMap`/`Map` keys for side tables.
+   */
+  childAt(index: number): SyntaxElement | undefined {
+    return this.#slots()[index];
   }
 
   get kind(): SyntaxKind {
@@ -173,21 +200,19 @@ export class SyntaxNode {
   }
 
   get firstChild(): SyntaxElement | undefined {
-    return childAt(this, 0);
+    return this.childAt(0);
   }
 
   get lastChild(): SyntaxElement | undefined {
-    const len = this.green.children.length;
-    if (len === 0) return undefined;
-    return childAt(this, len - 1);
+    return this.childAt(this.green.children.length - 1);
   }
 
   get nextSibling(): SyntaxElement | undefined {
-    return this.parent === undefined ? undefined : childAt(this.parent, this.index + 1);
+    return this.parent?.childAt(this.index + 1);
   }
 
   get prevSibling(): SyntaxElement | undefined {
-    return this.parent === undefined ? undefined : childAt(this.parent, this.index - 1);
+    return this.parent?.childAt(this.index - 1);
   }
 
   /** The sibling element immediately after this node within its parent. */
@@ -211,13 +236,7 @@ export class SyntaxNode {
   }
 
   *children(): Iterable<SyntaxElement> {
-    let offset = this.offset;
-    let index = 0;
-    for (const child of this.green.children) {
-      yield wrapElement(child, offset, this, index);
-      offset += elementTextLength(child);
-      index++;
-    }
+    yield* this.#slots();
   }
 
   *childNodes(): Iterable<SyntaxNode> {
@@ -389,7 +408,7 @@ function climbingNext(el: SyntaxElement): SyntaxElement | undefined {
   for (;;) {
     const parent = current.parent;
     if (parent === undefined) return undefined;
-    const sibling = childAt(parent, current.index + 1);
+    const sibling = parent.childAt(current.index + 1);
     if (sibling !== undefined) return sibling;
     current = parent;
   }
@@ -400,7 +419,7 @@ function climbingPrev(el: SyntaxElement): SyntaxElement | undefined {
   for (;;) {
     const parent = current.parent;
     if (parent === undefined) return undefined;
-    const sibling = childAt(parent, current.index - 1);
+    const sibling = parent.childAt(current.index - 1);
     if (sibling !== undefined) return sibling;
     current = parent;
   }
@@ -416,20 +435,6 @@ function wrapElement(
     return new SyntaxToken(green, offset, parent, index);
   }
   return new SyntaxNode(green, offset, parent, index);
-}
-
-function childAt(node: SyntaxNode, index: number): SyntaxElement | undefined {
-  const children = node.green.children;
-  const target = children[index];
-  if (target === undefined) return undefined;
-  let offset = node.offset;
-  for (let i = 0; i < index; i++) {
-    const child = children[i];
-    if (child !== undefined) {
-      offset += elementTextLength(child);
-    }
-  }
-  return wrapElement(target, offset, node, index);
 }
 
 export function createSyntaxTree(green: GreenNode): SyntaxNode {
