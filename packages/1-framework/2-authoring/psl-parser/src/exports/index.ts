@@ -91,6 +91,33 @@ export type {
   TaggedLiteralArgType,
   TypedFuncCall,
 } from '../attribute-spec/types';
+export type {
+  AttributeArgTypeView,
+  AttributeParamView,
+  AttributePositionalParamView,
+  AttributeSpecRegistry,
+  AttributeSpecView,
+  Binder,
+  BinderResult,
+  CreateBinderOptions,
+  PslSymbol,
+  Resolution,
+} from '../binder';
+export {
+  createBinder,
+  PSL_UNRESOLVED_ATTRIBUTE,
+  PSL_UNRESOLVED_REFERENCE,
+  typeReferenceNode,
+} from '../binder';
+export type {
+  FieldAttributeContextInput,
+  ModelAttributeContextInput,
+} from '../binder-context';
+export {
+  fieldAttributeContext,
+  modelAttributeContext,
+  referencedModel,
+} from '../binder-context';
 export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
 export {
   createPslDiagnosticCollector,
@@ -123,3 +150,4 @@ export type {
   TopLevelScope,
 } from '../symbol-table';
 export { buildSymbolTable } from '../symbol-table';
+export type { UniverseScope, UniverseSymbol } from '../universe-scope';

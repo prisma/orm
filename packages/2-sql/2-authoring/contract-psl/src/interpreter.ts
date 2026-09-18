@@ -43,6 +43,7 @@ import type {
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import type { Binder } from '@internal/psl-parser';
 import {
   type BlockSymbol,
   type CompositeTypeSymbol,
@@ -88,7 +89,6 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { contractError } from './contract-errors';
-
 import { getAttribute, getNamedArgument, mapFieldNamesToColumns } from './psl-attribute-parsing';
 import type { ColumnDescriptor } from './psl-column-resolution';
 import {
@@ -116,6 +116,7 @@ import {
   validateBackrelationFieldAttributes,
 } from './psl-relation-resolution';
 import {
+  createSqlBinder,
   findModelAttributeNode,
   interpretModelAttribute,
   PSL_CHECK_ON_STI_VARIANT,
@@ -273,6 +274,7 @@ function validateNamespaceBlocksForSqlTarget(input: {
   readonly targetId: string;
   readonly source: DiagnosticSource;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
 }): void {
   if (input.targetId === 'sqlite') {
@@ -640,6 +642,7 @@ interface BuildModelNodeInput {
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly symbolTable: SymbolTable;
   readonly diagnostics: PslDiagnosticCollector;
   /** Resolved namespace id keyed by model name — used to stamp the target namespace on FKs. */
@@ -751,6 +754,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     generatorDescriptorById: input.generatorDescriptorById,
     diagnostics,
     sources: input.sources,
+    binder: input.binder,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
     ...ifDefined('enumHandles', input.enumHandles),
     capabilities: input.capabilities,
@@ -800,6 +804,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       modelName: model.name,
       field,
       sources: input.sources,
+      binder: input.binder,
       composedExtensions: input.composedExtensions,
       authoringContributions: input.authoringContributions,
       diagnostics,
@@ -813,6 +818,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         field,
         symbols: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (!parsedRelation) {
@@ -932,6 +938,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         spec: sqlAttributeSpecs.model.control(),
         model,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed !== undefined) {
@@ -967,6 +974,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         spec: sqlAttributeSpecs.model.id(),
         model,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1011,6 +1019,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         spec: sqlAttributeSpecs.model.unique(),
         model,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1044,6 +1053,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         spec: sqlAttributeSpecs.model.index(),
         model,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1103,6 +1113,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         spec: sqlAttributeSpecs.model.check(),
         model,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1149,6 +1160,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         }),
         model,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (parsed === undefined) {
@@ -1240,6 +1252,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         field: relationAttribute.field,
         symbols: input.symbolTable,
         sources: input.sources,
+        binder: input.binder,
         diagnostics,
       });
       if (!parsedRelation) {
@@ -1399,6 +1412,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       field: relationAttribute.field,
       symbols: input.symbolTable,
       sources: input.sources,
+      binder: input.binder,
       diagnostics,
     });
     if (!parsedRelation) {
@@ -1558,6 +1572,7 @@ interface BuildValueObjectsInput {
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
+  readonly binder: Binder;
 }
 
 function buildValueObjects(input: BuildValueObjectsInput): Record<string, ContractValueObject> {
@@ -1677,6 +1692,7 @@ type BaseDeclaration = {
 function collectPolymorphismDeclarations(
   models: readonly ModelSymbol[],
   sources: PslSources,
+  binder: Binder,
   diagnostics: PslDiagnosticCollector,
 ): {
   discriminatorDeclarations: Map<string, DiscriminatorDeclaration>;
@@ -1694,6 +1710,7 @@ function collectPolymorphismDeclarations(
         spec: sqlAttributeSpecs.model.discriminator(),
         model,
         sources,
+        binder,
         diagnostics,
       });
       if (parsed !== undefined) {
@@ -1718,6 +1735,7 @@ function collectPolymorphismDeclarations(
         spec: sqlAttributeSpecs.model.base(),
         model,
         sources,
+        binder,
         diagnostics,
       });
       if (parsed !== undefined) {
@@ -1813,14 +1831,7 @@ function resolvePolymorphism(
   }
 
   for (const [variantName, baseDecl] of baseDeclarations) {
-    if (!modelNames.has(baseDecl.baseName)) {
-      diagnostics.push({
-        code: 'PSL_BASE_TARGET_NOT_FOUND',
-        message: `Model "${variantName}" @@base references non-existent model "${baseDecl.baseName}"`,
-        ...baseDecl.source.at(baseDecl.span),
-      });
-      continue;
-    }
+    if (!modelNames.has(baseDecl.baseName)) continue;
 
     if (!discriminatorDeclarations.has(baseDecl.baseName)) {
       diagnostics.push({
@@ -2054,6 +2065,14 @@ export function interpretPslDocumentToSqlContract(
 ): Result<Contract, ContractSourceDiagnostics> {
   const source = diagnosticSource(input.sources, input.document.syntax);
   const diagnostics = createPslDiagnosticCollector(input.sources);
+  const { binder, diagnostics: binderDiagnostics } = createSqlBinder({
+    symbolTable: input.symbolTable,
+    sources: input.sources,
+    authoringContributions: input.authoringContributions,
+    controlMutationDefaults: input.controlMutationDefaults,
+    scalarColumnDescriptors: input.scalarColumnDescriptors,
+  });
+  diagnostics.push(...binderDiagnostics);
   if (!input.target) {
     diagnostics.pushUnlocated({
       code: 'PSL_TARGET_CONTEXT_REQUIRED',
@@ -2084,6 +2103,7 @@ export function interpretPslDocumentToSqlContract(
     targetId: input.target.targetId,
     source,
     sources: input.sources,
+    binder,
     diagnostics,
   });
   validateBlockModelAttributeRequirements({
@@ -2268,6 +2288,7 @@ export function interpretPslDocumentToSqlContract(
     defaultNamespaceId,
     createPslDiagnosticCollector(input.sources),
     input.sources,
+    binder,
   );
   const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
   const namespaceExtensionEntities = new Map<
@@ -2418,6 +2439,7 @@ export function interpretPslDocumentToSqlContract(
     defaultNamespaceId,
     diagnostics,
     input.sources,
+    binder,
   );
   // Bare-name view for unqualified relation targets and polymorphism, where
   // resolution is by bare model name. When a bare name is shared across
@@ -2468,6 +2490,7 @@ export function interpretPslDocumentToSqlContract(
       generatorDescriptorById,
       scalarColumnDescriptors: input.scalarColumnDescriptors,
       sources: input.sources,
+      binder,
       symbolTable: input.symbolTable,
       diagnostics,
       modelNamespaceIds,
@@ -2543,6 +2566,7 @@ export function interpretPslDocumentToSqlContract(
   const { discriminatorDeclarations, baseDeclarations } = collectPolymorphismDeclarations(
     models,
     input.sources,
+    binder,
     diagnostics,
   );
 
@@ -2604,6 +2628,7 @@ export function interpretPslDocumentToSqlContract(
     authoringContributions: input.authoringContributions,
     diagnostics,
     sources: input.sources,
+    binder,
   });
 
   if (diagnostics.length > 0 || (input.seedDiagnostics?.length ?? 0) > 0) {

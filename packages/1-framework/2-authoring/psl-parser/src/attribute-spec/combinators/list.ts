@@ -28,12 +28,17 @@ export function list<T, Ctx extends AttributeCtx>(
       }
       const diagnostics: PslDiagnostic[] = [];
       const parsed: { node: ExpressionAst; value: T }[] = [];
+      let failed = false;
       let count = 0;
       for (const element of literal.elements()) {
         count += 1;
         const result = of.parse(element, ctx);
-        if (result.ok) parsed.push({ node: element, value: result.value });
-        else diagnostics.push(...result.failure);
+        if (result.ok) {
+          parsed.push({ node: element, value: result.value });
+        } else {
+          failed = true;
+          diagnostics.push(...result.failure);
+        }
       }
       if (!allowEmpty && count === 0) {
         diagnostics.push(leafDiagnostic(ctx, arg, 'Expected a non-empty list'));
@@ -45,7 +50,7 @@ export function list<T, Ctx extends AttributeCtx>(
           else seen.add(value);
         }
       }
-      if (diagnostics.length > 0) return notOk(diagnostics);
+      if (failed || diagnostics.length > 0) return notOk(diagnostics);
       return ok(parsed.map((entry) => entry.value));
     },
   };

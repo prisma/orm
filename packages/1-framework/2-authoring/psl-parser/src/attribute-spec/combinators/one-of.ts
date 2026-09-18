@@ -22,6 +22,7 @@ export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
     label,
     alternatives: alts,
     parse: (arg, ctx): Result<OutOf<Alts[number]>, readonly PslDiagnostic[]> => {
+      let silent = false;
       for (const alt of alts) {
         const parse = blindCast<
           (arg: Parameters<typeof alt.parse>[0], ctx: ParseContext) => ReturnType<typeof alt.parse>,
@@ -36,7 +37,9 @@ export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
             >(result.value),
           );
         }
+        if (result.failure.length === 0) silent = true;
       }
+      if (silent) return notOk([]);
       return notOk([leafDiagnostic(ctx, arg, `Expected one of: ${label}`)]);
     },
   } satisfies OneOfArgType<Alts, ParseContext>;

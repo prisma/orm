@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { createBinder } from '../src/binder';
 import type { ModelAttributeCtx } from '../src/exports';
 import {
   bool,
@@ -43,11 +44,18 @@ function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCt
   });
   const selfModel = symbolTable.topLevel.models['M'];
   if (selfModel === undefined) throw new Error('expected model M');
+  const { binder } = createBinder({
+    sources,
+    symbolTable,
+    typeConstructors: {},
+    attributeSpecs: { model: () => undefined, field: () => undefined },
+  });
   return {
     arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,
     ctx: {
       sources: new PslSources([[root, cursor.sourceFile]]),
       selfModel,
+      binder,
     },
   };
 }
@@ -66,7 +74,6 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
       'Cascade',
     ],
     ['entityRef', entityRef(), 'User', 'User'],
-    ['fieldRef', fieldRef(), 'id', 'id'],
     ['json', json(), '"{\\"a\\":1}"', { a: 1 }],
     ['list', list(str()), '["a", "b"]', ['a', 'b']],
     ['record', record(int()), '{ a: 1 }', { a: 1 }],
@@ -77,6 +84,15 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
 
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.value).toEqual(expected);
+  });
+
+  it('fieldRef dispatches on the syntax kind of a node from another module copy', () => {
+    const { arg, ctx } = foreignArg('id');
+
+    const result = fieldRef().parse(arg, ctx);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure).toEqual([]);
   });
 
   it('funcCall accepts a node from another module copy', () => {

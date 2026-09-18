@@ -17,6 +17,7 @@ export function record<T, Ctx extends AttributeCtx>(of: ArgType<T, Ctx>): Record
       const diagnostics: PslDiagnostic[] = [];
       const entries: [string, T][] = [];
       const keys = new Set<string>();
+      let failed = false;
       for (const field of Array.from(literal.fields())) {
         const key = field.keyName();
         if (key === undefined) {
@@ -30,6 +31,7 @@ export function record<T, Ctx extends AttributeCtx>(of: ArgType<T, Ctx>): Record
         }
         const parsed = of.parse(value, ctx);
         if (!parsed.ok) {
+          failed = true;
           diagnostics.push(...parsed.failure);
           continue;
         }
@@ -40,7 +42,7 @@ export function record<T, Ctx extends AttributeCtx>(of: ArgType<T, Ctx>): Record
         keys.add(key);
         entries.push([key, parsed.value]);
       }
-      if (diagnostics.length > 0) return notOk(diagnostics);
+      if (failed || diagnostics.length > 0) return notOk(diagnostics);
       return ok(Object.fromEntries(entries));
     },
   };

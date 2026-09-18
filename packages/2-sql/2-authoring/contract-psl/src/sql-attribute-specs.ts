@@ -1,3 +1,10 @@
+import type {
+  AuthoringContributions,
+  AuthoringFieldNamespace,
+  AuthoringTypeConstructorDescriptor,
+  AuthoringTypeNamespace,
+} from '@internal/framework-components/authoring';
+import { isAuthoringFieldPresetDescriptor } from '@internal/framework-components/authoring';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
@@ -6,6 +13,9 @@ import type {
   AttributeSpec,
   AttributeSpecContext,
   AttributeSpecNamespace,
+  AttributeSpecRegistry,
+  AttributeSpecView,
+  Binder,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
   FieldSymbol,
@@ -23,6 +33,7 @@ import type {
 } from '@internal/psl-parser';
 import {
   bool,
+  createBinder,
   diagnosticSource,
   entityRef,
   fieldAttribute,
@@ -75,10 +86,12 @@ export function findFieldAttributeNode(
 function buildModelAttributeCtx(input: {
   readonly selfModel: ModelSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
 }): ModelAttributeCtx {
   return {
     sources: input.sources,
     selfModel: input.selfModel,
+    binder: input.binder,
   };
 }
 
@@ -86,14 +99,95 @@ function buildFieldAttributeCtx(input: {
   readonly selfModel: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
-  readonly resolveReferencedModel?: (() => ModelSymbol | undefined) | undefined;
+  readonly binder: Binder;
 }): FieldAttributeCtx {
   return {
     sources: input.sources,
     selfModel: input.selfModel,
-    resolveReferencedModel: input.resolveReferencedModel ?? (() => undefined),
     field: input.field,
+    binder: input.binder,
   };
+}
+
+export function sqlBinderAttributeSpecs(input: {
+  readonly symbolTable: SymbolTable;
+  readonly controlMutationDefaults?: ControlDefaultRegistries | undefined;
+}): AttributeSpecRegistry {
+  const model: Readonly<Record<string, AttributeSpecView>> = {
+    map: mapModelSpec,
+    id: idModelSpec,
+    unique: uniqueModelSpec,
+    index: indexModelSpec,
+    check: checkModelSpec,
+    control: controlModelSpec,
+    discriminator: discriminatorModelSpec,
+    base: baseModelSpec,
+  };
+  const field: Readonly<Record<string, AttributeSpecView>> = {
+    map: mapFieldSpec,
+    id: idFieldSpec,
+    unique: uniqueFieldSpec,
+    noCheck: noCheckFieldSpec,
+    relation: relationFieldSpec,
+  };
+  const { controlMutationDefaults } = input;
+  const noReferences: AttributeSpecView = { positional: [], named: {} };
+  return {
+    model: (name) => (Object.hasOwn(model, name) ? model[name] : noReferences),
+    field: (name, owner, declaringField) => {
+      if (Object.hasOwn(field, name)) return field[name];
+      if (name === 'default' && controlMutationDefaults !== undefined && owner.kind === 'model') {
+        return sqlAttributeSpecs.field.default(
+          fieldSpecContext({
+            symbols: input.symbolTable,
+            model: owner,
+            field: declaringField,
+            controlMutationDefaults,
+          }),
+        );
+      }
+      return noReferences;
+    },
+  };
+}
+
+function fieldPresetsAsTypeNames(
+  namespace: AuthoringFieldNamespace | undefined,
+): AuthoringTypeNamespace {
+  if (namespace === undefined) return {};
+  const result: Record<string, AuthoringTypeConstructorDescriptor | AuthoringTypeNamespace> = {};
+  for (const [name, value] of Object.entries(namespace)) {
+    result[name] = isAuthoringFieldPresetDescriptor(value)
+      ? { kind: 'typeConstructor', output: { codecId: value.output.codecId } }
+      : fieldPresetsAsTypeNames(value);
+  }
+  return result;
+}
+
+export function createSqlBinder(input: {
+  readonly symbolTable: SymbolTable;
+  readonly sources: PslSources;
+  readonly authoringContributions?: AuthoringContributions | undefined;
+  readonly controlMutationDefaults?: ControlDefaultRegistries | undefined;
+  readonly scalarColumnDescriptors?: ReadonlyMap<string, { readonly codecId: string }> | undefined;
+}): { readonly binder: Binder; readonly diagnostics: readonly PslDiagnostic[] } {
+  const scalars: Record<string, AuthoringTypeConstructorDescriptor> = {};
+  for (const [name, descriptor] of input.scalarColumnDescriptors ?? []) {
+    scalars[name] = { kind: 'typeConstructor', output: { codecId: descriptor.codecId } };
+  }
+  return createBinder({
+    sources: input.sources,
+    symbolTable: input.symbolTable,
+    typeConstructors: {
+      ...scalars,
+      ...fieldPresetsAsTypeNames(input.authoringContributions?.field),
+      ...(input.authoringContributions?.type ?? {}),
+    },
+    attributeSpecs: sqlBinderAttributeSpecs({
+      symbolTable: input.symbolTable,
+      controlMutationDefaults: input.controlMutationDefaults,
+    }),
+  });
 }
 
 // Interpret a model-level attribute node against its spec, draining any parse
@@ -104,6 +198,7 @@ export function interpretModelAttribute<Out>(input: {
   readonly spec: AttributeSpec<Out, ModelAttributeCtx>;
   readonly model: ModelSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
 }): Out | undefined {
   const result = interpretAttribute(
@@ -112,6 +207,7 @@ export function interpretModelAttribute<Out>(input: {
     buildModelAttributeCtx({
       selfModel: input.model,
       sources: input.sources,
+      binder: input.binder,
     }),
   );
   if (!result.ok) {
@@ -130,8 +226,8 @@ export function interpretFieldAttribute<Out>(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
-  readonly resolveReferencedModel?: () => ModelSymbol | undefined;
 }): Out | undefined {
   const result = interpretAttribute(
     input.node,
@@ -140,7 +236,7 @@ export function interpretFieldAttribute<Out>(input: {
       selfModel: input.model,
       field: input.field,
       sources: input.sources,
-      resolveReferencedModel: input.resolveReferencedModel,
+      binder: input.binder,
     }),
   );
   if (!result.ok) {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from '../../src/parse';
 import { FieldDeclarationAst, ModelDeclarationAst } from '../../src/syntax/ast/declarations';
 import { GreenNodeBuilder } from '../../src/syntax/green-builder';
+import type { SyntaxElement } from '../../src/syntax/red';
 import { createSyntaxTree, SyntaxNode, SyntaxToken, TokenAtOffset } from '../../src/syntax/red';
 import type { SyntaxKind } from '../../src/syntax/syntax-kind';
 
@@ -556,6 +557,120 @@ describe('SyntaxNode.coveringElement', () => {
     b.startNode('Document');
     const root = createSyntaxTree(b.finishNode());
     expect(root.coveringElement(0, 0)).toBe(root);
+  });
+});
+
+describe('red element identity', () => {
+  function expectSameElements(left: readonly SyntaxElement[], right: readonly SyntaxElement[]) {
+    expect(right).toHaveLength(left.length);
+    left.forEach((el, i) => {
+      expect(right[i]).toBe(el);
+    });
+  }
+
+  it('returns the same wrapper from repeated childAt', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    const model = firstNodeOfKind(root, 'ModelDeclaration');
+    expect(model.childAt(0)).toBe(model.childAt(0));
+    expect(model.childAt(3)).toBe(model.childAt(3));
+    expect(root.childAt(0)).toBe(root.childAt(0));
+  });
+
+  it('returns the same wrappers across two children() walks', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    const model = firstNodeOfKind(root, 'ModelDeclaration');
+    expectSameElements(Array.from(model.children()), Array.from(model.children()));
+  });
+
+  it('agrees between children() and childAt', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    const model = firstNodeOfKind(root, 'ModelDeclaration');
+    const children = Array.from(model.children());
+    children.forEach((el, i) => {
+      expect(model.childAt(i)).toBe(el);
+    });
+  });
+
+  it('returns the same wrapper from repeated firstChild / lastChild', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    const model = firstNodeOfKind(root, 'ModelDeclaration');
+    expect(root.firstChild).toBe(root.firstChild);
+    expect(model.firstChild).toBe(model.childAt(0));
+    expect(model.lastChild).toBe(model.lastChild);
+    expect(model.lastChild).toBe(model.childAt(model.green.children.length - 1));
+  });
+
+  it('returns the same wrapper from repeated sibling navigation', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    const model = firstNodeOfKind(root, 'ModelDeclaration');
+    const name = model.childAt(2);
+    expect(name).toBeInstanceOf(SyntaxNode);
+    if (name instanceof SyntaxNode) {
+      expect(name.nextSibling).toBe(name.nextSibling);
+      expect(name.nextSibling).toBe(model.childAt(3));
+      expect(name.prevSibling).toBe(model.childAt(1));
+      expect(name.nextSibling?.prevSiblingOrToken).toBe(name);
+    }
+  });
+
+  it('returns the same ancestors from different descent paths', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    const field = firstNodeOfKind(root, 'FieldDeclaration');
+    const viaDescendants = firstNodeOfKind(field, 'Identifier');
+    const viaToken = root.tokenAtOffset(16).leftBiased()?.parent;
+
+    expect(viaToken).toBe(viaDescendants);
+    expectSameElements(Array.from(viaDescendants.ancestors()), [
+      field,
+      firstNodeOfKind(root, 'ModelDeclaration'),
+      root,
+    ]);
+    expectSameElements(
+      Array.from(viaDescendants.ancestors()),
+      Array.from(viaDescendants.ancestors()),
+    );
+    expect(viaDescendants.root()).toBe(root);
+  });
+
+  it('returns the same token from repeated tokenAtOffset', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    expect(root.tokenAtOffset(19).leftBiased()).toBe(root.tokenAtOffset(19).leftBiased());
+
+    const seam = root.tokenAtOffset(5);
+    const seamAgain = root.tokenAtOffset(5);
+    expect(seam.leftBiased()).toBe(seamAgain.leftBiased());
+    expect(seam.rightBiased()).toBe(seamAgain.rightBiased());
+  });
+
+  it('returns the same element from repeated coveringElement', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    expect(root.coveringElement(18, 21)).toBe(root.coveringElement(18, 21));
+    expect(root.coveringElement(15, 25)).toBe(root.coveringElement(15, 25));
+    expect(root.coveringElement(18, 21)).toBe(root.tokenAtOffset(19).leftBiased());
+    expect(root.coveringElement(15, 25)).toBe(firstNodeOfKind(root, 'FieldDeclaration'));
+  });
+
+  it('returns the same tokens across two traversals of a parsed document', () => {
+    const { document } = parse(SAMPLE_SOURCE, 'test.psl');
+    const root = document.syntax;
+    expectSameElements(Array.from(root.tokens()), Array.from(root.tokens()));
+    expectSameElements(Array.from(root.descendants()), Array.from(root.descendants()));
+  });
+
+  it('keys a WeakMap side table stably across traversals', () => {
+    const root = createSyntaxTree(buildSampleTree());
+    const table = new WeakMap<SyntaxNode, string>();
+    table.set(firstNodeOfKind(root, 'FieldDeclaration'), 'field');
+    expect(table.get(firstNodeOfKind(root, 'FieldDeclaration'))).toBe('field');
+  });
+
+  it('keeps distinct trees over the same green node distinct', () => {
+    const green = buildSampleTree();
+    const first = createSyntaxTree(green);
+    const second = createSyntaxTree(green);
+    expect(first).not.toBe(second);
+    expect(first.firstChild).not.toBe(second.firstChild);
+    expect(first.firstChild).toBe(first.firstChild);
   });
 });
 

@@ -38,6 +38,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
   const seen = new Set<string>();
   let positionalSlot = 0;
   let reportedExcess = false;
+  let failed = false;
 
   for (const arg of args) {
     const name = arg.name()?.name();
@@ -94,6 +95,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
     seen.add(key);
     const result = parseArgValue(arg, param, ctx, diagnostics);
     if (result.ok) output[key] = result.value;
+    else failed = true;
   }
 
   const finalized = new Set<string>();
@@ -128,7 +130,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
     finalizeAbsentKey(key, undefined, spec.named[key]?.type);
   }
 
-  if (diagnostics.length > 0) {
+  if (failed || diagnostics.length > 0) {
     return notOk<readonly PslDiagnostic[]>(diagnostics);
   }
   return ok(output);

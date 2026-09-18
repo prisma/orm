@@ -11,6 +11,7 @@ import type {
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
 import type {
+  Binder,
   FieldSymbol,
   ModelSymbol,
   ResolvedAttribute,
@@ -56,6 +57,7 @@ function lowerEnumDefaultForField(input: {
   readonly model: ModelSymbol;
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly enumHandle: EnumTypeHandle;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
   readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
@@ -82,6 +84,7 @@ function lowerEnumDefaultForField(input: {
     model,
     field,
     sources: input.sources,
+    binder: input.binder,
     diagnostics,
   });
   if (interpreted === undefined) return {};
@@ -165,6 +168,7 @@ export interface CollectResolvedFieldsInput {
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly enumHandles?: ReadonlyMap<string, EnumTypeHandle>;
   readonly capabilities: CapabilityMatrix;
@@ -221,6 +225,7 @@ function validateFieldAttributes(input: {
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly familyId: string;
   readonly targetId: string;
 }): void {
@@ -273,6 +278,7 @@ function extractFieldConstraintNames(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
 }): {
   readonly idAttribute: ResolvedAttribute | undefined;
@@ -292,6 +298,7 @@ function extractFieldConstraintNames(input: {
           model: input.model,
           field: input.field,
           sources: input.sources,
+          binder: input.binder,
           diagnostics: input.diagnostics,
         })?.map;
   const uniqueNode = findFieldAttributeNode(input.field, 'unique');
@@ -304,6 +311,7 @@ function extractFieldConstraintNames(input: {
           model: input.model,
           field: input.field,
           sources: input.sources,
+          binder: input.binder,
           diagnostics: input.diagnostics,
         })?.map;
   return { idAttribute, uniqueAttribute, idName, uniqueName };
@@ -324,6 +332,7 @@ function lowerNoCheckForField(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly isListField: boolean;
   readonly isDomainEnum: boolean;
   readonly diagnostics: PslDiagnosticCollector;
@@ -336,6 +345,7 @@ function lowerNoCheckForField(input: {
     model: input.model,
     field: input.field,
     sources: input.sources,
+    binder: input.binder,
     diagnostics: input.diagnostics,
   });
   if (interpreted === undefined) return undefined;
@@ -388,6 +398,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     compositeTypeNames,
     composedExtensions,
     authoringContributions,
+    binder,
     familyId,
     targetId,
     defaultFunctionRegistry,
@@ -436,6 +447,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       authoringContributions,
       diagnostics,
       sources,
+      binder,
       familyId,
       targetId,
     });
@@ -466,6 +478,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     let presetContributions: FieldPresetContributions | undefined;
     const resolveInput = {
       field,
+      binder,
       enumTypeDescriptors,
       namedTypeDescriptors,
       scalarColumnDescriptors,
@@ -572,6 +585,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             model,
             symbolTable,
             sources: input.sources,
+            binder: input.binder,
             enumHandle,
             defaultFunctionRegistry,
             defaultLiteralTagRegistry,
@@ -584,6 +598,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             model,
             symbolTable,
             sources: input.sources,
+            binder: input.binder,
             columnDescriptor: descriptor,
             generatorDescriptorById,
             defaultFunctionRegistry,
@@ -631,6 +646,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
       model,
       field,
       sources: input.sources,
+      binder: input.binder,
       diagnostics,
     });
     let isIdField = Boolean(idAttribute);
@@ -676,6 +692,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
           model,
           field,
           sources: input.sources,
+          binder: input.binder,
           // The storage shape decides, not the PSL shape: a value-object list
           // lands in one JSONB column, which derives no generated checks, so
           // any waiver on it waives nothing and must be rejected here rather
@@ -711,6 +728,7 @@ export function buildModelMappings(
   defaultNamespaceId: string,
   diagnostics: PslDiagnosticCollector,
   sources: PslSources,
+  binder: Binder,
 ): Map<string, ModelNameMapping> {
   const result = new Map<string, ModelNameMapping>();
   for (const { model, namespaceId } of modelEntries) {
@@ -723,6 +741,7 @@ export function buildModelMappings(
             spec: sqlAttributeSpecs.model.map(),
             model,
             sources,
+            binder,
             diagnostics,
           })?.name ?? defaultTableName(model.name));
     const fieldColumns = new Map<string, string>();
@@ -736,6 +755,7 @@ export function buildModelMappings(
               spec: sqlAttributeSpecs.field.map(),
               model,
               field,
+              binder,
               sources,
               diagnostics,
             })?.name ?? field.name);
