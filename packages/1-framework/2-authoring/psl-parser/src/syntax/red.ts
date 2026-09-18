@@ -169,11 +169,6 @@ export class SyntaxNode {
     return slots;
   }
 
-  /**
-   * The child at `index`, or `undefined` when out of range. Every traversal
-   * reaching the same position within one tree returns the identical wrapper,
-   * so red elements are usable as `WeakMap`/`Map` keys for side tables.
-   */
   childAt(index: number): SyntaxElement | undefined {
     return this.#slots()[index];
   }
