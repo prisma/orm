@@ -249,7 +249,12 @@ describe('sqlAttributeSpecs.field.default', () => {
       'funcCall',
       'funcCall',
       'funcCall',
+      // One tagged-literal arm per distinct tag documentation: the sql tags, then json.
       'taggedLiteral',
+      'taggedLiteral',
+      // A codec such as `pg/vector@1` declares a list of element types, so a scalar column takes a
+      // list literal too; the codec's declaration decides whether one is accepted.
+      'list',
     ]);
     const uuid = value.alternatives.find(
       (alt): alt is FuncCallMetadata<FieldAttributeCtx> =>
@@ -298,12 +303,18 @@ describe('sqlAttributeSpecs.field.default', () => {
         .filter((alt) => alt.kind === 'funcCall')
         .map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
     ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid', 'dbgenerated']);
-    expect(value.alternatives.at(-1)).toMatchObject({
-      kind: 'taggedLiteral',
-      label: 'sql`...`',
-      tags: ['sql', 'pg.sql'],
-      documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
-    });
+    expect(value.alternatives.filter((alt) => alt.kind === 'taggedLiteral')).toMatchObject([
+      {
+        label: 'sql`...`',
+        tags: ['sql', 'pg.sql'],
+        documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
+      },
+      {
+        label: 'json`...`',
+        tags: ['json'],
+        documentation: "Reads the body as a JSON document and stores it as the column's default.",
+      },
+    ]);
   });
 
   it('exposes enum default alternatives and empty-enum rejection metadata', () => {
@@ -413,16 +424,13 @@ model Post {
     });
   });
 
-  it('accepts a list literal on a list field and rejects a list on a scalar field', () => {
+  it('accepts a list literal on a list field and on a scalar field, where the codec decides', () => {
     expect(
       interpretDefault('model Post {\n  id Int @id\n  tags String[] @default(["a"])\n}\n', 'tags'),
     ).toEqual({ value: { value: ['a'] }, diagnostics: [] });
-    const rejected = interpretDefault(
-      'model Post {\n  id Int @id\n  tag String @default(["a"])\n}\n',
-      'tag',
-    );
-    expect(rejected.value).toBeUndefined();
-    expect(rejected.diagnostics).toHaveLength(1);
+    expect(
+      interpretDefault('model Post {\n  id Int @id\n  tag String @default(["a"])\n}\n', 'tag'),
+    ).toEqual({ value: { value: ['a'] }, diagnostics: [] });
   });
 
   it('accepts a registered default function and rejects an unregistered one', () => {

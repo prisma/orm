@@ -3,6 +3,7 @@ import type {
   ExecutionMutationDefaultPhases,
   ExecutionMutationDefaultValue,
 } from '@internal/contract/types';
+import type { LiteralTypeName } from './literal-types';
 
 interface SourcePosition {
   readonly offset: number;
@@ -88,15 +89,35 @@ export interface TaggedLiteralValue {
   readonly span: SourceSpan;
 }
 
-export interface ControlDefaultLiteralTagEntry {
+interface ControlDefaultLiteralTagDescription {
   /** How the tag is written, for messages: `` sql`...` ``. */
   readonly usage: string;
   /** What the literal does, shown as signature help. */
   readonly documentation: string;
+}
+
+/** A tag whose body the family lowers itself, into a storage default or an execution default. */
+export interface ControlDefaultLiteralTagLoweringEntry extends ControlDefaultLiteralTagDescription {
   readonly lower: (input: {
     readonly literal: TaggedLiteralValue;
     readonly context: DefaultFunctionLoweringContext;
   }) => LoweredDefaultResult;
+}
+
+/** A tag whose body is a literal of one type, checked against the column's codec like any other literal. */
+export interface ControlDefaultLiteralTagTypeEntry extends ControlDefaultLiteralTagDescription {
+  readonly literalType: LiteralTypeName;
+}
+
+export type ControlDefaultLiteralTagEntry =
+  | ControlDefaultLiteralTagLoweringEntry
+  | ControlDefaultLiteralTagTypeEntry;
+
+/** Which of the two kinds of tag entry this is; the only place the discriminating key is named. */
+export function isDefaultLiteralTagLoweringEntry(
+  entry: ControlDefaultLiteralTagEntry,
+): entry is ControlDefaultLiteralTagLoweringEntry {
+  return 'lower' in entry;
 }
 
 export type ControlDefaultLiteralTagRegistry = ReadonlyMap<string, ControlDefaultLiteralTagEntry>;

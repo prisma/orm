@@ -1,4 +1,6 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { jsonDefaultLiteralTagEntry } from '@internal/framework-components/codec';
+import { isDefaultLiteralTagLoweringEntry } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
@@ -82,14 +84,27 @@ describe('createSqliteDefaultFunctionRegistry — dbgenerated canonicalization',
 
 describe('createSqliteDefaultLiteralTagRegistry', () => {
   const tagRegistry = createSqliteDefaultLiteralTagRegistry();
+  const loweringTag = (tag: string) => {
+    const entry = tagRegistry.get(tag);
+    if (entry === undefined || !isDefaultLiteralTagLoweringEntry(entry)) {
+      throw new Error(`the registry does not register "${tag}" as a lowering tag`);
+    }
+    return entry;
+  };
 
-  it('registers sql and sqlite.sql, in that order', () => {
-    expect([...tagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
+  it('registers sql, sqlite.sql and json, in that order', () => {
+    expect([...tagRegistry.keys()]).toEqual(['sql', 'sqlite.sql', 'json']);
     expect(tagRegistry.get('sqlite.sql')?.usage).toBe('sqlite.sql`...`');
+    expect(tagRegistry.get('json')?.usage).toBe('json`...`');
+  });
+
+  it('registers json as a literal of type json, with no prefixed alias', () => {
+    expect(tagRegistry.get('json')).toEqual(jsonDefaultLiteralTagEntry());
+    expect(tagRegistry.get('sqlite.json')).toBeUndefined();
   });
 
   it('lowers sql`CURRENT_TIMESTAMP` verbatim, with no rewrite to now()', () => {
-    const result = tagRegistry.get('sql')!.lower({
+    const result = loweringTag('sql').lower({
       literal: { tag: 'sql', body: 'CURRENT_TIMESTAMP', span: stubSpan },
       context: stubContext,
     });
@@ -106,14 +121,14 @@ describe('createSqliteDefaultLiteralTagRegistry', () => {
     const registries = sqliteAdapterDescriptor.controlMutationDefaults;
     if (registries === undefined)
       throw new Error('the adapter descriptor declares mutation defaults');
-    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'sqlite.sql']);
+    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'sqlite.sql', 'json']);
   });
 
   it.each([
     ['sql', 'now'],
     ['sqlite.sql', 'autoincrement'],
   ])('refuses %s`%s()`, which is a Prisma default function', (tag, name) => {
-    const result = tagRegistry.get(tag)!.lower({
+    const result = loweringTag(tag).lower({
       literal: { tag, body: `${name}()`, span: stubSpan },
       context: stubContext,
     });
@@ -127,7 +142,7 @@ describe('createSqliteDefaultLiteralTagRegistry', () => {
   });
 
   it("accepts sql`now() + interval '1 day'`", () => {
-    const result = tagRegistry.get('sql')!.lower({
+    const result = loweringTag('sql').lower({
       literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
       context: stubContext,
     });

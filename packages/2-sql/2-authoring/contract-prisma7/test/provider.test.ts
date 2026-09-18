@@ -10,15 +10,29 @@ import { postgresSourceContext } from './support';
 
 const postgres = { binding: prisma7PostgresBinding };
 
+/**
+ * A lookup whose text codec encodes every default as JSON null, so the contract the reader builds
+ * fails the checks `contract emit` runs. The column's codec is built from its descriptor, so the
+ * descriptor's factory is what has to hand back the broken codec.
+ */
 function withTextDefaultsEncodedAsNull(lookup: CodecLookup): CodecLookup {
+  const breakCodec = <T extends object>(codec: T): T =>
+    Object.assign(Object.create(Object.getPrototypeOf(codec)), codec, { encodeJson: () => null });
   const get = (id: string) => {
     const codec = lookup.get(id);
-    if (id !== 'pg/text@1' || codec === undefined) return codec;
-    return Object.assign(Object.create(Object.getPrototypeOf(codec)), codec, {
-      encodeJson: () => null,
+    return id !== 'pg/text@1' || codec === undefined ? codec : breakCodec(codec);
+  };
+  const descriptorFor = (id: string) => {
+    const descriptor = lookup.descriptorFor?.(id);
+    if (id !== 'pg/text@1' || descriptor === undefined) return descriptor;
+    return Object.assign(Object.create(Object.getPrototypeOf(descriptor)), descriptor, {
+      factory: (params: never) => (ctx: never) => breakCodec(descriptor.factory(params)(ctx)),
     });
   };
-  return Object.assign(Object.create(Object.getPrototypeOf(lookup)), lookup, { get });
+  return Object.assign(Object.create(Object.getPrototypeOf(lookup)), lookup, {
+    get,
+    descriptorFor,
+  });
 }
 
 function scratchDir(name: string): string {

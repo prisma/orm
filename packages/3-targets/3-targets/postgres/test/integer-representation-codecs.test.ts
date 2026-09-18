@@ -116,9 +116,19 @@ describe('pg/int8number@1', () => {
       expect(codec.decodeJson(-9007199254740991)).toBe(-9007199254740991);
     });
 
-    it('rejects a JSON string', () => {
-      expect(() => codec.decodeJson('42')).toThrow(
-        'pg/int8number@1 database JSON value must be a number',
+    it('reads the digit text of a whole-number literal default', () => {
+      expect(codec.decodeJson('42')).toBe(42);
+    });
+
+    it('rejects digit text past the safe integer range', () => {
+      expect(() => codec.decodeJson('9007199254740992')).toThrow(
+        'pg/int8number@1 value must be an integer within the safe integer range',
+      );
+    });
+
+    it('rejects a JSON string that is not a decimal integer', () => {
+      expect(() => codec.decodeJson('1.5')).toThrow(
+        'pg/int8number@1 value must be a decimal integer',
       );
     });
 
@@ -312,9 +322,13 @@ describe('pg/unboundedint@1', () => {
       expect(codec.decodeJson('18446744073709551617')).toBe(18446744073709551617n);
     });
 
-    it('rejects a JSON number, which has already lost digits', () => {
-      expect(() => codec.decodeJson(42)).toThrow(
-        'pg/unboundedint@1 database JSON value must be a decimal string',
+    it('reads the JSON number of a whole-number literal default', () => {
+      expect(codec.decodeJson(42)).toBe(42n);
+    });
+
+    it('rejects a JSON number past the safe integer range, which has already lost digits', () => {
+      expect(() => codec.decodeJson(9007199254740992)).toThrow(
+        'pg/unboundedint@1 wire number must be an integer within the safe integer range',
       );
     });
 

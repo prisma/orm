@@ -40,6 +40,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  type LiteralTypeDeclaration,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import {
@@ -145,6 +146,7 @@ export class PostgisGeometryCodec extends CodecImpl<
 }
 
 export class PostgisGeometryDescriptor extends PostgresCodecDescriptor<GeometryParams> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return POSTGIS_GEOMETRY_NATIVE_TYPE;
   }

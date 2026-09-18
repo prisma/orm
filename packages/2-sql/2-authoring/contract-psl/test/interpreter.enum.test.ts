@@ -16,6 +16,7 @@ import {
 } from '../src/interpreter';
 import {
   createBuiltinLikeControlMutationDefaults,
+  postgresCodecLookup,
   postgresEnumInferenceCodecs,
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -79,6 +80,7 @@ const testCodecLookup: CodecLookup = {
   get(id: string): Codec | undefined {
     return codecsById[id];
   },
+  descriptorFor: (id: string) => postgresCodecLookup.descriptorFor?.(id),
   targetTypesFor(id: string): readonly string[] | undefined {
     return targetTypesById[id];
   },

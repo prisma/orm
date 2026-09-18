@@ -1,0 +1,162 @@
+import { type SqlColumnIRInput, SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import { ifDefined } from '@internal/utils/defined';
+import { describe, expect, it } from 'vitest';
+import { parsePostgresDefault } from '../../../src/core/default-normalizer';
+import {
+  CODEC_ID_BY_PRINTED_TYPE,
+  literalTypesForPrintedType,
+} from '../../../src/core/psl-infer/infer-default-codec';
+import { PRINTED_PSL_TYPE_NAMES } from '../../../src/core/psl-infer/postgres-type-map';
+import { printPslFromFlat } from '../fixtures';
+
+function introspected(
+  name: string,
+  nativeType: string,
+  rawDefault: string,
+  shape: { readonly many?: true } = {},
+): SqlColumnIRInput {
+  const resolvedNativeType = shape.many ? `${nativeType}[]` : nativeType;
+  return {
+    name,
+    nativeType,
+    nullable: shape.many === true,
+    default: rawDefault,
+    ...ifDefined('many', shape.many),
+    resolvedNativeType,
+    ...ifDefined('resolvedDefault', parsePostgresDefault(rawDefault, resolvedNativeType)),
+  };
+}
+
+/** The `@default(...)` each column prints, keyed by field name. */
+function printedDefaults(columns: readonly SqlColumnIRInput[]): Record<string, string> {
+  const output = printPslFromFlat(
+    new SqlSchemaIR({
+      tables: {
+        account: {
+          name: 'account',
+          columns: Object.fromEntries(
+            [{ name: 'id', nativeType: 'int4', nullable: false }, ...columns].map((column) => [
+              column.name,
+              column,
+            ]),
+          ),
+          primaryKey: { columns: ['id'] },
+          foreignKeys: [],
+          uniques: [],
+          indexes: [],
+        },
+      },
+    }),
+  );
+  return Object.fromEntries(
+    output
+      .split('\n')
+      .flatMap((line) => {
+        const match = /^\s+(\w+)\s.*?(@default\(.*?\))(?:\s+@|\s*$)/.exec(line);
+        return match?.[1] === undefined || match[2] === undefined ? [] : [[match[1], match[2]]];
+      })
+      .filter(([name]) => name !== 'id'),
+  );
+}
+
+describe('printPsl writes each default as the literal its codec reads back', () => {
+  it('prints every literal form the outcome schema writes', () => {
+    expect(
+      printedDefaults([
+        introspected('name', 'text', "'anonymous'::text"),
+        introspected('small', 'int2', "'100'::integer"),
+        introspected('count', 'int4', "'100000'::integer"),
+        introspected('balance', 'int8', "'100000000000000099'::bigint"),
+        introspected('price', 'numeric(10,2)', '1.50'),
+        introspected('ratio', 'float8', "'NaN'::numeric"),
+        introspected('active', 'bool', 'true'),
+        introspected('meta', 'jsonb', `'{"plan": "free", "seats": 1}'::jsonb`),
+        introspected('scores', 'int4', "'{1,2}'::integer[]", { many: true }),
+      ]),
+    ).toEqual({
+      name: '@default("anonymous")',
+      small: '@default(100)',
+      count: '@default(100000)',
+      balance: '@default(100000000000000099)',
+      price: '@default(1.50)',
+      ratio: '@default(NaN)',
+      active: '@default(true)',
+      meta: '@default(json`{"plan":"free","seats":1}`)',
+      scores: '@default([1, 2])',
+    });
+  });
+
+  it('prints every digit of an int8 past the safe integer range', () => {
+    expect(printedDefaults([introspected('big', 'int8', "'9007199254740993'::bigint")])).toEqual({
+      big: '@default(9007199254740993)',
+    });
+  });
+
+  it.each([
+    ['NaN', "'NaN'::numeric", '@default(NaN)'],
+    ['Infinity', "'Infinity'::numeric", '@default(Infinity)'],
+    ['-Infinity', "'-Infinity'::numeric", '@default(-Infinity)'],
+  ])('prints the float8 %s unquoted', (_name, rawDefault, expected) => {
+    expect(printedDefaults([introspected('ratio', 'float8', rawDefault)])).toEqual({
+      ratio: expected,
+    });
+  });
+
+  it('prints a list of json documents as json tags', () => {
+    expect(
+      printedDefaults([
+        introspected('docs', 'jsonb', `ARRAY['{}'::jsonb, '[]'::jsonb]`, { many: true }),
+      ]),
+    ).toEqual({ docs: '@default([json`{}`, json`[]`])' });
+  });
+
+  it.each([
+    ['infinity', "'infinity'::timestamp without time zone"],
+    ['-infinity', "'-infinity'::timestamp without time zone"],
+  ])(
+    'falls back to the raw expression for the temporal sentinel %s, which its codec refuses',
+    (_name, rawDefault) => {
+      const printed = printedDefaults([introspected('stamp', 'timestamp', rawDefault)])['stamp'];
+      expect(printed).toMatch(/^@default\(dbgenerated\(/);
+    },
+  );
+
+  it('prints an ordinary temporal default as the string its codec reads', () => {
+    expect(
+      printedDefaults([
+        introspected('stamp', 'timestamp', "'2024-01-01 00:00:00'::timestamp without time zone"),
+      ]),
+    ).toEqual({ stamp: '@default("2024-01-01 00:00:00")' });
+  });
+
+  it('falls back to the raw expression for a codec that names no literal type', () => {
+    expect(printedDefaults([introspected('area', 'geometry', "'POINT(0 0)'::geometry")])).toEqual(
+      {},
+    );
+  });
+});
+
+describe('the codec bound to each printed type name', () => {
+  it('covers every PSL type name the type map prints', () => {
+    expect(PRINTED_PSL_TYPE_NAMES.size).toBeGreaterThan(0);
+    expect(
+      [...PRINTED_PSL_TYPE_NAMES].filter((name) => !CODEC_ID_BY_PRINTED_TYPE.has(name)),
+    ).toEqual([]);
+  });
+
+  it('names a registered codec that declares literal types for every printed type', () => {
+    expect(
+      [...CODEC_ID_BY_PRINTED_TYPE.keys()].filter(
+        (typeName) => literalTypesForPrintedType(typeName, false).length === 0,
+      ),
+    ).toEqual([]);
+  });
+
+  it('reads an enum column through the text codec, whose members are strings', () => {
+    expect(literalTypesForPrintedType('SomeEnum', true)).toEqual(['string']);
+  });
+
+  it('names nothing for a type no codec is bound to', () => {
+    expect(literalTypesForPrintedType('Unsupported', false)).toEqual([]);
+  });
+});

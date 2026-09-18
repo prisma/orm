@@ -1,4 +1,6 @@
-import type { ColumnDefault } from '@internal/contract/types';
+import type { ColumnDefault, ColumnDefaultLiteralInputValue } from '@internal/contract/types';
+import type { LiteralTypeDeclaration } from '@internal/framework-components/codec';
+import { writeLiteral } from '@internal/framework-components/codec';
 
 const DEFAULT_FUNCTION_ATTRIBUTES: Readonly<Record<string, string>> = {
   'autoincrement()': '@default(autoincrement())',
@@ -8,6 +10,17 @@ const DEFAULT_FUNCTION_ATTRIBUTES: Readonly<Record<string, string>> = {
 export interface DefaultMappingOptions {
   readonly functionAttributes?: Readonly<Record<string, string>>;
   readonly fallbackFunctionAttribute?: ((expression: string) => string | undefined) | undefined;
+  /**
+   * What the column's codec accepts as a literal default. A value none of these types writes has no
+   * PSL literal, and the caller falls back to the raw database default.
+   */
+  readonly literalTypes?: readonly LiteralTypeDeclaration[];
+  /**
+   * Whether the column is a list, whose elements are each written against the element codec's
+   * scalar declarations. A scalar column whose codec declares `{ list: [...] }` — `pg/vector@1` —
+   * writes its list through {@link writeLiteral} instead.
+   */
+  readonly list?: boolean;
 }
 
 export type DefaultMappingResult = { readonly attribute: string } | { readonly comment: string };
@@ -17,8 +30,16 @@ export function mapDefault(
   options?: DefaultMappingOptions,
 ): DefaultMappingResult {
   switch (columnDefault.kind) {
-    case 'literal':
-      return { attribute: `@default(${formatLiteralValue(columnDefault.value)})` };
+    case 'literal': {
+      const text = writeDefaultLiteral(
+        columnDefault.value,
+        options?.literalTypes ?? [],
+        options?.list === true,
+      );
+      return text === undefined
+        ? { comment: `// Literal default: ${JSON.stringify(columnDefault.value)}` }
+        : { attribute: `@default(${text})` };
+    }
     case 'function': {
       const attribute =
         options?.functionAttributes?.[columnDefault.expression] ??
@@ -31,26 +52,20 @@ export function mapDefault(
   }
 }
 
-function formatLiteralValue(value: unknown): string {
-  if (value === null) {
-    return 'null';
+function writeDefaultLiteral(
+  value: ColumnDefaultLiteralInputValue,
+  declarations: readonly LiteralTypeDeclaration[],
+  list: boolean,
+): string | undefined {
+  if (value instanceof Date) return undefined;
+  if (!list) return writeLiteral(value, declarations)?.text;
+  if (!Array.isArray(value)) return undefined;
+  const scalars = declarations.filter((declaration) => typeof declaration === 'string');
+  const parts: string[] = [];
+  for (const element of value) {
+    const written = writeLiteral(element, scalars);
+    if (written === undefined) return undefined;
+    parts.push(written.text);
   }
-
-  switch (typeof value) {
-    case 'boolean':
-    case 'number':
-      return String(value);
-    case 'string':
-      return quoteString(value);
-    default:
-      return quoteString(JSON.stringify(value));
-  }
-}
-
-function quoteString(str: string): string {
-  return `"${escapeString(str)}"`;
-}
-
-function escapeString(str: string): string {
-  return JSON.stringify(str).slice(1, -1);
+  return `[${parts.join(', ')}]`;
 }

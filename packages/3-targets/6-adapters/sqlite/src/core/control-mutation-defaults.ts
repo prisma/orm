@@ -4,6 +4,7 @@ import {
   timestampNowControlDescriptor,
 } from '@internal/family-sql/control';
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import { jsonDefaultLiteralTagEntry } from '@internal/framework-components/codec';
 import type {
   ControlDefaultLiteralTagEntry,
   ControlMutationDefaultEntry,
@@ -272,9 +273,10 @@ export function createSqliteDefaultLiteralTagRegistry(): ReadonlyMap<
   string,
   ControlDefaultLiteralTagEntry
 > {
-  return new Map([
+  return new Map<string, ControlDefaultLiteralTagEntry>([
     ['sql', sqlDefaultLiteralTagEntry('sql`...`')],
     ['sqlite.sql', sqlDefaultLiteralTagEntry('sqlite.sql`...`')],
+    ['json', jsonDefaultLiteralTagEntry()],
   ]);
 }
 

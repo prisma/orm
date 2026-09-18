@@ -6,6 +6,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  type LiteralTypeDeclaration,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -117,6 +118,7 @@ export class PgTimestamptzDateCodec extends CodecImpl<
 }
 
 export class PgTimestamptzDateDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_TIMESTAMPTZ_NATIVE_TYPE;
   }

@@ -11,6 +11,7 @@
  */
 
 import { col, fn, lit } from '@internal/sql-relational-core/contract-free';
+import type { AnyPostgresCodecDescriptor } from '@internal/target-postgres/codec-descriptor';
 import { addColumnAction, alterTable } from '@internal/target-postgres/contract-free';
 import { PostgresAlterTable } from '@internal/target-postgres/ddl';
 import { describe, expect, it } from 'vitest';
@@ -137,6 +138,70 @@ describe('PostgresAlterTable ADD COLUMN lowering', () => {
     expect(lowered.sql).toBe(
       `ALTER TABLE "s"."t" ADD COLUMN "meta" jsonb DEFAULT '{"key":"value"}'::jsonb`,
     );
+  });
+
+  describe('a parameterized column whose codec answers for its params', () => {
+    // A codec whose wire form depends on the length its column declares, as `pg/vector@1` does.
+    const descriptor = {
+      codecId: 'test/vector@1',
+      traits: ['equality'],
+      targetTypes: ['vector'],
+      isParameterized: true,
+      paramsSchema: {
+        '~standard': { version: 1, vendor: 'test', validate: (value: unknown) => ({ value }) },
+      },
+      factory: (params: { readonly length: number }) => () => ({
+        id: 'test/vector@1',
+        encode: async (value: readonly number[]) => `[${value.join(',')}]`,
+        decode: async (wire: unknown) => wire,
+        encodeJson: (value: unknown) => value,
+        decodeJson: (json: unknown) => {
+          if (!Array.isArray(json) || json.length !== params.length) {
+            throw new Error(`length mismatch: expected ${params.length}, got ${String(json)}`);
+          }
+          return [...json];
+        },
+      }),
+    } as unknown as AnyPostgresCodecDescriptor;
+
+    const builtin = createPostgresBuiltinCodecLookup();
+    const withVector = new PostgresControlAdapter({
+      ...builtin,
+      // The representative instance carries no params, as the control stack's does.
+      get: (id: string) =>
+        id === 'test/vector@1' ? descriptor.factory({})({ name: id }) : builtin.get(id),
+      descriptorFor: (id: string): AnyPostgresCodecDescriptor | undefined =>
+        id === 'test/vector@1'
+          ? descriptor
+          : (builtin.descriptorFor(id) as AnyPostgresCodecDescriptor | undefined),
+    });
+
+    const vectorColumn = (length: number) =>
+      alterTable({
+        schema: 's',
+        table: 't',
+        actions: [
+          addColumnAction(
+            col('embedding', 'vector', {
+              default: lit([0.5, 0.25, 0.125]),
+              codecRef: { codecId: 'test/vector@1', typeParams: { length } },
+            }),
+          ),
+        ],
+      });
+
+    it("renders the default through a codec built with the column's typeParams", async () => {
+      const lowered = await withVector.lowerToExecuteRequest(vectorColumn(3));
+      expect(lowered.sql).toBe(
+        `ALTER TABLE "s"."t" ADD COLUMN "embedding" vector DEFAULT '[0.5,0.25,0.125]'::vector`,
+      );
+    });
+
+    it('refuses a default whose length is not the length the column declares', async () => {
+      await expect(withVector.lowerToExecuteRequest(vectorColumn(2))).rejects.toThrow(
+        'length mismatch: expected 2',
+      );
+    });
   });
 
   it('params array is always empty for DDL', async () => {

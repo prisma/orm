@@ -4,6 +4,8 @@ import {
   instantiateAuthoringTypeConstructor,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
+import { jsonDefaultLiteralTagEntry } from '@internal/framework-components/codec';
+import { isDefaultLiteralTagLoweringEntry } from '@internal/framework-components/control';
 import { describe, expect, it } from 'vitest';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
@@ -406,15 +408,28 @@ describe('postgresNativeAuthoringTypes', () => {
 
 describe('createPostgresDefaultLiteralTagRegistry', () => {
   const tagRegistry = createPostgresDefaultLiteralTagRegistry();
+  const loweringTag = (tag: string) => {
+    const entry = tagRegistry.get(tag);
+    if (entry === undefined || !isDefaultLiteralTagLoweringEntry(entry)) {
+      throw new Error(`the registry does not register "${tag}" as a lowering tag`);
+    }
+    return entry;
+  };
 
-  it('registers sql and pg.sql, in that order', () => {
-    expect([...tagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+  it('registers sql, pg.sql and json, in that order', () => {
+    expect([...tagRegistry.keys()]).toEqual(['sql', 'pg.sql', 'json']);
     expect(tagRegistry.get('sql')?.usage).toBe('sql`...`');
     expect(tagRegistry.get('pg.sql')?.usage).toBe('pg.sql`...`');
+    expect(tagRegistry.get('json')?.usage).toBe('json`...`');
+  });
+
+  it('registers json as a literal of type json, with no prefixed alias', () => {
+    expect(tagRegistry.get('json')).toEqual(jsonDefaultLiteralTagEntry());
+    expect(tagRegistry.get('pg.json')).toBeUndefined();
   });
 
   it('lowers a body verbatim as a function default', () => {
-    const result = tagRegistry.get('pg.sql')!.lower({
+    const result = loweringTag('pg.sql').lower({
       literal: { tag: 'pg.sql', body: "'{}'::jsonb", span: stubSpan },
       context: stubContext,
     });
@@ -428,14 +443,14 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
     const registries = postgresAdapterDescriptor.controlMutationDefaults;
     if (registries === undefined)
       throw new Error('the adapter descriptor declares mutation defaults');
-    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'pg.sql', 'json']);
   });
 
   it.each([
     ['sql', 'now'],
     ['pg.sql', 'autoincrement'],
   ])('refuses %s`%s()`, which is a Prisma default function', (tag, name) => {
-    const result = tagRegistry.get(tag)!.lower({
+    const result = loweringTag(tag).lower({
       literal: { tag, body: `${name}()`, span: stubSpan },
       context: stubContext,
     });
@@ -449,7 +464,7 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
   });
 
   it('lowers sql`gen_random_uuid()` verbatim', () => {
-    const result = tagRegistry.get('sql')!.lower({
+    const result = loweringTag('sql').lower({
       literal: { tag: 'sql', body: 'gen_random_uuid()', span: stubSpan },
       context: stubContext,
     });
@@ -463,7 +478,7 @@ describe('createPostgresDefaultLiteralTagRegistry', () => {
   });
 
   it("accepts sql`now() + interval '1 day'`", () => {
-    const result = tagRegistry.get('sql')!.lower({
+    const result = loweringTag('sql').lower({
       literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
       context: stubContext,
     });

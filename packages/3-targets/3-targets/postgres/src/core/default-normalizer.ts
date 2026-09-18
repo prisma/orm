@@ -1,4 +1,5 @@
 import type { ColumnDefault, JsonValue } from '@internal/contract/types';
+import { blindCast } from '@internal/utils/casts';
 
 /**
  * Pre-compiled regex patterns for performance.
@@ -219,7 +220,7 @@ function parseArrayLiteralBody(
     if (token.quoted) {
       // A quoted token is always a string — `"NULL"`, `"true"`, `"1"` are the
       // literal text, never the keyword/number.
-      result.push(token.value);
+      result.push(textElementValue(token.value, elementType));
       continue;
     }
     const el = token.value.trim();
@@ -287,7 +288,19 @@ function parseConstructorElement(element: string, elementType: string): JsonValu
   if (FALSE_PATTERN.test(element)) return false;
   const token = readLiteralToken(element);
   if (token === undefined) return undefined;
-  return token.kind === 'number' ? numberValue(token.numeral, elementType) : token.text;
+  return token.kind === 'number'
+    ? numberValue(token.numeral, elementType)
+    : textElementValue(token.text, elementType);
+}
+
+/** A `json`/`jsonb` element's text is a JSON document, as it is on a scalar column of the same type. */
+function textElementValue(text: string, elementType: string): JsonValue {
+  if (elementType !== 'json' && elementType !== 'jsonb') return text;
+  try {
+    return blindCast<JsonValue, 'JSON.parse yields a JSON value'>(JSON.parse(text));
+  } catch {
+    return text;
+  }
 }
 
 function parseArrayConstructor(

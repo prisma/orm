@@ -1,3 +1,4 @@
+import { integerLiteralTypesUpTo } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
 import {
   type DefaultMappingOptions,
@@ -11,7 +12,10 @@ const injectedMapping: DefaultMappingOptions = {
   fallbackFunctionAttribute: (expression) => `@default(dbgenerated(${JSON.stringify(expression)}))`,
 };
 
-describe('mapDefault', () => {
+const wholeNumbers = integerLiteralTypesUpTo('i64');
+type Declarations = NonNullable<DefaultMappingOptions['literalTypes']>;
+
+describe('mapDefault function defaults', () => {
   it('maps autoincrement()', () => {
     expect(mapDefault({ kind: 'function', expression: 'autoincrement()' })).toEqual({
       attribute: '@default(autoincrement())',
@@ -38,42 +42,6 @@ describe('mapDefault', () => {
     });
   });
 
-  it('maps boolean true', () => {
-    expect(mapDefault({ kind: 'literal', value: true })).toEqual({
-      attribute: '@default(true)',
-    });
-  });
-
-  it('maps boolean false', () => {
-    expect(mapDefault({ kind: 'literal', value: false })).toEqual({
-      attribute: '@default(false)',
-    });
-  });
-
-  it('maps number', () => {
-    expect(mapDefault({ kind: 'literal', value: 42 })).toEqual({
-      attribute: '@default(42)',
-    });
-  });
-
-  it('maps string', () => {
-    expect(mapDefault({ kind: 'literal', value: 'hello' })).toEqual({
-      attribute: '@default("hello")',
-    });
-  });
-
-  it('maps string with quotes', () => {
-    expect(mapDefault({ kind: 'literal', value: 'he said "hi"' })).toEqual({
-      attribute: '@default("he said \\"hi\\"")',
-    });
-  });
-
-  it('escapes control characters in string defaults', () => {
-    expect(mapDefault({ kind: 'literal', value: 'line 1\nline 2\t"quoted"' })).toEqual({
-      attribute: '@default("line 1\\nline 2\\t\\"quoted\\"")',
-    });
-  });
-
   it('unrecognized function becomes comment', () => {
     expect(mapDefault({ kind: 'function', expression: 'custom_func()' })).toEqual({
       comment: '// Raw default: custom_func()',
@@ -85,22 +53,75 @@ describe('mapDefault', () => {
       comment: '// Raw default: gen_random_uuid()',
     });
   });
+});
 
-  it('maps null literal', () => {
-    expect(mapDefault({ kind: 'literal', value: null })).toEqual({
-      attribute: '@default(null)',
-    });
+describe('mapDefault literal defaults', () => {
+  it.each([
+    ['a string', 'anonymous', ['string'], '@default("anonymous")'],
+    ['a string with quotes', 'he said "hi"', ['string'], '@default("he said \\"hi\\"")'],
+    ['a string with a newline', 'line 1\nline 2', ['string'], '@default("line 1\\nline 2")'],
+    ['true', true, ['boolean'], '@default(true)'],
+    ['false', false, ['boolean'], '@default(false)'],
+    ['a small whole number', 100, wholeNumbers, '@default(100)'],
+    ['digit text past 2^53', '100000000000000099', wholeNumbers, '@default(100000000000000099)'],
+    ['decimal text keeping its trailing zero', '1.50', ['decimal'], '@default(1.50)'],
+    ['NaN unquoted', 'NaN', ['float'], '@default(NaN)'],
+    [
+      'a JSON document as a json tag',
+      { plan: 'free', seats: 1 },
+      ['json'],
+      '@default(json`{"plan":"free","seats":1}`)',
+    ],
+    ['a JSON array as a json tag', [1, 2], ['json'], '@default(json`[1,2]`)'],
+    [
+      'a list against a list declaration',
+      [0.1, 0.2, 0.3],
+      [{ list: ['decimal'] }],
+      '@default([0.1, 0.2, 0.3])',
+    ],
+  ] as [string, never, Declarations, string][])(
+    'writes %s',
+    (_name, value, literalTypes, attribute) => {
+      expect(mapDefault({ kind: 'literal', value }, { literalTypes })).toEqual({ attribute });
+    },
+  );
+
+  it('writes a list column element by element against the scalar declarations', () => {
+    expect(
+      mapDefault({ kind: 'literal', value: [1, 2] }, { literalTypes: wholeNumbers, list: true }),
+    ).toEqual({ attribute: '@default([1, 2])' });
   });
 
-  it('maps large number literal', () => {
-    expect(mapDefault({ kind: 'literal', value: 9007199254740991 })).toEqual({
-      attribute: '@default(9007199254740991)',
-    });
+  it('writes an empty list column default', () => {
+    expect(
+      mapDefault({ kind: 'literal', value: [] }, { literalTypes: ['string'], list: true }),
+    ).toEqual({ attribute: '@default([])' });
   });
 
-  it('stringifies unsupported literal defaults', () => {
-    expect(mapDefault({ kind: 'literal', value: { nested: ['value'] } })).toEqual({
-      attribute: '@default("{\\"nested\\":[\\"value\\"]}")',
+  it('writes a list of json tags on a json list column', () => {
+    expect(
+      mapDefault({ kind: 'literal', value: [{}, []] }, { literalTypes: ['json'], list: true }),
+    ).toEqual({ attribute: '@default([json`{}`, json`[]`])' });
+  });
+
+  it.each([
+    ['a codec that names no literal type', 'anonymous', []],
+    ['a value no named type writes', { a: 1 }, ['string']],
+    ['a list element no named type writes', ['a', 1], ['string']],
+    ['a list value on a codec naming only scalars', [1, 2], wholeNumbers],
+  ] as [string, never, Declarations][])(
+    'describes %s in a comment, so the caller falls back',
+    (_name, value, literalTypes) => {
+      const isList = _name.includes('list element');
+      expect(mapDefault({ kind: 'literal', value }, { literalTypes, list: isList })).toEqual({
+        comment: `// Literal default: ${JSON.stringify(value)}`,
+      });
+    },
+  );
+
+  it('describes a literal in a comment when no literal types are given at all', () => {
+    expect(mapDefault({ kind: 'literal', value: 'hello' })).toEqual({
+      comment: '// Literal default: "hello"',
     });
   });
 });

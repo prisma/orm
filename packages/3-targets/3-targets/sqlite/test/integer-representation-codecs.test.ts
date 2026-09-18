@@ -184,9 +184,19 @@ describe('sqlite/bigintnumber@1', () => {
       expect(codec.decodeJson(-9007199254740991)).toBe(-9007199254740991);
     });
 
-    it('rejects a JSON string', () => {
-      expect(() => codec.decodeJson('42')).toThrow(
-        'sqlite/bigintnumber@1 database JSON value must be a number',
+    it('reads the digit text of a whole-number literal default', () => {
+      expect(codec.decodeJson('42')).toBe(42);
+    });
+
+    it('rejects digit text past the safe integer range', () => {
+      expect(() => codec.decodeJson('9007199254740992')).toThrow(
+        'sqlite/bigintnumber@1 value must be an integer within the safe integer range',
+      );
+    });
+
+    it('rejects a JSON string that is not a decimal integer', () => {
+      expect(() => codec.decodeJson('1.5')).toThrow(
+        'sqlite/bigintnumber@1 database JSON value must be a whole number or decimal text',
       );
     });
 

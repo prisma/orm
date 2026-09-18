@@ -7,6 +7,7 @@ import {
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
+  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
@@ -19,6 +20,7 @@ import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contr
 
 const baseInput = {
   target: postgresTarget,
+  codecLookup: postgresCodecLookup,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
   authoringContributions: { type: postgresScalarAuthoringTypes },
   composedExtensionContracts: new Map(),

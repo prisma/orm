@@ -1,5 +1,5 @@
 import type {
-  ControlDefaultLiteralTagEntry,
+  ControlDefaultLiteralTagLoweringEntry,
   LoweredDefaultResult,
 } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
@@ -11,7 +11,7 @@ export const PSL_INVALID_DEFAULT_SQL: ContributedPslDiagnosticCode = 'PSL_INVALI
 /**
  * The `` sql`...` `` default literal every SQL target registers: the canonical body becomes the expression verbatim. A body that is exactly `now()` or `autoincrement()` is refused so the named form is written instead.
  */
-export function sqlDefaultLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
+export function sqlDefaultLiteralTagEntry(usage: string): ControlDefaultLiteralTagLoweringEntry {
   return {
     usage,
     documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",

@@ -132,19 +132,63 @@ describe('Decimal and BigInt number defaults', () => {
   });
 });
 
+async function diagnosticsOf(caseName: string, file: string) {
+  const schemaPath = join(fixturesDir, caseName, file);
+  const result = await prisma7Contract(schemaPath, {
+    binding: prisma7PostgresBinding,
+  }).source.load(postgresSourceContext([schemaPath]));
+  return result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.message);
+}
+
 describe('Number defaults on String, Bytes, DateTime and Boolean fields', () => {
-  it('are rejected, as Prisma 7 rejects them', async () => {
-    const schemaPath = join(fixturesDir, 'number-default-spellings', 'other-types.prisma');
-    const result = await prisma7Contract(schemaPath, {
-      binding: prisma7PostgresBinding,
-    }).source.load(postgresSourceContext([schemaPath]));
-    expect(
-      result.ok ? [] : result.failure.diagnostics.map((diagnostic) => diagnostic.message),
-    ).toEqual([
-      'Field "OtherTypes.name": @default holds 5, which is not a valid String value.',
-      'Field "OtherTypes.payload": @default holds 1234, which is not a valid Bytes value.',
-      'Field "OtherTypes.at": @default holds 0, which is not a valid DateTime value.',
-      'Field "OtherTypes.flag": @default holds 1, which is not a valid Boolean value.',
+  it('are rejected, naming the literal type and what the column accepts', async () => {
+    expect(await diagnosticsOf('number-default-spellings', 'other-types.prisma')).toEqual([
+      'Field "OtherTypes.name": @default holds an i8 literal, which pg/text@1 does not accept; it accepts string literals.',
+      'Field "OtherTypes.payload": @default holds an i16 literal, which pg/bytea@1 does not accept; it accepts string literals.',
+      'Field "OtherTypes.at": @default holds an i8 literal, which pg/timestamp-temporal@1 does not accept; it accepts string literals.',
+      'Field "OtherTypes.flag": @default holds an i8 literal, which pg/bool@1 does not accept; it accepts boolean literals.',
     ]);
+  });
+});
+
+describe('Number defaults too large for the column', () => {
+  it('are rejected before anything is decoded, naming the literal type', async () => {
+    expect(await diagnosticsOf('number-default-spellings', 'out-of-range.prisma')).toEqual([
+      'Field "OutOfRange.count": @default holds an i64 literal, which pg/int4@1 does not accept; it accepts i8, i16, i32 literals.',
+      'Field "OutOfRange.small": @default holds an i32 literal, which pg/int2@1 does not accept; it accepts i8, i16 literals.',
+      'Field "OutOfRange.ints": @default holds an i64 literal at element 2, which pg/int4@1 does not accept; it accepts i8, i16, i32 literals.',
+    ]);
+  });
+});
+
+describe('Json defaults whose text is not a JSON document', () => {
+  it('are rejected, carrying the JSON parser message', async () => {
+    expect(await diagnosticsOf('number-default-spellings', 'unreadable-json.prisma')).toEqual([
+      expect.stringMatching(
+        /^Field "UnreadableJson\.broken": @default holds text that this contract source does not read: /,
+      ),
+      expect.stringMatching(
+        /^Field "UnreadableJson\.list": @default holds text at element 2 that this contract source does not read: /,
+      ),
+    ]);
+  });
+});
+
+describe('Json, Decimal, BigInt and Float literal defaults', () => {
+  it('lower through the column codec', async () => {
+    const { columns } = await loadFixtureTable('defaults', 'Defaults');
+    expect(
+      Object.fromEntries(
+        ['jsonLiteral', 'decimalLiteral', 'bigIntLiteral', 'floatLiteral', 'intLiteral'].map(
+          (column) => [column, columns[column]?.['default']],
+        ),
+      ),
+    ).toEqual({
+      jsonLiteral: { kind: 'literal', value: { a: 1 } },
+      decimalLiteral: { kind: 'literal', value: '12.34' },
+      bigIntLiteral: { kind: 'literal', value: '9007199254740993' },
+      floatLiteral: { kind: 'literal', value: 1.5 },
+      intLiteral: { kind: 'literal', value: 42 },
+    });
   });
 });

@@ -12,6 +12,7 @@ import type { JsonValue } from '@internal/contract/types';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Codec } from './codec';
 import { type CodecInstanceContext, type CodecTrait, voidParamsSchema } from './codec-types';
+import type { LiteralTypeDeclaration } from './literal-types';
 
 /**
  * Unified codec descriptor. Every codec in the framework registers through this shape — non-parameterized codecs use `P = void` and a constant factory that returns the same shared codec instance for every column; parameterized codecs use a non-empty `P` and a curried higher-order factory that returns a per-instance codec.
@@ -31,6 +32,8 @@ export interface CodecDescriptor<P = void> {
   readonly traits: readonly CodecTrait[];
   /** Database-native type names this codec handles (e.g. `['timestamptz']`). */
   readonly targetTypes: readonly string[];
+  /** The literal types this codec's columns accept as a `@default(...)` literal, by name. A codec that names none accepts no literal default. The codec's `decodeJson` accepts the value shape of every type named here in addition to its own JSON form. ADR 254. */
+  readonly literalTypes?: readonly LiteralTypeDeclaration[] | undefined;
   /** Standard Schema validator for the factory's params. Validates JSON-sourced params at the contract boundary (PSL → IR; `contract.json` → runtime). For non-parameterized codecs (`P = void`), the schema validates `void`/`undefined` — the framework supplies no params at the call boundary. */
   readonly paramsSchema: StandardSchemaV1<P>;
   /** Whether this descriptor is parameterized — i.e. its `paramsSchema` is something other than the singleton `voidParamsSchema`. Consumers that need to gate column-aware dispatch read this directly rather than threading a free-floating `(codecId) => boolean` callback. */
@@ -73,6 +76,9 @@ export abstract class CodecDescriptorImpl<TParams = void> implements CodecDescri
   abstract readonly codecId: string;
   abstract readonly traits: readonly CodecTrait[];
   abstract readonly targetTypes: readonly string[];
+
+  /** Optional literal types this codec's columns accept. See {@link CodecDescriptor.literalTypes}. */
+  readonly literalTypes?: readonly LiteralTypeDeclaration[] | undefined;
 
   abstract readonly paramsSchema: StandardSchemaV1<TParams>;
 

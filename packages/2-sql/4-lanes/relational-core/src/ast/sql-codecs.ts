@@ -18,6 +18,8 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  integerLiteralTypesUpTo,
+  type LiteralTypeDeclaration,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -71,6 +73,7 @@ export class SqlTextCodec extends CodecImpl<
 }
 
 export class SqlTextDescriptor extends CodecDescriptorImpl<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   override readonly codecId = SQL_TEXT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly targetTypes = ['text'] as const;
@@ -109,6 +112,8 @@ export class SqlIntCodec extends CodecImpl<
 }
 
 export class SqlIntDescriptor extends CodecDescriptorImpl<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] =
+    integerLiteralTypesUpTo('i32');
   override readonly codecId = SQL_INT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['int'] as const;
@@ -147,6 +152,11 @@ export class SqlFloatCodec extends CodecImpl<
 }
 
 export class SqlFloatDescriptor extends CodecDescriptorImpl<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
+    ...integerLiteralTypesUpTo('i64'),
+    'bigint',
+    'decimal',
+  ];
   override readonly codecId = SQL_FLOAT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['float'] as const;
@@ -185,6 +195,7 @@ export class SqlCharCodec extends CodecImpl<
 }
 
 export class SqlCharDescriptor extends CodecDescriptorImpl<LengthParams> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   override readonly codecId = SQL_CHAR_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly targetTypes = ['char'] as const;
@@ -226,6 +237,7 @@ export class SqlVarcharCodec extends CodecImpl<
 }
 
 export class SqlVarcharDescriptor extends CodecDescriptorImpl<LengthParams> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   override readonly codecId = SQL_VARCHAR_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly targetTypes = ['varchar'] as const;

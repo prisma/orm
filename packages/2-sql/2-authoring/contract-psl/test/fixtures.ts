@@ -18,10 +18,11 @@ import {
   type PslExtensionBlock,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import { jsonDefaultLiteralTagEntry } from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
   ControlDefaultLiteralTagEntry,
+  ControlDefaultLiteralTagLoweringEntry,
   ControlMutationDefaultEntry,
   ControlMutationDefaults,
   DefaultFunctionLoweringContext,
@@ -44,6 +45,7 @@ import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contr
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { postgresCodecLookup } from './fixture-codec-descriptors';
 
 function testEnumFactory(
   block: PslExtensionBlock,
@@ -544,37 +546,7 @@ export const sqliteScalarColumnDescriptors = collectScalarTypeConstructors(
   sqliteScalarAuthoringTypes,
 );
 
-const targetTypesByCodecId: Record<string, readonly string[]> = {
-  'pg/text@1': ['text'],
-  'pg/int@1': ['int4'],
-  'pg/bool@1': ['bool'],
-  'pg/int4@1': ['int4'],
-  'pg/int8@1': ['int8'],
-  'pg/float8@1': ['float8'],
-  'pg/numeric@1': ['numeric'],
-  'pg/timestamptz-temporal@1': ['timestamptz'],
-  'pg/jsonb@1': ['jsonb'],
-  'pg/bytea@1': ['bytea'],
-  'sql/char@1': ['character'],
-  'sql/varchar@1': ['character varying'],
-  'pg/int2@1': ['int2'],
-  'pg/float4@1': ['float4'],
-  'pg/timestamp-temporal@1': ['timestamp'],
-  'pg/date-temporal@1': ['date'],
-  'pg/time-temporal@1': ['time'],
-  'pg/timetz@1': ['timetz'],
-  'pg/json@1': ['json'],
-  'pg/vector@1': ['vector'],
-};
-
-export const postgresCodecLookup: CodecLookup = {
-  get: (id: string) => {
-    if (!targetTypesByCodecId[id]) return undefined;
-    return { id } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => targetTypesByCodecId[id],
-  renderOutputTypeFor: () => undefined,
-};
+export { postgresCodecLookup } from './fixture-codec-descriptors';
 
 export function createPostgresTestContext(
   overrides?: Partial<ContractSourceContext>,
@@ -645,7 +617,7 @@ const dbgeneratedSig: FuncCallSig = {
 };
 
 // Mirrors the SQL family's `sqlDefaultLiteralTagEntry`; the authoring layer's tests cannot import the family.
-function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
+function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagLoweringEntry {
   return {
     usage,
     documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
@@ -777,6 +749,7 @@ export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefau
     defaultLiteralTagRegistry: new Map<string, ControlDefaultLiteralTagEntry>([
       ['sql', sqlLiteralTagEntry('sql`...`')],
       ['pg.sql', sqlLiteralTagEntry('pg.sql`...`')],
+      ['json', jsonDefaultLiteralTagEntry()],
     ]),
     generatorDescriptors: [
       {

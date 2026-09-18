@@ -377,6 +377,44 @@ The descriptor is the only place a target's behaviour for a codec is declared. `
 
 An identity `jsonProjection` is a claim, not a placeholder: it says this codec's stored form *is* its canonical JSON, as it is for `pg/text@1` and `pg/int4@1`. Write one only when that holds. A codec whose stored form cannot survive JSON — a wide integer, a byte string, a value whose text depends on a session setting — needs a projection that converts it, because the renderer will ask and then use the answer.
 
+## Literal defaults a codec accepts
+
+A written `@default` literal has a type of its own, decided by what was written rather than by the column: `string`, `boolean`, the whole-number types by size — `i8`, `i16`, `i32`, `i64`, `bigint` — `decimal`, `float` for `NaN` and the infinities, and `json`. A descriptor names the ones its columns take in `literalTypes`, and the contract source checks the written literal's type against that list before anything is decoded, so a value too large for the column is refused with a diagnostic instead of a decode failure.
+
+```ts
+class PgInt4Descriptor extends PostgresCodecDescriptor<void> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] =
+    integerLiteralTypesUpTo('i32');
+  // …
+}
+```
+
+`integerLiteralTypesUpTo(name)` gives the chain from `i8` up to and including `name`, so a descriptor does not spell it out. A declaration may also name a list of element types, which is how a column that is not a list takes a PSL list:
+
+```ts
+class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
+  override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
+    { list: [...integerLiteralTypesUpTo('i64'), 'bigint', 'decimal'] },
+  ];
+  // …
+}
+```
+
+Each literal type fixes the shape of the value it produces: `i8`, `i16` and `i32` give a JSON number, `i64` and `bigint` give digit text (a JSON number rounds past 2^53), `decimal` gives decimal text with its trailing zeros, `float` gives the word, and `json` gives the parsed document. **A codec's `decodeJson` must accept the value shape of every type it names**, in addition to its own JSON form. `pg/int8@1` stores digit text and names `i8` to `i64`, so its `decodeJson` takes a whole JSON number as well as the text:
+
+```ts
+decodeJson(json: JsonValue): bigint {
+  if (typeof json !== 'string' && typeof json !== 'number') {
+    throw postgresError(/* … */);
+  }
+  return pgInt8Decode(json);
+}
+```
+
+Converting between those shapes is the codec's job, not the interpreter's — there is no per-type code and no per-codec branch in any contract source. A codec that names nothing accepts no literal default at all; its columns take only a `` sql`...` `` default. `contract infer` runs the same declaration backwards to choose the literal it prints, and checks that what it wrote reads back through `decodeJson` before printing it.
+
+See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Literal%20types%20for%20column%20defaults.md).
+
 ## `satisfies` discipline
 
 The framework exports two helper-shape constraints:

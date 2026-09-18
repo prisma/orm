@@ -541,7 +541,7 @@ An attribute Prisma 7 for the target does not have, or one the source does not r
 
 ### PSL.PRISMA7_UNKNOWN_DEFAULT
 
-A `@default` value the source cannot read: an unknown function, an enum member on a non-enum field or a non-member, a number with a fraction on an `Int` or `BigInt` field, a malformed JSON or base64 literal, or `dbgenerated()` with no expression on a required field. Use a literal, an enum member, or a supported function. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@default` value the source cannot read, or one the column's codec does not accept. The message is `Field "<Model>.<field>": @default <reason>`, where the reason is one of: `holds <a literal type> literal, which <codecId> does not accept; it accepts <types>.` for a literal of the wrong type, and `... at element <n>, ...` when it is one element of a list; `holds text that this contract source does not read: <parser message>` for a `Json` default whose text is not a JSON document; `holds a value that <codecId> does not read: <codec message>` for a literal the codec declares but refuses; plus the reasons that do not involve the value's type — an unknown function, an enum member on a non-enum field or a non-member, and `dbgenerated()` with no expression on a required field. Use a literal of a type the column accepts, an enum member, or a supported function. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_UNSUPPORTED_TYPE
 
@@ -566,6 +566,18 @@ A backtick string appears somewhere other than after a tag, for example `` @map(
 ### PSL_UNKNOWN_DEFAULT_LITERAL_TAG
 
 A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal when the default is lowered.
+
+### PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE
+
+A `@default` literal has a type the column's codec does not accept: `Field "<Model>.<field>": <codecId> is not compatible with <a literal type> literal; it accepts <types>`. A written literal has a type of its own — a number's comes from its size and precision, so `42` is an `i8` and `100000000000000099` an `i64` — and a codec names the types it takes. Inside a list literal the message names the element: `Field "<Model>.<field>" at element 2: ...`. A codec that names none reads `it accepts no literal defaults`, and takes only a `` sql`...` `` default. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Literal%20types%20for%20column%20defaults.md).
+
+### PSL_INVALID_DEFAULT_LITERAL
+
+A `@default` literal the column's codec accepts by type but refuses to decode, such as a `pgvector.Vector(3)` column given two elements: `Field "<Model>.<field>": <the codec's own message>`, or ` at element <n>` when it is one element of a list. Also reported for a literal no contract source can write, such as a list inside a list: `A list literal cannot contain another list.` Reported at the `@default` attribute.
+
+### PSL_INVALID_JSON_LITERAL
+
+A `` @default(json`...`) `` body is not a JSON document: `Field "<Model>.<field>": <the JSON parser's message>`. Reported at the `@default` attribute.
 
 ### PSL_TAGGED_LITERAL_NUL
 

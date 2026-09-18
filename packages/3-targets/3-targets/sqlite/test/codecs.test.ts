@@ -11,9 +11,13 @@ describe('SQLite codec JSON representations', () => {
     expect(bigintCodec.decodeJson('9223372036854775807')).toBe(9223372036854775807n);
   });
 
-  it('rejects a JSON number, which has already lost digits', () => {
-    expect(() => bigintCodec.decodeJson(42)).toThrow(
-      'sqlite/bigint@1 database JSON value must be a decimal string',
+  it('reads the JSON number of a whole-number literal default', () => {
+    expect(bigintCodec.decodeJson(42)).toBe(42n);
+  });
+
+  it('rejects a JSON number past the safe integer range, which has already lost digits', () => {
+    expect(() => bigintCodec.decodeJson(9007199254740992)).toThrow(
+      'sqlite/bigint@1 value must be an integer within the safe integer range',
     );
   });
 

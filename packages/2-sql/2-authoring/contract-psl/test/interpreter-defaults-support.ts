@@ -5,6 +5,7 @@ import {
 } from '../src/interpreter';
 import {
   createBuiltinLikeControlMutationDefaults,
+  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresTarget,
   temporalCodecPresetMirrors,
@@ -32,6 +33,8 @@ export const interpretPslDocumentToSqlContract = (
     input;
   return interpretPslDocumentToSqlContractInternal({
     target: postgresTarget,
+    // Literal defaults resolve through the column's codec descriptor, as they do in a real stack.
+    codecLookup: postgresCodecLookup,
     scalarColumnDescriptors,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,

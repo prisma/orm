@@ -1204,16 +1204,17 @@ describe('providePslCompletionItems', () => {
         insertTextFormat: item.insertTextFormat,
       }));
     const postgresTags = postgres.createPostgresDefaultLiteralTagRegistry();
-    const documentation = postgresTags.get('sql')?.documentation;
+    const documentationOf = (registry: ControlDefaultLiteralTagRegistry, tag: string) =>
+      registry.get(tag)?.documentation;
     const value = (label: string) => ({
       label,
       detail: 'PSL argument value',
       newText: label,
       insertTextFormat: undefined,
     });
-    const tag = (label: string, snippet: boolean) => ({
+    const tag = (registry: ControlDefaultLiteralTagRegistry, label: string, snippet: boolean) => ({
       label,
-      detail: documentation,
+      detail: documentationOf(registry, label),
       newText: snippet ? `${label}\`$1\`` : label,
       insertTextFormat: snippet ? InsertTextFormat.Snippet : undefined,
     });
@@ -1221,21 +1222,28 @@ describe('providePslCompletionItems', () => {
     expect(complete(postgresTags, true)).toEqual([
       value('true'),
       value('false'),
-      tag('sql', true),
-      tag('pg.sql', true),
+      tag(postgresTags, 'sql', true),
+      tag(postgresTags, 'pg.sql', true),
+      tag(postgresTags, 'json', true),
     ]);
-    expect(complete(sqlite.createSqliteDefaultLiteralTagRegistry(), true)).toEqual([
+    const sqliteTags = sqlite.createSqliteDefaultLiteralTagRegistry();
+    expect(complete(sqliteTags, true)).toEqual([
       value('true'),
       value('false'),
-      tag('sql', true),
-      tag('sqlite.sql', true),
+      tag(sqliteTags, 'sql', true),
+      tag(sqliteTags, 'sqlite.sql', true),
+      tag(sqliteTags, 'json', true),
     ]);
     expect(complete(postgresTags, false)).toEqual([
       value('true'),
       value('false'),
-      tag('sql', false),
-      tag('pg.sql', false),
+      tag(postgresTags, 'sql', false),
+      tag(postgresTags, 'pg.sql', false),
+      tag(postgresTags, 'json', false),
     ]);
+
+    // Each tag carries the text of the tag it names, not every registered tag's text.
+    expect(documentationOf(postgresTags, 'json')).not.toBe(documentationOf(postgresTags, 'sql'));
   }, 5_000);
 
   it('uses distinct local and referenced fields through actual SQL relation specs', async () => {
