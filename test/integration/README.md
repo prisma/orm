@@ -24,7 +24,7 @@ This package contains integration tests that verify the complete flow from contr
 
 ### Packaging suites run sequentially
 
-The suites under `test/packaging/` pack overlapping real package directories (both pack the Postgres facade, whose `prepack` rewrites its `skills/` tree in place), so two of them packing concurrently corrupt each other's tarballs. `vitest.config.ts` therefore isolates them in a dedicated `packaging` project with `fileParallelism: false`: Vitest runs every such project in one shared sequential group while the `integration` project keeps its normal file parallelism. `test/packaging-config.test.ts` guards this split.
+The suites under `test/packaging/` pack overlapping real package directories (both pack the Postgres facade, whose `prepack` rewrites its `skills/` tree in place), so two of them packing concurrently corrupt each other's tarballs. `vitest.config.ts` therefore isolates them in a dedicated `packaging` project with `fileParallelism: false`: Vitest runs every such project in one shared sequential group while the `integration` project keeps its normal file parallelism.
 
 **Note**: Integration tests that depend on multiple packages (for example SQL authoring, emission, and runtime packages together) are placed here to avoid cyclic dependencies.
 
