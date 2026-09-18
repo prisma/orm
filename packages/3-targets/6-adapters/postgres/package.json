@@ -64,7 +64,6 @@
     "./adapter": "./dist/adapter.mjs",
     "./column-types": "./dist/column-types.mjs",
     "./control": "./dist/control.mjs",
-    "./operation-types": "./dist/operation-types.mjs",
     "./runtime": "./dist/runtime.mjs",
     "./sql-renderer": "./dist/sql-renderer.mjs",
     "./types": "./dist/types.mjs",

@@ -77,6 +77,7 @@
     "./migration": "./dist/migration.mjs",
     "./native-type-normalizer": "./dist/native-type-normalizer.mjs",
     "./op-factory-call": "./dist/op-factory-call.mjs",
+    "./operation-types": "./dist/operation-types.mjs",
     "./pack": "./dist/pack.mjs",
     "./planner": "./dist/planner.mjs",
     "./planner-ddl-builders": "./dist/planner-ddl-builders.mjs",

@@ -6,7 +6,6 @@
 // in this package-level copy to avoid a circular Turbo build dependency.
 // (@internal/extension-pgvector → @internal/postgres → @internal/sql-orm-client)
 // The integration tests that exercise pgvector-specific operations live in test/integration/.
-import type { QueryOperationTypes as PgAdapterQueryOps } from '@internal/adapter-postgres/operation-types';
 // pgvector types replaced with local aliases (see note above)
 type PgVectorTypes = object;
 type Vector<_N extends number> = number[];
@@ -28,6 +27,7 @@ import type {
   VarBit,
   Varchar,
 } from '@internal/target-postgres/codec-types';
+import type { QueryOperationTypes as PgTargetQueryOps } from '@internal/target-postgres/operation-types';
 
 import type {
   ContractWithTypeMaps,
@@ -51,7 +51,7 @@ export type ProfileHash =
 
 export type CodecTypes = PgTypes & PgVectorTypes;
 export type LaneCodecTypes = CodecTypes;
-export type QueryOperationTypes = PgAdapterQueryOps<CodecTypes> &
+export type QueryOperationTypes = PgTargetQueryOps<CodecTypes> &
   PgVectorQueryOperationTypes<CodecTypes>;
 export type AggregateTypes = {
   readonly avg: {

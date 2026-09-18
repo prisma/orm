@@ -723,6 +723,10 @@ Two trait-matching aggregate descriptors for one operation both claim a register
 
 A lane terminal (SQL DSL `.build()`, ORM collection terminal) received an annotation whose declared `applicableTo` set does not include the operation kind being built: the runtime check that backs up the type-level annotation validation when it is bypassed via casts or dynamic invocation. Payload: `namespace`, `terminalName`, `kind`, `applicableTo`.
 
+### RUNTIME.ARGUMENT_INVALID
+
+A built-in Postgres query operation received an argument it cannot use. Today the only such argument is the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`: the language is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused. Raised while the query is being built, before any SQL reaches the database. Payload: `helper`, `argument`, `received`.
+
 ### RUNTIME.AST_INVALID
 
 A lowered SQL AST is structurally invalid: a subquery projecting other than one column, an INSERT with zero rows, a missing column value, an empty onConflict column list or do-update-set, an UPDATE with no SET assignments, an INSERT target table absent from contract storage, or an AST node constructed with invalid arguments (empty FunctionSource column aliases, a CaseExpr with no branches, a raw query declaring a `__proto__` result column, a name that cannot survive as a column, so alias it in SQL and declare the alias). Raised by the Postgres and SQLite SQL renderers and by AST node construction in relational-core. Payload: `node`, `table`, `column`; construction sites carry node-specific fields.

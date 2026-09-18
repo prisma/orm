@@ -1,0 +1,30 @@
+---
+changes:
+  - id: re-emit-the-contract-for-the-moved-query-operation-types
+    summary: |
+      Emitted Postgres `contract.d.ts` files import `QueryOperationTypes` from the target package
+      instead of the adapter. Run `prisma contract emit` once; an un-emitted contract names a
+      subpath that no longer exists and stops type-checking.
+    detection:
+      glob: "**/contract.d.ts"
+      contains:
+        - "/adapter/operation-types"
+---
+
+## `re-emit-the-contract-for-the-moved-query-operation-types`
+
+The built-in Postgres query operations (`ilike`, and the new `fullTextMatches`, `fullTextRank` and `fullTextHeadline`) are contributed by the Postgres target rather than the Postgres adapter. Emitted contract types follow: the generated line
+
+```ts
+import type { QueryOperationTypes as PgAdapterQueryOps } from '@prisma/orm-postgres/adapter/operation-types';
+```
+
+becomes
+
+```ts
+import type { QueryOperationTypes as PgTargetQueryOps } from '@prisma/orm-postgres/target/operation-types';
+```
+
+Run `prisma contract emit` and commit the regenerated `contract.d.ts`. Nothing else in the file changes, `contract.json` does not change, and no contract hash moves. Do not hand-edit the generated file.
+
+Application code that imported `@prisma/orm-postgres/adapter/operation-types` directly imports `@prisma/orm-postgres/target/operation-types` instead. That subpath no longer exists; there is no compatibility re-export.

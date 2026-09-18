@@ -6,7 +6,6 @@ import type {
   Geometry,
 } from '@prisma/orm-extension-postgis/codec-types';
 import type { QueryOperationTypes as PostgisQueryOperationTypes } from '@prisma/orm-extension-postgis/operation-types';
-import type { QueryOperationTypes as PgAdapterQueryOps } from '@prisma/orm-postgres/adapter/operation-types';
 import type {
   Bit,
   Char,
@@ -24,6 +23,7 @@ import type {
   VarBit,
   Varchar,
 } from '@prisma/orm-postgres/target/codec-types';
+import type { QueryOperationTypes as PgTargetQueryOps } from '@prisma/orm-postgres/target/operation-types';
 
 import type {
   ContractWithTypeMaps,
@@ -47,7 +47,7 @@ export type ProfileHash =
 
 export type CodecTypes = PgTypes & PostgisTypes;
 export type LaneCodecTypes = CodecTypes;
-export type QueryOperationTypes = PgAdapterQueryOps<CodecTypes> &
+export type QueryOperationTypes = PgTargetQueryOps<CodecTypes> &
   PostgisQueryOperationTypes<CodecTypes>;
 export type AggregateTypes = {
   readonly avg: {

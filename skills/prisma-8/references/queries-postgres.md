@@ -62,6 +62,31 @@ db.orm.public.User.where({ kind: 'admin' });
 
 Operators on the field proxy include `.eq`, `.neq`, `.lt`, `.lte`, `.gt`, `.gte`, `.like`, `.ilike`, `.in([...])`, `.isNull()`, `.isNotNull()`. Extensions add target-specific operators on extension-typed columns (`pgvector`'s `.cosineDistance(...)`, `postgis`'s `.within(...)` / `.intersectsBbox(...)` / `.distanceSphere(...)`).
 
+**Full-text search** is built into the Postgres target, on any text column: `.fullTextMatches(q)` is the predicate, `.fullTextRank(q)` scores a row so you can order by relevance, and `.fullTextHeadline(q)` returns the text with `<b>` around the matches. The search string is a bound parameter lowered to `websearch_to_tsquery`, so `"an exact phrase"` and `-excluded` work the way a user expects from a search box. Each takes an optional second argument naming the text-search configuration; it defaults to `'english'` and only accepts the configurations a stock PostgreSQL server ships with (`'simple'`, `'german'`, `'french'`, … — anything else throws `RUNTIME.ARGUMENT_INVALID` when the query is built).
+
+```typescript
+// ORM: filter by the query, order by relevance.
+const hits = await db.orm.public.Message
+  .select('id', 'text')
+  .where((m) => m.text.fullTextMatches(query))
+  .orderBy((m) => m.text.fullTextRank(query).desc())
+  .limit(20)
+  .all();
+
+// SQL builder: the same predicate, plus a highlighted snippet.
+const snippets = db.sql.public.message
+  .select('id')
+  .select('snippet', (f, fns) => fns.fullTextHeadline(f.text, query))
+  .where((f, fns) => fns.fullTextMatches(f.text, query))
+  .build();
+```
+
+Without an index Postgres recomputes `to_tsvector` for every row. Declare one whose expression matches what the operation renders, character for character, including the language:
+
+```prisma
+@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: "message_text_search")
+```
+
 **There is no `.between(a, b)` operator.** Express ranges either as two chained `.where(...)` clauses (the idiomatic form — clauses AND-compose) or with the `and(...)` combinator inside one clause:
 
 ```typescript

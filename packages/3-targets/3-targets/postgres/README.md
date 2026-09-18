@@ -115,6 +115,40 @@ export const contract = defineContract({
 
 Pack refs are pure JSON-friendly objects that make TypeScript contract authoring work in both emit and no-emit workflows without requiring separate manifest files.
 
+### Full-text search
+
+This package contributes the built-in Postgres query operations — `ilike`, and the three full-text search operations below — through `queryOperations` on its runtime descriptor, with their types on `./operation-types`. Emitted `contract.d.ts` files import them from there.
+
+`fullTextMatches` is a predicate, `fullTextRank` scores a row for ordering, and `fullTextHeadline` returns the matched text with `<b>` around the matching words. All three take the search string as a bound parameter and lower to `websearch_to_tsquery`, so a user can type `"an exact phrase"` and `-excluded` and get what those mean in a search box. Each takes an optional second argument naming the text-search configuration, which defaults to `english`; only the configurations a stock PostgreSQL server ships with are accepted, because the name is written into the SQL as an inline literal.
+
+Through the ORM:
+
+```typescript
+const hits = await db.orm.public.Message.select('id', 'text')
+  .where((row) => row.text.fullTextMatches(query))
+  .orderBy((row) => row.text.fullTextRank(query).desc())
+  .limit(20)
+  .all();
+```
+
+Through the SQL builder:
+
+```typescript
+const snippets = db.sql.public.message
+  .select('id')
+  .select('snippet', (f, fns) => fns.fullTextHeadline(f.text, query))
+  .where((f, fns) => fns.fullTextMatches(f.text, query))
+  .build();
+```
+
+Postgres computes `to_tsvector` per row unless an index covers that exact expression, so declare one in the schema:
+
+```prisma
+@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: "message_text_search")
+```
+
+Write the index expression exactly as the operation renders it — `to_tsvector('<language>', "<column>")`, with the same language you pass to the operation — or Postgres will not use the index.
+
 ## Codec descriptor authoring
 
 PostgreSQL-bound codecs use the public `PostgresCodecDescriptor` protocol, `postgresCodec(...)` adapter, and `definePostgresCodecs(...)` tuple helper exported from `@internal/target-postgres/codec-descriptor`. See the [codec authoring guide](../../../../docs/reference/codec-authoring-guide.md#target-owned-sql-codec-descriptors) for subclassing, generic adaptation, stack contribution, validation, array projection, and the current renderer transition.
@@ -158,6 +192,7 @@ Postgres prints a `timestamptz` value in the session's time zone, and dates and 
 - `./control`: Control plane entry point for `SqlControlTargetDescriptor`
 - `./runtime`: Runtime entry point for target-specific runtime code
 - `./pack`: Pure pack ref for `defineContract({ family, target: postgresPack, ... })`
+- `./operation-types`: `QueryOperationTypes` for the built-in Postgres query operations, plus `FullTextSearchLanguage`
 - `./prisma7-binding`: `prisma7PostgresBinding`, this target's view for the Prisma 7 contract source (see above)
 
 ## Tests

@@ -81,3 +81,56 @@ describe('integration/extension-operations', () => {
     timeouts.spinUpPpgDev,
   );
 });
+
+describe('integration/full-text-search operations', () => {
+  const seedSearchablePosts = async (runtime: Parameters<typeof seedPosts>[0]) => {
+    await seedUsers(runtime, [{ id: 1, name: 'Alice', email: 'alice@test.com' }]);
+    await seedPosts(runtime, [
+      { id: 1, title: 'alice wrote the report', userId: 1, views: 10, embedding: null },
+      { id: 2, title: 'alice met alice and alice again', userId: 1, views: 20, embedding: null },
+      { id: 3, title: 'bob wrote the report', userId: 1, views: 30, embedding: null },
+    ]);
+  };
+
+  it(
+    'filters posts by fullTextMatches in where()',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+
+        const results = await createPostsCollection(runtime)
+          .select('id', 'title')
+          .where((p) => p.title.fullTextMatches('alice'))
+          .orderBy((p) => p.id.asc())
+          .all();
+
+        expect(results).toEqual([
+          { id: 1, title: 'alice wrote the report' },
+          { id: 2, title: 'alice met alice and alice again' },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'orders posts by fullTextRank in orderBy()',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+
+        const results = await createPostsCollection(runtime)
+          .select('id', 'title')
+          .where((p) => p.title.fullTextMatches('alice'))
+          .orderBy((p) => p.title.fullTextRank('alice').desc())
+          .all();
+
+        expect(results).toEqual([
+          { id: 2, title: 'alice met alice and alice again' },
+          { id: 1, title: 'alice wrote the report' },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+});

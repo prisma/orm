@@ -89,7 +89,13 @@ export function setupIntegrationTest() {
         INSERT INTO comments (id, body, post_id) VALUES
           (1, 'Great post!', 1),
           (2, 'Nice work', 1),
-          (3, 'Interesting', 3)
+          (3, 'Interesting', 3),
+          (101, 'alice wrote the report', 1),
+          (102, 'alice met alice and alice again', 1),
+          (103, 'bob wrote the report', 1),
+          (104, 'the quick brown fox jumps', 1),
+          (105, 'a brown dog and a quick cat', 1),
+          (106, 'alice manuscript draft', 1)
       `);
       await c.query(`
         INSERT INTO profiles (id, user_id, bio) VALUES

@@ -640,6 +640,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           'migration',
           'native-type-normalizer',
           'op-factory-call',
+          'operation-types',
           'pack',
           'planner',
           'planner-ddl-builders',

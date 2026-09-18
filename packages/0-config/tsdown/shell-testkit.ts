@@ -326,7 +326,6 @@ function shellMapModules(installedPackageDir: string): ReadonlySet<string> {
 export const knownInternalNamesInDist: readonly string[] = [
   '@internal/*',
   '@internal/adapter-mongo/codec-types',
-  '@internal/adapter-postgres/operation-types',
   '@internal/adapter-sqlite/codec-types',
   '@internal/cli',
   '@internal/cli-telemetry',
@@ -379,6 +378,7 @@ export const knownInternalNamesInDist: readonly string[] = [
   '@internal/target-postgres/codec-types',
   '@internal/target-postgres/codecs',
   '@internal/target-postgres/errors',
+  '@internal/target-postgres/operation-types',
   '@internal/target-sqlite',
   '@internal/target-sqlite/errors',
   '@internal/utils',
