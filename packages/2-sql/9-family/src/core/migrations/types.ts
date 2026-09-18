@@ -224,6 +224,15 @@ export interface SqlMigrationPlanOperation<TTargetDetails> extends MigrationPlan
   readonly execute: readonly SqlMigrationPlanOperationStep[];
   readonly postcheck: readonly SqlMigrationPlanOperationStep[];
   readonly meta?: AnyRecord;
+  /**
+   * Opt out of the runner's pre-execution idempotency probe. The probe skips
+   * an operation whose postcheck is already satisfied; an operation whose
+   * postcheck cannot tell "already applied" from "still needs the change"
+   * (e.g. widening `SET DEFAULT`, whose postcheck only asserts a default
+   * exists) sets this so the change is not silently skipped. The postcheck
+   * still runs after execution.
+   */
+  readonly skipIdempotencyProbe?: boolean;
 }
 
 export interface SqlMigrationPlanContractInfo {
