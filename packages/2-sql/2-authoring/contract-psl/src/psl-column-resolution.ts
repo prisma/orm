@@ -30,6 +30,7 @@ import {
   type MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
 import type {
+  Binder,
   FieldSymbol,
   ModelSymbol,
   NumLiteral,
@@ -750,6 +751,7 @@ export function lowerDefaultForField(input: {
   readonly model: ModelSymbol;
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly columnDescriptor: ColumnDescriptor;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
@@ -780,6 +782,7 @@ export function lowerDefaultForField(input: {
     model: input.model,
     field: input.field,
     sources: input.sources,
+    binder: input.binder,
     diagnostics: input.diagnostics,
   });
   if (interpreted === undefined) return {};

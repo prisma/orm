@@ -716,7 +716,16 @@ describe('interpretPslDocumentToMongoContract', () => {
           author   User @relation(fields: [missing], references: [id])
         }
       `);
-      expectInvalidAttributeSyntax(result, /missing.*does not exist/i);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: expect.stringContaining('Cannot find field "missing"'),
+          }),
+        ]),
+      );
     });
   });
 
@@ -1906,9 +1915,7 @@ describe('interpretPslDocumentToMongoContract', () => {
       const result = interpret(source);
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const diags = result.failure.diagnostics.filter(
-        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-      );
+      const diags = result.failure.diagnostics.filter((d) => d.code === 'PSL_UNRESOLVED_REFERENCE');
       expect(diags).toHaveLength(1);
       expect(diags[0]?.span).toMatchObject({
         start: { offset: source.indexOf('nonexistent') },

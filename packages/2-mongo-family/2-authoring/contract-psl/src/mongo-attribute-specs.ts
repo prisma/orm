@@ -1,8 +1,14 @@
 import type {
+  AuthoringContributions,
+  AuthoringTypeConstructorDescriptor,
+} from '@internal/framework-components/authoring';
+import type { ControlDefaultRegistries } from '@internal/framework-components/control';
+import type {
   ArgType,
   AttributeSpec,
   AttributeSpecContext,
   AttributeSpecNamespace,
+  Binder,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
   FieldSymbol,
@@ -10,10 +16,13 @@ import type {
   InferAttr,
   ModelAttributeCtx,
   ModelSymbol,
+  PslDiagnostic,
+  SymbolTable,
   TypedFuncCall,
 } from '@internal/psl-parser';
 import {
   bool,
+  createBinder,
   entityRef,
   fieldAttribute,
   fieldRef,
@@ -57,10 +66,12 @@ export function findFieldAttributeNode(
 function buildModelAttributeCtx(input: {
   readonly selfModel: ModelSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
 }): ModelAttributeCtx {
   return {
     sources: input.sources,
     selfModel: input.selfModel,
+    binder: input.binder,
   };
 }
 
@@ -68,14 +79,56 @@ function buildFieldAttributeCtx(input: {
   readonly selfModel: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
-  readonly resolveReferencedModel?: (() => ModelSymbol | undefined) | undefined;
+  readonly binder: Binder;
 }): FieldAttributeCtx {
   return {
     sources: input.sources,
     selfModel: input.selfModel,
-    resolveReferencedModel: input.resolveReferencedModel ?? (() => undefined),
     field: input.field,
+    binder: input.binder,
   };
+}
+
+export function createMongoBinder(input: {
+  readonly symbolTable: SymbolTable;
+  readonly sources: PslSources;
+  readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly authoringContributions?: AuthoringContributions | undefined;
+}): { readonly binder: Binder; readonly diagnostics: readonly PslDiagnostic[] } {
+  const scalars: Record<string, AuthoringTypeConstructorDescriptor> = {};
+  for (const [name, codecId] of input.scalarTypeCodecIds) {
+    scalars[name] = { kind: 'typeConstructor', output: { codecId } };
+  }
+  const noReferences = { positional: [], named: {} };
+  return createBinder({
+    sources: input.sources,
+    symbolTable: input.symbolTable,
+    typeConstructors: { ...scalars, ...(input.authoringContributions?.type ?? {}) },
+    attributeSpecs: {
+      model: (name, owner) => {
+        if (!Object.hasOwn(mongoAttributeSpecs.model, name) || owner.kind !== 'model') {
+          return noReferences;
+        }
+        return mongoAttributeSpecs.model[name as keyof typeof mongoAttributeSpecs.model]({
+          symbols: input.symbolTable,
+          model: owner,
+          controlMutationDefaults: input.controlMutationDefaults,
+        });
+      },
+      field: (name, owner, declaringField) => {
+        if (!Object.hasOwn(mongoAttributeSpecs.field, name) || owner.kind !== 'model') {
+          return noReferences;
+        }
+        return mongoAttributeSpecs.field[name as keyof typeof mongoAttributeSpecs.field]({
+          symbols: input.symbolTable,
+          model: owner,
+          field: declaringField,
+          controlMutationDefaults: input.controlMutationDefaults,
+        });
+      },
+    },
+  });
 }
 
 // Interpret a model-level attribute node against its spec, draining any parse
@@ -86,6 +139,7 @@ export function interpretModelAttribute<Out>(input: {
   readonly spec: AttributeSpec<Out, ModelAttributeCtx>;
   readonly model: ModelSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
 }): Out | undefined {
   const result = interpretAttribute(
@@ -94,6 +148,7 @@ export function interpretModelAttribute<Out>(input: {
     buildModelAttributeCtx({
       selfModel: input.model,
       sources: input.sources,
+      binder: input.binder,
     }),
   );
   if (!result.ok) {
@@ -112,8 +167,8 @@ export function interpretFieldAttribute<Out>(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
+  readonly binder: Binder;
   readonly diagnostics: PslDiagnosticCollector;
-  readonly resolveReferencedModel?: () => ModelSymbol | undefined;
 }): Out | undefined {
   const result = interpretAttribute(
     input.node,
@@ -122,7 +177,7 @@ export function interpretFieldAttribute<Out>(input: {
       selfModel: input.model,
       field: input.field,
       sources: input.sources,
-      resolveReferencedModel: input.resolveReferencedModel,
+      binder: input.binder,
     }),
   );
   if (!result.ok) {

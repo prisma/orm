@@ -757,8 +757,8 @@ model Bug {
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-            message: expect.stringContaining('does not exist'),
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: expect.stringContaining('Cannot find field'),
           }),
         ]),
       );
@@ -856,7 +856,8 @@ model Bug {
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            code: 'PSL_BASE_TARGET_NOT_FOUND',
+            code: 'PSL_UNRESOLVED_REFERENCE',
+            message: expect.stringContaining('Cannot find entity "NonExistent"'),
           }),
         ]),
       );
