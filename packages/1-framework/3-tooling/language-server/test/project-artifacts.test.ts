@@ -6,11 +6,12 @@ import { parse } from '@internal/psl-parser/syntax';
 import { notOk, ok } from '@internal/utils/result';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import type { ProjectInterpretation } from '../src/config-resolution';
 import { mapParseDiagnostics } from '../src/diagnostic-mapping';
 import type { PipelineInputs } from '../src/pipeline';
 import { createProjectArtifacts, type ProjectArtifacts } from '../src/project-artifacts';
-import { resolveSchemaInputs } from '../src/schema-inputs';
+import { canonicalFileIdentity, resolveSchemaInputs } from '../src/schema-inputs';
 
 const pipelineMock = vi.hoisted(() => ({
   runPipeline: vi.fn<typeof import('../src/pipeline')['runPipeline']>(),
@@ -42,6 +43,18 @@ const cleanSource = `${directive}model User {\n  id Int @id\n}\n`;
 const twoModelSource = `${directive}model User {\n  id Int @id\n}\n\nmodel Post {\n  id Int @id\n}\n`;
 const unmarkedSource = 'model Stray {\n  id Int @id\n}\n';
 
+function mirroredDocument(
+  texts: ReadonlyMap<string, string>,
+  uri: string,
+): TextDocument | undefined {
+  for (const [openedUri, text] of texts) {
+    if (canonicalFileIdentity(openedUri) === canonicalFileIdentity(uri)) {
+      return TextDocument.create(openedUri, 'prisma', 1, text);
+    }
+  }
+  return undefined;
+}
+
 function projectWithMirror(interpretation?: ProjectInterpretation): {
   readonly texts: Map<string, string>;
   readonly store: ProjectArtifacts;
@@ -53,7 +66,7 @@ function projectWithMirror(interpretation?: ProjectInterpretation): {
     inputs,
     controlStack,
     onInterpretationError,
-    getText: (uri) => texts.get(uri),
+    getDocument: (uri) => mirroredDocument(texts, uri),
     ...(interpretation === undefined ? {} : { interpretation }),
   });
   return { texts, store, onInterpretationError };
@@ -87,7 +100,7 @@ describe('createProjectArtifacts', () => {
         contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
       }),
       controlStack,
-      getText: (uri) => texts.get(uri),
+      getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
       interpretation,
     });
@@ -144,17 +157,18 @@ describe('createProjectArtifacts', () => {
     const liveUri = 'file:///abs/%73chema.psl';
     const { texts, store } = projectWithMirror();
     texts.set(liveUri, cleanSource);
-    const first = store.document(liveUri)!;
+    const first = store.document(schemaUri)!;
+    expect(first.sourceFile.filename).toBe(liveUri);
     expect(store.symbolTable().topLevel.models['User']?.node.syntax.root()).toBe(
       first.document.syntax,
     );
     texts.set(liveUri, twoModelSource);
-    store.documentChanged(liveUri);
+    store.documentChanged(schemaUri);
     expect(Object.keys(store.symbolTable().topLevel.models)).toEqual(['User', 'Post']);
     expect(store.document(schemaUri)).toBe(store.document(liveUri));
     expect(() => store.sources.sourceFileFor(first.document.syntax)).toThrow(/No SourceFile/);
     texts.delete(liveUri);
-    store.documentClosed(liveUri);
+    store.documentClosed(schemaUri);
     expect(store.document(schemaUri)).toBeUndefined();
     texts.set(schemaUri, cleanSource);
     expect(store.document(schemaUri)?.sourceFile.filename).toBe(schemaUri);
@@ -231,7 +245,7 @@ describe('createProjectArtifacts', () => {
     const store = createProjectArtifacts({
       inputs: twoInputs,
       controlStack,
-      getText: (uri) => texts.get(uri),
+      getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
     });
     texts.set(schemaUri, unmarkedSource);
@@ -271,7 +285,7 @@ describe('createProjectArtifacts', () => {
     const store = createProjectArtifacts({
       inputs: twoInputs,
       controlStack,
-      getText: (uri) => texts.get(uri),
+      getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
     });
     texts.set(schemaUri, cleanSource);
@@ -296,7 +310,7 @@ describe('createProjectArtifacts', () => {
         contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
       }),
       controlStack,
-      getText: (uri) => texts.get(uri),
+      getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
     });
     const first = store.document(schemaUri)!;
@@ -513,7 +527,7 @@ describe('interpret slot', () => {
         contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
       }),
       controlStack,
-      getText: (uri) => texts.get(uri),
+      getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
       interpretation,
     });
@@ -589,7 +603,7 @@ describe('interpret slot', () => {
         contract: { source: { format: 'psl', inputs: ['/abs/schema.psl', '/abs/sibling.psl'] } },
       }),
       controlStack,
-      getText: (uri) => texts.get(uri),
+      getDocument: (uri) => mirroredDocument(texts, uri),
       onInterpretationError: vi.fn(),
       interpretation,
     });

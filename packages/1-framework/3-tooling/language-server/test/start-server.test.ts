@@ -135,7 +135,7 @@ describe('startServer over injected streams', () => {
     client.sendNotification(ExitNotification.type);
 
     expect(initialized.capabilities).toMatchObject({
-      textDocumentSync: TextDocumentSyncKind.Incremental,
+      textDocumentSync: { openClose: true, change: TextDocumentSyncKind.Incremental },
       documentFormattingProvider: true,
       foldingRangeProvider: true,
       completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ','] },

@@ -7,6 +7,7 @@ import {
 import { type DocumentAst, PslSources, type SourceFile } from '@internal/psl-parser/syntax';
 import { InternalError } from '@internal/utils/internal-error';
 import { LSPErrorCodes, ResponseError } from 'vscode-languageserver';
+import type { TextDocument } from 'vscode-languageserver-textdocument';
 import type { ProjectInterpretation } from './config-resolution';
 import {
   type LspDiagnostic,
@@ -31,7 +32,7 @@ export interface DocumentArtifacts {
 export interface ProjectArtifactsOptions {
   readonly inputs: SchemaInputSet;
   readonly controlStack: PipelineInputs;
-  readonly getText: (uri: string) => string | undefined;
+  readonly getDocument: (uri: string) => TextDocument | undefined;
   readonly interpretation?: ProjectInterpretation;
   readonly onInterpretationError: (uri: string, error: unknown) => void;
 }
@@ -57,9 +58,8 @@ export interface ProjectArtifacts {
 }
 
 export function createProjectArtifacts(options: ProjectArtifactsOptions): ProjectArtifacts {
-  const { inputs, controlStack, getText, interpretation } = options;
+  const { inputs, controlStack, getDocument, interpretation } = options;
   const documents = new Map<string, DocumentArtifacts>();
-  const openDocumentUris = new Map<string, string>();
   let symbolTableResult: SymbolTableResult | undefined;
   let sources = new PslSources([]);
 
@@ -142,12 +142,16 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     if (existing !== undefined) {
       return existing;
     }
-    const openDocumentUri = openDocumentUris.get(identity) ?? uri;
-    const text = getText(openDocumentUri);
-    if (text === undefined) {
+    const textDocument = getDocument(uri);
+    if (textDocument === undefined) {
       return undefined;
     }
-    const computed = computeDocumentDiagnostics(openDocumentUri, text, inputs, controlStack);
+    const computed = computeDocumentDiagnostics(
+      textDocument.uri,
+      textDocument.getText(),
+      inputs,
+      controlStack,
+    );
     if (computed === null) {
       return undefined;
     }
@@ -156,12 +160,11 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       sourceFile: computed.sourceFile,
       diagnostics: computed.parseDiagnostics,
       interpretDiagnostics: createInterpretSlot(
-        openDocumentUri,
+        textDocument.uri,
         computed.document,
         computed.sourceFile,
       ),
     };
-    openDocumentUris.set(identity, openDocumentUri);
     documents.set(identity, artifacts);
     refreshSources();
     return artifacts;
@@ -198,9 +201,6 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     symbolTable: readSymbolTable,
     symbolDiagnostics: () => readSymbolTableResult().diagnostics,
     documentChanged: drop,
-    documentClosed(uri) {
-      drop(uri);
-      openDocumentUris.delete(canonicalFileIdentity(uri));
-    },
+    documentClosed: drop,
   };
 }

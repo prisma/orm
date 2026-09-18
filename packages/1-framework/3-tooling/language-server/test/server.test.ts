@@ -72,6 +72,7 @@ import {
   SignatureHelpTriggerKind,
   StreamMessageReader,
   StreamMessageWriter,
+  TextDocumentSyncKind,
   type TextEdit,
 } from 'vscode-languageserver/node';
 import type { ConfigResolution } from '../src/config-resolution';
@@ -833,10 +834,130 @@ afterEach(async () => {
 });
 
 describe('language server', { timeout: timeouts.databaseOperation }, () => {
+  it('publishes once per open and edit, using the opened URI across equivalent lifecycle notifications', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const alias = schemaUri.replace('schema.psl', '%73chema.psl');
+    openDocument(harness, alias, unformattedPsl);
+    await harness.waitForDiagnostics(alias);
+    await settle();
+    expect(harness.publishCount(alias)).toBe(1);
+    expect(harness.publishCount(schemaUri)).toBe(0);
+    const first = harness.getDocumentAst(schemaUri)!;
+    expect(first).toBe(harness.getDocumentAst(alias));
+    expect(first.sourceFile.filename).toBe(alias);
+    expect(await requestFormatting(harness, schemaUri)).toEqual([
+      {
+        range: { start: { line: 0, character: 0 }, end: { line: 3, character: 1 } },
+        newText: formattedPsl,
+      },
+    ]);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [
+        {
+          range: { start: { line: 1, character: 6 }, end: { line: 1, character: 10 } },
+          text: 'Post',
+        },
+      ],
+    });
+    await harness.waitForDiagnosticsCount(alias, 2);
+    await settle();
+    expect(harness.publishCount(alias)).toBe(2);
+    expect(harness.publishCount(schemaUri)).toBe(0);
+    expect(harness.getDocumentAst(schemaUri)).not.toBe(first);
+    expect(Object.keys(harness.getProjectSymbolTable(schemaUri)!.topLevel.models)).toEqual([
+      'Post',
+    ]);
+    expect(configLoaderMock.findNearestConfigPathForFile).toHaveBeenCalledTimes(1);
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 3 },
+      contentChanges: [],
+    });
+    await requestFormatting(harness, alias);
+    await settle();
+    expect(harness.publishCount(alias)).toBe(2);
+    closeDocument(harness, schemaUri);
+    await harness.waitForDiagnosticsCount(alias, 3);
+    expect(harness.getDocumentAst(alias)).toBeUndefined();
+    expect(harness.getProjectSymbolTable(schemaUri)).toBeUndefined();
+    openDocument(harness, schemaUri, unformattedPsl);
+    await harness.waitForDiagnostics(schemaUri);
+    expect(harness.getDocumentAst(alias)?.sourceFile.filename).toBe(schemaUri);
+    expect(Object.keys(harness.getProjectSymbolTable(alias)!.topLevel.models)).toEqual(['User']);
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(2);
+  });
+
+  it('replaces simultaneous alias opens and clears the superseded URI', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    const alias = schemaUri.replace('schema.psl', '%73chema.psl');
+    openDocument(harness, alias, duplicateModelSource);
+    expect((await harness.waitForDiagnostics(alias)).length).toBeGreaterThan(0);
+    openDocument(harness, schemaUri, unformattedPsl);
+    await harness.waitForDiagnostics(schemaUri);
+    expect(harness.latestDiagnostics(alias)).toEqual([]);
+    expect(harness.getDocumentAst(alias)?.sourceFile.filename).toBe(schemaUri);
+    expect(harness.getDocumentAst(alias)).toBe(harness.getDocumentAst(schemaUri));
+    closeDocument(harness, alias);
+    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    expect(harness.getDocumentAst(schemaUri)).toBeUndefined();
+    expect(await requestFormatting(harness, schemaUri)).toEqual([]);
+    expect(configResolutionMock.resolveConfigInputs).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads aliases from the current buffer for pull diagnostics and editor features', async () => {
+    harness = startHarness(resolveToSchema, pullDiagnosticsCapabilities);
+    await harness.initialize();
+    const alias = schemaUri.replace('schema.psl', '%73chema.psl');
+    openDocument(harness, alias, unformattedPsl);
+    expect(fullReportItems(await requestPullDiagnostics(harness, schemaUri))).toEqual([]);
+    expect(harness.getDocumentAst(schemaUri)?.sourceFile.filename).toBe(alias);
+    const updated = '// use prisma-8\r\nmodel Post {\r\n  id Int\r\n}\r\nmodel Post {}';
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: updated }],
+    });
+    const diagnostics = fullReportItems(await requestPullDiagnostics(harness, schemaUri));
+    expect(diagnostics.length).toBeGreaterThan(0);
+    expect(fullReportItems(await requestPullDiagnostics(harness, alias))).toEqual(diagnostics);
+    expect(await requestFoldingRanges(harness, schemaUri)).toEqual(
+      await requestFoldingRanges(harness, alias),
+    );
+    expect(await requestSemanticTokens(harness, schemaUri)).toEqual(
+      await requestSemanticTokens(harness, alias),
+    );
+    const position = { line: 2, character: 5 };
+    const completions = completionItems(await requestCompletion(harness, schemaUri, position));
+    expect(completions.map(({ label }) => label)).toContain('Post');
+    expect(completions).toEqual(completionItems(await requestCompletion(harness, alias, position)));
+    expect(pipelineMock.runPipeline).toHaveBeenLastCalledWith(alias, updated, expect.any(Object));
+    expect(configLoaderMock.findNearestConfigPathForFile).toHaveBeenCalledTimes(1);
+    expect(harness.publishCount(schemaUri)).toBe(0);
+    expect(harness.publishCount(alias)).toBe(0);
+  });
+
+  it('ignores changes and closes for unopened documents', async () => {
+    harness = startHarness(resolveToSchema);
+    await harness.initialize();
+    harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
+      textDocument: { uri: schemaUri, version: 2 },
+      contentChanges: [{ text: unformattedPsl }],
+    });
+    closeDocument(harness, schemaUri);
+    expect(await requestFormatting(harness, schemaUri)).toEqual([]);
+    await settle();
+    expect(harness.publishCount(schemaUri)).toBe(0);
+    expect(configResolutionMock.resolveConfigInputs).not.toHaveBeenCalled();
+  });
+
   it('answers initialize and advertises text-document features plus completion support', async () => {
     harness = startHarness(resolveToSchema);
     const result = await harness.initialize();
-    expect(result.capabilities.textDocumentSync).toBeDefined();
+    expect(result.capabilities.textDocumentSync).toEqual({
+      openClose: true,
+      change: TextDocumentSyncKind.Incremental,
+    });
     expect(result.capabilities.documentFormattingProvider).toBe(true);
     expect(result.capabilities.foldingRangeProvider).toBe(true);
     expect(result.capabilities.semanticTokensProvider).toEqual({
@@ -1112,10 +1233,9 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       ].join('\n'),
     );
     openDocument(harness, schemaUri, initial);
-    await harness.waitForDiagnostics(schemaUri);
-    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    await harness.waitForDiagnosticsCount(schemaUri, 1);
 
-    const republished = harness.waitForDiagnosticsCount(schemaUri, 3);
+    const republished = harness.waitForDiagnosticsCount(schemaUri, 2);
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: schemaUri, version: 2 },
       contentChanges: [{ text: updated.source }],
@@ -1149,7 +1269,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       ].join('\n'),
     );
     openDocument(harness, schemaUri, source);
-    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    await harness.waitForDiagnosticsCount(schemaUri, 1);
 
     pipelineMock.runPipeline.mockClear();
     const items = completionItems(await requestCompletion(harness, schemaUri, position));
@@ -1176,10 +1296,10 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
       ].join('\n'),
     );
     openDocument(harness, schemaUri, initial);
-    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    await harness.waitForDiagnosticsCount(schemaUri, 1);
 
     pipelineMock.runPipeline.mockClear();
-    const republished = harness.waitForDiagnosticsCount(schemaUri, 3);
+    const republished = harness.waitForDiagnosticsCount(schemaUri, 2);
     harness.client.sendNotification(DidChangeTextDocumentNotification.type, {
       textDocument: { uri: schemaUri, version: 2 },
       contentChanges: [{ text: updated.source }],
@@ -2999,8 +3119,7 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
     await harness.initialize();
 
     // Open with a diagnostic-producing source so the only empty publish is the
-    // close's clear: an `onDidOpen` + `onDidChangeContent` pair both fire on open,
-    // so a clean source would publish `[]` twice and resolve the waiter early.
+    // close's clear.
     harness.client.sendNotification(DidOpenTextDocumentNotification.type, {
       textDocument: {
         uri: schemaUri,
@@ -3012,7 +3131,7 @@ describe('language server preserved artifacts', { timeout: timeouts.databaseOper
     expect((await harness.waitForDiagnostics(schemaUri)).length).toBeGreaterThan(0);
     expect(harness.getDocumentAst(schemaUri)).toBeDefined();
     expect(harness.getProjectSymbolTable(schemaUri)).toBeDefined();
-    await harness.waitForDiagnosticsCount(schemaUri, 2);
+    expect(harness.publishCount(schemaUri)).toBe(1);
 
     const closed = harness.waitForDiagnosticsMatching(
       schemaUri,
