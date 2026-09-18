@@ -54,6 +54,7 @@ const MODEL_SPECS: Readonly<Record<string, ReturnType<AttributeSpecRegistry['mod
   unique: { positional: [{ key: 'fields', type: fieldRefList }], named: {} },
   base: { positional: [{ key: 'model', type: { kind: 'entityRef' } }], named: {} },
   map: { positional: [{ key: 'name', type: { kind: 'str' } }], named: {} },
+  borrowed: { positional: [{ key: 'fields', type: referencedFieldRefList }], named: {} },
 };
 
 const FIELD_SPECS: Readonly<Record<string, ReturnType<AttributeSpecRegistry['field']>>> = {
@@ -839,5 +840,35 @@ describe('referencedFieldRef on a cross-space list', () => {
     for (const node of nodes) {
       expect(binder.symbolForNode(node)).toEqual({ kind: 'crossSpace' });
     }
+  });
+});
+
+describe('createBinder — reference slots the binder stays silent about', () => {
+  it('records nothing for a referencedFieldRef outside a field attribute', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      'model User {\n  id Int\n  @@borrowed([id])\n}',
+    );
+    const user = symbolTable.topLevel.models['User']!;
+    const [node] = attributeNodes(user, 'borrowed');
+
+    expect(node).toBeDefined();
+    expect(node === undefined ? undefined : binder.symbolForNode(node)).toBeUndefined();
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('records nothing for a non-identifier in a reference slot', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      ['model User {', '  id Int', '  @@index(["id", 7])', '  @@base("Base")', '}'].join('\n'),
+    );
+    const user = symbolTable.topLevel.models['User']!;
+    const indexNodes = attributeNodes(user, 'index');
+    const baseNodes = attributeNodes(user, 'base');
+
+    expect(indexNodes).toHaveLength(2);
+    expect(baseNodes).toHaveLength(1);
+    for (const node of [...indexNodes, ...baseNodes]) {
+      expect(binder.symbolForNode(node)).toBeUndefined();
+    }
+    expect(diagnostics).toEqual([]);
   });
 });

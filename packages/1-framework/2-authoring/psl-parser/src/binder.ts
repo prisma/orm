@@ -258,9 +258,13 @@ function resolveOwnerField(name: string, node: SyntaxNode, ctx: BindContext): Re
   return { kind: 'unresolved', name };
 }
 
-function resolveReferencedField(name: string, node: SyntaxNode, ctx: BindContext): Resolution {
+function resolveReferencedField(
+  name: string,
+  node: SyntaxNode,
+  ctx: BindContext,
+): Resolution | undefined {
   const declaring = ctx.field;
-  if (declaring === undefined) return resolveOwnerField(name, node, ctx);
+  if (declaring === undefined) return undefined;
   if (declaring.typeContractSpaceId !== undefined) return { kind: 'crossSpace' };
   const typeNode = typeReferenceNode(declaring);
   const target = typeNode === undefined ? undefined : ctx.references.get(typeNode);
