@@ -531,7 +531,7 @@ function emptySchemaIR(): SqlSchemaIR {
   return new SqlSchemaIR({ tables: {} });
 }
 
-function conflictForDisallowedCall(
+export function conflictForDisallowedCall(
   call: SqliteOpFactoryCall,
   allowed: readonly string[],
 ): SqlPlannerConflict {

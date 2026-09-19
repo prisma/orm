@@ -14,10 +14,10 @@
 
 ### Slice 2 — Rename-table migration operation
 
-- **Outcome:** a PSL model whose table name changes plans as one rename-table operation on Postgres and SQLite instead of a drop and a create, and the guard's second remedy points at that path. How the planner learns a rename is intended is settled in this slice's spec before implementation.
+- **Outcome:** a user renames a table without losing its rows by writing `this.renameTable(...)` in a migration created with `prisma migration new`; the method also renames the constraints and indexes named after the table. The guard points at this path. Spec: `slices/rename-table-operation/spec.md`.
 - **Builds on:** slice 1 (guard and error text).
-- **Hands to:** the rename op and the intent mechanism.
-- **Branch:** to be cut from `main` after slice 1 merges.
+- **Hands to:** the rename operation and the companion-rename computation that a future planner-hint feature can reuse.
+- **PR:** https://github.com/prisma/orm/pull/30331
 
 ### Slice 3 — TS DSL cross-space relation table fallback
 
@@ -28,6 +28,10 @@
 Slice 2 and slice 3 are independent of each other and run in parallel after slice 1 merges.
 
 ## Follow-ups filed outside this project
+
+- Planner hints in the contract source, `@hint(was: ...)`, as documented in the Data Contract and Migration System subsystem docs and ADR 001. Not implemented. With hints, `migration plan` and `db update` could plan a rename without a hand-written migration, reusing slice 2's companion-rename code. Open questions: PSL syntax and the TypeScript equivalent; whether `was` names the old model or the old table; how hints reach the offline planner without entering `contract.json`; whether a leftover hint that matches nothing is ignored or an error.
+
+- Extension packages keep migrations directly under `migrations/` (per `.agents/rules/contract-space-package-layout.mdc` and every shipped extension), but `migration plan` reads and writes history under `migrations/app/`. Inside such a package `migration plan` cannot see the history, so `--from` fails and a stated rename cannot be planned. Found while writing the slice 2 extension upgrade note; it predates this project and affects every `migration plan` run in an extension package.
 
 - Whether `contract infer` should keep names verbatim like Prisma 7 instead of re-casing to PascalCase.
 - Mongo has no planner guard; the operator chose not to address it in this project.

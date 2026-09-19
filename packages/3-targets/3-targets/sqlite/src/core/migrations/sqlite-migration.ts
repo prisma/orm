@@ -5,6 +5,7 @@ import type {
 } from '@internal/family-sql/control';
 import type { SqlControlAdapter } from '@internal/family-sql/control-adapter';
 import { Migration as SqlMigration } from '@internal/family-sql/migration';
+import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import type { ControlStack } from '@internal/framework-components/control';
 import { MigrationContractViews } from '@internal/migration-tools/migration';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -23,6 +24,7 @@ import {
 } from './op-factory-call';
 import type { SqliteColumnSpec, SqliteIndexSpec, SqliteTableSpec } from './operations/shared';
 import type { SqlitePlanTargetDetails } from './planner-target-details';
+import { sqliteTableRenameCalls } from './table-rename-calls';
 
 type Op = SqlMigrationPlanOperation<SqlitePlanTargetDetails>;
 
@@ -81,6 +83,16 @@ export abstract class SqliteMigration<
       : undefined;
   }
 
+  private frameworkComponents(): ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>> {
+    const stack = this.stack;
+    if (stack === undefined) return [];
+    return [
+      stack.target,
+      ...(stack.adapter === undefined ? [] : [stack.adapter]),
+      ...stack.extensions,
+    ];
+  }
+
   /**
    * Returns the materialized control adapter, or throws a MIGRATION.SQLITE_CONTROL_STACK_MISSING naming
    * `operation` when the migration was constructed without a `ControlStack`.
@@ -123,6 +135,22 @@ export abstract class SqliteMigration<
 
   protected dropTable(options: { readonly table: string }): Promise<Op> {
     return new DropTableCall(options.table).toOp(this.controlAdapterFor('dropTable'));
+  }
+
+  /**
+   * Emit the operations that rename a table: the table rename, then a drop and a create under the new name of each index whose name was derived from the old table name, read from this migration's start and end contracts. Spread the result into `operations`: `...this.renameTable({ table: 'userProfile', to: 'UserProfile' })`. Throws `MIGRATION.TABLE_RENAME_UNMATCHED` when the start contract lacks the table or the end contract lacks the new name.
+   */
+  protected renameTable(options: {
+    readonly table: string;
+    readonly to: string;
+  }): readonly Promise<Op>[] {
+    const adapter = this.controlAdapterFor('renameTable');
+    return sqliteTableRenameCalls({
+      startContract: this.startContract,
+      endContract: this.endContract,
+      rename: { namespaceId: undefined, from: options.table, to: options.to },
+      frameworkComponents: this.frameworkComponents(),
+    }).map(async (call) => call.toOp(adapter));
   }
 
   protected addColumn(options: {
