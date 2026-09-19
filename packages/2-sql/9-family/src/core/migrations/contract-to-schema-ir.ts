@@ -145,6 +145,7 @@ function convertColumn(
     // equal instead of drifting on `kind` alone.
     resolvedNativeType,
     ...ifDefined('resolvedDefault', resolvedColumnDefault),
+    ...ifDefined('authoredDefault', rawColumnDefault),
     // The column's codec identity, carried the same way the query AST
     // carries `CodecRef` (TML-2456) — the migration planner's op-builders
     // resolve DDL rendering from this at plan time (Decision 5), instead of

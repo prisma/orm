@@ -1,0 +1,45 @@
+{
+  "name": "prisma7-adoption",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "db:start": "tsx scripts/db-start.ts",
+    "v7:generate": "prisma7 generate --config prisma7.config.ts",
+    "v7:migrate": "prisma7 migrate deploy --config prisma7.config.ts",
+    "v7:read": "tsx src/v7-read.ts",
+    "emit": "prisma contract emit",
+    "sign": "prisma db sign",
+    "verify": "prisma db verify",
+    "seed": "tsx scripts/seed.ts",
+    "start": "tsx src/main.ts",
+    "test": "vitest run",
+    "typecheck": "pnpm v7:generate && tsc --project tsconfig.json --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write ."
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "@prisma/orm-postgres": "workspace:8.0.0-rc.11",
+    "dotenv": "^17.4.2",
+    "pg": "catalog:",
+    "temporal-polyfill": "^1.0.4"
+  },
+  "devDependencies": {
+    "@prisma/cli-engine": "0.4.0",
+    "@prisma/dev": "catalog:",
+    "@prisma/prisma7": "7.10.0",
+    "@repo/test-utils": "workspace:8.0.0-rc.11",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "prisma": "workspace:@internal/cli@8.0.0-rc.11",
+    "tsx": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "version": "8.0.0-rc.11"
+}

@@ -65,6 +65,7 @@ function stubStackWithContext(): ControlStack {
     },
     codecLookup: { get: () => undefined },
     controlMutationDefaults: {
+      defaultLiteralTagRegistry: new Map(),
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
     },
@@ -199,7 +200,11 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
 
     const result = await resolveConfigInputs('/abs/prisma.config.ts');
 
-    expect(result.controlStack).toEqual({ scalarTypes: ['Int'], pslBlockDescriptors: {} });
+    expect(result.controlStack).toEqual({
+      scalarTypes: ['Int'],
+      pslBlockDescriptors: {},
+      authoringContributions: { pslBlockDescriptors: {} },
+    });
     expect(result.inputs.includes(pathToFileURL('/abs/schema.psl').toString())).toBe(true);
   });
 });
@@ -238,7 +243,11 @@ describe('control-stack input derivation', () => {
 
     const result = await resolveConfigInputs('/abs/prisma.config.ts');
 
-    expect(result.controlStack).toEqual({ scalarTypes: ['Int', 'String'], pslBlockDescriptors });
+    expect(result.controlStack).toEqual({
+      scalarTypes: ['Int', 'String'],
+      pslBlockDescriptors,
+      authoringContributions: { pslBlockDescriptors },
+    });
   });
 
   it('propagates createControlStack failures for a psl source', async () => {

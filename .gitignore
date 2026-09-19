@@ -37,7 +37,7 @@ packages/9-public/@prisma/*/skills/
 
 # Per-machine install lockfile written by `skills add`. Local only;
 # our canonical source is `skills-contrib/` (for contributors) and the
-# git-pinned tag (for external consumers via `prisma-next init`).
+# git-pinned tag (for external consumers via `prisma init`).
 skills-lock.json
 
 # Review artifacts (transient, local-only)

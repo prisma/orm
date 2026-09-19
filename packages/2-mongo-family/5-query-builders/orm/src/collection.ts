@@ -45,6 +45,7 @@ import { MongoParamRef } from '@internal/mongo-value';
 import { blindCast, castAs } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import type { SimplifyDeep } from '@internal/utils/simplify-deep';
 import type { MongoIncludeExpr } from './collection-state';
 import { emptyCollectionState, type MongoCollectionState } from './collection-state';
 import { compileMongoQuery } from './compile';
@@ -78,6 +79,7 @@ export interface MongoCollection<
   TIncludes extends MongoIncludeSpec<TContract, ModelName> = NoIncludes,
   TVariant extends string = never,
 > {
+  readonly _row?: SimplifyDeep<IncludedRow<TContract, ModelName, TIncludes>>;
   /** Narrows to a specific variant, injecting a discriminator filter. */
   variant<V extends VariantNames<TContract, ModelName>>(
     variantName: V,

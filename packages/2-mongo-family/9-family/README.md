@@ -1,6 +1,6 @@
 # @internal/family-mongo
 
-Mongo family descriptor and family pack for Prisma Next.
+Mongo family descriptor and family pack for Prisma 8.
 
 ## Purpose
 

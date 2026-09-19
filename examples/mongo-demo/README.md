@@ -1,6 +1,6 @@
 # Mongo Demo
 
-End-to-end example of Prisma Next with MongoDB, demonstrating the full **authoring → emit → runtime** pipeline using the contract-first approach.
+End-to-end example of Prisma 8 with MongoDB, demonstrating the full **authoring → emit → runtime** pipeline using the contract-first approach.
 
 ## What it shows
 

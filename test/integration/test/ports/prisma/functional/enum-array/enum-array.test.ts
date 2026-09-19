@@ -15,7 +15,7 @@ type Plan = 'FREE' | 'PAID' | 'CUSTOM';
 //
 // The third upstream test ("can retrieve data with an enum array with a raw
 // query and a custom parser") uses a driver-adapter-specific raw query path
-// with a custom OID parser — not expressible through the prisma-next ORM public
+// with a custom OID parser — not expressible through the Prisma 8 ORM public
 // API — non-ported (see ledger).
 
 function withEnumArray(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {

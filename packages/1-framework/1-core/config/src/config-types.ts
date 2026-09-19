@@ -58,7 +58,7 @@ export function normalizeContractConfig(
 }
 
 /**
- * Configuration for Prisma Next CLI.
+ * Configuration for Prisma 8 CLI.
  * Uses Control*Descriptor types for type-safe wiring with compile-time compatibility checks.
  *
  * @template TFamilyId - The family ID (e.g., 'sql', 'document')

@@ -34,6 +34,7 @@ export const blogContract = createMongoContract({
         author: {
           to: crossRef('User'),
           cardinality: 'N:1',
+          nullable: false,
           on: { localFields: ['authorId'], targetFields: ['_id'] },
         },
         comments: {

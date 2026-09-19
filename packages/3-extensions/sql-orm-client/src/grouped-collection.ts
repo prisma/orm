@@ -5,26 +5,30 @@ import type {
   OperationKind,
 } from '@internal/framework-components/runtime';
 import { createMetaBuilder } from '@internal/framework-components/runtime';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import {
   AggregateExpr,
   type AnyExpression,
-  BinaryExpr,
   type BinaryOp,
   ColumnRef,
   isAggregateFn,
   LiteralExpr,
   type OrderByItem,
 } from '@internal/sql-relational-core/ast';
+import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
 import { blindCast } from '@internal/utils/casts';
 import type { SimplifyDeep } from '@internal/utils/simplify-deep';
 import { createAggregateBuilder, isAggregateSelector } from './aggregate-builder';
+import { resolveAggregate } from './aggregate-codecs';
 import { aggregateOperationNames } from './aggregate-operations';
 import { getFieldToColumnMap } from './collection-contract';
-import { mapStorageRowToModelFields } from './collection-runtime';
+import { createStorageRowMapper } from './collection-runtime';
 import { createModelAccessor } from './model-accessor';
 import { ormError } from './orm-errors';
+import { predicateComparison } from './predicate-comparison';
+import { predicateExpression } from './predicate-expression';
 import { compileGroupedAggregate, mergeAnnotations } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
 import type {
@@ -187,9 +191,13 @@ export class GroupedCollection<
    * any order, so "the first n groups" is undefined without one.
    */
   limit(
-    n: HasOrderBy extends true ? number : never,
+    n: HasOrderBy extends true
+      ? number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>
+      : never,
   ): GroupedCollection<TContract, ModelName, GroupFields, NsId, HasOrderBy> {
-    return this.#clone({ postGroup: { ...this.postGroup, limit: n } });
+    return this.#clone({
+      postGroup: { ...this.postGroup, limit: typeof n === 'number' ? n : toExpr(n) },
+    });
   }
 
   /**
@@ -198,9 +206,13 @@ export class GroupedCollection<
    * pagination methods need a deterministic group order.
    */
   offset(
-    n: HasOrderBy extends true ? number : never,
+    n: HasOrderBy extends true
+      ? number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>
+      : never,
   ): GroupedCollection<TContract, ModelName, GroupFields, NsId, HasOrderBy> {
-    return this.#clone({ postGroup: { ...this.postGroup, offset: n } });
+    return this.#clone({
+      postGroup: { ...this.postGroup, offset: typeof n === 'number' ? n : toExpr(n) },
+    });
   }
 
   /**
@@ -210,10 +222,30 @@ export class GroupedCollection<
    * `MetaBuilder<'read'>` for attaching typed annotations.
    * Annotations are merged into the compiled plan's `meta.annotations`.
    */
+  get prepared() {
+    return {
+      aggregate: <Spec extends AggregateSpec>(
+        fn: (aggregate: AggregateBuilder<TContract, ModelName, NsId>) => Spec,
+        configure?: (meta: MetaBuilder<'read'>) => void,
+      ) => this.#describeAggregate(fn, configure),
+    };
+  }
+
   async aggregate<Spec extends AggregateSpec>(
     fn: (aggregate: AggregateBuilder<TContract, ModelName, NsId>) => Spec,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Array<GroupedAggregateRow<TContract, ModelName, GroupFields, NsId, Spec>>> {
+    const description = this.#describeAggregate(fn, configure);
+    return description.consume(queryPlanRows(this.ctx.runtime, description.plan));
+  }
+
+  #describeAggregate<Spec extends AggregateSpec>(
+    fn: (aggregate: AggregateBuilder<TContract, ModelName, NsId>) => Spec,
+    configure?: (meta: MetaBuilder<'read'>) => void,
+  ): Preparable<
+    Record<string, unknown>,
+    Promise<Array<GroupedAggregateRow<TContract, ModelName, GroupFields, NsId, Spec>>>
+  > {
     const aggregateSpec = fn(
       createAggregateBuilder<TContract, ModelName, NsId>(
         this.contract,
@@ -265,23 +297,21 @@ export class GroupedCollection<
       ),
       annotationsMap,
     );
-    const rows = await queryPlanRows<Record<string, unknown>>(this.ctx.runtime, compiled).toArray();
-
-    return rows.map((row) => {
-      const mapped = mapStorageRowToModelFields(
-        this.contract,
-        this.namespaceId,
-        this.modelName,
-        row,
-      );
-      for (const [alias] of aggregateEntries) {
-        mapped[alias] = row[alias];
-      }
-      return blindCast<
-        GroupedAggregateRow<TContract, ModelName, GroupFields, NsId, Spec>,
-        'group keys are mapped from storage columns and aggregate aliases are copied from the decoded query row'
-      >(mapped);
-    });
+    const mapRow = createStorageRowMapper(this.contract, this.namespaceId, this.modelName);
+    return {
+      plan: compiled,
+      async consume(source) {
+        const rows = await source.toArray();
+        return rows.map((row) => {
+          const mapped = mapRow(row);
+          for (const [alias] of aggregateEntries) mapped[alias] = row[alias];
+          return blindCast<
+            GroupedAggregateRow<TContract, ModelName, GroupFields, NsId, Spec>,
+            'group keys are mapped from storage columns and aggregate aliases are copied from the decoded query row'
+          >(mapped);
+        });
+      },
+    };
   }
 }
 
@@ -325,7 +355,18 @@ function createHavingBuilder<
         operation,
         field === undefined ? undefined : ColumnRef.of(tableName, fieldToColumn[field] ?? field),
       );
-      return createHavingComparisonMethods(metric);
+      return createHavingComparisonMethods(
+        metric,
+        () =>
+          resolveAggregate({
+            aggregates,
+            contract,
+            namespaceId,
+            tableName,
+            fn: operation,
+            column: field === undefined ? undefined : (fieldToColumn[field] ?? field),
+          }).codec.codecId,
+      );
     };
   }
   return blindCast<
@@ -336,9 +377,22 @@ function createHavingBuilder<
 
 function createHavingComparisonMethods<T extends number | null>(
   metric: AggregateExpr,
+  outputCodecId: () => string,
 ): HavingComparisonMethods<T> {
-  const buildBinaryExpr = (op: BinaryOp, value: unknown): AnyExpression =>
-    new BinaryExpr(op, metric, LiteralExpr.of(value));
+  const buildBinaryExpr = (op: BinaryOp, value: unknown): AnyExpression => {
+    const expression = predicateExpression(value);
+    if (
+      expression !== undefined &&
+      (expression.kind !== 'prepared-param-ref' || expression.codec.codecId !== outputCodecId())
+    ) {
+      throw ormError(
+        'ORM.HAVING_EXPRESSION_UNSUPPORTED',
+        'HAVING comparands require a prepared parameter with the aggregate output codec',
+        { meta: { kind: expression.kind } },
+      );
+    }
+    return predicateComparison(op, metric, expression ?? LiteralExpr.of(value));
+  };
 
   return {
     eq(value) {

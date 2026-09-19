@@ -15,7 +15,7 @@ These principles drive all testing decisions, from test structure to helper desi
 
 ## Testing Pyramid
 
-Prisma Next follows the testing pyramid model with three layers:
+Prisma 8 follows the testing pyramid model with three layers:
 
 ### Unit Tests
 

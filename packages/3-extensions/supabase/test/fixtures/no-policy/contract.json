@@ -40,6 +40,7 @@
             "relations": {
               "user": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -189,7 +190,7 @@
       "id": "supabase",
       "kind": "extension",
       "targetId": "postgres",
-      "version": "8.0.0-rc.8"
+      "version": "8.0.0-rc.11"
     }
   },
   "meta": {},

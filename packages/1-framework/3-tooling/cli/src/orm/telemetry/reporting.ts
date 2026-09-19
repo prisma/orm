@@ -26,9 +26,9 @@ function senderPath(): string {
 function firstRunNotice(configPath: string): string {
   return [
     'Prisma ORM collects anonymous CLI usage data, enabled by default.',
-    "What's collected and why: https://prisma-next.dev/docs/cli/telemetry.",
+    "What's collected and why: https://www.prisma.io/docs/cli/telemetry.",
     'Opt out: run "prisma telemetry disable", set DO_NOT_TRACK=1 or',
-    `PRISMA_NEXT_DISABLE_TELEMETRY=1, or set "enableTelemetry": false in ${configPath}.`,
+    `PRISMA_DISABLE_TELEMETRY=1, or set "enableTelemetry": false in ${configPath}.`,
   ].join(' ');
 }
 
@@ -40,7 +40,7 @@ function firstRunNotice(configPath: string): string {
  */
 function senderCommandShape(snapshot: EngineCommandSnapshot): CommanderResultShape {
   return {
-    commandPath: ['prisma-next', ...snapshot.commandPath],
+    commandPath: ['prisma', ...snapshot.commandPath],
     positionalArgs: [],
     options: snapshot.flags.map((entry) => ({
       attributeName: entry.name,

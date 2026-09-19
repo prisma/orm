@@ -1,6 +1,6 @@
 # @internal/extension-pgvector
 
-PostgreSQL pgvector extension pack for Prisma Next.
+PostgreSQL pgvector extension pack for Prisma 8.
 
 ## Overview
 
@@ -200,7 +200,7 @@ See [ADR 212 — Contract spaces](../../../docs/architecture%20docs/adrs/ADR%202
 ## References
 
 - [pgvector documentation](https://github.com/pgvector/pgvector)
-- [Prisma Next Architecture Overview](../../../docs/Architecture%20Overview.md)
+- [Prisma 8 Architecture Overview](../../../docs/Architecture%20Overview.md)
 - [Extension Packs Guide](../../../docs/reference/Extension-Packs-Naming-and-Layout.md)
 - [ADR 212 — Contract spaces](../../../docs/architecture%20docs/adrs/ADR%20212%20-%20Contract%20spaces.md)
 

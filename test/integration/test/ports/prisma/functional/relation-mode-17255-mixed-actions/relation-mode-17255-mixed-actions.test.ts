@@ -13,12 +13,12 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // real database foreign keys, which the harness materialises from the contract.
 //
 // Upstream `beforeEach` seeds two Main rows, each with a nested-created Bob and
-// Alice sharing the same id. prisma-next gives each test a fresh database, so
+// Alice sharing the same id. Prisma 8 gives each test a fresh database, so
 // the seed runs inside each test.
 //
 // Only the '[update] ... nested disconnect alice' test is ported. The
 // '[update] ... nested delete alice' test uses `alice: { delete: true }`, a
-// nested-delete mutator prisma-next's ORM does not expose (create/connect/
+// nested-delete mutator Prisma 8's ORM does not expose (create/connect/
 // disconnect only) — see the inbox for the non-ported disposition.
 
 async function seedMains(

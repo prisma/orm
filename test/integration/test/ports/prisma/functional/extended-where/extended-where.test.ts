@@ -9,7 +9,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // non-PK unique connect, findUnique/OrThrow, update, upsert, delete.
 //
 // Cursor faithfulness gap:
-//   findMany/findFirst/findFirstOrThrow with cursor: prisma-next cursor is
+//   findMany/findFirst/findFirstOrThrow with cursor: Prisma 8 cursor is
 //   exclusive (keyset-after, starts AFTER the cursor row); Prisma cursor is
 //   inclusive (starts FROM the cursor row). A faithful port using
 //   `.orderBy(...).cursor(...)` is expressible but returns a different result
@@ -23,7 +23,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Implementation notes:
 //   - upstream `setup` creates User with `payment: { create: {} }`.
-//     In prisma-next this is expressed as a nested create callback.
+//     In Prisma 8 this is expressed as a nested create callback.
 //     User.paymentId is mandatory; the nested Payment create populates it.
 //   - upsert() does not support nested relation callbacks; where the
 //     upstream upsert create clause uses `payment: { create: {} }` we
@@ -31,7 +31,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - update({}) with no fields returns null (ORM skips the SQL round-trip),
 //     so the faithful empty-data update ('update with where 1 unique (PK)')
 //     is an it.fails (see failing.md).
-//   - 'create with connect 2 uniques' is non-ported: prisma-next's connect
+//   - 'create with connect 2 uniques' is non-ported: Prisma 8's connect
 //     criterion accepts a single unique key, not a compound { id, referralId }
 //     (see non-ported.md).
 
@@ -84,7 +84,7 @@ describe('ports/prisma/functional/extended-where', () => {
           .cursor({ id: postId2 })
           .all();
         // Prisma inclusive cursor: postId2 + postId3 = 2 rows
-        // prisma-next exclusive cursor: only postId3 = 1 row → assertion fails
+        // Prisma 8 exclusive cursor: only postId3 = 1 row → assertion fails
         expect(data.length).toBe(2);
       }),
     timeouts.spinUpPpgDev,
@@ -99,7 +99,7 @@ describe('ports/prisma/functional/extended-where', () => {
           .cursor({ id: postId2, title: 'Hello World 2' })
           .all();
         // Prisma inclusive cursor: postId2 + postId3 = 2 rows
-        // prisma-next exclusive cursor: only postId3 = 1 row → assertion fails
+        // Prisma 8 exclusive cursor: only postId3 = 1 row → assertion fails
         expect(data.length).toBe(2);
       }),
     timeouts.spinUpPpgDev,
@@ -114,7 +114,7 @@ describe('ports/prisma/functional/extended-where', () => {
           .cursor({ title: 'Hello World 2' })
           .all();
         // Prisma inclusive cursor: Hello World 2 + Hello World 3 = 2 rows
-        // prisma-next exclusive cursor: only Hello World 3 = 1 row → assertion fails
+        // Prisma 8 exclusive cursor: only Hello World 3 = 1 row → assertion fails
         expect(data.length).toBe(2);
       }),
     timeouts.spinUpPpgDev,
@@ -131,7 +131,7 @@ describe('ports/prisma/functional/extended-where', () => {
           .cursor({ id: postId2 })
           .first();
         // Prisma inclusive cursor starts FROM postId2; first() returns postId2
-        // prisma-next exclusive cursor starts AFTER postId2; first() returns postId3 → assertion fails
+        // Prisma 8 exclusive cursor starts AFTER postId2; first() returns postId3 → assertion fails
         expect(data?.id).toBe(postId2);
       }),
     timeouts.spinUpPpgDev,
@@ -251,7 +251,7 @@ describe('ports/prisma/functional/extended-where', () => {
         const { userId } = await createTestData(db);
         // Faithful port of upstream filtered nested include:
         //   findUnique({ where: { id }, include: { payment: { where: { ccn: 'not there' } } } })
-        // prisma-next expresses this as .include('payment', p => p.where(...)); a
+        // Prisma 8 expresses this as .include('payment', p => p.where(...)); a
         // non-matching filter nulls out the to-one relation.
         const data = await db.public.User.where({ id: userId })
           .include('payment', (p) => p.where({ ccn: 'not there' }))
@@ -345,7 +345,7 @@ describe('ports/prisma/functional/extended-where', () => {
   // 'create with connect 2 uniques (PK & non-PK)' is non-ported.
   // Upstream (create.ts:62-67) connects via a COMPOUND criterion
   //   user: { connect: { id: userId, referralId: userReferralId } }
-  // — two unique keys in a single connect object. prisma-next's connect
+  // — two unique keys in a single connect object. Prisma 8's connect
   // criterion is a union of per-constraint objects (one unique key at a time);
   // a compound { id, referralId } connect is a type error, so the multi-key
   // connect input cannot be faithfully expressed. Recorded in non-ported.md.
@@ -383,7 +383,7 @@ describe('ports/prisma/functional/extended-where', () => {
         const { userId } = await createTestData(db);
         // Faithful port: upstream update({ where: { id }, data: {} }) — empty
         // no-op update still returns the addressed row (update.ts:15-22).
-        // prisma-next's update({}) skips the SQL round-trip and returns null,
+        // Prisma 8's update({}) skips the SQL round-trip and returns null,
         // so data?.id is undefined → assertion fails. Recorded in failing.md.
         const data = await db.public.User.where({ id: userId }).update({});
         expect(data?.id).toBe(userId);

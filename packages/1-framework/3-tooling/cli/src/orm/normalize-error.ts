@@ -24,6 +24,8 @@ interface RaisedError {
    * and nothing else.
    */
   readonly nextActions?: readonly NextAction[];
+  /** Findings reported alongside the error, already in the protocol's shape. */
+  readonly diagnostics?: readonly Diagnostic[];
 }
 
 /**
@@ -110,6 +112,7 @@ export function normalizeError(error: unknown): CliStructuredError {
   return new CliStructuredError(diagnostic.code, diagnostic.summary, {
     severity: diagnostic.severity,
     nextActions: diagnostic.nextActions,
+    ...ifDefined('diagnostics', error.diagnostics),
     ...ifDefined('why', diagnostic.why),
     ...ifDefined('where', diagnostic.where),
     ...ifDefined('meta', diagnostic.meta),

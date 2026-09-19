@@ -13,7 +13,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   "should create a user with posts and a profile and update itself and
 //    nested connections setting fields to null"                → non-ported
 //      Reason: the update uses `profile: { update: {...} }` and
-//      `posts: { updateMany: {...} }` nested patterns. The prisma-next ORM
+//      `posts: { updateMany: {...} }` nested patterns. The Prisma 8 ORM
 //      `update()` supports `connect`/`disconnect`/`create` nested relation
 //      mutations but does not expose nested `update` or `updateMany` on
 //      relations — there is no matching public API surface.

@@ -9,7 +9,7 @@ export default defineConfig({
     },
     globals: true,
     environment: 'node',
-    testTimeout: timeouts.default,
-    hookTimeout: timeouts.default,
+    testTimeout: timeouts.vitestPackageDefault,
+    hookTimeout: timeouts.vitestPackageDefault,
   },
 });

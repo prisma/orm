@@ -71,6 +71,7 @@ const profile: ModelNode = {
       toTable: 'users',
       toNamespaceId: 'auth',
       cardinality: 'N:1',
+      nullable: false,
       on: {
         parentTable: 'profile',
         parentColumns: ['userId'],

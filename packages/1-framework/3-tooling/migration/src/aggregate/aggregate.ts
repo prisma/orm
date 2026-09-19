@@ -3,11 +3,7 @@ import type { SchemaEntityCoordinate } from '@internal/framework-components/cont
 import { coordinateKey, elementCoordinates } from '@internal/framework-components/ir';
 import { InternalError } from '@internal/utils/internal-error';
 import { join } from 'pathe';
-import {
-  contractSnapshotDir,
-  readContractSnapshotDts,
-  readContractSnapshotJson,
-} from '../contract-snapshot-store';
+import { contractSnapshotDir, readContractSnapshotJson } from '../contract-snapshot-store';
 import {
   errorBundleNotFoundForGraphNode,
   errorContractDeserializationFailed,
@@ -54,12 +50,11 @@ async function readContractSnapshotEntry(
   migrationsDir: string,
   hash: string,
   deserializeContract: (raw: unknown) => Contract,
-): Promise<{ contractJson: unknown; contractDts: string; contract: Contract }> {
+): Promise<{ contractJson: unknown; contract: Contract }> {
   const contractJson = await readContractSnapshotJson(migrationsDir, hash);
-  const contractDts = await readContractSnapshotDts(migrationsDir, hash);
   const jsonPath = join(contractSnapshotDir(migrationsDir, hash), 'contract.json');
   const contract = deserializeContractAtPath(jsonPath, contractJson, deserializeContract);
-  return { contractJson, contractDts, contract };
+  return { contractJson, contract };
 }
 
 async function resolveContractAt(args: {
@@ -87,18 +82,12 @@ async function resolveContractAt(args: {
     }
 
     if (refEntry) {
-      const { contractJson, contractDts, contract } = await readContractSnapshotEntry(
+      const { contractJson, contract } = await readContractSnapshotEntry(
         migrationsDir,
         refEntry.hash,
         deserializeContract,
       );
-      return {
-        hash: refEntry.hash,
-        contractJson,
-        contractDts,
-        contract,
-        provenance: 'ref',
-      };
+      return { hash: refEntry.hash, contractJson, contract, provenance: 'ref' };
     }
 
     if (isGraphNode(hash, graph)) {
@@ -134,18 +123,12 @@ async function resolveGraphNodeContractAt(args: {
     throw errorBundleNotFoundForGraphNode(hash, explicitLabel);
   }
 
-  const { contractJson, contractDts, contract } = await readContractSnapshotEntry(
+  const { contractJson, contract } = await readContractSnapshotEntry(
     migrationsDir,
     hash,
     deserializeContract,
   );
-  return {
-    hash,
-    contractJson,
-    contractDts,
-    contract,
-    provenance: 'graph-node',
-  };
+  return { hash, contractJson, contract, provenance: 'graph-node' };
 }
 
 /**

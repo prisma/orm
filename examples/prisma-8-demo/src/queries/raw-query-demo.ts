@@ -118,8 +118,8 @@ export async function rawQueryActiveAuthors(minPosts = 1, runtime?: Runtime) {
 export async function rawQueryPromoteAndList(titleTerm: string, runtime?: Runtime) {
   const promoted = db.raw.sql`
     UPDATE "post"
-    SET priority = 'high'
-    WHERE title ILIKE ${`%${titleTerm}%`} AND priority <> 'high'
+    SET priority = ${db.enums.public.Priority.members.High}
+    WHERE title ILIKE ${`%${titleTerm}%`} AND priority <> ${db.enums.public.Priority.members.High}
     RETURNING id, title, "userId"
   `.returnsRow({
     id: post.columns.id,

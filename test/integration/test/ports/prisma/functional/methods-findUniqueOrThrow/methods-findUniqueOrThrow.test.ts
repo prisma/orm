@@ -7,7 +7,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry).
 //
 // Upstream uses prisma.user.findUniqueOrThrow({ where: { email } }).
-// prisma-next equivalent: db.public.User.where({ email }).all().firstOrThrow()
+// Prisma 8 equivalent: db.public.User.where({ email }).all().firstOrThrow()
 // which throws RUNTIME.NO_ROWS when no row is found (maps to upstream P2025).
 //
 // Dispositions:
@@ -15,9 +15,9 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //     `transaction(async (tx) => …)`: the failing firstOrThrow rejects the
 //     transaction and rolls back the create (RUNTIME.NO_ROWS maps to upstream P2025).
 //   - 'works with transactions' — NON-PORTED: the array/batch `$transaction([...])`
-//     form has no prisma-next equivalent (interactive transactions do).
+//     form has no Prisma 8 equivalent (interactive transactions do).
 //   - 'reports correct method name in case of validation error' — NON-PORTED:
-//     upstream asserts the error message contains the client method name; prisma-next
+//     upstream asserts the error message contains the client method name; Prisma 8
 //     errors carry structured codes, not the invoking method name.
 
 const existingEmail = 'existing@example.com';

@@ -10,7 +10,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Regression test for v7 bug: "No record was found for an upsert" when calling
 // upsert twice with the same Bytes @unique value.
 //
-// In prisma-next, the Bytes field is typed as Uint8Array and `conflictOn` is
+// In Prisma 8, the Bytes field is typed as Uint8Array and `conflictOn` is
 // used instead of Prisma's `where: { bytes: byteId }`.
 //
 describe('ports/prisma/functional/bytes-upsert', () => {

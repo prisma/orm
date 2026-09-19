@@ -20,7 +20,11 @@ import type {
   Varchar,
 } from '@internal/target-postgres/codec-types';
 
-import type { ContractWithTypeMaps, TypeMaps as TypeMapsType } from '@internal/sql-contract/types';
+import type {
+  ContractWithTypeMaps,
+  RelationKeys,
+  TypeMaps as TypeMapsType,
+} from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
@@ -115,6 +119,10 @@ export type AggregateTypes = {
         readonly output: 'pg/timestamp-temporal@1';
         readonly nullable: true;
       };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
+        readonly nullable: true;
+      };
       readonly 'pg/timestamptz-string@1': {
         readonly output: 'pg/timestamptz-string@1';
         readonly nullable: true;
@@ -169,6 +177,10 @@ export type AggregateTypes = {
       };
       readonly 'pg/timestamp-temporal@1': {
         readonly output: 'pg/timestamp-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
         readonly nullable: true;
       };
       readonly 'pg/timestamptz-string@1': {
@@ -295,6 +307,38 @@ export type StorageColumnInputTypes = {
     };
   };
 };
+
+export namespace Models {
+  export type public_OneToMany = {
+    id: CodecTypes['pg/int4@1']['output'];
+    testId: CodecTypes['pg/int4@1']['output'] | null;
+    toOneId: CodecTypes['pg/int4@1']['output'] | null;
+    test: public_TestModel | null;
+    toOne: public_ToOne | null;
+    readonly [RelationKeys]?: 'test' | 'toOne';
+  };
+  export type public_TestModel = {
+    id: CodecTypes['pg/int4@1']['output'];
+    toMany: public_OneToMany[];
+    readonly [RelationKeys]?: 'toMany';
+  };
+  export type public_ToOne = {
+    id: CodecTypes['pg/int4@1']['output'];
+    string1: CodecTypes['pg/text@1']['output'];
+    string2: CodecTypes['pg/text@1']['output'];
+    toMany: public_OneToMany | null;
+    readonly [RelationKeys]?: 'toMany';
+  };
+}
+
+export declare const models: {
+  public: {
+    OneToMany: Models.public_OneToMany;
+    TestModel: Models.public_TestModel;
+    ToOne: Models.public_ToOne;
+  };
+};
+
 export type TypeMaps = TypeMapsType<
   CodecTypes,
   QueryOperationTypes,
@@ -415,8 +459,8 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly testModel: { readonly namespace: 'public' & NamespaceId; readonly model: 'TestModel' };
     readonly oneToMany: { readonly namespace: 'public' & NamespaceId; readonly model: 'OneToMany' };
+    readonly testModel: { readonly namespace: 'public' & NamespaceId; readonly model: 'TestModel' };
     readonly toOne: { readonly namespace: 'public' & NamespaceId; readonly model: 'ToOne' };
   };
   readonly domain: {
@@ -445,6 +489,7 @@ type ContractBase = Omit<
                   readonly model: 'TestModel';
                 };
                 readonly cardinality: 'N:1';
+                readonly nullable: true;
                 readonly on: {
                   readonly localFields: readonly ['testId'];
                   readonly targetFields: readonly ['id'];
@@ -456,6 +501,7 @@ type ContractBase = Omit<
                   readonly model: 'ToOne';
                 };
                 readonly cardinality: 'N:1';
+                readonly nullable: true;
                 readonly on: {
                   readonly localFields: readonly ['toOneId'];
                   readonly targetFields: readonly ['id'];
@@ -520,6 +566,7 @@ type ContractBase = Omit<
                   readonly model: 'OneToMany';
                 };
                 readonly cardinality: '1:1';
+                readonly nullable: true;
                 readonly on: {
                   readonly localFields: readonly ['id'];
                   readonly targetFields: readonly ['toOneId'];

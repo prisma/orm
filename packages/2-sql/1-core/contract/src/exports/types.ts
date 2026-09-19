@@ -1,4 +1,11 @@
 export type {
+  RelationNamesOf,
+  Scalars,
+  Shape,
+  ShapeSpec,
+} from '@internal/framework-components/runtime';
+export { RelationKeys } from '@internal/framework-components/runtime';
+export type {
   StorageColumnMapAt,
   StorageColumnTypeAcrossNamespaces,
 } from '../column-type-resolution';

@@ -7,12 +7,12 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/interactive-transactions
 // (postgres matrix entry; allProviders — this is the postgres port).
 //
-// prisma-next SUPPORTS interactive transactions via the high-level facade:
+// Prisma 8 SUPPORTS interactive transactions via the high-level facade:
 //   `postgres({ contract, url }).transaction(async (tx) => { tx.orm.public.User... })`
 // Only the array/batch `$transaction([...])` form is absent.
 //
 // Nested `$transaction` (tx.$transaction(async tx2 => {...})) has no equivalent
-// in prisma-next's facade: the tx context gives `tx.orm`/`tx.sql` but no `.transaction()`.
+// in Prisma 8's facade: the tx context gives `tx.orm`/`tx.sql` but no `.transaction()`.
 // Transaction options (timeout, maxWait, isolationLevel) are not supported in the facade.
 //
 // Dispositions:

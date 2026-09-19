@@ -2,7 +2,7 @@ import { role } from '@internal/postgres/contract-builder';
 import { enumType, member } from '@internal/sql-contract-ts/contract-builder';
 
 /**
- * Supabase's three standard Postgres roles as a Prisma Next enum — the
+ * Supabase's three standard Postgres roles as a Prisma 8 enum — the
  * single source of truth for the role vocabulary. Runtime-only: the shipped
  * contract declares the roles via PSL `role` blocks inside an explicit
  * `namespace unbound { }` block, not through this handle. The runtime

@@ -30,19 +30,19 @@
       "public": {
         "enum": {
           "Priority": {
-            "codecId": "pg/text@1",
+            "codecId": "pg/int4@1",
             "members": [
               {
                 "name": "Low",
-                "value": "low"
+                "value": 0
               },
               {
                 "name": "High",
-                "value": "high"
+                "value": 1
               },
               {
                 "name": "Urgent",
-                "value": "urgent"
+                "value": 2
               }
             ]
           },
@@ -147,6 +147,13 @@
                   "kind": "scalar"
                 }
               },
+              "expiresAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
               "id": {
                 "nullable": false,
                 "type": {
@@ -164,7 +171,7 @@
               "priority": {
                 "nullable": false,
                 "type": {
-                  "codecId": "pg/text@1",
+                  "codecId": "pg/int4@1",
                   "kind": "scalar"
                 },
                 "valueSet": {
@@ -234,6 +241,7 @@
               },
               "user": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -255,6 +263,9 @@
                 },
                 "embedding": {
                   "column": "embedding"
+                },
+                "expiresAt": {
+                  "column": "expiresAt"
                 },
                 "id": {
                   "column": "id"
@@ -302,6 +313,7 @@
             "relations": {
               "post": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "postId"
@@ -317,6 +329,7 @@
               },
               "tag": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "tagId"
@@ -462,6 +475,7 @@
             "relations": {
               "user": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -756,8 +770,8 @@
             "post": {
               "checks": [
                 {
-                  "expression": "\"priority\" IN ('low', 'high', 'urgent')",
-                  "name": "post_priority_check_09b41aa0",
+                  "expression": "\"priority\" IN (0, 1, 2)",
+                  "name": "post_priority_check_b236ace9",
                   "prefix": "post_priority_check"
                 }
               ],
@@ -777,6 +791,15 @@
                   "nullable": true,
                   "typeRef": "Embedding1536"
                 },
+                "expiresAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "default": {
+                    "expression": "(now() + '7 days'::interval)",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
@@ -788,12 +811,12 @@
                   "nullable": true
                 },
                 "priority": {
-                  "codecId": "pg/text@1",
+                  "codecId": "pg/int4@1",
                   "default": {
                     "kind": "literal",
-                    "value": "low"
+                    "value": 0
                   },
-                  "nativeType": "text",
+                  "nativeType": "int4",
                   "nullable": false,
                   "valueSet": {
                     "entityKind": "valueSet",
@@ -1104,9 +1127,9 @@
             "Priority": {
               "kind": "valueSet",
               "values": [
-                "low",
-                "high",
-                "urgent"
+                0,
+                1,
+                2
               ]
             },
             "user_type": {
@@ -1122,7 +1145,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "2268a4dd377c4a238d1c8d5fada0056356d753619b26472c10cb1d258d7cea77",
+    "storageHash": "62d81d607d929760f7d740b45bb97acc1dba361363c4851b19ee5a1cb4fecbe3",
     "types": {
       "Embedding1536": {
         "codecId": "pg/vector@1",

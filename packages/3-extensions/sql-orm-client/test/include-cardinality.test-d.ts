@@ -104,8 +104,8 @@ export type IncludeCardinalityTypeAssertions = [
       'id' | 'name' | 'email' | 'invitedById' | 'address'
     >
   >,
-  // N:1 with non-nullable column but no FK constraint → nullable
-  Assert<Equal<Extract<ArticlesWithReviewerRow['reviewer'], null>, null>>,
+  // N:1 on a required field → not nullable, whether or not an FK constraint exists
+  Assert<Equal<Extract<ArticlesWithReviewerRow['reviewer'], null>, never>>,
   Assert<
     Equal<ArticlesWithReviewerRow['reviewer'] extends readonly unknown[] ? true : false, false>
   >,

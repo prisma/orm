@@ -1,17 +1,20 @@
 import { existsSync } from 'node:fs';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { errorInvalidRefName, MigrationToolsError } from '@internal/migration-tools/errors';
+import { notOk, ok } from '@internal/utils/result';
 import { join } from 'pathe';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   advanceRefSafely,
+  buildRefAdvancementFields,
   type ContractIR,
   computeRefAdvancementName,
   executeRefAdvancement,
-  resolveRefAdvancementFields,
+  preflightRefAdvancement,
 } from '../../src/control-api/operations/ref-advancement';
-import { createTestProjectDir } from '../utils/test-project-dir';
+import type { RenderContractDtsResult } from '../../src/control-api/render-contract-dts';
+import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const HASH_A = `${'a'.repeat(64)}`;
 const PROFILE_HASH = `${'c'.repeat(64)}`;
@@ -139,102 +142,185 @@ describe('executeRefAdvancement', () => {
   });
 });
 
-describe('resolveRefAdvancementFields', () => {
-  let tempDir: string;
-  let migrationsDir: string;
-  let refsDir: string;
+describe('preflightRefAdvancement', () => {
+  const contractJson = sampleContractIR().contract as Record<string, unknown>;
+  let projectDir: string;
   let contractJsonPath: string;
-  const contractIR = sampleContractIR();
-  const contractJson = contractIR.contract as Record<string, unknown>;
+  let configPath: string;
 
-  beforeEach(async () => {
-    tempDir = createTestProjectDir('resolve-ref-advancement');
-    migrationsDir = join(tempDir, 'migrations');
-    refsDir = join(migrationsDir, 'app', 'refs');
-    contractJsonPath = join(tempDir, 'contract.json');
-    await writeFile(contractJsonPath, JSON.stringify(contractJson));
-    await writeFile(join(tempDir, 'contract.d.ts'), contractIR.contractDts);
+  beforeEach(() => {
+    projectDir = createTestProjectDir('preflight-ref-advancement');
+    writeProjectManifest(projectDir);
+    contractJsonPath = join(projectDir, 'output', 'contract.json');
+    configPath = join(projectDir, 'prisma.config.ts');
   });
 
   afterEach(async () => {
-    await rm(tempDir, { recursive: true, force: true });
+    await rm(projectDir, { recursive: true, force: true });
   });
+  const RENDERED = '// rendered\nexport type Contract = { rendered: true };\n';
 
-  it('is a no-op when the computed advancement name is null', async () => {
-    const result = await resolveRefAdvancementFields({
-      db: 'postgres://localhost/db',
-      refsDir,
-      migrationsDir,
+  function fakeClient(result: RenderContractDtsResult) {
+    return { renderContractDts: vi.fn().mockResolvedValue(result) };
+  }
+
+  it('returns the contract with the declarations the client renders for it', async () => {
+    const client = fakeClient(ok({ contractDts: RENDERED }));
+
+    const result = await preflightRefAdvancement({
+      name: 'db',
       contractJson,
       contractJsonPath,
-      mode: 'apply',
-      hash: HASH_A,
+      configPath,
+      client,
     });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toEqual({ advancedRef: null, plannedAdvanceRef: null });
-    }
-    expect(existsSync(refsDir)).toBe(false);
+
+    expect(result).toEqual(ok({ contract: contractJson, contractDts: RENDERED }));
+    expect(client.renderContractDts).toHaveBeenCalledWith({
+      contract: contractJson,
+      resolveImportSpecifier: expect.any(Function),
+    });
   });
 
-  it('plans without writing in plan mode', async () => {
-    const result = await resolveRefAdvancementFields({
-      advanceRef: 'staging',
-      refsDir,
-      migrationsDir,
-      contractJson,
-      contractJsonPath,
-      mode: 'plan',
-      hash: HASH_A,
-    });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toEqual({
-        advancedRef: null,
-        plannedAdvanceRef: { name: 'staging', hash: HASH_A },
-      });
-    }
-    expect(existsSync(refPointerPath(refsDir, 'staging'))).toBe(false);
-  });
+  it('refuses an invalid ref name without rendering', async () => {
+    const client = fakeClient(ok({ contractDts: RENDERED }));
 
-  it('advances the ref in apply mode, writing store entry and pointer', async () => {
-    const result = await resolveRefAdvancementFields({
-      advanceRef: 'staging',
-      refsDir,
-      migrationsDir,
+    const result = await preflightRefAdvancement({
+      name: 'Invalid Name',
       contractJson,
       contractJsonPath,
-      mode: 'apply',
-      hash: HASH_A,
+      configPath,
+      client,
     });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value).toEqual({
-        advancedRef: { name: 'staging', hash: HASH_A },
-        plannedAdvanceRef: null,
-      });
-    }
-    expect(existsSync(refPointerPath(refsDir, 'staging'))).toBe(true);
-    expect(existsSync(join(contractSnapshotDir(migrationsDir, HASH_A), 'contract.json'))).toBe(
-      true,
-    );
-  });
 
-  it('maps an invalid ref name to the MigrationToolsError envelope without writing', async () => {
-    const result = await resolveRefAdvancementFields({
-      advanceRef: 'Invalid Name',
-      refsDir,
-      migrationsDir,
-      contractJson,
-      contractJsonPath,
-      mode: 'apply',
-      hash: HASH_A,
-    });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.failure.toEnvelope()).toEqual(errorInvalidRefName('Invalid Name').toEnvelope());
     }
-    expect(existsSync(contractSnapshotDir(migrationsDir, HASH_A))).toBe(false);
+    expect(client.renderContractDts).not.toHaveBeenCalled();
+  });
+
+  it('reports a contract the family rejects as a validation failure at the contract path', async () => {
+    const client = fakeClient(
+      notOk({
+        code: 'CONTRACT_VALIDATION_FAILED',
+        summary: 'Contract validation failed',
+        why: 'storage.storageHash must be a string',
+      }),
+    );
+
+    const result = await preflightRefAdvancement({
+      name: 'db',
+      contractJson,
+      contractJsonPath,
+      configPath,
+      client,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.toEnvelope()).toMatchObject({
+        code: 'CONTRACT.VALIDATION_FAILED',
+        why: expect.stringContaining('storage.storageHash must be a string'),
+        where: { path: contractJsonPath },
+      });
+    }
+  });
+
+  it('reports a contract the emitter refuses with a contract emit fix', async () => {
+    const client = fakeClient(
+      notOk({
+        code: 'RENDER_FAILED',
+        summary: 'Failed to render contract types',
+        why: 'relation author must declare nullability',
+      }),
+    );
+
+    const result = await preflightRefAdvancement({
+      name: 'db',
+      contractJson,
+      contractJsonPath,
+      configPath,
+      client,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.toEnvelope()).toMatchObject({
+        code: 'CONTRACT.TYPES_RENDER_FAILED',
+        why: expect.stringContaining('relation author must declare nullability'),
+        fix: expect.stringContaining('contract emit'),
+        where: { path: contractJsonPath },
+      });
+    }
+  });
+});
+
+describe('buildRefAdvancementFields', () => {
+  let migrationsDir: string;
+  let refsDir: string;
+
+  beforeEach(() => {
+    migrationsDir = createTestProjectDir('build-ref-advancement');
+    refsDir = join(migrationsDir, 'app', 'refs');
+  });
+
+  afterEach(async () => {
+    await rm(migrationsDir, { recursive: true, force: true });
+  });
+
+  it('plans without writing in plan mode', async () => {
+    const result = await buildRefAdvancementFields({
+      name: 'staging',
+      refsDir,
+      migrationsDir,
+      contractIR: sampleContractIR(),
+      mode: 'plan',
+      hash: HASH_A,
+    });
+
+    expect(result).toEqual(
+      ok({ advancedRef: null, plannedAdvanceRef: { name: 'staging', hash: HASH_A } }),
+    );
+    expect(existsSync(refPointerPath(refsDir, 'staging'))).toBe(false);
+  });
+
+  it('advances the ref in apply mode, writing store entry and pointer', async () => {
+    const contractIR = sampleContractIR();
+
+    const result = await buildRefAdvancementFields({
+      name: 'staging',
+      refsDir,
+      migrationsDir,
+      contractIR,
+      mode: 'apply',
+      hash: HASH_A,
+    });
+
+    expect(result).toEqual(
+      ok({ advancedRef: { name: 'staging', hash: HASH_A }, plannedAdvanceRef: null }),
+    );
+    expect(existsSync(refPointerPath(refsDir, 'staging'))).toBe(true);
+    const storeDir = contractSnapshotDir(migrationsDir, HASH_A);
+    expect(existsSync(join(storeDir, 'contract.json'))).toBe(true);
+    expect(await readFile(join(storeDir, 'contract.d.ts'), 'utf-8')).toBe(contractIR.contractDts);
+  });
+
+  it('maps a hash mismatch between the argument and the contract to the MigrationToolsError envelope', async () => {
+    const result = await buildRefAdvancementFields({
+      name: 'staging',
+      refsDir,
+      migrationsDir,
+      contractIR: sampleContractIR('b'.repeat(64)),
+      mode: 'apply',
+      hash: HASH_A,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.code).toBe('MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH');
+    }
+    expect(existsSync(refPointerPath(refsDir, 'staging'))).toBe(false);
   });
 });
 

@@ -33,7 +33,7 @@ Prisma ORM setup is scaffolded in:
 - \`prisma/db.ts\`
 - \`src/lib/prisma.ts\`
 
-For provider-specific Prisma ORM reference docs, see \`prisma-next.md\`. Prisma ORM skills live in the upstream \`skills/\` directory: https://github.com/prisma/prisma/tree/main/skills.
+For provider-specific Prisma ORM reference docs, see \`prisma-8.md\`. Prisma ORM skills live in the upstream \`skills/\` directory: https://github.com/prisma/prisma/tree/main/skills.
 
 Node-based Prisma ORM projects expect Node.js 24 LTS or newer.
 "
@@ -71,7 +71,7 @@ Prisma ORM setup is scaffolded in:
 - \`prisma/db.ts\`
 - \`src/lib/prisma.ts\`
 
-For provider-specific Prisma ORM reference docs, see \`prisma-next.md\`. Prisma ORM skills live in the upstream \`skills/\` directory: https://github.com/prisma/prisma/tree/main/skills.
+For provider-specific Prisma ORM reference docs, see \`prisma-8.md\`. Prisma ORM skills live in the upstream \`skills/\` directory: https://github.com/prisma/prisma/tree/main/skills.
 
 Node-based Prisma ORM projects expect Node.js 24 LTS or newer.
 "
@@ -233,13 +233,13 @@ The ORM covers the common cases. For the rest, two escape hatches are designed i
 If this project lives inside a pnpm workspace, a few things are worth knowing:
 
 - **Catalogs.** When the workspace's \`pnpm-workspace.yaml\` defines a \`catalogs\` entry for \`prisma\` or \`@internal/mongo\`, pnpm uses the catalog version everywhere — \`init\` does too. If you wanted the published \`latest\` instead, update or remove the catalog entry, then re-run \`pnpm install\`.
-- **\`pnpm dlx\`.** \`pnpm dlx prisma@next orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
+- **\`pnpm dlx\`.** \`pnpm dlx prisma@latest orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
 - **\`pnpm\` → \`npm\` fallback.** If \`pnpm\` ever fails to install Prisma ORM with a \`workspace:*\` or \`catalog:\` resolution error (a leak in a published artefact), \`init\` falls back to \`npm install\` and surfaces a warning. Once the offending package republishes a clean version you can switch back with \`pnpm install\`.
 "
 `;
 
 exports[`templates > per-cell snapshots (FR5.4) > mongo + psl > starterSchema is stable 1`] = `
-"// use prisma-next
+"// use prisma-8
 
 model User {
   id       ObjectId @id @map("_id")
@@ -428,7 +428,7 @@ The ORM covers the common cases. For the rest, two escape hatches are designed i
 If this project lives inside a pnpm workspace, a few things are worth knowing:
 
 - **Catalogs.** When the workspace's \`pnpm-workspace.yaml\` defines a \`catalogs\` entry for \`prisma\` or \`@internal/mongo\`, pnpm uses the catalog version everywhere — \`init\` does too. If you wanted the published \`latest\` instead, update or remove the catalog entry, then re-run \`pnpm install\`.
-- **\`pnpm dlx\`.** \`pnpm dlx prisma@next orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
+- **\`pnpm dlx\`.** \`pnpm dlx prisma@latest orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
 - **\`pnpm\` → \`npm\` fallback.** If \`pnpm\` ever fails to install Prisma ORM with a \`workspace:*\` or \`catalog:\` resolution error (a leak in a published artefact), \`init\` falls back to \`npm install\` and surfaces a warning. Once the offending package republishes a clean version you can switch back with \`pnpm install\`.
 "
 `;
@@ -605,13 +605,13 @@ pnpm prisma migration status    # Show migration status
 If this project lives inside a pnpm workspace, a few things are worth knowing:
 
 - **Catalogs.** When the workspace's \`pnpm-workspace.yaml\` defines a \`catalogs\` entry for \`prisma\` or \`@internal/postgres\`, pnpm uses the catalog version everywhere — \`init\` does too. If you wanted the published \`latest\` instead, update or remove the catalog entry, then re-run \`pnpm install\`.
-- **\`pnpm dlx\`.** \`pnpm dlx prisma@next orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
+- **\`pnpm dlx\`.** \`pnpm dlx prisma@latest orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
 - **\`pnpm\` → \`npm\` fallback.** If \`pnpm\` ever fails to install Prisma ORM with a \`workspace:*\` or \`catalog:\` resolution error (a leak in a published artefact), \`init\` falls back to \`npm install\` and surfaces a warning. Once the offending package republishes a clean version you can switch back with \`pnpm install\`.
 "
 `;
 
 exports[`templates > per-cell snapshots (FR5.4) > postgres + psl > starterSchema is stable 1`] = `
-"// use prisma-next
+"// use prisma-8
 
 model User {
   id        Int      @id @default(autoincrement())
@@ -780,7 +780,7 @@ pnpm prisma migration status    # Show migration status
 If this project lives inside a pnpm workspace, a few things are worth knowing:
 
 - **Catalogs.** When the workspace's \`pnpm-workspace.yaml\` defines a \`catalogs\` entry for \`prisma\` or \`@internal/postgres\`, pnpm uses the catalog version everywhere — \`init\` does too. If you wanted the published \`latest\` instead, update or remove the catalog entry, then re-run \`pnpm install\`.
-- **\`pnpm dlx\`.** \`pnpm dlx prisma@next orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
+- **\`pnpm dlx\`.** \`pnpm dlx prisma@latest orm init …\` works in any directory. Inside a workspace, pnpm still resolves dependencies through the workspace's catalog/overrides rather than the registry; expect the installed Prisma ORM packages to reflect the workspace's catalog rather than \`latest\`.
 - **\`pnpm\` → \`npm\` fallback.** If \`pnpm\` ever fails to install Prisma ORM with a \`workspace:*\` or \`catalog:\` resolution error (a leak in a published artefact), \`init\` falls back to \`npm install\` and surfaces a warning. Once the offending package republishes a clean version you can switch back with \`pnpm install\`.
 "
 `;

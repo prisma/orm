@@ -1,4 +1,4 @@
-# Prisma Next Demo (SQLite)
+# Prisma 8 Demo (SQLite)
 
 A minimal runnable demo showing how to use `@prisma/orm-sqlite`. Covers a
 simple read + a relational read + a write through both the ORM client and

@@ -7,7 +7,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry).
 //
 // Upstream seeds four users with explicit ages [20, 45, 60, 63] (sum=188, avg=47).
-// prisma-next aggregate builder: agg.count(), agg.min('age'), agg.max('age'),
+// Prisma 8 aggregate builder: agg.count(), agg.min('age'), agg.max('age'),
 // agg.sum('age'), agg.avg('age').
 //
 // The `invalid *` tests assert BOTH a compile-time rejection (`@ts-expect-error`
@@ -15,7 +15,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // rejection. Ported faithfully with both assertions inline.
 //
 // 'multiple aggregations with where' in upstream uses _count: { email: true }
-// (count of non-null email values). prisma-next agg.count() counts all rows —
+// (count of non-null email values). Prisma 8 agg.count() counts all rows —
 // all 3 rows with age > 20 have non-null email, so the assertion still holds.
 
 const SEED = [

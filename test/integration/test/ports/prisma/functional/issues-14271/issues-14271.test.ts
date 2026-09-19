@@ -10,7 +10,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // ordered findMany across relations returns the expected shape; deleting a Hub sets
 // hubId to null on orphaned BatteryLevel rows (onDelete: SetNull).
 //
-// Upstream uses `createMany` nested inside `hub.create`. Prisma-next supports nested
+// Upstream uses `createMany` nested inside `hub.create`. Prisma 8 supports nested
 // `create([...])` on 1:N relations. The subject (nested bulk insert + shape + cascade)
 // is fully expressible.
 

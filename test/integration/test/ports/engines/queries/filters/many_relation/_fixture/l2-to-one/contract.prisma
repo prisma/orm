@@ -1,3 +1,3 @@
-model Blog { id Int @id name String posts Post[] }
-model Post { id Int @id blog_id Int blog Blog @relation(fields: [blog_id], references: [id]) comment Comment? }
-model Comment { id Int @id popularity Int postId Int @unique post Post @relation(fields: [postId], references: [id]) }
+model Blog { id Int @id name String posts Post[] @@map("blog") }
+model Post { id Int @id blog_id Int blog Blog @relation(fields: [blog_id], references: [id]) comment Comment? @@map("post") }
+model Comment { id Int @id popularity Int postId Int @unique post Post @relation(fields: [postId], references: [id]) @@map("comment") }

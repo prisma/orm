@@ -1,27 +1,38 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
+import type { PslDiagnostic } from '../diagnostic';
 import type { AstNode } from '../syntax/ast-helpers';
-import type { AttributeOut, AttributeSpec, InterpretCtx, Param, PositionalParam } from './types';
+import type {
+  AttributeOut,
+  AttributeSpec,
+  FieldAttributeCtx,
+  Param,
+  PositionalParam,
+} from './types';
 
 interface FieldAttributeConfig<
-  Pos extends readonly PositionalParam[],
-  Named extends Record<string, Param<unknown>>,
+  Pos extends readonly PositionalParam<unknown, FieldAttributeCtx>[],
+  Named extends Record<string, Param<unknown, FieldAttributeCtx>>,
 > {
+  readonly documentation: string;
   readonly positional?: Pos;
   readonly named?: Named;
   readonly refine?: (
     parsed: AttributeOut<Pos, Named>,
-    ctx: InterpretCtx,
+    ctx: FieldAttributeCtx,
     attributeNode: AstNode,
   ) => readonly PslDiagnostic[];
 }
 
 export function fieldAttribute<
-  const Pos extends readonly PositionalParam[] = readonly [],
-  const Named extends Record<string, Param<unknown>> = Record<never, never>,
->(name: string, config: FieldAttributeConfig<Pos, Named>): AttributeSpec<AttributeOut<Pos, Named>> {
+  const Pos extends readonly PositionalParam<unknown, FieldAttributeCtx>[] = readonly [],
+  const Named extends Record<string, Param<unknown, FieldAttributeCtx>> = Record<never, never>,
+>(
+  name: string,
+  config: FieldAttributeConfig<Pos, Named>,
+): AttributeSpec<AttributeOut<Pos, Named>, FieldAttributeCtx> {
   return {
     level: 'field',
     name,
+    documentation: config.documentation,
     positional: config.positional ?? [],
     named: config.named ?? {},
     ...(config.refine !== undefined ? { refine: config.refine } : {}),

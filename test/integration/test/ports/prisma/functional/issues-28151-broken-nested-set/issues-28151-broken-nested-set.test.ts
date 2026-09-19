@@ -9,7 +9,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Subject: nested `set` on a 1:N relation in an `update` replaces the relation's
 // current membership — all three specified post ids end up linked to the user.
 //
-// prisma-next's RelationMutator (update context) exposes `create`, `connect`, and
+// Prisma 8's RelationMutator (update context) exposes `create`, `connect`, and
 // `disconnect` but does NOT have a `set` method. The faithful call
 // `posts: (p) => p.set([...])` is a type error; at runtime `p.set` is undefined
 // and the mutation throws. Marked it.fails.
@@ -33,10 +33,10 @@ describe('ports/prisma/functional/issues-28151-broken-nested-set', () => {
 
         await db.public.Post.create({ id: post3Id });
 
-        // set() is not part of prisma-next's RelationMutator — type error + runtime failure.
+        // set() is not part of Prisma 8's RelationMutator — type error + runtime failure.
         await db.public.User.where({ id: user.id }).update({
           posts: (p) =>
-            // @ts-expect-error — set() is absent from RelationMutator in prisma-next
+            // @ts-expect-error — set() is absent from RelationMutator in Prisma 8
             p.set([{ id: post1Id }, { id: post2Id }, { id: post3Id }]),
         });
 

@@ -5,7 +5,7 @@
 //   model User { id String @id @default(cuid()); plans Plan[] }
 //   enum Plan { FREE PAID CUSTOM }
 //
-// prisma-next PSL: text-backed enum with list column uses Enum[]
+// Prisma 8 PSL: text-backed enum with list column uses Enum[]
 // (scalar list + text-backed enum → pg/text array column).
 
 enum Plan {
@@ -18,4 +18,5 @@ enum Plan {
 model User {
   id    String @id @default(cuid(2))
   plans Plan[]
+  @@map("user")
 }

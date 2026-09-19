@@ -4,6 +4,10 @@ import { postgresTargetDescriptorMeta } from '../src/core/descriptor-meta';
 import postgresTargetPack from '../src/exports/pack';
 
 describe('postgresTargetDescriptorMeta', () => {
+  it('declares namespace support, so emitted model names keep their namespace segment', () => {
+    expect(postgresTargetDescriptorMeta.supportsNamespaces).toBe(true);
+  });
+
   it('declares the expected defaultNamespaceId', () => {
     expect(postgresTargetDescriptorMeta.defaultNamespaceId).toBe('public');
   });

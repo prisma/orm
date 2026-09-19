@@ -6,7 +6,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/filter-count-relations
 // (postgres matrix entry).
 //
-// Upstream uses an implicit M2M between User and Group. prisma-next requires
+// Upstream uses an implicit M2M between User and Group. Prisma 8 requires
 // an explicit junction model (UserGroup). The fixture adds bare backrelation
 // list fields (`groups Group[]` on User, `users User[]` on Group) so the
 // interpreter lowers them with cardinality 'N:M' and a `through` descriptor,
@@ -135,7 +135,7 @@ describe('ports/prisma/functional/filter-count-relations', () => {
             .first();
 
           // Upstream: [{ _count: { posts: 0 } }, { _count: { posts: 0 } }, { _count: { posts: 3 } }]
-          // prisma-next flattens _count.posts → posts on each user row.
+          // Prisma 8 flattens _count.posts → posts on each user row.
           expect(group?.users.map((u) => u.posts)).toEqual([0, 0, 3]);
         }),
       timeouts.spinUpPpgDev,

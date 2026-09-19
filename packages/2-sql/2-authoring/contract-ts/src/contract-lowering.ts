@@ -1,3 +1,4 @@
+import { resolveToOneRelationNullable } from '@internal/contract-authoring';
 import {
   type AuthoringEntityTypeNamespace,
   isAuthoringEntityTypeDescriptor,
@@ -49,6 +50,7 @@ import {
   emitTypedNamedTypeFallbackWarnings,
 } from './contract-warnings';
 import { isEnumTypeHandle } from './enum-type';
+import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
 type RuntimeModel = ContractModelBuilder<
   string | undefined,
@@ -390,6 +392,38 @@ function resolveRelationAnchorFields(spec: RuntimeModelSpec): readonly string[] 
   );
 }
 
+function belongsToNullable(
+  relationName: string,
+  declaredNullable: boolean | undefined,
+  spec: RuntimeModelSpec,
+  fieldNames: readonly string[],
+): boolean {
+  const { nullable, contradiction } = resolveToOneRelationNullable({
+    declaredNullable,
+    localFieldNullability: fieldNames.map(
+      (fieldName) => spec.fieldBuilders[fieldName]?.build().nullable === true,
+    ),
+    ownsReference: true,
+  });
+  if (contradiction !== undefined) {
+    throw contractError(
+      'CONTRACT.RELATION_INVALID',
+      toOneNullabilityContradictionMessage(
+        `Relation "${spec.modelName}.${relationName}"`,
+        contradiction,
+      ),
+      {
+        meta: {
+          modelName: spec.modelName,
+          relationName,
+          reason: 'to-one-nullability-mismatch',
+        },
+      },
+    );
+  }
+  return nullable;
+}
+
 function lowerBelongsToRelation(
   relationName: string,
   relation: Extract<RelationState, { kind: 'belongsTo' }>,
@@ -434,6 +468,7 @@ function lowerBelongsToRelation(
       toModel: targetModelName,
       toTable: targetTable,
       cardinality: 'N:1',
+      nullable: belongsToNullable(relationName, relation.optional, currentSpec, fromFields),
       spaceId: relation.spaceId,
       ...(relation.namespaceId !== undefined ? { namespaceId: relation.namespaceId } : {}),
       on: {
@@ -459,6 +494,7 @@ function lowerBelongsToRelation(
     toModel: targetModelName,
     toTable: targetSpec.tableName,
     cardinality: 'N:1',
+    nullable: belongsToNullable(relationName, relation.optional, currentSpec, fromFields),
     on: {
       parentTable: currentSpec.tableName,
       parentColumns: mapFieldNamesToColumnNames(
@@ -507,7 +543,9 @@ function lowerHasOwnershipRelation(
     fieldName: relationName,
     toModel: targetModelName,
     toTable: targetSpec.tableName,
-    cardinality: relation.kind === 'hasMany' ? '1:N' : '1:1',
+    ...(relation.kind === 'hasMany'
+      ? { cardinality: '1:N' as const }
+      : { cardinality: '1:1' as const, nullable: true }),
     on: {
       parentTable: currentSpec.tableName,
       parentColumns: mapFieldNamesToColumnNames(

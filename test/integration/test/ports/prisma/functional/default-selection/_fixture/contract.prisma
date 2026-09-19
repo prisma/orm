@@ -31,9 +31,11 @@ model Model {
   list     String[]
   enum     Enum
   enumList Enum[]
+  @@map("model")
 }
 
 model Other {
   id    String  @id
   model Model?
+  @@map("other")
 }

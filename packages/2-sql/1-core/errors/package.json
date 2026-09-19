@@ -1,11 +1,11 @@
 {
   "name": "@internal/sql-errors",
   "private": true,
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.11",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Normalized SQL driver error types for Prisma Next",
+  "description": "Normalized SQL driver error types for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
@@ -16,9 +16,9 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.8",
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@repo/test-utils": "workspace:8.0.0-rc.11",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@repo/tsdown": "workspace:8.0.0-rc.11",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

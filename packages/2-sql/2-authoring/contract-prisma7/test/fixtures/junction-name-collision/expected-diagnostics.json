@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA7_JUNCTION_NAME_COLLISION",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Relation field \"User.favorites\" is an implicit many-to-many relation whose junction model would be named \"Favorites\", but model \"Favorites\" already has that name. Rename model \"Favorites\" and keep its table with @@map(\"Favorites\"); Prisma 7's next migration is then empty."
+  },
+  {
+    "code": "PSL.PRISMA7_JUNCTION_NAME_COLLISION",
+    "file": "schema.prisma",
+    "line": 13,
+    "message": "Relation field \"Post.tags\" is an implicit many-to-many relation whose junction model would be named \"PostToTag\", but model \"PostToTag\" already has that name. Rename model \"PostToTag\" and keep its table with @@map(\"PostToTag\"); Prisma 7's next migration is then empty."
+  }
+]

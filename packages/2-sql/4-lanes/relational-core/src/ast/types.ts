@@ -9,7 +9,18 @@ import type { AnyJsonValueProjection } from './json-value-projection';
 
 export type Direction = 'asc' | 'desc';
 
-export type BinaryOp = 'eq' | 'neq' | 'gt' | 'lt' | 'gte' | 'lte' | 'like' | 'in' | 'notIn';
+export type BinaryOp =
+  | 'eq'
+  | 'neq'
+  | 'isNotDistinctFrom'
+  | 'isDistinctFrom'
+  | 'gt'
+  | 'lt'
+  | 'gte'
+  | 'lte'
+  | 'like'
+  | 'in'
+  | 'notIn';
 
 export type AggregateCountFn = 'count';
 export type AggregateOpFn = 'sum' | 'avg' | 'min' | 'max';
@@ -612,16 +623,18 @@ export class PreparedParamRef extends Expression {
   readonly kind = 'prepared-param-ref' as const;
   readonly name: string;
   readonly codec: CodecRef;
+  readonly nullable: boolean;
 
-  constructor(name: string, codec: CodecRef) {
+  constructor(name: string, codec: CodecRef, nullable = false) {
     super();
     this.name = name;
     this.codec = frozenCodecRef(codec);
+    this.nullable = nullable;
     this.freeze();
   }
 
-  static of(name: string, codec: CodecRef): PreparedParamRef {
-    return new PreparedParamRef(name, codec);
+  static of(name: string, codec: CodecRef, nullable = false): PreparedParamRef {
+    return new PreparedParamRef(name, codec, nullable);
   }
 
   override accept<R>(visitor: ExprVisitor<R>): R {

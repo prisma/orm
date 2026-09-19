@@ -111,6 +111,7 @@ describe('contract types', () => {
     const ref: ContractRelation = {
       to: crossRef('Post'),
       cardinality: 'N:1',
+      nullable: false,
       on: { localFields: ['postId'], targetFields: ['id'] },
     };
     const embed: ContractRelation = {

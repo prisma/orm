@@ -1,6 +1,6 @@
 # @prisma/orm-target-sqlite
 
-The concrete SQLite target of Prisma Next: the target descriptor (DDL planning, codecs, migration rendering), the SQLite adapter, and the driver.
+The concrete SQLite target of Prisma 8: the target descriptor (DDL planning, codecs, migration rendering), the SQLite adapter, and the driver.
 
 Applications receive it as an exact-pinned dependency of `@prisma/orm-sqlite`; app developers install that facade. Extension authors targeting SQLite and decomposed installs (for example, replacing the adapter while keeping the target and driver) import this package directly.
 

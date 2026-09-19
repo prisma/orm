@@ -25,6 +25,7 @@ model User {
   name  String?
   posts Post[]
   val   Int?
+  @@map("user")
 }
 
 model Post {
@@ -36,4 +37,5 @@ model Post {
   content   String?
   authorId  String?
   author    User?    @relation(fields: [authorId], references: [id])
+  @@map("post")
 }

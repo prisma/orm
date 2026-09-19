@@ -23,12 +23,13 @@
 //   }
 //
 // Subject: creating a post then a user with `posts: { connect }` does not throw.
-// Note: @updatedAt becomes `temporal.updatedAt()` field preset in prisma-next PSL.
+// Note: @updatedAt becomes `temporal.updatedAt()` field preset in Prisma 8 PSL.
 model User {
   id    String  @id @default(cuid(2))
   email String  @unique
   name  String?
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -43,4 +44,5 @@ model Post {
   authorId  String?
 
   @@index([authorId])
+  @@map("post")
 }

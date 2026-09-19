@@ -99,7 +99,7 @@ export function engineDevDependencySpec(cwd: string): string {
   } catch {
     // The fallback below covers an unreadable or unparseable manifest.
   }
-  return '@prisma/cli-engine@next';
+  return '@prisma/cli-engine@latest';
 }
 
 export async function installProjectDependencies(ctx: {

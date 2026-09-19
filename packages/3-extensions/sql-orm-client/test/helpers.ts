@@ -303,6 +303,7 @@ export function buildMixedPolyContract(): TestContract {
       assignee: {
         to: { model: 'Assignee', namespace: 'public' },
         cardinality: 'N:1',
+        nullable: true,
         on: { localFields: ['assigneeId'], targetFields: ['id'] },
       },
     },
@@ -323,6 +324,7 @@ export function buildMixedPolyContract(): TestContract {
       assignee: {
         to: { model: 'Assignee', namespace: 'public' },
         cardinality: 'N:1',
+        nullable: true,
         on: { localFields: ['assigneeId'], targetFields: ['id'] },
       },
     },
@@ -588,7 +590,7 @@ export function buildManyToManyContract(opts: {
     if (col.default !== undefined) {
       builder =
         typeof col.default === 'string'
-          ? builder.defaultSql(col.default)
+          ? builder.default({ kind: 'function', expression: col.default })
           : builder.default(col.default);
     }
     junctionFields[name] = builder;

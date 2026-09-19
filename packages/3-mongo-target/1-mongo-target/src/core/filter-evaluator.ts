@@ -10,22 +10,29 @@ import type {
 } from '@internal/mongo-query-ast/control';
 import { deepEqual } from '@internal/mongo-schema-ir';
 import type { MongoValue } from '@internal/mongo-value';
+import { blindCast } from '@internal/utils/casts';
 import { mongoTargetError } from './mongo-target-errors';
 
-function getNestedField(doc: Record<string, unknown>, path: string): unknown {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object';
+}
+
+function getNestedField(doc: Record<string, unknown>, path: string): MongoValue | undefined {
   const parts = path.split('.');
   let current: unknown = doc;
   for (const part of parts) {
-    if (current === null || current === undefined || typeof current !== 'object') {
+    if (!isRecord(current)) {
       return undefined;
     }
-    const record = current as Record<string, unknown>;
+    const record = current;
     if (!Object.hasOwn(record, part)) {
       return undefined;
     }
     current = record[part];
   }
-  return current;
+  return blindCast<MongoValue, 'inspection documents expose Mongo-compatible field values'>(
+    current,
+  );
 }
 
 function evaluateFieldOp(op: string, actual: unknown, expected: MongoValue): boolean {
@@ -35,13 +42,53 @@ function evaluateFieldOp(op: string, actual: unknown, expected: MongoValue): boo
     case '$ne':
       return !deepEqual(actual, expected);
     case '$gt':
-      return typeof actual === typeof expected && (actual as number) > (expected as number);
+      return (
+        typeof actual === typeof expected &&
+        blindCast<
+          number,
+          'Mongo comparison operands keep existing JavaScript relational semantics'
+        >(actual) >
+          blindCast<
+            number,
+            'Mongo comparison operands keep existing JavaScript relational semantics'
+          >(expected)
+      );
     case '$gte':
-      return typeof actual === typeof expected && (actual as number) >= (expected as number);
+      return (
+        typeof actual === typeof expected &&
+        blindCast<
+          number,
+          'Mongo comparison operands keep existing JavaScript relational semantics'
+        >(actual) >=
+          blindCast<
+            number,
+            'Mongo comparison operands keep existing JavaScript relational semantics'
+          >(expected)
+      );
     case '$lt':
-      return typeof actual === typeof expected && (actual as number) < (expected as number);
+      return (
+        typeof actual === typeof expected &&
+        blindCast<
+          number,
+          'Mongo comparison operands keep existing JavaScript relational semantics'
+        >(actual) <
+          blindCast<
+            number,
+            'Mongo comparison operands keep existing JavaScript relational semantics'
+          >(expected)
+      );
     case '$lte':
-      return typeof actual === typeof expected && (actual as number) <= (expected as number);
+      return (
+        typeof actual === typeof expected &&
+        blindCast<
+          number,
+          'Mongo comparison operands keep existing JavaScript relational semantics'
+        >(actual) <=
+          blindCast<
+            number,
+            'Mongo comparison operands keep existing JavaScript relational semantics'
+          >(expected)
+      );
     case '$in':
       return Array.isArray(expected) && expected.some((v) => deepEqual(actual, v));
     default:

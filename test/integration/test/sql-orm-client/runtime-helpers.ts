@@ -195,7 +195,7 @@ export async function createPgIntegrationRuntime(
       options?: RuntimeExecuteOptions,
     ): AsyncIterableResult<Row> {
       record(plan);
-      return target.query(plan, options);
+      return target.query<Row>(plan, options);
     };
   }
 

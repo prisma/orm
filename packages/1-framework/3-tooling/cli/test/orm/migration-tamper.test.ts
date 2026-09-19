@@ -2,15 +2,17 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { writeRef } from '@internal/migration-tools/refs';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
-import { afterEach, describe, expect, it } from 'vitest';
-import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { BIN_GROUPS } from '../../src/orm/cli';
 import {
   ADDITIVE_OP,
   contractJson,
   createOfflineProject,
+  OFFLINE_COMMANDS,
   type OfflineProject,
   offlineConfig,
   removeOfflineProjects,
+  resetRenderContractDtsMock,
   seedMigrationPackage,
 } from './fixtures/offline-project';
 
@@ -23,6 +25,7 @@ import {
  * commands (migration show) load the tolerant aggregate and succeed.
  */
 
+beforeEach(resetRenderContractDtsMock);
 afterEach(removeOfflineProjects);
 
 const HASH_TO = `${'a'.repeat(64)}`;
@@ -67,7 +70,7 @@ function driverConfig(project: OfflineProject): {
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, config: { orm: config } });
+  return createTestCli({ commands: OFFLINE_COMMANDS, groups: BIN_GROUPS, config: { orm: config } });
 }
 
 /** A project whose only migration's ops.json was rewritten after attestation. */

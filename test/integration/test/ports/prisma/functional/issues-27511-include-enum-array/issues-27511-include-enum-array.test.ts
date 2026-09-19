@@ -12,7 +12,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // enum-array column (`permissions workspace_permission[]`) returns the correct data.
 //
 // Schema note: upstream uses implicit M:N (workspace_member.roles / workspace_role.members).
-// prisma-next requires explicit junction models; the faithful port introduces
+// Prisma 8 requires explicit junction models; the faithful port introduces
 // `workspace_member_role` as the junction table.
 //
 // `workspace_role.permissions` is a `workspace_permission[]` (text-backed enum

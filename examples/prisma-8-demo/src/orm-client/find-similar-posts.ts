@@ -2,6 +2,7 @@ import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import type { ModelAccessor } from '@prisma/orm-postgres/orm-client';
 import type { Char } from '@prisma/orm-postgres/target/codec-types';
 import { blindCast } from '@prisma/orm-postgres/utils/casts';
+import { NotFoundError } from '../errors';
 import type { Contract } from '../prisma/contract';
 import { createOrmClient } from './client';
 
@@ -14,7 +15,7 @@ export async function ormClientFindSimilarPosts(postId: string, limit: number, r
   >(postId);
   const toPost = await db.Post.select('embedding').first({ id: typedPostId });
   if (!toPost) {
-    throw new Error(`Post not found: ${postId}`);
+    throw new NotFoundError(`Post not found: ${postId}`);
   }
 
   const { embedding } = toPost;

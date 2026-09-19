@@ -1,11 +1,11 @@
 {
   "name": "@internal/sql-contract-psl",
   "private": true,
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.11",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "PSL-to-SQL ContractIR interpreter for Prisma Next",
+  "description": "PSL-to-SQL ContractIR interpreter for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
@@ -16,20 +16,20 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/config": "workspace:8.0.0-rc.8",
-    "@internal/contract": "workspace:8.0.0-rc.8",
-    "@internal/framework-components": "workspace:8.0.0-rc.8",
-    "@internal/psl-parser": "workspace:8.0.0-rc.8",
-    "@internal/sql-contract": "workspace:8.0.0-rc.8",
-    "@internal/sql-contract-ts": "workspace:8.0.0-rc.8",
-    "@internal/utils": "workspace:8.0.0-rc.8",
+    "@internal/config": "workspace:8.0.0-rc.11",
+    "@internal/contract": "workspace:8.0.0-rc.11",
+    "@internal/contract-authoring": "workspace:8.0.0-rc.11",
+    "@internal/framework-components": "workspace:8.0.0-rc.11",
+    "@internal/psl-parser": "workspace:8.0.0-rc.11",
+    "@internal/sql-contract": "workspace:8.0.0-rc.11",
+    "@internal/sql-contract-ts": "workspace:8.0.0-rc.11",
+    "@internal/utils": "workspace:8.0.0-rc.11",
     "pathe": "^2.0.3"
   },
   "devDependencies": {
-    "@internal/contract-authoring": "workspace:8.0.0-rc.8",
-    "@repo/test-utils": "workspace:8.0.0-rc.8",
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@repo/test-utils": "workspace:8.0.0-rc.11",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@repo/tsdown": "workspace:8.0.0-rc.11",
     "arktype": "^2.2.2",
     "tsdown": "catalog:",
     "typescript": "catalog:",
@@ -49,9 +49,30 @@
   ],
   "types": "./dist/index.d.mts",
   "exports": {
-    ".": "./dist/index.mjs",
-    "./provider": "./dist/provider.mjs",
-    "./package.json": "./package.json"
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./attribute-specs": {
+      "types": "./dist/attribute-specs.d.mts",
+      "import": "./dist/attribute-specs.mjs"
+    },
+    "./default-table-name": {
+      "types": "./dist/default-table-name.d.mts",
+      "import": "./dist/default-table-name.mjs"
+    },
+    "./provider": {
+      "types": "./dist/provider.d.mts",
+      "import": "./dist/provider.mjs"
+    },
+    "./resolution": {
+      "types": "./dist/resolution.d.mts",
+      "import": "./dist/resolution.mjs"
+    },
+    "./package.json": {
+      "types": "./package.json",
+      "import": "./package.json"
+    }
   },
   "engines": {
     "node": ">=24"

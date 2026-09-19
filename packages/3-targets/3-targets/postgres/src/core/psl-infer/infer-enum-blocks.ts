@@ -100,6 +100,8 @@ function buildNativeEnumBlock(
               span: SYNTHETIC_SPAN,
             },
           ],
+    attributes:
+      name === typeName ? {} : { map: { args: { name: typeName }, span: SYNTHETIC_SPAN } },
     span: SYNTHETIC_SPAN,
   };
 }

@@ -24,7 +24,7 @@ changes:
          to `@prisma/orm-sqlite/config` and `@prisma/orm-mongo/config`.
       3. If the config reads `process.env`, keep (or add) `import 'dotenv/config';` as the
          first import — the loader does not read `.env` for you.
-      4. In `package.json`, replace the `prisma-next` devDependency with `@prisma/cli@next`
+      4. In `package.json`, replace the `prisma-next` devDependency with `prisma@latest`
          plus `@prisma/cli-engine` at the exact version that `@prisma/cli` names in its own
          dependencies, and rewrite scripts: `prisma-next <subcommand>` becomes
          `prisma-cli <subcommand>` (`migration apply` becomes `migrate`; `init` alone moves

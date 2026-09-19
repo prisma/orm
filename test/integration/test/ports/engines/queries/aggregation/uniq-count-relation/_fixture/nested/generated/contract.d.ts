@@ -20,7 +20,11 @@ import type {
   Varchar,
 } from '@internal/target-postgres/codec-types';
 
-import type { ContractWithTypeMaps, TypeMaps as TypeMapsType } from '@internal/sql-contract/types';
+import type {
+  ContractWithTypeMaps,
+  RelationKeys,
+  TypeMaps as TypeMapsType,
+} from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
@@ -115,6 +119,10 @@ export type AggregateTypes = {
         readonly output: 'pg/timestamp-temporal@1';
         readonly nullable: true;
       };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
+        readonly nullable: true;
+      };
       readonly 'pg/timestamptz-string@1': {
         readonly output: 'pg/timestamptz-string@1';
         readonly nullable: true;
@@ -169,6 +177,10 @@ export type AggregateTypes = {
       };
       readonly 'pg/timestamp-temporal@1': {
         readonly output: 'pg/timestamp-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
         readonly nullable: true;
       };
       readonly 'pg/timestamptz-string@1': {
@@ -238,8 +250,8 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 export type FieldOutputTypes = {
   readonly public: {
     readonly Comment: {
-      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly body: CodecTypes['pg/text@1']['output'];
+      readonly id: CodecTypes['pg/int4@1']['output'];
       readonly postId: CodecTypes['pg/int4@1']['output'];
     };
     readonly CommentTag: {
@@ -268,8 +280,8 @@ export type FieldOutputTypes = {
 export type FieldInputTypes = {
   readonly public: {
     readonly Comment: {
-      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly body: CodecTypes['pg/text@1']['input'];
+      readonly id: CodecTypes['pg/int4@1']['input'];
       readonly postId: CodecTypes['pg/int4@1']['input'];
     };
     readonly CommentTag: {
@@ -355,6 +367,65 @@ export type StorageColumnInputTypes = {
     };
   };
 };
+
+export namespace Models {
+  export type public_Comment = {
+    body: CodecTypes['pg/text@1']['output'];
+    id: CodecTypes['pg/int4@1']['output'];
+    postId: CodecTypes['pg/int4@1']['output'];
+    post: public_Post;
+    tags: public_Tag[];
+    readonly [RelationKeys]?: 'post' | 'tags';
+  };
+  export type public_CommentTag = {
+    commentId: CodecTypes['pg/int4@1']['output'];
+    tagId: CodecTypes['pg/int4@1']['output'];
+    comment: public_Comment;
+    tag: public_Tag;
+    readonly [RelationKeys]?: 'comment' | 'tag';
+  };
+  export type public_Post = {
+    id: CodecTypes['pg/int4@1']['output'];
+    title: CodecTypes['pg/text@1']['output'];
+    userId: CodecTypes['pg/int4@1']['output'];
+    comments: public_Comment[];
+    tags: public_Tag[];
+    user: public_User;
+    readonly [RelationKeys]?: 'comments' | 'tags' | 'user';
+  };
+  export type public_PostTag = {
+    postId: CodecTypes['pg/int4@1']['output'];
+    tagId: CodecTypes['pg/int4@1']['output'];
+    post: public_Post;
+    tag: public_Tag;
+    readonly [RelationKeys]?: 'post' | 'tag';
+  };
+  export type public_Tag = {
+    id: CodecTypes['pg/int4@1']['output'];
+    name: CodecTypes['pg/text@1']['output'];
+    comments: public_Comment[];
+    posts: public_Post[];
+    readonly [RelationKeys]?: 'comments' | 'posts';
+  };
+  export type public_User = {
+    id: CodecTypes['pg/int4@1']['output'];
+    name: CodecTypes['pg/text@1']['output'];
+    posts: public_Post[];
+    readonly [RelationKeys]?: 'posts';
+  };
+}
+
+export declare const models: {
+  public: {
+    Comment: Models.public_Comment;
+    CommentTag: Models.public_CommentTag;
+    Post: Models.public_Post;
+    PostTag: Models.public_PostTag;
+    Tag: Models.public_Tag;
+    User: Models.public_User;
+  };
+};
+
 export type TypeMaps = TypeMapsType<
   CodecTypes,
   QueryOperationTypes,
@@ -375,14 +446,14 @@ type ContractBase = Omit<
           readonly table: {
             readonly comment: {
               columns: {
-                readonly id: {
-                  readonly nativeType: 'int4';
-                  readonly codecId: 'pg/int4@1';
-                  readonly nullable: false;
-                };
                 readonly body: {
                   readonly nativeType: 'text';
                   readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                };
+                readonly id: {
+                  readonly nativeType: 'int4';
+                  readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
                 readonly postId: {
@@ -618,15 +689,15 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
-    readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
     readonly comment: { readonly namespace: 'public' & NamespaceId; readonly model: 'Comment' };
-    readonly tag: { readonly namespace: 'public' & NamespaceId; readonly model: 'Tag' };
-    readonly postTag: { readonly namespace: 'public' & NamespaceId; readonly model: 'PostTag' };
     readonly commentTag: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'CommentTag';
     };
+    readonly post: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
+    readonly postTag: { readonly namespace: 'public' & NamespaceId; readonly model: 'PostTag' };
+    readonly tag: { readonly namespace: 'public' & NamespaceId; readonly model: 'Tag' };
+    readonly user: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -634,13 +705,13 @@ type ContractBase = Omit<
         readonly models: {
           readonly Comment: {
             readonly fields: {
-              readonly id: {
-                readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
-              };
               readonly body: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly id: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
               readonly postId: {
                 readonly nullable: false;
@@ -651,6 +722,7 @@ type ContractBase = Omit<
               readonly post: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['postId'];
                   readonly targetFields: readonly ['id'];
@@ -676,8 +748,8 @@ type ContractBase = Omit<
               readonly table: 'comment';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly id: { readonly column: 'id' };
                 readonly body: { readonly column: 'body' };
+                readonly id: { readonly column: 'id' };
                 readonly postId: { readonly column: 'postId' };
               };
             };
@@ -700,6 +772,7 @@ type ContractBase = Omit<
                   readonly model: 'Comment';
                 };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['commentId'];
                   readonly targetFields: readonly ['id'];
@@ -708,6 +781,7 @@ type ContractBase = Omit<
               readonly tag: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Tag' };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['tagId'];
                   readonly targetFields: readonly ['id'];
@@ -768,6 +842,7 @@ type ContractBase = Omit<
               readonly user: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['userId'];
                   readonly targetFields: readonly ['id'];
@@ -799,6 +874,7 @@ type ContractBase = Omit<
               readonly post: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Post' };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['postId'];
                   readonly targetFields: readonly ['id'];
@@ -807,6 +883,7 @@ type ContractBase = Omit<
               readonly tag: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'Tag' };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['tagId'];
                   readonly targetFields: readonly ['id'];

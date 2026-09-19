@@ -1,11 +1,11 @@
 {
   "name": "@internal/migration-tools",
   "private": true,
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.11",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "On-disk migration persistence, hash verification, and chain reconstruction for Prisma Next",
+  "description": "On-disk migration persistence, hash verification, and chain reconstruction for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
@@ -16,18 +16,18 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/contract": "workspace:8.0.0-rc.8",
-    "@internal/errors": "workspace:8.0.0-rc.8",
-    "@internal/framework-components": "workspace:8.0.0-rc.8",
-    "@internal/utils": "workspace:8.0.0-rc.8",
+    "@internal/contract": "workspace:8.0.0-rc.11",
+    "@internal/errors": "workspace:8.0.0-rc.11",
+    "@internal/framework-components": "workspace:8.0.0-rc.11",
+    "@internal/utils": "workspace:8.0.0-rc.11",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
     "prettier": "^3.9.6"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.8",
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@repo/test-utils": "workspace:8.0.0-rc.11",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@repo/tsdown": "workspace:8.0.0-rc.11",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

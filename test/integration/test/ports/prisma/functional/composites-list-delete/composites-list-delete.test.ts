@@ -7,7 +7,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/composites/list/delete.ts
 // (mongodb matrix entry).
 //
-// Upstream verifies deletion via a follow-up `count`. prisma-next has no `count`
+// Upstream verifies deletion via a follow-up `count`. Prisma 8 has no `count`
 // method, so the follow-up read uses `.where().all()` and asserts the row is gone.
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {

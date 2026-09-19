@@ -95,6 +95,7 @@
             "relations": {
               "post": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "postId"
@@ -145,6 +146,7 @@
             "relations": {
               "blog": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "blog_id"
@@ -160,6 +162,7 @@
               },
               "comment": {
                 "cardinality": "1:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "id"

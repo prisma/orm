@@ -86,6 +86,7 @@
             "relations": {
               "parent": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "parentId"

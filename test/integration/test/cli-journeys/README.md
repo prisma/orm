@@ -3,7 +3,7 @@
 End-to-end tests organized by real-world user workflow, not by individual CLI command.
 Each journey composes multiple CLI commands against evolving database state in a single `it()` block.
 
-These tests are the primary regression suite for the Prisma Next CLI's database lifecycle commands.
+These tests are the primary regression suite for the Prisma 8 CLI's database lifecycle commands.
 
 ## Running
 

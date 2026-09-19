@@ -2,7 +2,7 @@
 
 Research and takeaways from how established systems approach the migration problem. Each summary captures the system's mental model, vocabulary, and CLI surface, then surfaces what is genuinely novel about it. The synthesis at the top of the directory cross-cuts the per-system summaries to pull out conventions worth borrowing, points of genuine disagreement, and patterns that don't fit a graph-shaped migration model.
 
-The Prisma Next migration domain model in [`../../10-domains/migration/`](../../10-domains/migration/) builds on the verdicts in the synthesis: which conventions to adopt, which to diverge from with reasoning, and which to avoid by name.
+The Prisma 8 migration domain model in [`../../10-domains/migration/`](../../10-domains/migration/) builds on the verdicts in the synthesis: which conventions to adopt, which to diverge from with reasoning, and which to avoid by name.
 
 ## Contents
 

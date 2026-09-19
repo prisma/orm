@@ -1,4 +1,3 @@
-import type { Contract } from '@internal/contract/types';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { isStructuredError } from '@internal/utils/structured-error';
@@ -65,6 +64,58 @@ describe('emitter', () => {
     timeouts.typeScriptCompilation,
   );
 
+  it('refuses a same-space to-one relation that does not state whether it is nullable', async () => {
+    const int = { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false };
+    const column = { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false };
+    const ir = createTestContract({
+      models: {
+        Post: {
+          storage: {
+            namespaceId: '__unbound__',
+            table: 'post',
+            fields: { id: { column: 'id' }, authorId: { column: 'author_id' } },
+          },
+          fields: { id: int, authorId: int },
+          relations: {
+            author: {
+              to: { namespace: '__unbound__', model: 'User' },
+              cardinality: 'N:1',
+              on: { localFields: ['authorId'], targetFields: ['id'] },
+            },
+          },
+        },
+        User: {
+          storage: { namespaceId: '__unbound__', table: 'user', fields: { id: { column: 'id' } } },
+          fields: { id: int },
+          relations: {},
+        },
+      },
+      storage: unboundNamespaceTables({
+        post: {
+          columns: { id: column, author_id: column },
+          primaryKey: { columns: ['id'] },
+          uniques: [],
+          indexes: [],
+          foreignKeys: [],
+        },
+        user: {
+          columns: { id: column },
+          primaryKey: { columns: ['id'] },
+          uniques: [],
+          indexes: [],
+          foreignKeys: [],
+        },
+      }),
+    });
+
+    await expect(emit(ir, { codecTypeImports: [] }, mockSqlHook)).rejects.toMatchObject({
+      code: 'CONTRACT.RELATION_INVALID',
+      message:
+        'Relation "author" on model "__unbound__:Post" is a N:1 relation and must carry a boolean "nullable"',
+      meta: { modelName: 'Post', relationName: 'author', reason: 'to-one-nullability-missing' },
+    });
+  });
+
   it(
     'emits contract.json and contract.d.ts',
     async () => {
@@ -130,6 +181,34 @@ describe('emitter', () => {
     },
     timeouts.typeScriptCompilation,
   );
+
+  it('threads supportsNamespaces from the emit options into the emitted model names', async () => {
+    const ir = createTestContract({
+      models: {
+        User: {
+          storage: { namespaceId: '__unbound__', table: 'user', fields: { id: { column: 'id' } } },
+          fields: { id: { type: { kind: 'scalar', codecId: 'pg/int4@1' }, nullable: false } },
+          relations: {},
+        },
+      },
+      storage: unboundNamespaceTables({
+        user: {
+          columns: { id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false } },
+          primaryKey: { columns: ['id'] },
+          uniques: [],
+          indexes: [],
+          foreignKeys: [],
+        },
+      }),
+    });
+    const kept = await emit(ir, { codecTypeImports: [] }, mockSqlHook);
+    expect(kept.contractDts).toContain('export type unbound_User = {');
+    const dropped = await emit(ir, { codecTypeImports: [] }, mockSqlHook, {
+      supportsNamespaces: false,
+    });
+    expect(dropped.contractDts).toContain('export type User = {');
+    expect(dropped.contractDts).not.toContain('unbound_User');
+  });
 
   it('emits contract even when extension pack namespace does not match extensionIds', async () => {
     const ir = createTestContract({
@@ -539,14 +618,7 @@ describe('emitter', () => {
   });
 
   it('throws when the sole namespace id has no namespace payload on the contract', () => {
-    const contract = {
-      ...createTestContract(),
-      domain: {
-        namespaces: {
-          public: undefined,
-        },
-      },
-    } as unknown as Contract;
+    const contract = createTestContract({ namespaces: { public: undefined } });
     expect(() =>
       generateContractDts(contract, mockSqlHook, [], {
         storageHash: '0000000000000000000000000000000000000000000000000000000000000001',

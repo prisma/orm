@@ -25,7 +25,7 @@ export type { DeclaredExtensionEntry } from '../integrity-violation';
  *
  * Construction reads migration **state** from disk (`migrations/<space>/`
  * packages + refs + head refs). The app's *live* contract is not a disk
- * artifact — in Prisma Next it is always compiled from the project's
+ * artifact — in Prisma 8 it is always compiled from the project's
  * central contract, so the caller always has it and threads it in as
  * `appContract`. `deserializeContract` is held and called lazily only for
  * the extension contracts resolved from the contract snapshot store,

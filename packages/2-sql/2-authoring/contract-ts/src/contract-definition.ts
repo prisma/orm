@@ -1,5 +1,6 @@
 import type {
   ColumnDefault,
+  ColumnDefaultLiteralInputValue,
   ControlPolicy,
   ExecutionMutationDefaultPhases,
 } from '@internal/contract/types';
@@ -36,12 +37,25 @@ export type AttachedEntities = Readonly<
   Record<string, Readonly<Record<string, Readonly<Record<string, unknown>>>>>
 >;
 
+/**
+ * A literal default as an authoring surface builds it. The contract build encodes it through the
+ * column codec into a {@link ColumnDefault}, so it may hold a `bigint`, which JSON cannot.
+ */
+export type AuthoredColumnDefaultLiteralValue =
+  | ColumnDefaultLiteralInputValue
+  | bigint
+  | readonly AuthoredColumnDefaultLiteralValue[];
+
+export type AuthoredColumnDefault =
+  | ColumnDefault
+  | { readonly kind: 'literal'; readonly value: AuthoredColumnDefaultLiteralValue };
+
 export interface FieldNode {
   readonly fieldName: string;
   readonly columnName: string;
   readonly descriptor: ColumnTypeDescriptor;
   readonly nullable: boolean;
-  readonly default?: ColumnDefault;
+  readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
   readonly many?: boolean;
   /**
@@ -141,6 +155,11 @@ export interface RelationNode {
   readonly toNamespaceId?: string;
   readonly cardinality: '1:1' | '1:N' | 'N:1' | 'N:M';
   /**
+   * Whether the related row may be absent, as stated by the schema. Present on
+   * every `'1:1'` and `'N:1'` relation; absent on `'1:N'` and `'N:M'`.
+   */
+  readonly nullable?: boolean;
+  /**
    * Contract-space identity of the related model. When present, the
    * related model lives in a different contract space. Absent for local
    * (same-space) relations.
@@ -177,7 +196,7 @@ export interface ValueObjectFieldNode {
   readonly columnName: string;
   readonly valueObjectName: string;
   readonly nullable: boolean;
-  readonly default?: ColumnDefault;
+  readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
   readonly many?: boolean;
 }

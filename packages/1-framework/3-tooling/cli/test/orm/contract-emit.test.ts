@@ -325,6 +325,36 @@ describe('contract emit', () => {
     ]);
   });
 
+  it.each([false, true])('reports a source filename without a span for json=%s', async (json) => {
+    const finding = {
+      code: 'CONTRACT.SOURCE_DIAGNOSTIC' as const,
+      severity: 'error' as const,
+      summary: 'prisma/models.prisma PSL_PARSE_ERROR: Unexpected token',
+      nextActions: [],
+      where: { path: 'prisma/models.prisma' },
+      meta: { code: 'PSL_PARSE_ERROR' },
+    };
+    executeContractEmit.mockRejectedValue(
+      new CliStructuredError('CONTRACT.SOURCE_LOAD_FAILED', 'Failed to resolve contract source', {
+        why: 'Provider parse failed',
+        diagnostics: [finding],
+      }),
+    );
+
+    const run = await harness().run(['contract', 'emit', ...(json ? ['--json'] : [])], {
+      cwd: PROJECT_DIR,
+      isTty: { stdout: true, stderr: true },
+    });
+
+    expect(run.exitCode).toBe(2);
+    if (json) {
+      expect(erroredEnvelope(run).diagnostics).toContainEqual(finding);
+    } else {
+      expect(stripAnsi(run.stderr)).toContain('prisma/models.prisma');
+      expect(stripAnsi(run.stderr)).toContain('Unexpected token');
+    }
+  });
+
   /**
    * `defineOrmCommand` catches at the top of the handler. Without it the engine
    * settles the throw itself: it accepts prisma/prisma's `CliStructuredError`

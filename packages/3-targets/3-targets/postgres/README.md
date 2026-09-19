@@ -1,6 +1,6 @@
 # @internal/target-postgres
 
-Postgres target pack for Prisma Next.
+Postgres target pack for Prisma 8.
 
 ## Package Classification
 
@@ -25,10 +25,12 @@ Provides the Postgres target descriptor (`SqlControlTargetDescriptor`) for CLI c
 - **Generated Defaults Policy**: Treats client-generated defaults as non-DB defaults when emitting DDL
 - **Database Dependency Consumption**: The planner extracts database dependencies from the configured framework components (passed as `frameworkComponents`), verifies each dependency against the live schema, and only emits install operations when required. The runner reuses the same metadata for post-apply verification, so there are no hardcoded extension mappings—database dependencies stay component-owned.
 - **Storage Type Planning**: The planner dispatches storage type hooks for `storage.types` and emits type operations before table creation when supported by the policy
+- **Runtime List Framing**: Parses inbound Postgres array text for contract-declared list columns before applying the scalar element codec. Builtin arrays and enum arrays therefore share one target-owned decode path; fixed-scale `numeric(30,10)[]` reads database-normalized text such as `"1.5000000000"`, matching scalar numeric decoding rather than the previous driver numeric-array float spelling `"1.5"`.
 
 This package spans multiple planes:
+
 - **Migration plane** (`src/exports/control.ts`): Control plane entry point that exports `SqlControlTargetDescriptor` for config files
-- **Runtime plane** (`src/exports/runtime.ts`): Runtime entry point for target-specific runtime code (future)
+- **Runtime plane** (`src/exports/runtime.ts`): Runtime entry point for target-specific runtime code, including list decoding
 - **Authoring pack ref** (`src/exports/pack.ts`): Pure data surface for contract builder workflows
 
 ## `db init`
@@ -117,19 +119,25 @@ Pack refs are pure JSON-friendly objects that make TypeScript contract authoring
 
 PostgreSQL-bound codecs use the public `PostgresCodecDescriptor` protocol, `postgresCodec(...)` adapter, and `definePostgresCodecs(...)` tuple helper exported from `@internal/target-postgres/codec-descriptor`. See the [codec authoring guide](../../../../docs/reference/codec-authoring-guide.md#target-owned-sql-codec-descriptors) for subclassing, generic adaptation, stack contribution, validation, array projection, and the current renderer transition.
 
+## List framing
+
+Inbound Postgres list framing is target-owned; see [ADR 251](../../../../docs/architecture%20docs/adrs/ADR%20251%20-%20Target-owned%20Postgres%20list%20framing.md). The Postgres runtime contributes the selected list-decoder strategy, which receives raw array text, parses the frame, and invokes the same scalar element codec for each non-null element. The contribution is optional at the SQL-family boundary, but row decoding always runs with an explicit selected strategy; non-Postgres paths use the SQL native-array default. Element codecs that can be used in list columns must accept the raw text spellings Postgres emits for their scalar values; the built-in numeric, boolean, integer, and float codecs also retain their scalar native-wire compatibility. Outbound array parameters are intentionally asymmetric: `pg` still serializes JavaScript arrays under the SQL type context emitted by the adapter.
+
 ## Architecture
 
-This package provides both control and runtime entry points for the Postgres target. All declarative fields (version, capabilities, types, operations) are defined directly on the descriptor, so the published entry points never touch the filesystem. The `./pack` entry point provides a pure pack ref for contract authoring. The runtime entry point will provide target-specific runtime functionality in the future.
+This package provides both control and runtime entry points for the Postgres target. All declarative fields (version, capabilities, types, operations) are defined directly on the descriptor, so the published entry points never touch the filesystem. The `./pack` entry point provides a pure pack ref for contract authoring. The runtime entry point provides target-specific runtime behavior such as Postgres list decoding.
 
 ## Error Handling
 
 Both the planner and runner return structured results instead of throwing:
 
 **Planner** returns `PlannerResult` with either:
+
 - `kind: 'success'` with a `MigrationPlan`
 - `kind: 'failure'` with a list of `PlannerConflict` objects (e.g., `unsupportedOperation`, `policyViolation`)
 
 **Runner** returns `MigrationRunnerResult` (`Result<MigrationRunnerSuccessValue, MigrationRunnerFailure>`) with either:
+
 - `ok: true` with operation counts
 - `ok: false` with a `MigrationRunnerFailure` containing error code, summary, and metadata
 
@@ -137,11 +145,20 @@ Runner error codes include: `EXECUTION_FAILED`, `PRECHECK_FAILED`, `POSTCHECK_FA
 
 See `@internal/family-sql/control` README for full error code documentation.
 
+## Prisma 7 binding
+
+`./prisma7-binding` exports `prisma7PostgresBinding`, everything the Postgres target supplies to the Prisma 7 interpreter in `@internal/sql-contract-prisma7`: the accepted `provider` names, the index types, the 63-byte identifier limit, the `@updatedAt` generator for each codec, how `Json`, `Bytes` and `DateTime` literal defaults are read (the SQL text Postgres stores for `Bytes` and `DateTime`, with `ARRAY[...]::type[]` for lists), and the type map. The type map is the table of what Prisma 7.10.0 creates in Postgres for each Prisma 7 scalar and `@db.*` native type, expressed as the Prisma 8 type constructor that produces the same column (`DateTime` is `Timestamp(3)`, `Decimal` is `Numeric(65, 30)`, `Json` is `Jsonb`, `@db.VarChar(n)` passes its argument through); the recorded SQL Prisma 7 generated for the reference schema is what the rows were read from. A `@db.*` spelling missing from the table is a hard error for the source, never a guess. The Postgres facade and the interpreter's tests import this one instance.
+
+## Introspection session settings
+
+Postgres prints a `timestamptz` value in the session's time zone, and dates and intervals in the session's styles, so the same stored default can read back as different text on two servers. The adapter therefore runs the whole introspection read with `TimeZone = UTC`, `DateStyle = ISO, MDY`, and `IntervalStyle = postgres`, and restores the caller's settings when it finishes, including when the read fails. Inside a caller's transaction the settings are set and restored locally; outside one they are set and restored for the session. Column defaults, check constraint text, index predicates, and policy expressions are all read under those settings, so their text does not depend on the server, the role, or what the caller had set.
+
 ## Exports
 
 - `./control`: Control plane entry point for `SqlControlTargetDescriptor`
-- `./runtime`: Runtime entry point for target-specific runtime code (future)
+- `./runtime`: Runtime entry point for target-specific runtime code
 - `./pack`: Pure pack ref for `defineContract({ family, target: postgresPack, ... })`
+- `./prisma7-binding`: `prisma7PostgresBinding`, this target's view for the Prisma 7 contract source (see above)
 
 ## Tests
 

@@ -6,7 +6,7 @@
  * cover planning/apply-ordering but can't prove this cross-transaction
  * usability).
  *
- * Isolated in a throwaway database (`prisma_next_native_enum_add_value_realdb`)
+ * Isolated in a throwaway database (`prisma_8_native_enum_add_value_realdb`)
  * dropped and recreated on a maintenance connection; skips (does not fail)
  * when no real Postgres is reachable.
  */
@@ -94,17 +94,20 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
   const scalarTypeDescriptors = buildScalarTypeDescriptors();
 
-  const { document, sourceFile } = parse(psl);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(
+    psl,
+    'native-enum-add-value.real-postgres.integration.test.psl',
+  );
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
 
   const result = interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: {
       kind: 'target' as const,
       familyId: 'sql' as const,
@@ -193,7 +196,7 @@ function nativeEnumMembers(
 
 const MAINTENANCE_URL =
   process.env['DATABASE_URL'] ?? 'postgres://postgres:postgres@localhost:5432/postgres';
-const TEST_DB = 'prisma_next_native_enum_add_value_realdb';
+const TEST_DB = 'prisma_8_native_enum_add_value_realdb';
 
 function testDatabaseUrl(): string {
   const u = new URL(MAINTENANCE_URL);
@@ -214,7 +217,9 @@ async function isRealPostgresAvailable(): Promise<boolean> {
 
 async function dropTestDatabaseViaMaintenance(): Promise<void> {
   const maintenance = await createDriver(MAINTENANCE_URL);
-  await maintenance.query(`DROP DATABASE IF EXISTS ${TEST_DB} WITH (FORCE)`);
+  await maintenance.query(
+    'DROP DATABASE IF EXISTS prisma_8_native_enum_add_value_realdb WITH (FORCE)',
+  );
   await maintenance.close();
 }
 
@@ -229,8 +234,10 @@ describe.runIf(await isRealPostgresAvailable())(
 
     beforeAll(async () => {
       const maintenance = await createDriver(MAINTENANCE_URL);
-      await maintenance.query(`DROP DATABASE IF EXISTS ${TEST_DB} WITH (FORCE)`);
-      await maintenance.query(`CREATE DATABASE ${TEST_DB}`);
+      await maintenance.query(
+        'DROP DATABASE IF EXISTS prisma_8_native_enum_add_value_realdb WITH (FORCE)',
+      );
+      await maintenance.query('CREATE DATABASE prisma_8_native_enum_add_value_realdb');
       await maintenance.close();
 
       driver = await createDriver(testDatabaseUrl());

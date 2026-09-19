@@ -6,7 +6,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/composites/object/updateMany.ts
 // (mongodb matrix entry). Upstream is matrix-parameterised on contentProperty (required/optional).
-// `updateMany` returns `{ count: N }` in Prisma; in prisma-next the equivalent is
+// `updateMany` returns `{ count: N }` in Prisma; in Prisma 8 the equivalent is
 // `.updateAndCount()` returning a number.
 //
 // Ported (both variants):
@@ -25,7 +25,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Non-ported — see non-ported ledger:
 //   - optional/required `update` sub-operator, `update push/set nested list` — no partial
-//     composite-field update sub-operator in prisma-next
+//     composite-field update sub-operator in Prisma 8
 //   - `unset` required branch — upstream asserts Prisma-specific "Unknown argument `unset`" throw
 //   - `upsert set` / `upsert update` — `content: { upsert: {...} }` composite-level upsert
 
@@ -78,7 +78,7 @@ describe('ports/prisma/functional/composites/object/updateMany', () => {
     );
 
     // Upstream asserts null on required `content` is both a type error and a runtime throw.
-    // Prisma Next rejects it at the type level, and MongoDB rejects it through the
+    // Prisma 8 rejects it at the type level, and MongoDB rejects it through the
     // provisioned collection validator.
     it(
       'set null',

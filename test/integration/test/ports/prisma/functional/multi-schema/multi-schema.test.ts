@@ -17,7 +17,7 @@ import contractNoMapJson from './_fixture/no-map/generated/contract.json' with {
 // Upstream suite: CRUD across two postgres schemas (base.User, transactional.Post)
 // with three @@map variants: no mapping, identical table names, different table names.
 //
-// Prisma @@schema("x") maps to prisma-next `namespace x { model ... }`.
+// Prisma @@schema("x") maps to Prisma 8 `namespace x { model ... }`.
 // Cross-namespace relation: `posts transactional.Post[]` / `author base.User?`.
 // ORM access: db.base.User, db.transactional.Post.
 //

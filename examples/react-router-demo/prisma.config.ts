@@ -2,12 +2,12 @@ import 'dotenv/config';
 import { defineConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
-const rawContractSource = process.env['PRISMA_NEXT_CONTRACT_SOURCE'];
+const rawContractSource = process.env['PRISMA_CONTRACT_SOURCE'];
 const contractSource =
   rawContractSource === undefined || rawContractSource === '' ? 'psl' : rawContractSource;
 if (contractSource !== 'psl' && contractSource !== 'ts') {
   throw new Error(
-    `PRISMA_NEXT_CONTRACT_SOURCE must be 'ts' or 'psl' (got: ${JSON.stringify(contractSource)}).`,
+    `PRISMA_CONTRACT_SOURCE must be 'ts' or 'psl' (got: ${JSON.stringify(contractSource)}).`,
   );
 }
 

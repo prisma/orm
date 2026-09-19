@@ -1,6 +1,6 @@
 # Query Patterns
 
-This document covers standard patterns for working with Prisma Next queries, including table access, type inference, and common usage patterns.
+This document covers standard patterns for working with Prisma 8 queries, including table access, type inference, and common usage patterns.
 
 ## Keep a single `db.ts` entrypoint
 
@@ -70,6 +70,8 @@ const plan = db.sql
 ## Type Inference with `ResultType`
 
 **Pattern**: Use `ResultType<typeof plan>` to extract row types from plans.
+
+`ResultType` also names the row of any ORM query (`db.orm.public.User.include('posts')`). The same rows can be named without a query in scope: `contract.d.ts` emits a `Models` namespace, and the family package exports the `Scalars` and `Shape` utilities that are applied to those model types; see [Naming model and result types](./model-and-result-types.md).
 
 **✅ CORRECT: Extract row type from plan**
 

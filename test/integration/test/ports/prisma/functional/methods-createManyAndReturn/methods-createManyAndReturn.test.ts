@@ -21,7 +21,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   "should create many records"            → ported (passing)
 //   "should accept select"                  → ported (passing)
 //   "should accept include on the post side" → ported (passing)
-//   "should fail include on the user side"  → non-ported: prisma-next's createAll DOES support
+//   "should fail include on the user side"  → non-ported: Prisma 8's createAll DOES support
 //                                             include('posts') on User (to-many is valid); there
 //                                             is no equivalent restriction
 //   "take should fail"                      → non-ported: createAll takes (data[], configure?)
@@ -34,7 +34,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //                                             select('_count') (not a scalar field); the invalid
 //                                             column also makes the SQL reject at runtime
 //   "include _count should fail"            → ported (it.fails): inline @ts-expect-error on
-//                                             include('_count') (not a relation); prisma-next
+//                                             include('_count') (not a relation); Prisma 8
 //                                             type-rejects but ignores it at runtime (no throw)
 
 function withCreateManyAndReturn(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {

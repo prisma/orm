@@ -1,2 +1,2 @@
-model User { id Int @id name String? posts Post[] userId Int userId2 Int @@unique([userId, userId2]) }
-model Post { id Int @id title String? userId Int? userId_2 Int? author User? @relation(fields: [userId, userId_2], references: [userId, userId2]) }
+model User { id Int @id name String? posts Post[] userId Int userId2 Int @@unique([userId, userId2]) @@map("user") }
+model Post { id Int @id title String? userId Int? userId_2 Int? author User? @relation(fields: [userId, userId_2], references: [userId, userId2]) @@map("post") }

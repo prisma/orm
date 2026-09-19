@@ -41,7 +41,7 @@ interface FileEntry {
 }
 
 const CONFIG_FILE = 'prisma.config.ts';
-const QUICK_REFERENCE_FILE = 'prisma-next.md';
+const QUICK_REFERENCE_FILE = 'prisma-8.md';
 const ENV_EXAMPLE_FILE = '.env.example';
 
 /**

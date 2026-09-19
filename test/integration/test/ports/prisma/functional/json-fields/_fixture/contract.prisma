@@ -10,4 +10,5 @@
 model Entry {
   id   String @id
   json Json
+  @@map("entry")
 }

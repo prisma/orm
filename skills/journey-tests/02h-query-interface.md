@@ -1,12 +1,12 @@
 # Journey 02h — Pick the right query interface
 
-**Skills under test:** `prisma-next-queries`.
+**Skills under test:** `prisma-8-queries`.
 
 **Acceptance criterion:** AC5h.
 
 ## Prompt
 
-> I need to compute a running total of order amounts per user using a Postgres window function. How do I write this in Prisma Next?
+> I need to compute a running total of order amounts per user using a Postgres window function. How do I write this in Prisma 8?
 
 ## Expected agent behavior
 

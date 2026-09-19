@@ -1,0 +1,26 @@
+[
+  {
+    "code": "PSL.PRISMA7_TABLE_COLLISION",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Models \"User\", \"Person\" all map to table \"public\".\"people\"; each model needs its own table."
+  },
+  {
+    "code": "PSL.PRISMA7_TABLE_COLLISION",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "Models \"User\", \"Person\" all map to table \"public\".\"people\"; each model needs its own table."
+  },
+  {
+    "code": "PSL.PRISMA7_TABLE_COLLISION",
+    "file": "schema.prisma",
+    "line": 17,
+    "message": "Models \"Account\", \"account\" all map to table \"public\".\"Account\"; each model needs its own table."
+  },
+  {
+    "code": "PSL.PRISMA7_TABLE_COLLISION",
+    "file": "schema.prisma",
+    "line": 24,
+    "message": "Models \"Account\", \"account\" all map to table \"public\".\"Account\"; each model needs its own table."
+  }
+]

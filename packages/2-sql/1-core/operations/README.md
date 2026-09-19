@@ -1,6 +1,6 @@
 # @internal/sql-operations
 
-SQL-specific operation types and registry for Prisma Next.
+SQL-specific operation types and registry for Prisma 8.
 
 ## Package Classification
 

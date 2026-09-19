@@ -53,8 +53,8 @@ export interface WithMongoPortOptions {
  * Each ported suite authors its schema as PSL (`_fixtures/<suite>/contract.prisma`)
  * and emits a `contract.json` / `contract.d.ts`. The harness:
  *   1. starts a `MongoMemoryReplSet` (wiredTiger, single-node),
- *   2. pushes the emitted contract through Prisma Next's plan → apply path,
- *   3. connects a `MongoClient` (raw) + a prisma-next `MongoRuntime`,
+ *   2. pushes the emitted contract through Prisma 8's plan → apply path,
+ *   3. connects a `MongoClient` (raw) + a Prisma 8 `MongoRuntime`,
  *   4. deserialises the emitted `contract.json` and builds a `mongoOrm` handle,
  *   5. yields `{ db, client, mongoDb, contract }`,
  *   6. drops the database + tears down in a `finally` block.

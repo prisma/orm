@@ -1,6 +1,6 @@
 # @internal/middleware-cache
 
-A family-agnostic, opt-in caching middleware for Prisma Next runtimes.
+A family-agnostic, opt-in caching middleware for Prisma 8 runtimes.
 
 Built on the `interceptQuery` hook on `RuntimeMiddleware`: on a cache hit, the middleware short-circuits the query and returns the cached rows; the driver is never invoked. On a cache miss, the middleware buffers rows from the driver and commits them to the store on successful completion.
 

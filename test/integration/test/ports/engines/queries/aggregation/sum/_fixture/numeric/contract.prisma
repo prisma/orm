@@ -3,4 +3,5 @@ model TestModel {
   int   Int
   bInt BigInt
   float Float
+  @@map("testModel")
 }

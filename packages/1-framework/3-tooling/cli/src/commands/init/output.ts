@@ -102,7 +102,7 @@ export function buildNextSteps(options: {
   } else {
     push(`Edit your schema at ${options.schemaPath}, then re-run \`${options.emitCommand}\`.`);
   }
-  push('Open prisma-next.md for a quick reference on how to write your first typed query.');
+  push('Open prisma-8.md for a quick reference on how to write your first typed query.');
   push(
     'Working with a coding agent? Run `prisma init` in this project to set up the Prisma agent skills.',
   );

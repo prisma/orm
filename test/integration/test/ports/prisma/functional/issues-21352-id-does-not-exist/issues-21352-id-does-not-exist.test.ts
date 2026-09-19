@@ -13,11 +13,11 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Test [1]: Relation1.findMany({ select: { id }, where: { user: { email: X } } })
 //   Relation1 has FK `email` → User1.email (parent PK is also named `email`)
-//   In prisma-next: where((r) => r.user.some((u) => u.email.eq(X)))
+//   In Prisma 8: where((r) => r.user.some((u) => u.email.eq(X)))
 //
 // Test [2]: Relation2.findMany({ select: { field }, where: { user: { id: X } } })
 //   Relation2 has FK `email` → User2.id (parent PK is named `id`, FK column is `email`)
-//   In prisma-next: where((r) => r.user.some((u) => u.id.eq(X)))
+//   In Prisma 8: where((r) => r.user.some((u) => u.id.eq(X)))
 //
 // Both tests assert the query resolves without error; there are no rows seeded,
 // but the generated SQL must not throw "column does not exist".

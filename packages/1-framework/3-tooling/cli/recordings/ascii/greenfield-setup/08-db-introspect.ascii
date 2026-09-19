@@ -95,7 +95,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Inspect the live database schema tree [initialized with user(id, email)]
-> prisma-next db schema
+> prisma db schema
 
 
 
@@ -127,7 +127,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Inspect the live database schema tree [initialized with user(id, email)]
-> prisma-next db schema
+> prisma db schema
 
 
 
@@ -159,7 +159,7 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Inspect the live database schema tree [initialized with user(id, email)]
-> prisma-next db schema
+> prisma db schema
 
 
 
@@ -191,8 +191,8 @@
 
 ────────────────────────────────────────────────────────────────────────────────
 > # Inspect the live database schema tree [initialized with user(id, email)]
-> prisma-next db schema
-prisma-next db schema → Inspect the live database schema
+> prisma db schema
+prisma db schema → Inspect the live database schema
 │
 │ config:               prisma.config.ts
 │ database:             postgres://****:****@127.0.0.1:5433/postgres

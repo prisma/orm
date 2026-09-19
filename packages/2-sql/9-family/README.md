@@ -1,6 +1,6 @@
 # @internal/family-sql
 
-SQL family descriptor for Prisma Next.
+SQL family descriptor for Prisma 8.
 
 ## Purpose
 

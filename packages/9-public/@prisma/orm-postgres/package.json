@@ -1,10 +1,10 @@
 {
   "name": "@prisma/orm-postgres",
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.11",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma Next for Postgres: the one package a Postgres application installs",
+  "description": "Prisma 8 for Postgres: the one package a Postgres application installs",
   "files": [
     "dist",
     "skills"
@@ -13,26 +13,24 @@
     "build": "tsdown",
     "prepack": "node ../../../../scripts/sync-package-skills.ts @prisma/orm-postgres",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen skills",
-    "test": "vitest run"
+    "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.8",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.8",
-    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.8",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.8",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.11",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.11",
+    "@prisma/orm-target-postgres": "workspace:8.0.0-rc.11",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.11",
+    "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "pathe": "^2.0.3",
     "pg": "catalog:"
   },
   "devDependencies": {
-    "@internal/postgres": "workspace:8.0.0-rc.8",
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@internal/publish-surface": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@internal/postgres": "workspace:8.0.0-rc.11",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@repo/tsdown": "workspace:8.0.0-rc.11",
     "tsdown": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "typescript": ">=5.9"

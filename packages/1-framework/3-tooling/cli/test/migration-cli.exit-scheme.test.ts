@@ -1,7 +1,7 @@
 /**
  * Pins the migration-file CLI's exit-code scheme: 0 for success paths,
  * 1 for runtime errors, 2 for usage errors. The S5 cutover deletes the
- * commander shell and moves the `prisma-next` bin onto the CLI engine's
+ * commander shell and moves the standalone bin onto the CLI engine's
  * settlement codes (errored runs exit 2, findings exit 4) — the
  * clipanion migration-file CLI is explicitly untouched by that change,
  * and this suite is the assertion that its scheme survived.

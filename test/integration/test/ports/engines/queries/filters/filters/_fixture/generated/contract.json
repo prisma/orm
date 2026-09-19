@@ -123,6 +123,7 @@
             "relations": {
               "ride": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "vehicle_id"
@@ -193,6 +194,7 @@
             "relations": {
               "owner": {
                 "cardinality": "1:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "id"

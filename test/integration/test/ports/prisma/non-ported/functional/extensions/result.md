@@ -4,7 +4,7 @@ Source: `packages/client/tests/functional/extensions/result.ts`
 
 Every test in this file exercises the Prisma Client `$extends({ result: {...} })` result-component
 extension mechanism (computed fields, dependencies, shadowing, propagation to nested/fluent reads
-and writes). prisma-next has no `$extends` client-extension surface (zero hits for `$extends`/
+and writes). Prisma 8 has no `$extends` client-extension surface (zero hits for `$extends`/
 `getExtensionContext`/`defineExtension` across `packages/` outside node_modules/dist;
 `packages/3-extensions/` is database extensions, not client extensions). The subject of each test
 IS the result-extension mechanism itself.

@@ -1,0 +1,23 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model A {
+  id Int @id
+  bs B[] @relation("X")
+}
+
+model B {
+  id Int @id
+  as A[] @relation("X")
+}
+
+model C {
+  id Int @id
+  ds D[] @relation("X")
+}
+
+model D {
+  id Int @id
+  cs C[] @relation("X")
+}

@@ -1,6 +1,6 @@
 # Supply chain
 
-This page documents the supply-chain hygiene practices that protect Prisma Next's published packages and the consumers who install them. Most of these are enforced in CI or in workflow configuration; this page captures the *why* alongside pointers to the *what*.
+This page documents the supply-chain hygiene practices that protect Prisma 8's published packages and the consumers who install them. Most of these are enforced in CI or in workflow configuration; this page captures the *why* alongside pointers to the *what*.
 
 ## License declarations (CI-enforced)
 

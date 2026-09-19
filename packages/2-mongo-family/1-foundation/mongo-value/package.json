@@ -1,11 +1,11 @@
 {
   "name": "@internal/mongo-value",
   "private": true,
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.11",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Primitive value types for Prisma Next MongoDB support",
+  "description": "Primitive value types for Prisma 8 MongoDB support",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
@@ -19,8 +19,8 @@
     "mongodb": "catalog:"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@repo/tsdown": "workspace:8.0.0-rc.11",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

@@ -13,7 +13,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // throw. The inputs match upstream exactly: `with decimal instances` and
 // `with numbers` both pass the JS numbers `[12.3, 45.6]` (despite the name,
 // upstream constructs no Decimal.js instances here); `create with strings`
-// passes `['12.3', '45.6']`. prisma-next's Numeric codec accepts number and
+// passes `['12.3', '45.6']`. Prisma 8's Numeric codec accepts number and
 // string inputs, so all three are faithful.
 
 function withDecimalList(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {

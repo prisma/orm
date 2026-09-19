@@ -31,7 +31,7 @@ interface ApplyPlanSuccessValue {
   readonly executedOperations: readonly SqlMigrationPlanOperation<PostgresPlanTargetDetails>[];
 }
 
-const LOCK_DOMAIN = 'prisma_next.contract.marker';
+const LOCK_DOMAIN = 'prisma_8.contract.marker';
 
 /**
  * Deep clones and freezes a record object to prevent mutation.
@@ -45,12 +45,19 @@ function cloneAndFreezeRecord<T extends Record<string, unknown>>(value: T): T {
     } else if (Array.isArray(val)) {
       cloned[key] = Object.freeze([...val]);
     } else if (typeof val === 'object') {
-      cloned[key] = cloneAndFreezeRecord(val as Record<string, unknown>);
+      cloned[key] = cloneAndFreezeRecord(
+        blindCast<
+          Record<string, unknown>,
+          'recursive clone only recurses into plain record-shaped values'
+        >(val),
+      );
     } else {
       cloned[key] = val;
     }
   }
-  return Object.freeze(cloned) as T;
+  return blindCast<T, 'cloned record preserves the key/value shape of the input record'>(
+    Object.freeze(cloned),
+  );
 }
 
 export function createPostgresMigrationRunner(
@@ -319,7 +326,7 @@ class PostgresMigrationRunner implements SqlMigrationRunner<PostgresPlanTargetDe
     return runnerFailure(
       'MIGRATION.LEGACY_MARKER_SHAPE',
       'Legacy marker-table shape detected on prisma_contract.marker (no `space` column). ' +
-        'Prisma Next is in pre-1.0; the previous transitional auto-migration to the per-space-row schema has been removed. ' +
+        'Prisma 8 is in pre-1.0; the previous transitional auto-migration to the per-space-row schema has been removed. ' +
         'Drop `prisma_contract.marker` and re-run `dbInit` to reinitialise from a clean baseline.',
       {
         meta: {

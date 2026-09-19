@@ -6,7 +6,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/composites/list/updateMany.ts
 // (mongodb matrix entry). Upstream uses `prisma.commentRequiredList.updateMany(...)` which
-// returns `{ count: N }`. In prisma-next the equivalent is `.updateAndCount()`.
+// returns `{ count: N }`. In Prisma 8 the equivalent is `.updateAndCount()`.
 //
 // The upstream seed (commentListDataA) creates one entry with:
 //   contents: [{ text: 'Hello World', upvotes: [{ vote: true, userId: '10' }] }]
@@ -22,8 +22,8 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - set null shorthand
 //
 // Non-ported — see non-ported ledger:
-//   - updateMany (embedded-list per-element filtered update) — no prisma-next surface
-//   - deleteMany (embedded-list per-element filtered delete) — no prisma-next surface
+//   - updateMany (embedded-list per-element filtered update) — no Prisma 8 surface
+//   - deleteMany (embedded-list per-element filtered delete) — no Prisma 8 surface
 //   - unset — asserts Prisma-specific "Unknown argument `unset`" on required list field
 //   - upsert set / upsert update — asserts Prisma-specific "Unknown argument `upsert`"
 
@@ -73,7 +73,7 @@ describe('ports/prisma/functional/composites/list/updateMany', () => {
   );
 
   // Upstream asserts null on required `contents` is a type error and a runtime throw.
-  // Prisma Next rejects it at the type level (@ts-expect-error holds), and MongoDB
+  // Prisma 8 rejects it at the type level (@ts-expect-error holds), and MongoDB
   // rejects it through the provisioned collection validator.
   it(
     'set null',

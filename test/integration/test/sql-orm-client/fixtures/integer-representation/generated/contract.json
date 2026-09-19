@@ -101,6 +101,7 @@
             "relations": {
               "meter": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "meterId"

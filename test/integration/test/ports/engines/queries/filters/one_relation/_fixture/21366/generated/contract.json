@@ -37,6 +37,7 @@
             "relations": {
               "current_state": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "device_id"

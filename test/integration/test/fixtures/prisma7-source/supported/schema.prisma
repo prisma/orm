@@ -1,0 +1,298 @@
+generator client {
+  provider        = "prisma-client"
+  output          = "../generated/prisma"
+  previewFeatures = ["multiSchema", "views"]
+}
+
+datasource db {
+  provider = "postgresql"
+  schemas  = ["public", "audit"]
+}
+
+enum Role {
+  USER  @map("user")
+  ADMIN
+
+  @@map("user_role")
+  @@schema("public")
+}
+
+enum AuditAction {
+  CREATE
+  DELETE
+
+  @@schema("audit")
+}
+
+model Scalars {
+  id           Int        @id @default(autoincrement())
+  string       String
+  stringOpt    String?
+  stringList   String[]
+  boolean      Boolean
+  booleanOpt   Boolean?
+  booleanList  Boolean[]
+  int          Int
+  intOpt       Int?
+  intList      Int[]
+  bigInt       BigInt
+  bigIntOpt    BigInt?
+  bigIntList   BigInt[]
+  float        Float
+  floatOpt     Float?
+  floatList    Float[]
+  decimal      Decimal
+  decimalOpt   Decimal?
+  decimalList  Decimal[]
+  dateTime     DateTime
+  dateTimeOpt  DateTime?
+  dateTimeList DateTime[]
+  json         Json
+  jsonOpt      Json?
+  jsonList     Json[]
+  bytes        Bytes
+  bytesOpt     Bytes?
+  bytesList    Bytes[]
+  role         Role
+  roleOpt      Role?
+  roleList     Role[]
+
+  @@schema("public")
+}
+
+model NativeTypes {
+  id              Int      @id @default(autoincrement())
+  text            String   @db.Text
+  varChar         String   @db.VarChar(255)
+  char            String   @db.Char(10)
+  charNoLength    String   @db.Char
+  uuid            String   @db.Uuid
+  inet            String   @db.Inet
+  boolean         Boolean  @db.Boolean
+  integer         Int      @db.Integer
+  smallInt        Int      @db.SmallInt
+  bigInt          BigInt   @db.BigInt
+  real            Float    @db.Real
+  doublePrecision Float    @db.DoublePrecision
+  decimal         Decimal  @db.Decimal(10, 2)
+  timestamp       DateTime @db.Timestamp(6)
+  timestamptz     DateTime @db.Timestamptz(6)
+  date            DateTime @db.Date
+  time            DateTime @db.Time(6)
+  timetz          DateTime @db.Timetz(6)
+  json            Json     @db.Json
+  jsonB           Json     @db.JsonB
+  byteA           Bytes    @db.ByteA
+  varCharList     String[] @db.VarChar(32)
+  timestamptzOpt  DateTime? @db.Timestamptz(3)
+
+  @@schema("public")
+}
+
+model Timestamps {
+  id           Int       @id @default(autoincrement())
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  updatedAtOpt DateTime? @updatedAt
+  updatedAtNow DateTime  @default(now()) @updatedAt
+  updatedAtTz  DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+model Defaults {
+  id              Int        @id @default(autoincrement())
+  bigSequence     BigInt     @default(autoincrement())
+  createdAt       DateTime   @default(now())
+  generated       String     @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  uuid4           String     @default(uuid())
+  uuid7           String     @default(uuid(7))
+  cuid1           String     @default(cuid())
+  cuid2           String     @default(cuid(2))
+  ulid            String     @default(ulid())
+  nanoid          String     @default(nanoid())
+  nanoidSized     String     @default(nanoid(10))
+  uuidOpt         String?    @default(uuid())
+  stringLiteral   String     @default("hello")
+  intLiteral      Int        @default(42)
+  bigIntLiteral   BigInt     @default(9007199254740993)
+  floatLiteral    Float      @default(1.5)
+  decimalLiteral  Decimal    @default(12.34)
+  booleanLiteral  Boolean    @default(true)
+  dateTimeLiteral DateTime   @default("2024-01-01T00:00:00.000Z")
+  jsonLiteral     Json       @default("{\"a\":1}")
+  bytesLiteral    Bytes      @default("aGVsbG8=")
+  stringList      String[]   @default(["a", "b"])
+  intList         Int[]      @default([1, 2])
+  enumMember      Role       @default(USER)
+  enumList        Role[]     @default([ADMIN])
+
+  @@schema("public")
+}
+
+model User {
+  id        Int       @id @default(autoincrement())
+  email     String    @unique
+  legacy    String?   @ignore
+  posts     Post[]
+  edited    Post[]    @relation("PostEditor")
+  profile   Profile?
+  settings  Settings?
+  favorites Post[]    @relation("Favorites")
+  followers User[]    @relation("Follows")
+  following User[]    @relation("Follows")
+  legacyOwned Post[]  @relation("LegacyOwner") @ignore
+  reviews   Review[]  @relation("ReviewAuthor")
+
+  @@schema("public")
+}
+
+model Post {
+  id            Int     @id @default(autoincrement())
+  slug          String  @unique
+  title         String
+  category      String
+  hashed        String
+  authorId      Int
+  author        User    @relation(fields: [authorId], references: [id])
+  editorId      Int?
+  editor        User?   @relation("PostEditor", fields: [editorId], references: [id])
+  legacyOwnerId Int?    @ignore
+  legacyOwner   User?   @relation("LegacyOwner", fields: [legacyOwnerId], references: [id]) @ignore
+  tags          Tag[]
+  fans          User[]  @relation("Favorites")
+  labels        Label[]
+
+  @@unique([title, category])
+  @@index([category])
+  @@index([title, category], map: "post_title_category")
+  @@index([hashed], type: Hash)
+  @@schema("public")
+}
+
+model Tag {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  posts Post[]
+
+  @@schema("public")
+}
+
+model Profile {
+  id     Int    @id @default(autoincrement())
+  bio    String
+  userId Int    @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@schema("public")
+}
+
+model Settings {
+  id     Int   @id @default(autoincrement())
+  theme  String
+  userId Int?  @unique
+  user   User? @relation(fields: [userId], references: [id])
+
+  @@schema("public")
+}
+
+model Composite {
+  a        Int
+  b        String
+  children CompositeChild[]
+
+  @@id([a, b])
+  @@schema("audit")
+}
+
+model AuditLog {
+  id     Int         @id @default(autoincrement())
+  action AuditAction @default(CREATE)
+  at     DateTime    @default(now()) @db.Timestamptz(3)
+
+  @@map("audit_log")
+  @@schema("audit")
+}
+
+model MappedIndexes {
+  id        Int    @id @default(autoincrement())
+  firstName String @map("first_name")
+  other     String
+
+  @@unique([firstName, other])
+  @@index([firstName])
+  @@map("mapped_indexes")
+  @@schema("public")
+}
+
+model LegacyThing {
+  id Int @id
+
+  @@ignore
+  @@schema("public")
+}
+
+model NumberDefaults {
+  id               Int     @id @default(autoincrement())
+  negativeInt      Int     @default(-1)
+  negativeSmallInt Int     @default(-2) @db.SmallInt
+  negativeFloat    Float   @default(-1.5)
+  negativeDecimal  Decimal @default(-12.34)
+  longDecimal      Decimal @default(12345678901234567890.123456789)
+  tinyDecimal      Decimal @default(0.000000000000000001)
+  zerosBare        Decimal @default(1.50) @db.Decimal
+  zerosScaled      Decimal @default(1.50) @db.Decimal(10, 2)
+  zerosDefault     Decimal @default(1.50)
+  negativeBigInt   BigInt  @default(-9007199254740993)
+
+  @@schema("public")
+}
+
+model ListDefaults {
+  id           Int        @id @default(autoincrement())
+  ints         Int[]      @default([-1, 2])
+  bigInts      BigInt[]   @default([9007199254740993, -1])
+  floats       Float[]    @default([-1.5, 2.25])
+  decimals     Decimal[]  @default([1.50, -2, 0.000000000000000001])
+  dateTimes    DateTime[] @default(["2024-01-01T00:00:00.000Z", "2024-01-02T03:04:05.123+02:00"])
+  bytes        Bytes[]    @default(["aGVsbG8=", "d29ybGQ="])
+  emptyVarChar String[]   @default([]) @db.VarChar(32)
+
+  @@schema("public")
+}
+
+model TemporalDefaults {
+  id            Int      @id @default(autoincrement())
+  date          DateTime @default("2024-01-02T03:04:05.000Z") @db.Date
+  time          DateTime @default("1970-01-01T12:34:56.789Z") @db.Time(3)
+  timetz        DateTime @default("2024-01-02T03:04:05+02:00") @db.Timetz(6)
+  timestamptz   DateTime @default("2024-01-02T03:04:05+02:00") @db.Timestamptz(6)
+  beforeYearOne DateTime @default("0001-01-01T00:30:00+01:00") @db.Timestamptz(3)
+
+  @@schema("public")
+}
+
+model Review {
+  id       Int   @id @default(autoincrement())
+  authorId Int
+  author   User? @relation("ReviewAuthor", fields: [authorId], references: [id])
+
+  @@schema("public")
+}
+
+model CompositeChild {
+  id         Int        @id @default(autoincrement())
+  compositeA Int?
+  compositeB String
+  composite  Composite? @relation(fields: [compositeA, compositeB], references: [a, b])
+
+  @@schema("audit")
+}
+
+model Label {
+  id    Int    @id @default(autoincrement())
+  name  String
+  posts Post[]
+
+  @@schema("audit")
+}

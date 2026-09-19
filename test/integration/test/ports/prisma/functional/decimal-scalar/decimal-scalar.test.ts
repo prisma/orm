@@ -8,13 +8,13 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry only; mongodb opted out as it does not support Decimal).
 //
 // Upstream seeds a User with money = 12.5 and reads it back through four
-// `where` input forms. In prisma-next, Decimal is stored/returned as a Numeric
+// `where` input forms. In Prisma 8, Decimal is stored/returned as a Numeric
 // branded string:
 //   - 'decimal as string'  — string equality filter → portable.
 //   - 'decimal as number'  — `{ gt, lt }` range → portable via the callback
 //     filter `u.money.gt(...)/.lt(...)` (PgNumeric carries the `order` trait).
 //   - 'decimal as Decimal.js instance' / 'decimal as decimal.js-like object' —
-//     non-portable: prisma-next has no Decimal.js input interop.
+//     non-portable: Prisma 8 has no Decimal.js input interop.
 // The two non-portable cases are recorded in the ledger.
 
 function withDecimalScalar(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {

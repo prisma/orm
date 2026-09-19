@@ -24,7 +24,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   "should update and return records satisfying the where clause" → ported (passing)
 //   "should accept select"                                    → ported (passing)
 //   "should accept include on the post side"                  → ported (passing)
-//   "should fail include on the user side"  → non-ported: prisma-next's updateAll DOES support
+//   "should fail include on the user side"  → non-ported: Prisma 8's updateAll DOES support
 //                                             include('posts') on User; no equivalent restriction
 //   "take should fail"                      → non-ported: updateAll takes (data, configure?) not
 //                                             an options bag; take is not an option here
@@ -33,7 +33,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   "select _count should fail"             → ported (passing): inline @ts-expect-error on
 //                                             select('_count'); the invalid column rejects at runtime
 //   "include _count should fail"            → ported (it.fails): inline @ts-expect-error on
-//                                             include('_count'); prisma-next type-rejects but ignores
+//                                             include('_count'); Prisma 8 type-rejects but ignores
 //                                             the unknown relation at runtime (no throw)
 
 function withUpdateManyAndReturn(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {

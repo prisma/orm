@@ -195,7 +195,7 @@ export async function loadContractFromTs(
 
   const tempFile = join(
     tmpdir(),
-    `prisma-next-contract-${Date.now()}-${Math.random().toString(36).slice(2)}.mjs`,
+    `prisma-8-contract-${Date.now()}-${Math.random().toString(36).slice(2)}.mjs`,
   );
 
   // Disallowed imports are collected by the allowlist resolver plugin itself,

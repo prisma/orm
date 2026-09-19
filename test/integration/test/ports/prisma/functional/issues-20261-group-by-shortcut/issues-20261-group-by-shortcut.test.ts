@@ -18,10 +18,10 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Non-ported tests:
 //   'works with a scalar in "by" and no other selection'
-//     — groupBy with no aggregation cannot be expressed in prisma-next's
+//     — groupBy with no aggregation cannot be expressed in Prisma 8's
 //       public API: groupBy().aggregate() requires at least one selector.
 //   'works with extended client'
-//     — `prisma.$extends({})` has no equivalent in prisma-next.
+//     — `prisma.$extends({})` has no equivalent in Prisma 8.
 
 const SEED = [
   { teamName: 'Red', points: 5 },

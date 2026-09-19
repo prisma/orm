@@ -1,6 +1,6 @@
 # @internal/sql-relational-core
 
-Schema and column builders, operation attachment, and AST types for Prisma Next.
+Schema and column builders, operation attachment, and AST types for Prisma 8.
 
 ## Package Classification
 

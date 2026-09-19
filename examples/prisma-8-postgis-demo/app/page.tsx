@@ -83,7 +83,7 @@ export default async function Home({ searchParams }: { searchParams: SearchParam
     <main>
       <header className="topbar">
         <div className="brand">
-          <h1>Prisma Next · PostGIS</h1>
+          <h1>Prisma 8 · PostGIS</h1>
           <p>
             Six geospatial queries over five SF cafes, three neighborhoods, two routes. Pick a query
             on the left to see what it does and which features it highlights.

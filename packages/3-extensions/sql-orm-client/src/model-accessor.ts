@@ -381,7 +381,6 @@ function createScalarFieldAccessor(
     'scalar field accessor combines the expression protocol with generated comparison methods'
   >({
     returnType: { codecId, nullable, codec },
-    codec,
     buildAst: () => column,
     ...Object.fromEntries(comparisonEntries),
   });

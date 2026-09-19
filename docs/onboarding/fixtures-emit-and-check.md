@@ -6,10 +6,10 @@
 
 `fixtures:emit` regenerates every committed fixture, in this order:
 
-1. `emit` on the fixture-bearing packages (`examples/*`, `apps/*`, `sql-builder`, `sql-orm-client`, `e2e-tests`, `integration-tests`) — runs the **contract emitter** and rewrites each `contract.json` + `contract.d.ts`.
+1. `emit` on the fixture-bearing packages (`examples/*`, `apps/*`, `sql-builder`, `sql-orm-client`, `e2e-tests`, `integration-tests`) — runs the **contract emitter** and rewrites each `contract.json` + `contract.d.ts`. The `integration-tests` package also runs `test/integration/scripts/emit-fixture-configs.mjs`, which walks `test/ports/`, `test/enum-order-by/`, and `test/sql-builder/fixtures/` and re-emits a `prisma.config.ts` only when a committed `generated/` directory sits beside it; every other config is skipped (it belongs to a non-ported suite, or its own test emits to a temp dir).
 2. `build:contract-space` on `packages/3-extensions/*` — the extensions' emitted `contract.json`.
 3. `migrations:regen` (`scripts/regen-extension-migrations.mjs`) — extension migration artifacts.
-4. `migrations:regen:examples` (`scripts/regen-example-migrations.mjs`) — for each example migration: re-emits its bookend contracts into the content-addressed store at `migrations/snapshots/<hex>/contract.*`, then re-runs `tsx migration.ts` to rewrite `ops.json` + `migration.json`.
+4. `migrations:regen:examples` (`scripts/regen-example-migrations.mjs`) — for each example migration: re-emits its bookend contracts into the content-addressed store at `migrations/snapshots/<hex>/contract.*`, then re-runs `tsx migration.ts` to rewrite `ops.json` + `migration.json`. Steps 3 and 4 both write the store through `refreshContractSnapshot` (`scripts/refresh-contract-snapshot.mjs`): the plain `writeContractSnapshot` never rewrites an entry whose hash already exists, so the wrapper compares the entry's `contract.json` and `contract.d.ts` with the fresh emit and replaces the whole entry when either file differs.
 
 `fixtures:check` runs `fixtures:emit` and then:
 

@@ -75,6 +75,7 @@
                   "namespace": "__unbound__"
                 },
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": ["assigneeId"],
                   "targetFields": ["_id"]

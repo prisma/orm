@@ -110,7 +110,7 @@ describe('planSpacePath — empty-graph spaces', () => {
 
   it('an extension space with a MANAGED element and no migrations is never-planned, not advanced', () => {
     // Advancing a marker without migrations is valid only when nothing in
-    // the space is Prisma-Next-managed. A managed element with no authored
+    // the space is Prisma 8-managed. A managed element with no authored
     // graph is an authoring bug and must fail loudly.
     const outcome = planSpacePath({
       space: makeEmptyGraphSpace('broken-extension', [], 'managed'),

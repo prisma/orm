@@ -1,5 +1,5 @@
 /**
- * Prisma Next config for the internal `feature-flags` contract-space
+ * Prisma 8 config for the internal `feature-flags` contract-space
  * package — see `../audit/prisma.config.ts` for the framing.
  */
 

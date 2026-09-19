@@ -1,6 +1,6 @@
 # Architecture pattern catalogue
 
-This catalogue is the single place to learn **which structural shapes the Prisma Next codebase has settled for**. Each entry pins a pattern's intent, when it applies (and when it does not), the canonical structure, and reference implementations in the codebase. Consult it before approving — or proposing — a new architectural shape.
+This catalogue is the single place to learn **which structural shapes the Prisma 8 codebase has settled for**. Each entry pins a pattern's intent, when it applies (and when it does not), the canonical structure, and reference implementations in the codebase. Consult it before approving — or proposing — a new architectural shape.
 
 The catalogue is distinct from its neighbours:
 

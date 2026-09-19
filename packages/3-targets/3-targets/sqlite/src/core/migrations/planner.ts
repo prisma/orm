@@ -6,6 +6,7 @@ import type {
   SqlPlannerFailureResult,
 } from '@internal/family-sql/control';
 import {
+  detectTableNameCaseChanges,
   extractCodecControlHooks,
   planFieldEventOperations,
   plannerFailure,
@@ -20,7 +21,11 @@ import type {
 } from '@internal/framework-components/control';
 import { issueOutcome } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
-import { RelationalSchemaNodeKind, type SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import {
+  RelationalSchemaNodeKind,
+  type SqlSchemaIR,
+  SqlTableIR,
+} from '@internal/sql-schema-ir/types';
 import { buildSqlitePlanDiff } from './diff-database-schema';
 import { coalesceSubtreeIssues, issueNode, planIssues } from './issue-planner';
 import {
@@ -124,6 +129,17 @@ export class SqliteMigrationPlanner
     if (policyResult) return policyResult;
 
     const { expected, actual, issues } = this.collectSchemaIssues(options);
+    const caseChangeConflicts = detectTableNameCaseChanges({
+      issues,
+      tableOf: (issue) => {
+        const node = issueNode(issue);
+        return node instanceof SqlTableIR ? node : undefined;
+      },
+      namespaceIdOf: () => UNBOUND_NAMESPACE_ID,
+    });
+    if (caseChangeConflicts.length > 0) {
+      return plannerFailure(caseChangeConflicts);
+    }
     const codecHooks = extractCodecControlHooks(options.frameworkComponents);
 
     const result = planIssues({

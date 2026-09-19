@@ -1,7 +1,7 @@
 /**
  * CLI recording configuration.
  *
- * Defines VHS settings and recording scenarios for `prisma-next` CLI commands.
+ * Defines VHS settings and recording scenarios for `prisma` CLI commands.
  * Run with: `npx tsx scripts/record.ts` from the CLI package directory.
  */
 

@@ -55,7 +55,7 @@ export function buildInitNextActions(inputs: {
     label: `Edit your schema at ${inputs.schemaPath}, then emit again`,
   });
   actions.push(
-    chooseAction('Open prisma-next.md for a quick reference on writing your first typed query'),
+    chooseAction('Open prisma-8.md for a quick reference on writing your first typed query'),
   );
   actions.push(
     runCommandAction('Set up the Prisma agent skills for your coding agent', 'prisma init'),
@@ -63,7 +63,7 @@ export function buildInitNextActions(inputs: {
   return actions;
 }
 
-const DONE_TEXT = 'Done. Open prisma-next.md to get started.';
+const DONE_TEXT = 'Done. Open prisma-8.md to get started.';
 const INCOMPLETE_TEXT = 'Scaffold written. Finish the steps above to complete setup.';
 
 /**

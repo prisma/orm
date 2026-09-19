@@ -119,12 +119,19 @@ export {
   type ContractIR,
   computeRefAdvancementName,
   executeRefAdvancement,
+  NO_REF_ADVANCEMENT,
+  preflightRefAdvancement,
   type RefAdvancementFields,
-  readContractIR,
-  resolveRefAdvancementFields,
 } from '../control-api/operations/ref-advancement';
 export { resolveContractRef, resolveMigrationRef } from '../control-api/operations/ref-resolution';
 export { readMigrationRefs } from '../control-api/operations/refs';
+export type {
+  RenderContractDtsFailure,
+  RenderContractDtsFailureCode,
+  RenderContractDtsOptions,
+  RenderContractDtsResult,
+  RenderContractDtsSuccess,
+} from '../control-api/render-contract-dts';
 // CLI-specific types
 export type {
   ContractEmitOptions,

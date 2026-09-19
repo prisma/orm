@@ -1,6 +1,6 @@
-# Prisma Next CLI Style Guide
+# Prisma 8 CLI Style Guide
 
-This guide defines how Prisma Next's CLI behaves and looks. It exists to keep our developer experience consistent across commands and packages while aligning with our architecture: contract‑first, deterministic, agent‑friendly.
+This guide defines how Prisma 8's CLI behaves and looks. It exists to keep our developer experience consistent across commands and packages while aligning with our architecture: contract‑first, deterministic, agent‑friendly.
 
 For the architectural view of the CLI (distribution, command surface, init pipeline, programmatic API, layering), see the [CLI subsystem doc](architecture%20docs/subsystems/11.%20CLI.md).
 
@@ -58,7 +58,7 @@ The CLI checks `process.stdout.isTTY` once at startup to determine the output mo
 - Verbose: `-v/--verbose` (debug: timings, resolved config), `--trace` (deep internals, stack traces).
 - JSON: `--json` outputs single JSON object to stdout.
 - Interactivity: `--interactive`/`--no-interactive`. Defaults to `process.stdout.isTTY`. `-y/--yes` accepts prompts.
-- Env toggles: `PRISMA_NEXT_DEBUG=1` ≅ `-v`, `PRISMA_NEXT_TRACE=1` ≅ `--trace`.
+- Env toggles: `PRISMA_DEBUG=1` ≅ `-v`, `PRISMA_TRACE=1` ≅ `--trace`.
 - CLI flags take precedence over env vars.
 
 > **Future**: If long-running streaming commands are introduced, `--json` may auto‑select NDJSON for those commands, and `--json=object|ndjson` override syntax can be re‑introduced.
@@ -135,11 +135,11 @@ This is a deliberate divergence from clig.dev §Arguments §Confirmation. AI age
 
 - `db update`: when the plan includes destructive ops, asks the user to type the database name; `--no-interactive --confirm <database>` applies without a prompt. The name is the `database` a driver connection object carries, or the connection URL's first path segment, else its host, falling back to the target id.
 - `init`: re-running `init` in a directory with a generated `prisma.config.ts` asks the user to type the directory's basename; `-y` alone is not sufficient to authorise overwriting generated files. (The commander-era `--force` retired with the commander shell in the S5 cutover; the engine-hosted `init` uses the consent form above.)
-- `db sign`: the `--force` this guide lists in its flags was never implemented. When overwriting a marker with a different hash grows a switch, it takes the consent form above.
+- `db sign`: overwriting a marker that holds a different hash happens without consent (the previous hash is reported). This is an intentional exception to the rule above: `db sign` verifies the live schema against the contract before writing, so the overwrite only ever records a contract the database already satisfies. If that ever grows a switch, it takes the consent form above — not a `--force`.
 
 ## Config & Environment
 - Config file names: `prisma.config.ts|.mjs|.js` (ESM); optional CJS fallback.
-- Discovery precedence: `--config <path>` > `PRISMA_NEXT_CONFIG` > nearest `prisma.config.*` in CWD (no upward search).
+- Discovery precedence: `--config <path>` > `PRISMA_CONFIG` > nearest `prisma.config.*` in CWD (no upward search).
 - Precedence: flags > config > defaults.
 - Env policy: the CLI does not auto‑load `.env`. Apps may do so in `prisma.config.*` and pass values (e.g., `db.connection`).
 - Contract source: defined in config; no flag override.
@@ -155,7 +155,7 @@ Streams are covered in [Output Conventions](#output-conventions-composable-cli-o
 
 ### Reserved (CLI-wide)
 
-These codes have a fixed meaning across every Prisma Next CLI command. Specific commands MUST NOT redefine them.
+These codes have a fixed meaning across every Prisma 8 CLI command. Specific commands MUST NOT redefine them.
 
 | Code | Name | Meaning |
 |---|---|---|
@@ -240,9 +240,12 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
   - `--marker-only` cannot be combined with `--schema-only` or `--strict` (exit code 2, `CLI.INVALID_VERIFY_MODE`). `--schema-only --strict` is valid.
   - Non‑interactive; single JSON with `--json`.
 - `db sign` (canonical):
-  - Runs the same verify phase first, then writes/updates the marker row.
-  - Missing marker → insert; same hash → no‑op; different hash → never overwrite unless `--force`.
-  - Options: `--force`, `--dry-run`, `--include-contract-json`, `--app-tag`, `--canonical-version`.
+  - Runs the schema verification that `db verify --schema-only` runs (non-strict) and skips the marker checks, since the database being signed usually has no marker yet; a failing verification refuses to sign and writes nothing (exit code 4, the verify findings as the document).
+  - On success writes or updates the marker: missing marker → insert; same hash → no‑op; different hash → overwrite, reporting the previous hash.
+  - Then writes the signed contract into the snapshot store and advances the `db` ref to the signed hash (`--advance-ref <name>` picks another ref). Unlike `db init` / `db update`, `--db` does not suppress this — signing never mutates the schema, and adoption normally runs against the real database via `--db`. `--no-advance-ref` signs without writing any ref or snapshot; combining it with `--advance-ref` is `CLI.ADVANCE_REF_ARG_CONFLICT` (exit code 2). Human output names the advanced ref and, when it existed, the previous hash; JSON carries `advancedRef: { name, hash }` or `null`.
+  - No migration package is written.
+  - Options: `[contract]` positional or `--contract <ref>` (hash, prefix, ref name, migration dir name, `<dir>^`, or `./path`; the positional accepts only the first four; defaults to the emitted `contract.json`; both together is `CLI.CONTRACT_ARG_CONFLICT`), `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
+  - Exit codes: 0 signed; 2 the command could not run (unresolvable contract reference, no emitted contract, unreachable database, conflicting flags); 4 verification refused.
 
 ## Init Flow
 - `prisma orm init` is the greenfield-app entry point (distinct from `prisma db init`, which adopts an existing database).
@@ -253,8 +256,8 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
   - `prisma/contract.prisma` (PSL) — starter schema with two related models so the user has something to query immediately.
   - `prisma/db.ts` — runtime client (e.g. `postgres<Contract>({ contractJson })`) typed against the emitted contract.
   - `prisma/contract.json` and `prisma/contract.d.ts` — emitted by the post-install `contract emit` step.
-  - `prisma-next.md` — short human-facing quick reference (file locations, common commands, minimal query example).
-  - `.agents/skills/prisma-next/SKILL.md` — agent skill so AI tooling in the project knows the layout and conventions.
+  - `prisma-8.md` — short human-facing quick reference (file locations, common commands, minimal query example).
+  - `.agents/skills/prisma-8/SKILL.md` — agent skill so AI tooling in the project knows the layout and conventions.
   - `.env.example` with `DATABASE_URL=`; CLI still does not read `.env`.
   - After-init output: small celebratory header + a numbered "Next steps" list (edit the schema, run `pnpm prisma contract emit`, import `db` from `./prisma/db`).
 - Re-init detection: if `prisma.config.ts` already exists, init prompts once — *"This project is already initialized. Re-initialize? This will overwrite all generated files."* — and then either overwrites everything or exits. No per-file overwrite prompts.
@@ -270,7 +273,7 @@ Concrete examples (from the migration CLI verb refactor, TML-2546). Each entry b
 - Per‑command examples:
   - `contract emit`: `--contract <path>`, `--out <dir>`, `--show-sql`, `--show-diff`.
   - `migration plan`: `--out <dir>`, `--show-sql`, `--show-diff`, `--max-sql-lines <n>`, `--yes`.
-  - `db sign`: `--include-contract-json`, `--app-tag`, `--canonical-version`, `--force`, `--dry-run`.
+  - `db sign`: `[contract]` / `--contract <ref>`, `--db <url>`, `--advance-ref <name>`, `--no-advance-ref`.
 
 ## Rationale
 - Predictable, human‑oriented text with clear errors; mirror determinism and actionable messages while avoiding heavy codegen.

@@ -125,13 +125,16 @@ jobs:
         run: pnpm lint:consumer-internal-imports
       - name: Lint the legacy product name
         run: pnpm lint:legacy-name
+      - name: Lint vitest timeout budgets
+        run: pnpm lint:vitest-timeouts
 
       - name: Lint publishability matches the directory layout
         run: pnpm lint:publishability
       - name: Check upgrade-instruction coverage
         env:
-          BASE: ${{ github.base_ref || 'main' }}
-        run: pnpm check:upgrade-coverage --mode pr --prev "origin/$BASE"
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
+          HEAD_SHA: ${{ github.event.merge_group.head_sha || github.sha }}
+        run: pnpm check:upgrade-coverage --mode pr --prev "$BASE_SHA" --head "$HEAD_SHA"
       - name: Check error-reference completeness
         run: pnpm check:error-reference
       - name: Check release notes
@@ -228,7 +231,7 @@ jobs:
       # brought up by `pnpm db:up` below (docker-compose, not a service
       # container, because GitHub Actions service containers can't override
       # the postgres CMD to enable shared_preload_libraries=pg_stat_statements).
-      WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgres://postgres:postgres@127.0.0.1:5433/prisma_next_cloudflare_worker
+      WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE: postgres://postgres:postgres@127.0.0.1:5433/prisma_8_cloudflare_worker
     services:
       postgres:
         image: postgres:15
@@ -256,6 +259,12 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Start cloudflare-worker Postgres (5433, pg_stat_statements)
         run: pnpm --filter prisma-8-cloudflare-worker db:up
+      # Fetch Prisma 7's schema engine, which the install does not download,
+      # so a slow or unreachable binary host fails this step within 5 minutes
+      # instead of timing out inside the example test.
+      - name: Fetch the Prisma 7 schema engine (prisma7-adoption)
+        timeout-minutes: 5
+        run: pnpm --filter prisma7-adoption exec prisma7 --version --config prisma7.config.ts
       - name: Test examples
         run: pnpm test:examples
       - name: Check working tree is clean

@@ -135,7 +135,7 @@ describe('Postgres index introspection — type and options', { concurrent: fals
   // appear in the index definition, not in the order they appear in the
   // table. Verification compares `columns` to the contract index columns
   // using order-sensitive equality, so a shuffled order produces a spurious
-  // `index_mismatch` and breaks `prisma-next db init` on a fresh database
+  // `index_mismatch` and breaks `prisma db init` on a fresh database
   // whenever the index column order differs from the table column order.
   it('reports composite index columns in index order, not table order', {
     timeout: testTimeout,

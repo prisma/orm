@@ -2,6 +2,7 @@ model TestModel {
   id      Int    @id
   childId Int?   @unique
   child   Child? @relation(fields: [childId], references: [id])
+  @@map("testModel")
 }
 
 model Child {
@@ -9,4 +10,5 @@ model Child {
   string1 String
   string2 String
   test    TestModel?
+  @@map("child")
 }

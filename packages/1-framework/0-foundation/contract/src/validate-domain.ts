@@ -3,9 +3,16 @@ import type { CrossReference } from './cross-reference';
 import type { ContractWithDomain } from './domain-envelope';
 import { asNamespaceId, type NamespaceId } from './namespace-id';
 
+export interface DomainRelationShape {
+  readonly to: CrossReference;
+  readonly cardinality?: string;
+  readonly on?: unknown;
+  readonly nullable?: unknown;
+}
+
 export interface DomainModelShape {
   readonly fields: Record<string, unknown>;
-  readonly relations?: Record<string, { readonly to: CrossReference }>;
+  readonly relations?: Record<string, DomainRelationShape>;
   readonly discriminator?: { readonly field: string };
   readonly variants?: Record<string, unknown>;
   readonly base?: CrossReference;
@@ -59,6 +66,7 @@ export function validateContractDomain(contract: DomainContractShape): void {
   validateRoots(contract, modelIndex, errors);
   validateVariantsAndBases(modelIndex, errors);
   validateRelationTargets(modelIndex, errors);
+  validateRelationNullability(modelIndex, errors);
   validateDiscriminators(modelIndex, errors);
   validateOwnership(contract, modelIndex, errors);
   validateValueObjectReferences(contract, errors);
@@ -149,6 +157,34 @@ function validateRelationTargets(modelIndex: ModelIndex, errors: string[]): void
       if (!lookupModel(modelIndex, relation.to)) {
         errors.push(
           `Relation "${relName}" on model "${namespaceId}:${modelName}" targets "${relation.to.namespace}:${relation.to.model}" which does not exist in domain.namespaces`,
+        );
+      }
+    }
+  }
+}
+
+function relationKindLabel(relation: DomainRelationShape): string {
+  return relation.on === undefined ? 'embed relation' : `${relation.cardinality} relation`;
+}
+
+function validateRelationNullability(modelIndex: ModelIndex, errors: string[]): void {
+  for (const { namespaceId, name: modelName, model } of iterateIndexedModels(modelIndex)) {
+    for (const [relName, relation] of Object.entries(model.relations ?? {})) {
+      const location = `Relation "${relName}" on model "${namespaceId}:${modelName}"`;
+      const isToOneReference =
+        relation.on !== undefined &&
+        (relation.cardinality === '1:1' || relation.cardinality === 'N:1');
+      if (isToOneReference) {
+        if (relation.nullable !== undefined && typeof relation.nullable !== 'boolean') {
+          errors.push(
+            `${location} is a ${relation.cardinality} relation and its "nullable" must be a boolean`,
+          );
+        }
+        continue;
+      }
+      if (relation.nullable !== undefined) {
+        errors.push(
+          `${location} is a ${relationKindLabel(relation)} and must not carry "nullable"`,
         );
       }
     }

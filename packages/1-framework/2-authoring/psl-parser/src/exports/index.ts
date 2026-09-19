@@ -8,7 +8,6 @@ export type {
   PslDefaultFunctionValue,
   PslDefaultLiteralValue,
   PslDefaultValue,
-  PslDiagnostic,
   PslDiagnosticCode,
   PslDocumentAst,
   PslExtensionBlock,
@@ -38,12 +37,11 @@ export {
 export { getPositionalArgument, parseQuotedStringLiteral } from '../attribute-helpers';
 export type { AssembledAttributeSpecs } from '../attribute-spec/assemble';
 export { assembleAttributeSpecs } from '../attribute-spec/assemble';
+export { blockAttribute } from '../attribute-spec/block-attribute';
 export { bool } from '../attribute-spec/combinators/bool';
 export { leafDiagnostic } from '../attribute-spec/combinators/diagnostic';
 export { entityRef } from '../attribute-spec/combinators/entity-ref';
-export type { FieldRefArgType, FieldRefScope } from '../attribute-spec/combinators/field-ref';
-export { fieldRef } from '../attribute-spec/combinators/field-ref';
-export type { FuncCallSig, TypedFuncCall } from '../attribute-spec/combinators/func-call';
+export { fieldRef, referencedFieldRef } from '../attribute-spec/combinators/field-ref';
 export { funcCall } from '../attribute-spec/combinators/func-call';
 export { identifier } from '../attribute-spec/combinators/identifier';
 export { int } from '../attribute-spec/combinators/int';
@@ -51,9 +49,11 @@ export { json } from '../attribute-spec/combinators/json';
 export type { ListOptions } from '../attribute-spec/combinators/list';
 export { list } from '../attribute-spec/combinators/list';
 export { num } from '../attribute-spec/combinators/num';
+export { numLiteral } from '../attribute-spec/combinators/num-literal';
 export { oneOf } from '../attribute-spec/combinators/one-of';
 export { record } from '../attribute-spec/combinators/record';
 export { str } from '../attribute-spec/combinators/str';
+export { taggedLiteral } from '../attribute-spec/combinators/tagged-literal';
 export { fieldAttribute } from '../attribute-spec/field-attribute';
 export type { ArgBindingSpec } from '../attribute-spec/interpret';
 export { interpretArgs, interpretAttribute } from '../attribute-spec/interpret';
@@ -62,29 +62,46 @@ export { optional } from '../attribute-spec/optional';
 export type {
   AttributeSpecContext,
   AttributeSpecNamespace,
+  BlockAttributeSpecFactory,
   FieldAttributeSpecContext,
   FieldAttributeSpecFactory,
   ModelAttributeSpecFactory,
 } from '../attribute-spec/spec-context';
 export type {
   ArgType,
+  ArgTypeKind,
+  AttributeCtx,
   AttributeLevel,
   AttributeOut,
   AttributeSpec,
+  FieldAttributeCtx,
+  FuncCallSig,
   InferAttr,
-  InterpretCtx,
+  InspectableArgType,
+  ModelAttributeCtx,
   NamedOut,
+  NumLiteral,
   OptionalArgType,
   OutOf,
   Param,
+  ParsedTaggedLiteral,
   PositionalParam,
   PosOut,
+  RejectingArgType,
+  TaggedLiteralArgType,
+  TypedFuncCall,
 } from '../attribute-spec/types';
+export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
+export {
+  createPslDiagnosticCollector,
+  diagnosticFromSpan,
+  diagnosticSource,
+  mapPslDiagnostics,
+} from '../diagnostic';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
 export {
   keywordPslSpan,
   nodePslSpan,
-  rangeToPslSpan,
   readResolvedAttribute,
   readResolvedAttributes,
   readResolvedConstructorCall,

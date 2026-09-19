@@ -2,7 +2,7 @@
  * Native Postgres enum end-to-end proof — the Supabase extension declares a
  * `native_enum AalLevel` in `auth` (member set `aal1`/`aal2`/`aal3`, mapped to
  * the Postgres type `aal_level`) and a `sessions` table with an `aal
- * pg.enum(AalLevel)?` column. Both are external — Prisma Next emits no DDL
+ * pg.enum(AalLevel)?` column. Both are external — Prisma 8 emits no DDL
  * for them; `setUpSupabaseMockSchema` seeds `CREATE TYPE auth.aal_level` and
  * `auth.sessions` directly, mirroring the existing `auth.users`/`storage.*`
  * seed pattern.

@@ -1,6 +1,6 @@
 # Mongo Blog Leaderboard
 
-A focused MongoDB example for Prisma Next that demonstrates the **typed aggregation pipeline DSL** end-to-end against a discriminated post collection.
+A focused MongoDB example for Prisma 8 that demonstrates the **typed aggregation pipeline DSL** end-to-end against a discriminated post collection.
 
 The headline query ranks authors by post count, attaches the most recent post date, and embeds the author document via `$lookup` — all behind a single typed builder chain that terminates in `.build()` and runs through the canonical `mongo()` runtime facade.
 

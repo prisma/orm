@@ -85,6 +85,7 @@ type PostModel = {
     readonly author: {
       readonly to: { readonly namespace: '__unbound__'; readonly model: 'User' };
       readonly cardinality: 'N:1';
+      readonly nullable: false;
       readonly on: {
         readonly localFields: readonly ['authorId'];
         readonly targetFields: readonly ['_id'];

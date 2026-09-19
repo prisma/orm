@@ -5,7 +5,7 @@ Source: `packages/client/tests/functional/extensions/query.ts`
 Every test in this file exercises the Prisma Client `$extends({ query: {...} })` query-component
 extension mechanism (middleware-style interception of operations, args mutation/isolation, result
 override/mutation, `$allModels`/`$allOperations` scoping, composition with result extensions).
-prisma-next has no `$extends` client-extension surface (zero hits for `$extends`/`getExtensionContext`/
+Prisma 8 has no `$extends` client-extension surface (zero hits for `$extends`/`getExtensionContext`/
 `defineExtension` across `packages/` outside node_modules/dist; `packages/3-extensions/` is database
 extensions, not client extensions). The subject of each test IS the query-extension mechanism itself.
 

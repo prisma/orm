@@ -11,10 +11,10 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //     → concurrent findUniqueOrThrow on existing rows: all Promise.allSettled entries fulfilled.
 //   'batched errors when some of the objects not found'
 //     → concurrent findUniqueOrThrow with a missing row: that slot rejects with P2025
-//       (prisma-next: RUNTIME.NO_ROWS).
+//       (Prisma 8: RUNTIME.NO_ROWS).
 //
 // Upstream uses Promise.allSettled([findUniqueOrThrow, findUniqueOrThrow]).
-// prisma-next: findUniqueOrThrow({ where: { id } }) → .where({ id }).all().firstOrThrow()
+// Prisma 8: findUniqueOrThrow({ where: { id } }) → .where({ id }).all().firstOrThrow()
 // Missing-row error surfaces as code 'RUNTIME.NO_ROWS' (maps to Prisma P2025).
 //
 // Dispositions:

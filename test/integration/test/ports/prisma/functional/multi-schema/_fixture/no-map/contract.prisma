@@ -20,7 +20,7 @@
 //     @@schema("transactional")
 //   }
 //
-// prisma-next maps @@schema("base") -> namespace base { model User {} }
+// Prisma 8 maps @@schema("base") -> namespace base { model User {} }
 // and @@schema("transactional") -> namespace transactional { model Post {} }.
 // Cross-namespace relation: user base.User @relation(...).
 
@@ -29,6 +29,7 @@ namespace base {
     id       String  @id @default(cuid(2))
     email    String
     posts    transactional.Post[]
+    @@map("user")
   }
 }
 
@@ -37,6 +38,7 @@ namespace transactional {
     id       String  @id @default(cuid(2))
     title    String
     authorId String
-    author   base.User? @relation(fields: [authorId], references: [id])
+    author   base.User  @relation(fields: [authorId], references: [id])
+    @@map("post")
   }
 }

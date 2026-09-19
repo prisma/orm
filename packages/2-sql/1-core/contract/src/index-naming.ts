@@ -55,11 +55,11 @@ const EXACT_NAME_BODY_PREAMBLE =
  */
 const EXACT_NAME_BODY_REMEDIATION = {
   index:
-    'For hand-authored definitions, use name: and let Prisma Next manage the physical name; to migrate an adopted object to wire naming, replace map: with name: (keeping the body text unchanged) and apply the resulting rename migration.',
+    'For hand-authored definitions, use name: and let Prisma 8 manage the physical name; to migrate an adopted object to wire naming, replace map: with name: (keeping the body text unchanged) and apply the resulting rename migration.',
   policy:
     "For hand-authored definitions, drop @@map and let the policy block's head name the policy; to migrate an adopted policy to wire naming, remove @@map (keeping the body text unchanged) and apply the resulting rename migration.",
   check:
-    'For hand-authored definitions, use name: and let Prisma Next manage the physical name; to migrate an adopted check to wire naming, replace map: with name: (keeping the body text unchanged) and apply the resulting rename migration.',
+    'For hand-authored definitions, use name: and let Prisma 8 manage the physical name; to migrate an adopted check to wire naming, replace map: with name: (keeping the body text unchanged) and apply the resulting rename migration.',
 } as const;
 
 /** What the user actually wrote, per subject: index and check `map:`, policy `@@map`. */

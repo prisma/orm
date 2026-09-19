@@ -1,6 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import type { ExtractAggregateTypes, SqlStorage } from '@internal/sql-contract/types';
-import type { AnyExpression } from '@internal/sql-relational-core/ast';
+import type { WhereArg } from '@internal/sql-relational-core/ast';
 import type { Collection } from './collection';
 import type {
   CollectionContext,
@@ -11,9 +11,9 @@ import type {
   IncludeCombineBranch,
   IncludeRelationValue,
   IncludeScalar,
-  ModelAccessor,
   RelationCardinality,
   ShorthandWhereFilter,
+  VariantAwareModelAccessor,
 } from './types';
 
 export interface CollectionInit<TContract extends Contract<SqlStorage>> {
@@ -130,15 +130,31 @@ export type IncludeRefinementValue<
       // cardinality-wrapped; Collection carries a raw row that still needs it.
       RefinedResult extends { readonly kind: 'includeScalar' | 'includeCombine' }
       ? V
-      : IncludeRelationValue<TContract, ParentModelName, RelName, V, NsId>
+      : RefinedIncludeRelationValue<TContract, ParentModelName, RelName, V, NsId>
     : IncludeRelationValue<TContract, ParentModelName, RelName, DefaultIncludedRow, NsId>;
+
+/**
+ * A refined to-one include is nullable whatever the relation's `nullable` flag
+ * says: the refinement's filter can exclude the related row.
+ */
+type RefinedIncludeRelationValue<
+  TContract extends Contract<SqlStorage>,
+  ParentModelName extends string,
+  RelName extends string,
+  IncludedRow,
+  NsId extends string = never,
+> =
+  RelationCardinality<TContract, ParentModelName, RelName, NsId> extends '1:1' | 'N:1'
+    ? IncludedRow | null
+    : IncludedRow[];
 
 export type WhereInput<
   TContract extends Contract<SqlStorage>,
   NsId extends string,
   ModelName extends string,
+  VariantName extends string | undefined = undefined,
 > =
-  | ((model: ModelAccessor<TContract, ModelName, NsId>) => AnyExpression)
+  | ((model: VariantAwareModelAccessor<TContract, ModelName, VariantName, NsId>) => WhereArg)
   | ShorthandWhereFilter<TContract, NsId, ModelName>;
 
 export interface IncludeRefinementEvaluation {

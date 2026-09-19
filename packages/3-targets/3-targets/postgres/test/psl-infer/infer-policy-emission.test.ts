@@ -165,7 +165,7 @@ describe('policy block emission', () => {
       policyNode({ name: 'odd role policy', roles: ['my role'], using: '(owner_id = 1)' }),
     ]);
     expect(psl).not.toContain('policy_select');
-    expect(psl).toContain('// prisma-next: skipped policy "odd role policy"');
+    expect(psl).toContain('// prisma: skipped policy "odd role policy"');
     expect(psl).toContain('@@rls');
   });
 });

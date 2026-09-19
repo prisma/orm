@@ -17,7 +17,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // `prisma.contactAnalytics.createMany({ data: rows })` → `db.public.ContactAnalytics.createAndCount(rows)`
 // `prisma.contactAnalytics.count()` → `db.public.ContactAnalytics.aggregate(a => ({ count: a.count() }))`
 //
-// Upstream uses `undefined` to omit optional fields; prisma-next's CreateInput types
+// Upstream uses `undefined` to omit optional fields; Prisma 8's CreateInput types
 // optional nullable fields as `field?: Date | null`. We construct each row as a
 // partial object and spread only the fields that are present (the varying pattern
 // is preserved faithfully — only which fields are included varies per row/iteration).

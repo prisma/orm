@@ -222,16 +222,16 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
 ]);
 
 function interpret(source: string) {
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(source, 'infer-psl-contract.enum-adoption.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target: postgresTarget,
     scalarColumnDescriptors: scalarTypeDescriptors,
@@ -502,7 +502,7 @@ describe('enum-typed column defaults', () => {
     expect(output).toContain('@default("aal1")');
   });
 
-  it('a schema-qualified cast default is preserved raw via dbgenerated, never mis-parsed', () => {
+  it('reads a schema-qualified cast default as the member literal, which interprets', () => {
     const output = inferAndPrint(
       tree({
         auth: namespaceNode(
@@ -523,8 +523,15 @@ describe('enum-typed column defaults', () => {
       }),
     );
 
-    expect(output).toContain('@default(dbgenerated("\'aal1\'::auth.aal_level"))');
-    expect(output).toContain('pg.enum(AalLevel)');
+    expect(output).toContain('aal pg.enum(AalLevel) @default("aal1")');
+    const result = interpret(output);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
+    expect(ns.table['sessions']?.columns['aal']?.default).toEqual({
+      kind: 'literal',
+      value: 'aal1',
+    });
   });
 });
 

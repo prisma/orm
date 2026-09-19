@@ -317,6 +317,9 @@ export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFie
     }) as ScalarFieldBuilder<State>;
   }
 
+  /**
+   * @deprecated Write `.default(now())` or `.default(autoincrement())`, or `` .default(sql`...`) `` for any other SQL. Removed in 8.0.0.
+   */
   defaultSql(expression: string): ScalarFieldBuilder<State> {
     return new ScalarFieldBuilder({
       ...this.state,
@@ -620,6 +623,11 @@ type BelongsToRelation<
   readonly from: FromField;
   readonly to: ToField;
   readonly sql?: SqlSpec;
+  /**
+   * Whether the related row may be absent. Defaults to whether any `from`
+   * field is nullable; an explicit value that contradicts them is rejected.
+   */
+  readonly optional?: boolean;
   /**
    * Contract-space identity of the target model. Populated when
    * `belongsTo` receives a cross-space branded handle. Absent for
@@ -1946,7 +1954,7 @@ function belongsTo<
   ToField extends RelationFieldSelection<RelationModelFieldNames<Token>>,
 >(
   toModel: Token | LazyNamedModelToken<Token>,
-  options: { readonly from: FromField; readonly to: ToField },
+  options: { readonly from: FromField; readonly to: ToField; readonly optional?: boolean },
 ): RelationBuilder<BelongsToRelation<RelationModelName<Token>, FromField, ToField>>;
 function belongsTo<
   ToModel extends string,
@@ -1954,13 +1962,14 @@ function belongsTo<
   ToField extends string | readonly string[],
 >(
   toModel: ToModel,
-  options: { readonly from: FromField; readonly to: ToField },
+  options: { readonly from: FromField; readonly to: ToField; readonly optional?: boolean },
 ): RelationBuilder<BelongsToRelation<ToModel, FromField, ToField>>;
 function belongsTo(
   toModel: string | AnyNamedModelToken | LazyNamedModelToken,
   options: {
     readonly from: string | readonly string[];
     readonly to: string | readonly string[];
+    readonly optional?: boolean;
   },
 ): RelationBuilder<BelongsToRelation> {
   // F-lazy: when the model is a lazy thunk (() => handle), resolve it before
@@ -1987,6 +1996,7 @@ function belongsTo(
     toModel: normalizeRelationModelSource(toModel),
     from: options.from,
     to: options.to,
+    ...ifDefined('optional', options.optional),
     ...(crossSpaceCoordinate !== undefined ? crossSpaceCoordinate : {}),
   });
 }

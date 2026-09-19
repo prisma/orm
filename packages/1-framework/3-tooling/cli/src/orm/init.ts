@@ -137,8 +137,8 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
 
       const deps = [targetPackageName(inputs.target, scaffold.resolveImportSpecifier), 'dotenv'];
       // The CLI the scaffolded scripts run is `prisma`, the unified CLI's
-      // published name, whose v8 line publishes under the `next` dist-tag (the
-      // `prisma-next` shim is no longer published). It is the package that
+      // published name, whose v8 line publishes under the `latest` dist-tag (the
+      // standalone shim is no longer published). It is the package that
       // carries the `prisma` binary, which is what the scaffolded scripts
       // invoke. `@prisma/cli-engine` — the config file's
       // defineConfig import — is deliberately absent here: the CLI declares it
@@ -147,7 +147,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
       // scaffolded files reference process.env, which only typechecks with
       // Node's ambient types present; a project that already pins @types/node
       // keeps its own major.
-      const cliDevDeps = ['prisma@next'];
+      const cliDevDeps = ['prisma@latest'];
       const devDeps: string[] = scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node'];
 
       const findings: Diagnostic[] = [];

@@ -8,9 +8,9 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (mongodb matrix entry). Upstream seeds one Comment (required content, always set),
 // deleteMany by id, then asserts `count === 0` via a follow-up count().
 //
-// prisma-next's deleteMany equivalent is `.where({ _id }).deleteAndCount()`, which
+// Prisma 8's deleteMany equivalent is `.where({ _id }).deleteAndCount()`, which
 // returns the number deleted. The "rows are gone" post-condition is verified
-// faithfully by re-reading: `.where({ _id }).first()` returns null. prisma-next has
+// faithfully by re-reading: `.where({ _id }).first()` returns null. Prisma 8 has
 // no read-side count() to mirror the upstream verification query.
 //
 // This suite is not matrix-parameterised upstream (content is always set), so this

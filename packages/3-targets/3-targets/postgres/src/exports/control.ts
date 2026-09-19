@@ -53,7 +53,10 @@ const postgresTargetDescriptor: SqlControlTargetDescriptor<'postgres', PostgresP
         return createPostgresMigrationPlanner(adapter);
       },
       createRunner(family) {
-        return createPostgresMigrationRunner(family) as MigrationRunner<'sql', 'postgres'>;
+        return blindCast<
+          MigrationRunner<'sql', 'postgres'>,
+          'Postgres migration runner implements the framework migration runner surface for sql/postgres'
+        >(createPostgresMigrationRunner(family));
       },
       contractToSchema(contract, frameworkComponents) {
         const expander = buildNativeTypeExpander(frameworkComponents);
@@ -95,5 +98,10 @@ export {
   INSTANT_NOW_GENERATOR_ID,
   instantNowControlDescriptor,
 } from '../core/instant-now-generator';
+export { decodePostgresListText, parsePostgresListText } from '../core/list-decoder';
+export {
+  PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+  plainDateTimeNowControlDescriptor,
+} from '../core/plain-date-time-now-generator';
 
 export default postgresTargetDescriptor;

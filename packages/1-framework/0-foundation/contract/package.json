@@ -1,11 +1,11 @@
 {
   "name": "@internal/contract",
   "private": true,
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.11",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Data contract type definitions and JSON schema for Prisma Next",
+  "description": "Data contract type definitions and JSON schema for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
@@ -16,13 +16,13 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/utils": "workspace:8.0.0-rc.8",
+    "@internal/utils": "workspace:8.0.0-rc.11",
     "@standard-schema/spec": "^1.1.0",
     "arktype": "catalog:"
   },
   "devDependencies": {
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@repo/tsdown": "workspace:8.0.0-rc.11",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

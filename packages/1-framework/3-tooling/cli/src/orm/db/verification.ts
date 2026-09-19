@@ -25,9 +25,13 @@ import { sanitizeErrorMessage } from '../../utils/command-helpers';
 import { contractPathFor, displayPath } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 
-/** The contract both verification commands read, and where it was read from. */
+/**
+ * The contract both verification commands read, and where it was read from.
+ * `json` is the parsed file as read, for commands that also store it.
+ */
 export interface EmittedContract {
   readonly contract: Contract;
+  readonly json: Record<string, unknown>;
   readonly path: string;
   readonly displayPath: string;
 }
@@ -76,8 +80,10 @@ export async function readEmittedContract(inputs: {
 
   const familyInstance = inputs.config.family.create(createControlStack(inputs.config));
   try {
+    const json = castAs<Record<string, unknown>>(JSON.parse(content));
     return ok({
-      contract: familyInstance.deserializeContract(castAs<unknown>(JSON.parse(content))),
+      contract: familyInstance.deserializeContract(json),
+      json,
       path,
       displayPath: relativePath,
     });

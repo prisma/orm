@@ -125,6 +125,7 @@
             "relations": {
               "followee": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "followeeId"
@@ -140,6 +141,7 @@
               },
               "follower": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "followerId"

@@ -6,12 +6,12 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/composites/list/create.ts
 // (mongodb matrix entry).
 //
-// Upstream wraps the composite list in `{ set: [...] }`; prisma-next takes the
+// Upstream wraps the composite list in `{ set: [...] }`; Prisma 8 takes the
 // array directly, so "set" and "set shorthand" collapse to the same ORM call.
 //
 // Upstream `set null` / `set null shorthand` assert BOTH a type error and a
 // runtime Prisma "Argument `set`/`contents` must not be null" throw. In
-// prisma-next `contents` is a required non-null list: `null` is rejected at the
+// Prisma 8 `contents` is a required non-null list: `null` is rejected at the
 // type level (the @ts-expect-error holds), and MongoDB rejects it through the
 // provisioned collection validator.
 

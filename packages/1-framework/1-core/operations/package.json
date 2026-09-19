@@ -1,11 +1,11 @@
 {
   "name": "@internal/operations",
   "private": true,
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.11",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Target-neutral operation registry and capability helpers for Prisma Next",
+  "description": "Target-neutral operation registry and capability helpers for Prisma 8",
   "scripts": {
     "build": "tsdown",
     "test": "vitest run --passWithNoTests",
@@ -16,12 +16,12 @@
     "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
   },
   "dependencies": {
-    "@internal/utils": "workspace:8.0.0-rc.8"
+    "@internal/utils": "workspace:8.0.0-rc.11"
   },
   "devDependencies": {
-    "@repo/test-utils": "workspace:8.0.0-rc.8",
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@repo/test-utils": "workspace:8.0.0-rc.11",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@repo/tsdown": "workspace:8.0.0-rc.11",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

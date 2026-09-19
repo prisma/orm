@@ -104,7 +104,7 @@ export async function dataTransform<TContract extends Contract<SqlStorage>>(
 ): Promise<SqlMigrationPlanOperation<PostgresPlanTargetDetails>> {
   const runClosures: readonly DataTransformClosure[] = Array.isArray(options.run)
     ? options.run
-    : [options.run as DataTransformClosure];
+    : [options.run];
 
   const checkPlan = options.check
     ? await invokeAndLower(options.check, contract, adapter, name)
@@ -174,7 +174,7 @@ function isBuildable(value: unknown): value is Buildable {
     typeof value === 'object' &&
     value !== null &&
     'build' in value &&
-    typeof (value as { build: unknown }).build === 'function'
+    typeof Reflect.get(value, 'build') === 'function'
   );
 }
 

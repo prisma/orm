@@ -1,6 +1,6 @@
 # @internal/sql-contract
 
-SQL contract types, validators, and IR factories for Prisma Next.
+SQL contract types, validators, and IR factories for Prisma 8.
 
 ## Overview
 

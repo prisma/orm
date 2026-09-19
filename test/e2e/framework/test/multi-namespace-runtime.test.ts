@@ -116,6 +116,7 @@ function buildMultiNamespaceRuntimeContract(): Contract<SqlStorage> {
               relations: {
                 author: {
                   cardinality: 'N:1',
+                  nullable: false,
                   on: { localFields: ['authorId'], targetFields: ['id'] },
                   to: { model: 'User', namespace: 'auth' },
                 },

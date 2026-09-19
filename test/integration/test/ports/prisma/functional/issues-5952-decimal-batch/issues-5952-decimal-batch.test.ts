@@ -8,14 +8,14 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Upstream seeds two Resource rows (decimal @unique) with decimals '1.2' and '2.4'
 // and reads them back concurrently, asserting each round-trips as `new Prisma.Decimal(...)`.
-// In prisma-next Decimal (pg/numeric@1) is stored/returned as a plain string; the
+// In Prisma 8 Decimal (pg/numeric@1) is stored/returned as a plain string; the
 // faithful equivalent asserts the returned string equals the seeded decimal string.
 //
 // Dispositions (per upstream test):
 //   - 'findUnique decimal with Promise.all'      → PORTED: two concurrent `.first({decimal})`.
 //   - 'findFirst  decimal with Promise.all'      → PORTED: two concurrent `.where({decimal}).first()`.
 //   - 'findUnique decimal with $transaction([])' → NON-PORTED: array/batch `$transaction([...])`
-//     is absent; prisma-next only has the interactive `transaction(cb)` facade, a different
+//     is absent; Prisma 8 only has the interactive `transaction(cb)` facade, a different
 //     execution path that does not exercise the batch request pipeline this regression depends on.
 //   - 'findFirst  decimal with $transaction([])' → NON-PORTED (same reason).
 

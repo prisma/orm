@@ -1,0 +1,487 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "AVeryLongModelNameThatKeepsGoingAndGoingForever": {
+            "storage": {
+              "table": "AVeryLongModelNameThatKeepsGoingAndGoingForever",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "aVeryLongColumnNameThatAlsoKeepsGoingAndGoing": {
+                  "column": "aVeryLongColumnNameThatAlsoKeepsGoingAndGoing"
+                },
+                "anotherVeryLongColumnNameThatIsAlsoQuiteLengthy": {
+                  "column": "anotherVeryLongColumnNameThatIsAlsoQuiteLengthy"
+                },
+                "short": {
+                  "column": "short"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "aVeryLongColumnNameThatAlsoKeepsGoingAndGoing": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "anotherVeryLongColumnNameThatIsAlsoQuiteLengthy": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "short": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          },
+          "Örebrö_Ünïcödé_ModelNameWithMultiByteCharactersInIt": {
+            "storage": {
+              "table": "Örebrö_Ünïcödé_ModelNameWithMultiByteCharactersInIt",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "ünïcödé_cölümn_näme_thät_ïs_älsö_vëry_löng": {
+                  "column": "ünïcödé_cölümn_näme_thät_ïs_älsö_vëry_löng"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "ünïcödé_cölümn_näme_thät_ïs_älsö_vëry_löng": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          },
+          "AVeryLongModelNameThatKeepsGoingAndGoingForeverX": {
+            "storage": {
+              "table": "AVeryLongModelNameThatKeepsGoingAndGoingForeverX",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "others": {
+                "to": {
+                  "namespace": "public",
+                  "model": "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["A"]
+                },
+                "through": {
+                  "table": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryL",
+                  "namespaceId": "public",
+                  "parentColumns": ["A"],
+                  "childColumns": ["B"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing": {
+            "storage": {
+              "table": "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "firsts": {
+                "to": {
+                  "namespace": "public",
+                  "model": "AVeryLongModelNameThatKeepsGoingAndGoingForeverX"
+                },
+                "cardinality": "N:M",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["B"]
+                },
+                "through": {
+                  "table": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryL",
+                  "namespaceId": "public",
+                  "parentColumns": ["B"],
+                  "childColumns": ["A"],
+                  "targetColumns": ["id"]
+                }
+              }
+            }
+          },
+          "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123": {
+            "storage": {
+              "table": "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "col": {
+                  "column": "col"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "col": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          },
+          "AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing": {
+            "storage": {
+              "table": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryL",
+              "namespaceId": "public",
+              "fields": {
+                "A": {
+                  "column": "A"
+                },
+                "B": {
+                  "column": "B"
+                }
+              }
+            },
+            "fields": {
+              "A": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "B": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "anotherVeryLongModelNameThatAlsoKeepsGoingAndGoing": {
+                "to": {
+                  "namespace": "public",
+                  "model": "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["B"],
+                  "targetFields": ["id"]
+                }
+              },
+              "aVeryLongModelNameThatKeepsGoingAndGoingForeverX": {
+                "to": {
+                  "namespace": "public",
+                  "model": "AVeryLongModelNameThatKeepsGoingAndGoingForeverX"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["A"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "AVeryLongModelNameThatKeepsGoingAndGoingForever": {
+      "namespace": "public",
+      "model": "AVeryLongModelNameThatKeepsGoingAndGoingForever"
+    },
+    "Örebrö_Ünïcödé_ModelNameWithMultiByteCharactersInIt": {
+      "namespace": "public",
+      "model": "Örebrö_Ünïcödé_ModelNameWithMultiByteCharactersInIt"
+    },
+    "AVeryLongModelNameThatKeepsGoingAndGoingForeverX": {
+      "namespace": "public",
+      "model": "AVeryLongModelNameThatKeepsGoingAndGoingForeverX"
+    },
+    "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing": {
+      "namespace": "public",
+      "model": "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing"
+    },
+    "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123": {
+      "namespace": "public",
+      "model": "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123"
+    },
+    "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryL": {
+      "namespace": "public",
+      "model": "AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "40c7273dadf53f2f415c2a8199295cc80705b6f10cd7f96ce607ad50b5cf4aea",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "AVeryLongModelNameThatKeepsGoingAndGoingForever": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "aVeryLongColumnNameThatAlsoKeepsGoingAndGoing": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "anotherVeryLongColumnNameThatIsAlsoQuiteLengthy": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "short": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "AVeryLongModelNameThatKeepsGoingAndGoingForever_short_aVery_key",
+                  "unique": true,
+                  "columns": ["short", "aVeryLongColumnNameThatAlsoKeepsGoingAndGoing"]
+                },
+                {
+                  "name": "AVeryLongModelNameThatKeepsGoingAndGoingForever_anotherVery_key",
+                  "unique": true,
+                  "columns": ["anotherVeryLongColumnNameThatIsAlsoQuiteLengthy"]
+                },
+                {
+                  "name": "AVeryLongModelNameThatKeepsGoingAndGoingForever_aVeryLongCo_idx",
+                  "unique": false,
+                  "columns": ["aVeryLongColumnNameThatAlsoKeepsGoingAndGoing"]
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Örebrö_Ünïcödé_ModelNameWithMultiByteCharactersInIt": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "ünïcödé_cölümn_näme_thät_ïs_älsö_vëry_löng": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "Örebrö_Ünïcödé_ModelNameWithMultiByteCharactersInIt__idx",
+                  "unique": false,
+                  "columns": ["ünïcödé_cölümn_näme_thät_ïs_älsö_vëry_löng"]
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "AVeryLongModelNameThatKeepsGoingAndGoingForeverX": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "col": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "Exactly63CharactersLongNameAbcdefghijklmnopqrstuvwxyz0123_c_idx",
+                  "unique": false,
+                  "columns": ["col"]
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryL": {
+              "columns": {
+                "A": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "B": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnot_B_index",
+                  "unique": false,
+                  "columns": ["B"]
+                }
+              ],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryL",
+                    "columns": ["A"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "AVeryLongModelNameThatKeepsGoingAndGoingForeverX",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade"
+                },
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "_AVeryLongModelNameThatKeepsGoingAndGoingForeverXToAnotherVeryL",
+                    "columns": ["B"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "AnotherVeryLongModelNameThatAlsoKeepsGoingAndGoing",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "cascade",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["A", "B"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

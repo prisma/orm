@@ -49,8 +49,9 @@ async function fileExists(path: string): Promise<boolean> {
  * `@prisma/orm-postgres` import and (via walk-up) the config for the opened
  * document. When `sourceFile` points at an existing file, its contents are
  * copied so the playground edits a sandbox copy rather than the user's file;
- * otherwise an empty scratch file is created. The staged file reuses the
- * source's basename (or `scratch.psl`) so the editor tab reads naturally.
+ * otherwise a scratch file with the Prisma Next directive is created. The
+ * staged file reuses the source's basename (or `scratch.psl`) so the editor tab
+ * reads naturally.
  */
 async function stageSchema(sourceFile?: string): Promise<string> {
   await mkdir(PLAYGROUND_DIR, { recursive: true });
@@ -59,7 +60,7 @@ async function stageSchema(sourceFile?: string): Promise<string> {
   if (sourceFile !== undefined && (await fileExists(sourceFile))) {
     await copyFile(sourceFile, target);
   } else if (!(await fileExists(target))) {
-    await writeFile(target, '', 'utf8');
+    await writeFile(target, '// use prisma-8\n\n', 'utf8');
   }
   return target;
 }

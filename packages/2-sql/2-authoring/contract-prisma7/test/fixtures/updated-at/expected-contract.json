@@ -1,0 +1,150 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Timestamps": {
+            "storage": {
+              "table": "Timestamps",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "updatedAt": {
+                  "column": "updatedAt"
+                },
+                "updatedAtTz": {
+                  "column": "updatedAtTz"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "updatedAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": false
+              },
+              "updatedAtTz": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Timestamps": {
+      "namespace": "public",
+      "model": "Timestamps"
+    }
+  },
+  "execution": {
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "public",
+            "table": "Timestamps",
+            "column": "updatedAt"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "plainDateTimeNow"
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "plainDateTimeNow"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "table": "Timestamps",
+            "column": "updatedAtTz"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "instantNow"
+          },
+          "onUpdate": {
+            "kind": "generator",
+            "id": "instantNow"
+          }
+        }
+      ]
+    },
+    "executionHash": "b252358adc4d61bfe2500d33ccdbe3c463160a2bf200f34d96bd831f28fe042f"
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "3fb4c16e2064060f36331fbce1e9906a62e9d0cc9b23883a751ea5f1cba3f809",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Timestamps": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "updatedAt": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "updatedAtTz": {
+                  "nativeType": "timestamptz",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

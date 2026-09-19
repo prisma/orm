@@ -139,24 +139,18 @@ describe('hasProjectManifest', () => {
 
 describe('formatRunCommand', () => {
   it('uses npx for npm', () => {
-    expect(formatRunCommand('npm', 'prisma-next', 'contract emit')).toBe(
-      'npx prisma-next contract emit',
-    );
+    expect(formatRunCommand('npm', 'prisma', 'contract emit')).toBe('npx prisma contract emit');
   });
 
   it('uses deno run npm: for deno', () => {
-    expect(formatRunCommand('deno', 'prisma-next', 'contract emit')).toBe(
-      'deno run npm:prisma-next contract emit',
+    expect(formatRunCommand('deno', 'prisma', 'contract emit')).toBe(
+      'deno run npm:prisma contract emit',
     );
   });
 
   it('uses pm directly for pnpm/yarn/bun', () => {
-    expect(formatRunCommand('pnpm', 'prisma-next', 'contract emit')).toBe(
-      'pnpm prisma-next contract emit',
-    );
-    expect(formatRunCommand('bun', 'prisma-next', 'contract emit')).toBe(
-      'bun prisma-next contract emit',
-    );
+    expect(formatRunCommand('pnpm', 'prisma', 'contract emit')).toBe('pnpm prisma contract emit');
+    expect(formatRunCommand('bun', 'prisma', 'contract emit')).toBe('bun prisma contract emit');
   });
 });
 
@@ -180,11 +174,11 @@ describe('formatAddArgs', () => {
 
 describe('formatAddDevArgs', () => {
   it('uses --dev for deno with npm: prefix', () => {
-    expect(formatAddDevArgs('deno', ['prisma-next'])).toEqual(['add', '--dev', 'npm:prisma-next']);
+    expect(formatAddDevArgs('deno', ['prisma'])).toEqual(['add', '--dev', 'npm:prisma']);
   });
 
   it('uses -D for other managers', () => {
-    expect(formatAddDevArgs('npm', ['prisma-next'])).toEqual(['add', '-D', 'prisma-next']);
+    expect(formatAddDevArgs('npm', ['prisma'])).toEqual(['add', '-D', 'prisma']);
   });
 });
 

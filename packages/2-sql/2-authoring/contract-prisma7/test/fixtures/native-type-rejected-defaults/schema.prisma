@@ -1,0 +1,12 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model T {
+  id   Int    @id
+  gen  String @default(uuid()) @db.Citext
+  expr String @default(dbgenerated("'a'::citext")) @db.Citext
+  none String @default(dbgenerated()) @db.Citext
+  lit  String @default("a") @db.Citext
+  cuid String @default(cuid(2)) @db.Citext
+}

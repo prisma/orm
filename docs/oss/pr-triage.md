@@ -41,7 +41,7 @@ Read the **base branch**, not the title and not the paths.
 
 | Base branch | Line | What we accept |
 | --- | --- | --- |
-| `main` | Prisma Next (8.x) | Bug fixes and directionally aligned features |
+| `main` | Prisma 8 (8.x) | Bug fixes and directionally aligned features |
 | `v7`, `7.9.x` | Prisma 7 | Bug fixes only |
 
 A PR whose title says Prisma 8 but which targets `v7` is targeting Prisma 7. If the base branch looks wrong for the change, that is the first thing to ask about — a rebase onto the right base is cheaper than a review against the wrong one.
@@ -50,7 +50,7 @@ A PR whose title says Prisma 8 but which targets `v7` is targeting Prisma 7. If 
 
 **Prisma 7 (`v7`, `7.9.x`): bug fixes only.** Features do not land on the 7.x line; direct the contributor to `main` or explain that the API is closed. Be specific about which it is — "we're not taking features on 7.x, but this would be welcome against `main`" is a useful reply, and "no thanks" is not.
 
-**Prisma Next (`main`): fixes are in scope by default, features need a direction call.** See step 5.
+**Prisma 8 (`main`): fixes are in scope by default, features need a direction call.** See step 5.
 
 **Any line: is this a beginner asking for direction rather than proposing a change?** The signals are a PR that describes an idea instead of implementing one, an empty or near-empty diff, a body that asks what to do next, or a change that restates something the docs already cover. Close it politely with a link to [`CONTRIBUTING.md`](../../CONTRIBUTING.md) and the [Discord](https://pris.ly/discord), where open-ended questions belong. Thank them and be concrete about where the conversation should continue. This is not a rejection of the person.
 
@@ -81,7 +81,7 @@ Note that CodeRabbit does not review PRs whose base is not the default branch. O
 
 This applies to features and refactors on `main`. Fixes rarely need it.
 
-Our plans are documented in the repository — [`ROADMAP.md`](../../ROADMAP.md), [`docs/architecture docs/adrs/`](../architecture%20docs/adrs/), and the specs and plans under [`projects/`](../../projects/). Check them before answering, and cite what you found. "Not on the roadmap" is not by itself a reason to decline; the roadmap records what we committed to, not the full set of things we would accept.
+Our plans are documented in the repository — [`docs/architecture docs/adrs/`](../architecture%20docs/adrs/), the [feature scoreboard](../../scorecard.md), and the specs and plans under [`projects/`](../../projects/). Check them before answering, and cite what you found. "Not planned" is not by itself a reason to decline; the plans record what we committed to, not the full set of things we would accept.
 
 Questions that resolve most cases:
 

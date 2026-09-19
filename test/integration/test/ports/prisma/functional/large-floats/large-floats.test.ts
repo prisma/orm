@@ -8,7 +8,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Upstream seeds five Floats rows with large/extreme float values and asserts
 // each round-trips exactly. The upstream note about js_pg float precision says
-// Postgres < 12 may be affected; PGlite (which prisma-next's integration tests
+// Postgres < 12 may be affected; PGlite (which Prisma 8's integration tests
 // use) uses a modern libpq under the hood and the issue is not present.
 //
 // API translation: `prisma.floats.create({ data: { value } })` → `db.public.Floats.create({ id, value })`

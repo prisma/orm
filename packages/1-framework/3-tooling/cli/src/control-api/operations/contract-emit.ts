@@ -3,8 +3,11 @@ import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
 import { createControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
+import type { Diagnostic } from '@internal/utils/structured-error';
+import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import { dirname, join } from 'pathe';
 import { errorContractConfigMissing, errorRuntime } from '../../utils/cli-errors';
 import { queueEmitByOutput } from '../../utils/emit-queue';
@@ -49,13 +52,81 @@ function failedToResolveContractSource(
   fix: string,
   meta?: Record<string, unknown>,
   cause?: unknown,
+  diagnostics?: readonly Diagnostic[],
 ) {
   return errorRuntime('CONTRACT.SOURCE_LOAD_FAILED', 'Failed to resolve contract source', {
     why,
     fix,
+    ...ifDefined('diagnostics', diagnostics),
     ...ifDefined('meta', meta),
     ...ifDefined('cause', cause),
   });
+}
+
+interface DiagnosticLocation {
+  readonly sourceId: string | undefined;
+  readonly line: number | undefined;
+  readonly character: number | undefined;
+}
+
+function diagnosticLocation(diagnostic: Record<string, unknown>): DiagnosticLocation {
+  const sourceId = typeof diagnostic['sourceId'] === 'string' ? diagnostic['sourceId'] : undefined;
+  const span = isRecord(diagnostic['span']) ? diagnostic['span'] : undefined;
+  const start = span && isRecord(span['start']) ? span['start'] : undefined;
+  const line = start && typeof start['line'] === 'number' ? start['line'] : undefined;
+  // biome-ignore lint/plugin/no-family-vocabulary: a text position in the source file; the span calls it column
+  const character = start && typeof start['column'] === 'number' ? start['column'] : undefined;
+  return { sourceId, line, character };
+}
+
+function formatLocation({ sourceId, line, character }: DiagnosticLocation): string | undefined {
+  if (sourceId === undefined) return undefined;
+  return line !== undefined && character !== undefined
+    ? `${sourceId}:${line}:${character}`
+    : sourceId;
+}
+
+/**
+ * The finding the CLI prints under the error, one per source diagnostic. The
+ * terminal renderer prints a finding's code and summary and nothing of its
+ * `where`, so the summary starts with the location. A source code that is not
+ * yet dotted is wrapped as `CONTRACT.SOURCE_DIAGNOSTIC` and named in the summary.
+ */
+function sourceDiagnosticToFinding(raw: unknown): Diagnostic | undefined {
+  if (!isRecord(raw)) return undefined;
+  const code = typeof raw['code'] === 'string' ? raw['code'] : 'diagnostic';
+  const message = typeof raw['message'] === 'string' ? raw['message'] : '';
+  const location = diagnosticLocation(raw);
+  const formatted = formatLocation(location);
+  const locatedSummary = (text: string) =>
+    formatted === undefined ? text : `${formatted} ${text}`;
+  const finding = {
+    severity: 'error',
+    nextActions: [],
+    ...ifDefined(
+      'where',
+      location.sourceId === undefined
+        ? undefined
+        : { path: location.sourceId, ...ifDefined('line', location.line) },
+    ),
+  } as const;
+  return isStructuredErrorCode(code)
+    ? { code, summary: locatedSummary(message), ...finding }
+    : {
+        code: 'CONTRACT.SOURCE_DIAGNOSTIC',
+        summary: locatedSummary(`${code}: ${message}`),
+        ...finding,
+        meta: { code },
+      };
+}
+
+function sourceDiagnosticsToFindings(diagnostics: readonly unknown[]): Diagnostic[] {
+  const findings: Diagnostic[] = [];
+  for (const raw of diagnostics) {
+    const finding = sourceDiagnosticToFinding(raw);
+    if (finding !== undefined) findings.push(finding);
+  }
+  return findings;
 }
 
 type ValidatedProviderResult =
@@ -63,18 +134,8 @@ type ValidatedProviderResult =
   | { readonly ok: false; readonly error: ReturnType<typeof errorRuntime> };
 
 function diagnosticLocationSuffix(diagnostic: Record<string, unknown>): string {
-  const sourceId = typeof diagnostic['sourceId'] === 'string' ? diagnostic['sourceId'] : undefined;
-  const span = isRecord(diagnostic['span']) ? diagnostic['span'] : undefined;
-  const start = span && isRecord(span['start']) ? span['start'] : undefined;
-  const line = start && typeof start['line'] === 'number' ? start['line'] : undefined;
-  const column = start && typeof start['column'] === 'number' ? start['column'] : undefined;
-  if (sourceId && line !== undefined && column !== undefined) {
-    return ` (${sourceId}:${line}:${column})`;
-  }
-  if (sourceId) {
-    return ` (${sourceId})`;
-  }
-  return '';
+  const formatted = formatLocation(diagnosticLocation(diagnostic));
+  return formatted === undefined ? '' : ` (${formatted})`;
 }
 
 function mapDiagnosticsToIssues(
@@ -128,16 +189,31 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
       ),
     };
   }
+  if (
+    failure['diagnostics'].some(
+      (diagnostic: unknown) => !isRecord(diagnostic) || typeof diagnostic['sourceId'] !== 'string',
+    )
+  ) {
+    return {
+      ok: false,
+      error: failedToResolveContractSource(
+        'Contract source provider returned malformed failure result: each diagnostic must include a string sourceId.',
+        'Include the source filename in each diagnostic returned by contract.source.load.',
+      ),
+    };
+  }
   return {
     ok: false,
     error: failedToResolveContractSource(
       String(failure['summary']),
-      'Fix contract source diagnostics and return ok(Contract).',
+      'Edit the schema where each finding points, then run contract emit again.',
       {
         diagnostics: failure['diagnostics'],
         issues: mapDiagnosticsToIssues(failure['diagnostics']),
         ...ifDefined('providerMeta', failure['meta']),
       },
+      undefined,
+      sourceDiagnosticsToFindings(failure['diagnostics']),
     ),
   };
 }
@@ -263,7 +339,10 @@ export async function executeContractEmit(
       // can decorate first; the subsequent serialize→deserialize round-trip
       // re-narrows the envelope into the precise type.
       const enrichedIR = enrichContract(
-        validatedContract.value as unknown as Contract,
+        blindCast<
+          Contract,
+          'Provider payload is enriched before target serialization and family validation'
+        >(validatedContract.value),
         frameworkComponents,
       );
       const rawContractJson = config.target.contractSerializer.serializeContract(enrichedIR);
@@ -283,6 +362,7 @@ export async function executeContractEmit(
         dependencies.emit(deserializedContract, stack, config.family.emission, {
           outputJsonPath,
           serializeContract,
+          deserializeContract: (json) => familyInstance.deserializeContract(json),
           // Which package names the generated files may import is decided by
           // the nearest manifest above the file being written — the package
           // that will import it, and the same directory `validateContractDeps`
@@ -291,6 +371,7 @@ export async function executeContractEmit(
           resolveImportSpecifier: createProjectSpecifierResolver(configPath ?? outputJsonPath),
           ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
           ...ifDefined('sortStorage', contractSerializer.sortStorage),
+          ...ifDefined('supportsNamespaces', config.target.supportsNamespaces),
         }),
       );
     } catch (error) {

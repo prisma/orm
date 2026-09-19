@@ -1,6 +1,6 @@
 # @internal/mongo-runtime
 
-MongoDB runtime executor for Prisma Next.
+MongoDB runtime executor for Prisma 8.
 
 ## Package Classification
 

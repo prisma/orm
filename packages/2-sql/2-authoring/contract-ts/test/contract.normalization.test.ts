@@ -252,6 +252,7 @@ describe('SqlContractSerializer structural validation', () => {
               to: crossRef('User'),
               on: { localFields: ['userId'], targetFields: ['id'] },
               cardinality: 'N:1',
+              nullable: false,
             },
           },
         },

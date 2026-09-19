@@ -9,7 +9,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // supported there).
 //
 // Upstream uses implicit many-to-many with two named relations ("upVotes",
-// "downVotes") between Comment and User. Prisma-next PSL requires explicit
+// "downVotes") between Comment and User. Prisma 8 PSL requires explicit
 // junction models; we author UpVote and DownVote with composite @@id on the
 // FK pair, which produces the same N:M relation with a `through` descriptor.
 //

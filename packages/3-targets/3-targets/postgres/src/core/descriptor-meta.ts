@@ -17,6 +17,7 @@ import { postgresCreateNamespace } from './postgres-schema';
 const postgresTargetDescriptorMetaBase = {
   ...postgresTargetDescriptorMetaRuntime,
   defaultNamespaceId: DEFAULT_NAMESPACE_ID,
+  supportsNamespaces: true,
   indexTypes: postgresIndexTypes,
   authoring: {
     type: postgresAuthoringTypes,

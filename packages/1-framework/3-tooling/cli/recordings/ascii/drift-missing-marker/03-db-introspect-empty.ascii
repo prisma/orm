@@ -96,7 +96,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Introspect shows empty schema [empty database]
-> prisma-next db introspect
+> prisma db introspect
 
 
 
@@ -128,7 +128,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Introspect shows empty schema [empty database]
-> prisma-next db introspect
+> prisma db introspect
 
 
 
@@ -160,7 +160,7 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Introspect shows empty schema [empty database]
-> prisma-next db introspect
+> prisma db introspect
 
 
 
@@ -192,9 +192,9 @@ bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file o
 ────────────────────────────────────────────────────────────────────────────────
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > # Introspect shows empty schema [empty database]
-> prisma-next db introspect
+> prisma db introspect
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
-prisma-next db introspect → Inspect the database schema
+prisma db introspect → Inspect the database schema
 │
 │ config:               prisma.config.ts
 │ database:             postgres://****:****@127.0.0.1:5433/prisma_rec_2

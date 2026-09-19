@@ -72,6 +72,10 @@ function pipelineInputsFromStack(stack: ControlStack): PipelineInputs {
   return {
     scalarTypes: [...stack.scalarTypes],
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
+    authoringContributions: stack.authoringContributions,
+    ...(stack.controlMutationDefaults === undefined
+      ? {}
+      : { controlMutationDefaults: stack.controlMutationDefaults }),
   };
 }
 

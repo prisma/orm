@@ -23,7 +23,7 @@ import {
 } from '@prisma/orm-postgres/adapter/column-types';
 import postgresAdapter from '@prisma/orm-postgres/adapter/control';
 import { extractCodecLookup } from '@prisma/orm-postgres/components/control';
-import { defineContract } from '@prisma/orm-postgres/contract-builder';
+import { autoincrement, defineContract, now } from '@prisma/orm-postgres/contract-builder';
 import { type } from 'arktype';
 
 const postgresCodecLookup = extractCodecLookup([postgresAdapter, pgvectorPack, arktypeJsonPack]);
@@ -38,9 +38,9 @@ export const contract = defineContract(
   ({ field, model, rel }) => {
     const UserBase = model('User', {
       fields: {
-        id: field.column(int4Column).defaultSql('autoincrement()').id(),
+        id: field.column(int4Column).default(autoincrement()).id(),
         email: field.column(varcharColumn(255)).unique({ name: 'user_email_key' }),
-        createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()').column('created_at'),
+        createdAt: field.column(timestamptzTemporalColumn).default(now()).column('created_at'),
         updatedAt: field.column(timestamptzTemporalColumn).optional().column('update_at'),
         profile: field.column(jsonbColumn).optional(),
       },
@@ -48,10 +48,10 @@ export const contract = defineContract(
 
     const PostBase = model('Post', {
       fields: {
-        id: field.column(int4Column).defaultSql('autoincrement()').id(),
+        id: field.column(int4Column).default(autoincrement()).id(),
         userId: field.column(int4Column),
         title: field.column(textColumn),
-        createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()').column('created_at'),
+        createdAt: field.column(timestamptzTemporalColumn).default(now()).column('created_at'),
         updatedAt: field.column(timestamptzTemporalColumn).optional().column('update_at'),
         published: field.column(boolColumn),
         meta: field.column(jsonColumn).optional(),
@@ -60,10 +60,10 @@ export const contract = defineContract(
 
     const Comment = model('Comment', {
       fields: {
-        id: field.column(int4Column).defaultSql('autoincrement()').id(),
+        id: field.column(int4Column).default(autoincrement()).id(),
         postId: field.column(int4Column),
         content: field.column(textColumn),
-        createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()').column('created_at'),
+        createdAt: field.column(timestamptzTemporalColumn).default(now()).column('created_at'),
         updatedAt: field.column(timestamptzTemporalColumn).optional().column('update_at'),
       },
       relations: {
@@ -88,7 +88,7 @@ export const contract = defineContract(
 
         ParamTypes: model('ParamTypes', {
           fields: {
-            id: field.column(int4Column).defaultSql('autoincrement()').id(),
+            id: field.column(int4Column).default(autoincrement()).id(),
             name: field.column(varcharColumn(255)).optional(),
             code: field.column(charColumn(16)).optional(),
             price: field.column(numericColumn(10, 2)).optional(),
@@ -112,16 +112,13 @@ export const contract = defineContract(
               .column(timestamptzStringColumn)
               .default({ kind: 'literal', value: '2024-01-15 10:30:00+00' })
               .column('scheduled_at'),
-            createdAt: field
-              .column(timestamptzTemporalColumn)
-              .defaultSql('now()')
-              .column('created_at'),
+            createdAt: field.column(timestamptzTemporalColumn).default(now()).column('created_at'),
           },
         }).sql({ table: 'event' }),
 
         LiteralDefaults: model('LiteralDefaults', {
           fields: {
-            id: field.column(int4Column).defaultSql('autoincrement()').id(),
+            id: field.column(int4Column).default(autoincrement()).id(),
             label: field.column(textColumn).default('draft'),
             score: field.column(int4Column).default(0),
             rating: field.column(float8Column).default(3.14),
@@ -134,7 +131,7 @@ export const contract = defineContract(
 
         Embedding: model('Embedding', {
           fields: {
-            id: field.column(int4Column).defaultSql('autoincrement()').id(),
+            id: field.column(int4Column).default(autoincrement()).id(),
             embedding: field.column(vector(1536)),
             profile: field.column(arktypeJson(profileSchema)),
           },

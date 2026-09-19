@@ -6,17 +6,19 @@
 // The upstream schema uses foreignKeyForProvider for FK fields (String).
 // Upstream's issue: field names "postId"/"mediaId" conflicted with generated
 // Prisma args types (PostMedia model used "postId"/"mediaId" as both FK columns
-// and the generated args type names). prisma-next uses structural types with no
+// and the generated args type names). Prisma 8 uses structural types with no
 // codegen naming conflicts.
 
 model Post {
   id    String      @id @default(cuid(2))
   media PostMedia[]
+  @@map("post")
 }
 
 model Media {
   id    String      @id @default(cuid(2))
   posts PostMedia[]
+  @@map("media")
 }
 
 model PostMedia {
@@ -27,4 +29,5 @@ model PostMedia {
   mediaId String
 
   @@unique([postId, mediaId])
+  @@map("postMedia")
 }

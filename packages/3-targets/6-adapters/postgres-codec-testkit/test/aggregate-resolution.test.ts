@@ -110,6 +110,15 @@ describe('PostgreSQL aggregate resolution', () => {
     });
   });
 
+  it.each(['min', 'max'])('preserves Date codec identity and precision for %s', (operation) => {
+    expect(
+      registry.resolve(operation, {
+        codecId: 'pg/timestamptz-date@1',
+        typeParams: { precision: 3 },
+      })?.output,
+    ).toEqual({ codecId: 'pg/timestamptz-date@1', typeParams: { precision: 3 } });
+  });
+
   it('prefers the exact varchar overload over the textual fallback', () => {
     expect(
       registry.resolve('min', { codecId: 'pg/varchar@1', typeParams: { length: 10 } })?.output,

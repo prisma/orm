@@ -14,7 +14,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // distinct `Numeric(p, s)` column here (see the fixture named types).
 //
 // The port replaces random generation with representative full-precision values
-// per column and asserts the same round-trip property. prisma-next returns
+// per column and asserts the same round-trip property. Prisma 8 returns
 // Numeric as a branded string (no Prisma.Decimal), so `String(value) === input`
 // is the equivalent of `toFixed() === input`.
 

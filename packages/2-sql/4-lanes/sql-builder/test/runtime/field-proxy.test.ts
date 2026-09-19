@@ -2,6 +2,7 @@ import { coreHash } from '@internal/contract/types';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTable } from '@internal/sql-contract/types';
 import { ColumnRef, IdentifierRef } from '@internal/sql-relational-core/ast';
+import { codecOf } from '@internal/sql-relational-core/expression';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../../1-core/contract/test/test-support';
 import { tableToScope } from '../../src/runtime/builder-base';
@@ -56,7 +57,8 @@ describe('createFieldProxy', () => {
     const proxy = createFieldProxy(usersScope);
     const idExpr = proxy.id as ExpressionImpl;
 
-    expect(idExpr.codec).toEqual(usersScope.topLevel.id.codec);
+    expect(codecOf(idExpr)).toEqual(usersScope.topLevel.id.codec);
+    expect(idExpr).not.toHaveProperty('codec');
   });
 
   it('tableToScope resolves codec by storage table name when alias differs', () => {
@@ -98,13 +100,17 @@ describe('createFieldProxy', () => {
       namespaceId: UNBOUND_NAMESPACE_ID,
       tableName: 'Post',
     });
-    expect(scope.namespaces['post_alias']?.['embedding']?.codec).toEqual({
-      codecId: 'pgvector/vector@1',
-      typeParams: { length: 1536 },
-    });
+    const proxy = createFieldProxy(scope);
+    for (const expression of [proxy['embedding'], proxy['post_alias']?.['embedding']]) {
+      expect(codecOf(expression)).toEqual({
+        codecId: 'pgvector/vector@1',
+        typeParams: { length: 1536 },
+      });
+      expect(expression).not.toHaveProperty('codec');
+    }
   });
 
-  it('codec is undefined for top-level fields without a codec', () => {
+  it('derives the declared codec for top-level fields without a codec ref', () => {
     const ambiguousScope = {
       topLevel: { name: { codecId: 'pg/text@1', nullable: false } },
       namespaces: {
@@ -115,6 +121,6 @@ describe('createFieldProxy', () => {
     const proxy = createFieldProxy(ambiguousScope);
     const nameExpr = proxy.name as ExpressionImpl;
 
-    expect(nameExpr.codec).toBeUndefined();
+    expect(codecOf(nameExpr)).toEqual({ codecId: 'pg/text@1' });
   });
 });

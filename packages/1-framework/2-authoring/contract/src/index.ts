@@ -25,3 +25,12 @@ export {
   isEnumTypeHandle,
   member,
 } from './enum-type';
+export type {
+  LocalFieldNullabilityLookup,
+  ToOneRelationNullability,
+  ToOneRelationNullabilityContradiction,
+} from './relation-nullability';
+export {
+  resolveToOneRelationNullable,
+  withDerivedToOneRelationNullability,
+} from './relation-nullability';

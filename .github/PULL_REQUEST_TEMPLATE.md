@@ -1,5 +1,5 @@
 <!--
-Thanks for contributing to Prisma Next!
+Thanks for contributing to Prisma 8!
 
 Before you submit:
 - Have you read CONTRIBUTING.md?

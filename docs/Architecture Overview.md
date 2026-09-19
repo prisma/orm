@@ -1,8 +1,8 @@
-# Prisma Next — Architecture Overview
+# Prisma 8 — Architecture Overview
 
 ## Agent-First ORM
 
-Prisma Next is an ORM designed for software agents. Agents need deterministic surfaces, machine-readable structure, and tight feedback loops. Prisma Next makes every operation explicit and inspectable so agents—and the humans working alongside them—always know what will happen, why it is safe, and how to adapt it.
+Prisma 8 is an ORM designed for software agents. Agents need deterministic surfaces, machine-readable structure, and tight feedback loops. Prisma 8 makes every operation explicit and inspectable so agents—and the humans working alongside them—always know what will happen, why it is safe, and how to adapt it.
 
 This architecture focuses on three outcomes:
 
@@ -10,7 +10,7 @@ This architecture focuses on three outcomes:
 - **Explicit, machine-readable contracts:** The data contract sets the system boundary, describing schema, capabilities, and policies for both queries and migrations
 - **Guardrails with frequent feedback:** Authoring tools, PPg, and the runtime surface the intent, validation, and policy impact of each operation before it can cause drift
 
-Prisma Next also addresses the largest weakness in Prisma 7: a monolithic, tightly coupled codebase. By modularizing responsibilities, new behaviors are introduced by composing modules and capability packs instead of patching core implementation.
+Prisma 8 also addresses the largest weakness in Prisma 7: a monolithic, tightly coupled codebase. By modularizing responsibilities, new behaviors are introduced by composing modules and capability packs instead of patching core implementation.
 
 ## Guiding Principles
 
@@ -46,7 +46,7 @@ Fast, targeted feedback at authoring, planning, and execution time. AST-first li
 
 ## Architecture at a Glance
 
-Prisma Next is organized around two planes that share the contract and a pinned capability profile
+Prisma 8 is organized around two planes that share the contract and a pinned capability profile
 
 - **Control Plane** (build time): authoring, planning, verifying, and applying contract changes
 - **Execution Plane** (runtime): authoring, validating, and executing query plans against live data
@@ -249,7 +249,7 @@ sequenceDiagram
 | Post-feedback    | PPg ledger, drift detectors, and diagnostics inform authors.     | Policy outcomes and drift indicators feed back to authoring tools. |
 ## Modularity and Extensibility
 
-Prisma 7 required touching multiple layers of a monolithic Rust/TypeScript codebase to add features. Prisma Next treats the core as a stable execution kernel and exposes extension hooks instead.
+Prisma 7 required touching multiple layers of a monolithic Rust/TypeScript codebase to add features. Prisma 8 treats the core as a stable execution kernel and exposes extension hooks instead.
 
 - **Extension packs** supply capabilities, migration operations, codecs, and policies in manifest-driven bundles
 - **Adapters** implement database-specific behavior behind capability interfaces

@@ -30,6 +30,7 @@ export const PG_TIME_TEMPORAL_CODEC_ID = 'pg/time-temporal@1' as const;
 export const PG_DATE_STRING_CODEC_ID = 'pg/date-string@1' as const;
 export const PG_TIMESTAMP_STRING_CODEC_ID = 'pg/timestamp-string@1' as const;
 export const PG_TIMESTAMPTZ_STRING_CODEC_ID = 'pg/timestamptz-string@1' as const;
+export const PG_TIMESTAMPTZ_DATE_CODEC_ID = 'pg/timestamptz-date@1' as const;
 export const PG_TIME_STRING_CODEC_ID = 'pg/time-string@1' as const;
 export const PG_TIMETZ_CODEC_ID = 'pg/timetz@1' as const;
 export const PG_INTERVAL_CODEC_ID = 'pg/interval@1' as const;

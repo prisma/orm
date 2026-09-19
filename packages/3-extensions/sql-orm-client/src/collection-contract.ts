@@ -178,9 +178,6 @@ export interface VariantColumnRef {
  * base-table field map. Base fields are intentionally absent so callers can
  * gate variant qualification strictly to variant-owned fields.
  *
- * `baseModelName` is a default-namespace model name, consistent with the rest
- * of this module; namespace context is bound downstream at table resolution.
- *
  * Uncached on purpose: `resolvePolymorphismInfo` already memoizes the variant
  * lookup, and the remaining work is one pass over the variant's field→column
  * map, so a second cache layer would buy nothing.
@@ -254,8 +251,7 @@ export function getColumnToFieldMap(
 const completeColumnToFieldCache = new WeakMap<object, Map<string, Record<string, string>>>();
 
 /**
- * Like getColumnToFieldMap but includes identity-mapped fields (where field name equals column
- * name). getColumnToFieldMap only returns explicit remaps; this returns ALL column→field entries.
+ * Like getColumnToFieldMap, but a field without a storage `column` maps under its own name.
  */
 export function getCompleteColumnToFieldMap(
   contract: Contract<SqlStorage>,

@@ -10,6 +10,40 @@ describe('postgresRenderCheckExpressions', () => {
     ]);
   });
 
+  it('renders integer, fractional, and negative scalar members without quotes', () => {
+    expect(postgresRenderCheckExpressions({ ...base, memberValues: [1, 2.5, -3] })).toEqual([
+      { kind: 'membership', columnName: 'role', expression: '"role" IN (1, 2.5, -3)' },
+    ]);
+  });
+
+  it('compares numeric arrays with both operands cast to numeric[]', () => {
+    expect(
+      postgresRenderCheckExpressions({ ...base, many: true, memberValues: [1, 2.5, -3] }),
+    ).toEqual([
+      {
+        kind: 'membership',
+        columnName: 'role',
+        expression: '"role"::numeric[] <@ ARRAY[1, 2.5, -3]::numeric[]',
+      },
+      {
+        kind: 'elementNotNull',
+        columnName: 'role',
+        expression: 'array_position("role", NULL) IS NULL',
+      },
+    ]);
+  });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'rejects non-finite numeric member %s',
+    (value) => {
+      for (const many of [false, true]) {
+        expect(() =>
+          postgresRenderCheckExpressions({ ...base, many, memberValues: [1, value] }),
+        ).toThrow(/non-finite numeric member/);
+      }
+    },
+  );
+
   it('renders an array domain enum as an <@ containment predicate', () => {
     expect(
       postgresRenderCheckExpressions({

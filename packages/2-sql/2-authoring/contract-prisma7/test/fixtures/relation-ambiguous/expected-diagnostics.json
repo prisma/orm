@@ -1,0 +1,26 @@
+[
+  {
+    "code": "PSL.PRISMA7_RELATION_UNRESOLVED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Relation field \"User.liked\" is ambiguous: more than one list field on \"Post\" could pair with it. Name both sides with @relation(\"name\")."
+  },
+  {
+    "code": "PSL.PRISMA7_RELATION_UNRESOLVED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Relation field \"User.written\" is ambiguous: more than one list field on \"Post\" could pair with it. Name both sides with @relation(\"name\")."
+  },
+  {
+    "code": "PSL.PRISMA7_RELATION_UNRESOLVED",
+    "file": "schema.prisma",
+    "line": 13,
+    "message": "Relation field \"Post.likers\" is ambiguous: more than one list field on \"User\" could pair with it. Name both sides with @relation(\"name\")."
+  },
+  {
+    "code": "PSL.PRISMA7_RELATION_UNRESOLVED",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "Relation field \"Post.author\" is ambiguous: more than one list field on \"User\" could pair with it. Name both sides with @relation(\"name\")."
+  }
+]

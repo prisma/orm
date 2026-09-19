@@ -6,15 +6,15 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/issues/27455-bytes-id
 // (postgres matrix entry; sqlserver opted-out upstream).
 //
-// Subject: records with Bytes @id are retrievable after create — the prisma-next
+// Subject: records with Bytes @id are retrievable after create — the Prisma 8
 // Bytes type is Uint8Array (not Buffer).
 //
 // Upstream uses `timeTables: { createMany: { data: [...] } }` inside the
-// parent create. In prisma-next this translates to a nested relation callback
+// parent create. In Prisma 8 this translates to a nested relation callback
 // `timeTables: (tts) => tts.create([...])`.
 //
 // Note: `accommodationId` must be provided explicitly in the nested rows
-// because prisma-next nested mutations do not automatically inject the parent FK.
+// because prisma-8 nested mutations do not automatically inject the parent FK.
 
 describe('ports/prisma/functional/issues-27455-bytes-id', () => {
   it(

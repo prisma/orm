@@ -8,7 +8,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Subject: JSON values containing a `$type` key are stored and read back verbatim.
 // Prisma uses `$type` as a tagged-value protocol in some JSON serialisation paths;
-// the regression was that `$type` got stripped or transformed. prisma-next has no
+// the regression was that `$type` got stripped or transformed. Prisma 8 has no
 // such tagged-value protocol, so the key is stored and returned verbatim.
 
 function withIssue21454(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {

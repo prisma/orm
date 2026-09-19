@@ -32,7 +32,9 @@ Neither the framework nor the SQL family knows what `@@rls` means. The Postgres 
 First, the attribute itself — a descriptor naming it, supplying a factory for its parameter spec (no parameters here), and lowering it to a pack entity:
 
 ```ts
-const postgresRlsSpec = modelAttribute('rls', {});
+const postgresRlsSpec = modelAttribute('rls', {
+  documentation: 'Enables PostgreSQL row-level security on this model’s table.',
+});
 const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
 
 export const postgresAuthoringModelAttributes = {

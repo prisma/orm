@@ -11,15 +11,15 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // This port uses two separate roots (required / optional content), mirroring the
 // create port, because upstream is matrix-parameterised on contentProperty.
 //
-// prisma-next: `.where({ _id }).upsert({ create, update: {} })`.
+// Prisma 8: `.where({ _id }).upsert({ create, update: {} })`.
 //
 // Like create(), upsert() returns the input merged with the server-assigned
 // `_id` and does NOT re-read the stored document — so the shape is asserted via
 // toMatchObject (content/country) plus `_id`, exactly as the create port does.
-// Upstream asserts `id: expect.any(String)`; prisma-next decodes write results
+// Upstream asserts `id: expect.any(String)`; Prisma 8 decodes write results
 // through the same codecs as reads (#29879), so `_id` is a hex string here too.
 //
-// Upstream "set null" for the required variant throws at runtime; in prisma-next the
+// Upstream "set null" for the required variant throws at runtime; in Prisma 8 the
 // required constraint is enforced at the type level (@ts-expect-error holds) and
 // MongoDB rejects it through the provisioned collection validator.
 
@@ -86,7 +86,7 @@ describe('ports/prisma/functional/composites/object/upsert-create', () => {
       timeouts.spinUpMongoMemoryServer,
     );
 
-    // Upstream: null on required `content` throws at runtime. prisma-next rejects it
+    // Upstream: null on required `content` throws at runtime. Prisma 8 rejects it
     // at the type level (@ts-expect-error holds), and MongoDB rejects it through the
     // provisioned collection validator.
     it(

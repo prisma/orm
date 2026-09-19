@@ -1,7 +1,7 @@
 # `telemetry-backend`
 
-A telemetry HTTP service that receives Prisma Next CLI events, validates them
-with arktype, and inserts them into Postgres through Prisma Next itself
+A telemetry HTTP service that receives Prisma 8 CLI events, validates them
+with arktype, and inserts them into Postgres through Prisma 8 itself
 (dogfooded). The production/deploy entrypoint uses `Bun.serve`; the same
 handler can also run behind `node:http` for repo tests that must not require a
 Bun binary. The service is unauthenticated by design — events are anonymous —
@@ -11,7 +11,7 @@ This package lives under `apps/` rather than `packages/` because the
 backend is a deployable service, not a framework component. It sits
 outside the framework domain boundary in `architecture.config.json` by
 construction (the `packages` glob and `lint:deps` configuration both
-scope to `packages/`), so it consumes the full Prisma Next stack without
+scope to `packages/`), so it consumes the full Prisma 8 stack without
 violating domain layering.
 
 ## Endpoint

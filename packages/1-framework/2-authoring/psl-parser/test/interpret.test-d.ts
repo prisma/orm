@@ -12,7 +12,7 @@ import {
   type PslInterpretCapable,
   type PslInterpretInput,
 } from '../src/interpret';
-import type { SourceFile } from '../src/source-file';
+import type { PslSources } from '../src/source-file';
 import type { SymbolTable } from '../src/symbol-table';
 import type { DocumentAst } from '../src/syntax/ast/declarations';
 
@@ -38,9 +38,8 @@ test('guard narrows the union to expose a fully typed interpret method', () => {
 
 test('interpret input carries the parser artifact vocabulary', () => {
   expectTypeOf<PslInterpretInput['document']>().toEqualTypeOf<DocumentAst>();
-  expectTypeOf<PslInterpretInput['sourceFile']>().toEqualTypeOf<SourceFile>();
+  expectTypeOf<PslInterpretInput['sources']>().toEqualTypeOf<PslSources>();
   expectTypeOf<PslInterpretInput['symbolTable']>().toEqualTypeOf<SymbolTable>();
-  expectTypeOf<PslInterpretInput['sourceId']>().toEqualTypeOf<string>();
 });
 
 test('capability carries the full psl provider shape', () => {

@@ -1,11 +1,11 @@
 # react-router-demo
 
-A minimal React Router v7 Framework Mode example that proves Prisma Next's Vite plugin re-emits contract artifacts on save, inside a real framework.
+A minimal React Router v7 Framework Mode example that proves Prisma 8's Vite plugin re-emits contract artifacts on save, inside a real framework.
 
 ## What this demonstrates
 
 - `@internal/vite-plugin-contract-emit` auto-emits `contract.json` + `contract.d.ts` on dev-server startup and on every contract edit.
-- A React Router `loader` and `action` on `/` exercise the Prisma Next runtime against Postgres via the emitted contract.
+- A React Router `loader` and `action` on `/` exercise the Prisma 8 runtime against Postgres via the emitted contract.
 - Editing `prisma/contract.prisma` (or `prisma/contract.ts`) while `pnpm dev` is running re-emits the artifacts — no manual `prisma contract emit`.
 
 ## Prerequisites
@@ -34,7 +34,7 @@ pnpm dev
 
 # TypeScript — re-emits when prisma/contract.ts (or anything else imported by
 # prisma.config.ts) changes
-PRISMA_NEXT_CONTRACT_SOURCE=ts pnpm dev
+PRISMA_CONTRACT_SOURCE=ts pnpm dev
 ```
 
 The TypeScript surface does not declare an explicit watch path. Instead,
@@ -53,7 +53,7 @@ Re-toggling mid-session requires restarting the dev server; the config is read o
 4. Save. The dev server emits a new `src/prisma/contract.json` and `src/prisma/contract.d.ts` without any command.
 5. Reload the page. The app still serves; types in your editor pick up the new field.
 
-For the TypeScript path, start with `PRISMA_NEXT_CONTRACT_SOURCE=ts pnpm dev` and edit `prisma/contract.ts` instead.
+For the TypeScript path, start with `PRISMA_CONTRACT_SOURCE=ts pnpm dev` and edit `prisma/contract.ts` instead.
 
 ## HMR runtime cache
 

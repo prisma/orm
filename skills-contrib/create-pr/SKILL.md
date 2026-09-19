@@ -1,6 +1,6 @@
 ---
 name: create-pr
-description: Creates a GitHub PR with a Linear-ticket-prefixed title and a decision-led, narrative description for prisma-next. Use when the user wants to create a pull request, open a PR, or submit changes for review.
+description: Creates a GitHub PR with a Linear-ticket-prefixed title and a decision-led, narrative description for Prisma 8. Use when the user wants to create a pull request, open a PR, or submit changes for review.
 ---
 
 # Create PR Skill
@@ -153,7 +153,7 @@ For each check, if it fails, **rewrite the draft** before pushing — don't ship
 
 Open the PR directly — **do not ask the user to confirm the title or body first**. The skill's quality bar is the structure, the forbidden-patterns checklist, and the fresh-eyes pass; running through those in your own head is the gate, not a confirmation prompt. (If the user wants changes after the fact, they will tell you and you can edit the PR via `gh pr edit`.)
 
-1. **DCO sign-off check.** Before pushing, verify every commit has a `Signed-off-by:` trailer — the prisma-next PR template's checklist requires it and the DCO status check will block merge:
+1. **DCO sign-off check.** Before pushing, verify every commit has a `Signed-off-by:` trailer — the repository's PR template's checklist requires it and the DCO status check will block merge:
 
    ```bash
    git log "$BASE_BRANCH..HEAD" --format='%h %s%n  %(trailers:key=Signed-off-by,valueonly)'

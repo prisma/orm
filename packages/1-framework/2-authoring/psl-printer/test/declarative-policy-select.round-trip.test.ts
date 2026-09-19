@@ -44,8 +44,7 @@ import {
   type SymbolTable,
   validateExtensionBlockFromSymbol,
 } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
-import { parse } from '@internal/psl-parser/syntax';
+import { type PslSources, parse } from '@internal/psl-parser/syntax';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { describe, expect, it } from 'vitest';
 import { printPslFromAst } from '../src/print-psl';
@@ -134,22 +133,21 @@ const ZERO_SPAN: PslSpan = {
 
 interface ParsedPolicySelect {
   readonly symbolTable: SymbolTable;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
+  readonly sources: PslSources;
   readonly blockSymbols: readonly BlockSymbol[];
 }
 
-function parsePolicySelect(schema: string, sourceId = 'r1'): ParsedPolicySelect {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
+function parsePolicySelect(schema: string): ParsedPolicySelect {
+  const { document, sources } = parse(schema, 'declarative-policy-select.round-trip.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
-  const blockSymbols = Object.values(table.topLevel.blocks).filter(
+  const blockSymbols = Object.values(symbolTable.topLevel.blocks).filter(
     (block) => block.keyword === POLICY_SELECT_KEYWORD,
   );
-  return { symbolTable: table, sourceFile, sourceId, blockSymbols };
+  return { symbolTable, sources, blockSymbols };
 }
 
 function onlyBlockSymbol(parsed: ParsedPolicySelect): BlockSymbol {
@@ -170,8 +168,7 @@ function validate(parsed: ParsedPolicySelect, block: BlockSymbol) {
     block,
     descriptor: POLICY_SELECT_DESCRIPTOR,
     symbolTable: parsed.symbolTable,
-    sourceFile: parsed.sourceFile,
-    sourceId: parsed.sourceId,
+    sources: parsed.sources,
     codecLookup,
   });
 }
@@ -359,8 +356,7 @@ policy_select NakedParse {
         block,
         descriptor: POLICY_SELECT_DESCRIPTOR,
         symbolTable: parsed.symbolTable,
-        sourceFile: parsed.sourceFile,
-        sourceId: parsed.sourceId,
+        sources: parsed.sources,
         codecLookup: extractCodecLookup([]),
       });
       expect(diagnostics[0]).toMatchObject({
@@ -382,7 +378,7 @@ policy_select ProfilesSelect {
 `;
 
     it('prints the block back to PSL text that contains the keyword and all parameters', () => {
-      const parsed = parsePolicySelect(source, 'rt1');
+      const parsed = parsePolicySelect(source);
       const block = onlyBlockSymbol(parsed);
       expect(validate(parsed, block)).toEqual([]);
 
@@ -397,7 +393,7 @@ policy_select ProfilesSelect {
     });
 
     it('re-parses the printed PSL and produces an IR-equivalent extension block', () => {
-      const firstParsed = parsePolicySelect(source, 'rt2');
+      const firstParsed = parsePolicySelect(source);
       const firstBlock = onlyBlockSymbol(firstParsed);
       expect(validate(firstParsed, firstBlock)).toEqual([]);
       const original = reconstruct(firstParsed, firstBlock);
@@ -407,7 +403,7 @@ policy_select ProfilesSelect {
         codecLookup,
       });
 
-      const reParsed = parsePolicySelect(printed, 'rt2-reparse');
+      const reParsed = parsePolicySelect(printed);
       const reParsedBlockSymbol = onlyBlockSymbol(reParsed);
       expect(validate(reParsed, reParsedBlockSymbol)).toEqual([]);
       const reParsedBlock = reconstruct(reParsed, reParsedBlockSymbol);

@@ -3,4 +3,5 @@ model TestModel {
   json  Jsonb?
   json2 Jsonb?
   str   String?
+  @@map("testModel")
 }

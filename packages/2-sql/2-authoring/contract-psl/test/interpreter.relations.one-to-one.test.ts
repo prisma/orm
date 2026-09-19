@@ -50,6 +50,7 @@ model Profiles {
       profiles: {
         to: crossRef('Profiles', 'public'),
         cardinality: '1:1',
+        nullable: true,
         on: {
           localFields: ['tenantId', 'id'],
           targetFields: ['userTenantId', 'userId'],
@@ -88,6 +89,7 @@ model Profiles {
       profiles: {
         to: crossRef('Profiles', 'public'),
         cardinality: '1:1',
+        nullable: true,
         on: {
           localFields: ['id', 'tenantId'],
           targetFields: ['userId', 'userTenantId'],
@@ -121,12 +123,44 @@ model Profiles {
       profiles: {
         to: crossRef('Profiles', 'public'),
         cardinality: '1:1',
+        nullable: true,
         on: {
           localFields: ['id'],
           targetFields: ['userId'],
         },
       },
     });
+  });
+
+  it('rejects a required 1:1 back-relation and tells the user to make it optional', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model User {
+  id      Int @id
+  profile Profile
+}
+
+model Profile {
+  id     Int @id
+  userId Int @unique
+  user   User @relation(fields: [userId], references: [id])
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_REQUIRED_ONE_TO_ONE_BACKRELATION',
+        message: expect.stringContaining(
+          'Backrelation field "User.profile" is required, but "Profile" holds the relation fields',
+        ),
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 3 }) }),
+      }),
+    ]);
   });
 
   it('rejects a singular back-relation whose matched FK is not unique', () => {

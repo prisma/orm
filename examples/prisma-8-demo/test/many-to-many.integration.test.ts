@@ -12,6 +12,7 @@ import { ormClientDisconnectPostTags } from '../src/orm-client/disconnect-post-t
 import { ormClientGetPostTags } from '../src/orm-client/get-post-tags';
 import { ormClientGetPostsByTagFilter } from '../src/orm-client/get-posts-by-tag-filter';
 import { ormClientGetTagPosts } from '../src/orm-client/get-tag-posts';
+import { ormClientGetUserProfile } from '../src/orm-client/get-user-profile';
 import type { Contract } from '../src/prisma/contract.d';
 import contractJson from '../src/prisma/contract.json' with { type: 'json' };
 import { db } from '../src/prisma/db';
@@ -108,6 +109,48 @@ async function seedManyToManyData(runtime: Runtime): Promise<void> {
 
 describe('ORM client many-to-many examples', () => {
   it(
+    'ormClientGetUserProfile returns the Shape-declared response: no email, posts projected with tags',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const runtime = await getRuntime(connectionString);
+
+        try {
+          await seedManyToManyData(runtime);
+          const profile = await ormClientGetUserProfile(authorId, runtime);
+
+          expect(profile).toEqual({
+            id: authorId,
+            displayName: 'Author',
+            createdAt: Temporal.Instant.from('2024-01-01T00:00:00.000Z'),
+            kind: 'user',
+            address: null,
+            posts: [
+              {
+                id: seededPostIds.alpha,
+                title: 'Alpha post',
+                tags: [
+                  { id: seededTagIds.orm, label: 'orm' },
+                  { id: seededTagIds.typescript, label: 'typescript' },
+                ],
+              },
+              {
+                id: seededPostIds.beta,
+                title: 'Beta post',
+                tags: [{ id: seededTagIds.orm, label: 'orm' }],
+              },
+              { id: seededPostIds.untagged, title: 'Untagged post', tags: [] },
+            ],
+          });
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'ormClientGetPostTags includes the tags of a post through the junction',
     async () => {
       await withDevDatabase(async ({ connectionString }) => {
@@ -179,8 +222,9 @@ describe('ORM client many-to-many examples', () => {
             id: seededPostIds.beta,
             title: 'Beta post',
             userId: authorId,
-            priority: 'low',
+            priority: 0,
             createdAt: Temporal.Instant.from('2024-01-02T10:00:00.000Z'),
+            expiresAt: expect.any(Temporal.Instant),
             embedding: null,
             viewCount: null,
             impressionCount: null,
@@ -311,8 +355,9 @@ describe('ORM client many-to-many examples', () => {
             id: newPostId,
             title: 'Fresh post',
             userId: authorId,
-            priority: 'low',
+            priority: 0,
             createdAt: expect.any(Temporal.Instant),
+            expiresAt: expect.any(Temporal.Instant),
             embedding: null,
             viewCount: null,
             impressionCount: null,
@@ -360,8 +405,9 @@ describe('ORM client many-to-many examples', () => {
             id: newPostId,
             title: 'Connected post',
             userId: authorId,
-            priority: 'low',
+            priority: 0,
             createdAt: expect.any(Temporal.Instant),
+            expiresAt: expect.any(Temporal.Instant),
             embedding: null,
             viewCount: null,
             impressionCount: null,

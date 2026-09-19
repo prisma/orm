@@ -80,7 +80,7 @@ export function buildPolicyBlocks(
     if (badRole !== undefined) {
       const notes = skipNotesByTable.get(tableName) ?? [];
       notes.push(
-        `// prisma-next: skipped policy "${policy.name}": role "${badRole}" is not a valid PSL identifier and role references cannot be escaped`,
+        `// prisma: skipped policy "${policy.name}": role "${badRole}" is not a valid PSL identifier and role references cannot be escaped`,
       );
       skipNotesByTable.set(tableName, notes);
       continue;
@@ -138,6 +138,7 @@ export function buildPolicyBlocks(
           span: SYNTHETIC_SPAN,
         },
       ],
+      attributes: { map: { args: { name: policy.name }, span: SYNTHETIC_SPAN } },
       span: SYNTHETIC_SPAN,
     });
   }

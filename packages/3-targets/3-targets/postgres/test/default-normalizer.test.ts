@@ -75,10 +75,31 @@ describe('parsePostgresDefault array literals', () => {
     });
   });
 
-  it('parses negative and decimal numeric elements', () => {
+  it('parses negative and decimal integer and float elements as numbers', () => {
+    expect(parsePostgresDefault("'{-1,2}'::integer[]", 'int4[]')).toEqual({
+      kind: 'literal',
+      value: [-1, 2],
+    });
+    expect(parsePostgresDefault("'{-1.5,2}'::double precision[]", 'float8[]')).toEqual({
+      kind: 'literal',
+      value: [-1.5, 2],
+    });
+  });
+
+  it('reads numeric elements as the decimal text Postgres printed', () => {
     expect(parsePostgresDefault("'{-1,2.5}'::numeric[]", 'numeric[]')).toEqual({
       kind: 'literal',
-      value: [-1, 2.5],
+      value: ['-1', '2.5'],
+    });
+    expect(
+      parsePostgresDefault("'{12345678901234567890.123456789}'::numeric[]", 'numeric[]'),
+    ).toEqual({ kind: 'literal', value: ['12345678901234567890.123456789'] });
+  });
+
+  it('reads int8 elements as decimal text past the safe integer range', () => {
+    expect(parsePostgresDefault("'{1,9007199254740993}'::bigint[]", 'int8[]')).toEqual({
+      kind: 'literal',
+      value: ['1', '9007199254740993'],
     });
   });
 
@@ -397,11 +418,282 @@ describe('postgresResolveDefault', () => {
     });
   });
 
-  it('keeps an enum-cast literal a function (unqualified cast type defeats the string-literal pattern)', () => {
+  it('resolves a literal cast to a schema-qualified enum type to the literal', () => {
     const expression = "'confidential'::auth.oauth_client_type";
     expect(postgresResolveDefault({ kind: 'function', expression }, 'oauth_client_type')).toEqual({
-      kind: 'function',
-      expression,
+      kind: 'literal',
+      value: 'confidential',
     });
+  });
+});
+
+describe('parsePostgresDefault enum literal casts', () => {
+  it('reads a literal cast to a schema-qualified quoted enum type', () => {
+    expect(parsePostgresDefault('\'CREATE\'::audit."AuditAction"', 'audit.AuditAction')).toEqual({
+      kind: 'literal',
+      value: 'CREATE',
+    });
+  });
+
+  it('reads a literal cast to a schema-qualified unquoted enum type', () => {
+    expect(parsePostgresDefault("'user'::auth.user_role", 'auth.user_role')).toEqual({
+      kind: 'literal',
+      value: 'user',
+    });
+  });
+
+  it('still reads the unqualified quoted and bare spellings', () => {
+    expect(parsePostgresDefault('\'CREATE\'::"AuditAction"', 'AuditAction')).toEqual({
+      kind: 'literal',
+      value: 'CREATE',
+    });
+    expect(parsePostgresDefault("'user'::user_role", 'user_role')).toEqual({
+      kind: 'literal',
+      value: 'user',
+    });
+  });
+});
+
+describe('parsePostgresDefault ARRAY[...] constructors', () => {
+  it('reads a text array constructor with per-element casts', () => {
+    expect(parsePostgresDefault("ARRAY['a'::text, 'b'::text]", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ['a', 'b'],
+    });
+  });
+
+  it('reads a numeric array constructor', () => {
+    expect(parsePostgresDefault('ARRAY[1, 2]', 'integer[]')).toEqual({
+      kind: 'literal',
+      value: [1, 2],
+    });
+  });
+
+  it('reads enum element casts, quoted and schema-qualified', () => {
+    expect(parsePostgresDefault('ARRAY[\'x\'::"MyEnum"]', 'MyEnum[]')).toEqual({
+      kind: 'literal',
+      value: ['x'],
+    });
+    expect(
+      parsePostgresDefault('ARRAY[\'x\'::sch."MyEnum", \'y\'::sch."MyEnum"]', 'sch.MyEnum[]'),
+    ).toEqual({
+      kind: 'literal',
+      value: ['x', 'y'],
+    });
+  });
+
+  it('keeps commas and doubled quotes inside an element', () => {
+    expect(parsePostgresDefault("ARRAY['it''s, ok'::text, 'b'::text]", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ["it's, ok", 'b'],
+    });
+  });
+
+  it('reads an empty constructor and a cast constructor', () => {
+    expect(parsePostgresDefault('ARRAY[]::text[]', 'text[]')).toEqual({
+      kind: 'literal',
+      value: [],
+    });
+    expect(parsePostgresDefault("ARRAY['a', 'b']::text[]", 'text[]')).toEqual({
+      kind: 'literal',
+      value: ['a', 'b'],
+    });
+  });
+
+  it('fails closed for an element it cannot read', () => {
+    expect(parsePostgresDefault('ARRAY[now()]', 'timestamptz[]')?.kind).toBe('function');
+  });
+});
+
+describe('parsePostgresDefault number literals Postgres prints with a cast', () => {
+  it.each([
+    { raw: "'-1'::integer", nativeType: 'int4', value: -1 },
+    { raw: "'-2'::integer", nativeType: 'int2', value: -2 },
+    { raw: "'-1.5'::numeric", nativeType: 'float8', value: -1.5 },
+    { raw: "'-1.5'::numeric", nativeType: 'float4', value: -1.5 },
+    { raw: '(1.5)::double precision', nativeType: 'float8', value: 1.5 },
+  ])('reads $raw as the number $value for $nativeType', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+
+  it.each([
+    { raw: "'-9007199254740993'::bigint", value: '-9007199254740993' },
+    { raw: "'-5'::integer", value: '-5' },
+    { raw: '(1)::bigint', value: '1' },
+  ])('reads $raw as decimal text for int8', ({ raw, value }) => {
+    expect(parsePostgresDefault(raw, 'int8')).toEqual({ kind: 'literal', value });
+  });
+});
+
+describe('parsePostgresDefault numerals on a column that is not a number type', () => {
+  it.each([
+    { raw: "'-1'::integer", nativeType: 'text', value: '-1' },
+    { raw: "'-1'::integer", nativeType: 'character varying(10)', value: '-1' },
+    { raw: "'-1.5'::numeric", nativeType: 'text', value: '-1.5' },
+    { raw: '5', nativeType: 'text', value: '5' },
+  ])('reads $raw as the text $value for $nativeType', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+
+  it.each([
+    { raw: "ARRAY['-1'::integer, 2]", value: ['-1', '2'] },
+    { raw: "'{-1,2}'::text[]", value: ['-1', '2'] },
+  ])('reads the elements of $raw as text for text[]', ({ raw, value }) => {
+    expect(parsePostgresDefault(raw, 'text[]')).toEqual({ kind: 'literal', value });
+  });
+
+  it('reads a numeral as a number when no native type is given', () => {
+    expect(parsePostgresDefault("'-1'::integer")).toEqual({ kind: 'literal', value: -1 });
+  });
+});
+
+describe('parsePostgresDefault numeric columns', () => {
+  it.each([
+    { raw: '12345678901234567890.123456789', nativeType: 'numeric(65,30)' },
+    { raw: '0.000000000000000001', nativeType: 'numeric(65,30)' },
+    { raw: '1.50', nativeType: 'numeric(65,30)' },
+    { raw: '10', nativeType: 'numeric(65,30)' },
+    { raw: '12.34', nativeType: 'numeric' },
+    { raw: '1.50', nativeType: 'numeric' },
+    { raw: '1.5', nativeType: 'numeric(10,2)' },
+    { raw: '2.0', nativeType: 'numeric(10,0)' },
+  ])('reads $raw as that decimal text for $nativeType', ({ raw, nativeType }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value: raw });
+  });
+
+  it.each([
+    { raw: "'-0.5'::numeric", nativeType: 'numeric(65,30)', value: '-0.5' },
+    { raw: "'-1.5'::numeric", nativeType: 'numeric(10,2)', value: '-1.5' },
+    {
+      raw: "'12345678901234567890'::numeric",
+      nativeType: 'numeric',
+      value: '12345678901234567890',
+    },
+    { raw: '1.5::numeric(10,2)', nativeType: 'numeric(10,2)', value: '1.5' },
+    { raw: "'NaN'::numeric", nativeType: 'numeric', value: 'NaN' },
+  ])('reads $raw as the decimal text $value for $nativeType', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+});
+
+describe('parsePostgresDefault ARRAY[...] elements Postgres prints with a cast', () => {
+  it.each([
+    { raw: "ARRAY['-1'::integer, 2]", nativeType: 'int4[]', value: [-1, 2] },
+    { raw: 'ARRAY[(1)::bigint, (2)::bigint]', nativeType: 'int8[]', value: ['1', '2'] },
+    {
+      raw: "ARRAY[('-1'::integer)::bigint, (2)::bigint]",
+      nativeType: 'int8[]',
+      value: ['-1', '2'],
+    },
+    {
+      raw: 'ARRAY[(1.5)::double precision, (2)::double precision]',
+      nativeType: 'float8[]',
+      value: [1.5, 2],
+    },
+    {
+      raw: "ARRAY[('-1.5'::numeric)::double precision, (2)::double precision]",
+      nativeType: 'float8[]',
+      value: [-1.5, 2],
+    },
+    { raw: 'ARRAY[1.5::numeric(65,30)]', nativeType: 'numeric(65,30)[]', value: ['1.5'] },
+    {
+      raw: "ARRAY['-1.5'::numeric(65,30), (2)::numeric(65,30)]",
+      nativeType: 'numeric(65,30)[]',
+      value: ['-1.5', '2'],
+    },
+    {
+      raw: 'ARRAY[12345678901234567890.123456789::numeric(65,30)]',
+      nativeType: 'numeric(65,30)[]',
+      value: ['12345678901234567890.123456789'],
+    },
+    {
+      raw: "ARRAY[1.5::numeric(10,2), '-2.25'::numeric(10,2)]",
+      nativeType: 'numeric(10,2)[]',
+      value: ['1.5', '-2.25'],
+    },
+    { raw: 'ARRAY[(2)::numeric(10,2)]', nativeType: 'numeric(10,2)[]', value: ['2'] },
+    {
+      raw: "ARRAY[('-1'::integer)::smallint, (2)::smallint]",
+      nativeType: 'int2[]',
+      value: [-1, 2],
+    },
+    { raw: 'ARRAY[(1.1)::real]', nativeType: 'float4[]', value: [1.1] },
+    {
+      raw: "ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]",
+      nativeType: 'timestamp(3)[]',
+      value: ['2024-01-01 00:00:00'],
+    },
+    {
+      raw: "ARRAY['2024-01-01 00:00:00+00'::timestamp(3) with time zone]",
+      nativeType: 'timestamptz(3)[]',
+      value: ['2024-01-01 00:00:00+00'],
+    },
+  ])('reads $raw by each element cast', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+
+  it.each([
+    {
+      raw: '(ARRAY[]::character varying[])::character varying(32)[]',
+      nativeType: 'character varying(32)[]',
+      value: [],
+    },
+    {
+      raw: "(ARRAY['a'::character varying])::character varying(32)[]",
+      nativeType: 'character varying(32)[]',
+      value: ['a'],
+    },
+  ])('unwraps the outer cast in $raw', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+
+  it('reads an empty constructor cast to a multi-word type', () => {
+    expect(parsePostgresDefault('ARRAY[]::character varying[]', 'character varying[]')).toEqual({
+      kind: 'literal',
+      value: [],
+    });
+  });
+});
+
+describe('parsePostgresDefault expressions that are not literals', () => {
+  it.each([
+    { raw: '(- (1.5)::double precision)', nativeType: 'float8' },
+    { raw: '(- 1.5::numeric(10,2))', nativeType: 'numeric(10,2)' },
+    { raw: '((1 + 2))::bigint', nativeType: 'int8' },
+    { raw: "('a'::text || 'b'::text)", nativeType: 'text' },
+    { raw: 'round(1.555, 2)', nativeType: 'numeric' },
+    { raw: 'ARRAY[(1 + 1)]', nativeType: 'int4[]' },
+    { raw: 'ARRAY[ARRAY[1, 2]]', nativeType: 'int4[]' },
+    { raw: '(1.5)::integer', nativeType: 'int4' },
+    { raw: 'ARRAY[(1.5)::integer]', nativeType: 'int4[]' },
+    { raw: "('now'::text)::date", nativeType: 'date' },
+    { raw: "ARRAY[('today'::text)::date]", nativeType: 'date[]' },
+  ])('keeps $raw a raw expression', ({ raw, nativeType }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'function', expression: raw });
+  });
+});
+
+/**
+ * Postgres prints a float default through `float4out` or `float8out`, which switch to exponent
+ * notation for very large and very small magnitudes. Each raw expression below is what
+ * `pg_get_expr` reported for the column default named beside it.
+ */
+describe('parsePostgresDefault float defaults Postgres prints in exponent notation', () => {
+  it.each([
+    { raw: "'1e+20'::real", nativeType: 'float4', value: 1e20 },
+    { raw: "'1.5e-40'::real", nativeType: 'float4', value: 1.5e-40 },
+    { raw: "'1e+300'::double precision", nativeType: 'float8', value: 1e300 },
+    { raw: "'1e-320'::double precision", nativeType: 'float8', value: 1e-320 },
+    { raw: "'-1.5e-40'::real", nativeType: 'float4', value: -1.5e-40 },
+  ])('reads $raw as the number $value for $nativeType', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
+  });
+
+  it.each([
+    { raw: '1e+20', nativeType: 'float8', value: 1e20 },
+    { raw: '1.5e-40::double precision', nativeType: 'float8', value: 1.5e-40 },
+    { raw: '-2.5E+3', nativeType: 'float8', value: -2500 },
+  ])('reads the unquoted $raw as the number $value', ({ raw, nativeType, value }) => {
+    expect(parsePostgresDefault(raw, nativeType)).toEqual({ kind: 'literal', value });
   });
 });

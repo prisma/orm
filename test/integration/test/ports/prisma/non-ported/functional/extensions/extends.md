@@ -3,7 +3,7 @@
 Source: `packages/client/tests/functional/extensions/extends.ts`
 
 Every test in this file exercises the Prisma Client `$extends({...})` extension mechanism.
-prisma-next has no `$extends` client-extension surface at all — the `packages/3-extensions/`
+Prisma 8 has no `$extends` client-extension surface at all — the `packages/3-extensions/`
 directory in this repo refers to PostgreSQL database extensions (pgvector, ParadeDB, PostGIS,
 Supabase), not client-level extensions. Confirmed by grepping `packages/` for `$extends`,
 `getExtensionContext`, `defineExtension`, `$parent`, `customDataProxyFetch` (zero hits outside

@@ -1,11 +1,11 @@
 ---
 name: record-gotchas
-description: Capture surprises, workarounds, and rough edges hit while *consuming* the public surface of Prisma Next, Prisma Compute, or Prisma Postgres — anything a real user of these products would experience. Fires whenever an operator (or agent) writes a workaround, hits a surprising failure mode, or finds undocumented behaviour while using one of these three products from the outside (extension authoring, example apps, integration tests, customer reproductions, internal demos, manual repros). Does NOT fire on bugs in code the operator's own team maintains — those are normal product-backlog bugs. In product-team repos (e.g. `prisma-8-ws`), surfaces the gotcha and offers the operator three paths (capture-as-gotcha, file a normal bug, or note-and-move-on). Outside product-team repos (pet projects, hackathon entries, customer codebases), silent-captures into the project's gotchas log AND a Triage-state Linear ticket in the matching gotchas project — no operator escalation. Do not skip the recording step.
+description: Capture surprises, workarounds, and rough edges hit while *consuming* the public surface of Prisma 8, Prisma Compute, or Prisma Postgres — anything a real user of these products would experience. Fires whenever an operator (or agent) writes a workaround, hits a surprising failure mode, or finds undocumented behaviour while using one of these three products from the outside (extension authoring, example apps, integration tests, customer reproductions, internal demos, manual repros). Does NOT fire on bugs in code the operator's own team maintains — those are normal product-backlog bugs. In product-team repos (e.g. `prisma-8-ws`), surfaces the gotcha and offers the operator three paths (capture-as-gotcha, file a normal bug, or note-and-move-on). Outside product-team repos (pet projects, hackathon entries, customer codebases), silent-captures into the project's gotchas log AND a Triage-state Linear ticket in the matching gotchas project — no operator escalation. Do not skip the recording step.
 ---
 
 # Record a gotcha
 
-A **gotcha** is friction that a *consumer* of Prisma Next, Prisma Compute, or Prisma Postgres would feel — something an external user of those products would also experience: a surprising failure mode, an undocumented behaviour, a workaround you wrote, a mental model mismatch with the CLI / runtime / docs. The signal is the consumer's perspective, not the project context — you can hit a gotcha while writing an extension, working in an example app, reproducing a customer report, running an integration test against the public surface, or building anything that consumes the product from the outside.
+A **gotcha** is friction that a *consumer* of Prisma 8, Prisma Compute, or Prisma Postgres would feel — something an external user of those products would also experience: a surprising failure mode, an undocumented behaviour, a workaround you wrote, a mental model mismatch with the CLI / runtime / docs. The signal is the consumer's perspective, not the project context — you can hit a gotcha while writing an extension, working in an example app, reproducing a customer report, running an integration test against the public surface, or building anything that consumes the product from the outside.
 
 A gotcha is **not** a bug in code your team maintains. If you own the surface and you can fix it, that's a normal product bug, filed in the regular product backlog — not a gotcha.
 
@@ -61,7 +61,7 @@ Each product has a single Linear project for *all* tickets — both gotchas and 
 
 | Product | Linear project |
 |---------|----------------|
-| **Prisma Next** ORM (`@internal/*`, schema, generated client, migration tooling) | [`pn-gotchas`](https://linear.app/prisma-company/project/pn-gotchas-a6f6f5157a5c/overview) |
+| **Prisma 8** ORM (`@internal/*`, schema, generated client, migration tooling) | [`pn-gotchas`](https://linear.app/prisma-company/project/pn-gotchas-a6f6f5157a5c/overview) |
 | **Prisma Compute** (`@prisma/compute-cli`, deploy, runtime, env management) | [`compute-gotchas`](https://linear.app/prisma-company/project/compute-gotchas-dd3ac34b5ad4/overview) |
 | **Prisma Postgres** (PPg, `@prisma/dev`, dialect behaviour) | [`ppg-gotchas`](https://linear.app/prisma-company/project/ppg-gotchas-afe77336f696/overview) |
 
@@ -207,7 +207,7 @@ Used in `gotchas.md` (or the matching per-product file).
 ## <One-line title — start with the symptom or the constraint, not the solution>
 
 **Filed upstream:** [TML-XXXX](https://linear.app/prisma-company/issue/TML-XXXX) — *"<ticket title>"*
-**Product:** Prisma Next | Prisma Compute | Prisma Postgres
+**Product:** Prisma 8 | Prisma Compute | Prisma Postgres
 **Version:** <package version, CLI version, or commit SHA>
 **First hit:** <one-line context, e.g. "authoring a new extension pack", or "examples/prisma-8-demo migration plan">
 **Cost:** <only if material — "20 minutes of brownout", "3 hours debugging", etc. Skip if <30 min.>
@@ -239,7 +239,7 @@ Used in `gotchas.md` (or the matching per-product file).
 
 ```markdown
 **Source:** <link to the gotchas.md commit (or working-tree path if uncommitted), including file path and line range>
-**Product:** Prisma Next | Prisma Compute | Prisma Postgres
+**Product:** Prisma 8 | Prisma Compute | Prisma Postgres
 **Version:** <as in the file entry>
 
 ## Symptom
@@ -273,11 +273,11 @@ Use this when creating `gotchas.md` for the first time in a repo that has no per
 ```markdown
 # Gotchas
 
-A running log of surprises, workarounds, and undocumented behaviour hit while *consuming* **Prisma Next**, **Prisma Compute**, or **Prisma Postgres** in this project. Each entry captures friction a real user of these products would also experience.
+A running log of surprises, workarounds, and undocumented behaviour hit while *consuming* **Prisma 8**, **Prisma Compute**, or **Prisma Postgres** in this project. Each entry captures friction a real user of these products would also experience.
 
 Each entry is also filed as a Triage-state Linear ticket in the matching gotchas project so the team can pick them up:
 
-- Prisma Next → [`pn-gotchas`](https://linear.app/prisma-company/project/pn-gotchas-a6f6f5157a5c/overview)
+- Prisma 8 → [`pn-gotchas`](https://linear.app/prisma-company/project/pn-gotchas-a6f6f5157a5c/overview)
 - Prisma Compute → [`compute-gotchas`](https://linear.app/prisma-company/project/compute-gotchas-dd3ac34b5ad4/overview)
 - Prisma Postgres → [`ppg-gotchas`](https://linear.app/prisma-company/project/ppg-gotchas-afe77336f696/overview)
 
@@ -303,7 +303,7 @@ The capture workflow is documented in [`.agents/skills/record-gotchas/SKILL.md`]
 > ## `migration plan` reports "No changes detected" when contract is stale
 >
 > **Filed upstream:** [TML-XXXX](https://linear.app/prisma-company/issue/TML-XXXX)
-> **Product:** Prisma Next
+> **Product:** Prisma 8
 > **Version:** `@internal/cli@<version>`
 > **First hit:** `examples/prisma-8-demo`, changing the schema while iterating on a demo
 > **Cost:** ~15 minutes

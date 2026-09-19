@@ -1,7 +1,7 @@
 /**
  * Database Seed Script
  *
- * Populates the demo database with sample data using Prisma Next's SQL builder.
+ * Populates the demo database with sample data using Prisma 8's SQL builder.
  *
  * Run with: pnpm seed
  *
@@ -19,6 +19,7 @@
 import 'dotenv/config';
 
 import { loadAppConfig } from '../src/app-config';
+import { NotFoundError } from '../src/errors';
 import { createOrmClient } from '../src/orm-client/client';
 import 'temporal-polyfill/full/global';
 import { db } from '../src/prisma/db';
@@ -76,7 +77,7 @@ async function main() {
     const bob = bobRows[0] ?? null;
 
     if (!alice || !bob) {
-      throw new Error('Failed to create users');
+      throw new NotFoundError('Failed to create users');
     }
 
     console.log(`Created user: ${alice.email} (id: ${alice.id})`);
@@ -162,7 +163,7 @@ async function main() {
     const firstPost = firstPostRows[0] ?? null;
     const secondPost = secondPostRows[0] ?? null;
     if (!firstPost || !secondPost) {
-      throw new Error('Failed to create posts');
+      throw new NotFoundError('Failed to create posts');
     }
 
     console.log(`Created post: ${firstPost.title} (id: ${firstPost.id})`);
@@ -195,7 +196,7 @@ async function main() {
     const tagOrm = tagOrmRows[0] ?? null;
     const tagDemo = tagDemoRows[0] ?? null;
     if (!tagTypeScript || !tagOrm || !tagDemo) {
-      throw new Error('Failed to create tags');
+      throw new NotFoundError('Failed to create tags');
     }
 
     console.log(`Created tag: ${tagTypeScript.label} (id: ${tagTypeScript.id})`);

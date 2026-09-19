@@ -8,4 +8,5 @@ model Test {
   id    Int            @id
   group Int
   color pg.enum(Color)
+  @@map("test")
 }

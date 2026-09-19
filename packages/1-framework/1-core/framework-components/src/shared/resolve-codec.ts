@@ -66,12 +66,9 @@ export function validateCodecTypeParams(descriptor: AnyCodecDescriptor, ref: Cod
 
 /**
  * Resolves a `Codec` instance: validates `ref.typeParams` via
- * {@link validateCodecTypeParams} then calls `descriptor.factory(validated)(ctx)`.
- *
- * The descriptor's `factory` is typed against its own `P`; the registry erases
- * `P` to `any`, so the factory is narrowed to `(params: unknown) => (ctx) => Codec`
- * at the call boundary. The `paramsSchema` validates the input above before we
- * forward it, so the narrowing is safe by construction.
+ * {@link validateCodecTypeParams} then calls `descriptor.factory(validated)(ctx)`
+ * as a method on `descriptor`, preserving `this` for factories that build
+ * their returned codec from the descriptor instance (e.g. `new XCodec(this)`).
  */
 export function materializeCodec(
   descriptor: AnyCodecDescriptor,
@@ -79,8 +76,5 @@ export function materializeCodec(
   ctx: CodecInstanceContext,
 ): Codec {
   const validated = validateCodecTypeParams(descriptor, ref);
-  return blindCast<
-    (params: unknown) => (ctx: CodecInstanceContext) => Codec,
-    'registry erases P to any; paramsSchema validates input before forwarding'
-  >(descriptor.factory)(validated)(ctx);
+  return descriptor.factory(validated)(ctx);
 }

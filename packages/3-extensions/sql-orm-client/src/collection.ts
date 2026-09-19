@@ -5,7 +5,7 @@ import type {
   OperationKind,
 } from '@internal/framework-components/runtime';
 import { AsyncIterableResult, createMetaBuilder } from '@internal/framework-components/runtime';
-import type { SqlStorage } from '@internal/sql-contract/types';
+import type { ExtractCodecTypes, SqlStorage } from '@internal/sql-contract/types';
 import {
   type AnyExpression,
   BinaryExpr,
@@ -16,6 +16,8 @@ import {
   type ToWhereExpr,
   type WhereArg,
 } from '@internal/sql-relational-core/ast';
+import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -43,7 +45,12 @@ import {
   resolveRowIdentityColumns,
   resolveUpsertConflictColumns,
 } from './collection-contract';
-import { dispatchCollectionRows } from './collection-dispatch';
+import {
+  consumeFirstRow,
+  describeCollectionFirst,
+  describeCollectionRows,
+  dispatchCollectionRows,
+} from './collection-dispatch';
 import type {
   CollectionConstructor,
   CollectionInit,
@@ -55,6 +62,7 @@ import type {
   RowSelection,
   // biome-ignore lint/correctness/noUnusedImports: used in `declare` property
   RowType,
+  WhereInput,
   WithOrderByState,
   WithVariantState,
   WithWhereState,
@@ -83,6 +91,7 @@ import {
   withMutationScope,
 } from './mutation-executor';
 import { ormError } from './orm-errors';
+import type { PreparedCollection } from './prepared-collection';
 import {
   compileAggregate,
   compileDeleteCount,
@@ -101,7 +110,6 @@ import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
   type AggregateResult,
-  type AggregateSelector,
   type AggregateSpec,
   type CollectionContext,
   type CollectionState,
@@ -114,6 +122,7 @@ import {
   type IncludeCombineBranch,
   type IncludeExpr,
   type IncludeRelationOwner,
+  type IncludeRelationValue,
   type IncludeScalar,
   type InferRootRow,
   type MutationCreateInput,
@@ -133,26 +142,20 @@ import {
 } from './types';
 import { normalizeWhereArg } from './where-interop';
 
-type EmptyAggregateValue = ReturnType<typeof emptyAggregateResult>;
-
 function applyCreateDefaults(
   ctx: CollectionContext<Contract<SqlStorage>>,
   namespaceId: string,
   tableName: string,
   rows: Record<string, unknown>[],
+  defaultValueCache = new Map<string, unknown>(),
 ): void {
-  // Per-operation cache for generators with `stability: 'query'` (e.g.
-  // `timestampNow` for `temporal.updatedAt()`): one generated value
-  // shared across every row in this insert. Per-field generators
-  // (e.g. `cuid`) ignore the cache and vary per row.
-  const defaultValueCache = rows.length > 1 ? new Map<string, unknown>() : undefined;
   for (const row of rows) {
     const applied = ctx.context.applyMutationDefaults({
       op: 'create',
       table: tableName,
       namespace: namespaceId,
       values: row,
-      ...(defaultValueCache ? { defaultValueCache } : {}),
+      defaultValueCache,
     });
     for (const def of applied) {
       row[def.column] = def.value;
@@ -221,6 +224,7 @@ class CollectionImpl<
 > implements RowSelection<Row>
 {
   declare readonly [RowType]: Row;
+  declare readonly _row?: Row;
   /** @internal */
   readonly ctx: CollectionContext<TContract>;
   /** @internal */
@@ -230,7 +234,7 @@ class CollectionImpl<
   /** @internal */
   readonly tableName: string;
   /** @internal */
-  readonly namespaceId: string;
+  readonly namespaceId: State['nsId'];
   /** @internal */
   readonly state: CollectionState;
   /** @internal */
@@ -492,6 +496,110 @@ class CollectionImpl<
    * ).all();
    * ```
    */
+  include<
+    RelName extends VariantAwareIncludeRelationNames<
+      TContract,
+      ModelName,
+      State['variantName'],
+      State['nsId']
+    >,
+    RelationOwner extends string = IncludeRelationOwner<
+      TContract,
+      ModelName,
+      State['variantName'],
+      RelName,
+      State['nsId']
+    > &
+      string,
+    RelatedName extends RelatedModelName<TContract, RelationOwner, RelName, State['nsId']> &
+      string = RelatedModelName<TContract, RelationOwner, RelName, State['nsId']> & string,
+    TargetNs extends string = RelationTargetNamespace<
+      TContract,
+      RelationOwner,
+      RelName,
+      State['nsId']
+    >,
+  >(
+    relationName: RelName,
+  ): Collection<
+    TContract,
+    ModelName,
+    SimplifyDeep<
+      Row & {
+        [K in RelName]: IncludeRelationValue<
+          TContract,
+          RelationOwner,
+          K,
+          SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
+          State['nsId']
+        >;
+      }
+    >,
+    State
+  >;
+  include<
+    RelName extends VariantAwareIncludeRelationNames<
+      TContract,
+      ModelName,
+      State['variantName'],
+      State['nsId']
+    >,
+    RelationOwner extends string = IncludeRelationOwner<
+      TContract,
+      ModelName,
+      State['variantName'],
+      RelName,
+      State['nsId']
+    > &
+      string,
+    RelatedName extends RelatedModelName<TContract, RelationOwner, RelName, State['nsId']> &
+      string = RelatedModelName<TContract, RelationOwner, RelName, State['nsId']> & string,
+    TargetNs extends string = RelationTargetNamespace<
+      TContract,
+      RelationOwner,
+      RelName,
+      State['nsId']
+    >,
+    IsToMany extends boolean = IsToManyRelation<TContract, RelationOwner, RelName, State['nsId']>,
+    RefinedResult extends IncludeRefinementResult<
+      TContract,
+      RelatedName,
+      IsToMany
+    > = IncludeRefinementCollection<
+      TContract,
+      RelatedName,
+      SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
+      CollectionTypeState,
+      IsToMany
+    >,
+  >(
+    relationName: RelName,
+    refineFn: (
+      collection: IncludeRefinementCollection<
+        TContract,
+        RelatedName,
+        SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
+        DefaultCollectionTypeState,
+        IsToMany
+      >,
+    ) => RefinedResult,
+  ): Collection<
+    TContract,
+    ModelName,
+    SimplifyDeep<
+      Row & {
+        [K in RelName]: IncludeRefinementValue<
+          TContract,
+          RelationOwner,
+          K,
+          SimplifyDeep<InferRootRow<TContract, RelatedName, TargetNs>>,
+          RefinedResult,
+          State['nsId']
+        >;
+      }
+    >,
+    State
+  >;
   include<
     RelName extends VariantAwareIncludeRelationNames<
       TContract,
@@ -975,8 +1083,10 @@ class CollectionImpl<
    * const firstTen = await db.orm.User.orderBy((u) => u.id.asc()).limit(10).all();
    * ```
    */
-  limit(n: number): Collection<TContract, ModelName, Row, State> {
-    return this.#clone({ limit: n });
+  limit(
+    n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#clone({ limit: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**
@@ -990,8 +1100,10 @@ class CollectionImpl<
    *   .all();
    * ```
    */
-  offset(n: number): Collection<TContract, ModelName, Row, State> {
-    return this.#clone({ offset: n });
+  offset(
+    n: number | TraitExpression<readonly ['numeric'], false, ExtractCodecTypes<TContract>>,
+  ): Collection<TContract, ModelName, Row, State> {
+    return this.#clone({ offset: typeof n === 'number' ? n : toExpr(n) });
   }
 
   /**
@@ -1004,15 +1116,9 @@ class CollectionImpl<
    * whichever fits the caller. A single result can only be consumed
    * once.
    *
-   * Streaming is the default and the expected execution model. The
-   * only scenarios that fall back to buffering internally before
-   * yielding are drivers that cannot expose a cursor to the
-   * underlying database, and — for queries with `include(...)` —
-   * targets whose SQL dialect supports neither lateral joins nor
-   * correlated subqueries (so child rows cannot be stitched in a
-   * single streaming query). These are implementation details below
-   * the public API; the iteration shape itself is genuinely
-   * streaming whenever the driver and plan allow it.
+   * Queries without `include(...)` stream rows as the driver yields them (drivers that cannot
+   * expose a cursor buffer internally first). Queries with `include(...)` read the whole parent
+   * result set into memory before yielding the first row.
    *
    * ```typescript
    * // Thenable — collect to an array:
@@ -1037,6 +1143,46 @@ class CollectionImpl<
    */
   all(configure?: (meta: MetaBuilder<'read'>) => void): AsyncIterableResult<Row> {
     return this.#withAnnotationsFromMeta(configure, 'all').#dispatch();
+  }
+
+  get prepared(): PreparedCollection<TContract, ModelName, Row, State> {
+    return {
+      aggregate: (fn, configure) => this.#describeAggregate(fn, configure),
+      all: (configure) => {
+        const selected = this.#withAnnotationsFromMeta(configure, 'all');
+        return describeCollectionRows<Row>(selected.#descriptionOptions());
+      },
+      first: (
+        filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
+        configure?: (meta: MetaBuilder<'read'>) => void,
+      ) => {
+        const selected = this.#forFirst(filter, configure);
+        return describeCollectionFirst<Row>(selected.#descriptionOptions());
+      },
+    };
+  }
+
+  #descriptionOptions() {
+    return {
+      context: this.ctx.context,
+      state: this.state,
+      tableName: this.tableName,
+      modelName: this.modelName,
+      namespaceId: this.namespaceId,
+    };
+  }
+
+  #forFirst(
+    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']> | undefined,
+    configure: ((meta: MetaBuilder<'read'>) => void) | undefined,
+  ) {
+    const scoped =
+      filter === undefined
+        ? this
+        : typeof filter === 'function'
+          ? this.where(filter)
+          : this.where(filter);
+    return scoped.limit(1).#withAnnotationsFromMeta(configure, 'first');
   }
 
   /**
@@ -1069,37 +1215,14 @@ class CollectionImpl<
     configure: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null>;
   async first(
-    filter: (
-      model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
-    ) => WhereArg,
+    filter: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null>;
   async first(
-    filter: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
-    configure?: (meta: MetaBuilder<'read'>) => void,
-  ): Promise<Row | null>;
-  async first(
-    filter?:
-      | ((
-          model: VariantAwareModelAccessor<
-            TContract,
-            ModelName,
-            State['variantName'],
-            State['nsId']
-          >,
-        ) => WhereArg)
-      | ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
+    filter?: WhereInput<TContract, State['nsId'], ModelName, State['variantName']>,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<Row | null> {
-    const scoped =
-      filter === undefined
-        ? this
-        : typeof filter === 'function'
-          ? this.where(filter)
-          : this.where(filter);
-    const limited = scoped.limit(1).#withAnnotationsFromMeta(configure, 'first');
-    const rows = await limited.#dispatch().toArray();
-    return rows[0] ?? null;
+    return consumeFirstRow(this.#forFirst(filter, configure).#dispatch());
   }
 
   /**
@@ -1127,6 +1250,14 @@ class CollectionImpl<
     fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<AggregateResult<Spec>> {
+    const description = this.#describeAggregate(fn, configure);
+    return description.consume(queryPlanRows(this.ctx.runtime, description.plan));
+  }
+
+  #describeAggregate<Spec extends AggregateSpec>(
+    fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
+    configure?: (meta: MetaBuilder<'read'>) => void,
+  ): Preparable<Record<string, unknown>, Promise<AggregateResult<Spec>>> {
     const aggregateSpec = fn(
       createAggregateBuilder<TContract, ModelName, State['nsId']>(
         this.contract,
@@ -1170,20 +1301,38 @@ class CollectionImpl<
       ),
       annotationsMap,
     );
-    const rows = await queryPlanRows<Record<string, unknown>>(this.ctx.runtime, compiled).toArray();
-    // Values arrive decoded: the projection carries each aggregate's resolved
-    // output codec, so the runtime's decode pass has already turned the wire
-    // value into the application one. An absent alias means an empty input
-    // set, whose answer reads off the operation's declared row.
-    const row = rows[0] ?? {};
-    const result: Record<string, unknown> = {};
-    for (const [alias, selector] of entries) {
-      result[alias] = row[alias] ?? this.#emptyAggregateValue(selector);
-    }
-    return blindCast<
-      AggregateResult<Spec>,
-      "aliases are the aggregateSpec's own keys; values decoded by the projection codecs the same spec resolved"
-    >(result);
+    const results = entries.map(([alias, selector]) => {
+      const resolved = resolveAggregate({
+        aggregates: this.ctx.context.aggregateDescriptors,
+        contract: this.contract,
+        namespaceId: this.namespaceId,
+        tableName: this.tableName,
+        fn: selector.fn,
+        column: selector.column,
+      });
+      return {
+        alias,
+        resolved,
+        codec: this.ctx.context.contractCodecs.forCodecRef(resolved.codec),
+      };
+    });
+    return {
+      plan: compiled,
+      async consume(source) {
+        const rows = await source.toArray();
+        const row = rows[0] ?? {};
+        const result = Object.fromEntries(
+          results.map(({ alias, resolved, codec }) => {
+            const value = Object.hasOwn(row, alias) ? row[alias] : undefined;
+            return [alias, value ?? emptyAggregateResult(resolved, codec)];
+          }),
+        );
+        return blindCast<
+          AggregateResult<Spec>,
+          "aliases are the aggregateSpec's own keys; values decoded by the projection codecs the same spec resolved"
+        >(result);
+      },
+    };
   }
 
   /**
@@ -1191,12 +1340,13 @@ class CollectionImpl<
    * `select(...)` / `include(...)` projections applied to the returned
    * shape).
    *
-   * Related rows can be created or linked through relation callbacks
-   * on parent/child-owned relations (one-to-one or one-to-many).
-   * The callback receives a mutator exposing `create(...)` and
-   * `connect(...)`; `disconnect(...)` is only supported in nested
-   * `update(...)` mutations. Many-to-many relations are not yet
-   * supported as nested-mutation targets.
+   * Related rows can be created or linked through relation callbacks on any relation: to-one
+   * (1:1, N:1), to-many (1:N), and many-to-many (N:M, written through the junction table). The
+   * callback receives a mutator exposing `create(...)` and `connect(...)`; `disconnect(...)` is
+   * only supported in nested `update(...)` mutations. To-one relations take a single row or
+   * criterion.
+   * N:M `create`/`connect` are unavailable when the junction has required columns the relation API
+   * cannot populate.
    *
    * ```typescript
    * // Simple insert:
@@ -1228,9 +1378,9 @@ class CollectionImpl<
    *
    * Note: when the input contains nested-mutation callbacks, the
    * operation is executed as a graph of internal queries via
-   * `withMutationScope`. In that path, annotations apply to the
-   * logical `create()` call but do not currently flow into each
-   * constituent SQL statement issued for the related rows.
+   * `withMutationScope`. In that path the `configure` callback still runs, so `meta.annotate`
+   * validation applies, but the recorded annotations are discarded: neither the nested
+   * statements nor the read-back query carry them.
    */
   async create(
     data: ResolvedCreateInput<TContract, ModelName, State['variantName'], State['nsId']>,
@@ -1491,6 +1641,7 @@ class CollectionImpl<
     const mergedFieldToColumn = { ...baseFieldToColumn, ...variantFieldToColumn };
 
     const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+      const defaultValueCache = new Map<string, unknown>();
       for (const row of data) {
         const allMapped: Record<string, unknown> = {};
         for (const [fieldName, value] of Object.entries(row)) {
@@ -1512,7 +1663,7 @@ class CollectionImpl<
         }
 
         const merged = await withMutationScope(runtime, async (scope) => {
-          applyCreateDefaults(collectionCtx, namespaceId, tableName, [baseRow]);
+          applyCreateDefaults(collectionCtx, namespaceId, tableName, [baseRow], defaultValueCache);
           const baseCompiled = compileInsertReturning(
             contract,
             namespaceId,
@@ -1542,7 +1693,13 @@ class CollectionImpl<
 
           const pkValue = baseCreated[pkColumn];
           variantRow[pkColumn] = pkValue;
-          applyCreateDefaults(collectionCtx, namespaceId, variant.table, [variantRow]);
+          applyCreateDefaults(
+            collectionCtx,
+            namespaceId,
+            variant.table,
+            [variantRow],
+            defaultValueCache,
+          );
           const variantCompiled = compileInsertReturning(
             contract,
             namespaceId,
@@ -1833,12 +1990,13 @@ class CollectionImpl<
    * Requires a prior `.where(...)` — calling `update(...)` on an
    * unfiltered collection is a type error.
    *
-   * Related rows can be created or relinked through relation
-   * callbacks on parent/child-owned relations (one-to-one or
-   * one-to-many). The callback receives a mutator exposing
-   * `create(...)`, `connect(...)`, and `disconnect(...)`. Nested
-   * updates against existing related rows, and many-to-many relations
-   * as nested-mutation targets, are not supported through this API.
+   * Related rows can be created, linked, or unlinked through relation callbacks on any relation:
+   * to-one (1:1, N:1), to-many (1:N), and many-to-many (N:M, written through the junction table).
+   * The callback receives a mutator exposing `create(...)`, `connect(...)`, and `disconnect(...)`.
+   * A to-one `disconnect()` clears the foreign key; a to-many `disconnect()` with no criteria
+   * unlinks every related row; an N:M `disconnect()` requires criteria. N:M `create`/`connect` are
+   * unavailable when the junction has required columns the relation API cannot populate. Nested
+   * updates against existing related rows are not supported through this API.
    *
    * ```typescript
    * // Update one row by id:
@@ -1860,9 +2018,9 @@ class CollectionImpl<
    *
    * Note: when the input contains nested-mutation callbacks, the
    * operation is executed as a graph of internal queries via
-   * `withMutationScope`. In that path, annotations apply to the logical
-   * `update()` call but do not currently flow into each constituent SQL
-   * statement issued for the related rows.
+   * `withMutationScope`. In that path the `configure` callback still runs, so `meta.annotate`
+   * validation applies, but the recorded annotations are discarded: neither the nested
+   * statements nor the read-back query carry them.
    */
   async update(
     data: State['hasWhere'] extends true
@@ -2398,27 +2556,6 @@ class CollectionImpl<
     return rows[0] ?? null;
   }
 
-  /**
-   * The value an aggregate alias reads as when the result set has no row to
-   * read at all. Resolution mirrors planning — the same registry, operation,
-   * and column — so the answer derives from the operation's declared row
-   * rather than its name.
-   */
-  #emptyAggregateValue(selector: AggregateSelector<unknown>): EmptyAggregateValue {
-    const resolved = resolveAggregate({
-      aggregates: this.ctx.context.aggregateDescriptors,
-      contract: this.contract,
-      namespaceId: this.namespaceId,
-      tableName: this.tableName,
-      fn: selector.fn,
-      column: selector.column,
-    });
-    return emptyAggregateResult(
-      resolved,
-      this.ctx.context.contractCodecs.forCodecRef(resolved.codec),
-    );
-  }
-
   #assertIncludeRefinementMode(action: string): void {
     if (this.includeRefinementMode) {
       return;
@@ -2570,7 +2707,7 @@ class CollectionImpl<
    * compiled plan is post-wrapped via `mergeAnnotations` instead.
    * Read terminals `all` and `first` populate `state.annotations`
    * via `#withAnnotationsFromMeta` instead; `aggregate` uses this
-   * post-wrap path because its compile function doesn't take `state`.
+   * post-wrap path because `compileAggregate` does not forward `state.annotations` into the plan.
    * The meta builder's `annotate` method enforces applicability at the
    * type level and at runtime.
    */

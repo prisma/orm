@@ -91,16 +91,16 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 ]);
 
 function interpret(source: string, capabilities: Record<string, Record<string, boolean>> = {}) {
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(source, 'psl-pg-enum-column.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities,
     target: postgresTarget,
     scalarColumnDescriptors,
@@ -135,7 +135,7 @@ describe('PSL pg.enum(Ref) field resolution', () => {
     if (!result.ok) return;
 
     const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
-    const authTable = ns.table['authSession'];
+    const authTable = ns.table['AuthSession'];
     expect(authTable).toBeDefined();
     const aalColumn = authTable?.columns['aal'];
     expect(aalColumn).toMatchObject({
@@ -162,7 +162,8 @@ describe('PSL pg.enum(Ref) field resolution', () => {
     if (!result.ok) return;
 
     const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
-    const authTable = ns.table['authSession'];
+    const authTable = ns.table['AuthSession'];
+    expect(authTable).toBeDefined();
     expect(authTable?.checks ?? []).toEqual([]);
   });
 
@@ -201,7 +202,7 @@ namespace auth {
     if (!result.ok) return;
 
     const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
-    const aalsColumn = ns.table['authSession']?.columns['aals'];
+    const aalsColumn = ns.table['AuthSession']?.columns['aals'];
     expect(aalsColumn).toMatchObject({
       codecId: 'pg/enum@1',
       nativeType: 'auth.aal_level',
@@ -237,7 +238,7 @@ namespace auth {
     if (!result.ok) return;
 
     const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
-    const aalColumn = ns.table['authSession']?.columns['aal'];
+    const aalColumn = ns.table['AuthSession']?.columns['aal'];
     expect(aalColumn?.nullable).toBe(true);
     expect(aalColumn?.valueSet).toEqual({
       plane: 'storage',
@@ -278,7 +279,7 @@ namespace public {
 
     const ns = result.value.storage.namespaces['public'] as PostgresSchema;
     expect(ns.valueSet?.['AalLevel']).toMatchObject({ values: ['aal1', 'aal2'] });
-    const aalColumn = ns.table['authSession']?.columns['aal'];
+    const aalColumn = ns.table['AuthSession']?.columns['aal'];
     expect(aalColumn).toMatchObject({
       codecId: 'pg/enum@1',
       nativeType: 'aal_level',

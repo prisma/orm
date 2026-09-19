@@ -942,8 +942,8 @@ function buildDistinctNonLeafChildRowsSelect(options: {
 }
 
 /**
- * Build the inner SELECT for a scalar include reducer (`count` /
- * `sum` / `avg` / `min` / `max`).
+ * Build the inner SELECT for a scalar include reducer (any operation the aggregate registry
+ * contributes).
  *
  * Emits one row containing `json_build_object('value', AGG(...))`
  * over the child relation correlated to the parent via the FK. The

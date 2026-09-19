@@ -7,6 +7,7 @@ import type { SchemaInputSet } from './schema-inputs';
 
 export interface DocumentDiagnostics {
   readonly diagnostics: readonly LspDiagnostic[];
+  readonly parseDiagnostics: readonly LspDiagnostic[];
   readonly document: DocumentAst;
   readonly sourceFile: SourceFile;
   readonly symbolTable: SymbolTable;
@@ -27,6 +28,10 @@ export function computeDocumentDiagnostics(
   if (!inputs.includes(uri) || !isPrismaNextSchema(text)) {
     return null;
   }
-  const { document, sourceFile, symbolTable, diagnostics } = runPipeline(text, controlStack);
-  return { diagnostics, document, sourceFile, symbolTable };
+  const { document, sourceFile, symbolTable, diagnostics, parseDiagnostics } = runPipeline(
+    uri,
+    text,
+    controlStack,
+  );
+  return { diagnostics, parseDiagnostics, document, sourceFile, symbolTable };
 }

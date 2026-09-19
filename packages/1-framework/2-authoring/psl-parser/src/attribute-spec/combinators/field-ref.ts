@@ -1,36 +1,51 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import type { PslDiagnostic } from '../../diagnostic';
+import type { ModelSymbol } from '../../symbol-table';
+import type { ExpressionAst } from '../../syntax/ast/expressions';
 import { IdentifierAst } from '../../syntax/ast/identifier';
-import type { ArgType } from '../types';
+import type {
+  AttributeCtx,
+  FieldAttributeCtx,
+  FieldRefArgType,
+  ModelAttributeCtx,
+  ReferencedFieldRefArgType,
+} from '../types';
 import { leafDiagnostic } from './diagnostic';
 
-export type FieldRefScope = 'self' | 'referenced';
-
-export interface FieldRefArgType extends ArgType<string> {
-  readonly scope: FieldRefScope;
+function parseFieldName(
+  arg: ExpressionAst,
+  ctx: AttributeCtx,
+  model: ModelSymbol | undefined,
+): Result<string, readonly PslDiagnostic[]> {
+  const identifier = IdentifierAst.cast(arg.syntax);
+  if (identifier === undefined) {
+    return notOk([leafDiagnostic(ctx, arg, 'Expected a field name')]);
+  }
+  const name = identifier.name();
+  if (name === undefined) {
+    return notOk([leafDiagnostic(ctx, arg, 'Expected a field name')]);
+  }
+  // A referenced model in another space can't be resolved here (resolveReferencedModel returns undefined); skip the existence check — it runs where that model is known.
+  if (model !== undefined && !Object.hasOwn(model.fields, name)) {
+    return notOk([
+      leafDiagnostic(ctx, arg, `Field "${name}" does not exist on model "${model.name}"`),
+    ]);
+  }
+  return ok(name);
 }
 
-export function fieldRef(scope: FieldRefScope): FieldRefArgType {
+export function fieldRef(): FieldRefArgType<ModelAttributeCtx> {
   return {
     kind: 'fieldRef',
     label: 'field name',
-    scope,
-    parse: (arg, ctx): Result<string, readonly PslDiagnostic[]> => {
-      if (!(arg instanceof IdentifierAst)) {
-        return notOk([leafDiagnostic(ctx, arg, 'Expected a field name')]);
-      }
-      const name = arg.name();
-      if (name === undefined) {
-        return notOk([leafDiagnostic(ctx, arg, 'Expected a field name')]);
-      }
-      const model = scope === 'self' ? ctx.selfModel : ctx.resolveReferencedModel();
-      // A referenced model in another space can't be resolved here (resolveReferencedModel returns undefined); skip the existence check — it runs where that model is known.
-      if (model !== undefined && !Object.hasOwn(model.fields, name)) {
-        return notOk([
-          leafDiagnostic(ctx, arg, `Field "${name}" does not exist on model "${model.name}"`),
-        ]);
-      }
-      return ok(name);
-    },
+    parse: (arg, ctx) => parseFieldName(arg, ctx, ctx.selfModel),
+  };
+}
+
+export function referencedFieldRef(): ReferencedFieldRefArgType<FieldAttributeCtx> {
+  return {
+    kind: 'referencedFieldRef',
+    label: 'field name',
+    parse: (arg, ctx) => parseFieldName(arg, ctx, ctx.resolveReferencedModel()),
   };
 }

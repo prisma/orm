@@ -1,0 +1,93 @@
+import { describe, expect, it } from 'vitest';
+import type { ModelAttributeCtx } from '../src/exports';
+import {
+  bool,
+  entityRef,
+  fieldRef,
+  funcCall,
+  identifier,
+  int,
+  json,
+  list,
+  num,
+  numLiteral,
+  record,
+  str,
+} from '../src/exports';
+import { Cursor, parse, parseAttribute } from '../src/parse';
+import { PslSources } from '../src/source-file';
+import { buildSymbolTable } from '../src/symbol-table';
+import { FieldAttributeAst } from '../src/syntax/ast/attributes';
+import type { ExpressionAst } from '../src/syntax/ast/expressions';
+import type { SyntaxNode } from '../src/syntax/red';
+import { createSyntaxTree } from '../src/syntax/red';
+
+class ForeignCopyOfAnAstNode {
+  readonly syntax: SyntaxNode;
+  constructor(syntax: SyntaxNode) {
+    this.syntax = syntax;
+  }
+}
+
+function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCtx } {
+  const cursor = new Cursor('schema.prisma', `@demo(${source})`);
+  const root = createSyntaxTree(parseAttribute(cursor));
+  const node = FieldAttributeAst.cast(root);
+  const value = Array.from(node?.argList()?.args() ?? [])[0]?.value();
+  if (value === undefined) throw new Error('expected one argument');
+  const { document, sources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
+  const selfModel = symbolTable.topLevel.models['M'];
+  if (selfModel === undefined) throw new Error('expected model M');
+  return {
+    arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,
+    ctx: {
+      sources: new PslSources([[root, cursor.sourceFile]]),
+      selfModel,
+    },
+  };
+}
+
+describe('combinators dispatch on syntax kind, not on AST class identity', () => {
+  it.each([
+    ['str', str(), '"x"', 'x'],
+    ['int', int(), '3', 3],
+    ['num', num(), '2.5', 2.5],
+    ['numLiteral', numLiteral(), '2.50', { text: '2.50' }],
+    ['bool', bool(), 'true', true],
+    [
+      'identifier',
+      identifier('Cascade', { documentation: 'An accepted identifier in this test grammar.' }),
+      'Cascade',
+      'Cascade',
+    ],
+    ['entityRef', entityRef(), 'User', 'User'],
+    ['fieldRef', fieldRef(), 'id', 'id'],
+    ['json', json(), '"{\\"a\\":1}"', { a: 1 }],
+    ['list', list(str()), '["a", "b"]', ['a', 'b']],
+    ['record', record(int()), '{ a: 1 }', { a: 1 }],
+  ])('%s accepts a node from another module copy', (_name, argType, source, expected) => {
+    const { arg, ctx } = foreignArg(source);
+
+    const result = argType.parse(arg, ctx);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toEqual(expected);
+  });
+
+  it('funcCall accepts a node from another module copy', () => {
+    const { arg, ctx } = foreignArg('now()');
+
+    const result = funcCall('now', { documentation: 'Calls the named value generator.' }).parse(
+      arg,
+      ctx,
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.value).toMatchObject({ fn: 'now', args: {} });
+  });
+});

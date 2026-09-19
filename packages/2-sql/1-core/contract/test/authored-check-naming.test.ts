@@ -128,7 +128,7 @@ describe('lowerAuthoredCheck — exact-name body warning', () => {
       'check "positive_total" uses map: with a SQL body. Drift detection compares the authored ' +
         "SQL text byte-for-byte against Postgres's reprinted form, which is only reliable when the " +
         'text was captured by contract infer. For hand-authored definitions, use name: and let ' +
-        'Prisma Next manage the physical name; to migrate an adopted check to wire naming, replace ' +
+        'Prisma 8 manage the physical name; to migrate an adopted check to wire naming, replace ' +
         'map: with name: (keeping the body text unchanged) and apply the resulting rename migration.',
     );
   });

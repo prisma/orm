@@ -9,7 +9,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // update branch runs (the record already exists). The `create` arg is present but
 // unused. Upstream is matrix-parameterised on contentProperty (required/optional).
 //
-// prisma-next: `.where({ _id }).upsert({ update: {...}, create: { _id, content: {...} } })`.
+// Prisma 8: `.where({ _id }).upsert({ update: {...}, create: { _id, content: {...} } })`.
 // `upsert()` returns the post-update document.
 //
 // Ported (both variants):
@@ -28,7 +28,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Non-ported — see non-ported ledger:
 //   - optional/required `update` sub-operator inside upsert update, `update push/set nested list`
-//     — no partial composite-field update sub-operator in prisma-next
+//     — no partial composite-field update sub-operator in Prisma 8
 //   - `unset` required branch — upstream asserts Prisma-specific "Unknown argument `unset`" throw
 //   - `upsert set` / `upsert update` (nested composite `content: { upsert: {...} }` operator)
 
@@ -100,7 +100,7 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
     );
 
     // Upstream asserts null on required `content` is both a type error and a runtime throw.
-    // Prisma Next rejects it at the type level, and MongoDB rejects it through the
+    // Prisma 8 rejects it at the type level, and MongoDB rejects it through the
     // provisioned collection validator.
     it(
       'set null',
@@ -347,7 +347,7 @@ describe('ports/prisma/functional/composites/object/upsert-update', () => {
     );
 
     // Upstream: `update: { content: { unset: true } }` removes the optional composite and
-    // returns `{ content: null, ... }`. prisma-next's `$unset` removes the field entirely
+    // returns `{ content: null, ... }`. Prisma 8's `$unset` removes the field entirely
     // rather than writing `null`, so the document lacks the `content` key — it.fails.
     it.fails(
       'unset',

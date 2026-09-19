@@ -7,6 +7,7 @@ import {
   isColumnDefaultLiteralInputValue,
   isExecutionMutationDefaultValue,
 } from '@internal/contract/types';
+import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -117,6 +118,7 @@ export interface AuthoringTypeConstructorEntityRef {
 
 export interface AuthoringTypeConstructorDescriptor {
   readonly kind: 'typeConstructor';
+  readonly documentation?: string;
   readonly args?: readonly AuthoringArgumentDescriptor[];
   readonly output: AuthoringStorageTypeTemplate;
   /** Present when one of this constructor's positional arguments names another document-local entity instead of carrying a literal value. Absent for ordinary literal-argument constructors. */
@@ -330,7 +332,7 @@ export function resolveEnumCodecId(
   ctx: AuthoringEntityContext,
 ): { readonly codecId: string; readonly codecSpan: PslSpan } | undefined {
   const sourceId = ctx.sourceId ?? 'unknown';
-  const typeAttr = block.blockAttributes.find((a) => a.name === 'type');
+  const typeAttr = block.attributes['type'];
 
   if (typeAttr === undefined) {
     const inferredKind = classifyEnumMemberType(block);
@@ -346,21 +348,9 @@ export function resolveEnumCodecId(
     return { codecId: ctx.enumInferenceCodecs[inferredKind], codecSpan: block.span };
   }
 
-  const rawCodecArg = typeAttr.args[0]?.value;
-  const codecId =
-    rawCodecArg?.startsWith('"') && rawCodecArg.endsWith('"') && rawCodecArg.length >= 2
-      ? rawCodecArg.slice(1, -1)
-      : undefined;
-  if (codecId === undefined) {
-    ctx.diagnostics?.push({
-      code: 'PSL_ENUM_MISSING_TYPE',
-      message: `enum "${block.name}" @@type attribute must have a quoted codec id argument`,
-      sourceId,
-      span: typeAttr.span,
-    });
-    return undefined;
-  }
-  return { codecId, codecSpan: typeAttr.args[0]?.span ?? typeAttr.span };
+  const codecId = typeAttr.args['codecId'];
+  invariant(typeof codecId === 'string', '@@type on an enum block parses one string argument');
+  return { codecId, codecSpan: typeAttr.span };
 }
 
 export interface AuthoringEntityTypeTemplateOutput {
@@ -431,6 +421,7 @@ export type AuthoringEntityTypeNamespace = {
  */
 export interface AuthoringPslBlockDescriptor {
   readonly kind: 'pslBlock';
+  readonly documentation?: string;
   readonly keyword: string;
   readonly discriminator: string;
   readonly name: { readonly required: boolean };
@@ -464,6 +455,7 @@ export interface AuthoringPslBlockDescriptor {
     readonly parameter: string;
     readonly attribute: string;
   };
+  readonly attributes?: Readonly<Record<string, unknown>>;
 }
 
 export type AuthoringPslBlockDescriptorNamespace = {
@@ -735,7 +727,15 @@ function isWellFormedDescriptor(value: unknown, descriptorKind: string): boolean
       if (!('required' in name) || typeof name.required !== 'boolean') return false;
       if (!('parameters' in value)) return false;
       const parameters = value.parameters;
-      return typeof parameters === 'object' && parameters !== null && !Array.isArray(parameters);
+      if (typeof parameters !== 'object' || parameters === null || Array.isArray(parameters)) {
+        return false;
+      }
+      if (!('attributes' in value) || value.attributes === undefined) return true;
+      const attributes = value.attributes;
+      if (typeof attributes !== 'object' || attributes === null || Array.isArray(attributes)) {
+        return false;
+      }
+      return Object.values(attributes).every((factory) => typeof factory === 'function');
     }
     case 'modelAttribute': {
       if (

@@ -1,4 +1,4 @@
-# Agents — Prisma Next
+# Agents — Prisma 8
 
 Welcome. This is a contract‑first, agent‑friendly data layer.
 
@@ -21,7 +21,7 @@ Welcome. This is a contract‑first, agent‑friendly data layer.
 
 ## Project Overview
 
-**Prisma Next** is a contract-first data access layer:
+**Prisma 8** is a contract-first data access layer:
 
 - **Contract-first**: Emit `contract.json` + `contract.d.ts` — no executable runtime code generation
 - **Composable DSL**: Type-safe query builder (`sql().from(...).select(...)`)

@@ -3,7 +3,7 @@ import type {
   VerifyDatabaseSchemaResult,
 } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
-import type { NextAction } from '@internal/utils/structured-error';
+import type { Diagnostic, NextAction } from '@internal/utils/structured-error';
 import { CliStructuredError } from './control';
 
 // ============================================================================
@@ -137,7 +137,7 @@ function errorLegacyMarkerShape(options: {
 }): CliStructuredError {
   return errorRunnerFailed(
     `Legacy marker-table shape detected on ${options.markerLocation} (no \`space\` column). ` +
-      'Prisma Next is in pre-1.0; the previous transitional auto-migration to the per-space-row schema has been removed. ' +
+      'Prisma 8 is in pre-1.0; the previous transitional auto-migration to the per-space-row schema has been removed. ' +
       `Drop \`${options.markerLocation}\` and re-run \`{bin} db init\` to reinitialise from a clean baseline.`,
     {
       why: options.why,
@@ -330,6 +330,7 @@ export function errorRuntime(
   options?: {
     readonly why?: string;
     readonly fix?: string;
+    readonly diagnostics?: readonly Diagnostic[];
     readonly meta?: Record<string, unknown>;
     readonly cause?: unknown;
   },
@@ -337,6 +338,7 @@ export function errorRuntime(
   return new CliStructuredError(code, summary, {
     ...ifDefined('why', options?.why),
     ...ifDefined('fix', options?.fix),
+    ...ifDefined('diagnostics', options?.diagnostics),
     ...ifDefined('meta', options?.meta),
     ...ifDefined('cause', options?.cause),
   });

@@ -15,14 +15,14 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - simple  → `.where({ _id }).first()` returns the row incl. the composite content.
 //
 // Upstream omits `country` in its seed (Prisma stores it absent and reads it back
-// as `null`). prisma-next's mongo create input requires the optional `country` key
+// as `null`). Prisma 8's mongo create input requires the optional `country` key
 // (typed `string | null`), and an absent field reads back as `undefined`, so this
 // port seeds `country: null` explicitly. The observable read result — `country:
 // null` — is identical to upstream's asserted value.
 //
 // Non-ported (see _inbox): `select` (nested composite sub-selection),
 // `orderBy` (nested `content.upvotes._count` ordering), and `filter isSet`
-// (`country: { isSet: true }` operator) — none expressible in prisma-next's mongo ORM.
+// (`country: { isSet: true }` operator) — none expressible in Prisma 8's mongo ORM.
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
   return withMongoPort<Contract>({ contractJson }, fn);

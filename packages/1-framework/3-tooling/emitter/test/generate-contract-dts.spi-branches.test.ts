@@ -34,7 +34,6 @@ function makeEnumContract(opts: {
   };
   includeEnumBlock: boolean;
 }): Contract {
-  const base = createTestContract();
   const post = {
     fields: {
       priority: {
@@ -58,10 +57,7 @@ function makeEnumContract(opts: {
       },
     };
   }
-  return {
-    ...base,
-    domain: { namespaces: { public: publicNs } },
-  } as unknown as Contract;
+  return createTestContract({ namespaces: { public: publicNs } });
 }
 
 describe('generateContractDts SPI hook plumbing', () => {

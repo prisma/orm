@@ -103,9 +103,9 @@ export function generateDataContractJsonSchema(): JsonSchemaObject {
   return {
     $id: 'https://prisma.dev/schemas/data-contract-sql-v1.json',
     $schema: 'https://json-schema.org/draft/2020-12/schema',
-    title: 'Prisma Next Data Contract SQL v1',
+    title: 'Prisma 8 Data Contract SQL v1',
     description:
-      'Schema for Prisma Next contract.json files for the SQL family (postgres, mysql, sqlite, etc.). Generated from the arktype schemas in @internal/sql-contract — do not edit by hand; run `pnpm schemas:generate` in @internal/sql-contract-ts.',
+      'Schema for Prisma 8 contract.json files for the SQL family (postgres, mysql, sqlite, etc.). Generated from the arktype schemas in @internal/sql-contract — do not edit by hand; run `pnpm schemas:generate` in @internal/sql-contract-ts.',
     ...contract,
   };
 }

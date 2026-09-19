@@ -23,7 +23,7 @@
 //     author    User @relation(fields: [authorId], references: [id])
 //   }
 //
-// Prisma uses an implicit M:N join table. Prisma-next PSL requires an explicit
+// Prisma uses an implicit M:N join table. Prisma 8 PSL requires an explicit
 // junction model. We author UserGroup with composite @@id on the FK pair, and
 // add bare backrelation list fields (`groups Group[]` on User, `users User[]`
 // on Group) so the interpreter lowers those relations with cardinality 'N:M'
@@ -37,12 +37,14 @@ model User {
   balance  Int
   posts    Post[]
   groups   Group[]
+  @@map("user")
 }
 
 model Group {
   id    String  @id
   title String
   users User[]
+  @@map("group")
 }
 
 model UserGroup {
@@ -52,6 +54,7 @@ model UserGroup {
   group   Group @relation(fields: [groupId], references: [id])
 
   @@id([userId, groupId])
+  @@map("userGroup")
 }
 
 model Post {
@@ -60,4 +63,5 @@ model Post {
   upvotes   Int
   authorId  String
   author    User    @relation(fields: [authorId], references: [id])
+  @@map("post")
 }

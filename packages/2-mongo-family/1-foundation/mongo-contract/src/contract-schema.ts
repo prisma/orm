@@ -67,12 +67,30 @@ const RelationOnSchema = type({
   targetFields: 'string[]',
 });
 
-const RelationSchema = type({
+const ToOneReferenceRelationSchema = type({
   '+': 'reject',
   to: CrossReferenceSchema,
-  cardinality: "'1:1' | '1:N' | 'N:1'",
-  'on?': RelationOnSchema,
+  cardinality: "'1:1' | 'N:1'",
+  'nullable?': 'boolean',
+  on: RelationOnSchema,
 });
+
+const ToManyReferenceRelationSchema = type({
+  '+': 'reject',
+  to: CrossReferenceSchema,
+  cardinality: "'1:N'",
+  on: RelationOnSchema,
+});
+
+const EmbedRelationSchema = type({
+  '+': 'reject',
+  to: CrossReferenceSchema,
+  cardinality: "'1:1' | '1:N'",
+});
+
+const RelationSchema = ToOneReferenceRelationSchema.or(ToManyReferenceRelationSchema).or(
+  EmbedRelationSchema,
+);
 
 const StorageRelationEntrySchema = type({
   '+': 'reject',

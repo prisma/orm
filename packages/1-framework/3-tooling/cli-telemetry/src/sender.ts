@@ -12,7 +12,7 @@
  *      error, parse error of the response, anything else: same outcome.
  *
  * Every error is swallowed; the only escape valve for visibility is
- * `PRISMA_NEXT_DEBUG=1`, which routes diagnostics to stderr. In normal
+ * `PRISMA_DEBUG=1`, which routes diagnostics to stderr. In normal
  * operation no telemetry-originating output ever reaches the user — the
  * parent's stdio map ignores our streams anyway, but we also gate
  * stderr writes behind the debug flag so the same binary is safe to
@@ -24,7 +24,7 @@ import { isParentToSenderPayload, type ParentToSenderPayload } from './payload';
 const REQUEST_TIMEOUT_MS = 1500;
 
 function debugLog(message: string, error?: unknown): void {
-  if (process.env['PRISMA_NEXT_DEBUG'] !== '1') return;
+  if (process.env['PRISMA_DEBUG'] !== '1') return;
   if (error !== undefined) {
     process.stderr.write(`[cli-telemetry] ${message}: ${String(error)}\n`);
   } else {

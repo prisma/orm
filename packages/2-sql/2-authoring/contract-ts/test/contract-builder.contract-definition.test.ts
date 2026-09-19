@@ -121,6 +121,7 @@ describe('shared contract definition lowering', () => {
               toModel: 'User',
               toTable: 'app_user',
               cardinality: 'N:1',
+              nullable: false,
               on: {
                 parentTable: 'blog_post',
                 parentColumns: ['author_id'],

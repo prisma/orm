@@ -5,7 +5,7 @@ Source: `packages/client/tests/functional/extensions/pdp.ts`
 Every test in this file exercises `$extends` query extensions in combination with Prisma's data-proxy
 (Prisma Accelerate / PDP) transport: `customDataProxyFetch` hooks, `_runtimeDataModel`, engine-hash
 headers, batch-request interception, and `$parent` inside interactive transactions — most are gated on
-`TEST_DATA_PROXY`. prisma-next has neither a `$extends` client-extension surface NOR a Prisma
+`TEST_DATA_PROXY`. Prisma 8 has neither a `$extends` client-extension surface NOR a Prisma
 Accelerate/data-proxy transport (zero hits for `$extends`/`getExtensionContext`/`defineExtension`/
 `customDataProxyFetch` across `packages/` outside node_modules/dist). The subject of each test is
 inexpressible on both counts.

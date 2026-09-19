@@ -56,7 +56,7 @@ export async function loadProjectConfig(projectRoot: string): Promise<ProjectCon
     if (config === null || Object.keys(config).length === 0) {
       return EMPTY_PROJECT_CONFIG;
     }
-    // The engine shape nests the Prisma Next config as the `orm` section;
+    // The engine shape nests the Prisma 8 config as the `orm` section;
     // an export without the marker is not a config this CLI reads.
     if (config['$prismaConfig'] === undefined) {
       return EMPTY_PROJECT_CONFIG;

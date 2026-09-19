@@ -1,16 +1,16 @@
-# Framework Integration Analysis for Prisma Next
+# Framework Integration Analysis for Prisma 8
 
 ## Purpose
 
-A key success metric for Prisma Next is integration into popular JavaScript/TypeScript frameworks. This document identifies the characteristics of the framework ecosystem that create requirements on Prisma Next's architecture — specifically, the hard integration problems that the framework and adapter layers must solve.
+A key success metric for Prisma 8 is integration into popular JavaScript/TypeScript frameworks. This document identifies the characteristics of the framework ecosystem that create requirements on Prisma 8's architecture — specifically, the hard integration problems that the framework and adapter layers must solve.
 
-The audience is the Prisma Next engineering team: the architect designing the framework, and the engineers implementing it.
+The audience is the Prisma 8 engineering team: the architect designing the framework, and the engineers implementing it.
 
-## How Prisma Next changes the integration picture
+## How Prisma 8 changes the integration picture
 
 In Prisma ORM, `PrismaClient` is a single instantiated object with a built-in connection pool and Rust query engine binary. Framework integration boils down to: instantiate the client, keep it alive for the right scope, and call methods on it. The main pain points are binary size, cold starts, edge runtime incompatibility, connection exhaustion, and mocking difficulty.
 
-Prisma Next's architecture changes the integration surface:
+Prisma 8's architecture changes the integration surface:
 
 - **No query engine binary**: Pure TypeScript. Removes the most common edge/serverless friction (binary size, cold starts, read-only filesystems).
 - **Contract + context, not client**: The unit of integration is `ExecutionContext` (contract + operations + codecs + adapter), not a monolithic `PrismaClient`.
@@ -28,7 +28,7 @@ These changes solve several Prisma ORM pain points outright (see [Appendix B](#a
 
 Connection management is the hardest part of framework integration. The difficulty isn't Prisma-specific — it's inherent to the mismatch between database connection models (long-lived TCP, limited slots) and modern compute models (ephemeral, massively parallel, sometimes without TCP).
 
-Prisma Next's pure-TS architecture removes the *engine binary* problem but does **not** remove the *connection* problem. The adapter still needs a database connection, and how that connection is obtained, pooled, and released varies dramatically by execution model.
+Prisma 8's pure-TS architecture removes the *engine binary* problem but does **not** remove the *connection* problem. The adapter still needs a database connection, and how that connection is obtained, pooled, and released varies dramatically by execution model.
 
 ### The four execution models
 
@@ -99,7 +99,7 @@ This is framework-agnostic — the same pattern works in every meta-framework.
 
 ### Summary
 
-| Execution model | Connection strategy | Who pools? | Prisma Next's role |
+| Execution model | Connection strategy | Who pools? | Prisma 8's role |
 |---|---|---|---|
 | Long-lived server | TCP pool, shared across requests | **Adapter** (internal pool) | Pool config + lifecycle hooks |
 | Serverless (Node) | TCP, reused in warm instances | **External pooler** (PgBouncer, RDS Proxy, etc.) | Accept pooler endpoint; expose pool handle |
@@ -142,7 +142,7 @@ In RSC, multiple Server Components render **concurrently within the same request
 
 ### What needs validation
 
-The right next step is a **proof-of-concept**: build a Next.js App Router page with multiple parallel Server Components querying through a shared Prisma Next runtime. Observe connection pool behavior, Collection cache behavior under concurrent access, and runtime state transitions. The PoC should answer:
+The right next step is a **proof-of-concept**: build a Next.js App Router page with multiple parallel Server Components querying through a shared Prisma 8 runtime. Observe connection pool behavior, Collection cache behavior under concurrent access, and runtime state transitions. The PoC should answer:
 
 1. **Concurrency safety of runtime state**: `RuntimeCoreImpl` has mutable flags (`verified`, `startupVerified`) read and written during query execution. Node.js is single-threaded, so there are no CPU-level data races, but `async` interleaving between `await` points can still produce surprising behavior if state transitions aren't atomic across awaits. Does the PoC surface any issues?
 
@@ -154,7 +154,7 @@ The right next step is a **proof-of-concept**: build a Next.js App Router page w
 
 ## Hard problem 3: Streaming composition
 
-Prisma Next is designed around streaming (ADR 124, ADR 125). All queries return `AsyncIterable<Row>`. This is a differentiator over Prisma ORM, which always buffers the entire result set. But the streaming story has three layers, and only the first is designed.
+Prisma 8 is designed around streaming (ADR 124, ADR 125). All queries return `AsyncIterable<Row>`. This is a differentiator over Prisma ORM, which always buffers the entire result set. But the streaming story has three layers, and only the first is designed.
 
 ### Layer 1: Database → Runtime (designed)
 
@@ -186,7 +186,7 @@ Progressive rendering needs *query-level* concurrency (multiple queries in paral
 | Express / Fastify | `res.write()` | `for await` loop |
 | NestJS | `Observable` or `StreamableFile` | `AsyncIterable` → `Observable` conversion |
 
-The bridges are straightforward, but Prisma Next should provide a `toReadableStream()` helper with serialization options (NDJSON, CSV) to avoid boilerplate. **This is a lower-priority use case** — most frameworks use Pattern A for page renders, and row-level streaming is primarily for backend export endpoints.
+The bridges are straightforward, but Prisma 8 should provide a `toReadableStream()` helper with serialization options (NDJSON, CSV) to avoid boilerplate. **This is a lower-priority use case** — most frameworks use Pattern A for page renders, and row-level streaming is primarily for backend export endpoints.
 
 **What must be built for Layer 2**:
 
@@ -213,9 +213,9 @@ When a query streams via cursor, the connection is held for the entire stream du
 
 The contract emit step must be invisible to the developer. If users have to remember to run a manual command after editing their schema — the way `prisma generate` worked — then types go stale, the DX is broken, and we've recreated the exact pain point we're trying to eliminate.
 
-### Why Prisma Next can solve this
+### Why Prisma 8 can solve this
 
-In Prisma ORM, the query engine was a Rust binary invoked via a child process. Building build tool plugins that transparently re-run it was impractical — too slow, too fragile, too many platform-specific binaries. In Prisma Next, the entire emit pipeline is pure TypeScript, invoked via `executeContractEmit()` from `@internal/cli/control-api`. This makes build tool plugin integration trivial.
+In Prisma ORM, the query engine was a Rust binary invoked via a child process. Building build tool plugins that transparently re-run it was impractical — too slow, too fragile, too many platform-specific binaries. In Prisma 8, the entire emit pipeline is pure TypeScript, invoked via `executeContractEmit()` from `@internal/cli/control-api`. This makes build tool plugin integration trivial.
 
 ### Proof of concept: Vite plugin
 
@@ -270,18 +270,18 @@ Pure ESM, `contract.json` importable via `with { type: 'json' }`, no Node.js bui
 
 ## Architectural advantages (solved by design)
 
-These are integration properties that Prisma Next's architecture provides out of the box. They require no further design work, but should be validated during Tier 1 framework integration.
+These are integration properties that Prisma 8's architecture provides out of the box. They require no further design work, but should be validated during Tier 1 framework integration.
 
 ### TypeScript type safety
 
-End-to-end type safety is one of Prisma Next's core promises and a key competitive advantage for framework integration. The type inference chain:
+End-to-end type safety is one of Prisma 8's core promises and a key competitive advantage for framework integration. The type inference chain:
 
 1. **`contract.d.ts`** provides literal types for every model, field, and relation — the source of truth.
 2. **`DefaultModelRow<TContract, ModelName>`** maps contract field types to concrete JavaScript types (e.g., `string`, `number`, `boolean`).
 3. **Query builders narrow types precisely**: `.select('id', 'email')` produces `Pick<DefaultModelRow<...>, 'id' | 'email'>`, `.include('posts')` extends the row type with the related model's rows.
 4. **`AsyncIterableResult<Row>`** implements `PromiseLike<Row[]>`, so `await db.users.select('id', 'email').all()` infers `{ id: number; email: string }[]` — a concrete, inspectable type.
 
-Framework-level type utilities that rely on return-type inference — SvelteKit's `PageData`, Nuxt's `useAsyncData`, tRPC router definitions, Next.js Server Component props — propagate Prisma Next's types to the client automatically, with zero type boilerplate.
+Framework-level type utilities that rely on return-type inference — SvelteKit's `PageData`, Nuxt's `useAsyncData`, tRPC router definitions, Next.js Server Component props — propagate Prisma 8's types to the client automatically, with zero type boilerplate.
 
 **One edge case to validate**: `AsyncIterableResult` implements `PromiseLike`, not `Promise`. TypeScript's `Awaited<T>` handles this correctly, but a framework utility that explicitly checks for `Promise` (via `instanceof` or a nominal type) could reject it. No known framework does this today.
 
@@ -295,7 +295,7 @@ The architecture supports all tenancy models out of the box. Each instantiation 
 
 ### Server-only guarantees
 
-All meta-frameworks enforce a server/client boundary. Prisma Next's runtime packages should never be importable on the client side. Need to verify that tree-shaking and package `exports` don't accidentally expose server code.
+All meta-frameworks enforce a server/client boundary. Prisma 8's runtime packages should never be importable on the client side. Need to verify that tree-shaking and package `exports` don't accidentally expose server code.
 
 ### NestJS dependency injection
 
@@ -408,7 +408,7 @@ export class AppModule {}
 
 @Injectable()
 export class UserService {
-  constructor(@Inject(PRISMA_NEXT) private db: PrismaNextHandle) {}
+  constructor(@Inject(PRISMA) private db: PrismaHandle) {}
   findAll() { return this.db.orm.user.all(); }
 }
 ```
@@ -441,7 +441,7 @@ export const db = globalForDb.db ??= createDb({ contractJson, url: process.env['
 
 ## Appendix B: Prisma ORM pain points comparison
 
-| Pain point | Root cause in Prisma ORM | Status in Prisma Next |
+| Pain point | Root cause in Prisma ORM | Status in Prisma 8 |
 |---|---|---|
 | Connection exhaustion in Next.js dev | HMR creates new `PrismaClient` instances, each with its own pool | **Same problem, lighter form.** Singleton pattern still needed, but adapter pool is lighter than engine pool. |
 | Edge runtime incompatibility | Rust query engine binary can't run in V8 isolates | **Solved.** No binary — pure TypeScript. |

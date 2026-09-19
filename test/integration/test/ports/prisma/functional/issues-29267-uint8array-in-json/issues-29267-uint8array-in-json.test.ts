@@ -10,13 +10,13 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Subject: a `Uint8Array` embedded anywhere inside a Json field is serialised to a
 // base64 string. Prisma special-cases `Uint8Array` in its JSON serialiser.
 //
-// prisma-next's JSON codec serialises via plain `JSON.stringify`, which turns a
+// Prisma 8's JSON codec serialises via plain `JSON.stringify`, which turns a
 // `Uint8Array` into an index-keyed object (`{ "0": 72, "1": 101, ... }`), not a
-// base64 string. This is a genuine prisma-next gap: there is no Uint8Array→base64
+// base64 string. This is a genuine Prisma 8 gap: there is no Uint8Array→base64
 // hook in the JSON codec path. The faithful upstream assertions are ported verbatim
 // and marked `it.fails` — they run but diverge on this serialisation.
 //
-// `Uint8Array` is not part of prisma-next's `JsonValue`, so inputs are cast
+// `Uint8Array` is not part of Prisma 8's `JsonValue`, so inputs are cast
 // (test files are cast-exempt); the cast preserves the subject (Uint8Array → base64).
 
 describe('ports/prisma/functional/issues-29267-uint8array-in-json', () => {

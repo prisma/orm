@@ -12,7 +12,7 @@ vi.mock('node:child_process', async () => {
 });
 
 const commandInput = {
-  commandPath: ['prisma-next', 'init'],
+  commandPath: ['prisma', 'init'],
   positionalArgs: [],
   options: [],
 };
@@ -38,8 +38,8 @@ describe('test runs short-circuit the telemetry path', () => {
     rmSync(xdgRoot, { recursive: true, force: true });
   });
 
-  it('the test harness sets PRISMA_NEXT_DISABLE_TELEMETRY=1', () => {
-    expect(process.env['PRISMA_NEXT_DISABLE_TELEMETRY']).toBe('1');
+  it('the test harness sets PRISMA_DISABLE_TELEMETRY=1', () => {
+    expect(process.env['PRISMA_DISABLE_TELEMETRY']).toBe('1');
   });
 
   it('runTelemetry returns gated-off under the harness env even with a stored opt-in', () => {

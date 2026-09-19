@@ -1,6 +1,6 @@
 # @internal/target-sqlite
 
-SQLite target pack for Prisma Next.
+SQLite target pack for Prisma 8.
 
 ## Package Classification
 

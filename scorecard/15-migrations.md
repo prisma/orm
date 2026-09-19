@@ -4,15 +4,15 @@
 
 Legend:
 
-- `✅` **Works** — proven by a Prisma Next **integration** test (one that executes the feature against a database — Postgres via PGlite, SQLite via its real driver, or MongoDB via mongodb-memory-server — and asserts the observable runtime result). Unit-tier tests (SQL/AST/plan/type/snapshot assertions, or any test that never hits a database) do not qualify. Per-database rigor applies: a Postgres integration test cannot justify a SQLite or MongoDB `✅`, and vice versa.
-- `🟡` **Untested** — reachable through the Prisma Next public surface, but no proving Prisma Next integration test exists yet (evidence left blank). This includes features whose only backing is a unit-tier test.
-- `🧪` **Experimental** — shipped in Prisma Next but outside the stability promise (polymorphism / multi-table inheritance).
-- `❌` **Not in 8.0** — deliberately absent from Prisma Next.
+- `✅` **Works** — proven by a Prisma 8 **integration** test (one that executes the feature against a database — Postgres via PGlite, SQLite via its real driver, or MongoDB via mongodb-memory-server — and asserts the observable runtime result). Unit-tier tests (SQL/AST/plan/type/snapshot assertions, or any test that never hits a database) do not qualify. Per-database rigor applies: a Postgres integration test cannot justify a SQLite or MongoDB `✅`, and vice versa.
+- `🟡` **Untested** — reachable through the Prisma 8 public surface, but no proving Prisma 8 integration test exists yet (evidence left blank). This includes features whose only backing is a unit-tier test.
+- `🧪` **Experimental** — shipped in Prisma 8 but outside the stability promise (polymorphism / multi-table inheritance).
+- `❌` **Not in 8.0** — deliberately absent from Prisma 8.
 - `—` **n/a** — feature does not apply to that database.
 
 ## Migrations — workflow
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | Author + apply migrations (plan → apply) | ✅ | ✅ | ✅ | `test/integration/test/cli.migration-apply.e2e.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts`; `test/integration/test/mongo/migration-e2e.test.ts` |
 | `db init` (additive bootstrap) | ✅ | 🟡 | ✅ | `test/integration/test/cli.db-init.e2e.test.ts`; `test/integration/test/mongo/migration-e2e.test.ts` (`full lifecycle via control driver`) |
@@ -39,7 +39,7 @@ Legend:
 
 ## Migrations — columns & types
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | `createTable` | ✅ | ✅ | — | `test/integration/test/cli.migration-apply.e2e.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`single table with PK`) |
 | `createCollection` | — | — | ✅ | `test/integration/test/mongo/migration-authoring-e2e.test.ts` (`createCollection`) |
@@ -62,7 +62,7 @@ Legend:
 
 ## Migrations — IDs, PKs & autoincrement
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | Single-column primary key | ✅ | ✅ | — | `test/integration/test/cli.migration-apply.e2e.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`single table with PK`) |
 | Compound primary key | 🟡 | 🟡 | — | |
@@ -74,7 +74,7 @@ Legend:
 
 ## Migrations — foreign keys
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | `addForeignKey` | ✅ | ✅ | — | `packages/3-targets/6-adapters/postgres/test/migrations/cross-namespace-fk.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`FK ON DELETE CASCADE`) |
 | Referential action `cascade` | ✅ | ✅ | — | `test/integration/test/referential-actions.integration.test.ts` (`ON DELETE CASCADE removes child rows`); `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`FK ON DELETE CASCADE`) |
@@ -93,7 +93,7 @@ Legend:
 
 ## Migrations — indexes & unique
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | `createIndex` | ✅ | ✅ | ✅ | `packages/3-targets/6-adapters/postgres/test/migrations/index-introspection.integration.test.ts`; `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`indexes`); `test/integration/test/mongo/migration-e2e.test.ts` (`applies createIndex and verifies the index exists`) |
 | `dropIndex` | 🟡 | ✅ | ✅ | `test/e2e/framework/test/sqlite/migrations/destructive.test.ts` (`drops an index`); `test/integration/test/mongo/migration-e2e.test.ts` (`drops an index when the destination contract removes it`) |
@@ -118,7 +118,7 @@ Legend:
 
 ## Migrations — enums
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | `createNativeEnumType` | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/native-enum-lifecycle-e2e.integration.test.ts` (`create: CREATE TYPE is planned before the table, applies cleanly`) |
 | `dropNativeEnumType` | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/native-enum-lifecycle-e2e.integration.test.ts` (`drop: DROP TYPE is planned after the dependent column is gone`) |
@@ -130,7 +130,7 @@ Legend:
 
 ## Migrations — defaults
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | Literal defaults migrated | ✅ | ✅ | — | `test/e2e/framework/test/dml.test.ts` (`applies literal defaults` — schema provisioned via `db init` migration apply, defaults filled by the database); `test/e2e/framework/test/sqlite/migrations/additive.test.ts` (`default values`) |
 | `now()` / current-timestamp default | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts` (`round-trips a now() default`) |
@@ -143,7 +143,7 @@ Legend:
 
 ## Migrations — native types
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | Create native `@db.*`-typed columns (non-array, e.g. `@db.VarChar`, `@db.Uuid`) | 🟡 | — | — | |
 | Native array columns | ✅ | — | — | `packages/3-targets/6-adapters/postgres/test/migrations/native-array-columns.integration.test.ts` |
@@ -156,7 +156,7 @@ Legend:
 
 ## Migrations — extensions
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | `installExtension` | ✅ | — | — | `test/integration/test/extension-pgvector-scenario-a.e2e.integration.test.ts` |
 | `createExtension` | 🟡 | — | — | |
@@ -165,14 +165,14 @@ Legend:
 
 ## Migrations — views
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | View entity (read-only models over DB views) | ❌ | ❌ | — | |
 | Views excluded from migrations | ❌ | ❌ | — | |
 
 ## Migrations — existing-data safety
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | Static operation-class gating (additive/widening/destructive) | ✅ | ✅ | — | `test/integration/test/cli.db-update.e2e.test.ts` (`fails with DESTRUCTIVE_CHANGES`); `test/e2e/framework/test/sqlite/migrations/destructive.test.ts` |
 | Required→optional column (safe) | 🟡 | ✅ | — | `test/e2e/framework/test/sqlite/migrations/widening.test.ts` (`relaxes NOT NULL to nullable`) |
@@ -184,7 +184,7 @@ Legend:
 
 ## Migrations — schema filters
 
-| Feature | Postgres | SQLite | MongoDB | Prisma Next evidence |
+| Feature | Postgres | SQLite | MongoDB | Prisma 8 evidence |
 | --- | --- | --- | --- | --- |
 | `@@control(external)` policy | ✅ | 🟡 | ✅ | `test/integration/test/cli.control-policy.postgres.e2e.test.ts` (`external: zero DDL into namespace`); `test/integration/test/cli.control-policy.mongo.e2e.test.ts` |
 | `@@control(tolerated)` policy | ✅ | 🟡 | 🟡 | `test/integration/test/cli.control-policy.postgres.e2e.test.ts` (`tolerated: preserves extra columns across update`) |

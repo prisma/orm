@@ -451,3 +451,25 @@ Project closed at TML-2663 / PR #597 with all eight functional requirements sati
 **One-sentence summary.** Migrated `@internal/mongo` and siblings from a pinned `mongodb@^6` to a single-supported-major peer-dep posture on `mongodb@^7` — users now control the install, Prisma Next still owns the user-facing type surface — in one PR with three implementer commits and zero scope thrash.
 
 **Upstream candidate?** Yes for F6 / F7 (orchestrator-behavior, already routed). F8 / F9 / scope-trap bullet are mostly project-context (calibration-of-recon-briefs, calibration-of-validation-gate-scripts) but the underlying patterns ("recon-by-src-only", "regex-on-structured-files", "blanket-package.json-non-goals") generalise; mark as `maybe` for the synthesis ticket.
+
+## 2026-09-10 · drive-close-project · surprise (mandatory final retro — model-and-result-types / TML-3233)
+
+Project `model-and-result-types` (TML-3233, PR prisma/orm#30231) closed as one slice on one PR after a stacked spike (TML-3234, #30236) was folded back into it. It ships `Models` and `models` in `contract.d.ts`, `Scalars` and `Shape` in the family contract packages, `ResultType` on ORM collections, relation nullability recorded on the contract, and a runnable demo endpoint. The thesis held: **a model is the whole row plus its relations, as written in PSL; a query result is a view; the response type is declared from the model and the compiler holds the query to it.**
+
+**What went well.** Design was settled in conversation with the operator and Serhii before any code, and each reversal (dropping `With`, then `Shape`, then the `'+'`-includes-relations rule, then the always-explicit namespace rule and its SQLite exception) landed in the brief before the implementer saw it. Building the `Shape` brief as a spike on a stacked branch answered "does it hold" in one afternoon, with a reviewer probing the rules the brief did not name (union distribution, the `'+'`-plus-key overlap, the F-bounded constraint needing export). The eight-angle code review found three load-time defects that no test on the branch could have found, because every fixture had been regenerated.
+
+**What surprised us.**
+
+- A required key on `contract.json` is a breaking change for artefacts users cannot regenerate. Every fixture in the repo was regenerated, so nothing red appeared until the reviewer traced the migration loader. Landed as [F20](../calibration/failure-modes.md#f20-long-lived-pr-drifts-under-main-numbering-version-dirs-and-write-once-artefacts-move-without-the-branch-noticing) and a [DoD overlay item](../calibration/dod.md#documentation--migration).
+- A type that is correct under this repo's `tsconfig` (`exactOptionalPropertyTypes`) was wrong for every consumer. `Scalars<M>` collapsed to `{}` in a default `strict` project. Consumer-facing types now carry a test that compiles the fixture with the repo's non-default flags off.
+- Adjacent fixes in other subsystems (a Biome plugin exclusion, a language-server dispose race) were built because the same class of defect was in front of us, then pulled out at the operator's request as unrelated complexity and filed as TML-3236 and TML-3237. The team's "fix adjacent defects in the same PR" preference applies within the subsystem the PR is about; a defect in another subsystem is its own PR.
+- The relation-nullability rule was implemented five times across two families and two authoring surfaces before review, and had already diverged. One function in `contract-authoring` now owns it.
+- `main` moved under the PR three times: an ADR number collision, a version bump that moved the upgrade-instructions directory, and snapshots added by `main` that the branch's emitter wrote differently. Each showed up only in CI's merge tree. F20 covers it.
+
+**Lessons landed where.** F20 and the DoD overlay item above (project context). The architectural decision is [ADR 250](../../docs/architecture%20docs/adrs/ADR%20250%20-%20Models%20and%20views%20are%20emitted%20from%20the%20contract.md), with the reference page `docs/reference/model-and-result-types.md` and the `prisma-8` user skill as the user-facing surfaces.
+
+**Deferred work (ticketed).** TML-3235 Mongo ORM row typing does not narrow on `select`, `variant`, or a polymorphic include. TML-3236 language-server dispose race. TML-3237 Biome plugin test-file exclusion. Slice 2, the ORM reading its row types from the emitted models through a `TypeMaps` slot. Mongo read-time deviations from the contract (a required reference whose document is missing comes back with the key absent). `createAll` / `createAndCount` on-conflict option. Mongo embedded documents cannot record optionality. The demo's `pnpm start` lacks a Temporal polyfill. Declined without a ticket: contract-level field hiding (`omit`), until there is a concrete ask.
+
+**ADR-worthy?** Yes, ADR 250.
+
+**One-sentence summary.** Prisma 8 now emits your models as types, gives you `Shape` to declare response types from them, and lets `ResultType` name any ORM query; relation nullability is a contract fact and old contracts still load.

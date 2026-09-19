@@ -8,12 +8,12 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry; sqlserver opted out as it does not support JSON).
 //
 // Upstream seeds entries with various json shapes and asserts the round-trip.
-// prisma-next maps Json → jsonb; round-trips go through JSON serialisation.
+// Prisma 8 maps Json → jsonb; round-trips go through JSON serialisation.
 //
 // object with no prototype (Object.create(null)): serialises to `{}` because
 // JSON.stringify treats null-prototype objects the same as regular objects.
 //
-// object with .toJSON method: prisma-next passes the value through JSON
+// object with .toJSON method: Prisma 8 passes the value through JSON
 // serialisation; .toJSON is called by JSON.stringify, so the stored value is
 // whatever .toJSON returns. `url.toJSON()` returns the URL's href string.
 //
@@ -67,7 +67,7 @@ describe('ports/prisma/functional/json-fields', () => {
         const url = new URL('http://example.com/');
 
         // cast: upstream Prisma accepts objects with .toJSON() in its InputJsonValue
-        // type; prisma-next's JsonValue does not include function-valued properties.
+        // type; Prisma 8's JsonValue does not include function-valued properties.
         // Test files are cast-exempt; the cast preserves the subject (toJSON dispatch).
         const result = await db.public.Entry.create({
           id: '1',

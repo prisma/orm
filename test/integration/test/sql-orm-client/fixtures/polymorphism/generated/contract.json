@@ -133,6 +133,7 @@
             "relations": {
               "assignee": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "assigneeId"
@@ -209,6 +210,7 @@
             "relations": {
               "assignee": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "assigneeId"
@@ -414,6 +416,7 @@
               },
               "project": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "projectId"
@@ -429,6 +432,7 @@
               },
               "reporter": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "reporterId"
@@ -503,6 +507,7 @@
             "relations": {
               "task": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "taskId"
@@ -560,6 +565,7 @@
             "relations": {
               "owner": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "ownerId"
@@ -634,6 +640,7 @@
             "relations": {
               "account": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "accountId"

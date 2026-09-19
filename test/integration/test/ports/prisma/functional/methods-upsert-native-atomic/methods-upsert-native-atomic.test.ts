@@ -8,12 +8,12 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Tests 1–3 ('should only use ON CONFLICT when…') assert on query-log inspection —
 // they capture $on('query') events to check whether the emitted SQL contained
-// 'ON CONFLICT'. prisma-next has no equivalent query-log event API, and these
+// 'ON CONFLICT'. Prisma 8 has no equivalent query-log event API, and these
 // tests check internal engine strategy selection rather than observable behaviour.
 // Non-ported: no query log / ON CONFLICT strategy introspection API.
 //
 // Tests 4–6 are pure behavioural upsert tests (create then re-upsert) — ported.
-// In prisma-next, upsert() uses `conflictOn` to specify the unique constraint.
+// In Prisma 8, upsert() uses `conflictOn` to specify the unique constraint.
 
 function withNativeAtomic(fn: Parameters<typeof withPostgresPort<Contract>>[1]) {
   return withPostgresPort<Contract>({ contractJson }, fn);

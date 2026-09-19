@@ -154,7 +154,7 @@ function toConfigLoadFailure(error: unknown, configPath?: string): CliStructured
 }
 
 /**
- * Loads and finalizes the Prisma Next config.
+ * Loads and finalizes the Prisma 8 config.
  *
  * Failures that prevent evaluation entirely — missing file, module that does
  * not evaluate (`CONFIG.FILE_NOT_FOUND`, `CONFIG.EVALUATION_FAILED`) — are the
@@ -215,7 +215,7 @@ export async function loadConfig(
   const layerConfig = requestedLayer?.config;
 
   // The engine's shape: defineConfig from @prisma/cli-engine stamps the
-  // enumerable `$prismaConfig` key and nests the whole Prisma Next config as
+  // enumerable `$prismaConfig` key and nests the whole Prisma 8 config as
   // the `orm` section.
   const engineMarker = isRecord(layerConfig) ? layerConfig['$prismaConfig'] : undefined;
   if (engineMarker !== undefined) {

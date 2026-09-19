@@ -1,0 +1,68 @@
+import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import {
+  type InterpretPslDocumentToSqlContractInput,
+  interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
+} from '../src/interpreter';
+import {
+  createBuiltinLikeControlMutationDefaults,
+  postgresNativeScalarTypeDescriptors,
+  postgresTarget,
+  temporalCodecPresetMirrors,
+  temporalConvenienceMirrors,
+} from './fixtures';
+
+export const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
+export const interpretPslDocumentToSqlContract = (
+  input: Omit<
+    InterpretPslDocumentToSqlContractInput,
+    | 'target'
+    | 'scalarColumnDescriptors'
+    | 'composedExtensionContracts'
+    | 'createNamespace'
+    | 'capabilities'
+  > &
+    Partial<
+      Pick<
+        InterpretPslDocumentToSqlContractInput,
+        'composedExtensionContracts' | 'scalarColumnDescriptors'
+      >
+    >,
+) => {
+  const { scalarColumnDescriptors = postgresNativeScalarTypeDescriptors, ...interpreterInput } =
+    input;
+  return interpretPslDocumentToSqlContractInternal({
+    target: postgresTarget,
+    scalarColumnDescriptors,
+    composedExtensionContracts: new Map(),
+    createNamespace: createTestSqlNamespace,
+    capabilities: { sql: { scalarList: true } },
+    ...interpreterInput,
+  });
+};
+
+// The temporal preset registry inline test fixtures use to exercise the
+// PSL-side preset surface for Postgres + SQLite. Real targets ship the
+// same shapes via `target.authoring.field.temporal.*`.
+//
+// Every entry comes from the mirrors in fixtures.ts, which family-sql's
+// temporal-codec-presets.test.ts asserts deep-equal the real factory output
+// — so a factory change fails there rather than silently leaving these tests
+// passing against a preset that no longer ships.
+export const postgresTemporalContributions = {
+  field: {
+    temporal: {
+      ...temporalConvenienceMirrors.postgres,
+      timestamp: temporalCodecPresetMirrors.pgTimestamp,
+      timestamptz: temporalCodecPresetMirrors.pgTimestamptz,
+    },
+  },
+} as const;
+
+export const sqliteTemporalContributions = {
+  field: {
+    temporal: {
+      ...temporalConvenienceMirrors.sqlite,
+      datetime: temporalCodecPresetMirrors.sqliteDatetime,
+    },
+  },
+} as const;

@@ -6,11 +6,11 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/composites/list/createMany.ts
 // (mongodb matrix entry).
 //
-// Upstream `createMany({ data })` accepts a single object; prisma-next's
+// Upstream `createMany({ data })` accepts a single object; Prisma 8's
 // `createCount` takes an array and returns the inserted count.
 //
 // `set null` / `set null shorthand` assert BOTH a type error and a runtime
-// "must not be null" throw. Prisma Next rejects null at the type level, and
+// "must not be null" throw. Prisma 8 rejects null at the type level, and
 // MongoDB rejects it through the provisioned collection validator.
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {

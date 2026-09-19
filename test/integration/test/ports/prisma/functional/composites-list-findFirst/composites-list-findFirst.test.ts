@@ -10,11 +10,11 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Upstream has 3 tests: `simple`, `select`, `orderBy`.
 //   - simple  → PORTED: `.where().first()` returns the full row.
 //   - select  → NON-PORTED: upstream projects a subfield of the composite
-//               (`contents: { select: { text: true } }`). prisma-next `select()`
+//               (`contents: { select: { text: true } }`). Prisma 8 `select()`
 //               only projects top-level model fields, not embedded value-object
 //               subfields. See _inbox ledger.
 //   - orderBy → NON-PORTED: upstream orders by the embedded list count
-//               (`orderBy: { contents: { _count } }`). prisma-next `orderBy` only
+//               (`orderBy: { contents: { _count } }`). Prisma 8 `orderBy` only
 //               accepts scalar model fields with 1 | -1. See _inbox ledger.
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {

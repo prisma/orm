@@ -1,10 +1,10 @@
 import type { SqlControlExtensionDescriptor } from '@internal/family-sql/control';
 import type { ControlMutationDefaultEntry } from '@internal/framework-components/control';
 
-// `slugid()` takes no arguments; the empty signature makes arity a grammar concern, so any
+// `slugid()` takes no arguments; its signature makes arity a grammar concern, so any
 // `slugid(...)` call fails as invalid attribute syntax before the lower runs.
 const slugidEntry: ControlMutationDefaultEntry = {
-  signature: {},
+  signature: { documentation: 'Generates a slug identifier when a field value is omitted.' },
   lower: () => ({
     ok: true,
     value: {
@@ -27,6 +27,7 @@ const slugidDefaultsPack: SqlControlExtensionDescriptor<'postgres'> = {
 
   controlMutationDefaults: {
     defaultFunctionRegistry: new Map([['slugid', slugidEntry]]),
+    defaultLiteralTagRegistry: new Map(),
     generatorDescriptors: [{ id: 'slugid', applicableCodecIds: ['pg/text@1'] }],
   },
   create() {

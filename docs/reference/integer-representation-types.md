@@ -1,6 +1,6 @@
 # Integer representation types
 
-Prisma Next SQL contracts can choose how integer columns appear in application code. Use the default `BigInt` type when the database's integer range is sufficient and the application can work with `bigint`; opt into `BigIntNumber` for JavaScript `number` values guarded by the safe-integer range; use PostgreSQL-only `UnboundedInt` when values must remain exact beyond 64-bit storage.
+Prisma 8 SQL contracts can choose how integer columns appear in application code. Use the default `BigInt` type when the database's integer range is sufficient and the application can work with `bigint`; opt into `BigIntNumber` for JavaScript `number` values guarded by the safe-integer range; use PostgreSQL-only `UnboundedInt` when values must remain exact beyond 64-bit storage.
 
 ## Choose a representation
 

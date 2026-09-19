@@ -29,6 +29,6 @@ Prisma ORM setup is scaffolded in:
 - `prisma/db.ts`
 - `src/lib/prisma.ts`
 
-For provider-specific Prisma ORM reference docs, see `prisma-next.md`. Prisma ORM skills live in the upstream `skills/` directory: https://github.com/prisma/prisma/tree/main/skills.
+For provider-specific Prisma ORM reference docs, see `prisma-8.md`. Prisma ORM skills live in the upstream `skills/` directory: https://github.com/prisma/prisma/tree/main/skills.
 
 Node-based Prisma ORM projects expect Node.js 24 LTS or newer.

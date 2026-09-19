@@ -9,7 +9,13 @@ import {
 } from '@prisma/cli-engine/protocol';
 import { createControlClient } from '../../control-api/client';
 import { resolveContractRefToSnapshot } from '../../control-api/operations/contract-snapshot-resolution';
-import { resolveRefAdvancementFields } from '../../control-api/operations/ref-advancement';
+import {
+  buildRefAdvancementFields,
+  type ContractIR,
+  computeRefAdvancementName,
+  NO_REF_ADVANCEMENT,
+  preflightRefAdvancement,
+} from '../../control-api/operations/ref-advancement';
 import type { CreateControlClient, DbUpdateResult, DbUpdateSuccess } from '../../control-api/types';
 import {
   CliStructuredError,
@@ -22,6 +28,7 @@ import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
+import { projectConfigPathFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -174,6 +181,25 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
         snapshotContractPath = resolved.value.contractJsonPath;
       }
 
+      const refName = computeRefAdvancementName({
+        ...ifDefined('advanceRef', args.flags.advanceRef),
+        ...ifDefined('db', args.flags.db),
+      });
+      let advancement: { readonly name: string; readonly contractIR: ContractIR } | null = null;
+      if (refName !== null) {
+        const preflight = await preflightRefAdvancement({
+          name: refName,
+          contractJson,
+          contractJsonPath: snapshotContractPath,
+          configPath: projectConfigPathFor(ctx.cwd),
+          client,
+        });
+        if (!preflight.ok) {
+          return notOk(normalizeError(preflight.failure));
+        }
+        advancement = { name: refName, contractIR: preflight.value };
+      }
+
       const mode = args.flags.dryRun ? 'plan' : 'apply';
       let document: MigrationCommandResult;
       try {
@@ -237,25 +263,26 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           result.value.mode === 'apply'
             ? (result.value.marker?.storageHash ?? result.value.destination.storageHash)
             : result.value.destination.storageHash;
-        const advancement = await resolveRefAdvancementFields({
-          ...ifDefined('advanceRef', args.flags.advanceRef),
-          ...ifDefined('db', args.flags.db),
-          refsDir,
-          migrationsDir,
-          contractJson,
-          contractJsonPath: snapshotContractPath,
-          mode: result.value.mode,
-          hash: advancementHash,
-        });
-        if (!advancement.ok) {
-          return notOk(normalizeError(advancement.failure));
+        const advanced =
+          advancement === null
+            ? ok(NO_REF_ADVANCEMENT)
+            : await buildRefAdvancementFields({
+                name: advancement.name,
+                refsDir,
+                migrationsDir,
+                contractIR: advancement.contractIR,
+                mode: result.value.mode,
+                hash: advancementHash,
+              });
+        if (!advanced.ok) {
+          return notOk(normalizeError(advanced.failure));
         }
 
         document = updateDocument({
           value: result.value,
           targetId: ctx.config.target.targetId,
-          advancedRef: advancement.value.advancedRef,
-          plannedAdvanceRef: advancement.value.plannedAdvanceRef,
+          advancedRef: advanced.value.advancedRef,
+          plannedAdvanceRef: advanced.value.plannedAdvanceRef,
           startedAt,
         });
       } catch (error) {

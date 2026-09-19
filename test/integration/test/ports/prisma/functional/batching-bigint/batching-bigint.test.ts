@@ -7,10 +7,10 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry; allProviders, ported postgres branch).
 //
 // Upstream verifies that Prisma Client correctly handles BigInt @unique values in
-// concurrent queries. The `$transaction([...])` array-batch form has no prisma-next
+// concurrent queries. The `$transaction([...])` array-batch form has no Prisma 8
 // equivalent and remains non-ported.
 //
-// prisma-next pg/int8@1 carries `bigint` application values, so the upstream
+// Prisma 8 pg/int8@1 carries `bigint` application values, so the upstream
 // BigInt literals port across directly on both the write and the read side.
 //
 // Dispositions:

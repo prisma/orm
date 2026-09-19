@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import {
   createImportSpecifierResolver,
   type ImportRoot,
+  ImportRootError,
   type ImportSpecifierResolver,
   importRootForDependencies,
   internalImportRoot,
@@ -45,7 +46,9 @@ function errorCode(error: unknown): string | undefined {
  * at this level" continues the walk up; treating a permissions failure that
  * way would silently emit against the wrong project's dependencies.
  */
-function nearestManifest(from: string): Record<string, unknown> | undefined {
+function nearestManifest(
+  from: string,
+): { readonly manifest: Record<string, unknown>; readonly path: string } | undefined {
   let dir = from;
   while (true) {
     const path = join(dir, 'package.json');
@@ -84,7 +87,7 @@ function nearestManifest(from: string): Record<string, unknown> | undefined {
         meta: { path },
       });
     }
-    return parsed;
+    return { manifest: parsed, path };
   }
 }
 
@@ -105,9 +108,19 @@ function declaredDependencies(manifest: Record<string, unknown>): string[] {
  */
 export function projectImportRoot(configPath?: string): ImportRoot {
   const start = configPath === undefined ? resolve('.') : dirname(resolve(configPath));
-  const manifest = nearestManifest(start);
-  if (manifest === undefined) return internalImportRoot;
-  return importRootForDependencies(declaredDependencies(manifest));
+  const nearest = nearestManifest(start);
+  if (nearest === undefined) return internalImportRoot;
+  try {
+    return importRootForDependencies(declaredDependencies(nearest.manifest));
+  } catch (cause) {
+    if (!(cause instanceof ImportRootError)) throw cause;
+    throw errorRuntime('CLI.PROJECT_MANIFEST_INVALID', `Failed to read ${nearest.path}`, {
+      why: `\`${nearest.path}\` states dependencies emission cannot import from: ${cause.message}.`,
+      fix: `Keep one database facade in \`${nearest.path}\`, then re-run the command. Emission reads it to decide which package names generated files should import.`,
+      meta: { path: nearest.path },
+      cause,
+    });
+  }
 }
 
 /** The specifier resolver emission should use for the project owning `configPath`. */

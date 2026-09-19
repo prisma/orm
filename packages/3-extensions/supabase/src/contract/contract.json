@@ -271,6 +271,7 @@
             "relations": {
               "user": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -448,6 +449,7 @@
               },
               "oauthClient": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "oauthClientId"
@@ -478,6 +480,7 @@
               },
               "user": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -1581,6 +1584,7 @@
             "relations": {
               "session": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "sessionId"
@@ -1672,6 +1676,7 @@
             "relations": {
               "factor": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "factorId"
@@ -1832,6 +1837,7 @@
               },
               "user": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -2026,6 +2032,7 @@
             "relations": {
               "client": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "clientId"
@@ -2041,6 +2048,7 @@
               },
               "user": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "userId"
@@ -2405,6 +2413,7 @@
             "relations": {
               "client": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "clientId"
@@ -2420,6 +2429,7 @@
               },
               "user": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -2517,6 +2527,7 @@
             "relations": {
               "user": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -2628,6 +2639,7 @@
             "relations": {
               "session": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "sessionId"
@@ -2745,6 +2757,7 @@
             "relations": {
               "ssoProvider": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "ssoProviderId"
@@ -2855,6 +2868,7 @@
             "relations": {
               "flowState": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "flowStateId"
@@ -2870,6 +2884,7 @@
               },
               "ssoProvider": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "ssoProviderId"
@@ -2977,6 +2992,7 @@
             "relations": {
               "ssoProvider": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "ssoProviderId"
@@ -3168,6 +3184,7 @@
             "relations": {
               "user": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "userId"
@@ -3311,6 +3328,7 @@
             "relations": {
               "user": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -3618,6 +3636,7 @@
             "relations": {
               "catalog": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "catalogId"
@@ -3758,6 +3777,7 @@
             "relations": {
               "catalog": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "catalogId"
@@ -3773,6 +3793,7 @@
               },
               "namespace": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "namespaceId"
@@ -3954,6 +3975,7 @@
             "relations": {
               "bucket": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "bucketId"
@@ -4096,6 +4118,7 @@
             "relations": {
               "bucket": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "bucketId"
@@ -4111,6 +4134,7 @@
               },
               "upload": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "uploadId"
@@ -4172,6 +4196,14 @@
                   "typeParams": {
                     "typeName": "storage.buckettype"
                   }
+                }
+              },
+              "allowedMimeTypes": {
+                "many": true,
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
                 }
               },
               "avifAutodetection": {
@@ -4290,6 +4322,9 @@
                 "_type": {
                   "column": "type"
                 },
+                "allowedMimeTypes": {
+                  "column": "allowed_mime_types"
+                },
                 "avifAutodetection": {
                   "column": "avif_autodetection"
                 },
@@ -4380,6 +4415,14 @@
                   "kind": "scalar"
                 }
               },
+              "pathTokens": {
+                "many": true,
+                "nullable": true,
+                "type": {
+                  "codecId": "pg/text@1",
+                  "kind": "scalar"
+                }
+              },
               "updatedAt": {
                 "nullable": true,
                 "type": {
@@ -4405,6 +4448,7 @@
             "relations": {
               "bucket": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "bucketId"
@@ -4444,6 +4488,9 @@
                 },
                 "ownerId": {
                   "column": "owner_id"
+                },
+                "pathTokens": {
+                  "column": "path_tokens"
                 },
                 "updatedAt": {
                   "column": "updated_at"
@@ -4528,6 +4575,7 @@
             "relations": {
               "bucket": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "bucketId"
@@ -7581,6 +7629,15 @@
           "table": {
             "buckets": {
               "columns": {
+                "allowed_mime_types": {
+                  "codecId": "pg/text@1",
+                  "many": true,
+                  "nativeType": "text",
+                  "noCheck": [
+                    "elementNotNull"
+                  ],
+                  "nullable": true
+                },
                 "avif_autodetection": {
                   "codecId": "pg/bool@1",
                   "default": {
@@ -8155,6 +8212,15 @@
                   "nativeType": "text",
                   "nullable": true
                 },
+                "path_tokens": {
+                  "codecId": "pg/text@1",
+                  "many": true,
+                  "nativeType": "text",
+                  "noCheck": [
+                    "elementNotNull"
+                  ],
+                  "nullable": true
+                },
                 "updated_at": {
                   "codecId": "pg/timestamptz-temporal@1",
                   "default": {
@@ -8556,7 +8622,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "409d9a5191d9d7d8e45a795cb55695a79edce9d8f42ff1e456bce6e79f98dff1",
+    "storageHash": "ede079259d126d9153bcb4fc4aa6781d870a255585524e1e95fae9e5af4eef89",
     "types": {
       "CreatedAt": {
         "codecId": "pg/timestamp-temporal@1",

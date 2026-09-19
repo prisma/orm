@@ -1,0 +1,191 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Post": {
+            "storage": {
+              "table": "posts",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "slug": {
+                  "column": "slug"
+                },
+                "code": {
+                  "column": "code"
+                },
+                "title": {
+                  "column": "title"
+                },
+                "category": {
+                  "column": "category_name"
+                },
+                "hashed": {
+                  "column": "hashed"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "slug": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "code": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "title": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "category": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "hashed": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "posts": {
+      "namespace": "public",
+      "model": "Post"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "7a78bbab0f9dd1aad3fc98c1c8f3dc25f8080c37ed4074cc09ec273eef678b96",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "posts": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "slug": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "code": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "title": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "category_name": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "hashed": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [
+                {
+                  "name": "posts_title_category_name_key",
+                  "unique": true,
+                  "columns": ["title", "category_name"]
+                },
+                {
+                  "name": "post_slug_title_unique",
+                  "unique": true,
+                  "columns": ["slug", "title"]
+                },
+                {
+                  "name": "posts_slug_key",
+                  "unique": true,
+                  "columns": ["slug"]
+                },
+                {
+                  "name": "post_code_unique",
+                  "unique": true,
+                  "columns": ["code"]
+                },
+                {
+                  "name": "posts_category_name_idx",
+                  "unique": false,
+                  "columns": ["category_name"]
+                },
+                {
+                  "name": "post_title_category",
+                  "unique": false,
+                  "columns": ["title", "category_name"]
+                },
+                {
+                  "name": "posts_hashed_idx",
+                  "unique": false,
+                  "columns": ["hashed"],
+                  "type": "hash",
+                  "options": {}
+                },
+                {
+                  "name": "posts_title_idx",
+                  "unique": false,
+                  "columns": ["title"],
+                  "type": "btree",
+                  "options": {}
+                }
+              ],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

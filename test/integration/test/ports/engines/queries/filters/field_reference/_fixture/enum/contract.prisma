@@ -8,4 +8,5 @@ model TestModel {
   id    Int                 @id
   enum  pg.enum(TestEnum)?
   enum2 pg.enum(TestEnum)[]
+  @@map("testModel")
 }

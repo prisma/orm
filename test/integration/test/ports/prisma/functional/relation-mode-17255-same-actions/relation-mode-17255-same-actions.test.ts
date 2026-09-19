@@ -15,9 +15,9 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Only ONE matrix entry (Cascade / relationMode=foreignKeys) has a portable
 // test — the nested-`disconnect` case below. See the ledger for the full
 // disposition of the non-ported entries:
-//   - relationMode=prisma entries: prisma-next has no client-side
+//   - relationMode=prisma entries: Prisma 8 has no client-side
 //     referential-action emulation; it relies on DB foreign keys.
-//   - the nested-`delete` tests (upstream Tests 1-3): prisma-next's nested
+//   - the nested-`delete` tests (upstream Tests 1-3): Prisma 8's nested
 //     update mutators are create/connect/disconnect only — there is no nested
 //     `delete` mutator (see relation-mutator.ts), so the nested-delete
 //     referential-action behaviour cannot be expressed.

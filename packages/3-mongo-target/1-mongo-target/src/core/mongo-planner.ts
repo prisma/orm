@@ -19,6 +19,7 @@ import type {
   MongoSchemaValidator,
 } from '@internal/mongo-schema-ir';
 import { canonicalize, deepEqual } from '@internal/mongo-schema-ir';
+import { blindCast } from '@internal/utils/casts';
 import type { OpFactoryCall } from './op-factory-call';
 import {
   CollModCall,
@@ -155,8 +156,14 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
     readonly policy: MigrationOperationPolicy;
     readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'mongo', 'mongo'>>;
   }): PlanCallsResult {
-    const contract = options.contract as MongoContract;
-    const originIR = options.schema as MongoSchemaIR;
+    const contract = blindCast<
+      MongoContract,
+      'framework planner passes the Mongo contract selected for the mongo target'
+    >(options.contract);
+    const originIR = blindCast<
+      MongoSchemaIR,
+      'framework planner passes the inspected Mongo schema IR selected for the mongo target'
+    >(options.schema);
     const destinationIR = contractToMongoSchemaIR(contract);
 
     const collCreates: OpFactoryCall[] = [];
@@ -300,7 +307,10 @@ export class MongoMigrationPlanner implements MigrationPlanner<'mongo', 'mongo'>
      */
     readonly snapshotsImportPath: string;
   }): MigrationPlannerResult {
-    const contract = options.contract as MongoContract;
+    const contract = blindCast<
+      MongoContract,
+      'framework planner passes the Mongo contract selected for the mongo target'
+    >(options.contract);
     const result = this.planCalls(options);
     if (result.kind === 'failure') return result;
     return {
