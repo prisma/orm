@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { reservedSqlDefaultBody } from '../src/default-sql-body';
+import { checkSqlDefaultBody, reservedSqlDefaultBody } from '../src/default-sql-body';
 
 describe('reservedSqlDefaultBody', () => {
   it.each([
@@ -21,5 +21,24 @@ describe('reservedSqlDefaultBody', () => {
     [''],
   ])('passes %j as raw SQL', (body) => {
     expect(reservedSqlDefaultBody(body)).toBeUndefined();
+  });
+});
+
+describe('checkSqlDefaultBody', () => {
+  it('returns undefined for a safe body with no unsafe tokens', () => {
+    expect(checkSqlDefaultBody('now()')).toBeUndefined();
+  });
+
+  it.each([
+    ['id = 1; DROP TABLE users'],
+    ['1 -- comment'],
+    ['/* comment */ 1'],
+    ['$$ dollar quoted $$'],
+    ['SELECT 1'],
+    ['select 1'],
+  ])('flags %j as unsafe', (body) => {
+    expect(checkSqlDefaultBody(body)).toBe(
+      'Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.',
+    );
   });
 });
