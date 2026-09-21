@@ -117,6 +117,66 @@ describe('e2e: ORM on SQLite', { timeout: timeouts.databaseOperation }, () => {
     });
   });
 
+  describe('createAll with onConflict skip', () => {
+    it('yields only the rows the database inserted across both split statements', async () => {
+      await withSqliteTestRuntime<Contract>(contractJsonPath, async ({ ormClient }) => {
+        const rows = await ormClient[UNBOUND_NAMESPACE_ID].User.select('id', 'name').createAll(
+          [
+            { id: 1, name: 'Collides with Alice', email: 'collides@example.com' },
+            { id: 700, name: 'Batch1', email: 'batch1@example.com' },
+            { id: 701, name: 'Batch2', email: 'batch2@example.com', invitedById: 1 },
+          ],
+          { onConflict: 'skip' },
+        );
+
+        expect(rows).toEqual([
+          { id: 700, name: 'Batch1' },
+          { id: 701, name: 'Batch2' },
+        ]);
+
+        await ormClient[UNBOUND_NAMESPACE_ID].User.where({ id: 700 }).deleteAndCount();
+        await ormClient[UNBOUND_NAMESPACE_ID].User.where({ id: 701 }).deleteAndCount();
+      });
+    });
+
+    it('counts the rows the database inserted, summed across the split statements', async () => {
+      await withSqliteTestRuntime<Contract>(contractJsonPath, async ({ ormClient }) => {
+        const count = await ormClient[UNBOUND_NAMESPACE_ID].User.createAndCount(
+          [
+            { id: 1, name: 'Collides with Alice', email: 'collides@example.com' },
+            { id: 710, name: 'Batch1', email: 'batch1@example.com' },
+            { id: 711, name: 'Batch2', email: 'batch2@example.com', invitedById: 1 },
+          ],
+          { onConflict: 'skip' },
+        );
+
+        expect(count).toBe(2);
+
+        const alice = await ormClient[UNBOUND_NAMESPACE_ID].User.where({ id: 1 }).first();
+        expect(alice!.name).toBe('Alice');
+
+        await ormClient[UNBOUND_NAMESPACE_ID].User.where({ id: 710 }).deleteAndCount();
+        await ormClient[UNBOUND_NAMESPACE_ID].User.where({ id: 711 }).deleteAndCount();
+      });
+    });
+
+    it('skips on a named conflict target', async () => {
+      await withSqliteTestRuntime<Contract>(contractJsonPath, async ({ ormClient }) => {
+        const count = await ormClient[UNBOUND_NAMESPACE_ID].User.createAndCount(
+          [
+            { id: 1, name: 'Collides with Alice', email: 'collides@example.com' },
+            { id: 720, name: 'Batch1', email: 'batch1@example.com' },
+          ],
+          { onConflict: 'skip', conflictOn: ['id'] },
+        );
+
+        expect(count).toBe(1);
+
+        await ormClient[UNBOUND_NAMESPACE_ID].User.where({ id: 720 }).deleteAndCount();
+      });
+    });
+  });
+
   describe('update', () => {
     it('updates and returns updated row', async () => {
       await withSqliteTestRuntime<Contract>(contractJsonPath, async ({ ormClient }) => {
