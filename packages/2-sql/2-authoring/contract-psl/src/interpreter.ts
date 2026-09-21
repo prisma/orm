@@ -60,6 +60,7 @@ import {
 } from '@internal/psl-parser';
 import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
 import type { SourceFile } from '@internal/psl-parser/syntax';
+import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
 import type {
   SqlModelStorage,
   SqlNamespaceBase,
@@ -1129,7 +1130,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     }
     const contributedModelAttribute = input.modelAttributesByName.get(modelAttribute.name);
     if (contributedModelAttribute !== undefined) {
-      if (declaredContributedModelAttributes.has(modelAttribute.name)) {
+      if (
+        contributedModelAttribute.repeatable !== true &&
+        declaredContributedModelAttributes.has(modelAttribute.name)
+      ) {
         diagnostics.push(
           duplicateModelAttributeDiagnostic({
             name: modelAttribute.name,
@@ -1179,6 +1183,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         target: input.targetId,
         modelName: model.name,
         storageName: tableName,
+        fieldStorageName: (fieldName) => mapping.fieldColumns.get(fieldName),
         namespaceId: modelNamespaceId ?? input.defaultNamespaceId,
         sourceId,
         diagnostics: {
@@ -1190,6 +1195,15 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         },
       });
       if (lowered === undefined) {
+        continue;
+      }
+      if ('index' in lowered) {
+        if (!isAuthoredIndexInput(lowered.index)) {
+          throw new InternalError(
+            `Model attribute "@@${modelAttribute.name}" lowered to a malformed index; a contributed attribute that returns { index } must return an authored-index input`,
+          );
+        }
+        indexNodes.push(lowered.index);
         continue;
       }
       const slot = modelAttributeEntities[contributedModelAttribute.attribute] ?? {};

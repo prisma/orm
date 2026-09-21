@@ -474,20 +474,45 @@ export interface AuthoringModelAttributeContext extends AuthoringEntityContext {
   readonly modelName: string;
   readonly storageName: string;
   readonly namespaceId: string;
+  /**
+   * The storage name a field of the declaring model maps to, or `undefined`
+   * when the model declares no such field. The interpreter owns the mapping
+   * — a lowering that renders storage-level text must ask for the name here
+   * rather than reusing the authored field name, which `@map` may rename.
+   */
+  readonly fieldStorageName: (fieldName: string) => string | undefined;
 }
 
 /**
  * What a model-attribute lowering returns when it produces an entity: `key`
  * is the identity the entity is stored under within its `entries` slot
- * (`entries[attribute][key]`); `entity` is the value stored there. A
- * lowering that instead pushed a diagnostic through
- * {@link AuthoringModelAttributeContext.diagnostics} returns `undefined` —
- * the same convention {@link AuthoringEntityTypeFactoryOutput} uses.
+ * (`entries[attribute][key]`); `entity` is the value stored there.
  */
-export interface AuthoringModelAttributeLoweringOutput {
+export interface AuthoringModelAttributeEntityOutput {
   readonly key: string;
   readonly entity: unknown;
 }
+
+/**
+ * What a model-attribute lowering returns when it produces an index on the
+ * declaring model's storage rather than a standalone entity. The framework
+ * never reads `index`: its shape is the family's authored-index input, which
+ * the family interpreter narrows and files through the same path its own
+ * index attribute uses, so naming and validation are shared.
+ */
+export interface AuthoringModelAttributeIndexOutput {
+  readonly index: unknown;
+}
+
+/**
+ * What a model-attribute lowering returns. A lowering that instead pushed a
+ * diagnostic through {@link AuthoringModelAttributeContext.diagnostics}
+ * returns `undefined` — the same convention
+ * {@link AuthoringEntityTypeFactoryOutput} uses.
+ */
+export type AuthoringModelAttributeLoweringOutput =
+  | AuthoringModelAttributeEntityOutput
+  | AuthoringModelAttributeIndexOutput;
 
 /**
  * Declarative descriptor for an extension-contributed `@@` model attribute.
@@ -512,6 +537,11 @@ export interface AuthoringModelAttributeDescriptor<Out = never> {
   readonly kind: 'modelAttribute';
   readonly attribute: string;
   readonly spec: unknown;
+  /**
+   * Whether one model may declare this attribute more than once. Defaults to
+   * false, which is what the duplicate diagnostic enforces.
+   */
+  readonly repeatable?: boolean;
   readonly lower: (
     parsed: Out,
     ctx: AuthoringModelAttributeContext,

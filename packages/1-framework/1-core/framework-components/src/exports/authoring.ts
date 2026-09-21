@@ -16,6 +16,8 @@ export type {
   AuthoringModelAttributeContext,
   AuthoringModelAttributeDescriptor,
   AuthoringModelAttributeDescriptorNamespace,
+  AuthoringModelAttributeEntityOutput,
+  AuthoringModelAttributeIndexOutput,
   AuthoringModelAttributeLoweringOutput,
   AuthoringPslBlockDescriptor,
   AuthoringPslBlockDescriptorNamespace,
