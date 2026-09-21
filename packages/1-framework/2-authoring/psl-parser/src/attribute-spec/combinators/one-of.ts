@@ -11,6 +11,10 @@ import type {
 } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
+function alreadyVoicedElsewhere(rejection: readonly PslDiagnostic[]): boolean {
+  return rejection.length === 0;
+}
+
 export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
   ...alts: Alts
 ): OneOfArgType<Alts, ContextForRequirement<RequiredContextFor<CtxOf<Alts[number]>>>> {
@@ -22,7 +26,7 @@ export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
     label,
     alternatives: alts,
     parse: (arg, ctx): Result<OutOf<Alts[number]>, readonly PslDiagnostic[]> => {
-      let silent = false;
+      const rejections: (readonly PslDiagnostic[])[] = [];
       for (const alt of alts) {
         const parse = blindCast<
           (arg: Parameters<typeof alt.parse>[0], ctx: ParseContext) => ReturnType<typeof alt.parse>,
@@ -37,9 +41,9 @@ export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
             >(result.value),
           );
         }
-        if (result.failure.length === 0) silent = true;
+        rejections.push(result.failure);
       }
-      if (silent) return notOk([]);
+      if (rejections.some(alreadyVoicedElsewhere)) return notOk([]);
       return notOk([leafDiagnostic(ctx, arg, `Expected one of: ${label}`)]);
     },
   } satisfies OneOfArgType<Alts, ParseContext>;
