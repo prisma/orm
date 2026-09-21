@@ -141,7 +141,7 @@ const snippets = db.sql.public.message
   .build();
 ```
 
-Postgres computes `to_tsvector` per row unless an index covers that exact expression, and it only uses an index whose expression matches the query's byte for byte. `@@fullTextIndex`, contributed by this package, renders that expression from the field and the language, so the index and the predicate cannot drift:
+Postgres computes `to_tsvector` per row unless an index covers the predicate's expression — the same `to_tsvector`, the same configuration literal and the same column, which it compares as parsed expressions rather than as text. `@@fullTextIndex`, contributed by this package, renders that expression from the field and the language, so the index and the predicate cannot drift:
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
@@ -155,7 +155,7 @@ model('Message', { fields: { id, text } }).sql(({ cols }) => ({
 }));
 ```
 
-It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), and `name:` xor `map:` like any expression index; it is repeatable, so a model may index several columns. The column name comes from the resolved storage column, so `@map` is honoured. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
+It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), and `name:` xor `map:` like any expression index; it is repeatable, so a model may index several columns. Pass the same `language` here and to the operation: a mismatch is not an error, the query just stops using the index and falls back to a sequential scan. The column name comes from the resolved storage column, so `@map` is honoured. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
 
 ## Codec descriptor authoring
 

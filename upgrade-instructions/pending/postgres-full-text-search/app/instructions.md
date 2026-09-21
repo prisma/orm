@@ -50,4 +50,4 @@ model('Message', { fields: { id, text } }).sql(({ cols }) => ({
 }));
 ```
 
-Postgres only uses a full-text index when its expression matches the query's byte for byte, so prefer these over writing `@@index(expression: "to_tsvector(…)", type: "gin", …)` by hand.
+Postgres only uses a full-text index whose expression is the same `to_tsvector` over the same configuration literal and the same column as the query, so prefer these over writing `@@index(expression: "to_tsvector(…)", type: "gin", …)` by hand. Pass the same `language` to the index and to the operation: a mismatch is silent, and the query falls back to a sequential scan.

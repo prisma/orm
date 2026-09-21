@@ -81,11 +81,13 @@ const snippets = db.sql.public.message
   .build();
 ```
 
-Without an index Postgres recomputes `to_tsvector` for every row, and it only uses an index whose expression matches the query's byte for byte. `@@fullTextIndex` renders that expression for you — pass it the field and, if you use one, the same language:
+Without an index Postgres recomputes `to_tsvector` for every row, and it only uses one whose expression is the same `to_tsvector` over the same configuration literal and the same column. `@@fullTextIndex` renders that expression for you — pass it the field and, if you use one, the same language:
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
 ```
+
+Give the index and the operation the same `language`: a mismatch raises no error, the query silently falls back to a sequential scan.
 
 In a TypeScript contract, the same helper from `@prisma/orm-postgres/contract-builder`:
 

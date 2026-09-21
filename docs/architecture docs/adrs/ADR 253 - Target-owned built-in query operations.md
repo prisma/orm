@@ -36,15 +36,15 @@ An extension or application that imported `@internal/adapter-postgres/operation-
 
 Full-text search needs no new codec, no capability key and no extension. `tsvector` and `tsquery` never leave the server — they are constructed and consumed inside a single expression — so nothing has to cross the wire in a shape the codec registry does not already know.
 
-Performance is the application's responsibility, because the operation does not create indexes. `fullTextMatches` renders `to_tsvector('<language>', "<column>")`, so a GIN index that is to answer the predicate must declare exactly that expression:
+Performance is the application's responsibility, because the operation does not create indexes. `fullTextMatches` renders `to_tsvector('<language>', "<column>")`, so a GIN index that is to answer the predicate has to be the same `to_tsvector` over the same configuration literal and the same column — Postgres compares parsed expressions, not text, so qualifying the column or not makes no difference:
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")
 ```
 
-An index whose expression differs — a different language, or a `tsvector` column maintained by a trigger — will not be used.
+An index whose expression differs — a different language, or a `tsvector` column maintained by a trigger — will not be used, and nothing says so: the query simply falls back to a sequential scan, with no error and no warning. That silent failure is the reason the attribute exists.
 
-Because that expression has to match byte for byte, the target contributes the index as well as the operations: `@@fullTextIndex([text], name: …)` renders it from the resolved storage column and the same language allowlist, so an author never writes `to_tsvector` by hand and the two cannot drift apart. This needed no new IR — the attribute lowers to the `IndexNode` `@@index(expression:)` already produces — but it did need the framework to let a contributed model attribute return an index instead of a namespaced entity, and to let a descriptor declare itself repeatable. `@@index(expression:)` stays for expressions the attribute does not cover.
+Because the index and the predicate have to agree on the function, the configuration and the column, the target contributes the index as well as the operations: `@@fullTextIndex([text], name: …)` renders it from the resolved storage column and the same language allowlist, so an author never writes `to_tsvector` by hand and the two cannot drift apart. This needed no new IR — the attribute lowers to the `IndexNode` `@@index(expression:)` already produces — but it did need the framework to let a contributed model attribute return an index instead of a namespaced entity, and to let a descriptor declare itself repeatable. `@@index(expression:)` stays for expressions the attribute does not cover.
 
 The set of accepted languages is a hand-maintained list. A server with a custom text-search configuration installed cannot name it. That is the price of keeping the language out of the parameter list; widening it later means deciding how Prisma learns what a given server has configured, which is a question this decision does not answer.
 
@@ -52,6 +52,7 @@ The set of accepted languages is a hand-maintained list. A server with a custom 
 
 - The operations and the language list: [`query-operations.ts`](../../../packages/3-targets/3-targets/postgres/src/core/query-operations.ts).
 - The index attribute and the one place its expression is rendered: [`authoring.ts`](../../../packages/3-targets/3-targets/postgres/src/core/authoring.ts), [`full-text-index-expression.ts`](../../../packages/3-targets/3-targets/postgres/src/core/full-text-index-expression.ts).
+- That Postgres really does choose the index for the SQL the lanes lower, proved with `EXPLAIN` against a real server, including the controls that fail: [`full-text-index-usage.test.ts`](../../../test/integration/test/sql-builder/full-text-index-usage.test.ts).
 - Their type-level surface, re-exported as the package's `./operation-types` entry: [`operation-types.ts`](../../../packages/3-targets/3-targets/postgres/src/types/operation-types.ts).
 - The runtime target descriptor that contributes them: [`runtime.ts`](../../../packages/3-targets/3-targets/postgres/src/exports/runtime.ts).
 - The import spec the emitter writes into `contract.d.ts`: [`descriptor-meta.ts`](../../../packages/3-targets/3-targets/postgres/src/core/descriptor-meta.ts).
