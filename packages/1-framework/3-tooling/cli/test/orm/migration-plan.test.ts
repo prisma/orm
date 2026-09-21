@@ -422,7 +422,7 @@ describe('migration plan', () => {
     });
   });
 
-  it('includes the baseline ops in the operations of a two-package auto-baseline plan', async () => {
+  it('reports baseline ops beside the delta and renders one tree root per package', async () => {
     const project = await createOfflineProject({ storageHash: HASH_TO });
     await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_FROM });
     await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
@@ -438,16 +438,11 @@ describe('migration plan', () => {
     const data = run.presented?.data as {
       baselineDir: string;
       dir: string;
-      operations: readonly { id: string; operationClass: string; packageDir?: string }[];
+      operations: readonly { id: string; operationClass: string }[];
+      baselineOperations?: readonly { id: string; operationClass: string }[];
     };
-    expect(data.operations).toHaveLength(4);
-    expect(data.operations.filter((op) => op.operationClass === 'destructive')).toHaveLength(2);
-    expect(data.operations.map((op) => op.packageDir)).toEqual([
-      data.baselineDir,
-      data.baselineDir,
-      data.dir,
-      data.dir,
-    ]);
+    expect(data.operations).toHaveLength(2);
+    expect(data.baselineOperations).toHaveLength(2);
     const tree = (run.presented?.presentation.human ?? []).find(
       (block) => block.kind === 'tree',
     ) as { roots: readonly { label: string; children: readonly unknown[] }[] };
@@ -459,7 +454,6 @@ describe('migration plan', () => {
       text: 'This migration contains destructive operations that may cause data loss.',
     });
   });
-
   it('renders extension-space dirs under the configured migrations directory', async () => {
     const EXT_HASH = `f00d${'3'.repeat(60)}`;
     const extMetadataBase = {

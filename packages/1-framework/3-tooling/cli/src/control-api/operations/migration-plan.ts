@@ -165,9 +165,18 @@ async function runPlannerLeg(
       hasPlaceholders = true;
       // The operations that DID resolve still matter: the destructive-consent
       // check must see them, or a placeholder would smuggle a destructive
-      // baseline past the prompt. Writers stay gated on hasPlaceholders.
-      const settled = await Promise.allSettled(plannerResult.plan.operations);
-      plannedOps = settled.flatMap((entry) => (entry.status === 'fulfilled' ? [entry.value] : []));
+      // baseline past the prompt. Writers stay gated on hasPlaceholders. A
+      // planner whose `operations` accessor throws synchronously on an
+      // unfilled placeholder (rather than rejecting one op's promise) exposes
+      // no operations at all; the check then sees none.
+      try {
+        const settled = await Promise.allSettled(plannerResult.plan.operations);
+        plannedOps = settled.flatMap((entry) =>
+          entry.status === 'fulfilled' ? [entry.value] : [],
+        );
+      } catch {
+        plannedOps = [];
+      }
     } else {
       throw e;
     }
@@ -274,13 +283,18 @@ export interface MigrationPlanResult {
     readonly id: string;
     readonly label: string;
     readonly operationClass: string;
-    /**
-     * cwd-relative package directory the operation was written to. Set when
-     * one plan run writes more than one package (the two-package
-     * auto-baseline path), so renderers can attribute each operation to the
-     * package that actually contains it.
-     */
-    readonly packageDir?: string;
+  }[];
+  /**
+   * Operations of the auto-baseline package when this run wrote two packages
+   * (`baselineDir` + `dir`). Kept separate from `operations` (the app-space
+   * delta) so consumers keep reading `operations` as "the change", while
+   * renderers and the destructive warn-summary still cover everything the
+   * run wrote.
+   */
+  readonly baselineOperations?: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly operationClass: string;
   }[];
   /**
    * Family-agnostic textual preview of the migration plan operations.
@@ -726,7 +740,7 @@ async function executeMigrationPlanCommandInner(
 
       const baselineOps = baselineLeg.value.hasPlaceholders ? [] : baselineLeg.value.plannedOps;
       const deltaOps = deltaLeg.value.hasPlaceholders ? [] : deltaLeg.value.plannedOps;
-      if (deltaLeg.value.hasPlaceholders) {
+      if (baselineLeg.value.hasPlaceholders || deltaLeg.value.hasPlaceholders) {
         const result: MigrationPlanResult = {
           ok: true,
           noOp: false,
@@ -745,9 +759,10 @@ async function executeMigrationPlanCommandInner(
         return ok(result);
       }
 
-      const mergedOps = [...baselineOps, ...deltaOps];
+      // The preview covers both legs — the consented destructive baseline DDL
+      // must appear in the statements a user reads before applying.
       const preview = hasOperationPreview(familyInstance)
-        ? familyInstance.toOperationPreview(mergedOps)
+        ? familyInstance.toOperationPreview([...baselineOps, ...deltaOps])
         : undefined;
       const result: MigrationPlanResult = {
         ok: true,
@@ -756,23 +771,16 @@ async function executeMigrationPlanCommandInner(
         to: toStorageHash,
         dir: relative(cwd, deltaPackageDir),
         baselineDir: relative(cwd, baselinePackageDir),
-        // Baseline ops travel with the delta ops so consumers (including the
-        // destructive warn-summary) see everything this run wrote, each
-        // attributed to the package that contains it.
-        operations: [
-          ...baselineOps.map((op) => ({
-            id: op.id,
-            label: op.label,
-            operationClass: op.operationClass,
-            packageDir: relative(cwd, baselinePackageDir),
-          })),
-          ...deltaOps.map((op) => ({
-            id: op.id,
-            label: op.label,
-            operationClass: op.operationClass,
-            packageDir: relative(cwd, deltaPackageDir),
-          })),
-        ],
+        operations: deltaOps.map((op) => ({
+          id: op.id,
+          label: op.label,
+          operationClass: op.operationClass,
+        })),
+        baselineOperations: baselineOps.map((op) => ({
+          id: op.id,
+          label: op.label,
+          operationClass: op.operationClass,
+        })),
         emittedExtensionDirs,
         ...(preview !== undefined ? { preview } : {}),
         ...(warnings.length > 0 ? { warnings } : {}),

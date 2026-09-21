@@ -62,33 +62,42 @@ function outcomeFields(result: MigrationPlanResult, migrationsRelative: string):
   };
 }
 
+function operationNodes(operations: MigrationPlanResult['operations']): readonly TreeNode[] {
+  return operations.map((operation) =>
+    operation.operationClass === 'destructive'
+      ? { label: operation.label, status: 'warn' }
+      : { label: operation.label },
+  );
+}
+
 /**
- * One tree root per written package: operations carrying a `packageDir` (the
- * two-package auto-baseline path) group under their own directory, in first-
- * appearance order; the rest fall under the app-space package directory.
+ * One tree root per written package: the auto-baseline package first (when
+ * this run wrote one), then the app-space package. A baseline-only run has
+ * no `dir`, so the app-space root falls back to `baselineDir`.
  */
 function operationRoots(result: MigrationPlanResult): readonly TreeNode[] {
-  const roots = new Map<string, TreeNode[]>();
-  for (const operation of result.operations) {
-    const label = operation.packageDir ?? result.dir ?? 'operations';
-    const children = roots.get(label) ?? [];
-    children.push(
-      operation.operationClass === 'destructive'
-        ? { label: operation.label, status: 'warn' }
-        : { label: operation.label },
-    );
-    roots.set(label, children);
-  }
-  return [...roots.entries()].map(([label, children]) => ({ label, children }));
+  const baselineOperations = result.baselineOperations ?? [];
+  return [
+    ...(baselineOperations.length > 0 && result.baselineDir !== undefined
+      ? [{ label: result.baselineDir, children: operationNodes(baselineOperations) }]
+      : []),
+    ...(result.operations.length > 0
+      ? [
+          {
+            label: result.dir ?? result.baselineDir ?? 'operations',
+            children: operationNodes(result.operations),
+          },
+        ]
+      : []),
+  ];
 }
 
 function operationBlocks(result: MigrationPlanResult): readonly Block[] {
-  if (result.operations.length === 0) {
+  const written = [...(result.baselineOperations ?? []), ...result.operations];
+  if (written.length === 0) {
     return [];
   }
-  const destructive = result.operations.some(
-    (operation) => operation.operationClass === 'destructive',
-  );
+  const destructive = written.some((operation) => operation.operationClass === 'destructive');
   return [
     {
       kind: 'tree',
@@ -175,11 +184,15 @@ function planNextActions(
   migrationsRelative: string,
 ): readonly NextAction[] {
   if (result.pendingPlaceholders === true) {
-    const migrationTs = join(result.dir ?? '<dir>', 'migration.ts');
+    const stubFiles = [
+      ...(result.baselineDir === undefined ? [] : [join(result.baselineDir, 'migration.ts')]),
+      ...(result.dir === undefined ? [] : [join(result.dir, 'migration.ts')]),
+    ];
+    const migrationTs = stubFiles.at(-1) ?? join('<dir>', 'migration.ts');
     return [
       {
         kind: 'edit-file',
-        label: `Replace each placeholder(...) call in ${migrationTs} with your query`,
+        label: `Replace each placeholder(...) call in ${stubFiles.join(' and ') || migrationTs} with your query`,
       },
       runCommandAction(
         'Run it to self-emit ops.json and attest the package',
