@@ -369,10 +369,39 @@ describe('Collection', () => {
     it('createAndCount() uses split insert when defaultInInsert is absent', async () => {
       const { collection, runtime } = createReturningCollectionWithoutDefaultInInsert('User');
       runtime.setNextResults([[], []]);
+      runtime.setNextStats([{ affectedRows: 1 }, { affectedRows: 1 }]);
 
       const count = await collection.createAndCount([
         { id: 1, name: 'Alice', email: 'alice@example.com' },
         { id: 2, name: 'Bob', email: 'bob@example.com', invitedById: 1 },
+      ]);
+
+      expect(count).toBe(2);
+      expect(runtime.executions).toHaveLength(2);
+    });
+
+    it('createAndCount() returns the database count, not the input length', async () => {
+      const { collection, runtime } = createCollection();
+      runtime.setNextStats([{ affectedRows: 2 }]);
+
+      const count = await collection.createAndCount([
+        { id: 1, name: 'Alice', email: 'alice@example.com' },
+        { id: 2, name: 'Bob', email: 'bob@example.com' },
+        { id: 3, name: 'Carol', email: 'carol@example.com' },
+      ]);
+
+      expect(count).toBe(2);
+      expect(runtime.executions).toHaveLength(1);
+    });
+
+    it('createAndCount() sums the database counts across split statements', async () => {
+      const { collection, runtime } = createReturningCollectionWithoutDefaultInInsert('User');
+      runtime.setNextStats([{ affectedRows: 1 }, { affectedRows: 1 }]);
+
+      const count = await collection.createAndCount([
+        { id: 1, name: 'Alice', email: 'alice@example.com' },
+        { id: 2, name: 'Bob', email: 'bob@example.com' },
+        { id: 3, name: 'Carol', email: 'carol@example.com', invitedById: 1 },
       ]);
 
       expect(count).toBe(2);
