@@ -9,7 +9,11 @@ import type {
   OutOf,
   RequiredContextFor,
 } from '../types';
-import { alreadyVoicedElsewhere, leafDiagnostic } from './diagnostic';
+import { leafDiagnostic } from './diagnostic';
+
+function alreadyVoicedElsewhere(rejection: readonly PslDiagnostic[]): boolean {
+  return rejection.length === 0;
+}
 
 export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
   ...alts: Alts

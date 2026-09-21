@@ -145,3 +145,18 @@ const OK_VOID: Ok<void> = ResultImpl.ok<void>(undefined);
 export function okVoid(): Ok<void> {
   return OK_VOID;
 }
+
+/**
+ * Conjunction of two results whose failures accumulate: ok only when both are
+ * ok, and two failures keep both sides' details in order. Values are dropped —
+ * callers that need them collect them as they go and read them back once the
+ * accumulated result is ok.
+ */
+export function and<T, U, E>(
+  left: Result<T, readonly E[]>,
+  right: Result<U, readonly E[]>,
+): Result<void, readonly E[]> {
+  if (left.ok) return right.ok ? okVoid() : notOk(right.failure);
+  if (right.ok) return notOk(left.failure);
+  return notOk([...left.failure, ...right.failure]);
+}

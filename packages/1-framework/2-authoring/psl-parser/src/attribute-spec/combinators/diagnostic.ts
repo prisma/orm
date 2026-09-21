@@ -18,7 +18,3 @@ export function leafDiagnostic(
     ...diagnosticSource(ctx.sources, node.syntax).at(nodePslSpan(node.syntax, ctx.sources)),
   };
 }
-
-export function alreadyVoicedElsewhere(rejection: readonly PslDiagnostic[]): boolean {
-  return rejection.length === 0;
-}
