@@ -30,7 +30,7 @@ main ── A ── B ── C
 
 - Agent 2 (slice B) owns the `Codec` interface change and every codec class. Agent 1 (slice A) does not add or change codec members.
 - Agent 1 (slice A) owns the tokenizer, parser node, tag registry, TypeScript `sql` tag and helpers, `gen_random_uuid()`, and the SQLite verify-side resolver. Agent 2 does not touch those.
-- Interfaces slice C relies on, which A and B must ship exactly as specified: `ControlMutationDefaults.defaultLiteralTagRegistry` (A5), `TaggedLiteralValue` (A4), the codec descriptor's compatible literal types declaration and the tag registry's mapping from tag to literal type (slice B spec, rewrite pending), `mapDefault(columnDefault, { codec })` (B6). A change to any of these names or shapes is reported to the orchestrator before it lands.
+- Interfaces slice C relies on, which A and B ship exactly as specified: `TaggedLiteralValue` (A4); data types registered per target with `casts`, `dataType` on every codec descriptor, and the authoring contribution's `dataTypes` entries including the `sql` lowering entries (slice B, ADR 254; `ControlMutationDefaults.defaultLiteralTagRegistry` from A5 no longer exists); the printer's `mapDefault` reading the column's type from the assembled stack (B7). A change to any of these names or shapes is reported to the orchestrator before it lands.
 - Both agents record any question the spec does not answer in their PR body under "Spec gaps" and stop on the halt conditions their spec lists. They do not choose an alternative.
 
 ## Validation gates per slice
