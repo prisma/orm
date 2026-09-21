@@ -48,7 +48,7 @@ describe('ormConfigSection', () => {
     it('accepts the optional subsections', () => {
       const raw = {
         ...validConfig(),
-        migrations: { dir: 'migrations' },
+        migrations: { dir: '/project/migrations' },
         formatter: { indent: 2, newline: 'LF' },
         db: { connection: 'postgres://localhost/app' },
       };
@@ -160,8 +160,8 @@ describe('ormConfigSection', () => {
       const result = ormConfigSection.validate({
         ...validConfig(),
         contract: {
-          source: { format: 'psl', inputs: ['./out/./contract.json'], load: () => ({}) },
-          output: 'out/contract.json',
+          source: { format: 'psl', inputs: ['/app/out/./contract.json'], load: () => ({}) },
+          output: '/app/out/contract.json',
         },
       });
 
@@ -175,8 +175,8 @@ describe('ormConfigSection', () => {
       const result = ormConfigSection.validate({
         ...validConfig(),
         contract: {
-          source: { format: 'psl', inputs: ['./src/contract.prisma'], load: () => ({}) },
-          output: 'out/contract.json',
+          source: { format: 'psl', inputs: ['/app/src/contract.prisma'], load: () => ({}) },
+          output: '/app/out/contract.json',
         },
       });
 
@@ -240,5 +240,29 @@ describe('ormConfigSection', () => {
       expect(() => ormConfigSection.validate(raw)).not.toThrow();
       expect(ormConfigSection.validate(raw).ok).toBe(false);
     });
+  });
+});
+
+describe('paths that were never resolved', () => {
+  it('refuses a relative path even when baseDir is present, naming the field', () => {
+    const result = ormConfigSection.validate({
+      ...validConfig(),
+      migrations: { dir: './migrations' },
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.meta?.['field'])).toEqual([
+      'migrations.dir',
+    ]);
+  });
+
+  it('refuses a hand-written relative baseDir', () => {
+    const result = ormConfigSection.validate({ ...validConfig(), baseDir: 'app' });
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.meta?.['field'])).toEqual([
+      'baseDir',
+      'baseDir',
+    ]);
   });
 });

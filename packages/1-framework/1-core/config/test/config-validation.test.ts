@@ -304,7 +304,7 @@ describe('collectConfigIssues', () => {
         contract: {
           source: createSourceProvider({
             format: 'made-up-format',
-            inputs: ['./schema.prisma'],
+            inputs: ['/project/schema.prisma'],
             interpret: () => [],
           }),
         },
@@ -317,7 +317,14 @@ describe('collectConfigIssues', () => {
     expectIssue(createValidRawConfig({ migrations: 'invalid' }), 'migrations', 'migrations');
     expectIssue(createValidRawConfig({ migrations: { dir: 123 } }), 'migrations.dir', 'migrations');
     expect(collectConfigIssues(createValidRawConfig({ migrations: {} }))).toEqual([]);
-    expect(collectConfigIssues(createValidRawConfig({ migrations: { dir: 'moves' } }))).toEqual([]);
+    expect(collectConfigIssues(createValidRawConfig({ migrations: { dir: '/moves' } }))).toEqual(
+      [],
+    );
+    expect(
+      collectConfigIssues(createValidRawConfig({ migrations: { dir: 'moves' } })).map(
+        (issue) => issue.field,
+      ),
+    ).toEqual(['migrations.dir']);
   });
 
   it('collects formatter issues under the formatter section', () => {
@@ -374,5 +381,55 @@ describe('collectConfigIssues', () => {
     });
 
     expect(collectConfigIssues(config)).toEqual([]);
+  });
+});
+
+describe('paths are absolute once loaded', () => {
+  it('reports a relative contract input, output, and migrations dir', () => {
+    const issues = collectConfigIssues(
+      createValidRawConfig({
+        contract: {
+          source: createSourceProvider({ inputs: ['./schema.prisma'] }),
+          output: 'out/contract.json',
+        },
+        migrations: { dir: './db' },
+      }),
+    );
+
+    expect(issues.map((issue) => issue.field)).toEqual([
+      'contract.source.inputs[]',
+      'contract.output',
+      'migrations.dir',
+    ]);
+  });
+
+  it('accepts absolute paths', () => {
+    expect(
+      collectConfigIssues(
+        createValidRawConfig({
+          contract: {
+            source: createSourceProvider({ inputs: ['/p/schema.prisma'] }),
+            output: '/p/out/contract.json',
+          },
+          migrations: { dir: '/p/db' },
+          baseDir: '/p',
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  it('reports a baseDir that is not an absolute path against both path-bearing sections', () => {
+    const issues = collectConfigIssues(createValidRawConfig({ baseDir: 'app' }));
+
+    expect(issues.map((issue) => [issue.section, issue.field])).toEqual([
+      ['contract', 'baseDir'],
+      ['migrations', 'baseDir'],
+    ]);
+  });
+
+  it('reports a baseDir that is not a string', () => {
+    expect(
+      collectConfigIssues(createValidRawConfig({ baseDir: 42 })).map((issue) => issue.field),
+    ).toEqual(['baseDir', 'baseDir']);
   });
 });

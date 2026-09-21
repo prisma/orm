@@ -45,7 +45,7 @@ exp/
 
 ## How the file learns where it is
 
-The loader is the one party that knows which file it is evaluating. Before it evaluates the file it publishes that file's directory in a slot on `globalThis` under `Symbol.for('prisma.config.baseDir')`, and clears it after. While the file runs, `ormConfig` reads the slot and resolves every path in its section against it, recording it as `baseDir`.
+The loader is the one party that knows which file it is evaluating. It evaluates the file inside an `AsyncLocalStorage` run that carries the file's directory, so everything the evaluation awaits sees that directory and nothing else does. The store itself lives on `globalThis` under `Symbol.for('prisma.config.baseDir')`. While the file runs, `ormConfig` reads the store and resolves every path in its section against it, recording it as `baseDir`.
 
 ```mermaid
 sequenceDiagram
@@ -67,11 +67,11 @@ Three properties follow.
 - **The user writes nothing.** The file already runs inside a loader; the loader already knows the file. Asking the config author to pass `import.meta` would ask them for a value the system already has.
 - **Merging sees absolute paths.** Each file resolves its own paths while it runs, so whatever merges files later never sees a relative path and never needs to know which file wrote which value.
 
-The slot is `Symbol.for`, so every loader and every helper in a dependency tree shares it, and a family package declares it without importing the engine.
+The store is published under a `Symbol.for` key, so every loader and every helper in a dependency tree shares one store, and a family package reaches it without importing the engine.
 
 ## A section without a base directory is refused
 
-A file evaluated outside a loader, for instance a test that imports it directly, finds the slot empty. `ormConfig` then leaves the paths as written and records no `baseDir`. The ORM's section validator refuses any section without `baseDir`, naming the two ways that happens: the section was written as a plain object rather than with `defineConfig`, or the loader that evaluated the file predates the base directory. There is no fallback to the working directory: a path silently resolved against the wrong directory is exactly the failure this decision removes, so the only acceptable failure is a loud one.
+A file evaluated outside a loader, for instance a test that imports it directly, finds no base directory. `ormConfig` then leaves the paths as written and records no `baseDir`. The ORM's section validator refuses any section without `baseDir`, naming the two ways that happens: the section was written as a plain object rather than with `defineConfig`, or the loader that evaluated the file predates the base directory. The same validation also refuses a `baseDir` that is not an absolute path, and any path field that is still relative, so a `baseDir` written by hand into a plain object cannot smuggle relative paths past the check. There is no fallback to the working directory: a path silently resolved against the wrong directory is exactly the failure this decision removes, so the only acceptable failure is a loud one.
 
 ## Responsibilities
 
@@ -81,15 +81,15 @@ A file evaluated outside a loader, for instance a test that imports it directly,
 
 **Commands** read absolute paths and `baseDir` from the config. A command that needs the project's location, for instance to find the project's `package.json`, starts from `baseDir`. No command reconstructs the config file's path, and no command resolves a config value against the working directory. The one kind of path that is relative to the working directory is a path typed on the command line, such as `--output-path` on `contract emit`, because the shell is where the user wrote it.
 
-**The validator** refuses a section without `baseDir`.
+**The validator** refuses a section without an absolute `baseDir` or with any path still relative. The rule lives in the shared `collectConfigIssues`, so the ORM's loader and the CLI's section validator enforce the same thing.
 
 ## Layered configs
 
-Layering holds as long as the loader publishes each file's own directory while that file runs. A loader that evaluates the files itself, one at a time, gets this for free. A loader that delegates the whole chain to c12's `extends` does not: c12 evaluates a base file inside the same call as the file that extends it, so the slot still names the extending file. Whichever mechanism layering adopts, it evaluates each file with its own base directory published; that is the constraint this decision places on it.
+Layering holds as long as the loader publishes each file's own directory while that file runs. The engine's loader discovers the chain of config files itself and evaluates them one at a time, publishing each file's directory around its evaluation, so a parent's `./migrations` resolves under the parent and a child's under the child before the two are merged. A loader that instead delegates a chain to c12's `extends` does not get this: c12 evaluates a base file inside the same call as the file that extends it, so the published directory still names the extending file. Any loader that layers files must evaluate each with its own base directory published; that is the constraint this decision places on it.
 
 ## Concurrency
 
-The slot is process-global, so two config evaluations interleaving in one process would read each other's directory. Nothing loads configs concurrently today, and the loader sets and restores the slot around an awaited evaluation. If concurrent loads ever arrive, the slot moves to an `AsyncLocalStorage` behind the same two functions and nothing else changes.
+Config evaluations can overlap in one process: the language server loads one project per config file and a workspace can hold several. With a plain global value, the second evaluation to start would overwrite the directory the first one was about to read, and a file would silently record another project's directory. `AsyncLocalStorage` scopes the directory to the evaluation that published it, so overlapping loads each see their own. The two functions, `withBaseDir` and `baseDir`, are the whole surface; the storage behind them is not.
 
 ## Consequences
 
@@ -97,6 +97,7 @@ The slot is process-global, so two config evaluations interleaving in one proces
 - A config object holds absolute paths and a `baseDir` per section that has paths. Nothing resolves a config path after loading.
 - Importing a config file directly yields a section without `baseDir`, which the validator refuses; a test that wants a resolved config evaluates it under `withBaseDir`.
 - The engine's loader publishes the base directory, which is an engine change, so the engine's version moves and every family's exact engine peer moves with it.
+- The releases are ordered. A family whose validator requires `baseDir` must not be mounted by a shell whose engine does not yet publish it, or every command of that family fails for every user. The engine ships first; the family's release follows and moves its engine peer in the same release.
 
 ## Alternatives considered
 

@@ -1,3 +1,5 @@
+import { isAbsolute } from 'pathe';
+
 /**
  * Top-level config sections. Diagnostics carry the section they concern so
  * commands can fail on the sections they read and ignore the rest.
@@ -226,6 +228,12 @@ function validateContract(config: Record<string, unknown>, issues: IssueCollecto
         'contract.source.inputs[]',
         'Config.contract.source.inputs must contain only strings',
       );
+    } else if (inputs.some((input) => !isAbsolute(input))) {
+      issues.add(
+        'contract',
+        'contract.source.inputs[]',
+        'Config.contract.source.inputs must be absolute once loaded; build the orm section with defineConfig so paths resolve against the config file',
+      );
     }
   }
 
@@ -253,6 +261,12 @@ function validateContract(config: Record<string, unknown>, issues: IssueCollecto
       'contract.output',
       'Config.contract.output must be a string when provided',
     );
+  } else if (output !== undefined && !isAbsolute(output)) {
+    issues.add(
+      'contract',
+      'contract.output',
+      'Config.contract.output must be absolute once loaded; build the orm section with defineConfig so paths resolve against the config file',
+    );
   }
 }
 
@@ -267,7 +281,30 @@ function validateMigrations(config: Record<string, unknown>, issues: IssueCollec
   const dir = config['migrations']['dir'];
   if (dir !== undefined && typeof dir !== 'string') {
     issues.add('migrations', 'migrations.dir', 'Config.migrations.dir must be a string');
+  } else if (dir !== undefined && !isAbsolute(dir)) {
+    issues.add(
+      'migrations',
+      'migrations.dir',
+      'Config.migrations.dir must be absolute once loaded; build the orm section with defineConfig so paths resolve against the config file',
+    );
   }
+}
+
+/**
+ * `baseDir` is written by `defineConfig` while a loader evaluates the file
+ * (ADR 253). A value that is present but not an absolute path was written by
+ * hand, and every path anchored on it would be wrong. Reported against each
+ * path-bearing section so a command reading either refuses the config.
+ */
+function validateBaseDir(config: Record<string, unknown>, issues: IssueCollector): void {
+  const baseDir = config['baseDir'];
+  if (baseDir === undefined || (typeof baseDir === 'string' && isAbsolute(baseDir))) {
+    return;
+  }
+  const message =
+    'Config.baseDir must be an absolute path; it is recorded by defineConfig, not written by hand';
+  issues.add('contract', 'baseDir', message);
+  issues.add('migrations', 'baseDir', message);
 }
 
 function validateFormatter(config: Record<string, unknown>, issues: IssueCollector): void {
@@ -339,6 +376,7 @@ export function collectConfigIssues(
   validateExtensions(config, familyId, targetId, issues);
   validateContract(config, issues);
   validateMigrations(config, issues);
+  validateBaseDir(config, issues);
   validateFormatter(config, issues);
 
   return issues.issues;

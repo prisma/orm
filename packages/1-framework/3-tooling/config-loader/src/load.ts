@@ -19,7 +19,7 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
-import { dirname, join, resolve } from 'pathe';
+import { dirname, isAbsolute, join, resolve } from 'pathe';
 
 const CONFIG_FILENAME = 'prisma.config.ts';
 
@@ -101,22 +101,29 @@ function collectArtifactCollisionDiagnostics(
 }
 
 function buildLoadedConfig(rawConfig: Record<string, unknown>, configDir: string): LoadedConfig {
-  const issues = collectConfigIssues(rawConfig);
-  const diagnostics = issues.map((issue) =>
-    errorConfigValidation(issue.field, { why: issue.message, section: issue.section }),
-  );
-
-  const raw = blindCast<
+  const authored = blindCast<
     PrismaNextConfig,
-    'Structure was checked by collectConfigIssues; sections carrying diagnostics are guarded by requireConfigSections'
+    'resolution touches only contract and migrations paths and leaves any other value for collectConfigIssues'
   >(rawConfig);
 
   // A section built with defineConfig while the loader published the base
   // directory arrives resolved; one written as a plain object is resolved here
-  // against the same directory. Resolution is idempotent, so both are one call.
+  // against the same directory. Resolution is idempotent, so both are one
+  // call. A baseDir written by hand is left for collectConfigIssues to refuse
+  // rather than anchored on.
+  const baseDir =
+    typeof authored.baseDir === 'string' && isAbsolute(authored.baseDir)
+      ? authored.baseDir
+      : configDir;
+  const resolved = resolveConfigPaths(authored, baseDir);
+  const issues = collectConfigIssues({ ...rawConfig, ...resolved });
+  const diagnostics = issues.map((issue) =>
+    errorConfigValidation(issue.field, { why: issue.message, section: issue.section }),
+  );
+
   const config = issues.some((issue) => issue.section === 'migrations')
-    ? raw
-    : withConfigDefaults(resolveConfigPaths(raw, raw.baseDir ?? configDir));
+    ? resolved
+    : withConfigDefaults(resolved);
 
   if (config.contract === undefined || issues.some((issue) => issue.section === 'contract')) {
     return { config, diagnostics };

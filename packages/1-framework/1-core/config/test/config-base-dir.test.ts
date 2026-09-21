@@ -1,3 +1,4 @@
+import type { AsyncLocalStorage } from 'node:async_hooks';
 import { describe, expect, it } from 'vitest';
 import { BASE_DIR_KEY, baseDir, withBaseDir } from '../src/config-base-dir';
 
@@ -37,12 +38,36 @@ describe('withBaseDir', () => {
     expect(baseDir()).toBeUndefined();
   });
 
-  it('is the shared slot any loader can set without importing this package', async () => {
-    const slot = globalThis as { [BASE_DIR_KEY]?: string };
-    slot[Symbol.for('prisma.config.baseDir') as typeof BASE_DIR_KEY] = '/elsewhere';
+  it('keeps two overlapping evaluations apart', async () => {
+    let seenA: string | undefined;
+    let seenB: string | undefined;
+    let release: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
 
-    expect(baseDir()).toBe('/elsewhere');
+    await Promise.all([
+      withBaseDir('/a', async () => {
+        await gate;
+        seenA = baseDir();
+      }),
+      withBaseDir('/b', async () => {
+        release();
+        seenB = baseDir();
+      }),
+    ]);
 
-    delete slot[BASE_DIR_KEY];
+    expect({ seenA, seenB }).toEqual({ seenA: '/a', seenB: '/b' });
+  });
+
+  it('is one store any loader can publish through without importing this package', async () => {
+    const shared = (globalThis as { [BASE_DIR_KEY]?: AsyncLocalStorage<string> })[
+      Symbol.for('prisma.config.baseDir') as typeof BASE_DIR_KEY
+    ];
+    if (shared === undefined) throw new Error('store not published');
+
+    await shared.run('/elsewhere', async () => {
+      expect(baseDir()).toBe('/elsewhere');
+    });
   });
 });

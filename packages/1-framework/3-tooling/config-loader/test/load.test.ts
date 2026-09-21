@@ -459,7 +459,7 @@ describe('loadConfig', () => {
     'publishes the base directory to the file while it is evaluated',
     async () => {
       const readsBaseDir = `${CONFIG_BODY}
-const baseDir = globalThis[Symbol.for('prisma.config.baseDir')];
+const baseDir = globalThis[Symbol.for('prisma.config.baseDir')].getStore();
 export default { $prismaConfig: 1, orm: { ...config, migrations: { dir: baseDir + '/from-file' } } };
 `;
       writeFileSync(join(tempDir, 'prisma.config.ts'), readsBaseDir);
@@ -478,7 +478,7 @@ export default { $prismaConfig: 1, orm: { ...config, migrations: { dir: baseDir 
       const elsewhere = join(tempDir, 'elsewhere');
       mkdirSync(elsewhere);
       const readsBaseDir = `${CONFIG_BODY}
-const baseDir = globalThis[Symbol.for('prisma.config.baseDir')];
+const baseDir = globalThis[Symbol.for('prisma.config.baseDir')].getStore();
 export default { $prismaConfig: 1, orm: { ...config, migrations: { dir: baseDir + '/from-file' } } };
 `;
       writeFileSync(join(elsewhere, 'custom.config.ts'), readsBaseDir);
