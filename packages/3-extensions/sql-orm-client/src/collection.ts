@@ -1794,7 +1794,8 @@ class CollectionImpl<
 
   /**
    * Write terminal: insert many rows without materializing the
-   * inserted rows, returning the number of inserted records.
+   * inserted rows, returning the number of rows the database reports
+   * inserting.
    *
    * Prefer `createAll(...)` when you need the returned rows; prefer
    * this when you only need to know how many rows were inserted (the
@@ -1840,18 +1841,20 @@ class CollectionImpl<
         this.tableName,
         mappedRows,
       ).map((plan) => mergeAnnotations(plan, annotationsMap));
+      let affectedRows = 0;
       for (const plan of plans) {
-        await this.ctx.runtime.execute(plan);
+        const stats = await this.ctx.runtime.execute(plan);
+        affectedRows += stats.affectedRows;
       }
-      return data.length;
+      return affectedRows;
     }
 
     const compiled = mergeAnnotations(
       compileInsertCount(this.contract, this.namespaceId, this.tableName, mappedRows),
       annotationsMap,
     );
-    await this.ctx.runtime.execute(compiled);
-    return data.length;
+    const stats = await this.ctx.runtime.execute(compiled);
+    return stats.affectedRows;
   }
 
   /**
