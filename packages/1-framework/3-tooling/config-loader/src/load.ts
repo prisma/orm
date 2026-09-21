@@ -2,7 +2,6 @@ import { realpathSync } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
-import { withBaseDir } from '@internal/config/config-base-dir';
 import { resolveConfigPaths, withConfigDefaults } from '@internal/config/config-resolve';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { ConfigSection } from '@internal/config/config-validation';
@@ -20,6 +19,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { dirname, isAbsolute, join, resolve } from 'pathe';
+import { withBaseDir } from './base-dir';
 
 const CONFIG_FILENAME = 'prisma.config.ts';
 

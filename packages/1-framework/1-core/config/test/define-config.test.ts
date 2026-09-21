@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Contract } from '@internal/contract/types';
 import type {
   ControlDriverInstance,
@@ -5,7 +6,7 @@ import type {
 } from '@internal/framework-components/control';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
-import { withBaseDir } from '../src/config-base-dir';
+import { BASE_DIR_KEY } from '../src/config-base-dir';
 import { defineConfig, type PrismaNextConfig } from '../src/config-types';
 
 const mockHook = {
@@ -130,7 +131,10 @@ describe('defineConfig path resolution', () => {
     });
 
   it('resolves every relative path against the base directory the loader published', async () => {
-    const config = await withBaseDir('/app', async () => defineConfig(authored()));
+    const store = new AsyncLocalStorage<string>();
+    (globalThis as { [BASE_DIR_KEY]?: AsyncLocalStorage<string> })[BASE_DIR_KEY] = store;
+    const config = await store.run('/app', async () => defineConfig(authored()));
+    delete (globalThis as { [BASE_DIR_KEY]?: unknown })[BASE_DIR_KEY];
 
     expect(config).toMatchObject({
       baseDir: '/app',

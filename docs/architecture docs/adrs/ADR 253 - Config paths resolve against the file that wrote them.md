@@ -75,9 +75,9 @@ A file evaluated outside a loader, for instance a test that imports it directly,
 
 ## Responsibilities
 
-**Loaders** publish the base directory around each file they evaluate and clear it after. The CLI engine's loader does this through `withBaseDir`, which it exports for any other loader; the ORM's loader does the same around its own evaluation.
+**Loaders** publish the base directory around each file they evaluate. The CLI engine's loader and the ORM's loader each do this through their own `withBaseDir`, which creates the shared store when it is first needed. Only loaders import `node:async_hooks`.
 
-**A family's config helper** reads the base directory and resolves its own path fields, recording `baseDir`. The ORM's `defineConfig` covers the contract source, `contract.output`, and `migrations.dir`. Defaults that are themselves paths, such as the migrations directory, are supplied by the reader from `baseDir` rather than written into the section, so a layer that omits a value never shadows a layer that authored one.
+**A family's config helper** reads the base directory through `baseDir()`, which imports nothing and returns undefined when no loader has published a store, so the helper runs under any runtime, and resolves its own path fields, recording `baseDir`. The ORM's `defineConfig` covers the contract source, `contract.output`, and `migrations.dir`. Defaults that are themselves paths, such as the migrations directory, are supplied by the reader from `baseDir` rather than written into the section, so a layer that omits a value never shadows a layer that authored one.
 
 **Commands** read absolute paths and `baseDir` from the config. A command that needs the project's location, for instance to find the project's `package.json`, starts from `baseDir`. No command reconstructs the config file's path, and no command resolves a config value against the working directory. The one kind of path that is relative to the working directory is a path typed on the command line, such as `--output-path` on `contract emit`, because the shell is where the user wrote it.
 
