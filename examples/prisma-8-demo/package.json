@@ -37,7 +37,7 @@
     "@repo/test-utils": "workspace:8.0.0-rc.11",
     "@repo/tsconfig": "workspace:8.0.0-rc.11",
     "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "@types/react": "^19.2.18",
