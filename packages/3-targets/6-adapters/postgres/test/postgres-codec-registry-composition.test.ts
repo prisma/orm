@@ -3,7 +3,7 @@ import type {
   AnyCodecDescriptor,
   AnyCodecDescriptorTemplate,
 } from '@internal/framework-components/codec';
-import { dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
+import { dataType, dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import type { RuntimeExtensionDescriptor } from '@internal/framework-components/execution';
 import {
@@ -41,6 +41,15 @@ import {
   createComposedPostgresControlAdapter,
 } from './helpers/composed-adapter';
 import { defineTestCodec } from './test-codec';
+
+/** The data types the fixture codecs of one contribution represent, so assembly finds them. */
+/** A fixture codec's data type: its own id without the version. */
+const fixtureTypeId = (codecId: string) => dataTypeId(codecId.split('@')[0] ?? codecId);
+
+const fixtureDataTypes = (descriptors: readonly { readonly dataType?: string }[]) =>
+  [...new Set(descriptors.map((descriptor) => descriptor.dataType))]
+    .filter((id): id is string => id !== undefined)
+    .map((id) => dataType(id, {}));
 
 const contract = new SqlContractSerializer().deserializeContract({
   target: 'postgres',
@@ -98,7 +107,7 @@ function postgresDescriptor(
   onProjection?: () => void,
 ): AnyPostgresCodecDescriptor {
   return postgresCodec(genericDescriptor(codecId), {
-    dataType: dataTypeId('demo/fixture'),
+    dataType: fixtureTypeId(codecId),
     nativeType: () => nativeType,
     jsonProjection(expression: ProjectionExpr): ProjectionExpr {
       onProjection?.();
@@ -129,7 +138,7 @@ function transformingPostgresDescriptor(
     },
   };
   return postgresCodec(descriptor, {
-    dataType: dataTypeId('demo/fixture'),
+    dataType: fixtureTypeId(codecId),
     nativeType: () => nativeType,
     jsonProjection: (expression: ProjectionExpr) => expression,
   });
@@ -145,6 +154,7 @@ function runtimeExtension(
     version: '0.0.1',
     familyId: 'sql',
     targetId: 'postgres',
+    dataTypes: fixtureDataTypes(descriptors),
     types: { codecTypes: { codecDescriptors: descriptors } },
     create() {
       return { familyId: 'sql', targetId: 'postgres' };
@@ -162,6 +172,7 @@ function controlExtension(
     version: '0.0.1',
     familyId: 'sql',
     targetId: 'postgres',
+    dataTypes: fixtureDataTypes(descriptors),
     types: { codecTypes: { codecDescriptors: descriptors } },
     create() {
       return { familyId: 'sql', targetId: 'postgres' };
@@ -320,11 +331,13 @@ describe('PostgreSQL adapter codec registry composition', () => {
           extensions: [runtimeExtension('invalid-runtime', [descriptor])],
         }),
       ).toThrow(/not a valid PostgreSQL codec descriptor/);
+      // The control stack checks data types first, so it names the missing one; either way the
+      // contribution is refused before anything is lowered.
       expect(() =>
         createComposedPostgresControlAdapter({
           extensions: [controlExtension('invalid-control', [descriptor])],
         }),
-      ).toThrow(/not a valid PostgreSQL codec descriptor/);
+      ).toThrow(/not a valid PostgreSQL codec descriptor|which no component registers/);
     }
   });
 

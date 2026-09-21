@@ -20,7 +20,7 @@ import {
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
 } from './codec-ids';
-import { PG_DATE, PG_TIME, PG_TIMESTAMP, PG_TIMESTAMPTZ } from './data-type-ids';
+import { pgDate, pgTime, pgTimestamp, pgTimestamptz } from './data-types';
 import {
   PG_DATE_NATIVE_TYPE,
   PG_TIME_NATIVE_TYPE,
@@ -58,7 +58,7 @@ export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
-  override readonly dataType = PG_DATE;
+  override readonly dataType = pgDate.id;
   override readonly codecId = PG_DATE_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = [] as const;
@@ -107,7 +107,7 @@ export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<Precisi
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
-  override readonly dataType = PG_TIMESTAMP;
+  override readonly dataType = pgTimestamp.id;
   override readonly codecId = PG_TIMESTAMP_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = [] as const;
@@ -167,7 +167,7 @@ export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<Preci
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
-  override readonly dataType = PG_TIMESTAMPTZ;
+  override readonly dataType = pgTimestamptz.id;
   override readonly codecId = PG_TIMESTAMPTZ_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = [] as const;
@@ -226,7 +226,7 @@ export class PgTimeStringDescriptor extends PostgresCodecDescriptor<PrecisionPar
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
-  override readonly dataType = PG_TIME;
+  override readonly dataType = pgTime.id;
   override readonly codecId = PG_TIME_STRING_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = [] as const;

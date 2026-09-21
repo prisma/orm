@@ -1,9 +1,5 @@
 import type { CodecDescriptor, CodecTrait, DataTypeId } from '@internal/framework-components/codec';
-import {
-  dataTypeId,
-  renderTsLiteral,
-  voidParamsSchema,
-} from '@internal/framework-components/codec';
+import { renderTsLiteral, voidParamsSchema } from '@internal/framework-components/codec';
 import {
   type MongoCodec,
   type MongoCodecRegistry,
@@ -21,15 +17,16 @@ import {
   MONGO_STRING_CODEC_ID,
   MONGO_VECTOR_CODEC_ID,
 } from './codec-ids';
+import {
+  mongoBool,
+  mongoDate,
+  mongoDouble,
+  mongoInt32,
+  mongoObjectId,
+  mongoString,
+  mongoVector,
+} from './data-types';
 import { mongoAdapterError } from './errors';
-
-const MONGO_OBJECTID = dataTypeId('mongo/objectid');
-const MONGO_STRING = dataTypeId('mongo/string');
-const MONGO_DOUBLE = dataTypeId('mongo/double');
-const MONGO_INT32 = dataTypeId('mongo/int32');
-const MONGO_BOOL = dataTypeId('mongo/bool');
-const MONGO_DATE = dataTypeId('mongo/date');
-const MONGO_VECTOR = dataTypeId('mongo/vector');
 
 export const mongoObjectIdCodec = mongoCodec({
   typeId: MONGO_OBJECTID_CODEC_ID,
@@ -152,41 +149,41 @@ const renderVectorOutputType = (typeParams: Record<string, unknown>): string | u
  */
 export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
   descriptorFor(mongoObjectIdCodec, {
-    dataType: MONGO_OBJECTID,
+    dataType: mongoObjectId.id,
     traits: ['equality'],
     targetTypes: ['objectId'],
   }),
   descriptorFor(mongoStringCodec, {
-    dataType: MONGO_STRING,
+    dataType: mongoString.id,
     traits: ['equality', 'order', 'textual'],
     targetTypes: ['string'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoDoubleCodec, {
-    dataType: MONGO_DOUBLE,
+    dataType: mongoDouble.id,
     traits: ['equality', 'order', 'numeric'],
     targetTypes: ['double'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoInt32Codec, {
-    dataType: MONGO_INT32,
+    dataType: mongoInt32.id,
     traits: ['equality', 'order', 'numeric'],
     targetTypes: ['int'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoBooleanCodec, {
-    dataType: MONGO_BOOL,
+    dataType: mongoBool.id,
     traits: ['equality', 'boolean'],
     targetTypes: ['bool'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoDateCodec, {
-    dataType: MONGO_DATE,
+    dataType: mongoDate.id,
     traits: ['equality', 'order'],
     targetTypes: ['date'],
   }),
   descriptorFor(mongoVectorCodec, {
-    dataType: MONGO_VECTOR,
+    dataType: mongoVector.id,
     traits: ['equality'],
     targetTypes: ['vector'],
     renderOutputType: renderVectorOutputType,

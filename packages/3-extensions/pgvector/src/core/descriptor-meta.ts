@@ -8,6 +8,7 @@ import {
 import type { CodecTypes } from '../types/codec-types';
 import type { QueryOperationTypes } from '../types/operation-types';
 import { pgvectorAuthoringTypes } from './authoring';
+import { pgvectorDataTypes } from './data-types';
 import { pgvectorCodecRegistry } from './registry';
 
 const pgvectorTypeId = 'pg/vector@1' as const;
@@ -71,6 +72,7 @@ const pgvectorPackMetaBase = {
   authoring: {
     type: pgvectorAuthoringTypes,
   },
+  dataTypes: pgvectorDataTypes,
   types: {
     codecTypes: {
       codecDescriptors: Array.from(pgvectorCodecRegistry.values()),

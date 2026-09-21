@@ -632,6 +632,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           'contract-free',
           'control',
           'data-transform',
+          'data-types',
           'ddl',
           'default-normalizer',
           'diff-database-schema',

@@ -69,6 +69,7 @@
     "./contract-free": "./dist/contract-free.mjs",
     "./control": "./dist/control.mjs",
     "./data-transform": "./dist/data-transform.mjs",
+    "./data-types": "./dist/data-types.mjs",
     "./ddl": "./dist/ddl.mjs",
     "./default-normalizer": "./dist/default-normalizer.mjs",
     "./diff-database-schema": "./dist/diff-database-schema.mjs",

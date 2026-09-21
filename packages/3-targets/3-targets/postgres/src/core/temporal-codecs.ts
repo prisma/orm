@@ -20,7 +20,7 @@ import {
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from './codec-ids';
-import { PG_DATE, PG_TIME, PG_TIMESTAMP, PG_TIMESTAMPTZ } from './data-type-ids';
+import { pgDate, pgTime, pgTimestamp, pgTimestamptz } from './data-types';
 import {
   PG_DATE_NATIVE_TYPE,
   PG_TIME_NATIVE_TYPE,
@@ -66,7 +66,7 @@ export class PgDateTemporalDescriptor extends PostgresCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
-  override readonly dataType = PG_DATE;
+  override readonly dataType = pgDate.id;
   override readonly codecId = PG_DATE_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = ['date'] as const;
@@ -116,7 +116,7 @@ export class PgTimestampTemporalDescriptor extends PostgresCodecDescriptor<Preci
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
-  override readonly dataType = PG_TIMESTAMP;
+  override readonly dataType = pgTimestamp.id;
   override readonly codecId = PG_TIMESTAMP_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = ['timestamp'] as const;
@@ -174,7 +174,7 @@ export class PgTimestamptzTemporalDescriptor extends PostgresCodecDescriptor<Pre
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
-  override readonly dataType = PG_TIMESTAMPTZ;
+  override readonly dataType = pgTimestamptz.id;
   override readonly codecId = PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = ['timestamptz'] as const;
@@ -230,7 +230,7 @@ export class PgTimeTemporalDescriptor extends PostgresCodecDescriptor<PrecisionP
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
-  override readonly dataType = PG_TIME;
+  override readonly dataType = pgTime.id;
   override readonly codecId = PG_TIME_TEMPORAL_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = ['time'] as const;

@@ -48,14 +48,14 @@ import {
   SQLITE_TEXT_CODEC_ID,
 } from './codec-ids';
 import {
-  SQLITE_BIGINT,
-  SQLITE_BLOB,
-  SQLITE_DATETIME,
-  SQLITE_INTEGER,
-  SQLITE_JSON,
-  SQLITE_REAL,
-  SQLITE_TEXT,
-} from './data-type-ids';
+  sqliteBigint,
+  sqliteBlob,
+  sqliteDatetime,
+  sqliteInteger,
+  sqliteJson,
+  sqliteReal,
+  sqliteText,
+} from './data-types';
 import { sqliteError } from './errors';
 
 /**
@@ -273,22 +273,22 @@ const safeIntegerFromBigint = (value: bigint): number => {
 };
 
 export const sqliteSqlCharDescriptor = sqliteCodec(sqlCharDescriptor, {
-  dataType: SQLITE_TEXT,
+  dataType: sqliteText.id,
   jsonProjection: identityJsonProjection,
 });
 
 export const sqliteSqlVarcharDescriptor = sqliteCodec(sqlVarcharDescriptor, {
-  dataType: SQLITE_TEXT,
+  dataType: sqliteText.id,
   jsonProjection: identityJsonProjection,
 });
 
 export const sqliteSqlIntDescriptor = sqliteCodec(sqlIntDescriptor, {
-  dataType: SQLITE_INTEGER,
+  dataType: sqliteInteger.id,
   jsonProjection: identityJsonProjection,
 });
 
 export const sqliteSqlFloatDescriptor = sqliteCodec(sqlFloatDescriptor, {
-  dataType: SQLITE_REAL,
+  dataType: sqliteReal.id,
   jsonProjection: identityJsonProjection,
 });
 
@@ -317,7 +317,7 @@ export class SqliteTextDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
-  override readonly dataType = SQLITE_TEXT;
+  override readonly dataType = sqliteText.id;
   override readonly codecId = SQLITE_TEXT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly targetTypes = ['text'] as const;
@@ -361,7 +361,7 @@ export class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
-  override readonly dataType = SQLITE_INTEGER;
+  override readonly dataType = sqliteInteger.id;
   override readonly codecId = SQLITE_INTEGER_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['integer'] as const;
@@ -420,7 +420,7 @@ export class SqliteRealDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
-  override readonly dataType = SQLITE_REAL;
+  override readonly dataType = sqliteReal.id;
   override readonly codecId = SQLITE_REAL_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['real'] as const;
@@ -470,7 +470,7 @@ export class SqliteBlobDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return hexJsonProjection(expression);
   }
-  override readonly dataType = SQLITE_BLOB;
+  override readonly dataType = sqliteBlob.id;
   override readonly codecId = SQLITE_BLOB_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['blob'] as const;
@@ -532,7 +532,7 @@ export class SqliteDatetimeDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
-  override readonly dataType = SQLITE_DATETIME;
+  override readonly dataType = sqliteDatetime.id;
   override readonly codecId = SQLITE_DATETIME_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = ['text'] as const;
@@ -575,7 +575,7 @@ export class SqliteJsonDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return jsonDocumentRetag(expression);
   }
-  override readonly dataType = SQLITE_JSON;
+  override readonly dataType = sqliteJson.id;
   override readonly codecId = SQLITE_JSON_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['text'] as const;
@@ -650,7 +650,7 @@ export class SqliteBigintDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return decimalTextJsonProjection(expression);
   }
-  override readonly dataType = SQLITE_BIGINT;
+  override readonly dataType = sqliteBigint.id;
   override readonly codecId = SQLITE_BIGINT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['integer'] as const;
@@ -724,7 +724,7 @@ export class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return integerJsonProjection(expression);
   }
-  override readonly dataType = SQLITE_BIGINT;
+  override readonly dataType = sqliteBigint.id;
   override readonly codecId = SQLITE_BIGINT_NUMBER_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = [] as const;

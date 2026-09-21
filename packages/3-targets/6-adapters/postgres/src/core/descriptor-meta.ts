@@ -45,6 +45,7 @@ import {
   SQL_VARCHAR_CODEC_ID,
 } from '@internal/target-postgres/codec-ids';
 import { postgresCodecRegistry } from '@internal/target-postgres/codecs';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import type { QueryOperationTypes } from '../types/operation-types';
 import { adapterError } from './adapter-errors';
 
@@ -194,6 +195,7 @@ export const postgresAdapterDescriptorMeta = {
       checkConstraint: true,
     },
   },
+  dataTypes: postgresDataTypes,
   types: {
     aggregateDescriptors: postgresAggregateDescriptors,
     codecTypes: {

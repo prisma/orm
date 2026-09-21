@@ -2,6 +2,7 @@ import { buildOperation, codecOf, toExpr } from '@internal/sql-relational-core/e
 import type { CodecTypes } from '../types/codec-types';
 import type { QueryOperationTypes } from '../types/operation-types';
 import { postgisAuthoringTypes } from './authoring';
+import { postgisDataTypes } from './data-types';
 import { postgisCodecRegistry } from './registry';
 
 const postgisTypeId = 'pg/geometry@1' as const;
@@ -152,6 +153,7 @@ const postgisPackMetaBase = {
   authoring: {
     type: postgisAuthoringTypes,
   },
+  dataTypes: postgisDataTypes,
   types: {
     codecTypes: {
       codecDescriptors: Array.from(postgisCodecRegistry.values()),
