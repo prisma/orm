@@ -1199,8 +1199,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       }
       if ('index' in lowered) {
         if (!isAuthoredIndexInput(lowered.index)) {
-          throw new InternalError(
-            `Model attribute "@@${modelAttribute.name}" lowered to a malformed index; a contributed attribute that returns { index } must return an authored-index input`,
+          throw contractError(
+            'CONTRACT.PACK_CONTRIBUTION_INVALID',
+            `model attribute "@@${modelAttribute.name}" on model "${model.name}" lowered to a malformed index. A contributed attribute that returns { index } must return an authored-index input: exactly one of a columns list or an expression, plus explicit where/unique/name/map and a type-with-options pair.`,
+            { meta: { attribute: modelAttribute.name, modelName: model.name } },
           );
         }
         indexNodes.push(lowered.index);

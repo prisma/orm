@@ -67,7 +67,11 @@ export function isAuthoredIndexInput(value: unknown): value is AuthoredIndexInpu
   if (candidate['unique'] !== undefined && typeof candidate['unique'] !== 'boolean') return false;
   if (candidate['type'] === undefined) return candidate['options'] === undefined;
   if (typeof candidate['type'] !== 'string') return false;
-  return candidate['options'] === undefined || typeof candidate['options'] === 'object';
+  const options = candidate['options'];
+  return (
+    options === undefined ||
+    (typeof options === 'object' && options !== null && !Array.isArray(options))
+  );
 }
 
 function isOptionalString(value: unknown): boolean {
