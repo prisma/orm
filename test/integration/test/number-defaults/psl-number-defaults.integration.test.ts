@@ -213,32 +213,31 @@ describe('PSL number defaults keep every digit', () => {
   );
 });
 
-describe('PSL number defaults on codecs that accept no number literal', () => {
-  it('report the incompatibility on a Postgres bytea column', async () => {
+describe('PSL number defaults on columns whose data type casts from no number', () => {
+  it('refuse a number on a Postgres bytea column, naming the cast it would need', async () => {
     await expect(
       authorSqlContractFromPsl('model Payload {\n  id Int @id\n  data Bytes @default(1234)\n}'),
     ).resolves.toMatchObject({
       ok: false,
       diagnostics: [
         expect.objectContaining({
-          code: 'PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE',
-          message:
-            'Field "Payload.data": pg/bytea@1 is not compatible with an i16 literal; it accepts string literals',
+          code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+          message: 'Field "Payload.data": pg/bytea has no cast from pg/int2; it casts from pg/text',
         }),
       ],
     });
   });
 
-  it('report the incompatibility on a SQLite datetime column', async () => {
+  it('refuse a number on a SQLite datetime column, naming the cast it would need', async () => {
     const result = await authorSqliteContractFromPsl(
       'model Event {\n  id Int @id\n  at DateTime @default(0)\n}',
     );
     expect(result.ok).toBe(false);
     expect(result.ok ? [] : result.failure.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE',
+        code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
         message:
-          'Field "Event.at": sqlite/datetime@1 is not compatible with an i8 literal; it accepts string literals',
+          'Field "Event.at": sqlite/datetime has no cast from sqlite/integer; it casts from sqlite/text',
       }),
     ]);
   });

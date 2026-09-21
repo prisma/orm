@@ -1,8 +1,8 @@
 /**
- * Journey: every literal `@default` is classified into a literal type, checked against the column's
- * codec, stored in the contract in the codec's JSON form, created in the database by `db init`,
- * verified clean by strict `db verify`, and read back through the client as the codec's own value
- * type.
+ * Journey: every written `@default` is read by the authoring entry for the syntax it is written in,
+ * cast into the column's data type, validated by the column's codec, stored in the contract in that
+ * type's canonical form, created in the database by `db init`, verified clean by strict `db verify`,
+ * and read back through the client as the codec's own value.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -86,7 +86,7 @@ async function rows(result: AsyncIterable<unknown>): Promise<unknown[]> {
 }
 
 withTempDir(({ createTempDir }) => {
-  describe('Journey: literal types for column defaults', () => {
+  describe('Journey: data types for column defaults', () => {
     const db = useDevDatabase();
 
     it(
