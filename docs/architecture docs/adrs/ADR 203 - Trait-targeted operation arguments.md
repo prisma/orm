@@ -2,7 +2,7 @@
 
 ## Context
 
-Adapters and extensions register query operations (e.g., `ilike`, `cosineDistance`) that attach to fields of a given shape. (Since [ADR 254](ADR%20254%20-%20Target-owned%20built-in%20query%20operations.md), a target registers its built-in operations too — `ilike` is contributed by the Postgres target, not its adapter.) Until now an operation declared its `self` argument as a specific `codecId` — `pgvector/vector@1` for `cosineDistance`, for example. The type and runtime machinery then surfaced that operation on every field whose codec matched that ID.
+Adapters and extensions register query operations (e.g., `ilike`, `cosineDistance`) that attach to fields of a given shape. (Since [ADR 255](ADR%20255%20-%20Target-owned%20built-in%20query%20operations.md), a target registers its built-in operations too — `ilike` is contributed by the Postgres target, not its adapter.) Until now an operation declared its `self` argument as a specific `codecId` — `pgvector/vector@1` for `cosineDistance`, for example. The type and runtime machinery then surfaced that operation on every field whose codec matched that ID.
 
 Codec-ID targeting works when an operation is tied to one concrete codec. It breaks down when an operation is defined by a *capability* that multiple codecs share:
 

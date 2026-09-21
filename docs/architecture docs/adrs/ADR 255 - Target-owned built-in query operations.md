@@ -1,4 +1,4 @@
-# ADR 254 — Target-owned built-in query operations
+# ADR 255 — Target-owned built-in query operations
 
 **Status:** Accepted
 
