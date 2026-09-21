@@ -143,7 +143,8 @@ export class SyntaxNode {
   readonly parent: SyntaxNode | undefined;
   /** Position within the parent's children, enabling O(1) sibling navigation without rescanning the green layer. */
   readonly index: number;
-  #childSlots: ReadonlyArray<SyntaxElement> | undefined;
+  #childSlots: (SyntaxElement | undefined)[] | undefined;
+  #childOffsets: number[] | undefined;
 
   constructor(green: GreenNode, offset: number, parent: SyntaxNode | undefined, index: number) {
     this.green = green;
@@ -152,25 +153,42 @@ export class SyntaxNode {
     this.index = index;
   }
 
-  #slots(): ReadonlyArray<SyntaxElement> {
+  #slots(): (SyntaxElement | undefined)[] {
     let slots = this.#childSlots;
     if (slots === undefined) {
-      const created: SyntaxElement[] = [];
-      let offset = this.offset;
-      let index = 0;
-      for (const child of this.green.children) {
-        created.push(wrapElement(child, offset, this, index));
-        offset += elementTextLength(child);
-        index++;
-      }
-      slots = created;
+      slots = new Array<SyntaxElement | undefined>(this.green.children.length).fill(undefined);
       this.#childSlots = slots;
     }
     return slots;
   }
 
+  #childOffset(index: number): number {
+    let offsets = this.#childOffsets;
+    if (offsets === undefined) {
+      offsets = [];
+      this.#childOffsets = offsets;
+    }
+    for (let known = offsets.length; known <= index; known++) {
+      const previousOffset = offsets[known - 1];
+      const previousChild = this.green.children[known - 1];
+      offsets.push(
+        previousOffset === undefined || previousChild === undefined
+          ? this.offset
+          : previousOffset + elementTextLength(previousChild),
+      );
+    }
+    return offsets[index] ?? this.offset;
+  }
+
   childAt(index: number): SyntaxElement | undefined {
-    return this.#slots()[index];
+    const green = this.green.children[index];
+    if (green === undefined) return undefined;
+    const slots = this.#slots();
+    const cached = slots[index];
+    if (cached !== undefined) return cached;
+    const created = wrapElement(green, this.#childOffset(index), this, index);
+    slots[index] = created;
+    return created;
   }
 
   get kind(): SyntaxKind {
@@ -231,7 +249,11 @@ export class SyntaxNode {
   }
 
   *children(): Iterable<SyntaxElement> {
-    yield* this.#slots();
+    const count = this.green.children.length;
+    for (let index = 0; index < count; index++) {
+      const child = this.childAt(index);
+      if (child !== undefined) yield child;
+    }
   }
 
   *childNodes(): Iterable<SyntaxNode> {

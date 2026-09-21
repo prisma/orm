@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../../src/parse';
 import { FieldDeclarationAst, ModelDeclarationAst } from '../../src/syntax/ast/declarations';
+import type { GreenNode } from '../../src/syntax/green';
 import { GreenNodeBuilder } from '../../src/syntax/green-builder';
 import type { SyntaxElement } from '../../src/syntax/red';
 import { createSyntaxTree, SyntaxNode, SyntaxToken, TokenAtOffset } from '../../src/syntax/red';
@@ -739,4 +740,58 @@ describe('zero-width node precondition', () => {
       }
     });
   }
+});
+
+describe('red child-slot laziness', () => {
+  function watchedChildren(childCount: number) {
+    const b = new GreenNodeBuilder();
+    b.startNode('Document');
+    for (let i = 0; i < childCount; i++) {
+      b.startNode('Identifier');
+      b.token('Ident', `n${i}`);
+      b.finishNode();
+    }
+    const green = b.finishNode();
+    const touched = new Set<number>();
+    const watched: GreenNode = {
+      ...green,
+      children: new Proxy(green.children, {
+        get(target, property, receiver) {
+          if (typeof property === 'string' && /^\d+$/.test(property)) {
+            touched.add(Number(property));
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      }),
+    };
+    return { root: createSyntaxTree(watched), touched };
+  }
+
+  it('reaches no further than the child asked for', () => {
+    const { root, touched } = watchedChildren(6);
+    touched.clear();
+
+    root.childAt(1);
+
+    expect([...touched].sort((left, right) => left - right)).toEqual([0, 1]);
+  });
+
+  it('leaves later siblings untouched when an early child is wrapped', () => {
+    const { root, touched } = watchedChildren(6);
+    touched.clear();
+
+    root.firstChild;
+
+    expect(touched.has(5)).toBe(false);
+  });
+
+  it('still materializes every child when the whole row is iterated', () => {
+    const { root, touched } = watchedChildren(6);
+    touched.clear();
+
+    const children = Array.from(root.children());
+
+    expect(children).toHaveLength(6);
+    expect(touched.has(5)).toBe(true);
+  });
 });
