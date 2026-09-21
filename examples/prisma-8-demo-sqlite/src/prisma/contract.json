@@ -609,6 +609,8 @@
   "capabilities": {
     "sql": {
       "foreignKeys": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
       "jsonAgg": true,
       "limit": true,
       "orderBy": true,

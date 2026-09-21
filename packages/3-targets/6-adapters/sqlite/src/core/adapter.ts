@@ -81,6 +81,8 @@ const defaultCapabilities = Object.freeze({
     jsonAgg: true,
     returning: true,
     enums: false,
+    insertOnConflictSkip: true,
+    insertOnConflictWithoutTarget: true,
   },
 });
 

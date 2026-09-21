@@ -192,6 +192,8 @@ export const postgresAdapterDescriptorMeta = {
       lateral: true,
       scalarList: true,
       checkConstraint: true,
+      insertOnConflictSkip: true,
+      insertOnConflictWithoutTarget: true,
     },
   },
   types: {
