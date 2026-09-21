@@ -46,8 +46,20 @@ In a TypeScript contract, use the matching helper inside the model's `sql({ inde
 import { fullTextIndex } from '@prisma/orm-postgres/contract-builder';
 
 model('Message', { fields: { id, text } }).sql(({ cols }) => ({
-  indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
+  indexes: [
+    fullTextIndex(cols.text, { name: 'message_text_search' }),
+    fullTextIndex(cols.text, { where: 'archived_at IS NULL', name: 'message_text_search_live' }),
+  ],
 }));
+```
+
+The operations themselves take an options object as their second argument — `language` for all three, plus `normalization` and `coverDensity` on `fullTextRank` and the `ts_headline` options (`startSel`, `stopSel`, `maxWords`, `minWords`, `highlightAll`) on `fullTextHeadline`:
+
+```ts
+await db.orm.public.Message.select('id', 'text')
+  .where((m) => m.text.fullTextMatches(query))
+  .orderBy((m) => m.text.fullTextRank(query, { normalization: 32 }).desc())
+  .all();
 ```
 
 Postgres only uses a full-text index whose expression is the same `to_tsvector` over the same configuration literal and the same column as the query, so prefer these over writing `@@index(expression: "to_tsvector(…)", type: "gin", …)` by hand. Pass the same `language` to the index and to the operation: a mismatch is silent, and the query falls back to a sequential scan.

@@ -119,7 +119,16 @@ Pack refs are pure JSON-friendly objects that make TypeScript contract authoring
 
 This package contributes the built-in Postgres query operations — `ilike`, and the three full-text search operations below — through `queryOperations` on its runtime descriptor, with their types on `./operation-types`. Emitted `contract.d.ts` files import them from there.
 
-`fullTextMatches` is a predicate, `fullTextRank` scores a row for ordering, and `fullTextHeadline` returns the matched text with `<b>` around the matching words. All three take the search string as a bound parameter and lower to `websearch_to_tsquery`, so a user can type `"an exact phrase"` and `-excluded` and get what those mean in a search box. Each takes an optional second argument naming the text-search configuration, which defaults to `english`; only the configurations a stock PostgreSQL server ships with are accepted, because the name is written into the SQL as an inline literal.
+`fullTextMatches` is a predicate, `fullTextRank` scores a row for ordering, and `fullTextHeadline` returns the matched text with `<b>` around the matching words. All three take the search string as a bound parameter and lower to `websearch_to_tsquery`, so a user can type `"an exact phrase"` and `-excluded` and get what those mean in a search box.
+
+Each takes an options object as its second argument. `language` is common to all three and defaults to `english`; `fullTextRank` adds `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (which selects `ts_rank_cd`); `fullTextHeadline` adds `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`, which become `ts_headline`'s fourth argument:
+
+```typescript
+row.text.fullTextRank(query, { language: 'german', normalization: 32, coverDensity: true });
+row.text.fullTextHeadline(query, { startSel: '<mark>', stopSel: '</mark>', maxWords: 20 });
+```
+
+Postgres takes no parameter in any of those positions, so every option is written into the SQL as a literal and is therefore checked first: an unknown configuration, a normalization outside 0 to 63, a word count that is not a positive integer, a `minWords` above `maxWords`, or a marker carrying `ts_headline`'s own `"` `,` `=` delimiters all raise `RUNTIME.ARGUMENT_INVALID` before a statement is built.
 
 Through the ORM:
 
@@ -155,7 +164,7 @@ model('Message', { fields: { id, text } }).sql(({ cols }) => ({
 }));
 ```
 
-It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), and `name:` xor `map:` like any expression index; it is repeatable, so a model may index several columns. Pass the same `language` here and to the operation: a mismatch is not an error, the query just stops using the index and falls back to a sequential scan. The column name comes from the resolved storage column, so `@map` is honoured. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
+It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), an optional `where:` for a partial index, and `name:` xor `map:` like any expression index; it is repeatable, so a model may index several columns. Pass the same `language` here and to the operation: a mismatch is not an error, the query just stops using the index and falls back to a sequential scan. The column name comes from the resolved storage column, so `@map` is honoured. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
 
 ## Codec descriptor authoring
 
