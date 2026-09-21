@@ -13,16 +13,17 @@ import {
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { unboundTables } from './unbound-tables';
 
-function interpret(schema: string, codecLookup = postgresCodecLookup) {
+function interpret(
+  schema: string,
+  codecLookup = postgresCodecLookup,
+  dataTypes = fixtureDataTypeSupport.entries,
+) {
   const document = symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' });
   return interpretPslDocumentToSqlContract({
     ...document,
     target: postgresTarget,
     scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-    authoringContributions: {
-      ...pgvectorAuthoringContributions,
-      dataTypes: fixtureDataTypeSupport.entries,
-    },
+    authoringContributions: { ...pgvectorAuthoringContributions, dataTypes },
     dataTypeLookup: fixtureDataTypeSupport.lookup,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
@@ -174,6 +175,23 @@ describe('written defaults a column refuses', () => {
         message: expect.stringContaining(message),
         sourceId: 'schema.prisma',
         span: expect.objectContaining({ start: expect.objectContaining({ line: 3 }) }),
+      }),
+    ]);
+  });
+
+  it('refuses a plain form this target has no data type for, as SQLite has none for a boolean', () => {
+    const entries = Object.fromEntries(
+      Object.entries(fixtureDataTypeSupport.entries).filter(([key]) => key !== 'pg/bool'),
+    );
+    const result = interpret(
+      model('  active Boolean @default(true)'),
+      postgresCodecLookup,
+      entries,
+    );
+    expect(result.ok ? [] : result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+        message: expect.stringContaining('this target has no data type for a boolean value'),
       }),
     ]);
   });

@@ -13,10 +13,12 @@
  */
 
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -28,6 +30,8 @@ import { PG_ENUM_CODEC_ID } from '../src/core/codec-ids';
 import { pgEnumDescriptor, postgresQualifyColumnType } from '../src/core/codecs';
 import type { PostgresSchema } from '../src/core/postgres-schema';
 import { postgresCreateNamespace } from '../src/core/postgres-schema';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 // Production always resolves `pg.enum(Ref)` through a real `CodecLookup` (the
 // CLI/config-loading pipeline supplies `stack.codecLookup`), so this test
@@ -98,6 +102,7 @@ function interpret(source: string, capabilities: Record<string, Record<string, b
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
     document,
     symbolTable,
     sources,

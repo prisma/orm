@@ -7,11 +7,13 @@ import {
   UNBOUND_DOMAIN_NAMESPACE_ID,
 } from '@internal/contract/types';
 import { MongoContractSerializer } from '@internal/family-mongo/ir';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { interpretPslDocumentToMongoContract } from '@internal/mongo-contract-psl';
 import { mongoOrm } from '@internal/mongo-orm';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
 import { describeWithMongoDB } from '../mongo/setup';
@@ -110,6 +112,7 @@ function interpretSqlPsl(schema: string) {
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
     document,
     symbolTable,
     sources,

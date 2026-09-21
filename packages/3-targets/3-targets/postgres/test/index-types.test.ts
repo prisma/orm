@@ -1,7 +1,9 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { type } from 'arktype';
 import { describe, expect, it } from 'vitest';
 import {
@@ -11,6 +13,8 @@ import {
 import { postgresTargetDescriptorMeta } from '../src/core/descriptor-meta';
 import { postgresIndexTypes } from '../src/core/index-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const assembled = assembleAuthoringContributions([
   {
@@ -36,6 +40,7 @@ function interpret(source: string) {
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
     document,
     symbolTable,
     sources,

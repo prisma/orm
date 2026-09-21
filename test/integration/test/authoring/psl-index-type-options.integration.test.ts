@@ -1,8 +1,10 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import paradedbPack from '@internal/extension-paradedb/pack';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 // postgresPack is used directly in interpretPslDocumentToSqlContract (not in defineContract).
 import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
@@ -21,6 +23,7 @@ function interpret(schema: string) {
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
     document,
     symbolTable,
     sources,

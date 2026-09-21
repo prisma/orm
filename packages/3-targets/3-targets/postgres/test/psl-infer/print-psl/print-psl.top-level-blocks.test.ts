@@ -19,6 +19,7 @@ import {
   collectScalarTypeConstructors,
 } from '@internal/framework-components/authoring';
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import type {
   PslDocumentAst,
@@ -37,6 +38,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import { printPsl } from '@internal/psl-printer';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { assert, describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -48,6 +50,8 @@ import { buildPslDocumentAst } from '../../../src/core/psl-infer/infer-psl-contr
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
 import { createPostgresTypeMap } from '../../../src/core/psl-infer/postgres-type-map';
 import { inferPslAstFromFlat } from '../fixtures';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const authoringTypes = {
   Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
@@ -116,6 +120,7 @@ function parseAndInterpret(source: string) {
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const interpreted = interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
     document,
     symbolTable,
     sources,

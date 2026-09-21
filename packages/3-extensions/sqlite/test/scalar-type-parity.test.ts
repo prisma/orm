@@ -5,13 +5,17 @@ import {
   collectScalarTypeConstructors,
   type ScalarTypeConstructorOutput,
 } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
 import sqlitePackRef from '@internal/target-sqlite/pack';
 import { describe, expect, it } from 'vitest';
+
+const sqliteDataTypeLookup = createDataTypeLookup(sqliteDataTypes);
 
 const stack = createControlStack({
   family: sql,
@@ -41,6 +45,7 @@ function emit(scalarColumnDescriptors: ReadonlyMap<string, ScalarTypeConstructor
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: sqliteDataTypeLookup,
     document,
     symbolTable,
     sources,

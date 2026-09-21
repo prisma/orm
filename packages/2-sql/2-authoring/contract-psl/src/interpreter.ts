@@ -30,8 +30,7 @@ import {
   isAuthoringModelAttributeDescriptor,
   isAuthoringPslBlockDescriptor,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
-import { createDataTypeLookup, type DataTypeLookup } from '@internal/framework-components/codec';
+import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
 import type {
   CapabilityMatrix,
   ExtensionPackRef,
@@ -132,7 +131,7 @@ export interface InterpretPslDocumentToSqlContractInput {
   readonly composedExtensionPackRefs?: readonly ExtensionPackRef<'sql', string>[];
   readonly controlMutationDefaults?: ControlMutationDefaults;
   /** The stack's data types; the PSL support for them travels in `authoringContributions`. ADR 254. */
-  readonly dataTypeLookup?: DataTypeLookup;
+  readonly dataTypeLookup: DataTypeLookup;
   readonly authoringContributions?: AuthoringContributions;
   /**
    * Extension contracts keyed by space ID. Required for cross-space FK
@@ -2143,7 +2142,7 @@ export function interpretPslDocumentToSqlContract(
     input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map();
   const dataTypeSupport: DataTypeSupport = {
     entries: input.authoringContributions?.dataTypes ?? {},
-    lookup: input.dataTypeLookup ?? createDataTypeLookup([]),
+    lookup: input.dataTypeLookup,
   };
   const generatorDescriptors = input.controlMutationDefaults?.generatorDescriptors ?? [];
   const generatorDescriptorById = new Map<string, MutationDefaultGeneratorDescriptor>();

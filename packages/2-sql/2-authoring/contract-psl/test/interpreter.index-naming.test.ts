@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresScalarTypeDescriptors,
@@ -24,6 +25,7 @@ describe('index naming at PSL lowering', () => {
       composedExtensionContracts: new Map(),
       controlMutationDefaults: builtinControlMutationDefaults,
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
   }
@@ -81,6 +83,7 @@ describe('@@index matrix threading at PSL lowering', () => {
       composedExtensionContracts: new Map(),
       controlMutationDefaults: builtinControlMutationDefaults,
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
   }

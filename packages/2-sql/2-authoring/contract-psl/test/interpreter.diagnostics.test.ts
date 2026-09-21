@@ -1154,6 +1154,7 @@ namespace auth {}`,
         ...document,
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
         capabilities: { sql: { scalarList: true } },
       });
 
@@ -1191,6 +1192,7 @@ namespace auth {}`,
         ...document,
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
         capabilities: { sql: { scalarList: true } },
       });
 

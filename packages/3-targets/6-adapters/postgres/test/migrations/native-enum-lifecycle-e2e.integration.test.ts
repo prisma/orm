@@ -19,6 +19,7 @@
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import {
   APP_SPACE_ID,
   assembleAuthoringContributions,
@@ -30,6 +31,7 @@ import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import type { SqlSchemaIRNode } from '@internal/sql-schema-ir/types';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresDatabaseSchemaNode,
   postgresCreateNamespace,
@@ -52,6 +54,8 @@ import {
   synthEdges,
   testTimeout,
 } from './fixtures/runner-fixtures';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 // ============================================================================
 // PSL sources
@@ -218,6 +222,7 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
   });
 
   const result = interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
     document,
     symbolTable,
     sources,

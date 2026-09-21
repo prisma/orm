@@ -34,6 +34,7 @@ import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
 import { resolveFieldTypeDescriptor } from '../src/psl-column-resolution';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -197,6 +198,7 @@ const authoringContributions: AuthoringContributions = {
 };
 
 const baseInput = {
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),
