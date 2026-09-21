@@ -4,6 +4,7 @@ import {
   DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
   renderFullTextIndexExpression,
 } from '@internal/target-postgres/sql-utils';
+import { invariant } from '@internal/utils/assertions';
 
 type FullTextIndexOptions = { readonly language?: FullTextSearchLanguage } & (
   | { readonly name: string; readonly map?: never }
@@ -28,8 +29,16 @@ export function fullTextIndex(
     kind: 'index',
     expression: {
       fields: [column],
-      render: (columnNames: readonly string[]) =>
-        renderFullTextIndexExpression(language, columnNames[0] ?? ''),
+      render: (columnNames: readonly string[]) => {
+        const columnName = columnNames[0];
+        // Lowering resolves one name per field it was given, or raises
+        // `CONTRACT.FIELD_UNKNOWN`; this helper hands it exactly one.
+        invariant(
+          columnName !== undefined,
+          `fullTextIndex resolved no column name for field "${column.fieldName}"`,
+        );
+        return renderFullTextIndexExpression(language, columnName);
+      },
     },
     type: 'gin',
     ...(options.name !== undefined ? { name: options.name } : {}),
