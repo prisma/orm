@@ -152,6 +152,22 @@ export function okVoid(): Ok<void> {
  * callers that need them collect them as they go and read them back once the
  * accumulated result is ok.
  */
+/**
+ * Disjunction of two results: the first ok wins, carrying its value. Two
+ * failures combine on the failure lane, where a failure carrying no details is
+ * absorbing — it outranks the other side, because a rejection that was already
+ * reported elsewhere should not be buried under alternatives' complaints.
+ */
+export function or<T, U, E>(
+  left: Result<T, readonly E[]>,
+  right: Result<U, readonly E[]>,
+): Result<T | U, readonly E[]> {
+  if (left.ok) return left;
+  if (right.ok) return right;
+  if (left.failure.length === 0 || right.failure.length === 0) return notOk([]);
+  return notOk([...left.failure, ...right.failure]);
+}
+
 export function and<T, U, E>(
   left: Result<T, readonly E[]>,
   right: Result<U, readonly E[]>,
