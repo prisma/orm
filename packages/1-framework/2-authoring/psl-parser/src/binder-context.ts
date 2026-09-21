@@ -10,13 +10,15 @@ export function referencedModel(binder: Binder, field: FieldSymbol): ModelSymbol
   return resolution?.kind === 'model' ? resolution.symbol : undefined;
 }
 
-export interface ModelAttributeContextInput {
+export interface AttributeContextInput {
   readonly binder: Binder;
   readonly sources: PslSources;
   readonly model: ModelSymbol;
 }
 
-export interface FieldAttributeContextInput extends ModelAttributeContextInput {
+export type ModelAttributeContextInput = AttributeContextInput;
+
+export interface FieldAttributeContextInput extends AttributeContextInput {
   readonly field: FieldSymbol;
 }
 

@@ -110,6 +110,7 @@ export {
   typeReferenceNode,
 } from '../binder';
 export type {
+  AttributeContextInput,
   FieldAttributeContextInput,
   ModelAttributeContextInput,
 } from '../binder-context';
