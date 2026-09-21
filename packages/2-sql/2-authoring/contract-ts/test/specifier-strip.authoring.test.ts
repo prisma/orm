@@ -105,7 +105,11 @@ const stubContext: ContractSourceContext = {
     targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
   },
-  controlMutationDefaults: { defaultFunctionRegistry: new Map(), generatorDescriptors: [] },
+  controlMutationDefaults: {
+    defaultLiteralTagRegistry: new Map(),
+    defaultFunctionRegistry: new Map(),
+    generatorDescriptors: [],
+  },
   resolvedInputs: [],
   capabilities: {},
 };

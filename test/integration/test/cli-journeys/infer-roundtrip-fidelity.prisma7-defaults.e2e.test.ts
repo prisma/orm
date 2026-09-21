@@ -133,20 +133,6 @@ CREATE TABLE "raw_list_defaults" (
 );
 `;
 
-const LIST_COLUMNS = [
-  'negInts',
-  'negSmallInts',
-  'bigInts',
-  'negBigInts',
-  'emptyBigInts',
-  'hugeBigInts',
-  'negFloats',
-  'negDecimals',
-  'longDecimals',
-  'scaledDecimals',
-  'emptyVarchars',
-] as const;
-
 /**
  * `db init` renders a `dbgenerated` timestamp default through a codec that needs a global
  * `Temporal`, which the CLI does not install.
@@ -155,25 +141,10 @@ const DB_INIT_UNSUPPORTED_FIELDS = ['stamp'] as const;
 
 interface VerifyIssue {
   readonly path: readonly string[];
-  readonly expected?: { readonly nullable?: boolean };
-  readonly actual?: { readonly nullable?: boolean };
 }
 
 interface SchemaVerifyResult {
   readonly schema: { readonly issues: readonly VerifyIssue[] };
-}
-
-interface SourceLoadError {
-  readonly meta?: {
-    readonly diagnostics?: readonly {
-      readonly code: string;
-      readonly span?: { readonly start: { readonly line: number } };
-    }[];
-  };
-}
-
-function byPath(left: VerifyIssue, right: VerifyIssue): number {
-  return left.path.join('/').localeCompare(right.path.join('/'));
 }
 
 function readContractPsl(ctx: JourneyContext): string {
@@ -222,18 +193,18 @@ withTempDir(({ createTempDir }) => {
             // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
             model ListDefaults {
-              id             Int               @id(map: "list_defaults_pkey")
-              negInts        Int[]             @default([-1, 2]) @noCheck(elementNotNull)
-              negSmallInts   SmallInt[]        @default([-1, 2]) @noCheck(elementNotNull)
-              bigInts        BigInt[]          @default([1, 2]) @noCheck(elementNotNull)
-              negBigInts     BigInt[]          @default([-1, 2]) @noCheck(elementNotNull)
-              emptyBigInts   BigInt[]          @default([]) @noCheck(elementNotNull)
-              hugeBigInts    BigInt[]          @default([9007199254740993, -9007199254740993]) @noCheck(elementNotNull)
-              negFloats      Float[]           @default([-1.5, 2]) @noCheck(elementNotNull)
-              negDecimals    Numeric(65, 30)[] @default(["-1.5", "2"]) @noCheck(elementNotNull)
-              longDecimals   Numeric(65, 30)[] @default(["12345678901234567890.123456789", "0.000000000000000001"]) @noCheck(elementNotNull)
-              scaledDecimals Numeric(10, 2)[]  @default(["-1.25", "2"]) @noCheck(elementNotNull)
-              emptyVarchars  VarChar(32)[]     @default([]) @noCheck(elementNotNull)
+              id             Int                @id(map: "list_defaults_pkey")
+              negInts        Int[]?             @default([-1, 2]) @noCheck(elementNotNull)
+              negSmallInts   SmallInt[]?        @default([-1, 2]) @noCheck(elementNotNull)
+              bigInts        BigInt[]?          @default([1, 2]) @noCheck(elementNotNull)
+              negBigInts     BigInt[]?          @default([-1, 2]) @noCheck(elementNotNull)
+              emptyBigInts   BigInt[]?          @default([]) @noCheck(elementNotNull)
+              hugeBigInts    BigInt[]?          @default([9007199254740993, -9007199254740993]) @noCheck(elementNotNull)
+              negFloats      Float[]?           @default([-1.5, 2]) @noCheck(elementNotNull)
+              negDecimals    Numeric(65, 30)[]? @default(["-1.5", "2"]) @noCheck(elementNotNull)
+              longDecimals   Numeric(65, 30)[]? @default(["12345678901234567890.123456789", "0.000000000000000001"]) @noCheck(elementNotNull)
+              scaledDecimals Numeric(10, 2)[]?  @default(["-1.25", "2"]) @noCheck(elementNotNull)
+              emptyVarchars  VarChar(32)[]?     @default([]) @noCheck(elementNotNull)
 
               @@map("list_defaults")
             }
@@ -278,7 +249,7 @@ withTempDir(({ createTempDir }) => {
       );
 
       it(
-        'the inferred schema emits, and strict verify finds no default difference, only that each list column is nullable',
+        'the inferred schema emits, and strict verify finds nothing',
         async () => {
           const ctx = setupJourney({
             connectionString: db.connectionString,
@@ -291,14 +262,10 @@ withTempDir(({ createTempDir }) => {
           expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
 
           const verify = await runDbVerify(ctx, ['--schema-only', '--strict', '--json']);
-          const { schema } = parseJsonOutput<SchemaVerifyResult>(verify);
-          expect([...schema.issues].sort(byPath), `db verify\n${output(verify)}`).toEqual(
-            LIST_COLUMNS.map((column) => ({
-              path: ['database', 'public', 'list_defaults', `column:${column}`],
-              expected: expect.objectContaining({ nullable: false }),
-              actual: expect.objectContaining({ nullable: true }),
-            })).sort(byPath),
-          );
+          expect(
+            parseJsonOutput<SchemaVerifyResult>(verify).schema.issues,
+            `db verify\n${output(verify)}`,
+          ).toEqual([]);
         },
         timeouts.spinUpPpgDev,
       );
@@ -340,7 +307,7 @@ withTempDir(({ createTempDir }) => {
       });
 
       it(
-        'infer prints them as dbgenerated, which emit rejects at each field',
+        'infer prints them as dbgenerated, which emit accepts: a list column takes any storage default',
         async () => {
           const ctx = setupJourney({
             connectionString: db.connectionString,
@@ -353,8 +320,8 @@ withTempDir(({ createTempDir }) => {
             // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
             model RawListDefaults {
-              id         Int            @id(map: "raw_list_defaults_pkey")
-              timestamps Timestamp(3)[] @default(dbgenerated("ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]")) @noCheck(elementNotNull)
+              id         Int             @id(map: "raw_list_defaults_pkey")
+              timestamps Timestamp(3)[]? @default(dbgenerated("ARRAY['2024-01-01 00:00:00'::timestamp(3) without time zone]")) @noCheck(elementNotNull)
 
               @@map("raw_list_defaults")
             }
@@ -362,13 +329,7 @@ withTempDir(({ createTempDir }) => {
           `);
 
           const emit = await runContractEmit(ctx, ['--json']);
-          expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(2);
-          expect(parseJsonOutput<SourceLoadError>(emit).meta?.diagnostics).toEqual([
-            expect.objectContaining({
-              code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
-              span: expect.objectContaining({ start: expect.objectContaining({ line: 6 }) }),
-            }),
-          ]);
+          expect(emit.exitCode, `contract emit\n${output(emit)}`).toBe(0);
         },
         timeouts.spinUpPpgDev,
       );

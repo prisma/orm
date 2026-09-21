@@ -1,14 +1,16 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ArgType,
   AttributeCtx,
   FieldAttributeCtx,
   FieldAttributeSpecFactory,
   FieldSymbol,
+  FuncCallSig,
   ModelAttributeCtx,
   ModelAttributeSpecFactory,
   ModelSymbol,
+  Param,
 } from '@internal/psl-parser';
+import { createPslDiagnosticCollector } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import {
   fieldSpecContext,
@@ -19,7 +21,7 @@ import {
 } from '../src/sql-attribute-specs';
 import { buildSymbolTableInput, createBuiltinLikeControlMutationDefaults } from './fixtures';
 
-const controlMutationDefaults = createBuiltinLikeControlMutationDefaults().defaultFunctionRegistry;
+const controlMutationDefaults = createBuiltinLikeControlMutationDefaults();
 
 function project(schema: string, modelName: string) {
   const input = buildSymbolTableInput(schema);
@@ -54,13 +56,7 @@ interface OneOfMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> 
 interface FuncCallMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
   readonly kind: 'funcCall';
   readonly name: string;
-  readonly signature: {
-    readonly positional?: readonly {
-      readonly key: string;
-      readonly type: ArgType<unknown, AttributeCtx>;
-    }[];
-    readonly named?: Readonly<Record<string, ArgType<unknown, AttributeCtx>>>;
-  };
+  readonly signature: FuncCallSig;
 }
 
 function positionalType<Ctx extends AttributeCtx>(spec: {
@@ -72,12 +68,12 @@ function positionalType<Ctx extends AttributeCtx>(spec: {
 }
 
 function namedType<Ctx extends AttributeCtx>(
-  spec: { readonly named: Readonly<Record<string, ArgType<unknown, Ctx>>> },
+  spec: { readonly named: Readonly<Record<string, Param<unknown, Ctx>>> },
   key: string,
 ): ArgType<unknown, Ctx> {
   const type = spec.named[key];
   if (type === undefined) throw new Error(`spec declares named argument ${key}`);
-  return type;
+  return type.type;
 }
 
 function listMetadata<T, Ctx extends AttributeCtx>(
@@ -100,11 +96,11 @@ function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>): O
 }
 
 function interpretDefault(schema: string, fieldName: string) {
-  const { symbolTable, sourceFile, sourceId, model } = project(schema, 'Post');
+  const { symbolTable, sources, model } = project(schema, 'Post');
   const target = field(model, fieldName);
   const node = findFieldAttributeNode(target, 'default');
   if (node === undefined) throw new Error('no @default on field');
-  const diagnostics: ContractSourceDiagnostic[] = [];
+  const diagnostics = createPslDiagnosticCollector(sources);
   const value = interpretFieldAttribute({
     node,
     spec: sqlAttributeSpecs.field.default(
@@ -112,11 +108,10 @@ function interpretDefault(schema: string, fieldName: string) {
     ),
     model,
     field: target,
-    sourceFile,
-    sourceId,
+    sources,
     diagnostics,
   });
-  return { value, diagnostics };
+  return { value, diagnostics: diagnostics.toExternal() };
 }
 
 describe('sqlAttributeSpecs', () => {
@@ -254,6 +249,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       'funcCall',
       'funcCall',
       'funcCall',
+      'taggedLiteral',
     ]);
     const uuid = value.alternatives.find(
       (alt): alt is FuncCallMetadata<FieldAttributeCtx> =>
@@ -270,6 +266,21 @@ describe('sqlAttributeSpecs.field.default', () => {
     ]);
   });
 
+  it('omits the tagged-literal arm when no tag is registered', () => {
+    const noTags = fieldSpecContext({
+      symbols: symbolTable,
+      model,
+      field: field(model, 'id'),
+      controlMutationDefaults: {
+        defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
+        defaultLiteralTagRegistry: new Map(),
+      },
+    });
+    const value = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(noTags)));
+    expect(value.alternatives.map((alt) => alt.kind)).not.toContain('taggedLiteral');
+    expect(value.label).not.toContain('`...`');
+  });
+
   it('exposes list default alternatives without hiding registry function calls', () => {
     const listCtx = fieldSpecContext({
       symbols: symbolTable,
@@ -283,8 +294,16 @@ describe('sqlAttributeSpecs.field.default', () => {
     expect(listDefault).toMatchObject({ kind: 'list' });
     expect(listDefault.of).toMatchObject({ kind: 'oneOf' });
     expect(
-      value.alternatives.slice(1).map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
+      value.alternatives
+        .filter((alt) => alt.kind === 'funcCall')
+        .map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
     ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid', 'dbgenerated']);
+    expect(value.alternatives.at(-1)).toMatchObject({
+      kind: 'taggedLiteral',
+      label: 'sql`...`',
+      tags: ['sql', 'pg.sql'],
+      documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
+    });
   });
 
   it('exposes enum default alternatives and empty-enum rejection metadata', () => {

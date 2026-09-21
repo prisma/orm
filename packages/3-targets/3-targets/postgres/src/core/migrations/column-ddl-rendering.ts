@@ -32,7 +32,7 @@ function columnLike(
   return {
     ...columnTypeLike(`column "${column.name}"`, column),
     nullable: column.nullable,
-    ...ifDefined('default', column.resolvedDefault),
+    ...ifDefined('default', column.authoredDefault ?? column.resolvedDefault),
   };
 }
 
@@ -120,17 +120,16 @@ export function resolveColumnTemporaryDefault(
 }
 
 /**
- * The column's `SET DEFAULT` clause SQL, resolved from a column-default
- * diff node. `''` when the node carries no resolved default. A list default
- * is cast to the column type as the column's DDL writes it.
+ * The column's `SET DEFAULT` clause SQL, from a column-default diff node's authored default, or its resolved one when nothing was authored. `''` when the node carries neither. A list default is cast to the column type as the column's DDL writes it.
  */
 export function renderColumnDefaultSql(
   defaultNode: SqlColumnDefaultIR,
   codecHooks: ReadonlyMap<string, CodecControlHooks>,
 ): string {
-  if (defaultNode.resolved === undefined) return '';
+  const columnDefault = defaultNode.authored ?? defaultNode.resolved;
+  if (columnDefault === undefined) return '';
   const typeLike = columnTypeLike('column default', defaultNode);
-  return buildColumnDefaultSql(defaultNode.resolved, {
+  return buildColumnDefaultSql(columnDefault, {
     nativeType: buildColumnTypeSql(typeLike, codecHooks, {}, false),
     ...ifDefined('many', typeLike.many),
   });

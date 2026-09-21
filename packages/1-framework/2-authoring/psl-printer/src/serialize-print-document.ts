@@ -357,7 +357,8 @@ function formatFieldType(field: PrinterField): string {
   let type = field.typeName;
   if (field.list) {
     type += '[]';
-  } else if (field.optional) {
+  }
+  if (field.optional) {
     type += '?';
   }
   return type;

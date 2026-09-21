@@ -35,6 +35,7 @@ model User {
   referralId String   @unique
   payment    Payment  @relation(fields: [paymentId], references: [id])
   paymentId  String   @unique
+  @@map("user")
 }
 
 model Profile {
@@ -44,6 +45,7 @@ model Profile {
   email     String   @unique
   alias     String   @unique
   createdAt DateTime @default(now())
+  @@map("profile")
 }
 
 model Post {
@@ -51,10 +53,12 @@ model Post {
   title    String  @unique
   author   User?   @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId String?
+  @@map("post")
 }
 
 model Payment {
   id     String @id @default(cuid(2))
   ccn    String @unique
   author User?
+  @@map("payment")
 }

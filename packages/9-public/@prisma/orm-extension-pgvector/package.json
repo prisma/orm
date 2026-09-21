@@ -11,8 +11,7 @@
   "scripts": {
     "build": "tsdown",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen",
-    "test": "vitest run"
+    "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
     "@prisma/orm-family-sql": "workspace:8.0.0-rc.11",
@@ -24,12 +23,10 @@
   "devDependencies": {
     "@internal/extension-pgvector": "workspace:8.0.0-rc.11",
     "@repo/tsconfig": "workspace:8.0.0-rc.11",
-    "@internal/publish-surface": "workspace:8.0.0-rc.11",
     "@repo/tsdown": "workspace:8.0.0-rc.11",
     "@prisma/orm-target-postgres": "workspace:8.0.0-rc.11",
     "tsdown": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "@prisma/orm-target-postgres": "workspace:8.0.0-rc.11",

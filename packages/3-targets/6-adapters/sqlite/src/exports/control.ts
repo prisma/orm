@@ -4,6 +4,7 @@ import { assembleSqliteCodecRegistry } from '../core/codec-lookup';
 import { SqliteControlAdapter } from '../core/control-adapter';
 import {
   createSqliteDefaultFunctionRegistry,
+  createSqliteDefaultLiteralTagRegistry,
   createSqliteMutationDefaultGeneratorDescriptors,
   sqliteScalarAuthoringTypes,
 } from '../core/control-mutation-defaults';
@@ -14,6 +15,7 @@ const sqliteAdapterDescriptor: SqlControlAdapterDescriptor<'sqlite'> = {
   authoring: { type: sqliteScalarAuthoringTypes, valueObjectStorageType: 'Json' },
   controlMutationDefaults: {
     defaultFunctionRegistry: createSqliteDefaultFunctionRegistry(),
+    defaultLiteralTagRegistry: createSqliteDefaultLiteralTagRegistry(),
     generatorDescriptors: createSqliteMutationDefaultGeneratorDescriptors(),
   },
   create(stack): SqlControlAdapter<'sqlite'> {

@@ -90,7 +90,7 @@ function columnDefaults(model: string) {
     codecLookup,
   });
   if (!result.ok) throw new Error(JSON.stringify(result.failure));
-  const table = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['n'];
+  const table = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['N'];
   return Object.fromEntries(
     Object.entries(table?.columns ?? {}).flatMap(([name, column]) =>
       column.default === undefined ? [] : [[name, column.default]],

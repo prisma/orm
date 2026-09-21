@@ -74,18 +74,21 @@ function interpretMongoPsl(schema: string) {
     ['ObjectId', 'mongo/objectId@1'],
     ['Float', 'mongo/double@1'],
   ]);
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'mongo-value-objects.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToMongoContract({
-    symbolTable: table,
-    sourceFile,
-    sourceId: 'test.prisma',
+    document,
+    symbolTable,
+    sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   });
 }
 
@@ -100,16 +103,16 @@ const postgresScalarAuthoringTypes = Object.fromEntries(
 );
 
 function interpretSqlPsl(schema: string) {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'sql-value-objects.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
-    symbolTable: table,
-    sourceFile,
-    sourceId: 'test.prisma',
+    document,
+    symbolTable,
+    sources,
     target: postgresTarget,
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     // Mirrors the real postgres adapter declaration.
@@ -148,7 +151,7 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
     const validated = { contract: new MongoContractSerializer().deserializeContract(contract) };
 
     const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
-    const userCollection = orm['user']!;
+    const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
     const created = await userCollection.create({
@@ -179,7 +182,7 @@ describeWithMongoDB('value objects: end-to-end Mongo', (ctx) => {
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
     const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
-    const userCollection = orm['user']!;
+    const userCollection = orm['User']!;
 
     type CreateUser = Parameters<typeof userCollection.create>[0];
     await userCollection.create({
@@ -218,7 +221,7 @@ type Address {
 
     const validated = { contract: new MongoContractSerializer().deserializeContract(result.value) };
     const orm = mongoOrm({ contract: validated.contract, executor: ctx.runtime });
-    const userCollection = orm['user']!;
+    const userCollection = orm['User']!;
 
     await userCollection.create({ name: 'NoAddr', address: null } as unknown as Parameters<
       typeof userCollection.create
@@ -257,7 +260,7 @@ describe('value objects: end-to-end SQL pipeline', () => {
         { entries: { table: Record<string, { columns: Record<string, { nativeType: string }> }> } }
       >;
     };
-    const userTable = storage.namespaces['public']!.entries.table['user'];
+    const userTable = storage.namespaces['public']!.entries.table['User'];
     expect(userTable).toBeDefined();
     expect(userTable!.columns['homeAddress']).toBeDefined();
     expect(userTable!.columns['homeAddress']!.nativeType).toBe('jsonb');

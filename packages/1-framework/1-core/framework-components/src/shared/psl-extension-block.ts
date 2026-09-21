@@ -71,12 +71,21 @@ export type PslDiagnosticCode =
    */
   | 'PSL_INVALID_OBJECT_LITERAL'
   /**
-   * A string literal with no closing quote — the tokenizer stops the literal at
-   * a newline or at EOF when no terminating `"` is found, and the
-   * recursive-descent parser still consumes the token (preserving the lossless
-   * round-trip) but reports this code anchored on the string token's span.
+   * A string literal with no closing quote — the tokenizer stops a `"` or `'`
+   * literal at a newline or at EOF, and a backtick literal before the next line
+   * that opens with `}` or at EOF. The recursive-descent parser still consumes
+   * the token (preserving the lossless round-trip) but reports this code
+   * anchored on the string token's span.
    */
   | 'PSL_UNTERMINATED_STRING'
+  /** A backtick string that is not the string literal of a tagged literal; anchored on the string. */
+  | 'PSL_BACKTICK_STRING_REQUIRES_TAG'
+  /** A `@default` tagged literal whose tag no pack in the stack registered. */
+  | 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG'
+  /** A tagged literal body contains a NUL character. */
+  | 'PSL_TAGGED_LITERAL_NUL'
+  /** A tagged literal body is larger than 65536 UTF-8 bytes. */
+  | 'PSL_TAGGED_LITERAL_TOO_LARGE'
   /**
    * An unknown parameter key in an extension-contributed block — a key present
    * in the source block but absent from the descriptor's `parameters` map.
@@ -149,6 +158,7 @@ export type PslBlockParam =
   | PslBlockParamList;
 
 export interface PslBlockParamRef {
+  readonly documentation?: string;
   readonly kind: 'ref';
   readonly refKind: string;
   readonly scope: 'same-namespace' | 'same-space' | 'cross-space';
@@ -156,16 +166,19 @@ export interface PslBlockParamRef {
 }
 
 export interface PslBlockParamValue {
+  readonly documentation?: string;
   readonly kind: 'value';
   readonly codecId: string;
   readonly required?: boolean;
 }
 
 export interface PslBlockParamOption extends AuthoringOption {
+  readonly documentation?: string;
   readonly required?: boolean;
 }
 
 export interface PslBlockParamList {
+  readonly documentation?: string;
   readonly kind: 'list';
   readonly of: PslBlockParam;
   readonly required?: boolean;

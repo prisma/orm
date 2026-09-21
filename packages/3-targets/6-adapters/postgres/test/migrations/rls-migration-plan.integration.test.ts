@@ -75,17 +75,17 @@ function buildPslContract(psl: string = PSL) {
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
   const scalarColumnDescriptors = buildScalarTypeDescriptors();
 
-  const { document, sourceFile } = parse(psl);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(psl, 'rls-migration-plan.integration.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
 
   return interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: {
       kind: 'target' as const,
       familyId: 'sql' as const,

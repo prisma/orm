@@ -27,6 +27,7 @@ import {
 } from '../shared/framework-authoring';
 import type { ComponentMetadata } from '../shared/framework-components';
 import type {
+  ControlDefaultLiteralTagEntry,
   ControlMutationDefaultEntry,
   ControlMutationDefaults,
   MutationDefaultGeneratorDescriptor,
@@ -330,6 +331,8 @@ export function assembleControlMutationDefaults(
 ): ControlMutationDefaults {
   const defaultFunctionRegistry = new Map<string, ControlMutationDefaultEntry>();
   const functionOwners = new Map<string, string>();
+  const defaultLiteralTagRegistry = new Map<string, ControlDefaultLiteralTagEntry>();
+  const tagOwners = new Map<string, string>();
   const generatorMap = new Map<string, MutationDefaultGeneratorDescriptor>();
   const generatorOwners = new Map<string, string>();
 
@@ -361,10 +364,23 @@ export function assembleControlMutationDefaults(
       defaultFunctionRegistry.set(functionName, handler);
       functionOwners.set(functionName, descriptorId);
     }
+
+    for (const [tag, entry] of contributions.defaultLiteralTagRegistry) {
+      const existingOwner = tagOwners.get(tag);
+      if (existingOwner !== undefined) {
+        throw new InternalError(
+          `Duplicate default literal tag "${tag}". ` +
+            `Descriptor "${descriptorId}" conflicts with "${existingOwner}".`,
+        );
+      }
+      defaultLiteralTagRegistry.set(tag, entry);
+      tagOwners.set(tag, descriptorId);
+    }
   }
 
   return {
     defaultFunctionRegistry,
+    defaultLiteralTagRegistry,
     generatorDescriptors: Array.from(generatorMap.values()),
   };
 }

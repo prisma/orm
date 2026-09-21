@@ -10,4 +10,5 @@
 model Resource {
   id   String   @id @default(cuid(2))
   date DateTime @unique
+  @@map("resource")
 }

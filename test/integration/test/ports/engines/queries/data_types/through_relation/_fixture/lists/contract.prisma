@@ -1,6 +1,7 @@
 model Parent {
   id Int @id
   children Child[]
+  @@map("parent")
 }
 model Child {
   childId Int @id
@@ -15,4 +16,5 @@ model Child {
   dt DateTime[]
   empty Int[]
   unset Int[]
+  @@map("child")
 }

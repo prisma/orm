@@ -113,7 +113,7 @@ describe('prepared collection', () => {
     const { collection, runtime } = createCollectionFor('Post');
     const query = vi.spyOn(runtime, 'query');
     const view = collection.select('userId').prepared;
-    expect(Object.keys(view)).toEqual(['all', 'first']);
+    expect(Object.keys(view)).toEqual(['aggregate', 'all', 'first']);
     const all = view.all();
     const first = view.first();
     expect(Object.keys(all).sort()).toEqual(['consume', 'plan']);

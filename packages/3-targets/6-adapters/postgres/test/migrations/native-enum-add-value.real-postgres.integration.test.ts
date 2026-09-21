@@ -94,17 +94,20 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
   const scalarTypeDescriptors = buildScalarTypeDescriptors();
 
-  const { document, sourceFile } = parse(psl);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(
+    psl,
+    'native-enum-add-value.real-postgres.integration.test.psl',
+  );
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
 
   const result = interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: {
       kind: 'target' as const,
       familyId: 'sql' as const,
@@ -214,7 +217,9 @@ async function isRealPostgresAvailable(): Promise<boolean> {
 
 async function dropTestDatabaseViaMaintenance(): Promise<void> {
   const maintenance = await createDriver(MAINTENANCE_URL);
-  await maintenance.query(`DROP DATABASE IF EXISTS ${TEST_DB} WITH (FORCE)`);
+  await maintenance.query(
+    'DROP DATABASE IF EXISTS prisma_8_native_enum_add_value_realdb WITH (FORCE)',
+  );
   await maintenance.close();
 }
 
@@ -229,8 +234,10 @@ describe.runIf(await isRealPostgresAvailable())(
 
     beforeAll(async () => {
       const maintenance = await createDriver(MAINTENANCE_URL);
-      await maintenance.query(`DROP DATABASE IF EXISTS ${TEST_DB} WITH (FORCE)`);
-      await maintenance.query(`CREATE DATABASE ${TEST_DB}`);
+      await maintenance.query(
+        'DROP DATABASE IF EXISTS prisma_8_native_enum_add_value_realdb WITH (FORCE)',
+      );
+      await maintenance.query('CREATE DATABASE prisma_8_native_enum_add_value_realdb');
       await maintenance.close();
 
       driver = await createDriver(testDatabaseUrl());

@@ -1,4 +1,4 @@
-import type { Param, PositionalParam } from '@internal/psl-parser';
+import type { ArgType, Param, PositionalParam } from '@internal/psl-parser';
 
 interface ArgumentSignature {
   readonly positional?: readonly PositionalParam<unknown, never>[];
@@ -7,7 +7,7 @@ interface ArgumentSignature {
 
 type RequiredArgument =
   | { readonly kind: 'positional'; readonly argument: PositionalParam<unknown, never> }
-  | { readonly kind: 'named'; readonly key: string; readonly type: Param<unknown, never> };
+  | { readonly kind: 'named'; readonly key: string; readonly type: ArgType<unknown, never> };
 
 export function requiredArgumentsSnippet(signature: ArgumentSignature): string {
   return requiredArguments(signature)
@@ -24,7 +24,7 @@ function requiredArguments(signature: ArgumentSignature): readonly RequiredArgum
         ? []
         : [{ kind: 'positional', argument } satisfies RequiredArgument],
     ),
-    ...Object.entries(signature.named ?? {}).flatMap(([key, type]) =>
+    ...Object.entries(signature.named ?? {}).flatMap(([key, { type }]) =>
       positionalKeys.has(key) || isOptionalParam(type)
         ? []
         : [{ kind: 'named', key, type } satisfies RequiredArgument],
@@ -34,19 +34,23 @@ function requiredArguments(signature: ArgumentSignature): readonly RequiredArgum
 
 function requiredArgumentSnippet(argument: RequiredArgument, tabStop: number): string {
   if (argument.kind === 'positional') {
-    return argSnippetPlaceholder(argument.argument.type, tabStop);
+    return argSnippetPlaceholder(argument.argument.type, tabStop, argument.argument.key);
   }
-  return `${argument.key}: ${argSnippetPlaceholder(argument.type, tabStop)}`;
+  return `${argument.key}: ${argSnippetPlaceholder(argument.type, tabStop, argument.key)}`;
 }
 
-function argSnippetPlaceholder(param: Param<unknown, never>, tabStop: number): string {
-  const placeholder = `\${${tabStop.toString()}:}`;
+function argSnippetPlaceholder(
+  param: ArgType<unknown, never>,
+  tabStop: number,
+  key: string,
+): string {
+  const placeholder = `\${${tabStop.toString()}:${key}}`;
   if (param.kind === 'str') return `"${placeholder}"`;
   if (param.kind === 'list') return `[${placeholder}]`;
   if (param.kind === 'record') return `{ ${placeholder} }`;
   return placeholder;
 }
 
-function isOptionalParam(param: Param<unknown, never>): boolean {
+function isOptionalParam(param: ArgType<unknown, never>): boolean {
   return 'optional' in param && param.optional === true;
 }

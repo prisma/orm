@@ -35,7 +35,9 @@ describe('computeDocumentDiagnostics', () => {
     const source = '// use prisma-8\nmodel {';
     const result = computeDocumentDiagnostics(schemaUri, source, inputs, controlStack);
     expect(result).not.toBeNull();
-    expect(result?.diagnostics).toEqual(mapParseDiagnostics(parse(source).diagnostics));
+    expect(result?.diagnostics).toEqual(
+      mapParseDiagnostics(parse(source, 'language-server-test.psl').diagnostics),
+    );
     expect(result?.diagnostics.length).toBeGreaterThan(0);
   });
 
@@ -74,10 +76,14 @@ describe('computeDocumentDiagnostics', () => {
 
   it('matches the merged parse + symbol-table diagnostics for the same inputs', () => {
     const source = [directive, 'model Profile {', '  user a.b.c', '}'].join('\n');
-    const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
-    const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+    const {
       document,
-      sourceFile,
+      sources,
+      diagnostics: parseDiagnostics,
+    } = parse(source, 'language-server-test.psl');
+    const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+      documents: [document],
+      sources,
       pslBlockDescriptors: controlStack.pslBlockDescriptors,
     });
 

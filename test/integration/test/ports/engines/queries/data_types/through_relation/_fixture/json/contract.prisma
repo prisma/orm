@@ -1,10 +1,12 @@
 model Parent {
   id Int @id
   children Child[]
+  @@map("parent")
 }
 model Child {
   childId Int @id
   parentId Int?
   parent Parent? @relation(fields: [parentId], references: [id])
   json Jsonb
+  @@map("child")
 }

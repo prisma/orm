@@ -5,7 +5,9 @@ import type {
   ResolvedAttribute,
   ResolvedAttributeArg,
 } from '@internal/psl-parser';
+import { createPslDiagnosticCollector } from '@internal/psl-parser';
 import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
+import type { PslSources } from '@internal/psl-parser/syntax';
 import { ArrayLiteralAst, IdentifierAst, StringLiteralExprAst } from '@internal/psl-parser/syntax';
 import type { ReferentialAction } from '@internal/sql-contract/types';
 import {
@@ -56,6 +58,7 @@ export interface RelationModel {
   readonly tableSpan: PslSpan;
   readonly namespaceId: string;
   readonly sourceId: string;
+  readonly sources: PslSources;
   readonly columns: ReadonlyMap<string, FieldNode>;
   readonly ignoredFields: ReadonlySet<string>;
   /** Relation fields marked `@ignore`; their back-relations are omitted with them. */
@@ -705,18 +708,24 @@ export function lowerRelations(
     modelIdColumns.set(key, ['A', 'B']);
     modelUniqueColumnSets.set(key, [['A', 'B']]);
   }
-  // The shared helper reports every diagnostic against one sourceId, so the
-  // candidates are paired one declaring file at a time: a diagnostic then
-  // names the file that declares the relation field it is about.
-  const pairingDiagnostics: ContractSourceDiagnostic[] = [];
-  const candidatesBySourceId = new Map<string, ModelBackrelationCandidate[]>();
+  // Keep pairing groups per declaring file so every candidate field remains
+  // covered by the document registry that owns its syntax node.
+  const candidatesBySourceId = new Map<
+    string,
+    { readonly sources: PslSources; readonly candidates: ModelBackrelationCandidate[] }
+  >();
   for (const candidate of candidates) {
-    const sourceId = models.get(candidate.modelName)?.sourceId ?? 'schema.prisma';
-    const group = candidatesBySourceId.get(sourceId) ?? [];
-    candidatesBySourceId.set(sourceId, group);
-    group.push(candidate);
+    const model = models.get(candidate.modelName);
+    if (model === undefined) continue;
+    const group = candidatesBySourceId.get(model.sourceId) ?? {
+      sources: model.sources,
+      candidates: [],
+    };
+    candidatesBySourceId.set(model.sourceId, group);
+    group.candidates.push(candidate);
   }
-  for (const [sourceId, backrelationCandidates] of candidatesBySourceId) {
+  for (const { sources, candidates: backrelationCandidates } of candidatesBySourceId.values()) {
+    const pairingDiagnostics = createPslDiagnosticCollector(sources);
     applyBackrelationCandidates({
       backrelationCandidates,
       fkRelationsByPair,
@@ -726,15 +735,18 @@ export function lowerRelations(
       modelUniqueColumnSets,
       modelRelations,
       diagnostics: pairingDiagnostics,
-      sourceId,
+      sources,
     });
-  }
-  for (const diagnostic of pairingDiagnostics) {
-    diagnostics.push(
-      RELATION_PAIRING_CODES.has(diagnostic.code)
-        ? { ...diagnostic, code: 'PSL.PRISMA7_RELATION_UNRESOLVED' satisfies Prisma7DiagnosticCode }
-        : diagnostic,
-    );
+    for (const diagnostic of pairingDiagnostics.toExternal()) {
+      diagnostics.push(
+        RELATION_PAIRING_CODES.has(diagnostic.code)
+          ? {
+              ...diagnostic,
+              code: 'PSL.PRISMA7_RELATION_UNRESOLVED' satisfies Prisma7DiagnosticCode,
+            }
+          : diagnostic,
+      );
+    }
   }
 
   const relations = new Map<string, readonly RelationNode[]>();

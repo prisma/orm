@@ -19,4 +19,5 @@ model Event {
   value     Int
 
   @@id([appId, createdAt])
+  @@map("event")
 }

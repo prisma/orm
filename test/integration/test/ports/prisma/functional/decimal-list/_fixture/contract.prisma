@@ -17,4 +17,5 @@ types {
 model User {
   id       String @id @default(cuid(2))
   decimals D[]
+  @@map("user")
 }

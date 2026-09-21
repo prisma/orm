@@ -10,6 +10,7 @@ import {
 } from '@internal/sql-relational-core/ast';
 import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { blindCast } from '@internal/utils/casts';
+import { ifDefined } from '@internal/utils/defined';
 import { assertNever, InternalError } from '@internal/utils/internal-error';
 import { sqliteError } from '../errors';
 import type { SqliteColumnSpec } from './operations/shared';
@@ -52,7 +53,8 @@ function columnLike(
           >(column.codecRef.typeParams),
         }
       : {}),
-    ...(column.resolvedDefault !== undefined ? { default: column.resolvedDefault } : {}),
+    // DDL writes the default as authored; `resolvedDefault` exists for the diff comparison only.
+    ...ifDefined('default', column.authoredDefault ?? column.resolvedDefault),
   };
 }
 

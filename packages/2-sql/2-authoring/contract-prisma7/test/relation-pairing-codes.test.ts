@@ -1,5 +1,10 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import type { FieldSymbol } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createPslDiagnosticCollector,
+  type FieldSymbol,
+} from '@internal/psl-parser';
+import { type PslSources, parse } from '@internal/psl-parser/syntax';
 import {
   applyBackrelationCandidates,
   type FkRelationMetadata,
@@ -9,10 +14,29 @@ import {
 import { describe, expect, it } from 'vitest';
 import { RELATION_PAIRING_CODES } from '../src/relations';
 
-const span = {
-  start: { offset: 0, line: 1, column: 1 },
-  end: { offset: 0, line: 1, column: 1 },
-};
+const candidateSources = new WeakMap<FieldSymbol, PslSources>();
+
+function fieldSymbol(
+  fieldName: string,
+  targetModelName: string,
+  shape: { readonly isList: boolean; readonly optional: boolean },
+): FieldSymbol {
+  const optional = shape.optional ? '?' : '';
+  const list = shape.isList ? '[]' : '';
+  const { document, sources } = parse(
+    `model Test {\n  id Int @id\n  ${fieldName} ${targetModelName}${list}${optional}\n}`,
+    'schema.prisma',
+  );
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
+  const field = symbolTable.topLevel.models['Test']?.fields[fieldName];
+  if (field === undefined) throw new Error(`field ${fieldName} missing`);
+  candidateSources.set(field, sources);
+  return field;
+}
 
 function backrelation(
   modelName: string,
@@ -23,7 +47,7 @@ function backrelation(
   return {
     modelName,
     tableName: modelName,
-    field: { name: fieldName, optional: shape.optional, span } as FieldSymbol,
+    field: fieldSymbol(fieldName, targetModelName, shape),
     targetModelName,
     isList: shape.isList,
   };
@@ -56,7 +80,9 @@ function pairingDiagnostics(input: {
   const { modelRelations, fkRelationsByPair, fkRelationsByDeclaringModel } = indexFkRelations({
     fkRelationMetadata: input.foreignKeys,
   });
-  const diagnostics: ContractSourceDiagnostic[] = [];
+  const sources = candidateSources.get(input.candidate.field);
+  if (sources === undefined) throw new Error('candidate sources missing');
+  const diagnostics = createPslDiagnosticCollector(sources);
   applyBackrelationCandidates({
     backrelationCandidates: [input.candidate],
     fkRelationsByPair,
@@ -66,9 +92,14 @@ function pairingDiagnostics(input: {
     modelUniqueColumnSets: new Map(Object.entries(input.uniqueColumnSets ?? {})),
     modelRelations,
     diagnostics,
-    sourceId: 'schema.prisma',
+    sources,
   });
-  return diagnostics;
+  const external = diagnostics.toExternal();
+  for (const diagnostic of external) {
+    expect(diagnostic.sourceId).toBe('schema.prisma');
+    expect(diagnostic.span).toEqual(input.candidate.field.span);
+  }
+  return external;
 }
 
 const list = { isList: true, optional: false };

@@ -1,4 +1,4 @@
-import { defineContract, field, model } from '@prisma/orm-sqlite/contract-builder';
+import { defineContract, field, model, now } from '@prisma/orm-sqlite/contract-builder';
 import { describe, expect, it } from 'vitest';
 import { applyMigration, int, integerColumn, text } from './harness';
 
@@ -49,7 +49,7 @@ describe('SQLite Migration E2E - From empty schema', () => {
                 label: text.default('untitled'),
                 priority: field.column(integerColumn).default('0'),
                 isActive: field.column(integerColumn).default('1').column('is_active'),
-                createdAt: text.defaultSql('now()').column('created_at'),
+                createdAt: text.default(now()).column('created_at'),
               },
             }),
           },

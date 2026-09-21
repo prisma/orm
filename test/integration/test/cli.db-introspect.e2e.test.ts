@@ -104,7 +104,8 @@ withTempDir(({ createTempDir }) => {
                 CREATE TABLE IF NOT EXISTS "user" (
                   id SERIAL PRIMARY KEY,
                   email TEXT NOT NULL,
-                  name TEXT
+                  name TEXT,
+                  token UUID NOT NULL DEFAULT gen_random_uuid()
                 )
               `);
             });
@@ -128,6 +129,7 @@ model User {
   id    Int     @id(map: "user_pkey") @default(autoincrement())
   email String
   name  String?
+  token Uuid    @default(dbgenerated("gen_random_uuid()"))
 
   @@map("user")
 }

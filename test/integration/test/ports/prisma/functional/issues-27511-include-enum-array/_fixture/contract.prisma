@@ -21,6 +21,7 @@ enum workspace_permission {
 model workspace_member {
   id    VarChar(30)               @id
   roles workspace_member_role[]
+  @@map("workspace_member")
 }
 
 model workspace_role {
@@ -28,6 +29,7 @@ model workspace_role {
   name        String
   permissions workspace_permission[]
   members     workspace_member_role[]
+  @@map("workspace_role")
 }
 
 model workspace_member_role {
@@ -37,4 +39,5 @@ model workspace_member_role {
   role     workspace_role   @relation(fields: [roleId], references: [id])
 
   @@id([memberId, roleId])
+  @@map("workspace_member_role")
 }

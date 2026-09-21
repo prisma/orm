@@ -6,4 +6,5 @@ model user {
   phone String?
   posts String?
   avatar String?
+  @@map("user")
 }

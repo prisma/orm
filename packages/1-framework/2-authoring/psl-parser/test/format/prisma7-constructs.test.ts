@@ -25,7 +25,7 @@ describe('format given a Prisma 7 construct in a Prisma 8 document', () => {
 
 describe('emitDocument given a view block parsed with the Prisma 7 grammar', () => {
   it('keeps each field on one line with its type, aligned like a model field', () => {
-    const { document } = parse('view ActiveUsers {\n  id Int\n  email   String\n}\n', {
+    const { document } = parse('view ActiveUsers {\n  id Int\n  email   String\n}\n', 'test.psl', {
       grammar: 'prisma7',
     });
     expect(emitDocument(document, '  ', '\n')).toEqual(
@@ -34,7 +34,7 @@ describe('emitDocument given a view block parsed with the Prisma 7 grammar', () 
   });
 
   it('keeps a field attribute on the same line as its field', () => {
-    const { document } = parse('view ActiveUsers {\n  id Int @unique\n}\n', {
+    const { document } = parse('view ActiveUsers {\n  id Int @unique\n}\n', 'test.psl', {
       grammar: 'prisma7',
     });
     expect(emitDocument(document, '  ', '\n')).toEqual('view ActiveUsers {\n  id Int @unique\n}\n');

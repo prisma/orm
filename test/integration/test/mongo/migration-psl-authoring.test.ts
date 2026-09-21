@@ -69,18 +69,21 @@ function pslToContract(schema: string): MongoContract {
     ['ObjectId', 'mongo/objectId@1'],
     ['Float', 'mongo/double@1'],
   ]);
-  const { document, sourceFile } = parse(schema);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'mongo-migration-schema.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
   const result = interpretPslDocumentToMongoContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'test.prisma',
+    sources,
     scalarTypeCodecIds,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
     codecLookup: mongoCodecLookup,
   });
   if (!result.ok) {
@@ -187,7 +190,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('user').listIndexes().toArray();
+    const indexes = await db.collection('User').listIndexes().toArray();
     const emailIdx = indexes.find((idx) => idx['key']?.['email'] === 1);
     expect(emailIdx).toBeDefined();
 
@@ -206,7 +209,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('user').listIndexes().toArray();
+    const indexes = await db.collection('User').listIndexes().toArray();
     const emailIdx = indexes.find((idx) => idx['key']?.['email'] === 1);
     expect(emailIdx).toBeDefined();
     expect(emailIdx!['unique']).toBe(true);
@@ -224,7 +227,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const colls = await db.listCollections({ name: 'user' }).toArray();
+    const colls = await db.listCollections({ name: 'User' }).toArray();
     expect(colls).toHaveLength(1);
     const options = (colls[0] as Record<string, unknown>)['options'] as
       | Record<string, unknown>
@@ -251,17 +254,17 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
     `);
 
     const ns = contract.storage.namespaces[UNBOUND_NAMESPACE_ID];
-    const postColl = ns ? ns.entries.collection?.['post'] : undefined;
+    const postColl = ns ? ns.entries.collection?.['Post'] : undefined;
     expect(postColl?.indexes).toBeDefined();
     expect(postColl?.validator).toBeDefined();
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('post').listIndexes().toArray();
+    const indexes = await db.collection('Post').listIndexes().toArray();
     const createdAtIdx = indexes.find((idx) => idx['key']?.['createdAt'] === 1);
     expect(createdAtIdx).toBeDefined();
 
-    const colls = await db.listCollections({ name: 'post' }).toArray();
+    const colls = await db.listCollections({ name: 'Post' }).toArray();
     const options = (colls[0] as Record<string, unknown>)['options'] as
       | Record<string, unknown>
       | undefined;
@@ -279,11 +282,11 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('user').listIndexes().toArray();
+    const indexes = await db.collection('User').listIndexes().toArray();
     const idx = indexes.find((i) => i['key']?.['first_name'] === 1);
     expect(idx).toBeDefined();
 
-    const colls = await db.listCollections({ name: 'user' }).toArray();
+    const colls = await db.listCollections({ name: 'User' }).toArray();
     const mapUserInfo = colls[0] as Record<string, unknown>;
     const mapUserOpts = mapUserInfo['options'] as Record<string, unknown> | undefined;
     const validator = mapUserOpts?.['validator'] as Record<string, unknown> | undefined;
@@ -304,7 +307,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('events').listIndexes().toArray();
+    const indexes = await db.collection('Events').listIndexes().toArray();
     const wildcardIdx = indexes.find((idx) => idx['key']?.['$**'] === 1);
     expect(wildcardIdx).toBeDefined();
   });
@@ -320,7 +323,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('events').listIndexes().toArray();
+    const indexes = await db.collection('Events').listIndexes().toArray();
     const wildcardIdx = indexes.find((idx) => idx['key']?.['metadata.$**'] === 1);
     expect(wildcardIdx).toBeDefined();
   });
@@ -337,7 +340,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('events').listIndexes().toArray();
+    const indexes = await db.collection('Events').listIndexes().toArray();
     const compoundIdx = indexes.find(
       (idx) => idx['key']?.['status'] === 1 && idx['key']?.['createdAt'] === -1,
     );
@@ -355,7 +358,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('events').listIndexes().toArray();
+    const indexes = await db.collection('Events').listIndexes().toArray();
     const partialIdx = indexes.find(
       (idx) => idx['key']?.['status'] === 1 && idx['partialFilterExpression'],
     );
@@ -374,7 +377,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('user').listIndexes().toArray();
+    const indexes = await db.collection('User').listIndexes().toArray();
     const collatedIdx = indexes.find((idx) => idx['key']?.['email'] === 1 && idx['collation']);
     expect(collatedIdx).toBeDefined();
     expect(collatedIdx!['collation']?.['locale']).toBe('en');
@@ -393,7 +396,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('events').listIndexes().toArray();
+    const indexes = await db.collection('Events').listIndexes().toArray();
     const wcIdx = indexes.find((idx) => idx['key']?.['$**'] === 1);
     expect(wcIdx).toBeDefined();
     expect(wcIdx!['wildcardProjection']).toEqual({ metadata: 1, tags: 1 });
@@ -410,7 +413,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('events').listIndexes().toArray();
+    const indexes = await db.collection('Events').listIndexes().toArray();
     const wcIdx = indexes.find((idx) => idx['key']?.['$**'] === 1);
     expect(wcIdx).toBeDefined();
     expect(wcIdx!['wildcardProjection']).toEqual({ internal: 0 });
@@ -428,7 +431,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('article').listIndexes().toArray();
+    const indexes = await db.collection('Article').listIndexes().toArray();
     const textIdx = indexes.find((idx) => idx['key']?.['_fts'] === 'text');
     expect(textIdx).toBeDefined();
     expect(textIdx!['weights']?.['title']).toBeDefined();
@@ -447,7 +450,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('article').listIndexes().toArray();
+    const indexes = await db.collection('Article').listIndexes().toArray();
     const textIdx = indexes.find((idx) => idx['key']?.['_fts'] === 'text');
     expect(textIdx).toBeDefined();
     expect(textIdx!['weights']?.['title']).toBe(10);
@@ -466,7 +469,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('events').listIndexes().toArray();
+    const indexes = await db.collection('Events').listIndexes().toArray();
     const hashedIdx = indexes.find((idx) => idx['key']?.['tenantId'] === 'hashed');
     expect(hashedIdx).toBeDefined();
   });
@@ -482,7 +485,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const indexes = await db.collection('places').listIndexes().toArray();
+    const indexes = await db.collection('Places').listIndexes().toArray();
     const geoIdx = indexes.find((idx) => idx['key']?.['location'] === '2dsphere');
     expect(geoIdx).toBeDefined();
   });
@@ -502,7 +505,7 @@ describe('PSL authoring → migration E2E', { timeout: timeouts.spinUpMongoMemor
 
     await planAndApply(replSetUri, null, contract);
 
-    const colls = await db.listCollections({ name: 'user' }).toArray();
+    const colls = await db.listCollections({ name: 'User' }).toArray();
     const voUserInfo = colls[0] as Record<string, unknown>;
     const voUserOpts = voUserInfo['options'] as Record<string, unknown> | undefined;
     const validator = voUserOpts?.['validator'] as Record<string, unknown> | undefined;

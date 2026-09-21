@@ -144,14 +144,14 @@ model Post {
               .many()
               .noCheck('elementNotNull'),
           },
-        }).sql({ table: 'post' }),
+        }).sql({ table: 'Post' }),
       },
     });
 
     const pslNs = (pslResult.value.storage as unknown as SqlStorage).namespaces['public'];
     const tsNs = (tsContract.storage as unknown as SqlStorage).namespaces['public'];
-    const pslTable = pslNs !== undefined ? pslNs.entries.table?.['post'] : undefined;
-    const tsTable = tsNs !== undefined ? tsNs.entries.table?.['post'] : undefined;
+    const pslTable = pslNs !== undefined ? pslNs.entries.table?.['Post'] : undefined;
+    const tsTable = tsNs !== undefined ? tsNs.entries.table?.['Post'] : undefined;
 
     expect(pslTable?.columns['kind']?.noCheck).toEqual(['membership']);
     expect(pslTable?.columns['roles']?.noCheck).toEqual(['membership']);
@@ -160,8 +160,8 @@ model Post {
     expect(pslTable?.checks).toEqual(tsTable?.checks);
     // Only role's membership check and roles' element-non-null check survive.
     expect(pslTable?.checks?.map((c) => c.prefix)).toEqual([
-      'post_role_check',
-      'post_roles_elem_not_null',
+      'Post_role_check',
+      'Post_roles_elem_not_null',
     ]);
     expect((pslResult.value.storage as unknown as SqlStorage).storageHash).toEqual(
       (tsContract.storage as unknown as SqlStorage).storageHash,
@@ -179,7 +179,7 @@ model Post {
     expect(pslResult.ok).toBe(true);
     if (!pslResult.ok) return;
     const ns = (pslResult.value.storage as unknown as SqlStorage).namespaces['public'];
-    const postTable = ns !== undefined ? ns.entries.table?.['post'] : undefined;
+    const postTable = ns !== undefined ? ns.entries.table?.['Post'] : undefined;
     expect(postTable?.columns['roles']?.noCheck).toEqual(['elementNotNull', 'membership']);
     expect(postTable?.checks ?? []).toEqual([]);
   });
@@ -232,14 +232,14 @@ model Post {
             id: field.column({ codecId: 'pg/int4@1', nativeType: 'int4' }).id(),
             name: field.column({ codecId: 'pg/text@1', nativeType: 'text' }).noCheck('membership'),
           },
-        }).sql({ table: 'post', control: 'external' }),
+        }).sql({ table: 'Post', control: 'external' }),
       },
     });
 
     const pslStorage = pslResult.value.storage as unknown as SqlStorage;
     const tsStorage = tsContract.storage as unknown as SqlStorage;
-    const pslTable = pslStorage.namespaces['public']?.entries.table?.['post'];
-    const tsTable = tsStorage.namespaces['public']?.entries.table?.['post'];
+    const pslTable = pslStorage.namespaces['public']?.entries.table?.['Post'];
+    const tsTable = tsStorage.namespaces['public']?.entries.table?.['Post'];
     expect(pslTable).toBeDefined();
     // The flag is dropped on both surfaces, so the tables agree byte-for-byte.
     expect(JSON.stringify(pslTable)).toBe(JSON.stringify(tsTable));

@@ -1,6 +1,7 @@
 model TestModel {
   id       Int     @id
   children Child[]
+  @@map("testModel")
 }
 
 model Child {
@@ -9,4 +10,5 @@ model Child {
   string2 String
   testId  Int?
   test    TestModel? @relation(fields: [testId], references: [id])
+  @@map("child")
 }

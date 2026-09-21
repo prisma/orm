@@ -1,4 +1,4 @@
-import type { Contract, CrossReference } from '@internal/contract/types';
+import type { CrossReference } from '@internal/contract/types';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
 import { timeouts } from '@repo/test-utils';
@@ -524,22 +524,15 @@ describe('declarations follow the canonical JSON', () => {
   it(
     'generates the same contract.d.ts whichever order the models were authored in',
     async () => {
-      const hydrate = (json: Record<string, unknown>) => json as unknown as Contract;
       const authoredZebraFirst = await emit(
         contractWithModels(['Zebra', 'Apple']),
         {},
         createMockSpi(),
-        {
-          deserializeContract: hydrate,
-        },
       );
       const authoredAppleFirst = await emit(
         contractWithModels(['Apple', 'Zebra']),
         {},
         createMockSpi(),
-        {
-          deserializeContract: hydrate,
-        },
       );
 
       expect(authoredZebraFirst.contractJson).toBe(authoredAppleFirst.contractJson);

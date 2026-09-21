@@ -12,10 +12,12 @@ model Accommodation {
   id         Bytes                   @id
   name       String
   timeTables AccommodationTimeTable[]
+  @@map("accommodation")
 }
 
 model AccommodationTimeTable {
   id              Bytes         @id
   accommodationId Bytes
   accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+  @@map("accommodationTimeTable")
 }

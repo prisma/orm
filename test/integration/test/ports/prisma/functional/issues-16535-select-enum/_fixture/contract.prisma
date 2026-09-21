@@ -16,4 +16,5 @@ enum UserRole {
 model User {
   id   String   @id @default(cuid(2))
   role UserRole
+  @@map("user")
 }

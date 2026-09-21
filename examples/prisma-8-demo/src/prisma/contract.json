@@ -147,6 +147,13 @@
                   "kind": "scalar"
                 }
               },
+              "expiresAt": {
+                "nullable": false,
+                "type": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "kind": "scalar"
+                }
+              },
               "id": {
                 "nullable": false,
                 "type": {
@@ -256,6 +263,9 @@
                 },
                 "embedding": {
                   "column": "embedding"
+                },
+                "expiresAt": {
+                  "column": "expiresAt"
                 },
                 "id": {
                   "column": "id"
@@ -781,6 +791,15 @@
                   "nullable": true,
                   "typeRef": "Embedding1536"
                 },
+                "expiresAt": {
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "default": {
+                    "expression": "(now() + '7 days'::interval)",
+                    "kind": "function"
+                  },
+                  "nativeType": "timestamptz",
+                  "nullable": false
+                },
                 "id": {
                   "codecId": "pg/uuid@1",
                   "nativeType": "uuid",
@@ -1126,7 +1145,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "8abaa3b97115767c5fee67bcd90de0cec3ac1f14a59875c2f5d22887ba435f89",
+    "storageHash": "62d81d607d929760f7d740b45bb97acc1dba361363c4851b19ee5a1cb4fecbe3",
     "types": {
       "Embedding1536": {
         "codecId": "pg/vector@1",

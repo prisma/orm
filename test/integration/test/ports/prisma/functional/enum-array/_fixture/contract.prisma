@@ -18,4 +18,5 @@ enum Plan {
 model User {
   id    String @id @default(cuid(2))
   plans Plan[]
+  @@map("user")
 }

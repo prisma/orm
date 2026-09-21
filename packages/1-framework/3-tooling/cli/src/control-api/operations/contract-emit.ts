@@ -2,6 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
 import { abortable } from '@internal/utils/abortable';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
 import { dirname, join } from 'pathe';
@@ -137,7 +138,10 @@ export async function executeContractEmit(
       // can decorate first; the subsequent serialize→deserialize round-trip
       // re-narrows the envelope into the precise type.
       const enrichedIR = enrichContract(
-        loadedSource.contract as unknown as Contract,
+        blindCast<
+          Contract,
+          'Provider payload is enriched before target serialization and family validation'
+        >(loadedSource.contract),
         frameworkComponents,
       );
       const rawContractJson = config.target.contractSerializer.serializeContract(enrichedIR);

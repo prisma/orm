@@ -163,6 +163,19 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
       ),
     };
   }
+  if (
+    failure['diagnostics'].some(
+      (diagnostic: unknown) => !isRecord(diagnostic) || typeof diagnostic['sourceId'] !== 'string',
+    )
+  ) {
+    return {
+      ok: false,
+      error: failedToResolveContractSource(
+        'Contract source provider returned malformed failure result: each diagnostic must include a string sourceId.',
+        'Include the source filename in each diagnostic returned by contract.source.load.',
+      ),
+    };
+  }
   return {
     ok: false,
     error: failedToResolveContractSource(

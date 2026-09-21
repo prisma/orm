@@ -8,7 +8,6 @@ export type {
   PslDefaultFunctionValue,
   PslDefaultLiteralValue,
   PslDefaultValue,
-  PslDiagnostic,
   PslDiagnosticCode,
   PslDocumentAst,
   PslExtensionBlock,
@@ -54,6 +53,7 @@ export { numLiteral } from '../attribute-spec/combinators/num-literal';
 export { oneOf } from '../attribute-spec/combinators/one-of';
 export { record } from '../attribute-spec/combinators/record';
 export { str } from '../attribute-spec/combinators/str';
+export { taggedLiteral } from '../attribute-spec/combinators/tagged-literal';
 export { fieldAttribute } from '../attribute-spec/field-attribute';
 export type { ArgBindingSpec } from '../attribute-spec/interpret';
 export { interpretArgs, interpretAttribute } from '../attribute-spec/interpret';
@@ -84,16 +84,24 @@ export type {
   OptionalArgType,
   OutOf,
   Param,
+  ParsedTaggedLiteral,
   PositionalParam,
   PosOut,
   RejectingArgType,
+  TaggedLiteralArgType,
   TypedFuncCall,
 } from '../attribute-spec/types';
+export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
+export {
+  createPslDiagnosticCollector,
+  diagnosticFromSpan,
+  diagnosticSource,
+  mapPslDiagnostics,
+} from '../diagnostic';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
 export {
   keywordPslSpan,
   nodePslSpan,
-  rangeToPslSpan,
   readResolvedAttribute,
   readResolvedAttributes,
   readResolvedConstructorCall,

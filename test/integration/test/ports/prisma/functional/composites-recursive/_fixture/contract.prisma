@@ -21,4 +21,5 @@ type ListNode {
 model LinkedList {
   id   ObjectId @id @map("_id")
   head ListNode
+  @@map("linkedList")
 }

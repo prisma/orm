@@ -57,7 +57,7 @@ describe('@@control model attribute', () => {
       expect(result.ok).toBe(true);
       if (!result.ok) return;
       const tables = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value));
-      expect(tables['user']?.control).toBe(policy);
+      expect(tables['User']?.control).toBe(policy);
     }
   });
 
@@ -68,7 +68,7 @@ describe('@@control model attribute', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     const tables = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value));
-    expect(tables['user']).not.toHaveProperty('control');
+    expect(tables['User']).not.toHaveProperty('control');
   });
 
   it('round-trips tolerated, external, and observed through JSON', () => {

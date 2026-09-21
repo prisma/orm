@@ -7,6 +7,7 @@ describe('sql family pack authoring contributions', () => {
       sql: {
         String: {
           kind: 'typeConstructor',
+          documentation: 'Variable-length text with a required maximum character length.',
           args: [{ kind: 'number', name: 'length', integer: true, minimum: 1, maximum: 10485760 }],
           output: {
             codecId: 'sql/varchar@1',

@@ -64,6 +64,7 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
     },
     codecLookup: emptyCodecLookup,
     controlMutationDefaults: {
+      defaultLiteralTagRegistry: new Map(),
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
     },

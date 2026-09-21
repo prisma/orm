@@ -13,4 +13,5 @@
 model users {
   id        ObjectId @id @map("_id")
   firstName String   @unique
+  @@map("users")
 }

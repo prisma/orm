@@ -3,7 +3,9 @@ import type {
   AttributeCtx,
   AttributeSpecContext,
   FieldAttributeSpecContext,
+  FuncCallSig,
   ModelAttributeCtx,
+  Param,
 } from '@internal/psl-parser';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
@@ -29,13 +31,7 @@ interface OneOfMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> 
 interface FuncCallMetadata<Ctx extends AttributeCtx> extends ArgType<unknown, Ctx> {
   readonly kind: 'funcCall';
   readonly name: string;
-  readonly signature: {
-    readonly positional?: readonly {
-      readonly key: string;
-      readonly type: ArgType<unknown, AttributeCtx>;
-    }[];
-    readonly named?: Readonly<Record<string, ArgType<unknown, AttributeCtx>>>;
-  };
+  readonly signature: FuncCallSig;
 }
 
 function listMetadata<T, Ctx extends AttributeCtx>(
@@ -66,29 +62,39 @@ function positionalType<Ctx extends AttributeCtx>(spec: {
 }
 
 function namedType<Ctx extends AttributeCtx>(
-  spec: { readonly named: Readonly<Record<string, ArgType<unknown, Ctx>>> },
+  spec: { readonly named: Readonly<Record<string, Param<unknown, Ctx>>> },
   key: string,
 ): ArgType<unknown, Ctx> {
   const type = spec.named[key];
   if (type === undefined) throw new Error(`spec declares named argument ${key}`);
-  return type;
+  return type.type;
 }
 
 function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecContext } {
-  const { document, sourceFile } = parse(`
+  const { document, sources } = parse(
+    `
     model Widget {
       id   ObjectId @id @map("_id")
       name String
     }
-  `);
-  const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
-  const model = table.topLevel.models['Widget'];
+  `,
+    'test.prisma',
+  );
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
+  const model = symbolTable.topLevel.models['Widget'];
   const field = model?.fields['name'];
   if (!model || !field) throw new Error('fixture declares Widget.name');
   const modelContext: AttributeSpecContext = {
-    symbols: table,
+    symbols: symbolTable,
     model,
-    controlMutationDefaults: new Map(),
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   };
   return { model: modelContext, field: { ...modelContext, field } };
 }
@@ -134,6 +140,19 @@ describe('mongoAttributeSpecs', () => {
     );
   });
 
+  it('documents wildcard fields only for non-unique indexes', () => {
+    const { model } = contexts();
+    expect({
+      index: mongoAttributeSpecs.model.index(model).positional[0]?.documentation,
+      unique: mongoAttributeSpecs.model.unique(model).positional[0]?.documentation,
+    }).toEqual({
+      index:
+        'The nonempty list of indexed fields, optionally with sort directions or a wildcard scope.',
+      unique:
+        'The nonempty list of indexed fields, optionally with sort directions. Wildcard scopes are not supported.',
+    });
+  });
+
   it('exposes model-specific index field alternatives from the actual factory', () => {
     const { model } = contexts();
     const fields = listMetadata<string | unknown, ModelAttributeCtx>(
@@ -157,7 +176,11 @@ describe('mongoAttributeSpecs', () => {
     const nameField = element.alternatives[3] as FuncCallMetadata<ModelAttributeCtx>;
     const sort = nameField.signature.named?.['sort'];
     if (sort === undefined) throw new Error('field sort argument is present');
-    expect(oneOfMetadata(sort).alternatives).toEqual([
+    expect(nameField.signature.documentation).toBe(
+      'Selects an index field with an explicit sort direction.',
+    );
+    expect(sort.documentation).toBe('The index order for this field: `Asc` or `Desc`.');
+    expect(oneOfMetadata(sort.type).alternatives).toEqual([
       expect.objectContaining({ kind: 'identifier', name: 'Asc' }),
       expect.objectContaining({ kind: 'identifier', name: 'Desc' }),
     ]);

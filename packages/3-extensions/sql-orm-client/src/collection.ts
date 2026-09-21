@@ -17,6 +17,7 @@ import {
   type WhereArg,
 } from '@internal/sql-relational-core/ast';
 import { type TraitExpression, toExpr } from '@internal/sql-relational-core/expression';
+import type { Preparable } from '@internal/sql-relational-core/plan';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -109,7 +110,6 @@ import {
   type AggregateBuilder,
   type AggregateIncludeReducers,
   type AggregateResult,
-  type AggregateSelector,
   type AggregateSpec,
   type CollectionContext,
   type CollectionState,
@@ -142,26 +142,20 @@ import {
 } from './types';
 import { normalizeWhereArg } from './where-interop';
 
-type EmptyAggregateValue = ReturnType<typeof emptyAggregateResult>;
-
 function applyCreateDefaults(
   ctx: CollectionContext<Contract<SqlStorage>>,
   namespaceId: string,
   tableName: string,
   rows: Record<string, unknown>[],
+  defaultValueCache = new Map<string, unknown>(),
 ): void {
-  // Per-operation cache for generators with `stability: 'query'` (e.g.
-  // `timestampNow` for `temporal.updatedAt()`): one generated value
-  // shared across every row in this insert. Per-field generators
-  // (e.g. `cuid`) ignore the cache and vary per row.
-  const defaultValueCache = rows.length > 1 ? new Map<string, unknown>() : undefined;
   for (const row of rows) {
     const applied = ctx.context.applyMutationDefaults({
       op: 'create',
       table: tableName,
       namespace: namespaceId,
       values: row,
-      ...(defaultValueCache ? { defaultValueCache } : {}),
+      defaultValueCache,
     });
     for (const def of applied) {
       row[def.column] = def.value;
@@ -1153,6 +1147,7 @@ class CollectionImpl<
 
   get prepared(): PreparedCollection<TContract, ModelName, Row, State> {
     return {
+      aggregate: (fn, configure) => this.#describeAggregate(fn, configure),
       all: (configure) => {
         const selected = this.#withAnnotationsFromMeta(configure, 'all');
         return describeCollectionRows<Row>(selected.#descriptionOptions());
@@ -1255,6 +1250,14 @@ class CollectionImpl<
     fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
     configure?: (meta: MetaBuilder<'read'>) => void,
   ): Promise<AggregateResult<Spec>> {
+    const description = this.#describeAggregate(fn, configure);
+    return description.consume(queryPlanRows(this.ctx.runtime, description.plan));
+  }
+
+  #describeAggregate<Spec extends AggregateSpec>(
+    fn: (aggregate: AggregateBuilder<TContract, ModelName, State['nsId']>) => Spec,
+    configure?: (meta: MetaBuilder<'read'>) => void,
+  ): Preparable<Record<string, unknown>, Promise<AggregateResult<Spec>>> {
     const aggregateSpec = fn(
       createAggregateBuilder<TContract, ModelName, State['nsId']>(
         this.contract,
@@ -1298,20 +1301,38 @@ class CollectionImpl<
       ),
       annotationsMap,
     );
-    const rows = await queryPlanRows<Record<string, unknown>>(this.ctx.runtime, compiled).toArray();
-    // Values arrive decoded: the projection carries each aggregate's resolved
-    // output codec, so the runtime's decode pass has already turned the wire
-    // value into the application one. An absent alias means an empty input
-    // set, whose answer reads off the operation's declared row.
-    const row = rows[0] ?? {};
-    const result: Record<string, unknown> = {};
-    for (const [alias, selector] of entries) {
-      result[alias] = row[alias] ?? this.#emptyAggregateValue(selector);
-    }
-    return blindCast<
-      AggregateResult<Spec>,
-      "aliases are the aggregateSpec's own keys; values decoded by the projection codecs the same spec resolved"
-    >(result);
+    const results = entries.map(([alias, selector]) => {
+      const resolved = resolveAggregate({
+        aggregates: this.ctx.context.aggregateDescriptors,
+        contract: this.contract,
+        namespaceId: this.namespaceId,
+        tableName: this.tableName,
+        fn: selector.fn,
+        column: selector.column,
+      });
+      return {
+        alias,
+        resolved,
+        codec: this.ctx.context.contractCodecs.forCodecRef(resolved.codec),
+      };
+    });
+    return {
+      plan: compiled,
+      async consume(source) {
+        const rows = await source.toArray();
+        const row = rows[0] ?? {};
+        const result = Object.fromEntries(
+          results.map(({ alias, resolved, codec }) => {
+            const value = Object.hasOwn(row, alias) ? row[alias] : undefined;
+            return [alias, value ?? emptyAggregateResult(resolved, codec)];
+          }),
+        );
+        return blindCast<
+          AggregateResult<Spec>,
+          "aliases are the aggregateSpec's own keys; values decoded by the projection codecs the same spec resolved"
+        >(result);
+      },
+    };
   }
 
   /**
@@ -1620,6 +1641,7 @@ class CollectionImpl<
     const mergedFieldToColumn = { ...baseFieldToColumn, ...variantFieldToColumn };
 
     const generator = async function* (): AsyncGenerator<Row, void, unknown> {
+      const defaultValueCache = new Map<string, unknown>();
       for (const row of data) {
         const allMapped: Record<string, unknown> = {};
         for (const [fieldName, value] of Object.entries(row)) {
@@ -1641,7 +1663,7 @@ class CollectionImpl<
         }
 
         const merged = await withMutationScope(runtime, async (scope) => {
-          applyCreateDefaults(collectionCtx, namespaceId, tableName, [baseRow]);
+          applyCreateDefaults(collectionCtx, namespaceId, tableName, [baseRow], defaultValueCache);
           const baseCompiled = compileInsertReturning(
             contract,
             namespaceId,
@@ -1671,7 +1693,13 @@ class CollectionImpl<
 
           const pkValue = baseCreated[pkColumn];
           variantRow[pkColumn] = pkValue;
-          applyCreateDefaults(collectionCtx, namespaceId, variant.table, [variantRow]);
+          applyCreateDefaults(
+            collectionCtx,
+            namespaceId,
+            variant.table,
+            [variantRow],
+            defaultValueCache,
+          );
           const variantCompiled = compileInsertReturning(
             contract,
             namespaceId,
@@ -2526,27 +2554,6 @@ class CollectionImpl<
       namespaceId: this.namespaceId,
     });
     return rows[0] ?? null;
-  }
-
-  /**
-   * The value an aggregate alias reads as when the result set has no row to
-   * read at all. Resolution mirrors planning — the same registry, operation,
-   * and column — so the answer derives from the operation's declared row
-   * rather than its name.
-   */
-  #emptyAggregateValue(selector: AggregateSelector<unknown>): EmptyAggregateValue {
-    const resolved = resolveAggregate({
-      aggregates: this.ctx.context.aggregateDescriptors,
-      contract: this.contract,
-      namespaceId: this.namespaceId,
-      tableName: this.tableName,
-      fn: selector.fn,
-      column: selector.column,
-    });
-    return emptyAggregateResult(
-      resolved,
-      this.ctx.context.contractCodecs.forCodecRef(resolved.codec),
-    );
   }
 
   #assertIncludeRefinementMode(action: string): void {

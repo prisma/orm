@@ -202,9 +202,9 @@ describe('PSL number defaults keep every digit', () => {
           { strict: true },
         );
         expect(roundedResult.schema.issues.map((issue) => issue.path.join('/')).sort()).toEqual([
-          'database/public/numberDefault/column:bareTrailingZeros/default',
-          'database/public/numberDefault/column:big/default',
-          'database/public/numberDefault/column:long/default',
+          'database/public/NumberDefault/column:bareTrailingZeros/default',
+          'database/public/NumberDefault/column:big/default',
+          'database/public/NumberDefault/column:long/default',
         ]);
       });
     },

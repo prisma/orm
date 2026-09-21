@@ -88,7 +88,7 @@ model Event {
         public: {
           entries: {
             table: {
-              event: {
+              Event: {
                 columns: {
                   id: { codecId: 'pg/uuid@1', nativeType: 'uuid', nullable: false, typeRef: 'Id' },
                   slug: {
@@ -135,7 +135,7 @@ model Event {
         },
       },
     });
-    expect(result.value.roots).toEqual({ event: crossRef('Event', 'public') });
+    expect(result.value.roots).toEqual({ Event: crossRef('Event', 'public') });
   });
 
   it('lowers additional Postgres native type attributes on named types', () => {
@@ -205,7 +205,7 @@ model Event {
         public: {
           entries: {
             table: {
-              event: {
+              Event: {
                 columns: {
                   id: { codecId: 'pg/int4@1', nativeType: 'int4', nullable: false },
                   code: {
@@ -251,6 +251,6 @@ model Event {
         },
       },
     });
-    expect(result.value.roots).toEqual({ event: crossRef('Event', 'public') });
+    expect(result.value.roots).toEqual({ Event: crossRef('Event', 'public') });
   });
 });

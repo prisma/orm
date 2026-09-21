@@ -21,6 +21,7 @@ import {
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
+  ControlDefaultLiteralTagEntry,
   ControlMutationDefaultEntry,
   ControlMutationDefaults,
   DefaultFunctionLoweringContext,
@@ -34,12 +35,12 @@ import {
   num,
   oneOf,
   optional,
-  rangeToPslSpan,
   str,
 } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
+import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contract/validators';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -171,7 +172,17 @@ export const testEnumPslBlockDescriptor = {
   parameters: {},
   variadicParameters: true,
   attributes: {
-    type: () => blockAttribute('type', { positional: [{ key: 'codecId', type: str() }] }),
+    type: () =>
+      blockAttribute('type', {
+        documentation: 'Selects the storage codec for this enum.',
+        positional: [
+          {
+            key: 'codecId',
+            type: str(),
+            documentation: 'The fully qualified codec identifier for enum values.',
+          },
+        ],
+      }),
   },
 };
 
@@ -453,7 +464,9 @@ export function buildSymbolTableInput(
     readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
   },
 ): {
+  document: DocumentAst;
   symbolTable: SymbolTable;
+  sources: PslSources;
   sourceFile: SourceFile;
   sourceId: string;
   seedDiagnostics: ContractSourceDiagnostic[];
@@ -461,20 +474,23 @@ export function buildSymbolTableInput(
 } {
   const sourceId = options?.sourceId ?? 'schema.prisma';
   const pslBlockDescriptors = options?.pslBlockDescriptors ?? {};
-  const { document, sourceFile } = parse(schema);
-  const { table, diagnostics } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, sourceId);
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable, diagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors,
   });
   const seedDiagnostics: ContractSourceDiagnostic[] = diagnostics.map((diagnostic) => ({
     code: diagnostic.code,
     message: diagnostic.message,
     sourceId,
-    span: rangeToPslSpan(diagnostic.range, sourceFile),
+    span: sourceFile.rangeToPslSpan(diagnostic.range),
   }));
   return {
-    symbolTable: table,
+    document,
+    symbolTable,
+    sources,
     sourceFile,
     sourceId,
     seedDiagnostics,
@@ -487,7 +503,9 @@ export function symbolTableInputFromParseArgs(args: {
   readonly sourceId?: string;
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
 }): {
+  document: DocumentAst;
   symbolTable: SymbolTable;
+  sources: PslSources;
   sourceFile: SourceFile;
   sourceId: string;
   seedDiagnostics: ContractSourceDiagnostic[];
@@ -581,17 +599,84 @@ export function createPostgresTestContext(
   };
 }
 
-const nowSig: FuncCallSig = {};
-const autoincrementSig: FuncCallSig = {};
-const ulidSig: FuncCallSig = {};
+const nowSig: FuncCallSig = {
+  documentation: 'Uses the current database timestamp as the default value.',
+};
+const autoincrementSig: FuncCallSig = {
+  documentation: 'Generates an increasing integer value in the database.',
+};
+const ulidSig: FuncCallSig = { documentation: 'Generates a ULID when a value is not supplied.' };
 const uuidSig: FuncCallSig = {
-  positional: [{ key: 'version', type: optional(oneOf(num(4), num(7))) }],
+  documentation: 'Generates a UUID when a value is not supplied.',
+  positional: [
+    {
+      key: 'version',
+      type: optional(oneOf(num(4), num(7))),
+      documentation: 'The UUID version: `4` or `7`. Defaults to `4`.',
+    },
+  ],
 };
-const cuidSig: FuncCallSig = { positional: [{ key: 'version', type: num(2) }] };
+const cuidSig: FuncCallSig = {
+  documentation: 'Generates a CUID2 identifier when a value is not supplied.',
+  positional: [
+    { key: 'version', type: num(2), documentation: 'The CUID version. Only `2` is supported.' },
+  ],
+};
 const nanoidSig: FuncCallSig = {
-  positional: [{ key: 'size', type: optional(int({ min: 2, max: 255 })) }],
+  documentation: 'Generates a Nano ID when a value is not supplied.',
+  positional: [
+    {
+      key: 'size',
+      type: optional(int({ min: 2, max: 255 })),
+      documentation:
+        'The identifier length, from `2` through `255`. Omit to use the generator default.',
+    },
+  ],
 };
-const dbgeneratedSig: FuncCallSig = { positional: [{ key: 'expression', type: str() }] };
+const dbgeneratedSig: FuncCallSig = {
+  documentation: 'Uses a database SQL expression as the default value.',
+  positional: [
+    {
+      key: 'expression',
+      type: str(),
+      documentation: 'The nonempty SQL expression evaluated by the database.',
+    },
+  ],
+};
+
+// Mirrors the SQL family's `sqlDefaultLiteralTagEntry`; the authoring layer's tests cannot import the family.
+function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
+  return {
+    usage,
+    documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
+    lower: ({ literal, context }) => {
+      const reject = (message: string) => ({
+        ok: false as const,
+        diagnostic: {
+          code: 'PSL_INVALID_DEFAULT_SQL',
+          message,
+          sourceId: context.sourceId,
+          span: literal.span,
+        },
+      });
+      const reserved = reservedSqlDefaultBody(literal.body);
+      if (reserved !== undefined) {
+        return reject(
+          `Write @default(${reserved}()) instead of ${literal.tag}\`${reserved}()\`; ${reserved}() is a Prisma default function, not raw SQL.`,
+        );
+      }
+      const unsafe = checkSqlDefaultBody(literal.body);
+      if (unsafe !== undefined) return reject(unsafe);
+      return {
+        ok: true as const,
+        value: {
+          kind: 'storage' as const,
+          defaultValue: { kind: 'function' as const, expression: literal.body },
+        },
+      };
+    },
+  };
+}
 
 export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefaults {
   return {
@@ -688,6 +773,10 @@ export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefau
           usageSignatures: ['dbgenerated("...")'],
         },
       ],
+    ]),
+    defaultLiteralTagRegistry: new Map<string, ControlDefaultLiteralTagEntry>([
+      ['sql', sqlLiteralTagEntry('sql`...`')],
+      ['pg.sql', sqlLiteralTagEntry('pg.sql`...`')],
     ]),
     generatorDescriptors: [
       {
@@ -866,7 +955,7 @@ export const temporalConvenienceMirrors = {
       output: {
         codecId: 'pg/timestamptz-temporal@1',
         nativeType: 'timestamptz',
-        default: { kind: 'function', expression: 'now()' },
+        executionDefaults: { onCreate: TEMPORAL_MIRROR_NOW_PHASE },
       },
     },
     updatedAt: {
@@ -887,7 +976,7 @@ export const temporalConvenienceMirrors = {
       output: {
         codecId: 'sqlite/datetime@1',
         nativeType: 'text',
-        default: { kind: 'function', expression: 'now()' },
+        executionDefaults: { onCreate: TEMPORAL_MIRROR_NOW_PHASE },
       },
     },
     updatedAt: {

@@ -37,6 +37,7 @@ describe('PSL ↔ TS namespace parity', () => {
   model User {
     id Int @id
     posts public.Post[]
+    @@map("user")
   }
 }
 
@@ -45,6 +46,7 @@ namespace public {
     id    Int @id
     userId Int
     user  auth.User @relation(fields: [userId], references: [id])
+    @@map("post")
   }
 }
 `,
@@ -171,6 +173,7 @@ namespace public {
   id    Int @id
   userId Int
   user  supabase:auth.User @relation(fields: [userId], references: [id])
+  @@map("profile")
 }
 `,
       sourceId: 'schema.prisma',

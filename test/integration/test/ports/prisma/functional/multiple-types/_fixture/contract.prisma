@@ -22,4 +22,5 @@ model TestModel {
   bool   Boolean?
   dt     DateTime?
   dec    Decimal?
+  @@map("testModel")
 }

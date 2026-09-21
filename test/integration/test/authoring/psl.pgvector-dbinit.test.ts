@@ -211,12 +211,12 @@ model Document {
           let documentId = 0;
           await withClient(connectionString, async (client) => {
             const inserted = await client.query<{ id: number }>(
-              `INSERT INTO "document" ("embedding") VALUES ('[1,2,3]') RETURNING "id"`,
+              `INSERT INTO "Document" ("embedding") VALUES ('[1,2,3]') RETURNING "id"`,
             );
             documentId = inserted.rows[0]?.id ?? 0;
             expect(documentId).toBeGreaterThan(0);
 
-            await client.query('ALTER TABLE "document" DROP COLUMN "embedding"');
+            await client.query('ALTER TABLE "Document" DROP COLUMN "embedding"');
           });
 
           await withPgvectorControlClient(connectionString, async (client) => {
@@ -235,7 +235,7 @@ model Document {
           await withClient(connectionString, async (client) => {
             const restoredRows = await client.query<{ embedding_text: string }>(
               `SELECT "embedding"::text AS embedding_text
-               FROM "document"
+               FROM "Document"
                WHERE "id" = $1`,
               [documentId],
             );
@@ -245,7 +245,7 @@ model Document {
               SELECT column_default
               FROM information_schema.columns
               WHERE table_schema = 'public'
-                AND table_name = 'document'
+                AND table_name = 'Document'
                 AND column_name = 'embedding'
             `);
             expect(defaultCheck.rows[0]?.column_default ?? null).toBeNull();

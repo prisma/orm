@@ -5,4 +5,5 @@ model Reading {
   updatedAt      temporal.updatedAt()
   createdAtText  temporal.createdAtString()
   updatedAtText  temporal.updatedAtString()
+  @@map("reading")
 }

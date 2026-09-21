@@ -1,5 +1,6 @@
 import pgvector from '@prisma/orm-extension-pgvector/pack';
-import { defineContract, enumType, member, rel } from '@prisma/orm-postgres/contract-builder';
+import { timestamptzTemporalColumn } from '@prisma/orm-postgres/adapter/column-types';
+import { defineContract, enumType, member, rel, sql } from '@prisma/orm-postgres/contract-builder';
 
 const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
 
@@ -40,6 +41,9 @@ export const contract = defineContract(
         userId: field.uuidString(),
         priority: field.namedType(Priority).default(Priority.members.Low),
         createdAt: field.temporal.createdAt(),
+        expiresAt: field
+          .column(timestamptzTemporalColumn)
+          .default(sql`(now() + '7 days'::interval)`),
         updatedAt: field.temporal.updatedAt(),
         embedding: field.namedType(types.Embedding1536).optional(),
       },
