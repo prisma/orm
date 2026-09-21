@@ -251,21 +251,21 @@ describe('integration/create', () => {
       await withCollectionRuntime(async (runtime) => {
         const users = createUsersCollection(runtime);
 
-        await runtime.query(`
-          create or replace function skip_flagged_user() returns trigger as $$
-          begin
-            if new.email = 'skipped@example.com' then
-              return null;
-            end if;
-            return new;
-          end;
-          $$ language plpgsql
-        `);
-        await runtime.query(
-          'create trigger users_skip_flagged before insert on users for each row execute function skip_flagged_user()',
-        );
-
         try {
+          await runtime.query(`
+            create or replace function skip_flagged_user() returns trigger as $$
+            begin
+              if new.email = 'skipped@example.com' then
+                return null;
+              end if;
+              return new;
+            end;
+            $$ language plpgsql
+          `);
+          await runtime.query(
+            'create trigger users_skip_flagged before insert on users for each row execute function skip_flagged_user()',
+          );
+
           const count = await users.createAndCount([
             { id: 40, name: 'Eve', email: 'eve@example.com', invitedById: null },
             { id: 41, name: 'Skipped', email: 'skipped@example.com', invitedById: null },
