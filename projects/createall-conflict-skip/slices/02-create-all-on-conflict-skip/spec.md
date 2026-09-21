@@ -17,11 +17,11 @@ Rows that collide with a unique constraint are skipped by the database. `createA
 - **Option shape.** `createAll(rows, options?, configure?)` and `createAndCount(rows, options?, configure?)`. `options` is `{ onConflict: 'skip'; conflictOn?: readonly Field[] }` where `Field` is a scalar field name of the model. The existing two-argument call with the `configure` callback in second position keeps working: distinguish by `typeof arg === 'function'`. The option's only value is `'skip'`; it never gains an update value, `upsert` owns that.
 - **Compilation.** Every insert plan the call produces (one on Postgres, one per column-signature group on the split path) gets `InsertOnConflict` with a `do-nothing` action. `conflictOn` fields map to columns through the same field-to-column mapping `upsert`'s `resolveUpsertConflictColumns` uses (`src/collection-contract.ts`); absent, `columns` is empty.
 - **AST.** `InsertOnConflict` with empty `columns` is valid only with `do-nothing`. Add a static constructor for the targetless form (for example `InsertOnConflict.doNothing()`), keep `on(columns)` requiring at least one column for `doUpdateSet`. Both renderers emit `ON CONFLICT DO NOTHING` for the targetless form and keep throwing `RUNTIME.AST_INVALID` for a targetless `do-update-set`. `collectParamRefs` and `rewriteOnConflict` handle the empty case.
-- **Capabilities.** Two new `sql` keys, reported by the Postgres and SQLite adapter profiles and documented in `docs/reference/capabilities.md`:
+- **Capabilities.** Two new `sql` keys, reported by the Postgres and SQLite adapters in both their runtime profile (`adapter.ts` `defaultCapabilities`) and their emitted-contract capability map (`descriptor-meta.ts`), and documented in `docs/reference/capabilities.md`:
   - `insertOnConflictSkip`: the adapter can skip rows on unique conflict.
   - `insertOnConflictWithoutTarget`: it can do so without naming the constraint.
   The ORM refuses `onConflict: 'skip'` with `ORM.CAPABILITY_MISSING` unless the contract's capabilities carry the first; it refuses the untargeted form unless they carry the second. Gate on the key, never on a target id.
-- **Refusals.** MTI variant collections refuse the option with `ORM.UNSUPPORTED_OPERATION` (the shape `createAndCount` already uses via `#assertNotMtiVariant`). A `conflictOn` field that is not a scalar field of the model is refused with `ORM.INVALID_ARGUMENT`.
+- **Refusals.** MTI variant collections refuse the option with `ORM.OPERATION_UNSUPPORTED` (the shape `createAndCount` already uses via `#assertNotMtiVariant`). A `conflictOn` field that is not a scalar field of the model is refused with `ORM.ARGUMENT_INVALID`.
 - **`create()` does not take the option.**
 - **Mongo untouched.**
 
@@ -51,10 +51,10 @@ Rows that collide with a unique constraint are skipped by the database. `createA
 | All rows collide | `createAll` yields nothing; `createAndCount` returns 0; no error. |
 | Contract without `insertOnConflictSkip` | `ORM.CAPABILITY_MISSING`, before any statement executes. |
 | Contract with `insertOnConflictSkip` but without `insertOnConflictWithoutTarget`, untargeted call | `ORM.CAPABILITY_MISSING`; targeted call proceeds. |
-| MTI variant collection | `ORM.UNSUPPORTED_OPERATION`. |
+| MTI variant collection | `ORM.OPERATION_UNSUPPORTED`. |
 | `conflictOn: []` | Treated as absent (untargeted). |
-| `conflictOn` names a relation or unknown field | `ORM.INVALID_ARGUMENT`. |
-| Option object with anything other than `onConflict: 'skip'` | Type error; at runtime an unknown `onConflict` value is `ORM.INVALID_ARGUMENT`. |
+| `conflictOn` names a relation or unknown field | `ORM.ARGUMENT_INVALID`. |
+| Option object with anything other than `onConflict: 'skip'` | Type error; at runtime an unknown `onConflict` value is `ORM.ARGUMENT_INVALID`. |
 | Existing `createAll(rows, configure)` callers | Unchanged behaviour. |
 | Targetless `do-update-set` reaching a renderer | `RUNTIME.AST_INVALID`, unit tested in both adapters. |
 

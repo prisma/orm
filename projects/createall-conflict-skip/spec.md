@@ -29,7 +29,7 @@ We deliberately do not copy the Prisma 7 name. `skipDuplicates: true` says nothi
 ## Non-goals
 
 - **Batch upsert.** `upsert` covers the single-row case. A batch form would be a separate method, never a value of `onConflict`.
-- **Conflict skipping on multi-table inheritance variants.** A variant row is a base-table row plus a variant-table row inserted separately per input row. A conflict in the variant table would orphan the already-inserted base row. Supporting it needs a savepoint per row. This project refuses the option on variant collections with the existing `ORM.UNSUPPORTED_OPERATION` shape.
+- **Conflict skipping on multi-table inheritance variants.** A variant row is a base-table row plus a variant-table row inserted separately per input row. A conflict in the variant table would orphan the already-inserted base row. Supporting it needs a savepoint per row. This project refuses the option on variant collections with the existing `ORM.OPERATION_UNSUPPORTED` shape.
 - **Mongo.** `insertMany` has no conflict target concept; `ordered: false` swallows every error, not only duplicates. The Mongo ORM `createAll` is untouched.
 - **Nested creates with conflict skipping.** `createAll` already rejects relation callbacks.
 - **Reporting which input rows were skipped.** The result is the inserted rows. Callers who need the skipped set diff it themselves.
@@ -51,8 +51,8 @@ We deliberately do not copy the Prisma 7 name. `skipDuplicates: true` says nothi
 - **The AST allows a targetless `do-nothing` and nothing else targetless.** `InsertOnConflict` with empty `columns` is valid only with the `do-nothing` action. Both renderers emit `ON CONFLICT DO NOTHING` for it and keep throwing `RUNTIME.AST_INVALID` for a targetless `do-update-set`.
 - **Results describe what the database did.** `createAll` yields exactly the rows the `RETURNING` clause produced. `createAndCount` returns the driver's affected-row count on every path, with or without the option, on Postgres and on the SQLite split path (summed across statements). `create()` keeps its current contract and does not take the option.
 - **The option rides alongside the annotation callback.** `createAll(rows, options?, configure?)` and `createAndCount(rows, options?, configure?)`. The existing two-argument form with a callback in second position stays valid, so no call site breaks.
-- **`conflictOn` names model fields, not columns**, and resolves through the same field-to-column mapping `upsert` uses. A field that is not part of the model is refused with the existing `ORM.INVALID_ARGUMENT` shape.
-- **Multi-table inheritance variants refuse the option** with `ORM.UNSUPPORTED_OPERATION`, the same shape `createAndCount` already uses for variants.
+- **`conflictOn` names model fields, not columns**, and resolves through the same field-to-column mapping `upsert` uses. A field that is not part of the model is refused with the existing `ORM.ARGUMENT_INVALID` shape.
+- **Multi-table inheritance variants refuse the option** with `ORM.OPERATION_UNSUPPORTED`, the same shape `createAndCount` already uses for variants.
 - **Tests execute against both databases.** A Postgres integration test and a SQLite end-to-end test each insert a batch with one genuine conflict and assert the returned rows, the count, and the exact SQL AST. The unit tier covers renderer output for the targetless clause and the refusal for targetless `do-update-set`.
 
 ## Transitional-shape constraints
@@ -69,7 +69,7 @@ Inherits the team-DoD floor ([`drive/calibration/dod.md`](../../drive/calibratio
 - [ ] `db.User.createAll(rows, { onConflict: 'skip' })` against Postgres and SQLite, with one row colliding on a unique column, returns the non-colliding rows only and executes one statement per column-signature group with a bare `ON CONFLICT DO NOTHING`.
 - [ ] The same call with `conflictOn: ['email']` renders `ON CONFLICT ("email") DO NOTHING` on both targets.
 - [ ] A contract whose capabilities lack `sql.insertOnConflictSkip` refuses the option with `ORM.CAPABILITY_MISSING`; one lacking `sql.insertOnConflictWithoutTarget` refuses the untargeted form only.
-- [ ] A multi-table inheritance variant collection refuses the option with `ORM.UNSUPPORTED_OPERATION`.
+- [ ] A multi-table inheritance variant collection refuses the option with `ORM.OPERATION_UNSUPPORTED`.
 - [ ] `docs/reference/capabilities.md` documents both keys; the SQL ORM client docs document the option; `scorecard/06-sql-orm-client.md` marks the row as proven on both targets with test links.
 - [ ] The three skip-duplicates engine cases in `projects/port-all-tests/checklists/engines-writes.md` are ported or explicitly marked not applicable with a reason.
 - [ ] The asks record has both deliverables set to done with PR links, the ask is satisfied, and Will has replied to broken.wind so the commitment can be discharged.
