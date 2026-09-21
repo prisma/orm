@@ -360,8 +360,9 @@ export const postgresNativeAuthoringTypes = {
   },
   // The representation-explicit spellings. Same columns, same precision, same native types — the
   // only difference is that a read hands back PostgreSQL's own text instead of a `Temporal.*`, so a
-  // value Temporal cannot express still round-trips. Authoring-only: they claim no introspection
-  // mapping, because a bare `timestamptz` column introspects to the Temporal-backed name.
+  // value Temporal cannot express still round-trips, and they work on runtimes without `Temporal`.
+  // `timestamptz` introspects to `TimestamptzString` (the `orm init` scaffold default); the remaining
+  // spellings stay authoring-only and claim no introspection mapping.
   DateString: {
     kind: 'typeConstructor',
     documentation: 'A PostgreSQL date represented as database text rather than Temporal.PlainDate.',

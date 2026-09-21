@@ -53,11 +53,11 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Post {
-        id          Int         @id @default(autoincrement())
-        title       String      @default("Untitled")
-        isPublished Boolean     @default(false) @map("is_published")
-        viewCount   Int         @default(0) @map("view_count")
-        createdAt   Timestamptz @default(now()) @map("created_at")
+        id          Int               @id @default(autoincrement())
+        title       String            @default("Untitled")
+        isPublished Boolean           @default(false) @map("is_published")
+        viewCount   Int               @default(0) @map("view_count")
+        createdAt   TimestamptzString @default(now()) @map("created_at")
 
         @@map("post")
       }
@@ -431,10 +431,10 @@ describe('printPsl', () => {
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Data {
-        id        Int         @id
-        computed  String      @default(dbgenerated("my_custom_func()"))
-        payload   Jsonb       @default(dbgenerated("'{}'::jsonb"))
-        touchedAt Timestamptz @default(dbgenerated("clock_timestamp()")) @map("touched_at")
+        id        Int               @id
+        computed  String            @default(dbgenerated("my_custom_func()"))
+        payload   Jsonb             @default(dbgenerated("'{}'::jsonb"))
+        touchedAt TimestamptzString @default(dbgenerated("clock_timestamp()")) @map("touched_at")
 
         @@map("data")
       }
