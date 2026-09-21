@@ -102,6 +102,26 @@ describe('printPsl writes each default as the literal its codec reads back', () 
     });
   });
 
+  it.each([
+    ['a quoted json null element', `ARRAY['null'::jsonb]`, '@default([json`null`])'],
+    ['a quoted json document element', `ARRAY['{}'::jsonb]`, '@default([json`{}`])'],
+  ])('prints %s', (_name, rawDefault, expected) => {
+    expect(printedDefaults([introspected('docs', 'jsonb', rawDefault, { many: true })])).toEqual({
+      docs: expected,
+    });
+  });
+
+  it.each([
+    ['an unquoted SQL NULL element', 'ARRAY[NULL::jsonb]'],
+    ['an unquoted SQL NULL in an array literal body', `'{NULL}'::jsonb[]`],
+  ])(
+    'falls back to the raw expression for %s, which is not the JSON value null',
+    (_name, rawDefault) => {
+      const printed = printedDefaults([introspected('docs', 'jsonb', rawDefault, { many: true })]);
+      expect(printed['docs']).not.toContain('json`null`');
+    },
+  );
+
   it('prints a list of json documents as json tags', () => {
     expect(
       printedDefaults([
