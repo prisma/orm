@@ -525,14 +525,12 @@ describe('Collection', () => {
         'insertOnConflictSkip',
       ]);
 
-      await expect(
-        collection
-          .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
-            onConflict: 'skip',
-            conflictOn: ['email'],
-          })
-          .toArray(),
-      ).rejects.toThrow(/insertOnConflictSkip/);
+      expect(() =>
+        collection.createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'skip',
+          conflictOn: ['email'],
+        }),
+      ).toThrow(/insertOnConflictSkip/);
       expect(runtime.executions).toHaveLength(0);
     });
 
@@ -554,13 +552,11 @@ describe('Collection', () => {
         'insertOnConflictWithoutTarget',
       ]);
 
-      await expect(
-        collection
-          .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
-            onConflict: 'skip',
-          })
-          .toArray(),
-      ).rejects.toThrow(/insertOnConflictWithoutTarget/);
+      expect(() =>
+        collection.createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'skip',
+        }),
+      ).toThrow(/insertOnConflictWithoutTarget/);
       expect(runtime.executions).toHaveLength(0);
 
       runtime.setNextResults([
@@ -579,27 +575,23 @@ describe('Collection', () => {
     it('createAll() refuses a conflictOn field that is not a scalar field of the model', async () => {
       const { collection, runtime } = createReturningCollectionFor('User');
 
-      await expect(
-        collection
-          .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
-            onConflict: 'skip',
-            conflictOn: ['posts' as never],
-          })
-          .toArray(),
-      ).rejects.toThrow(/posts/);
+      expect(() =>
+        collection.createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'skip',
+          conflictOn: ['posts' as never],
+        }),
+      ).toThrow(/posts/);
       expect(runtime.executions).toHaveLength(0);
     });
 
     it('createAll() refuses an unknown onConflict value', async () => {
       const { collection, runtime } = createReturningCollectionFor('User');
 
-      await expect(
-        collection
-          .createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
-            onConflict: 'merge' as never,
-          })
-          .toArray(),
-      ).rejects.toThrow(/onConflict/);
+      expect(() =>
+        collection.createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
+          onConflict: 'merge' as never,
+        }),
+      ).toThrow(/onConflict/);
       expect(runtime.executions).toHaveLength(0);
     });
 
