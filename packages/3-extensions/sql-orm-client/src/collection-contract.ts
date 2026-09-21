@@ -590,21 +590,23 @@ export function assertInsertConflictSkipCapability(
   action: string,
   targeted: boolean,
 ): void {
-  const capability = targeted ? 'insertOnConflictSkip' : 'insertOnConflictWithoutTarget';
-  if (
-    hasContractCapability(contract, 'insertOnConflictSkip') &&
-    hasContractCapability(contract, capability)
-  ) {
-    return;
+  requireCapability(contract, action, 'insertOnConflictSkip');
+  if (!targeted) {
+    requireCapability(contract, action, 'insertOnConflictWithoutTarget');
   }
+}
 
-  const missing = hasContractCapability(contract, 'insertOnConflictSkip')
-    ? capability
-    : 'insertOnConflictSkip';
+function requireCapability(
+  contract: Contract<SqlStorage>,
+  action: string,
+  capability: string,
+): void {
+  if (hasContractCapability(contract, capability)) return;
+
   throw ormError(
     'ORM.CAPABILITY_MISSING',
-    `${action} requires contract capability "${missing}". Re-emit the contract against an adapter that reports it.`,
-    { meta: { capability: missing, action } },
+    `${action} requires contract capability "${capability}". Re-emit the contract against an adapter that reports it.`,
+    { meta: { capability, action } },
   );
 }
 
