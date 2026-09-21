@@ -13,8 +13,7 @@
     "build": "tsdown",
     "prepack": "node ../../../../scripts/sync-package-skills.ts @prisma/orm-postgres",
     "lint": "biome check . --error-on-warnings",
-    "clean": "rm -rf dist src-gen skills",
-    "test": "vitest run"
+    "clean": "rm -rf dist src-gen skills"
   },
   "dependencies": {
     "@prisma/orm-family-sql": "workspace:8.0.0-rc.11",
@@ -29,11 +28,9 @@
   "devDependencies": {
     "@internal/postgres": "workspace:8.0.0-rc.11",
     "@repo/tsconfig": "workspace:8.0.0-rc.11",
-    "@internal/publish-surface": "workspace:8.0.0-rc.11",
     "@repo/tsdown": "workspace:8.0.0-rc.11",
     "tsdown": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   },
   "peerDependencies": {
     "typescript": ">=5.9"
