@@ -47,8 +47,9 @@ export function contractSnapshotDir(migrationsDir: string, storageHash: string):
  * mirroring `verifyMigrationHash` for migration packages and
  * `assertDescriptorSelfConsistency` for extension descriptors: the store is
  * content-addressed, so the JSON read back for a hash must reproduce that
- * hash. Verified hashes are memoised per instance, so a snapshot resolved
- * repeatedly in one command run is hashed once. The recompute is coupled to
+ * hash. Verified parsed values are memoised per instance, so a snapshot
+ * value resolved repeatedly in one command run is hashed once, while a fresh
+ * read of the same address is verified again. The recompute is coupled to
  * the emit-time canonicalization: a release that changes the family hooks
  * or hash canonicalization rules must regenerate (or migrate) existing
  * snapshot stores, or every pre-existing snapshot reads as tampered.
@@ -65,11 +66,15 @@ export interface SnapshotContentVerifier {
 export function createSnapshotContentVerifier(
   hooks?: SnapshotCanonicalizationHooks,
 ): SnapshotContentVerifier {
-  const verified = new Set<string>();
+  // Keyed by the parsed value, not by address: a value is verified once, but
+  // a fresh read of the same address (whose file may have changed since) is
+  // verified again. Readers that share the parsed object (the aggregate's
+  // contractAt memo, a check's single read) still skip the recompute.
+  const verified = new WeakSet<object>();
 
   return {
     assertSnapshotContentMatches(contractJson, storageHash, jsonPath) {
-      if (verified.has(storageHash)) {
+      if (typeof contractJson === 'object' && contractJson !== null && verified.has(contractJson)) {
         return;
       }
       const record = blindCast<
@@ -85,7 +90,9 @@ export function createSnapshotContentVerifier(
       if (computedHash !== storageHash) {
         throw errorContractSnapshotContentMismatch({ storageHash, computedHash, jsonPath });
       }
-      verified.add(storageHash);
+      if (typeof contractJson === 'object' && contractJson !== null) {
+        verified.add(contractJson);
+      }
     },
   };
 }

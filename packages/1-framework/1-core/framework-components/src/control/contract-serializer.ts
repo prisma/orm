@@ -69,7 +69,10 @@ export interface ContractSerializer<TContract> {
    * recompute must reproduce the exact canonical form the published
    * `storageHash` was derived from. Integrity checks that recompute storage
    * hashes (snapshot content verification, descriptor self-consistency)
-   * must use these hooks, never the serialization pair.
+   * must use these hooks, never the serialization pair. A family whose hash
+   * input is not the persisted storage shape (Mongo hashes a projection)
+   * must not publish hooks; its snapshots then read without content
+   * verification.
    */
   readonly hashCanonicalizationHooks?: {
     readonly shouldPreserveEmpty?: PreserveEmptyPredicate;
