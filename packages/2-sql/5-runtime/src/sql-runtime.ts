@@ -978,7 +978,13 @@ export async function withTransaction<R>(
   fn: (tx: TransactionContext) => PromiseLike<R>,
 ): Promise<R> {
   const connection = await runtime.connection();
-  const transaction = await connection.transaction();
+  let transaction: RuntimeTransaction;
+  try {
+    transaction = await connection.transaction();
+  } catch (error) {
+    await connection.destroy(error).catch(() => undefined);
+    throw error;
+  }
 
   let invalidated = false;
 
