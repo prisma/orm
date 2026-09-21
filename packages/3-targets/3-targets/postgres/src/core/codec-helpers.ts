@@ -9,7 +9,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { isNonFiniteText, isNumeralText } from '@internal/framework-components/codec';
+import { isNonFiniteText, isNumeralText, numeralText } from '@internal/framework-components/codec';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
@@ -60,8 +60,12 @@ export function renderPrecision(
   return `${typeName}<${precision}>`;
 }
 
+/**
+ * A `numeric` value as its canonical decimal text. A number is written out without an exponent,
+ * because `numeric` text has no exponent syntax and `encodeJson` refuses one.
+ */
 export const pgNumericDecode = (wire: string | number): string => {
-  if (typeof wire === 'number') return String(wire);
+  if (typeof wire === 'number') return numeralText(wire);
   return wire;
 };
 

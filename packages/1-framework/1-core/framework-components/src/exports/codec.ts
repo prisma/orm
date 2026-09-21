@@ -45,7 +45,7 @@ export {
   readLiteral,
 } from '../shared/literal-types';
 export type { WrittenLiteralText } from '../shared/literal-types-write';
-export { escapePslString, writeLiteral } from '../shared/literal-types-write';
+export { escapePslString, numeralText, writeLiteral } from '../shared/literal-types-write';
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,

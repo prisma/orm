@@ -89,8 +89,15 @@ describe('pg/numeric@1 decodeJson', () => {
   it.each([
     ['a whole JSON number', 42, '42'],
     ['a fractional JSON number', 1.5, '1.5'],
+    ['a large magnitude without an exponent', 1e21, '1000000000000000000000'],
+    ['a small magnitude without an exponent', 1e-7, '0.0000001'],
   ])('reads %s as canonical decimal text', (_name, json, expected) => {
     expect(codec.decodeJson(json)).toBe(expected);
+  });
+
+  it('reads a number back into a value its own encodeJson accepts', () => {
+    expect(codec.encodeJson(codec.decodeJson(1e21))).toBe('1000000000000000000000');
+    expect(codec.encodeJson(codec.decodeJson(1e-7))).toBe('0.0000001');
   });
 
   it.each([

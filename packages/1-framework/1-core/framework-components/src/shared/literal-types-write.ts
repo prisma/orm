@@ -23,8 +23,11 @@ export interface WrittenLiteralText {
   readonly tag?: LiteralTypeName;
 }
 
-/** PSL has no exponent syntax, so the decimal point moves to where the exponent puts it. */
-function plainNumeral(value: number): string {
+/**
+ * A number as a contract source writes it: no exponent, because no schema language has that syntax,
+ * so the decimal point moves to where the exponent puts it. A non-finite number is its own word.
+ */
+export function numeralText(value: number): string {
   const [coefficient = '', exponent] = String(value).split('e');
   if (exponent === undefined) return coefficient;
   const sign = coefficient.startsWith('-') ? '-' : '';
@@ -45,14 +48,14 @@ export function escapePslString(value: string): string {
     .replace(/\r/g, '\\r');
 }
 
-/** The text of a number-shaped value as a contract source would have written it. */
-function numeralText(value: JsonValue): string | undefined {
-  if (typeof value === 'number') return plainNumeral(value);
+/** The text of a number-shaped stored value: a number written out, or text taken as it is. */
+function storedNumeralText(value: JsonValue): string | undefined {
+  if (typeof value === 'number') return numeralText(value);
   return typeof value === 'string' ? value : undefined;
 }
 
 function writeNumber(value: JsonValue, type: LiteralTypeName): string | undefined {
-  const text = numeralText(value);
+  const text = storedNumeralText(value);
   if (text === undefined) return undefined;
   const literal = classifyNumberText(text);
   if (literal === undefined || literal.type !== type) return undefined;

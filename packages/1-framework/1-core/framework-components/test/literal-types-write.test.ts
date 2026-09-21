@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { integerLiteralTypesUpTo, type LiteralTypeDeclaration } from '../src/shared/literal-types';
-import { writeLiteral } from '../src/shared/literal-types-write';
+import { numeralText, writeLiteral } from '../src/shared/literal-types-write';
 import { resolvePslBacktickEscapes } from '../src/shared/tagged-literal';
 
 const integers = integerLiteralTypesUpTo('i64');
@@ -121,4 +121,17 @@ describe('writeLiteral', () => {
       expect(writeLiteral(value, declarations)).toBeUndefined();
     },
   );
+});
+
+describe('numeralText', () => {
+  it.each([
+    ['a plain integer', 42, '42'],
+    ['a fraction', 1.5, '1.5'],
+    ['a large magnitude with no exponent', 1e21, '1000000000000000000000'],
+    ['a negative large magnitude', -1.5e21, '-1500000000000000000000'],
+    ['a small magnitude with no exponent', 1e-7, '0.0000001'],
+    ['a non-finite number as its word', Number.NaN, 'NaN'],
+  ])('writes %s', (_name, value, text) => {
+    expect(numeralText(value)).toBe(text);
+  });
 });
