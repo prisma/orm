@@ -99,6 +99,28 @@ describe('readLiteral', () => {
       expect(readOk({ kind: 'json', text })).toEqual({ type: 'json', value });
     });
 
+    it.each([
+      ['a top-level number that overflows', '1e400', 'The value is Infinity'],
+      ['a number in an object', '{ "a": 1e400 }', 'a is Infinity'],
+      ['a number nested in an array', '{ "a": [1, [2, -1e400]] }', 'a[1][1] is -Infinity'],
+      ['a negative overflow', '-1e400', 'The value is -Infinity'],
+    ])('refuses %s, which JSON cannot write back', (_name, text, where) => {
+      expect(readLiteral({ kind: 'json', text })).toEqual({
+        ok: false,
+        reason: 'invalid-json',
+        message: expect.stringContaining(where),
+        elementIndex: undefined,
+      });
+    });
+
+    it.each([
+      ['a large finite number', '{ "a": 1e308 }', { a: 1e308 }],
+      ['a small finite number', '{ "a": 1e-308 }', { a: 1e-308 }],
+      ['zero', '{ "a": 0 }', { a: 0 }],
+    ])('keeps %s', (_name, text, value) => {
+      expect(readOk({ kind: 'json', text })).toEqual({ type: 'json', value });
+    });
+
     it('refuses text that is not json, with the parser message', () => {
       const result = readLiteral({ kind: 'json', text: '{ plan }' });
       expect(result).toMatchObject({ ok: false, reason: 'invalid-json' });

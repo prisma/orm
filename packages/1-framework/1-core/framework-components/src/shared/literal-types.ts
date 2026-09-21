@@ -159,8 +159,9 @@ function readScalar(written: Exclude<WrittenLiteral, { kind: 'list' }>): ReadSca
 }
 
 function readJson(text: string): ReadScalarResult {
+  let value: JsonValue;
   try {
-    return { ok: true, literal: { type: 'json', value: JSON.parse(text) } };
+    value = JSON.parse(text);
   } catch (error) {
     return {
       ok: false,
@@ -169,6 +170,45 @@ function readJson(text: string): ReadScalarResult {
       elementIndex: undefined,
     };
   }
+  const overflowed = nonFiniteNumberIn(value, '');
+  if (overflowed !== undefined) {
+    return {
+      ok: false,
+      reason: 'invalid-json',
+      message: `${overflowed.path} is ${overflowed.value}, which JSON cannot write back: the number in the text is outside the range a JSON number holds.`,
+      elementIndex: undefined,
+    };
+  }
+  return { ok: true, literal: { type: 'json', value } };
+}
+
+/**
+ * Where a parsed JSON value holds a number JSON cannot write back.
+ *
+ * `JSON.parse` reads a numeral too large for a double as `Infinity`, and `JSON.stringify` writes
+ * that back as `null` — so a document accepted here would not be the document stored.
+ */
+function nonFiniteNumberIn(
+  value: JsonValue,
+  path: string,
+): { readonly path: string; readonly value: number } | undefined {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? undefined : { path: path === '' ? 'The value' : path, value };
+  }
+  if (Array.isArray(value)) {
+    for (const [index, element] of value.entries()) {
+      const found = nonFiniteNumberIn(element, `${path}[${index}]`);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (typeof value === 'object' && value !== null) {
+    for (const [key, member] of Object.entries(value)) {
+      const found = nonFiniteNumberIn(member, path === '' ? key : `${path}.${key}`);
+      if (found !== undefined) return found;
+    }
+  }
+  return undefined;
 }
 
 function readList(elements: readonly WrittenLiteral[]): ReadLiteralResult {
