@@ -1,5 +1,5 @@
 /**
- * What a printed column's codec accepts as a literal default.
+ * The codec `contract emit` binds to a printed column, and the data type that codec represents.
  *
  * `contract emit` binds a codec to each PSL type constructor the printer names, so a default has to
  * be written in the form that codec reads back. The binding itself lives in the adapter's authoring
@@ -11,7 +11,7 @@
 import type { ColumnDefaultLiteralInputValue, JsonValue } from '@internal/contract/types';
 import {
   type Codec,
-  type LiteralTypeDeclaration,
+  type DataTypeId,
   materializeCodec,
 } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
@@ -43,16 +43,17 @@ export const CODEC_ID_BY_PRINTED_TYPE: ReadonlyMap<string, string> = new Map([
 ]);
 
 /**
- * The literal types a column of `pslTypeName` accepts. An enum column's default is a member name,
- * which is a string either way, so it reads through the text codec.
+ * The data type a column of `pslTypeName` holds values of, which is the one its codec represents.
+ * An enum column's default is a member name, which is text either way, so it reads through the text
+ * codec.
  */
-export function literalTypesForPrintedType(
+export function dataTypeForPrintedType(
   pslTypeName: string,
   isEnum: boolean,
-): readonly LiteralTypeDeclaration[] {
+): DataTypeId | undefined {
   const codecId = isEnum ? PG_TEXT_CODEC_ID : CODEC_ID_BY_PRINTED_TYPE.get(pslTypeName);
-  if (codecId === undefined) return [];
-  return postgresCodecDescriptorRegistry.descriptorFor(codecId)?.literalTypes ?? [];
+  if (codecId === undefined) return undefined;
+  return postgresCodecDescriptorRegistry.descriptorFor(codecId)?.dataType;
 }
 
 const codecs = new Map<string, Codec>();
@@ -73,10 +74,10 @@ function printedTypeCodec(pslTypeName: string, isEnum: boolean): Codec | undefin
 /**
  * Whether the column's codec reads the value back.
  *
- * A literal type says what a value is written as, not that this codec accepts every value of that
- * shape: the temporal codecs name `string` but refuse `infinity`, which PostgreSQL stores and
- * reports verbatim. A default the codec refuses has no PSL literal, so the raw expression prints
- * instead of a schema `contract emit` would reject.
+ * A data type says which values its column takes, not that every codec of it accepts each one: the
+ * temporal codecs represent types that cast from text but refuse `infinity`, which PostgreSQL
+ * stores and reports verbatim. A default the codec refuses has no PSL literal, so the raw
+ * expression prints instead of a schema `contract emit` would reject.
  */
 export function printedDefaultReadsBack(
   value: ColumnDefaultLiteralInputValue,

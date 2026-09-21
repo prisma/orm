@@ -1,9 +1,9 @@
 import { toEnumMemberName, toEnumName } from '@internal/family-sql/psl-infer';
-import { escapePslString } from '@internal/framework-components/codec';
 import type {
   PslExtensionBlock,
   PslExtensionBlockParamValue,
 } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 import {
   buildTopLevelNameMap,
   createUniqueFieldName,

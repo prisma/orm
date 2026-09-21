@@ -6,7 +6,6 @@ import type {
   RelationField,
 } from '@internal/family-sql/psl-infer';
 import { mapDefault, toFieldName, toModelName } from '@internal/family-sql/psl-infer';
-import { escapePslString } from '@internal/framework-components/codec';
 import type {
   PslAttributeArgument,
   PslField,
@@ -15,6 +14,7 @@ import type {
   PslModelAttribute,
   PslTypeConstructorCall,
 } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 import {
   composeCheckWirePrefix,
   computeCheckContentHash,
@@ -23,7 +23,7 @@ import {
 import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresRenderCheckExpressions } from '../check-expressions';
-import { literalTypesForPrintedType, printedDefaultReadsBack } from './infer-default-codec';
+import { dataTypeForPrintedType, printedDefaultReadsBack } from './infer-default-codec';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import {
   buildCheckAttribute,
@@ -284,7 +284,7 @@ function buildScalarField(
     rawDefaultParser,
     {
       ...defaultMapping,
-      literalTypes: literalTypesForPrintedType(resolution.pslType.name, isEnumColumn),
+      ...ifDefined('columnDataType', dataTypeForPrintedType(resolution.pslType.name, isEnumColumn)),
       list: column.many === true,
     },
     (value) =>
@@ -341,9 +341,9 @@ function buildScalarField(
 }
 
 /**
- * A literal default prints as the PSL literal its codec accepts. A literal that has no such PSL
- * literal prints as `dbgenerated(...)` with the expression Postgres reported: `contract emit`
- * accepts that on a scalar column and rejects it at the field on a list column.
+ * A literal default prints as the PSL literal the column's data type takes. A literal that has no
+ * such PSL literal prints as `dbgenerated(...)` with the expression Postgres reported: `contract
+ * emit` accepts that on a scalar column and rejects it at the field on a list column.
  */
 function inferDefaultAttribute(
   column: SqlColumnIR,
@@ -382,8 +382,8 @@ function inferDefaultAttribute(
 }
 
 /**
- * A literal no named literal type writes, or that the column's codec does not read back, has no PSL
- * literal, so the raw database default prints instead.
+ * A literal no data type the column takes writes, or that the column's codec does not read back,
+ * has no PSL literal, so the raw database default prints instead.
  */
 function literalOrRawAttribute(
   columnDefault: ColumnDefault,

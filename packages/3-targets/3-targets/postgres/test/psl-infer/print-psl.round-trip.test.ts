@@ -1,7 +1,7 @@
 /**
  * What `contract infer` prints, `contract emit` reads back to the value the database reported.
  *
- * The printer chooses a PSL literal from the column codec's declared literal types; this parses the
+ * The printer writes the literal of a data type the column's own type takes; this parses the
  * printed schema with the real PSL parser and interprets it through the real codec descriptors, so
  * a literal that prints but does not read back fails here rather than in a user's terminal.
  */
@@ -10,7 +10,7 @@ import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
 } from '@internal/framework-components/authoring';
-import { type CodecLookup, jsonDefaultLiteralTagEntry } from '@internal/framework-components/codec';
+import { type CodecLookup, createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
@@ -23,6 +23,8 @@ import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
 } from '../../src/core/authoring';
+import { postgresDataTypeEntries } from '../../src/core/data-type-entries';
+import { postgresDataTypes } from '../../src/core/data-types';
 import { parsePostgresDefault } from '../../src/core/default-normalizer';
 import { type PostgresSchema, postgresCreateNamespace } from '../../src/core/postgres-schema';
 import { CODEC_ID_BY_PRINTED_TYPE } from '../../src/core/psl-infer/infer-default-codec';
@@ -67,6 +69,7 @@ const assembled = assembleAuthoringContributions([
       entityTypes: postgresAuthoringEntityTypes,
       type: authoringTypes,
       pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
+      dataTypes: postgresDataTypeEntries(),
     },
   },
 ]);
@@ -145,9 +148,9 @@ function roundTrippedDefaults(columns: readonly SqlColumnIRInput[]) {
     composedExtensionContracts: new Map(),
     createNamespace: postgresCreateNamespace,
     codecLookup,
+    dataTypeLookup: createDataTypeLookup(postgresDataTypes),
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map([['json', jsonDefaultLiteralTagEntry()]]),
       generatorDescriptors: [],
     },
   });
@@ -195,7 +198,7 @@ two lines é'::text`,
       ratio: { kind: 'literal', value: 'NaN' },
       active: { kind: 'literal', value: true },
       meta: { kind: 'literal', value: { plan: 'free', seats: 1 } },
-      stamp: { kind: 'literal', value: '2024-01-01T00:00:00' },
+      stamp: { kind: 'literal', value: '2024-01-01 00:00:00' },
       scores: { kind: 'literal', value: [1, 2] },
       docs: { kind: 'literal', value: [{}, []] },
     });

@@ -1,12 +1,12 @@
 import { type ColumnDefault, isColumnDefault } from '@internal/contract/types';
 import type { PslPrinterOptions } from '@internal/family-sql/psl-infer';
-import { escapePslString } from '@internal/framework-components/codec';
 import type {
   PslAttribute,
   PslAttributeArgument,
   PslFieldAttribute,
   PslSpan,
 } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 
 export const SYNTHETIC_SPAN: PslSpan = {
   start: { offset: 0, line: 1, column: 1 },

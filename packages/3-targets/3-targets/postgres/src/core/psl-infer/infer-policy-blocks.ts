@@ -1,5 +1,5 @@
-import { escapePslString } from '@internal/framework-components/codec';
 import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 import { parseWireName } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';

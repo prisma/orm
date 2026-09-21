@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import {
   CODEC_ID_BY_PRINTED_TYPE,
-  literalTypesForPrintedType,
+  dataTypeForPrintedType,
 } from '../../../src/core/psl-infer/infer-default-codec';
 import { PRINTED_PSL_TYPE_NAMES } from '../../../src/core/psl-infer/postgres-type-map';
 import { printPslFromFlat } from '../fixtures';
@@ -59,7 +59,7 @@ function printedDefaults(columns: readonly SqlColumnIRInput[]): Record<string, s
   );
 }
 
-describe('printPsl writes each default as the literal its codec reads back', () => {
+describe('printPsl writes each default as the literal the column data type takes', () => {
   it('prints every literal form the outcome schema writes', () => {
     expect(
       printedDefaults([
@@ -72,6 +72,7 @@ describe('printPsl writes each default as the literal its codec reads back', () 
         introspected('active', 'bool', 'true'),
         introspected('meta', 'jsonb', `'{"plan": "free", "seats": 1}'::jsonb`),
         introspected('scores', 'int4', "'{1,2}'::integer[]", { many: true }),
+        introspected('docs', 'jsonb', `ARRAY['{}'::jsonb, '[]'::jsonb]`, { many: true }),
       ]),
     ).toEqual({
       name: '@default("anonymous")',
@@ -83,12 +84,25 @@ describe('printPsl writes each default as the literal its codec reads back', () 
       active: '@default(true)',
       meta: '@default(json`{"plan":"free","seats":1}`)',
       scores: '@default([1, 2])',
+      docs: '@default([json`{}`, json`[]`])',
     });
   });
 
   it('prints every digit of an int8 past the safe integer range', () => {
     expect(printedDefaults([introspected('big', 'int8', "'9007199254740993'::bigint")])).toEqual({
       big: '@default(9007199254740993)',
+    });
+  });
+
+  it('prints a whole number cast up to the column type', () => {
+    expect(printedDefaults([introspected('balance', 'int8', "'42'::bigint")])).toEqual({
+      balance: '@default(42)',
+    });
+  });
+
+  it('prints text that a number would classify as text, because the column holds text', () => {
+    expect(printedDefaults([introspected('name', 'text', "'100'::text")])).toEqual({
+      name: '@default("100")',
     });
   });
 
@@ -122,14 +136,6 @@ describe('printPsl writes each default as the literal its codec reads back', () 
     },
   );
 
-  it('prints a list of json documents as json tags', () => {
-    expect(
-      printedDefaults([
-        introspected('docs', 'jsonb', `ARRAY['{}'::jsonb, '[]'::jsonb]`, { many: true }),
-      ]),
-    ).toEqual({ docs: '@default([json`{}`, json`[]`])' });
-  });
-
   it.each([
     ['infinity', "'infinity'::timestamp without time zone"],
     ['-infinity', "'-infinity'::timestamp without time zone"],
@@ -149,7 +155,13 @@ describe('printPsl writes each default as the literal its codec reads back', () 
     ).toEqual({ stamp: '@default("2024-01-01 00:00:00")' });
   });
 
-  it('falls back to the raw expression for a codec that names no literal type', () => {
+  it('prints a database expression as the raw expression', () => {
+    expect(printedDefaults([introspected('token', 'uuid', 'gen_random_uuid()')])).toEqual({
+      token: '@default(dbgenerated("gen_random_uuid()"))',
+    });
+  });
+
+  it('falls back to the raw expression for a column whose type the map does not recognise', () => {
     expect(printedDefaults([introspected('area', 'geometry', "'POINT(0 0)'::geometry")])).toEqual(
       {},
     );
@@ -164,19 +176,19 @@ describe('the codec bound to each printed type name', () => {
     ).toEqual([]);
   });
 
-  it('names a registered codec that declares literal types for every printed type', () => {
+  it('names a registered codec that represents a data type for every printed type', () => {
     expect(
       [...CODEC_ID_BY_PRINTED_TYPE.keys()].filter(
-        (typeName) => literalTypesForPrintedType(typeName, false).length === 0,
+        (typeName) => dataTypeForPrintedType(typeName, false) === undefined,
       ),
     ).toEqual([]);
   });
 
-  it('reads an enum column through the text codec, whose members are strings', () => {
-    expect(literalTypesForPrintedType('SomeEnum', true)).toEqual(['string']);
+  it('reads an enum column through the text codec, whose members are text', () => {
+    expect(dataTypeForPrintedType('SomeEnum', true)).toBe('pg/text');
   });
 
   it('names nothing for a type no codec is bound to', () => {
-    expect(literalTypesForPrintedType('Unsupported', false)).toEqual([]);
+    expect(dataTypeForPrintedType('Unsupported', false)).toBeUndefined();
   });
 });

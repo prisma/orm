@@ -1,7 +1,10 @@
-import { isDefaultLiteralTagLoweringEntry } from '@internal/framework-components/control';
+import {
+  isDataTypeLoweringEntry,
+  loweringEntryKey,
+} from '@internal/framework-components/authoring';
 import { checkSqlDefaultBody } from '@internal/sql-contract/validators';
 import { describe, expect, it } from 'vitest';
-import { createBuiltinLikeControlMutationDefaults } from '../../2-authoring/contract-psl/test/fixtures';
+import { fixtureDataTypeEntries } from '../../2-authoring/contract-psl/test/fixture-data-types';
 import { sqlDefaultLiteralTagEntry } from '../src/core/sql-default-literal-tag';
 
 const span = {
@@ -38,10 +41,12 @@ describe('checkSqlDefaultBody', () => {
 });
 
 describe('sqlDefaultLiteralTagEntry', () => {
-  const entry = sqlDefaultLiteralTagEntry('pg.sql`...`');
+  const registeredEntry = sqlDefaultLiteralTagEntry('pg.sql');
+  if (!isDataTypeLoweringEntry(registeredEntry)) throw new Error('a lowering entry');
+  const entry = registeredEntry;
 
-  it('records its usage and documentation', () => {
-    expect(entry.usage).toBe('pg.sql`...`');
+  it('names the tag it is written with, and what it does', () => {
+    expect(entry.written).toEqual({ kind: 'tag', tag: 'pg.sql' });
     expect(entry.documentation).toBe(
       "Uses the SQL in the string, verbatim, as the column's default expression.",
     );
@@ -117,14 +122,15 @@ describe('sqlDefaultLiteralTagEntry', () => {
   });
 });
 
-describe('the contract-psl fixture registry mirrors the family entry', () => {
-  const registered =
-    createBuiltinLikeControlMutationDefaults().defaultLiteralTagRegistry.get('sql');
-  if (registered === undefined || !isDefaultLiteralTagLoweringEntry(registered)) {
-    throw new Error('the fixture registry does not register `sql` as a lowering tag');
+describe('the contract-psl fixture entries mirror the family entry', () => {
+  const registered = fixtureDataTypeEntries[loweringEntryKey('sql')];
+  if (registered === undefined || !isDataTypeLoweringEntry(registered)) {
+    throw new Error('the fixture entries do not register `sql` as a lowering tag');
   }
   const fixtureEntry = registered;
-  const familyEntry = sqlDefaultLiteralTagEntry('sql`...`');
+  const registeredFamilyEntry = sqlDefaultLiteralTagEntry('sql');
+  if (!isDataTypeLoweringEntry(registeredFamilyEntry)) throw new Error('a lowering entry');
+  const familyEntry = registeredFamilyEntry;
 
   it.each([
     ['x; y'],
