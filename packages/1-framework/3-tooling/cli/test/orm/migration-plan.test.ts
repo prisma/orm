@@ -1,5 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
+import { resolveConfigPaths } from '@internal/config/config-resolve';
+import type { PrismaNextConfig } from '@internal/config/config-types';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { notOk } from '@internal/utils/result';
@@ -8,6 +10,7 @@ import { createTestCli } from '@prisma/cli-engine/testing';
 import { basename, dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   ADDITIVE_OP,
   contractJson,
@@ -39,14 +42,12 @@ function harness(
     readonly overrides?: Record<string, unknown>;
   } = {},
 ) {
-  return createTestCli({
+  return createOrmTestCli({
     commands: OFFLINE_COMMANDS,
     groups: BIN_GROUPS,
-    config: {
-      orm: {
-        ...offlineConfig({ project, ...(options.script ? { script: options.script } : {}) }),
-        ...options.overrides,
-      },
+    orm: {
+      ...offlineConfig({ project, ...(options.script ? { script: options.script } : {}) }),
+      ...options.overrides,
     },
   });
 }
@@ -83,24 +84,30 @@ async function upToDateProject(): Promise<OfflineProject> {
   return project;
 }
 
-/** The engine's own loader leaves the paths inside the file as authored. */
-function relativeConfigLoader(
-  project: OfflineProject,
-): (configPath?: string) => Promise<LoadedConfig> {
-  return async (configPath) => ({
-    path: join(project.dir, configPath === undefined ? 'prisma.config.ts' : basename(configPath)),
-    sections: {
-      orm: {
-        ...offlineConfig({ project }),
-        contract: {
-          source: { format: 'typescript', inputs: [], load: async () => contractJson('unused') },
-          output: './output/contract.json',
-        },
-        migrations: { dir: './migrations' },
+/**
+ * The engine's loader: the section as the file wrote it, resolved against the
+ * file's own directory before the command sees it (ADR 253).
+ */
+function resolvingLoader(project: OfflineProject): (configPath?: string) => Promise<LoadedConfig> {
+  return async (configPath) => {
+    const path = join(
+      project.dir,
+      configPath === undefined ? 'prisma.config.ts' : basename(configPath),
+    );
+    const authored = {
+      ...offlineConfig({ project }),
+      contract: {
+        source: { format: 'typescript', inputs: [], load: async () => contractJson('unused') },
+        output: './output/contract.json',
       },
-    },
-    diagnostics: [],
-  });
+      migrations: { dir: './migrations' },
+    };
+    return {
+      path,
+      sections: { orm: resolveConfigPaths(authored as unknown as PrismaNextConfig, dirname(path)) },
+      diagnostics: [],
+    };
+  };
 }
 
 describe('migration plan --config naming a file in a subdirectory', () => {
@@ -109,7 +116,7 @@ describe('migration plan --config naming a file in a subdirectory', () => {
     const cli = createTestCli({
       commands: OFFLINE_COMMANDS,
       groups: BIN_GROUPS,
-      loadConfig: relativeConfigLoader(project),
+      loadConfig: resolvingLoader(project),
     });
 
     const run = await cli.run(

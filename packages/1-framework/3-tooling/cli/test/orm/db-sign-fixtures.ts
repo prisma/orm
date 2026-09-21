@@ -10,12 +10,12 @@ import { blindCast } from '@internal/utils/casts';
 import { ok } from '@internal/utils/result';
 import type { MountedTree, PresentedResult } from '@prisma/cli-engine';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { type Mock, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createDbSignCommand } from '../../src/orm/db/sign';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 export const HASH_A = `4cb4256${'0'.repeat(57)}`;
@@ -120,7 +120,7 @@ export function ormConfig(overrides: Record<string, unknown> = {}): Record<strin
 }
 
 export function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups, config: { orm: config } });
+  return createOrmTestCli({ commands, groups, orm: config });
 }
 
 export const MISSING_COLUMN = blindCast<

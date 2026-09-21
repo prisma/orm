@@ -112,7 +112,7 @@ export const migrationGraphCommand = defineOrmCommand({
       return notOk(normalizeError(errorLegendHumanOnly('--dot')));
     }
 
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
     const loaded = await buildReadAggregate(ctx.config, { migrationsDir });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));

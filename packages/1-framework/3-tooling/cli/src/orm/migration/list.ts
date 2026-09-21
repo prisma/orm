@@ -73,7 +73,7 @@ export const migrationListCommand = defineOrmCommand({
   },
   needs: { config: ormConfigSection },
   handler: async (args, ctx) => {
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
 
     const loaded = await buildReadAggregate(ctx.config, { migrationsDir });
     if (!loaded.ok) {

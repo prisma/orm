@@ -223,7 +223,7 @@ export const migrationShowCommand = defineOrmCommand({
   needs: { config: ormConfigSection },
   handler: async (args, ctx) => {
     const { target } = args.positionals;
-    const contractPath = contractPathFor(ctx.config, ctx.cwd);
+    const contractPath = contractPathFor(ctx.config);
     if (contractPath === undefined) {
       return notOk(
         normalizeError(
@@ -234,8 +234,8 @@ export const migrationShowCommand = defineOrmCommand({
         ),
       );
     }
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
-    const appMigrationsDir = appMigrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
+    const appMigrationsDir = appMigrationsDirFor(ctx.config);
     const appMigrationsRelative = displayPath(appMigrationsDir, ctx.cwd);
 
     let contractJson: string;

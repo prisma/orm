@@ -22,6 +22,7 @@
     "clipanion": "4.0.0-rc.4",
     "closest-match": "^1.3.3",
     "colorette": "^2.0.20",
+    "defu": "^6.1.7",
     "esbuild": "^0.28.2",
     "jsonc-parser": "^3.3.1",
     "package-manager-detector": "^1.8.0",

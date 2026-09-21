@@ -19,7 +19,7 @@ import {
   contractPathFor,
   displayPath,
   migrationsDirFor,
-  projectConfigPathFor,
+  projectRootFor,
 } from './paths';
 
 function hashRow(label: string, hash: string | null): { label: string; value: Text } {
@@ -256,7 +256,7 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
         {
           config: ctx.config,
           cwd: ctx.cwd,
-          configPath: projectConfigPathFor(ctx),
+          projectDir: projectRootFor(ctx.config),
           ...ifDefined('name', args.flags.name),
           ...ifDefined('from', args.flags.from),
           ...ifDefined('to', args.flags.to),
@@ -281,7 +281,7 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
         text: `Total time: ${planned.value.timings.total}ms`,
       });
 
-      const contractPath = contractPathFor(ctx.config, ctx.cwd);
+      const contractPath = contractPathFor(ctx.config);
       return ok(
         ctx.present(
           { data: planned.value },
@@ -289,8 +289,8 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
             document: planned.value,
             contractPath:
               contractPath === undefined ? '(unset)' : displayPath(contractPath, ctx.cwd),
-            appMigrationsRelative: displayPath(appMigrationsDirFor(ctx.config, ctx.cwd), ctx.cwd),
-            migrationsRelative: displayPath(migrationsDirFor(ctx.config, ctx.cwd), ctx.cwd),
+            appMigrationsRelative: displayPath(appMigrationsDirFor(ctx.config), ctx.cwd),
+            migrationsRelative: displayPath(migrationsDirFor(ctx.config), ctx.cwd),
             from: args.flags.from,
             to: args.flags.to,
             name: args.flags.name,

@@ -1,50 +1,41 @@
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import { spaceMigrationDirectory } from '@internal/migration-tools/spaces';
+import { InternalError } from '@internal/utils/internal-error';
 import { relative, resolve } from 'pathe';
 
 /**
- * Where migrations live for this project. The command boundary has already
- * resolved `migrations.dir` against the config file's directory, so `cwd`
- * only anchors a config handed in raw, as tests do.
+ * The directory of the config file that wrote the section. The section
+ * validator refuses a config without it, so its absence here is a bug.
  */
-export function migrationsDirFor(config: PrismaNextConfig, cwd: string): string {
-  return resolve(cwd, config.migrations?.dir ?? 'migrations');
+export function projectRootFor(config: PrismaNextConfig): string {
+  if (config.rootDir === undefined) {
+    throw new InternalError('the orm config section reached a command without rootDir');
+  }
+  return config.rootDir;
+}
+
+/** Where migrations live for this project; the resolved config carries it absolute. */
+export function migrationsDirFor(config: PrismaNextConfig): string {
+  return config.migrations?.dir ?? resolve(projectRootFor(config), 'migrations');
 }
 
 /** The app subspace under {@link migrationsDirFor}. */
-export function appMigrationsDirFor(config: PrismaNextConfig, cwd: string): string {
-  return spaceMigrationDirectory(migrationsDirFor(config, cwd), APP_SPACE_ID);
-}
-
-/**
- * The config file an operation should anchor its project paths on: the file
- * the engine loaded, which `--config` may have placed outside the invocation
- * directory. With no loaded file it is the invocation directory's own.
- */
-export function projectConfigPathFor(ctx: {
-  readonly cwd: string;
-  readonly configFile: string | null;
-}): string {
-  return ctx.configFile ?? resolve(ctx.cwd, 'prisma.config.ts');
+export function appMigrationsDirFor(config: PrismaNextConfig): string {
+  return spaceMigrationDirectory(migrationsDirFor(config), APP_SPACE_ID);
 }
 
 /**
  * Where refs live. The framework keeps them under the app subspace rather than
  * at the migrations root.
  */
-export function appRefsDirFor(config: PrismaNextConfig, cwd: string): string {
-  return resolve(appMigrationsDirFor(config, cwd), 'refs');
+export function appRefsDirFor(config: PrismaNextConfig): string {
+  return resolve(appMigrationsDirFor(config), 'refs');
 }
 
-/**
- * The emitted contract. The config loader has already resolved
- * `contract.output` against the config file's directory, so this only has an
- * effect for a config handed in raw, as tests do.
- */
-export function contractPathFor(config: PrismaNextConfig, cwd: string): string | undefined {
-  const output = config.contract?.output;
-  return output === undefined ? undefined : resolve(cwd, output);
+/** The emitted contract; the resolved config carries `contract.output` absolute. */
+export function contractPathFor(config: PrismaNextConfig): string | undefined {
+  return config.contract?.output;
 }
 
 /**

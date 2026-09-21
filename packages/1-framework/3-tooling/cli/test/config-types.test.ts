@@ -99,9 +99,9 @@ describe('defineConfig', () => {
     extensions: [],
   };
 
-  it('returns the config object unchanged when no contract', () => {
+  it('returns the config unchanged apart from its path resolver when no contract', () => {
     const result = defineConfig(baseConfig);
-    expect(result).toBe(baseConfig);
+    expect(result).toMatchObject(baseConfig);
     expect(result.family.familyId).toBe('sql');
     expect(result.target.id).toBe('postgres');
     expect(result.adapter.id).toBe('postgres');

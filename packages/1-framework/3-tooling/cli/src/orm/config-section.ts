@@ -1,3 +1,4 @@
+import { isUnresolvedConfig } from '@internal/config/config-resolve';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { ConfigValidationIssue } from '@internal/config/config-validation';
 import { collectConfigIssues } from '@internal/config/config-validation';
@@ -73,6 +74,38 @@ function unreadableDiagnostic(error: unknown): Diagnostic {
   };
 }
 
+/**
+ * The section still carries the resolver a loader calls with the directory of
+ * the file that wrote it (ADR 253). The engine that loaded this config did not
+ * call it, so its paths are still as written and cannot be trusted.
+ */
+function unresolvedDiagnostic(): Diagnostic {
+  return {
+    code: 'CONFIG.VALIDATION_FAILED',
+    severity: 'error',
+    summary: 'Prisma ORM configuration was loaded without resolving its paths',
+    why: 'The CLI that loaded prisma.config.ts predates path resolution for config sections, so relative paths in the orm section have no anchor.',
+    nextActions: [
+      {
+        kind: 'user-choice',
+        label: 'Update the prisma CLI to a version that resolves config sections.',
+      },
+    ],
+  };
+}
+
+function noRootDirDiagnostic(): Diagnostic {
+  return {
+    code: 'CONFIG.VALIDATION_FAILED',
+    severity: 'error',
+    summary: 'Prisma ORM configuration does not record the directory it was written in',
+    why: `The ${ORM_CONFIG_SECTION_NAME} section carries no rootDir, so relative paths in it have no anchor. A section built with defineConfig from your database facade package records it when the config is loaded.`,
+    nextActions: [
+      { kind: 'edit-file', label: 'Build the orm section with defineConfig in prisma.config.ts' },
+    ],
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -135,6 +168,9 @@ function validate(raw: unknown): SectionValidation<PrismaNextConfig> {
   if (!isRecord(raw)) {
     return { ok: false as const, diagnostics: [notAnObjectDiagnostic()] };
   }
+  if (isUnresolvedConfig(raw)) {
+    return { ok: false as const, diagnostics: [unresolvedDiagnostic()] };
+  }
 
   let issues: readonly ConfigValidationIssue[];
   try {
@@ -145,6 +181,9 @@ function validate(raw: unknown): SectionValidation<PrismaNextConfig> {
 
   if (issues.length > 0) {
     return { ok: false as const, diagnostics: issues.map(issueDiagnostic) };
+  }
+  if (typeof raw['rootDir'] !== 'string') {
+    return { ok: false as const, diagnostics: [noRootDirDiagnostic()] };
   }
 
   return {

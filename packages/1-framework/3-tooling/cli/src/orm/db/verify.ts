@@ -438,7 +438,7 @@ export function createDbVerifyCommand(
         strict,
         database: maskConnectionUrl(dbConnection),
       });
-      const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+      const migrationsDir = migrationsDirFor(ctx.config);
       const client = createClient({
         family: ctx.config.family,
         target: ctx.config.target,

@@ -1,3 +1,4 @@
+import { CONFIG_RESOLVE } from '@internal/config/config-resolve';
 import { describe, expect, it } from 'vitest';
 import { ormConfigSection } from '../../src/orm/config-section';
 
@@ -25,6 +26,7 @@ function validDescriptor(kind: string) {
 
 function validConfig() {
   return {
+    rootDir: '/project',
     family: validFamily(),
     target: { ...validDescriptor('target'), targetId: 'postgres' },
     adapter: validDescriptor('adapter'),
@@ -53,6 +55,44 @@ describe('ormConfigSection', () => {
       };
 
       expect(ormConfigSection.validate(raw).ok).toBe(true);
+    });
+  });
+
+  describe('a section whose paths were never resolved', () => {
+    it('refuses a section still carrying its resolver and asks for a newer CLI', () => {
+      const raw = { ...validConfig(), [CONFIG_RESOLVE]: () => validConfig() };
+      const result = ormConfigSection.validate(raw);
+
+      expect(result.ok).toBe(false);
+      expect(result.diagnostics).toMatchObject([
+        {
+          code: 'CONFIG.VALIDATION_FAILED',
+          summary: 'Prisma ORM configuration was loaded without resolving its paths',
+          nextActions: [{ kind: 'user-choice' }],
+        },
+      ]);
+    });
+
+    it('refuses a section that records no rootDir', () => {
+      const { rootDir: _rootDir, ...raw } = validConfig();
+      const result = ormConfigSection.validate(raw);
+
+      expect(result.ok).toBe(false);
+      expect(result.diagnostics).toMatchObject([
+        {
+          code: 'CONFIG.VALIDATION_FAILED',
+          summary: 'Prisma ORM configuration does not record the directory it was written in',
+        },
+      ]);
+    });
+
+    it('reports structural problems before the missing rootDir', () => {
+      const { rootDir: _rootDir, ...raw } = { ...validConfig(), migrations: { dir: 42 } };
+      const result = ormConfigSection.validate(raw);
+
+      expect(result.diagnostics.map((diagnostic) => diagnostic.summary)).toEqual([
+        'Config.migrations.dir must be a string',
+      ]);
     });
   });
 

@@ -60,6 +60,7 @@
     "./components/runtime": "./dist/components__runtime.mjs",
     "./components/utils": "./dist/components__utils.mjs",
     "./config": "./dist/config.mjs",
+    "./config/config-resolve": "./dist/config__config-resolve.mjs",
     "./config/config-types": "./dist/config__config-types.mjs",
     "./config/config-validation": "./dist/config__config-validation.mjs",
     "./contract": "./dist/contract.mjs",

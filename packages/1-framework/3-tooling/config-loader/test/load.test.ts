@@ -456,6 +456,50 @@ describe('loadConfig', () => {
   );
 
   it(
+    'resolves each layer against its own file before merging',
+    async () => {
+      const baseDir = join(tempDir, 'base');
+      mkdirSync(baseDir);
+      writeFileSync(
+        join(baseDir, 'base.config.ts'),
+        `${CONFIG_BODY}\nexport default { orm: { ...config, migrations: { dir: './db' } } };\n`,
+      );
+      writeFileSync(
+        join(tempDir, 'prisma.config.ts'),
+        "export default { $prismaConfig: 1, extends: './base/base.config.ts', orm: { contract: { output: './out/contract.json' } } };\n",
+      );
+      process.chdir(tempDir);
+
+      const { config, diagnostics } = (await loadConfig()).assertOk();
+
+      expect(diagnostics).toEqual([]);
+      expect(config).toMatchObject({
+        rootDir: tempDir,
+        contract: {
+          source: { inputs: [join(baseDir, 'schema.prisma')] },
+          output: join(tempDir, 'out', 'contract.json'),
+        },
+        migrations: { dir: join(baseDir, 'db') },
+      });
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'records the config file directory as rootDir',
+    async () => {
+      writeFileSync(join(tempDir, 'prisma.config.ts'), VALID_CONFIG_SOURCE);
+      process.chdir(tempDir);
+
+      const { config } = (await loadConfig()).assertOk();
+
+      expect(config.rootDir).toBe(tempDir);
+      expect(config.migrations?.dir).toBe(join(tempDir, 'migrations'));
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
     'rejects an unmarked config that extends a marked base config',
     async () => {
       writeFileSync(join(tempDir, 'base.config.ts'), VALID_CONFIG_SOURCE);

@@ -1,13 +1,16 @@
+import { resolveConfigPaths } from '@internal/config/config-resolve';
+import type { PrismaNextConfig } from '@internal/config/config-types';
 import { CliStructuredError } from '@internal/errors/control';
 import type { ErroredEnvelope, LoadedConfig, MountedTree, StreamEvent } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
-import { join } from 'pathe';
+import { dirname, join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ContractEmitResult } from '../../src/control-api/types';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import type { ContractEmitCommandDeps } from '../../src/orm/contract/emit';
 import { createContractEmitCommand } from '../../src/orm/contract/emit';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 
 /**
  * The command is mounted from the factory with the operation injected, so no
@@ -79,7 +82,7 @@ function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unkn
 }
 
 function harness(config: Record<string, unknown> = ormConfig()) {
-  return createTestCli({ commands, groups, config: { orm: config } });
+  return createOrmTestCli({ commands, groups, orm: config });
 }
 
 function erroredEnvelope(run: { readonly json: readonly StreamEvent[] }): ErroredEnvelope {
@@ -102,7 +105,7 @@ function countingLoader(config: Record<string, unknown> = ormConfig()): {
       calls.push(configPath ?? '(none)');
       return Promise.resolve({
         path: join(PROJECT_DIR, 'prisma.config.ts'),
-        sections: { orm: config },
+        sections: { orm: resolveConfigPaths(config as unknown as PrismaNextConfig, PROJECT_DIR) },
         diagnostics: [],
       });
     },
@@ -153,12 +156,14 @@ describe('contract emit', () => {
         output: './generated/contract.json',
       },
     });
-    const loadConfig = (configPath?: string) =>
-      Promise.resolve({
-        path: join(PROJECT_DIR, configPath ?? 'prisma.config.ts'),
-        sections: { orm: config },
+    const loadConfig = (configPath?: string) => {
+      const path = join(PROJECT_DIR, configPath ?? 'prisma.config.ts');
+      return Promise.resolve({
+        path,
+        sections: { orm: resolveConfigPaths(config as unknown as PrismaNextConfig, dirname(path)) },
         diagnostics: [],
       });
+    };
 
     const run = await createTestCli({ commands, groups, loadConfig }).run(
       ['contract', 'emit', '--json', '--config', 'sub/prisma.config.ts'],

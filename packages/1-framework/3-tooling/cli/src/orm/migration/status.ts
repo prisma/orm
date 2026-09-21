@@ -244,7 +244,7 @@ export const migrationStatusCommand = defineOrmCommand({
   },
   needs: { config: ormConfigSection },
   handler: async (args, ctx) => {
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
     const dbConnection = args.flags.db ?? ctx.config.db?.connection;
     const hasDriver = ctx.config.driver !== undefined;
     const usingFromOverride = args.flags.from !== undefined;
@@ -261,7 +261,7 @@ export const migrationStatusCommand = defineOrmCommand({
       }
     }
 
-    const refsResult = await readMigrationRefs(appRefsDirFor(ctx.config, ctx.cwd));
+    const refsResult = await readMigrationRefs(appRefsDirFor(ctx.config));
     if (!refsResult.ok) {
       return notOk(normalizeError(refsResult.failure));
     }
@@ -276,7 +276,7 @@ export const migrationStatusCommand = defineOrmCommand({
     const { aggregate, contractHash } = loaded.value;
 
     const contractConfig = {
-      contract: ifDefined('output', contractPathFor(ctx.config, ctx.cwd)),
+      contract: ifDefined('output', contractPathFor(ctx.config)),
     };
     try {
       await readContractEnvelope(contractConfig);

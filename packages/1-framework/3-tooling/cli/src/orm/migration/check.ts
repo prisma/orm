@@ -125,8 +125,8 @@ export const migrationCheckCommand = defineOrmCommand({
   handler: async (args, ctx) => {
     const { target } = args.positionals;
     const spaceFilter = args.flags.space;
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
-    const appMigrationsDir = appMigrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
+    const appMigrationsDir = appMigrationsDirFor(ctx.config);
     const appMigrationsRelative = displayPath(appMigrationsDir, ctx.cwd);
 
     const loaded = await buildReadAggregate(ctx.config, { migrationsDir });

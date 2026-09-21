@@ -6,6 +6,7 @@ import type {
   ControlFamilyDescriptor,
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
+import { normalizeContractConfig, withPathResolver } from './config-resolve';
 import type { ContractSourceProvider } from './contract-source-types';
 
 /**
@@ -36,26 +37,6 @@ export interface ContractConfig {
 export interface FormatterConfig {
   readonly indent?: number | 'tab';
   readonly newline?: 'LF' | 'CRLF';
-}
-
-/**
- * Default *source* directory for the contract file the user authors at `init`
- * time. Output artefacts colocate with source per the same rule path-bearing
- * providers apply.
- */
-export const DEFAULT_CONTRACT_SOURCE_DIR = 'src/prisma';
-
-export function normalizeContractConfig(
-  contract: ContractConfig,
-): ContractConfig & { readonly output: string } {
-  // In-memory-only fallback: `typescriptContract(contract)` has no source path
-  // to anchor on, so normalization supplies a default output colocated with
-  // the default source directory.
-  const inMemoryFallbackOutput = `${DEFAULT_CONTRACT_SOURCE_DIR}/contract.json`;
-  return {
-    source: contract.source,
-    output: contract.output ?? inMemoryFallbackOutput,
-  };
 }
 
 /**
@@ -112,6 +93,12 @@ export interface PrismaNextConfig<
     readonly dir?: string;
   };
   readonly formatter?: FormatterConfig;
+  /**
+   * The directory of the config file that wrote this section, set when the
+   * section's paths are resolved. Every relative path above is resolved
+   * against it; commands that need the project's location start here.
+   */
+  readonly rootDir?: string;
 }
 
 /**
@@ -124,19 +111,18 @@ export interface PrismaNextConfig<
  * - contract.output defaults to a path colocated with DEFAULT_CONTRACT_SOURCE_DIR
  *   when missing (in-memory-only providers)
  *
+ * Relative paths stay as written. The section carries a resolver under
+ * `CONFIG_RESOLVE` that a loader calls with the directory of the file that
+ * wrote the section; see ADR 253.
+ *
  * @param config - Raw config input from user
  * @returns Normalized config IR with defaults applied
  */
 export function defineConfig<TFamilyId extends string = string, TTargetId extends string = string>(
   config: PrismaNextConfig<TFamilyId, TTargetId>,
 ): PrismaNextConfig<TFamilyId, TTargetId> {
-  if (config.contract) {
-    return {
-      ...config,
-      contract: normalizeContractConfig(config.contract),
-    };
-  }
-
-  // Return config as-is if no contract (preserve literal types)
-  return config;
+  const normalized = config.contract
+    ? { ...config, contract: normalizeContractConfig(config.contract) }
+    : config;
+  return withPathResolver(normalized);
 }

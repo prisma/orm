@@ -1,10 +1,9 @@
 import { CliStructuredError } from '@internal/errors/control';
 import { InternalError } from '@internal/utils/internal-error';
 import { structuredError } from '@internal/utils/structured-error';
-import type { ErroredEnvelope, LoadedConfig, StreamEvent } from '@prisma/cli-engine';
+import type { ErroredEnvelope, StreamEvent } from '@prisma/cli-engine';
 import { ok } from '@prisma/cli-engine/protocol';
 import { createTestCli } from '@prisma/cli-engine/testing';
-import { resolve } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { defineOrmCommand } from '../../src/orm/define-command';
 
@@ -142,119 +141,6 @@ describe('defineOrmCommand', () => {
 
       expect(run.exitCode).toBe(0);
       expect(terminalEnvelope(run)).toMatchObject({ ok: true });
-    });
-  });
-});
-
-interface SeenPaths {
-  output?: string | undefined;
-  inputs?: readonly string[] | undefined;
-  dir?: string | undefined;
-}
-
-function probeCli(seen: SeenPaths, loadConfig: (configPath?: string) => Promise<LoadedConfig>) {
-  return createTestCli({
-    commands: {
-      probe: defineOrmCommand({
-        help: { summary: 'Records the config paths the handler receives' },
-        needs: {
-          config: {
-            name: 'orm',
-            validate: (raw) => ({
-              ok: true as const,
-              value: raw as Record<string, unknown>,
-              diagnostics: [],
-            }),
-          },
-        },
-        handler: async (_args, ctx) => {
-          const config = ctx.config as {
-            contract?: { source?: { inputs?: readonly string[] }; output?: string };
-            migrations?: { dir?: string };
-          };
-          seen.output = config.contract?.output;
-          seen.inputs = config.contract?.source?.inputs;
-          seen.dir = config.migrations?.dir;
-          return ok(
-            ctx.present(
-              { data: seen, exitCode: 0 },
-              { stdout: () => [], next: () => [], human: () => [], json: () => seen },
-            ),
-          );
-        },
-      }),
-    },
-    loadConfig,
-  });
-}
-
-/** The engine's own loader: paths inside the file stay exactly as authored. */
-const relativeOrmSection = {
-  contract: {
-    source: {
-      format: 'psl',
-      inputs: ['./contract.prisma'],
-      load: async () => ({ ok: true, value: {} }),
-    },
-    output: './src/prisma/contract.json',
-  },
-  migrations: { dir: './migrations' },
-};
-
-function loaderAt(cwd: string): (configPath?: string) => Promise<LoadedConfig> {
-  return async (configPath) => ({
-    path: resolve(cwd, configPath ?? 'prisma.config.ts'),
-    sections: { orm: relativeOrmSection },
-    diagnostics: [],
-  });
-}
-
-describe('config finalization at the command boundary', () => {
-  it('hands the handler absolute contract and migration paths whatever the loader left relative', async () => {
-    const cwd = '/workspace/app';
-    const seen: SeenPaths = {};
-
-    const run = await probeCli(seen, loaderAt(cwd)).run(['probe', '--json'], { cwd });
-
-    expect(run.exitCode).toBe(0);
-    expect(seen).toEqual({
-      output: `${cwd}/src/prisma/contract.json`,
-      inputs: [`${cwd}/contract.prisma`],
-      dir: `${cwd}/migrations`,
-    });
-  });
-
-  describe('a --config file in a subdirectory of the working directory', () => {
-    const parent = '/workspace/app';
-    const configDir = `${parent}/sub`;
-    const anchoredOnConfigDir: SeenPaths = {
-      output: `${configDir}/src/prisma/contract.json`,
-      inputs: [`${configDir}/contract.prisma`],
-      dir: `${configDir}/migrations`,
-    };
-
-    it('resolves relative paths against the config file, not the working directory', async () => {
-      const seen: SeenPaths = {};
-
-      const run = await probeCli(seen, loaderAt(parent)).run(
-        ['probe', '--json', '--config', 'sub/prisma.config.ts'],
-        { cwd: parent },
-      );
-
-      expect(run.exitCode).toBe(0);
-      expect(seen).toEqual(anchoredOnConfigDir);
-    });
-
-    it('yields the same absolute paths as running from the config directory', async () => {
-      const seen: SeenPaths = {};
-
-      const run = await probeCli(seen, loaderAt(configDir)).run(
-        ['probe', '--json', '--config', 'prisma.config.ts'],
-        { cwd: configDir },
-      );
-
-      expect(run.exitCode).toBe(0);
-      expect(seen).toEqual(anchoredOnConfigDir);
     });
   });
 });

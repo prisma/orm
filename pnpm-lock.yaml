@@ -1524,6 +1524,9 @@ importers:
       c12:
         specifier: ^3.3.4
         version: 3.3.4(magicast@0.5.4)
+      defu:
+        specifier: ^6.1.7
+        version: 6.1.7
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
@@ -5226,6 +5229,9 @@ importers:
       colorette:
         specifier: ^2.0.20
         version: 2.0.20
+      defu:
+        specifier: ^6.1.7
+        version: 6.1.7
       esbuild:
         specifier: ^0.28.2
         version: 0.28.2

@@ -12,7 +12,7 @@ import { runCommandAction } from '../../utils/next-actions';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
-import { appMigrationsDirFor, contractPathFor, displayPath, projectConfigPathFor } from './paths';
+import { appMigrationsDirFor, contractPathFor, displayPath, projectRootFor } from './paths';
 
 function newPresentations(inputs: {
   readonly document: MigrationNewResult;
@@ -90,7 +90,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
       const scaffolded = await executeMigrationNewCommand({
         config: ctx.config,
         cwd: ctx.cwd,
-        configPath: projectConfigPathFor(ctx),
+        projectDir: projectRootFor(ctx.config),
         ...ifDefined('name', args.flags.name),
         ...ifDefined('from', args.flags.from),
         client: createClient({
@@ -105,7 +105,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
         return notOk(normalizeError(scaffolded.failure));
       }
 
-      const contractPath = contractPathFor(ctx.config, ctx.cwd);
+      const contractPath = contractPathFor(ctx.config);
       return ok(
         ctx.present(
           { data: scaffolded.value },
@@ -113,7 +113,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
             document: scaffolded.value,
             contractPath:
               contractPath === undefined ? '(unset)' : displayPath(contractPath, ctx.cwd),
-            appMigrationsRelative: displayPath(appMigrationsDirFor(ctx.config, ctx.cwd), ctx.cwd),
+            appMigrationsRelative: displayPath(appMigrationsDirFor(ctx.config), ctx.cwd),
           }),
         ),
       );
