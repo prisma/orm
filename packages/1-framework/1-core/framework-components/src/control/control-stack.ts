@@ -448,29 +448,30 @@ export function enforceDataTypeInvariants(input: DataTypeInvariantInput): void {
 
   for (const { key, contributedBy } of input.authoringEntries) {
     if (isLoweringEntryKey(key)) continue;
-    if (
-      !input.lookup.has(
-        blindCast<DataTypeId, 'an entry key is a data type id or a lowering key'>(key),
-      )
-    ) {
+    if (!input.lookup.has(key)) {
       unregistered(contributedBy, key, 'Authoring entry');
     }
   }
 
+  // A type a classifier can return is written as a plain number, so it is writable even though the
+  // entry that reads it is keyed under another type.
   const writable = new Set(
-    input.authoringEntries
-      .filter((entry) => !isLoweringEntryKey(entry.key))
-      .map((entry) => entry.key),
+    input.authoringEntries.flatMap(({ key, entry }) =>
+      isLoweringEntryKey(key)
+        ? []
+        : [
+            key,
+            ...(entry.written.kind === 'plain' && entry.written.syntax === 'number'
+              ? entry.written.types
+              : []),
+          ],
+    ),
   );
 
   for (const { type, contributedBy } of input.declaredTypes) {
     const sources = [...Object.keys(type.casts), ...(type.listCast?.of ?? [])];
     for (const source of sources) {
-      const sourceId = blindCast<
-        DataTypeId,
-        'a cast is keyed by the id of the type it takes values of'
-      >(source);
-      if (!input.lookup.has(sourceId)) {
+      if (!input.lookup.has(source)) {
         unregistered(contributedBy, source, `The casts of data type "${type.id}"`);
       }
       if (!writable.has(source)) {
@@ -483,20 +484,25 @@ export function enforceDataTypeInvariants(input: DataTypeInvariantInput): void {
     }
   }
 
-  const tagOwners = new Map<string, string>();
-  const plainOwners = new Map<string, string>();
+  const claimants = new Map<string, { readonly key: string; readonly contributedBy: string }>();
   for (const { key, entry, contributedBy } of input.authoringEntries) {
-    const claimed = entry.written.kind === 'tag' ? tagOwners : plainOwners;
-    const claim = entry.written.kind === 'tag' ? entry.written.tag : entry.written.syntax;
-    const existingOwner = claimed.get(claim);
-    if (existingOwner !== undefined) {
+    const written = entry.written;
+    const claim = written.kind === 'tag' ? `tag "${written.tag}"` : `plain ${written.syntax}`;
+    const existing = claimants.get(claim);
+    if (existing !== undefined) {
       throw runtimeError(
         'CONTRACT.DATA_TYPE_WRITTEN_FORM_DUPLICATE',
-        `Two authoring entries claim the ${entry.written.kind === 'tag' ? 'tag' : 'plain form'} "${claim}": "${key}" from "${contributedBy}" conflicts with "${existingOwner}".`,
-        { claim, key, contributedBy, owner: existingOwner },
+        `Two authoring entries claim the ${claim}: "${key}" from "${contributedBy}" conflicts with "${existing.key}" from "${existing.contributedBy}".`,
+        {
+          claim,
+          key,
+          contributedBy,
+          owner: existing.key,
+          ownerContributedBy: existing.contributedBy,
+        },
       );
     }
-    claimed.set(claim, `${key}" from "${contributedBy}`);
+    claimants.set(claim, { key, contributedBy });
   }
 }
 

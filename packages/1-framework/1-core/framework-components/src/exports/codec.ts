@@ -43,7 +43,6 @@ export {
   createDataTypeLookup,
   dataType,
   dataTypeId,
-  emptyDataTypeLookup,
 } from '../shared/data-type';
 export { jsonDefaultLiteralTagEntry } from '../shared/json-default-literal-tag';
 export type {

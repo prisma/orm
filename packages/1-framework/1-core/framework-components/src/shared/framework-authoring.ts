@@ -543,26 +543,47 @@ export interface AuthoringAttributeSpecContributions {
  * the three pieces of syntax read without a tag: a quoted string, `true`/`false`, and a number.
  * ADR 254.
  */
+/**
+ * How a contract source writes values of one data type, and how it reads the text back.
+ *
+ * A tag is a qualified name followed by a body in any of the quote styles. A plain form is one of
+ * the three pieces of syntax read without a tag: a quoted string, `true`/`false`, and a number.
+ *
+ * A number is the one plain form that yields several types, so instead of `parse` its arm carries a
+ * classifier, which picks the type from the digits and returns the canonical form with it, and
+ * `types`, every type the classifier can return — which is how assembly knows those types can be
+ * written. ADR 254.
+ */
 export type DataTypeWrittenForm =
-  | { readonly kind: 'tag'; readonly tag: string }
-  | { readonly kind: 'plain'; readonly syntax: 'string' | 'boolean' | 'number' };
+  | {
+      readonly kind: 'tag';
+      readonly tag: string;
+      readonly parse: (text: string) => JsonValue;
+    }
+  | {
+      readonly kind: 'plain';
+      readonly syntax: 'string' | 'boolean';
+      readonly parse: (text: string) => JsonValue;
+    }
+  | {
+      readonly kind: 'plain';
+      readonly syntax: 'number';
+      readonly types: readonly DataTypeId[];
+      readonly classify: (
+        text: string,
+      ) => { readonly type: DataTypeId; readonly value: JsonValue } | undefined;
+    };
 
 /**
  * PSL support for one data type, contributed by the pack that owns the type and keyed by its id.
  *
- * `parse` turns written text into the type's canonical form and throws a structured error for text
- * it cannot read; `print` is the reverse. The `number` plain form is the one kind that yields
- * several types, so the entry that claims it also carries `classify`, which picks the type from the
- * digits.
+ * The written form reads text into the type's canonical form, throwing a structured error for text
+ * it cannot read; `print` is the reverse.
  */
 export interface DataTypeAuthoringEntry {
   readonly written: DataTypeWrittenForm;
-  readonly parse: (text: string) => JsonValue;
   readonly print: (value: JsonValue) => string;
   readonly documentation: string;
-  readonly classify?: (
-    text: string,
-  ) => { readonly type: DataTypeId; readonly value: JsonValue } | undefined;
   readonly lower?: never;
 }
 
@@ -577,7 +598,6 @@ export interface DataTypeLoweringAuthoringEntry {
     readonly literal: TaggedLiteralValue;
     readonly context: DefaultFunctionLoweringContext;
   }) => LoweredDefaultResult;
-  readonly parse?: never;
 }
 
 export type AuthoringDataTypeEntry = DataTypeAuthoringEntry | DataTypeLoweringAuthoringEntry;

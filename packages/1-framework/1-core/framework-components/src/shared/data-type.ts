@@ -51,8 +51,8 @@ export interface DataTypeSpec {
 
 /** The assembled types of one stack, by id. */
 export interface DataTypeLookup {
-  get(id: DataTypeId): DataType | undefined;
-  has(id: DataTypeId): boolean;
+  get(id: string): DataType | undefined;
+  has(id: string): boolean;
 }
 
 const DATA_TYPE_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -92,5 +92,3 @@ export function createDataTypeLookup(types: readonly DataType[]): DataTypeLookup
     has: (id) => byId.has(id),
   };
 }
-
-export const emptyDataTypeLookup: DataTypeLookup = createDataTypeLookup([]);

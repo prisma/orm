@@ -4,7 +4,7 @@ import {
   assembleDataTypes,
   enforceDataTypeInvariants,
 } from '../src/control/control-stack';
-import { type DataType, dataType, dataTypeId } from '../src/shared/data-type';
+import { type DataType, type DataTypeId, dataType, dataTypeId } from '../src/shared/data-type';
 import { loweringEntryKey } from '../src/shared/framework-authoring';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
@@ -17,18 +17,21 @@ const contributor = (id: string, dataTypes: readonly DataType[]) => ({
   types: { codecTypes: { dataTypes } },
 });
 
-const plainNumberEntry = {
-  written: { kind: 'plain', syntax: 'number' },
-  parse: (text_: string) => text_,
-  print: String,
-  documentation: 'A number.',
-  classify: () => ({ type: int2.id, value: 0 }),
-} as const;
+const numberEntry = (types: readonly DataTypeId[] = [int2.id]) =>
+  ({
+    written: {
+      kind: 'plain',
+      syntax: 'number',
+      types,
+      classify: () => ({ type: int2.id, value: 0 }),
+    },
+    print: String,
+    documentation: 'A number.',
+  }) as const;
 
 const tagEntry = (tag: string) =>
   ({
-    written: { kind: 'tag', tag },
-    parse: (text_: string) => text_,
+    written: { kind: 'tag', tag, parse: (text_: string) => text_ },
     print: String,
     documentation: `A ${tag} body.`,
   }) as const;
@@ -104,18 +107,18 @@ describe('enforceDataTypeInvariants', () => {
           { key: text.id, entry: tagEntry('json'), contributedBy: 'two' },
         ],
       }),
-    ).toThrow(/json/);
+    ).toThrow(/"one".*"two"|"two".*"one"/s);
   });
 
   it('refuses two entries claiming one plain kind', () => {
     expect(() =>
       invariants({
         authoringEntries: [
-          { key: int2.id, entry: plainNumberEntry, contributedBy: 'one' },
-          { key: int8.id, entry: plainNumberEntry, contributedBy: 'two' },
+          { key: int2.id, entry: numberEntry(), contributedBy: 'one' },
+          { key: int8.id, entry: numberEntry(), contributedBy: 'two' },
         ],
       }),
-    ).toThrow(/number/);
+    ).toThrow(/"one".*"two"|"two".*"one"/s);
   });
 
   it('refuses a cast from a data type no contract source can write', () => {
@@ -127,13 +130,13 @@ describe('enforceDataTypeInvariants', () => {
     ).toThrow(/demo\/int2/);
   });
 
-  it('accepts a cast whose source has an authoring entry', () => {
+  it('passes a stack whose cast source can be written', () => {
     expect(() =>
       invariants({
         declaredTypes: [{ type: int8, contributedBy: 'demo' }],
         authoringEntries: [
           { key: int8.id, entry: tagEntry('int8'), contributedBy: 'demo' },
-          { key: int2.id, entry: plainNumberEntry, contributedBy: 'demo' },
+          { key: int2.id, entry: numberEntry(), contributedBy: 'demo' },
         ],
       }),
     ).not.toThrow();
@@ -166,7 +169,7 @@ describe('enforceDataTypeInvariants', () => {
 describe('assembleAuthoringDataTypes', () => {
   it('merges every contributor’s entries, keyed by data type id and by lowering key', () => {
     const merged = assembleAuthoringDataTypes([
-      { id: 'one', authoring: { dataTypes: { [int2.id]: plainNumberEntry } } },
+      { id: 'one', authoring: { dataTypes: { [int2.id]: numberEntry() } } },
       {
         id: 'two',
         authoring: {
@@ -186,10 +189,10 @@ describe('assembleAuthoringDataTypes', () => {
   it('refuses two contributors claiming one key', () => {
     expect(() =>
       assembleAuthoringDataTypes([
-        { id: 'one', authoring: { dataTypes: { [int2.id]: plainNumberEntry } } },
-        { id: 'two', authoring: { dataTypes: { [int2.id]: plainNumberEntry } } },
+        { id: 'one', authoring: { dataTypes: { [int2.id]: numberEntry() } } },
+        { id: 'two', authoring: { dataTypes: { [int2.id]: numberEntry() } } },
       ]),
-    ).toThrow(/"one"|"two"/);
+    ).toThrow(/"one".*"two"|"two".*"one"/s);
   });
 });
 

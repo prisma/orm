@@ -3,7 +3,7 @@ import { createDataTypeLookup, dataType, dataTypeId } from '../src/shared/data-t
 
 describe('dataTypeId', () => {
   it.each(['pg/int8', 'sqlite/integer', 'postgis/geometry', 'pg/text-array', 'arktype/json'])(
-    'accepts %s',
+    'reads %s as a data type id',
     (id) => {
       expect(dataTypeId(id)).toBe(id);
     },

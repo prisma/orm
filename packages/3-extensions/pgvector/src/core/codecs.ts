@@ -19,7 +19,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  dataTypeId,
   integerLiteralTypesUpTo,
   isNumeralText,
   type LiteralTypeDeclaration,
@@ -33,6 +32,7 @@ import {
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { VECTOR_CODEC_ID, VECTOR_MAX_DIM } from './constants';
+import { PGVECTOR_VECTOR } from './data-type-ids';
 import { pgVectorError } from './errors';
 
 type VectorConversionCode = 'RUNTIME.ENCODE_FAILED' | 'RUNTIME.DECODE_FAILED';
@@ -187,7 +187,7 @@ export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return jsonArrayFromVectorElements(expression);
   }
-  override readonly dataType = dataTypeId('pgvector/vector');
+  override readonly dataType = PGVECTOR_VECTOR;
   override readonly codecId = VECTOR_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;

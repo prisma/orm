@@ -40,7 +40,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  dataTypeId,
   type LiteralTypeDeclaration,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -51,6 +50,7 @@ import {
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { POSTGIS_GEOMETRY_CODEC_ID } from './constants';
+import { POSTGIS_GEOMETRY } from './data-type-ids';
 import { postgisError } from './errors';
 import { decodeEWKBHex, encodeEWKBHex, encodeEWKT } from './ewkb';
 import type { Geometry } from './geojson';
@@ -154,7 +154,7 @@ export class PostgisGeometryDescriptor extends PostgresCodecDescriptor<GeometryP
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
-  override readonly dataType = dataTypeId('postgis/geometry');
+  override readonly dataType = POSTGIS_GEOMETRY;
   override readonly codecId = POSTGIS_GEOMETRY_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['geometry'] as const;
