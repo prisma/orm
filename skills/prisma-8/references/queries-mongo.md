@@ -91,10 +91,10 @@ const user = await db.orm.users.create({
   address: null,
 });
 
-// Update one — plain object replaces top-level fields.
+// Update ONE document (the first match) — plain object replaces top-level fields. Returns `Row | null`.
 await db.orm.users.where({ _id: user._id }).update({ bio: 'Writer' });
 
-// Update one — field operations ($push, $inc, dot-path $set).
+// Update ONE document — field operations ($push, $inc, dot-path $set).
 await db.orm.users
   .where({ _id: user._id })
   .update((u) => [u.tags.push('admin'), u.loginCount.inc(1)]);
@@ -105,6 +105,9 @@ const updated = await db.orm.users
   .updateAll({ bio: 'filled' });
 for await (const row of updated) { /* each modified doc */ }
 
+const removed = await db.orm.posts.where({ authorId: user._id }).deleteAll(); // every match
+
+// Delete ONE document (findOneAndDelete) — use a unique filter. Returns `Row | null`.
 await db.orm.users.where({ _id: user._id }).delete();
 
 // Upsert — filter via .where(), split create vs update branches.
@@ -113,6 +116,8 @@ await db.orm.users.where({ email: 'alice@example.com' }).upsert({
   update: { bio: 'Editor' },
 });
 ```
+
+**`delete()` / `update()` touch one document; `deleteAll()` / `updateAll()` touch every match.** The single-document terminals run `findOneAndDelete` / `findOneAndUpdate`, so a non-unique filter such as `.where({ authorId })` changes one document and silently leaves the rest. Use them with an `_id` or unique filter; for bulk writes use `deleteAll()` / `updateAll()` and await the result (it does not run until consumed).
 
 **Count-only terminals.** `.createAndCount(...)`, `.updateAndCount(...)`, `.deleteAndCount()` return numbers without re-reading full documents — useful for bulk operations where you only need the modified count.
 
@@ -211,12 +216,13 @@ Update callbacks return arrays of field operations (`.set`, `.inc`, `.push`, `.p
 1. **Reaching for the lower-level lane when the ORM would have done.** Default to the ORM; drop to `db.query` only for shapes the ORM can't express.
 2. **Using `.all()` when you wanted one row.** Use `.where({ ... }).first()` — not `.all()`.
 3. **Calling `.update()` / `.delete()` without `.where()`.** Mutations other than `.create` / `.createAll` require a filter — the compiler enforces this at the type level where possible.
-4. **Using PascalCase model names on ORM.** Roots are lowercased plurals from the contract (`db.orm.users`, not `db.orm.User`).
-5. **Expecting Postgres-style lambda `.where((u) => u.email.eq(...))` on ORM.** Prefer object equality `.where({ email: '...' })`; richer operators need `MongoFilterExpr` helpers (façade gap today).
-6. **Expecting `db.transaction(...)`.** The Mongo façade does not expose it today. Multi-document atomicity requires MongoDB transactions on a replica set via the driver — not yet wrapped in the Prisma 8 façade. Route to *What Prisma 8 doesn't do yet* / `references/feedback.md` if the user needs this.
-7. **Trying to use `db.sql`.** There is no `db.sql` on Mongo.
-8. **Trying to `db.execute(plan)` directly, or reading documents with `execute`.** Run query-builder plans via `(await db.runtime()).query(plan)`. `execute(plan)` resolves statistics only and throws `RUNTIME.MONGO_STATISTICS_UNSUPPORTED` for a find or aggregate.
-9. **Expecting ORM `.aggregate(...)` / `.groupBy(...)`.** Use `db.query.from(...).group(...).build()` instead.
+4. **Using `.delete()` / `.update()` to change many documents.** They change only the first match. Use `.deleteAll()` / `.updateAll()` (awaited) or `.deleteAndCount()` / `.updateAndCount()` for bulk writes.
+5. **Using PascalCase model names on ORM.** Roots are lowercased plurals from the contract (`db.orm.users`, not `db.orm.User`).
+6. **Expecting Postgres-style lambda `.where((u) => u.email.eq(...))` on ORM.** Prefer object equality `.where({ email: '...' })`; richer operators need `MongoFilterExpr` helpers (façade gap today).
+7. **Expecting `db.transaction(...)`.** The Mongo façade does not expose it today. Multi-document atomicity requires MongoDB transactions on a replica set via the driver — not yet wrapped in the Prisma 8 façade. Route to *What Prisma 8 doesn't do yet* / `references/feedback.md` if the user needs this.
+8. **Trying to use `db.sql`.** There is no `db.sql` on Mongo.
+9. **Trying to `db.execute(plan)` directly, or reading documents with `execute`.** Run query-builder plans via `(await db.runtime()).query(plan)`. `execute(plan)` resolves statistics only and throws `RUNTIME.MONGO_STATISTICS_UNSUPPORTED` for a find or aggregate.
+10. **Expecting ORM `.aggregate(...)` / `.groupBy(...)`.** Use `db.query.from(...).group(...).build()` instead.
 
 ## Reference Files
 
@@ -230,6 +236,7 @@ Update callbacks return arrays of field operations (`.set`, `.inc`, `.push`, `.p
 - [ ] Used lowercased plural ORM roots (`db.orm.users`, not `db.orm.User`).
 - [ ] Chose the right lane (ORM by default; `db.query` for shapes the ORM doesn't express).
 - [ ] Used `.where({ ... }).first()` for single-row reads — not `.all()`.
+- [ ] Used `.delete()` / `.update()` only with an `_id` or unique filter; used `.deleteAll()` / `.updateAll()` (awaited) or the `*AndCount` terminals wherever every matching document must change.
 - [ ] Ran query-builder plans via `(await db.runtime()).query(plan)`; used `execute(plan)` only for an affected count on a write.
 - [ ] For aggregations, used `db.query.from(...).group(...)` rather than a non-existent ORM `.aggregate(...)`.
 - [ ] Did NOT confabulate `db.transaction`, `db.sql`, or ORM `.aggregate(...)` — routed to *What Prisma 8 doesn't do yet* / `references/feedback.md` instead.
