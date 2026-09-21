@@ -197,8 +197,7 @@ await db.orm.public.User
 // Delete ONE row — the first match — by unique key. Returns `Row | null`.
 await db.orm.public.User.where({ id }).delete();
 
-// Update / delete EVERY matching row — `updateAll` / `deleteAll` return an
-// AsyncIterableResult<Row>: `await` it for `Row[]` (or `for await` over it).
+// Update / delete EVERY matching row — `await` the result for `Row[]` (or `for await` over it).
 const published = await db.orm.public.Post.where({ authorId }).updateAll({ published: true });
 const removed = await db.orm.public.Post.where({ authorId }).deleteAll();
 

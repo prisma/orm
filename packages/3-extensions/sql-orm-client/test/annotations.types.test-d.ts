@@ -302,9 +302,7 @@ describe('Collection.upsert (write-typed)', () => {
 });
 
 describe('Collection.update / .updateAll / .updateAndCount (write-typed)', () => {
-  // Update terminals require the receiver to satisfy the `hasWhere` /
-  // `hasUniqueFilter` gates, so we use a separately-declared
-  // `userCollectionWithWhere` whose State is post-unique-where.
+  // update() needs a post-unique-where receiver, hence `userCollectionWithWhere`.
   test('update accepts a configurator that applies a write-only annotation', () => {
     userCollectionWithWhere.update({ name: 'Alice' }, (meta) =>
       meta.annotate(auditAnnotation({ actor: 'system' })),
