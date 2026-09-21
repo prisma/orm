@@ -95,13 +95,17 @@ export type {
   AssembledAuthoringContributions,
   ControlStack,
   CreateControlStackInput,
+  DataTypeInvariantInput,
 } from '../control/control-stack';
 export {
   assembleAuthoringContributions,
+  assembleAuthoringDataTypes,
   assembleControlMutationDefaults,
+  assembleDataTypes,
   assertUniqueCodecOwner,
   buildExtensionLoadOrder,
   createControlStack,
+  enforceDataTypeInvariants,
   extractCodecLookup,
   extractCodecTypeImports,
   extractComponentIds,

@@ -130,6 +130,7 @@ describe('assembleAuthoringContributions', () => {
   it('returns empty namespaces for descriptors without authoring', () => {
     const result = assembleAuthoringContributions([createDescriptor()]);
     expect(result).toEqual({
+      dataTypes: {},
       field: {},
       type: {},
       entityTypes: {},
@@ -1459,6 +1460,7 @@ describe('createControlStack', () => {
     expect(state.queryOperationTypeImports).toEqual([]);
     expect(state.extensionIds).toEqual(['fam', 'tgt']);
     expect(state.authoringContributions).toEqual({
+      dataTypes: {},
       field: {},
       type: {},
       entityTypes: {},

@@ -4,6 +4,7 @@ export type {
   AuthoringAttributeSpecContributions,
   AuthoringColumnDefaultTemplate,
   AuthoringContributions,
+  AuthoringDataTypeEntry,
   AuthoringDiagnosticSink,
   AuthoringEntityContext,
   AuthoringEntityTypeDescriptor,
@@ -27,6 +28,9 @@ export type {
   AuthoringTypeNamespace,
   AuthoringWarning,
   AuthoringWarningSink,
+  DataTypeAuthoringEntry,
+  DataTypeLoweringAuthoringEntry,
+  DataTypeWrittenForm,
   ScalarTypeConstructorOutput,
 } from '../shared/framework-authoring';
 export {
@@ -45,6 +49,9 @@ export {
   isAuthoringModelAttributeDescriptor,
   isAuthoringPslBlockDescriptor,
   isAuthoringTypeConstructorDescriptor,
+  isDataTypeLoweringEntry,
+  isLoweringEntryKey,
+  loweringEntryKey,
   mergeAuthoringNamespaces,
   resolveAuthoringTemplateValue,
   resolveEnumCodecId,

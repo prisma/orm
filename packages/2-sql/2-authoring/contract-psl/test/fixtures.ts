@@ -436,6 +436,7 @@ export const postgresNativeScalarTypeDescriptors = collectScalarTypeConstructors
  * Controlled test-only descriptor — intentionally uses pg/vector@1 with maximum: 2000 rather than importing the real pgvector pack, so interpreter unit tests stay layer-isolated. Real-pack parity is covered by `test/integration/test/authoring/parity/ts-psl-parity.real-packs.test.ts`.
  */
 export const pgvectorAuthoringContributions = {
+  dataTypes: {},
   entityTypes: {},
   field: {},
   pslBlockDescriptors: {},
@@ -555,6 +556,7 @@ export function createPostgresTestContext(
     composedExtensions: [],
     composedExtensionContracts: new Map(),
     authoringContributions: {
+      dataTypes: {},
       field: {},
       type: postgresScalarAuthoringTypes,
       entityTypes: {},

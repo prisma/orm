@@ -1,5 +1,6 @@
 import type { AggregateDescriptor } from './aggregate-descriptor';
 import type { AnyCodecDescriptor } from './codec-descriptor';
+import type { DataType } from './data-type';
 import type { AuthoringContributions } from './framework-authoring';
 import type { ControlMutationDefaults } from './mutation-default-types';
 import type { TypesImportSpec } from './types-import-spec';
@@ -41,6 +42,11 @@ export interface ComponentMetadata {
        * Codec descriptors contributed by this component. Source of truth for codec-id-keyed metadata (`traits`, `targetTypes`, `renderOutputType`) consumed by `extractCodecLookup`, and used to materialize representative `Codec` instances for codec-dispatched type rendering during emission.
        */
       readonly codecDescriptors?: ReadonlyArray<AnyCodecDescriptor>;
+      /**
+       * Data types this component registers — the types its codecs represent, each with the casts
+       * that say which other types' values it takes. ADR 254.
+       */
+      readonly dataTypes?: ReadonlyArray<DataType>;
     };
     /**
      * Aggregate descriptors contributed by this component — a sibling of `codecTypes`, not a member: an aggregate descriptor relates an operation, a target, and an input codec, which is why it is modeled apart from codecs. Source of truth for the result codec, nullability, and (family-side) lowering of each `(aggregate operation, input codec)` overload; each overload has exactly one contributor across the composed stack.

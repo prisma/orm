@@ -173,6 +173,7 @@ describe('defineConfig', () => {
       composedExtensions: [],
       composedExtensionContracts: new Map(),
       authoringContributions: {
+        dataTypes: {},
         field: {},
         type: {},
         entityTypes: {},

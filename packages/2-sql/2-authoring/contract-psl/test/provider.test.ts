@@ -747,6 +747,7 @@ model Document {
       const result = await contract.source.load(
         createPostgresTestContext({
           authoringContributions: {
+            dataTypes: {},
             field: {},
             type: {
               Int: {

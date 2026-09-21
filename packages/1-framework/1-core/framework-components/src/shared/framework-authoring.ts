@@ -2,6 +2,7 @@ import type {
   ColumnDefault,
   ExecutionMutationDefaultPhases,
   ExecutionMutationDefaultValue,
+  JsonValue,
 } from '@internal/contract/types';
 import {
   isColumnDefaultLiteralInputValue,
@@ -13,6 +14,12 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type { Type } from 'arktype';
 import type { CodecLookup } from './codec-types';
+import type { DataTypeId } from './data-type';
+import type {
+  DefaultFunctionLoweringContext,
+  LoweredDefaultResult,
+  TaggedLiteralValue,
+} from './mutation-default-types';
 import type { AuthoringOption } from './option-descriptor';
 import type { PslBlockParam, PslExtensionBlock, PslSpan } from './psl-extension-block';
 import { runtimeError } from './runtime-error';
@@ -529,6 +536,73 @@ export interface AuthoringAttributeSpecContributions {
   readonly field: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * How a contract source writes a value of one data type.
+ *
+ * A tag is a qualified name followed by a body in any of the quote styles. A plain form is one of
+ * the three pieces of syntax read without a tag: a quoted string, `true`/`false`, and a number.
+ * ADR 254.
+ */
+export type DataTypeWrittenForm =
+  | { readonly kind: 'tag'; readonly tag: string }
+  | { readonly kind: 'plain'; readonly syntax: 'string' | 'boolean' | 'number' };
+
+/**
+ * PSL support for one data type, contributed by the pack that owns the type and keyed by its id.
+ *
+ * `parse` turns written text into the type's canonical form and throws a structured error for text
+ * it cannot read; `print` is the reverse. The `number` plain form is the one kind that yields
+ * several types, so the entry that claims it also carries `classify`, which picks the type from the
+ * digits.
+ */
+export interface DataTypeAuthoringEntry {
+  readonly written: DataTypeWrittenForm;
+  readonly parse: (text: string) => JsonValue;
+  readonly print: (value: JsonValue) => string;
+  readonly documentation: string;
+  readonly classify?: (
+    text: string,
+  ) => { readonly type: DataTypeId; readonly value: JsonValue } | undefined;
+  readonly lower?: never;
+}
+
+/**
+ * A tag whose body the family lowers itself rather than reading as a value of a data type. It sits
+ * in the same map under a reserved key, because it names no type. ADR 254.
+ */
+export interface DataTypeLoweringAuthoringEntry {
+  readonly written: { readonly kind: 'tag'; readonly tag: string };
+  readonly documentation: string;
+  readonly lower: (input: {
+    readonly literal: TaggedLiteralValue;
+    readonly context: DefaultFunctionLoweringContext;
+  }) => LoweredDefaultResult;
+  readonly parse?: never;
+}
+
+export type AuthoringDataTypeEntry = DataTypeAuthoringEntry | DataTypeLoweringAuthoringEntry;
+
+const LOWERING_ENTRY_PREFIX = 'lowering:';
+
+/**
+ * The key a lowering entry sits under. A data type id is `owner/name`, so a key carrying this
+ * prefix can never collide with one.
+ */
+export function loweringEntryKey(tag: string): string {
+  return `${LOWERING_ENTRY_PREFIX}${tag}`;
+}
+
+export function isLoweringEntryKey(key: string): boolean {
+  return key.startsWith(LOWERING_ENTRY_PREFIX);
+}
+
+/** Which of the two kinds of entry this is; the only place the discriminating key is named. */
+export function isDataTypeLoweringEntry(
+  entry: AuthoringDataTypeEntry,
+): entry is DataTypeLoweringAuthoringEntry {
+  return 'lower' in entry && entry.lower !== undefined;
+}
+
 export interface AuthoringContributions {
   readonly type?: AuthoringTypeNamespace;
   readonly field?: AuthoringFieldNamespace;
@@ -555,6 +629,11 @@ export interface AuthoringContributions {
    */
   readonly modelAttributes?: AuthoringModelAttributeDescriptorNamespace;
   readonly attributeSpecs?: AuthoringAttributeSpecContributions;
+  /**
+   * PSL support for the data types this contribution owns, keyed by data type id, plus any
+   * lowering entries under their reserved keys. ADR 254.
+   */
+  readonly dataTypes?: Readonly<Record<string, AuthoringDataTypeEntry>>;
   /**
    * Names the top-level type constructor that stores embedded value-object
    * fields (fields typed as a value-object `type` block). A single named
