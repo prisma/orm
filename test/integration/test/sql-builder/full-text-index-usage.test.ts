@@ -1,0 +1,250 @@
+/**
+ * Does Postgres actually use the GIN index our `@@fullTextIndex` attribute
+ * emits, for the SQL our lanes lower? Prisma 7 built such an index and the
+ * planner never chose it, so nothing here is assumed:
+ *
+ *  - the index is created from the DDL our own op factory and adapter render
+ *    for the fixture contract's index node, never hand-written;
+ *  - the queries are the real lowered SQL and bound params of the SQL builder
+ *    and the ORM;
+ *  - `EXPLAIN (FORMAT JSON)` on exactly that SQL has to name the index;
+ *  - two negative controls (a different language, and an index built with the
+ *    one-argument `to_tsvector`) must NOT be chosen, so a passing assertion
+ *    means something.
+ *
+ * `enable_seqscan = off` makes this a question of whether the index is usable
+ * at all rather than one about cost estimates on a small table.
+ */
+import {
+  createPostgresBuiltinCodecLookup,
+  PostgresControlAdapter,
+} from '@internal/adapter-postgres/control';
+import { Collection } from '@internal/sql-orm-client';
+import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
+import { blindCast } from '@internal/utils/casts';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { setupIntegrationTest, timeouts } from './setup';
+
+const QUERY = 'zebra';
+
+/** Every `Index Name` anywhere in an EXPLAIN plan tree. */
+function indexNames(node: unknown): readonly string[] {
+  if (Array.isArray(node)) return node.flatMap(indexNames);
+  if (node === null || typeof node !== 'object') return [];
+  const record: Record<string, unknown> = { ...node };
+  const own = typeof record['Index Name'] === 'string' ? [record['Index Name']] : [];
+  return [...own, ...Object.values(record).flatMap(indexNames)];
+}
+
+/** Every `Node Type` anywhere in an EXPLAIN plan tree. */
+function nodeTypes(node: unknown): readonly string[] {
+  if (Array.isArray(node)) return node.flatMap(nodeTypes);
+  if (node === null || typeof node !== 'object') return [];
+  const record: Record<string, unknown> = { ...node };
+  const own = typeof record['Node Type'] === 'string' ? [record['Node Type']] : [];
+  return [...own, ...Object.values(record).flatMap(nodeTypes)];
+}
+
+describe('full-text index usage', { timeout: timeouts.databaseOperation }, () => {
+  const { db, runtime, client, contract, context, lower } = setupIntegrationTest();
+
+  const controlAdapter = new PostgresControlAdapter(createPostgresBuiltinCodecLookup());
+
+  /** The index nodes the fixture's `fullTextIndex(...)` helpers emitted. */
+  function fixtureIndexes() {
+    const namespace = blindCast<
+      { readonly table: Record<string, { readonly indexes: readonly Record<string, unknown>[] }> },
+      'the fixture contract is a Postgres schema; only its comment indexes are read here'
+    >(contract().storage.namespaces['public']);
+    return namespace.table['comments']!.indexes;
+  }
+
+  async function createIndexFromContract(index: Record<string, unknown>) {
+    const call = new CreateIndexCall(
+      'public',
+      'comments',
+      String(index['name']),
+      { expression: String(index['expression']) },
+      { type: String(index['type']) },
+    );
+    const op = await call.toOp(controlAdapter);
+    for (const step of op.execute) {
+      await client().query(step.sql);
+    }
+    return op.execute[0]!.sql;
+  }
+
+  /** `lowerSqlPlan` already unwrapped the renderer's slots to bare bound values. */
+  async function explain(sql: string, params: readonly unknown[]) {
+    const result = await client().query(`EXPLAIN (FORMAT JSON) ${sql}`, [...params]);
+    return result.rows[0]['QUERY PLAN'];
+  }
+
+  function loweredOf(plan: SqlQueryPlan<unknown>) {
+    return lower(plan);
+  }
+
+  beforeAll(async () => {
+    for (const index of fixtureIndexes()) await createIndexFromContract(index);
+
+    // A control index over the same column in another configuration: buildable,
+    // and not the expression our english query renders.
+    await client().query(
+      `CREATE INDEX comments_body_simple ON comments USING gin (to_tsvector('simple', "body"))`,
+    );
+
+    await client().query(`
+      INSERT INTO comments (id, body, subject, post_id)
+      SELECT 1000 + n,
+             CASE WHEN n % 97 = 0 THEN 'a zebra grazes here' ELSE 'ordinary filler text ' || n END,
+             CASE WHEN n % 97 = 0 THEN 'zebra subject' ELSE 'filler subject ' || n END,
+             1
+      FROM generate_series(1, 600) AS n
+    `);
+    await client().query('ANALYZE comments');
+    await client().query('SET enable_seqscan = off');
+  }, timeouts.spinUpPpgDev);
+
+  it('creates the index from the DDL our own op factory and adapter render', async () => {
+    const [bodyIndex] = fixtureIndexes();
+    expect(bodyIndex).toBeDefined();
+    if (bodyIndex === undefined) return;
+    const call = new CreateIndexCall(
+      'public',
+      'comments',
+      String(bodyIndex['name']),
+      { expression: String(bodyIndex['expression']) },
+      { type: String(bodyIndex['type']) },
+    );
+    const op = await call.toOp(controlAdapter);
+
+    expect(op.execute[0]?.sql).toBe(
+      `CREATE INDEX "comments_body_search_7b2cde4d" ON "public"."comments" USING "gin" (to_tsvector('english', "body"))`,
+    );
+  });
+
+  it('lowers the predicate to the index expression, with the query bound as a parameter', () => {
+    const lowered = loweredOf(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
+        .build(),
+    );
+
+    // Byte-identical to the index expression in the builder's case. The ORM
+    // qualifies the column instead, and still matches: Postgres compares parsed
+    // expression trees, not text.
+    expect(lowered.sql).toContain(`to_tsvector('english', "body")`);
+    expect(lowered.sql).toContain(`websearch_to_tsquery('english', $1)`);
+    expect(lowered.params).toEqual([QUERY]);
+  });
+
+  it('uses the index for the SQL builder predicate', async () => {
+    const lowered = loweredOf(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
+        .build(),
+    );
+
+    const plan = await explain(lowered.sql, lowered.params);
+    expect(indexNames(plan)).toContain('comments_body_search_7b2cde4d');
+  });
+
+  it('uses the index when the same predicate is ordered by rank and limited', async () => {
+    const lowered = loweredOf(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
+        .orderBy((f, fns) => fns.fullTextRank(f.body, QUERY), { direction: 'desc' })
+        .limit(10)
+        .build(),
+    );
+
+    const plan = await explain(lowered.sql, lowered.params);
+    expect(indexNames(plan)).toContain('comments_body_search_7b2cde4d');
+  });
+
+  it('uses the index for the ORM predicate ordered by rank', async () => {
+    const captured: SqlQueryPlan<unknown>[] = [];
+    const real = runtime();
+    const recording = blindCast<
+      typeof real,
+      'a recording proxy over the suite runtime; the collection only queries through it'
+    >({
+      ...real,
+      query: ((plan: SqlQueryPlan<unknown>, options?: Parameters<typeof real.query>[1]) => {
+        captured.push(plan);
+        return real.query(plan, options);
+      }) satisfies (...args: never[]) => unknown,
+    });
+
+    const comments = new Collection({ runtime: recording, context: context() }, 'Comment', {
+      namespaceId: 'public',
+    });
+    await comments
+      .select('id')
+      .where((row) => row.body.fullTextMatches(QUERY))
+      .orderBy((row) => row.body.fullTextRank(QUERY).desc())
+      .all();
+
+    const plan = captured[0];
+    expect(plan).toBeDefined();
+    if (plan === undefined) return;
+    const lowered = loweredOf(plan);
+    expect(lowered.sql).toContain(`to_tsvector('english', "comments"."body")`);
+
+    const explained = await explain(lowered.sql, lowered.params);
+    expect(indexNames(explained)).toContain('comments_body_search_7b2cde4d');
+  });
+
+  it('matches the index on a varchar column too', async () => {
+    const lowered = loweredOf(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.subject, QUERY))
+        .build(),
+    );
+
+    const plan = await explain(lowered.sql, lowered.params);
+    expect(indexNames(plan)).toContain('comments_subject_search_2b3d17a7');
+  });
+
+  describe('negative controls', () => {
+    it('does not use the english index for a german query', async () => {
+      const lowered = loweredOf(
+        db()
+          .public.comments.select('id')
+          .where((f, fns) => fns.fullTextMatches(f.body, QUERY, 'german'))
+          .build(),
+      );
+
+      const plan = await explain(lowered.sql, lowered.params);
+      expect(indexNames(plan)).not.toContain('comments_body_search_7b2cde4d');
+      expect(nodeTypes(plan)).toContain('Seq Scan');
+    });
+
+    it('does not use an index over the same column in another configuration', async () => {
+      const lowered = loweredOf(
+        db()
+          .public.comments.select('id')
+          .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
+          .build(),
+      );
+
+      const plan = await explain(lowered.sql, lowered.params);
+      expect(indexNames(plan)).not.toContain('comments_body_simple');
+    });
+
+    // The one-argument `to_tsvector(body)` reads `default_text_search_config`,
+    // so it is not IMMUTABLE and Postgres refuses to index it at all. Rendering
+    // the configuration into the expression, as the attribute does, is what
+    // makes the index possible — not merely what makes it match.
+    it('rejects an index over the one-argument to_tsvector outright', async () => {
+      await expect(
+        client().query('CREATE INDEX c_default_config ON comments USING gin (to_tsvector(body))'),
+      ).rejects.toThrow(/IMMUTABLE/);
+    });
+  });
+});

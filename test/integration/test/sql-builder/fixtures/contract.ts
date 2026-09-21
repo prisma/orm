@@ -1,4 +1,4 @@
-import { int4Column, textColumn } from '@internal/adapter-postgres/column-types';
+import { int4Column, textColumn, varcharColumn } from '@internal/adapter-postgres/column-types';
 import { vector } from '@internal/extension-pgvector/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
 import { uuidv4 } from '@internal/ids';
@@ -37,11 +37,18 @@ const Comment = model('Comment', {
   fields: {
     id: field.column(int4Column).id(),
     body: field.column(textColumn),
+    // A varchar sibling of `body`: Postgres stores `(subject)::text` inside the
+    // index expression, and the full-text integration test checks that a query
+    // over the same column still matches that index.
+    subject: field.column(varcharColumn(200)),
     postId: field.column(int4Column).column('post_id'),
   },
 }).sql(({ cols }) => ({
   table: 'comments',
-  indexes: [fullTextIndex(cols.body, { name: 'comments_body_search' })],
+  indexes: [
+    fullTextIndex(cols.body, { name: 'comments_body_search' }),
+    fullTextIndex(cols.subject, { name: 'comments_subject_search' }),
+  ],
 }));
 
 const Profile = model('Profile', {

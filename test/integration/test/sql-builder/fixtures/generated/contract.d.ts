@@ -36,7 +36,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'98799071414933fa0728a9979e3153a32bfec7d95419d408b663c07aab0deca5'>;
+  StorageHashBase<'b5bc225c3a57bcc7d0700cbbb16d41db99559a617569122f86e21350fa477a1b'>;
 export type ExecutionHash =
   ExecutionHashBase<'566d74b60e6b5393dcdbf9f250120fa4e1f12c0ae51e1c0958a131d8ed9667b5'>;
 export type ProfileHash =
@@ -258,6 +258,7 @@ export type FieldOutputTypes = {
       readonly body: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly postId: CodecTypes['pg/int4@1']['output'];
+      readonly subject: Varchar<200>;
     };
     readonly Post: {
       readonly embedding: Vector<3> | null;
@@ -289,6 +290,7 @@ export type FieldInputTypes = {
       readonly body: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly postId: CodecTypes['pg/int4@1']['input'];
+      readonly subject: CodecTypes['sql/varchar@1']['input'];
     };
     readonly Post: {
       readonly embedding: CodecTypes['pg/vector@1']['input'] | null;
@@ -317,6 +319,7 @@ export type StorageColumnTypes = {
       readonly body: CodecTypes['pg/text@1']['output'];
       readonly id: CodecTypes['pg/int4@1']['output'];
       readonly post_id: CodecTypes['pg/int4@1']['output'];
+      readonly subject: Varchar<200>;
     };
     readonly posts: {
       readonly embedding: Vector<3> | null;
@@ -348,6 +351,7 @@ export type StorageColumnInputTypes = {
       readonly body: CodecTypes['pg/text@1']['input'];
       readonly id: CodecTypes['pg/int4@1']['input'];
       readonly post_id: CodecTypes['pg/int4@1']['input'];
+      readonly subject: CodecTypes['sql/varchar@1']['input'];
     };
     readonly posts: {
       readonly embedding: CodecTypes['pg/vector@1']['input'] | null;
@@ -380,6 +384,7 @@ export namespace Models {
     body: CodecTypes['pg/text@1']['output'];
     id: CodecTypes['pg/int4@1']['output'];
     postId: CodecTypes['pg/int4@1']['output'];
+    subject: Varchar<200>;
     readonly [RelationKeys]?: never;
   };
   export type public_Post = {
@@ -475,6 +480,12 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
+                readonly subject: {
+                  readonly nativeType: 'character varying';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 200 };
+                };
               };
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [];
@@ -483,6 +494,13 @@ type ContractBase = Omit<
                   readonly name: 'comments_body_search_7b2cde4d';
                   readonly prefix: 'comments_body_search';
                   readonly expression: 'to_tsvector(\'english\', "body")';
+                  readonly unique: false;
+                  readonly type: 'gin';
+                },
+                {
+                  readonly name: 'comments_subject_search_2b3d17a7';
+                  readonly prefix: 'comments_subject_search';
+                  readonly expression: 'to_tsvector(\'english\', "subject")';
                   readonly unique: false;
                   readonly type: 'gin';
                 },
@@ -634,6 +652,14 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
+              readonly subject: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 200 };
+                };
+              };
             };
             readonly relations: Record<string, never>;
             readonly storage: {
@@ -643,6 +669,7 @@ type ContractBase = Omit<
                 readonly body: { readonly column: 'body' };
                 readonly id: { readonly column: 'id' };
                 readonly postId: { readonly column: 'post_id' };
+                readonly subject: { readonly column: 'subject' };
               };
             };
           };
