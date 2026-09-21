@@ -19,7 +19,6 @@ import {
   type ColumnHelperFor,
   type ColumnSpec,
   column,
-  type LiteralTypeDeclaration,
 } from '@internal/framework-components/codec';
 import { isRuntimeError, runtimeError } from '@internal/framework-components/runtime';
 import type { ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -212,7 +211,6 @@ const arktypeJsonParamsSchema = type({
 }) satisfies StandardSchemaV1<ArktypeJsonTypeParams>;
 
 export class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTypeParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['json'];
   protected override nativeType(): string {
     return ARKTYPE_JSON_NATIVE_TYPE;
   }

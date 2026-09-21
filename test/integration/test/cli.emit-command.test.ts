@@ -576,6 +576,7 @@ describe('emit command: additional fixtures', () => {
         composedExtensionContracts: new Map(),
         authoringContributions: stack.authoringContributions,
         codecLookup: stack.codecLookup,
+        dataTypeLookup: stack.dataTypeLookup,
         controlMutationDefaults: stack.controlMutationDefaults,
         resolvedInputs: contractConfig!.source.inputs ?? [],
         capabilities: stack.capabilities,

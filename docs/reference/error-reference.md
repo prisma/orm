@@ -567,13 +567,13 @@ A backtick string appears somewhere other than after a tag, for example `` @map(
 
 A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal when the default is lowered.
 
-### PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE
+### PSL_DEFAULT_TYPE_INCOMPATIBLE
 
-A `@default` literal has a type the column's codec does not accept: `Field "<Model>.<field>": <codecId> is not compatible with <a literal type> literal; it accepts <types>`. A written literal has a type of its own — a number's comes from its size and precision, so `42` is an `i8` and `100000000000000099` an `i64` — and a codec names the types it takes. Inside a list literal the message names the element: `Field "<Model>.<field>" at element 2: ...`. A codec that names none reads `it accepts no literal defaults`, and takes only a `` sql`...` `` default. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
+A written `@default` value has a data type the column's type neither is nor casts from: `Field "<Model>.<field>": <column type> has no cast from <value type>; it casts from <types>`. A written value has a data type of its own — a number's comes from its own size and precision, so on Postgres `42` is `pg/int2` and `100000000000000099` is `pg/int8` — and a data type declares which other types' values it takes. Inside a written list the message names the element: `Field "<Model>.<field>" at element 2: ...`. The same code reports a plain form this target has no data type for, such as `true` on SQLite: `this target has no data type for a boolean value`. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
 
 ### PSL_INVALID_DEFAULT_LITERAL
 
-A `@default` literal the column's codec accepts by type but refuses to decode, such as a `pgvector.Vector(3)` column given two elements: `Field "<Model>.<field>": <the codec's own message>`, or ` at element <n>` when it is one element of a list. Also reported for a literal no contract source can write, such as a list inside a list: `A list literal cannot contain another list.` Reported at the `@default` attribute.
+A written `@default` value the entry, a cast, or the column's codec refuses — a `pgvector.Vector(3)` column given two elements, or a number too large for the column's type to hold: `Field "<Model>.<field>": <the message of whatever refused it>`, or ` at element <n>` when it is one element of a list. Reported at the `@default` attribute.
 
 ### PSL_INVALID_JSON_LITERAL
 

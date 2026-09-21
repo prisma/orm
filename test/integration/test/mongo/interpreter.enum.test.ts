@@ -73,8 +73,8 @@ function interpret(
     sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
     controlMutationDefaults: {
+      dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
     },
     codecLookup: mongoCodecLookup,
     authoringContributions: contributions,

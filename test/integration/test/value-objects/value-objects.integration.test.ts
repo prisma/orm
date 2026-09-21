@@ -86,8 +86,8 @@ function interpretMongoPsl(schema: string) {
     sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
     controlMutationDefaults: {
+      dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
     },
   });
 }

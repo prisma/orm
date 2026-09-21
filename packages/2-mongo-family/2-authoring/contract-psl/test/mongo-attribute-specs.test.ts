@@ -92,8 +92,8 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
     symbols: symbolTable,
     model,
     controlMutationDefaults: {
+      dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
     },
   };
   return { model: modelContext, field: { ...modelContext, field } };

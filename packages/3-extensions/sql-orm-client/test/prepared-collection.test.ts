@@ -72,8 +72,8 @@ describe('prepared collection', () => {
       )
       .prepared.all();
     const prepared = prepareRows(description, (id) => [
-      { name: `User ${id}`, posts: { rows: [{ user_id: id }], count: { value: 1 } } },
-      { name: `Empty ${id}`, posts: { rows: [], count: { value: 0 } } },
+      { name: `User ${id}`, posts: { rows: [{ user_id: id }], count: { value: '1' } } },
+      { name: `Empty ${id}`, posts: { rows: [], count: { value: '0' } } },
     ]);
     const a = prepared.query(runtime, { id: 1 })[Symbol.asyncIterator]();
     const b = prepared.query(runtime, { id: 9 })[Symbol.asyncIterator]();

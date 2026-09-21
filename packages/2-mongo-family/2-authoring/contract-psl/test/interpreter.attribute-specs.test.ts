@@ -23,8 +23,8 @@ function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
     sources,
     scalarTypeCodecIds,
     controlMutationDefaults: {
+      dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
     },
   });
   return result.ok ? [] : result.failure.diagnostics;
