@@ -1,6 +1,9 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
-import { voidParamsSchema } from '@internal/framework-components/codec';
+import type {
+  AnyCodecDescriptor,
+  AnyCodecDescriptorTemplate,
+} from '@internal/framework-components/codec';
+import { dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import type { RuntimeExtensionDescriptor } from '@internal/framework-components/execution';
 import {
@@ -73,7 +76,7 @@ const contract = new SqlContractSerializer().deserializeContract({
   domain: applicationDomainOf({ models: {} }),
 }) as PostgresContract;
 
-function genericDescriptor(codecId: string): AnyCodecDescriptor {
+function genericDescriptor(codecId: string): AnyCodecDescriptorTemplate {
   const codec = defineTestCodec({
     typeId: codecId,
     encode: (value: JsonValue): JsonValue => value,
@@ -95,6 +98,7 @@ function postgresDescriptor(
   onProjection?: () => void,
 ): AnyPostgresCodecDescriptor {
   return postgresCodec(genericDescriptor(codecId), {
+    dataType: dataTypeId('demo/fixture'),
     nativeType: () => nativeType,
     jsonProjection(expression: ProjectionExpr): ProjectionExpr {
       onProjection?.();
@@ -113,7 +117,7 @@ function transformingPostgresDescriptor(
     encode: (value: string): string => `encoded:${value}`,
     decode: (wire: string): string => wire,
   });
-  const descriptor: AnyCodecDescriptor = {
+  const descriptor: AnyCodecDescriptorTemplate = {
     codecId,
     traits: ['equality'],
     targetTypes: [nativeType],
@@ -125,6 +129,7 @@ function transformingPostgresDescriptor(
     },
   };
   return postgresCodec(descriptor, {
+    dataType: dataTypeId('demo/fixture'),
     nativeType: () => nativeType,
     jsonProjection: (expression: ProjectionExpr) => expression,
   });
@@ -308,7 +313,8 @@ describe('PostgreSQL adapter codec registry composition', () => {
       projectJson: undefined,
     } as const;
 
-    for (const descriptor of [raw, wrongTarget, malformed]) {
+    const invalid = [raw, wrongTarget, malformed] as unknown as AnyCodecDescriptor[];
+    for (const descriptor of invalid) {
       expect(() =>
         createComposedPostgresAdapter({
           extensions: [runtimeExtension('invalid-runtime', [descriptor])],

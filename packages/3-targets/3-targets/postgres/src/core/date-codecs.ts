@@ -13,6 +13,7 @@ import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { PostgresCodecDescriptor } from './codec-descriptor';
 import { type PrecisionParams, precisionParamsSchema } from './codec-helpers';
 import { PG_TIMESTAMPTZ_DATE_CODEC_ID } from './codec-ids';
+import { PG_TIMESTAMPTZ } from './data-type-ids';
 import { PG_TIMESTAMPTZ_NATIVE_TYPE } from './temporal-codec-helpers';
 
 const TIMESTAMPTZ_TEXT =
@@ -125,6 +126,7 @@ export class PgTimestamptzDateDescriptor extends PostgresCodecDescriptor<Precisi
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return CastExpr.as(expression, 'text');
   }
+  override readonly dataType = PG_TIMESTAMPTZ;
   override readonly codecId = PG_TIMESTAMPTZ_DATE_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = [] as const;

@@ -19,6 +19,7 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecTrait,
+  dataTypeId,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
@@ -68,6 +69,7 @@ class TestVectorCodec extends CodecImpl<'test/vector@1', readonly ['equality'], 
 }
 
 class TestVectorDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = dataTypeId('test/vector');
   override readonly codecId = 'test/vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;

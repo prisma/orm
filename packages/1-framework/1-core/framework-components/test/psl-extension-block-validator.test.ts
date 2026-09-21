@@ -38,6 +38,7 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  dataTypeId,
   voidParamsSchema,
 } from '../src/exports/codec';
 import type { PslExtensionBlock } from '../src/exports/psl-ast';
@@ -78,6 +79,7 @@ class StubStringCodec extends CodecImpl<'stub/string@1', readonly ['textual'], s
 }
 
 class StubStringDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = dataTypeId('stub/string');
   override readonly codecId = 'stub/string@1' as const;
   override readonly traits = ['textual'] as const;
   override readonly targetTypes = ['text'] as const;

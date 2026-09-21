@@ -26,6 +26,7 @@ import type {
   PslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
@@ -109,6 +110,7 @@ function makeCodecDescriptor(options: {
 }): AnyCodecDescriptor {
   return {
     codecId: options.codecId,
+    dataType: dataTypeId('demo/fixture'),
     traits: ['equality'],
     targetTypes: ['text'],
     paramsSchema: {

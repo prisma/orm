@@ -19,6 +19,7 @@ import {
   type ColumnHelperFor,
   type ColumnSpec,
   column,
+  dataTypeId,
   type LiteralTypeDeclaration,
 } from '@internal/framework-components/codec';
 import { isRuntimeError, runtimeError } from '@internal/framework-components/runtime';
@@ -218,6 +219,7 @@ export class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTy
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
+  override readonly dataType = dataTypeId('arktype/json');
   override readonly codecId = ARKTYPE_JSON_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = [ARKTYPE_JSON_NATIVE_TYPE] as const;

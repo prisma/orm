@@ -1,5 +1,5 @@
 import type {
-  AnyCodecDescriptor,
+  AnyCodecDescriptorTemplate,
   CodecInstanceContext,
   CodecRef,
 } from '@internal/framework-components/codec';
@@ -81,7 +81,7 @@ describe('SQLite built-in codec descriptors', () => {
     const expression = ColumnRef.of('records', 'value');
     const cases: ReadonlyArray<{
       descriptor: AnySqliteCodecDescriptor;
-      rawDescriptor: AnyCodecDescriptor;
+      rawDescriptor: AnyCodecDescriptorTemplate;
       typeParams?: CodecRef['typeParams'];
     }> = [
       {

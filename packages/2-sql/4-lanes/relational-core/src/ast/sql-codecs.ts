@@ -3,7 +3,7 @@
  *
  * Each codec ships as three artifacts:
  *
- * 1. A `SqlXCodec` class extending {@link CodecImpl} that wraps the module-level encode/decode constants exported from `sql-codec-helpers.ts` (the single source of truth for runtime behaviour). 2. A `SqlXDescriptor` class extending {@link CodecDescriptorImpl} declaring the codec id, traits, target types, params schema, and (where applicable) the emit-path `renderOutputType`. 3. A per-codec column helper (`sqlXColumn`)
+ * 1. A `SqlXCodec` class extending {@link CodecImpl} that wraps the module-level encode/decode constants exported from `sql-codec-helpers.ts` (the single source of truth for runtime behaviour). 2. A `SqlXDescriptor` class extending {@link CodecDescriptorTemplateImpl} declaring the codec id, traits, target types, params schema, and (where applicable) the emit-path `renderOutputType`; the data type is left to the target that adapts the template. 3. A per-codec column helper (`sqlXColumn`)
  * that calls `descriptor.factory(...)` directly and packages the result into a {@link ColumnSpec} via the framework {@link column} packager. The helper is tied to its descriptor with `satisfies ColumnHelperFor`.
  *
  * After TML-2357 this file is the canonical source of SQL base codec metadata and runtime behaviour — the legacy `mkCodec` / `defineCodec` carriers retired with the deletion sweep.
@@ -12,7 +12,7 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   type CodecCallContext,
-  CodecDescriptorImpl,
+  CodecDescriptorTemplateImpl,
   CodecImpl,
   type CodecInstanceContext,
   type ColumnHelperFor,
@@ -72,7 +72,7 @@ export class SqlTextCodec extends CodecImpl<
   }
 }
 
-export class SqlTextDescriptor extends CodecDescriptorImpl<void> {
+export class SqlTextDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   override readonly codecId = SQL_TEXT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
@@ -111,7 +111,7 @@ export class SqlIntCodec extends CodecImpl<
   }
 }
 
-export class SqlIntDescriptor extends CodecDescriptorImpl<void> {
+export class SqlIntDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly literalTypes: readonly LiteralTypeDeclaration[] =
     integerLiteralTypesUpTo('i32');
   override readonly codecId = SQL_INT_CODEC_ID;
@@ -151,7 +151,7 @@ export class SqlFloatCodec extends CodecImpl<
   }
 }
 
-export class SqlFloatDescriptor extends CodecDescriptorImpl<void> {
+export class SqlFloatDescriptor extends CodecDescriptorTemplateImpl<void> {
   override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
     ...integerLiteralTypesUpTo('i64'),
     'bigint',
@@ -194,7 +194,7 @@ export class SqlCharCodec extends CodecImpl<
   }
 }
 
-export class SqlCharDescriptor extends CodecDescriptorImpl<LengthParams> {
+export class SqlCharDescriptor extends CodecDescriptorTemplateImpl<LengthParams> {
   override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   override readonly codecId = SQL_CHAR_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
@@ -236,7 +236,7 @@ export class SqlVarcharCodec extends CodecImpl<
   }
 }
 
-export class SqlVarcharDescriptor extends CodecDescriptorImpl<LengthParams> {
+export class SqlVarcharDescriptor extends CodecDescriptorTemplateImpl<LengthParams> {
   override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   override readonly codecId = SQL_VARCHAR_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;

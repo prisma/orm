@@ -6,6 +6,7 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  dataTypeId,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
@@ -80,6 +81,7 @@ class TestCodec extends CodecImpl<string, readonly ['equality'], string, string>
 }
 
 class TestGenericDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['text'] as const;
   override readonly paramsSchema = voidParamsSchema;
@@ -110,6 +112,7 @@ function sqliteDescriptor(options: {
     options.transform,
   );
   return sqliteCodec(descriptor, {
+    dataType: dataTypeId('demo/fixture'),
     jsonProjection(expression: ProjectionExpr): ProjectionExpr {
       options.onProjection?.();
       return expression;

@@ -1,12 +1,15 @@
 import type { JsonValue } from '@internal/contract/types';
 import {
   type AnyCodecDescriptor,
+  type AnyCodecDescriptorTemplate,
   type Codec,
   type CodecDescriptor,
   CodecDescriptorImpl,
+  type CodecDescriptorTemplate,
   type CodecInstanceContext,
   type CodecRef,
   type CodecTrait,
+  type DataTypeId,
   type LiteralTypeDeclaration,
   validateCodecTypeParams,
 } from '@internal/framework-components/codec';
@@ -53,22 +56,26 @@ export abstract class SqliteCodecDescriptor<P = void>
   }
 }
 
-type DescriptorParams<D extends AnyCodecDescriptor> =
-  D extends CodecDescriptor<infer P> ? P : never;
+type DescriptorParams<D extends AnyCodecDescriptorTemplate> =
+  D extends CodecDescriptorTemplate<infer P> ? P : never;
 
 export interface SqliteCodecOptions<P> {
+  /** The data type the adapted codec represents here. A template names none; this target does. */
+  readonly dataType: DataTypeId;
   readonly jsonProjection: (expression: ProjectionExpr, params: P) => ProjectionExpr;
 }
 
-export type AdaptedSqliteCodecDescriptor<D extends AnyCodecDescriptor> = Pick<
+export type AdaptedSqliteCodecDescriptor<D extends AnyCodecDescriptorTemplate> = Pick<
   D,
-  keyof CodecDescriptor<DescriptorParams<D>>
+  keyof CodecDescriptorTemplate<DescriptorParams<D>>
 > &
+  Pick<CodecDescriptor, 'dataType'> &
   Pick<AnySqliteCodecDescriptor, 'descriptorKind' | 'projectJson'>;
 
-class SqliteCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends SqliteCodecDescriptor<
-  DescriptorParams<D>
-> {
+class SqliteCodecDescriptorAdapter<
+  D extends AnyCodecDescriptorTemplate,
+> extends SqliteCodecDescriptor<DescriptorParams<D>> {
+  override readonly dataType: DataTypeId;
   override readonly codecId: string;
   override readonly traits: readonly CodecTrait[];
   override readonly targetTypes: readonly string[];
@@ -86,6 +93,7 @@ class SqliteCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends SqliteC
     private readonly options: SqliteCodecOptions<DescriptorParams<D>>,
   ) {
     super();
+    this.dataType = options.dataType;
     this.codecId = descriptor.codecId;
     this.traits = descriptor.traits;
     this.targetTypes = descriptor.targetTypes;
@@ -126,7 +134,7 @@ class SqliteCodecDescriptorAdapter<D extends AnyCodecDescriptor> extends SqliteC
   }
 }
 
-export function sqliteCodec<D extends AnyCodecDescriptor>(
+export function sqliteCodec<D extends AnyCodecDescriptorTemplate>(
   descriptor: D,
   options: SqliteCodecOptions<DescriptorParams<D>>,
 ): AdaptedSqliteCodecDescriptor<D> {

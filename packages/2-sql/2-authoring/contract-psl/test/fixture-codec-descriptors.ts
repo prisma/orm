@@ -10,6 +10,7 @@ import {
   type AnyCodecDescriptor,
   type CodecLookup,
   type CodecTrait,
+  dataTypeId,
   integerLiteralTypesUpTo,
   isNonFiniteText,
   isNumeralText,
@@ -171,6 +172,7 @@ function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
   const parameterized = codecId === 'pg/vector@1';
   return {
     codecId,
+    dataType: dataTypeId(codecId.split('@')[0] ?? 'demo/fixture'),
     traits: codec.traits,
     targetTypes: targetTypesByCodecId[codecId] ?? [],
     ...ifDefined('literalTypes', codec.literalTypes),

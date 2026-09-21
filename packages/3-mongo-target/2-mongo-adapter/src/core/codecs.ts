@@ -1,5 +1,9 @@
-import type { CodecDescriptor, CodecTrait } from '@internal/framework-components/codec';
-import { renderTsLiteral, voidParamsSchema } from '@internal/framework-components/codec';
+import type { CodecDescriptor, CodecTrait, DataTypeId } from '@internal/framework-components/codec';
+import {
+  dataTypeId,
+  renderTsLiteral,
+  voidParamsSchema,
+} from '@internal/framework-components/codec';
 import {
   type MongoCodec,
   type MongoCodecRegistry,
@@ -18,6 +22,14 @@ import {
   MONGO_VECTOR_CODEC_ID,
 } from './codec-ids';
 import { mongoAdapterError } from './errors';
+
+const MONGO_OBJECTID = dataTypeId('mongo/objectid');
+const MONGO_STRING = dataTypeId('mongo/string');
+const MONGO_DOUBLE = dataTypeId('mongo/double');
+const MONGO_INT32 = dataTypeId('mongo/int32');
+const MONGO_BOOL = dataTypeId('mongo/bool');
+const MONGO_DATE = dataTypeId('mongo/date');
+const MONGO_VECTOR = dataTypeId('mongo/vector');
 
 export const mongoObjectIdCodec = mongoCodec({
   typeId: MONGO_OBJECTID_CODEC_ID,
@@ -93,6 +105,7 @@ export const mongoStandardCodecs = [
 function descriptorFor<Id extends string>(
   codec: MongoCodec<Id, readonly CodecTrait[]>,
   metadata: {
+    readonly dataType: DataTypeId;
     readonly traits: readonly CodecTrait[];
     readonly targetTypes: readonly string[];
     readonly renderOutputType?: (typeParams: Record<string, unknown>) => string | undefined;
@@ -105,6 +118,7 @@ function descriptorFor<Id extends string>(
     | undefined;
   return {
     codecId: codec.id,
+    dataType: metadata.dataType,
     traits: metadata.traits,
     targetTypes: metadata.targetTypes,
     paramsSchema: voidParamsSchema as CodecDescriptor['paramsSchema'],
@@ -137,29 +151,42 @@ const renderVectorOutputType = (typeParams: Record<string, unknown>): string | u
  * Mongo wire-type codec descriptors. Static metadata for `traits`, `targetTypes`, and `renderOutputType` lives here (the descriptor shape) — `MongoCodec` itself is narrow and only carries the four conversion methods (TML-2357).
  */
 export const mongoCodecDescriptors: ReadonlyArray<CodecDescriptor> = [
-  descriptorFor(mongoObjectIdCodec, { traits: ['equality'], targetTypes: ['objectId'] }),
+  descriptorFor(mongoObjectIdCodec, {
+    dataType: MONGO_OBJECTID,
+    traits: ['equality'],
+    targetTypes: ['objectId'],
+  }),
   descriptorFor(mongoStringCodec, {
+    dataType: MONGO_STRING,
     traits: ['equality', 'order', 'textual'],
     targetTypes: ['string'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoDoubleCodec, {
+    dataType: MONGO_DOUBLE,
     traits: ['equality', 'order', 'numeric'],
     targetTypes: ['double'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoInt32Codec, {
+    dataType: MONGO_INT32,
     traits: ['equality', 'order', 'numeric'],
     targetTypes: ['int'],
     renderValueLiteral: renderTsLiteral,
   }),
   descriptorFor(mongoBooleanCodec, {
+    dataType: MONGO_BOOL,
     traits: ['equality', 'boolean'],
     targetTypes: ['bool'],
     renderValueLiteral: renderTsLiteral,
   }),
-  descriptorFor(mongoDateCodec, { traits: ['equality', 'order'], targetTypes: ['date'] }),
+  descriptorFor(mongoDateCodec, {
+    dataType: MONGO_DATE,
+    traits: ['equality', 'order'],
+    targetTypes: ['date'],
+  }),
   descriptorFor(mongoVectorCodec, {
+    dataType: MONGO_VECTOR,
     traits: ['equality'],
     targetTypes: ['vector'],
     renderOutputType: renderVectorOutputType,

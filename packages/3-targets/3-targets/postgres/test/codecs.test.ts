@@ -1,5 +1,5 @@
 import type {
-  AnyCodecDescriptor,
+  AnyCodecDescriptorTemplate,
   CodecInstanceContext,
 } from '@internal/framework-components/codec';
 import type { Codec, SqlCodecCallContext } from '@internal/sql-relational-core/ast';
@@ -65,7 +65,7 @@ const descriptorByScalar = {
   jsonb: pgJsonbDescriptor,
   uuid: pgUuidDescriptor,
   inet: pgInetDescriptor,
-} as const satisfies Record<string, AnyCodecDescriptor>;
+} as const satisfies Record<string, AnyCodecDescriptorTemplate>;
 
 type ScalarName = keyof typeof descriptorByScalar;
 

@@ -40,6 +40,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  dataTypeId,
   type LiteralTypeDeclaration,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -153,6 +154,7 @@ export class PostgisGeometryDescriptor extends PostgresCodecDescriptor<GeometryP
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
+  override readonly dataType = dataTypeId('postgis/geometry');
   override readonly codecId = POSTGIS_GEOMETRY_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['geometry'] as const;

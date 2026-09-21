@@ -1,5 +1,9 @@
 import type { AnyCodecDescriptor, Codec } from '@internal/framework-components/codec';
-import { CodecDescriptorImpl, voidParamsSchema } from '@internal/framework-components/codec';
+import {
+  CodecDescriptorImpl,
+  dataTypeId,
+  voidParamsSchema,
+} from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTableInput } from '@internal/sql-contract/types';
 import type { ContractCodecRegistry, ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -37,6 +41,7 @@ const transformingCodec = {
 
 const transformingCodecDescriptor: AnyCodecDescriptor = {
   codecId: 'test/transform@1',
+  dataType: dataTypeId('test/transform'),
   traits: [],
   targetTypes: ['text'],
   paramsSchema: voidParamsSchema,
@@ -44,6 +49,7 @@ const transformingCodecDescriptor: AnyCodecDescriptor = {
   factory: () => () => transformingCodec,
 };
 const transformingDescriptor = postgresCodec(transformingCodecDescriptor, {
+  dataType: dataTypeId('demo/fixture'),
   nativeType: () => 'text',
   jsonProjection: (expression: ProjectionExpr) => expression,
 });
@@ -280,6 +286,7 @@ describe('PostgresControlAdapter.lowerToExecuteRequest — query branch encoding
 const EXT_CODEC_ID = 'test/ext-transform@1';
 
 class ExtTransformDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = EXT_CODEC_ID;
   override readonly traits = [] as const;
   override readonly targetTypes = ['text'] as const;
@@ -297,6 +304,7 @@ class ExtTransformDescriptor extends CodecDescriptorImpl<void> {
 }
 
 const extTransformDescriptor = postgresCodec(new ExtTransformDescriptor(), {
+  dataType: dataTypeId('demo/fixture'),
   nativeType: () => 'text',
   jsonProjection: (expression: ProjectionExpr) => expression,
 });

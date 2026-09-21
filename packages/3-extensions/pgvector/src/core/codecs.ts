@@ -19,6 +19,7 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
+  dataTypeId,
   integerLiteralTypesUpTo,
   isNumeralText,
   type LiteralTypeDeclaration,
@@ -186,6 +187,7 @@ export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return jsonArrayFromVectorElements(expression);
   }
+  override readonly dataType = dataTypeId('pgvector/vector');
   override readonly codecId = VECTOR_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
