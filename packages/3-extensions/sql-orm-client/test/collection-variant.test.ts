@@ -555,6 +555,14 @@ describe('MTI variant mutation guards', () => {
     );
   });
 
+  it('createAll() with the skip option throws for MTI variants', async () => {
+    const { collection } = createReturningMixedPolyCollection();
+    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    await expect(
+      narrowed.createAll([{ title: 'X', priority: 1 } as never], { onConflict: 'skip' }).toArray(),
+    ).rejects.toThrow(/is not supported for MTI variant/);
+  });
+
   it('upsert() throws for MTI variants', async () => {
     const { collection } = createReturningMixedPolyCollection();
     const narrowed = collection.variant('Feature' as never) as typeof collection;
