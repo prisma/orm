@@ -3,30 +3,30 @@
     "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
     "file": "schema.prisma",
     "line": 7,
-    "message": "Field \"M.big\": @default holds a decimal literal, which pg/int8@1 does not accept; it accepts i8, i16, i32, i64 literals."
+    "message": "Field \"M.big\": @default holds a pg/numeric value, which pg/int8 has no cast from; it casts from pg/int2, pg/int4."
   },
   {
     "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
     "file": "schema.prisma",
     "line": 8,
-    "message": "Field \"M.bigs\": @default holds a decimal literal at element 2, which pg/int8@1 does not accept; it accepts i8, i16, i32, i64 literals."
+    "message": "Field \"M.bigs\": @default holds a pg/numeric value at element 2, which pg/int8 has no cast from; it casts from pg/int2, pg/int4."
   },
   {
     "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
     "file": "schema.prisma",
     "line": 9,
-    "message": "Field \"M.int\": @default holds a decimal literal, which pg/int4@1 does not accept; it accepts i8, i16, i32 literals."
+    "message": "Field \"M.int\": @default holds a pg/numeric value, which pg/int4 has no cast from; it casts from pg/int2."
   },
   {
     "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
     "file": "schema.prisma",
     "line": 10,
-    "message": "Field \"M.small\": @default holds a decimal literal, which pg/int2@1 does not accept; it accepts i8, i16 literals."
+    "message": "Field \"M.small\": @default holds a pg/numeric value, which pg/int2 has no cast from; it casts from nothing."
   },
   {
     "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
     "file": "schema.prisma",
     "line": 11,
-    "message": "Field \"M.ints\": @default holds a decimal literal at element 2, which pg/int4@1 does not accept; it accepts i8, i16, i32 literals."
+    "message": "Field \"M.ints\": @default holds a pg/numeric value at element 2, which pg/int4 has no cast from; it casts from pg/int2."
   }
 ]

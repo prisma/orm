@@ -141,22 +141,22 @@ async function diagnosticsOf(caseName: string, file: string) {
 }
 
 describe('Number defaults on String, Bytes, DateTime and Boolean fields', () => {
-  it('are rejected, naming the literal type and what the column accepts', async () => {
+  it('are refused, naming the data type and the casts the column type has', async () => {
     expect(await diagnosticsOf('number-default-spellings', 'other-types.prisma')).toEqual([
-      'Field "OtherTypes.name": @default holds an i8 literal, which pg/text@1 does not accept; it accepts string literals.',
-      'Field "OtherTypes.payload": @default holds an i16 literal, which pg/bytea@1 does not accept; it accepts string literals.',
-      'Field "OtherTypes.at": @default holds an i8 literal, which pg/timestamp-temporal@1 does not accept; it accepts string literals.',
-      'Field "OtherTypes.flag": @default holds an i8 literal, which pg/bool@1 does not accept; it accepts boolean literals.',
+      'Field "OtherTypes.name": @default holds a pg/int2 value, which pg/text has no cast from; it casts from nothing.',
+      'Field "OtherTypes.payload": @default holds a pg/int2 value, which pg/bytea has no cast from; it casts from pg/text.',
+      'Field "OtherTypes.at": @default holds a pg/int2 value, which pg/timestamp has no cast from; it casts from pg/text.',
+      'Field "OtherTypes.flag": @default holds a pg/int2 value, which pg/bool has no cast from; it casts from nothing.',
     ]);
   });
 });
 
 describe('Number defaults too large for the column', () => {
-  it('are rejected before anything is decoded, naming the literal type', async () => {
+  it('are refused before anything is decoded, naming the data type', async () => {
     expect(await diagnosticsOf('number-default-spellings', 'out-of-range.prisma')).toEqual([
-      'Field "OutOfRange.count": @default holds an i64 literal, which pg/int4@1 does not accept; it accepts i8, i16, i32 literals.',
-      'Field "OutOfRange.small": @default holds an i32 literal, which pg/int2@1 does not accept; it accepts i8, i16 literals.',
-      'Field "OutOfRange.ints": @default holds an i64 literal at element 2, which pg/int4@1 does not accept; it accepts i8, i16, i32 literals.',
+      'Field "OutOfRange.count": @default holds a pg/int8 value, which pg/int4 has no cast from; it casts from pg/int2.',
+      'Field "OutOfRange.small": @default holds a pg/int4 value, which pg/int2 has no cast from; it casts from nothing.',
+      'Field "OutOfRange.ints": @default holds a pg/int8 value at element 2, which pg/int4 has no cast from; it casts from pg/int2.',
     ]);
   });
 });

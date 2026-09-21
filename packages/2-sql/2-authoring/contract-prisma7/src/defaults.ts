@@ -1,10 +1,6 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
-import type { ExecutionMutationDefaultValue } from '@internal/contract/types';
-import {
-  type CodecLookup,
-  readLiteral,
-  type WrittenLiteral,
-} from '@internal/framework-components/codec';
+import type { ExecutionMutationDefaultValue, JsonValue } from '@internal/contract/types';
+import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ControlMutationDefaults } from '@internal/framework-components/control';
 import type { FieldSymbol, PslSpan, ResolvedAttribute } from '@internal/psl-parser';
 import type { ExpressionAst } from '@internal/psl-parser/syntax';
@@ -18,9 +14,11 @@ import {
   StringLiteralExprAst,
 } from '@internal/psl-parser/syntax';
 import {
-  describeLiteralType,
-  type LiteralDefaultRefusal,
-  readLiteralDefault,
+  type DataTypeSupport,
+  type DefaultRefusal,
+  entryForTag,
+  readDataTypeDefault,
+  type WrittenValue,
 } from '@internal/sql-contract-psl/resolution';
 import type {
   AuthoredColumnDefault,
@@ -44,6 +42,8 @@ export interface LowerPrisma7DefaultInput {
   /** Storage value per member name when the field is typed by a Prisma 7 enum. */
   readonly enumMembers: ReadonlyMap<string, string> | undefined;
   readonly controlMutationDefaults: ControlMutationDefaults;
+  /** The stack's data types and the PSL support for them, which this reader maps its syntax onto. */
+  readonly dataTypeSupport: DataTypeSupport;
   readonly sourceId: string;
   readonly diagnostics: ContractSourceDiagnostic[];
 }
@@ -124,7 +124,7 @@ export function lowerPrisma7Default(
 
   const scalar = scalarValue(expression, input, unknown);
   if (scalar === undefined) return undefined;
-  return { storage: { kind: 'literal', value: scalar }, onCreate: undefined };
+  return { storage: { kind: 'literal', value: scalar, canonical: true }, onCreate: undefined };
 }
 
 /**
@@ -161,11 +161,12 @@ function scalarValue(
   const jsonNull = jsonNullDefault(written, expression, input);
   if (jsonNull !== undefined) return jsonNull;
 
-  const read = readLiteralDefault({
+  const read = readDataTypeDefault({
     written,
     isList: input.field.list,
     column: { codecId: input.codecId },
     codecLookup: input.codecLookup,
+    support: input.dataTypeSupport,
     fieldPath: `${input.modelName}.${input.field.name}`,
   });
   return read.ok ? read.value : unknown(refusalReason(read.refusal), span);
@@ -184,9 +185,9 @@ function writtenLiteralFor(
   expression: ExpressionAst,
   elements: readonly ExpressionAst[] | undefined,
   input: LowerPrisma7DefaultInput,
-): WrittenLiteral | undefined {
+): WrittenValue | undefined {
   if (elements === undefined) return writtenLiteral(expression, input);
-  const written: WrittenLiteral[] = [];
+  const written: WrittenValue[] = [];
   for (const element of elements) {
     const elementLiteral = writtenLiteral(element, input);
     if (elementLiteral === undefined) return undefined;
@@ -200,14 +201,13 @@ function writtenLiteralFor(
  * column's codec sees the literal.
  */
 function jsonNullDefault(
-  written: WrittenLiteral,
+  written: WrittenValue,
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
 ): undefined {
   if (input.literalForm?.kind !== 'json') return undefined;
-  const read = readLiteral(written);
-  if (!read.ok) return undefined;
-  const value = read.literal.value;
+  const value = jsonDocumentOf(written, input);
+  if (value === undefined) return undefined;
   const isNull = Array.isArray(value) ? value.includes(null) : value === null;
   if (!isNull) return undefined;
   input.diagnostics.push(
@@ -269,10 +269,12 @@ function sqlExpressionDefault(
 function writtenLiteral(
   expression: ExpressionAst,
   input: LowerPrisma7DefaultInput,
-): WrittenLiteral | undefined {
+): WrittenValue | undefined {
   const text = StringLiteralExprAst.cast(expression.syntax)?.value();
   if (text !== undefined) {
-    return input.literalForm?.kind === 'json' ? { kind: 'json', text } : { kind: 'string', text };
+    return input.literalForm?.kind === 'json'
+      ? { kind: 'tag', tag: 'json', body: text }
+      : { kind: 'string', text };
   }
   const number = NumberLiteralExprAst.cast(expression.syntax)?.token()?.text;
   if (number !== undefined) return { kind: 'number', text: number };
@@ -280,14 +282,43 @@ function writtenLiteral(
   return boolean === undefined ? undefined : { kind: 'boolean', value: boolean };
 }
 
-/** Why the column refused the literal, as a phrase following `@default `. */
-function refusalReason(refusal: LiteralDefaultRefusal): string {
+/**
+ * The document a written JSON value holds, read through the same entry the interpreter uses, or
+ * `undefined` when the body is not a document.
+ */
+function jsonDocumentOf(
+  written: WrittenValue,
+  input: LowerPrisma7DefaultInput,
+): JsonValue | undefined {
+  const entry = entryForTag(input.dataTypeSupport, 'json');
+  if (entry === undefined || entry.entry.written.kind !== 'tag') return undefined;
+  const bodies =
+    written.kind === 'list'
+      ? written.elements.flatMap((element) => (element.kind === 'tag' ? [element.body] : []))
+      : written.kind === 'tag'
+        ? [written.body]
+        : [];
+  const parse = entry.entry.written.parse;
+  try {
+    const documents = bodies.map((body) => parse(body));
+    return written.kind === 'list' ? documents : documents[0];
+  } catch {
+    return undefined;
+  }
+}
+
+/** Why the column refused the value, as a phrase following `@default `. */
+function refusalReason(refusal: DefaultRefusal): string {
   const at = refusal.elementIndex === undefined ? '' : ` at element ${refusal.elementIndex + 1}`;
   switch (refusal.kind) {
     case 'unreadable':
       return `holds text${at} that this contract source does not read: ${refusal.message}`;
-    case 'incompatible':
-      return `holds ${describeLiteralType(refusal.literalType)}${at}, which ${refusal.codecId} does not accept; it accepts ${refusal.accepts}.`;
+    case 'unknown-tag':
+      return `holds a ${refusal.tag} literal${at}, which this stack does not register.`;
+    case 'unwritable':
+      return `holds a ${refusal.syntax} value${at}, which this target has no data type for.`;
+    case 'no-cast':
+      return `holds a ${refusal.valueType} value${at}, which ${refusal.columnType} has no cast from; ${refusal.casts.length === 0 ? 'it casts from nothing' : `it casts from ${refusal.casts.join(', ')}`}.`;
     case 'undecodable':
       return `holds a value${at} that ${refusal.codecId} does not read: ${refusal.message}`;
   }

@@ -1,6 +1,7 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
+import { dataType, dataTypeId } from '@internal/framework-components/codec';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { structuredError } from '@internal/utils/structured-error';
 import { join } from 'pathe';
@@ -15,24 +16,29 @@ const postgres = { binding: prisma7PostgresBinding };
  * fails the checks `contract emit` runs. The column's codec is built from its descriptor, so the
  * descriptor's factory is what has to hand back the broken codec.
  */
-function withTextDefaultsEncodedAsNull(lookup: CodecLookup): CodecLookup {
-  const breakCodec = <T extends object>(codec: T): T =>
-    Object.assign(Object.create(Object.getPrototypeOf(codec)), codec, { encodeJson: () => null });
-  const get = (id: string) => {
-    const codec = lookup.get(id);
-    return id !== 'pg/text@1' || codec === undefined ? codec : breakCodec(codec);
-  };
+/**
+ * A stack whose text columns store a null default: their descriptor names a data type whose cast
+ * from the written text returns null, which gives a contract the emit checks refuse.
+ */
+const BROKEN_TEXT = dataTypeId('demo/broken-text');
+
+function withTextDefaultsCastToNull(lookup: CodecLookup): CodecLookup {
   const descriptorFor = (id: string) => {
     const descriptor = lookup.descriptorFor?.(id);
     if (id !== 'pg/text@1' || descriptor === undefined) return descriptor;
     return Object.assign(Object.create(Object.getPrototypeOf(descriptor)), descriptor, {
-      factory: (params: never) => (ctx: never) => breakCodec(descriptor.factory(params)(ctx)),
+      dataType: BROKEN_TEXT,
     });
   };
-  return Object.assign(Object.create(Object.getPrototypeOf(lookup)), lookup, {
-    get,
-    descriptorFor,
-  });
+  return Object.assign(Object.create(Object.getPrototypeOf(lookup)), lookup, { descriptorFor });
+}
+
+function withBrokenTextType(lookup: DataTypeLookup): DataTypeLookup {
+  const brokenText = dataType(BROKEN_TEXT, { casts: { 'pg/text': () => null } });
+  return {
+    get: (id) => (id === BROKEN_TEXT ? brokenText : lookup.get(id)),
+    has: (id) => id === BROKEN_TEXT || lookup.has(id),
+  };
 }
 
 function scratchDir(name: string): string {
@@ -223,7 +229,8 @@ describe('prisma7Contract', () => {
     const context = postgresSourceContext([schemaFile]);
     const result = await prisma7Contract('prisma/schema.prisma', postgres).source.load({
       ...context,
-      codecLookup: withTextDefaultsEncodedAsNull(context.codecLookup),
+      codecLookup: withTextDefaultsCastToNull(context.codecLookup),
+      dataTypeLookup: withBrokenTextType(context.dataTypeLookup),
     });
     expect(result).toMatchObject({
       ok: false,
