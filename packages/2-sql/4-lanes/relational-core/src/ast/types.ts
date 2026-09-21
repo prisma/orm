@@ -1913,6 +1913,11 @@ export class InsertOnConflict extends AstNode {
     return new InsertOnConflict(columns, new DoNothingConflictAction());
   }
 
+  /** `ON CONFLICT DO NOTHING` over every unique constraint on the table. */
+  static doNothing(): InsertOnConflict {
+    return new InsertOnConflict([], new DoNothingConflictAction());
+  }
+
   doNothing(): InsertOnConflict {
     return new InsertOnConflict(this.columns, new DoNothingConflictAction());
   }
