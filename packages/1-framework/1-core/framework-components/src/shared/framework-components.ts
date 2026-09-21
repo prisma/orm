@@ -42,11 +42,6 @@ export interface ComponentMetadata {
        * Codec descriptors contributed by this component. Source of truth for codec-id-keyed metadata (`traits`, `targetTypes`, `renderOutputType`) consumed by `extractCodecLookup`, and used to materialize representative `Codec` instances for codec-dispatched type rendering during emission.
        */
       readonly codecDescriptors?: ReadonlyArray<AnyCodecDescriptor>;
-      /**
-       * Data types this component registers — the types its codecs represent, each with the casts
-       * that say which other types' values it takes. ADR 254.
-       */
-      readonly dataTypes?: ReadonlyArray<DataType>;
     };
     /**
      * Aggregate descriptors contributed by this component — a sibling of `codecTypes`, not a member: an aggregate descriptor relates an operation, a target, and an input codec, which is why it is modeled apart from codecs. Source of truth for the result codec, nullability, and (family-side) lowering of each `(aggregate operation, input codec)` overload; each overload has exactly one contributor across the composed stack.
@@ -60,6 +55,14 @@ export interface ComponentMetadata {
       readonly nativeType?: string;
     }>;
   };
+
+  /**
+   * Data types this component registers — the types its codecs represent, each with the casts that
+   * say which other types' values it takes. A sibling of `types` rather than a member of it,
+   * because `types` is copied into an extension's contract space and a cast is a function, which
+   * no contract holds. ADR 254.
+   */
+  readonly dataTypes?: ReadonlyArray<DataType>;
 
   /**
    * Optional pure-data authoring contributions exposed by this component.

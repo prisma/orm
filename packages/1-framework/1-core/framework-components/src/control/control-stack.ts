@@ -333,26 +333,19 @@ export function assembleAuthoringContributions(
   };
 }
 
-/**
- * Collect every data type the composed components register, refusing two declarations of one id.
- *
- * `registersDataTypes` says whether any component registered one at all. Until every pack declares
- * its types, a stack that registers none cannot be checked against its codecs, so the invariants
- * below stand down; the flag goes away once every pack declares. ADR 254.
- */
+/** Collect every data type the composed components register, refusing two declarations of one id. */
 export function assembleDataTypes(
-  descriptors: ReadonlyArray<Pick<ComponentMetadata, 'types'> & { readonly id?: string }>,
+  descriptors: ReadonlyArray<Pick<ComponentMetadata, 'dataTypes'> & { readonly id?: string }>,
 ): {
   readonly lookup: DataTypeLookup;
   readonly declared: ReadonlyArray<{ readonly type: DataType; readonly contributedBy: string }>;
-  readonly registersDataTypes: boolean;
 } {
   const declared: { type: DataType; contributedBy: string }[] = [];
   const owners = new Map<string, string>();
 
   for (const descriptor of descriptors) {
     const contributedBy = descriptor.id ?? '<unknown>';
-    for (const type of descriptor.types?.codecTypes?.dataTypes ?? []) {
+    for (const type of descriptor.dataTypes ?? []) {
       const existingOwner = owners.get(type.id);
       if (existingOwner !== undefined) {
         throw runtimeError(
@@ -367,11 +360,7 @@ export function assembleDataTypes(
     }
   }
 
-  return {
-    lookup: createDataTypeLookup(declared.map((entry) => entry.type)),
-    declared,
-    registersDataTypes: declared.length > 0,
-  };
+  return { lookup: createDataTypeLookup(declared.map((entry) => entry.type)), declared };
 }
 
 /** Merge every component's PSL support for its data types, refusing two claims on one key. */
@@ -401,8 +390,6 @@ export function assembleAuthoringDataTypes(
 }
 
 export interface DataTypeInvariantInput {
-  /** False while no component registers a data type; the checks then stand down. */
-  readonly registersDataTypes: boolean;
   readonly lookup: DataTypeLookup;
   readonly declaredTypes: ReadonlyArray<{
     readonly type: DataType;
@@ -430,8 +417,6 @@ export interface DataTypeInvariantInput {
  *    is never exercised.
  */
 export function enforceDataTypeInvariants(input: DataTypeInvariantInput): void {
-  if (!input.registersDataTypes) return;
-
   const unregistered = (contributedBy: string, id: string, what: string): never => {
     throw runtimeError(
       'CONTRACT.DATA_TYPE_UNREGISTERED',
@@ -843,7 +828,6 @@ export function createControlStack<TFamilyId extends string, TTargetId extends s
   const dataTypes = assembleDataTypes(allDescriptors);
 
   enforceDataTypeInvariants({
-    registersDataTypes: dataTypes.registersDataTypes,
     lookup: dataTypes.lookup,
     declaredTypes: dataTypes.declared,
     codecs: allDescriptors.flatMap((descriptor) =>

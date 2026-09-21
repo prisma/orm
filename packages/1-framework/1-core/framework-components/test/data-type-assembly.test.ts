@@ -12,10 +12,7 @@ const int2 = dataType('demo/int2', {});
 const int8 = dataType('demo/int8', { casts: { [int2.id]: (value) => String(value) } });
 const text = dataType('demo/text', {});
 
-const contributor = (id: string, dataTypes: readonly DataType[]) => ({
-  id,
-  types: { codecTypes: { dataTypes } },
-});
+const contributor = (id: string, dataTypes: readonly DataType[]) => ({ id, dataTypes });
 
 const numberEntry = (types: readonly DataTypeId[] = [int2.id]) =>
   ({
@@ -40,7 +37,6 @@ const codec = (codecId: string, type: DataType) => ({ codecId, dataType: type.id
 
 const invariants = (overrides: Partial<Parameters<typeof enforceDataTypeInvariants>[0]>) =>
   enforceDataTypeInvariants({
-    registersDataTypes: true,
     lookup: assembleDataTypes([contributor('demo', [int2, int8, text])]).lookup,
     declaredTypes: [{ type: int2, contributedBy: 'demo' }],
     codecs: [],
@@ -50,19 +46,15 @@ const invariants = (overrides: Partial<Parameters<typeof enforceDataTypeInvarian
 
 describe('assembleDataTypes', () => {
   it('collects every contributor’s types into one lookup', () => {
-    const { lookup, registersDataTypes } = assembleDataTypes([
+    const { lookup } = assembleDataTypes([
       contributor('demo', [int2]),
       contributor('other', [text]),
     ]);
-    expect([lookup.has(int2.id), lookup.has(text.id), registersDataTypes]).toEqual([
-      true,
-      true,
-      true,
-    ]);
+    expect([lookup.has(int2.id), lookup.has(text.id)]).toEqual([true, true]);
   });
 
-  it('reports that no contributor registers a type', () => {
-    expect(assembleDataTypes([{ id: 'demo', types: {} }]).registersDataTypes).toBe(false);
+  it('holds nothing when no contributor registers a type', () => {
+    expect(assembleDataTypes([{ id: 'demo' }]).declared).toEqual([]);
   });
 
   it('refuses two declarations of one id, naming both contributors', () => {
@@ -138,18 +130,6 @@ describe('enforceDataTypeInvariants', () => {
           { key: int8.id, entry: tagEntry('int8'), contributedBy: 'demo' },
           { key: int2.id, entry: numberEntry(), contributedBy: 'demo' },
         ],
-      }),
-    ).not.toThrow();
-  });
-
-  it('checks nothing until some contributor registers a data type', () => {
-    expect(() =>
-      enforceDataTypeInvariants({
-        registersDataTypes: false,
-        lookup: assembleDataTypes([{ id: 'demo', types: {} }]).lookup,
-        declaredTypes: [],
-        codecs: [{ ...codec('demo/x@1', dataType('demo/gone', {})), contributedBy: 'x-pack' }],
-        authoringEntries: [],
       }),
     ).not.toThrow();
   });
