@@ -30,6 +30,7 @@ Four slices: one foundation slice delivering the eager binder in `psl-parser` (w
   - **Builds on:** `binder-core`'s hand-off.
   - **Hands to:** project close-out (nothing downstream consumes SQL-specific state; the LSP slice waits on this by decree, not by dependency).
   - **Focus:** `packages/2-sql/2-authoring/contract-psl` only. Interpreter-internal indexes that are not name resolution (FK pairing, STI/MTI maps) stay as they are.
+  - **Carried finding (PR #30349 review, CodeRabbit, verified real):** `interpreter.ts:1430-1435` falls back to `input.modelMappings.get(fieldTypeName)`, a map flattened by bare name (last-wins), so `public.User` / `auth.User` duplicates can stamp an FK against the wrong namespace. This is exactly the hand-rolled lowering this slice replaces with the binder — include a duplicate-name-across-namespaces regression test when it does.
 
 ### Parallel group B (after `binder-core`, independent of group A)
 
