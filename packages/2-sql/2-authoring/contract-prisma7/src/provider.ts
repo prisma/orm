@@ -2,7 +2,6 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
 import { validateContractDomain } from '@internal/contract/validate-domain';
-import { rangeToPslSpan } from '@internal/psl-parser';
 import type { ParseDiagnostic, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
@@ -39,7 +38,7 @@ function mapParseDiagnostics(
     code: diagnostic.code,
     message: diagnostic.message,
     sourceId,
-    span: rangeToPslSpan(diagnostic.range, sourceFile),
+    span: sourceFile.rangeToPslSpan(diagnostic.range),
   }));
 }
 
@@ -154,9 +153,12 @@ export function prisma7Contract(
               },
             });
           }
-          const { document, sourceFile, diagnostics } = parse(schema, { grammar: 'prisma7' });
+          const { document, sources, diagnostics } = parse(schema, file.sourceId, {
+            grammar: 'prisma7',
+          });
+          const sourceFile = sources.sourceFileFor(document.syntax);
           seedDiagnostics.push(...mapParseDiagnostics(diagnostics, sourceFile, file.sourceId));
-          documents.push({ document, sourceFile, sourceId: file.sourceId });
+          documents.push({ document, sources, sourceFile, sourceId: file.sourceId });
         }
 
         let contract: Contract;

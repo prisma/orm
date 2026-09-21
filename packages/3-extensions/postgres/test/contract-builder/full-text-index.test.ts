@@ -57,16 +57,16 @@ model Message {
 const assembled = assembleAuthoringContributions([postgresTargetControl]);
 
 function pslIndexes() {
-  const { document, sourceFile } = parse(PSL);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(PSL, 'full-text-index.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const result = interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target: postgresPack,
     scalarColumnDescriptors: new Map([

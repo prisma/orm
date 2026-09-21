@@ -15,11 +15,11 @@ types {
 
 namespace auth {
   model AuditLogEntries {
-    id         Id         @id(map: "audit_log_entries_pkey")
-    instanceId Id?        @map("instance_id")
+    id         Id           @id(map: "audit_log_entries_pkey")
+    instanceId Id?          @map("instance_id")
     payload    Payload?
-    createdAt  DateTime?  @map("created_at")
-    ipAddress  IpAddress2 @default("") @map("ip_address")
+    createdAt  Timestamptz? @map("created_at")
+    ipAddress  IpAddress2   @default("") @map("ip_address")
 
     @@index([instanceId], map: "audit_logs_instance_id_idx")
     @@rls
@@ -33,34 +33,34 @@ namespace auth {
     role                     Parent?
     email                    Parent?
     encryptedPassword        Parent?                   @map("encrypted_password")
-    emailConfirmedAt         DateTime?                 @map("email_confirmed_at")
-    invitedAt                DateTime?                 @map("invited_at")
+    emailConfirmedAt         Timestamptz?              @map("email_confirmed_at")
+    invitedAt                Timestamptz?              @map("invited_at")
     confirmationToken        Parent?                   @map("confirmation_token")
-    confirmationSentAt       DateTime?                 @map("confirmation_sent_at")
+    confirmationSentAt       Timestamptz?              @map("confirmation_sent_at")
     recoveryToken            Parent?                   @map("recovery_token")
-    recoverySentAt           DateTime?                 @map("recovery_sent_at")
+    recoverySentAt           Timestamptz?              @map("recovery_sent_at")
     emailChangeTokenNew      Parent?                   @map("email_change_token_new")
     emailChange              Parent?                   @map("email_change")
-    emailChangeSentAt        DateTime?                 @map("email_change_sent_at")
-    lastSignInAt             DateTime?                 @map("last_sign_in_at")
+    emailChangeSentAt        Timestamptz?              @map("email_change_sent_at")
+    lastSignInAt             Timestamptz?              @map("last_sign_in_at")
     rawAppMetaData           Jsonb?                    @map("raw_app_meta_data")
     rawUserMetaData          Jsonb?                    @map("raw_user_meta_data")
     isSuperAdmin             Boolean?                  @map("is_super_admin")
-    createdAt                DateTime?                 @map("created_at")
-    updatedAt                DateTime?                 @map("updated_at")
+    createdAt                Timestamptz?              @map("created_at")
+    updatedAt                Timestamptz?              @map("updated_at")
     phone                    String?                   @unique(map: "users_phone_key")
-    phoneConfirmedAt         DateTime?                 @map("phone_confirmed_at")
+    phoneConfirmedAt         Timestamptz?              @map("phone_confirmed_at")
     phoneChange              String?                   @default("") @map("phone_change")
     phoneChangeToken         Parent?                   @default("") @map("phone_change_token")
-    phoneChangeSentAt        DateTime?                 @map("phone_change_sent_at")
-    confirmedAt              DateTime?                 @map("confirmed_at")
+    phoneChangeSentAt        Timestamptz?              @map("phone_change_sent_at")
+    confirmedAt              Timestamptz?              @map("confirmed_at")
     emailChangeTokenCurrent  Parent?                   @default("") @map("email_change_token_current")
     emailChangeConfirmStatus EmailChangeConfirmStatus? @default(0) @map("email_change_confirm_status")
-    bannedUntil              DateTime?                 @map("banned_until")
+    bannedUntil              Timestamptz?              @map("banned_until")
     reauthenticationToken    Parent?                   @default("") @map("reauthentication_token")
-    reauthenticationSentAt   DateTime?                 @map("reauthentication_sent_at")
+    reauthenticationSentAt   Timestamptz?              @map("reauthentication_sent_at")
     isSsoUser                Boolean                   @default(false) @map("is_sso_user")
-    deletedAt                DateTime?                 @map("deleted_at")
+    deletedAt                Timestamptz?              @map("deleted_at")
     isAnonymous              Boolean                   @default(false) @map("is_anonymous")
     identities               AuthIdentity[]
     mfaFactors               MfaFactors[]
@@ -80,21 +80,22 @@ namespace auth {
     @@index(expression: "instance_id, lower(email::text)", map: "users_instance_id_email_idx")
     @@index([instanceId], map: "users_instance_id_idx")
     @@index([isAnonymous], map: "users_is_anonymous_idx")
+    @@check(expression: "((email_change_confirm_status >= 0) AND (email_change_confirm_status <= 2))", map: "users_email_change_confirm_status_check")
     @@rls
     @@map("users")
   }
 
   model AuthIdentity {
-    id           Id        @id(map: "identities_pkey") @default(dbgenerated("gen_random_uuid()"))
-    providerId   String    @map("provider_id")
-    userId       Id        @map("user_id")
-    identityData Jsonb     @map("identity_data")
+    id           Id           @id(map: "identities_pkey") @default(dbgenerated("gen_random_uuid()"))
+    providerId   String       @map("provider_id")
+    userId       Id           @map("user_id")
+    identityData Jsonb        @map("identity_data")
     provider     String
-    lastSignInAt DateTime? @map("last_sign_in_at")
-    createdAt    DateTime? @map("created_at")
-    updatedAt    DateTime? @map("updated_at")
+    lastSignInAt Timestamptz? @map("last_sign_in_at")
+    createdAt    Timestamptz? @map("created_at")
+    updatedAt    Timestamptz? @map("updated_at")
     email        String?
-    user         AuthUser  @relation(fields: [userId], references: [id], onDelete: Cascade, map: "identities_user_id_fkey")
+    user         AuthUser     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "identities_user_id_fkey")
 
     @@unique([providerId, provider], map: "identities_provider_id_provider_unique")
     @@index([email], map: "identities_email_idx")
@@ -112,27 +113,31 @@ namespace auth {
     clientName              String?                        @map("client_name")
     clientUri               String?                        @map("client_uri")
     logoUri                 String?                        @map("logo_uri")
-    createdAt               DateTime                       @default(now()) @map("created_at")
-    updatedAt               DateTime                       @default(now()) @map("updated_at")
-    deletedAt               DateTime?                      @map("deleted_at")
-    clientType              pg.enum(OauthClientType)       @default(dbgenerated("'confidential'::auth.oauth_client_type")) @map("client_type")
+    createdAt               Timestamptz                    @default(now()) @map("created_at")
+    updatedAt               Timestamptz                    @default(now()) @map("updated_at")
+    deletedAt               Timestamptz?                   @map("deleted_at")
+    clientType              pg.enum(OauthClientType)       @default("confidential") @map("client_type")
     tokenEndpointAuthMethod String                         @map("token_endpoint_auth_method")
     oauthAuthorizations     OauthAuthorizations[]
     oauthConsents           OauthConsents[]
     sessions                AuthSession[]
 
     @@index([deletedAt], map: "oauth_clients_deleted_at_idx")
+    @@check(expression: "(char_length(client_name) <= 1024)", map: "oauth_clients_client_name_length")
+    @@check(expression: "(char_length(client_uri) <= 2048)", map: "oauth_clients_client_uri_length")
+    @@check(expression: "(char_length(logo_uri) <= 2048)", map: "oauth_clients_logo_uri_length")
+    @@check(expression: "(token_endpoint_auth_method = ANY (ARRAY['client_secret_basic'::text, 'client_secret_post'::text, 'none'::text]))", map: "oauth_clients_token_endpoint_auth_method_check")
     @@map("oauth_clients")
   }
 
   model AuthSession {
     id                  Id                 @id(map: "sessions_pkey")
     userId              Id                 @map("user_id")
-    createdAt           DateTime?          @map("created_at")
-    updatedAt           DateTime?          @map("updated_at")
+    createdAt           Timestamptz?       @map("created_at")
+    updatedAt           Timestamptz?       @map("updated_at")
     factorId            Id?                @map("factor_id")
     aal                 pg.enum(AalLevel)?
-    notAfter            DateTime?          @map("not_after")
+    notAfter            Timestamptz?       @map("not_after")
     refreshedAt         CreatedAt?         @map("refreshed_at")
     userAgent           String?            @map("user_agent")
     ip                  IpAddress?
@@ -150,40 +155,59 @@ namespace auth {
     @@index([oauthClientId], map: "sessions_oauth_client_id_idx")
     @@index([userId], map: "sessions_user_id_idx")
     @@index([userId, createdAt], map: "user_id_created_at_idx")
+    @@check(expression: "(char_length(scopes) <= 4096)", map: "sessions_scopes_length")
     @@rls
     @@map("sessions")
   }
 
   model CustomOauthProviders {
-    id                  Id        @id(map: "custom_oauth_providers_pkey") @default(dbgenerated("gen_random_uuid()"))
-    providerType        String    @map("provider_type")
-    identifier          String    @unique(map: "custom_oauth_providers_identifier_key")
+    id                  Id           @id(map: "custom_oauth_providers_pkey") @default(dbgenerated("gen_random_uuid()"))
+    providerType        String       @map("provider_type")
+    identifier          String       @unique(map: "custom_oauth_providers_identifier_key")
     name                String
-    clientId            String    @map("client_id")
-    clientSecret        String    @map("client_secret")
-    acceptableClientIds String[]  @default([]) @map("acceptable_client_ids")
-    scopes              String[]  @default([])
-    pkceEnabled         Boolean   @default(true) @map("pkce_enabled")
-    attributeMapping    Jsonb     @default(dbgenerated("'{}'::jsonb")) @map("attribute_mapping")
-    authorizationParams Jsonb     @default(dbgenerated("'{}'::jsonb")) @map("authorization_params")
-    enabled             Boolean   @default(true)
-    emailOptional       Boolean   @default(false) @map("email_optional")
+    clientId            String       @map("client_id")
+    clientSecret        String       @map("client_secret")
+    acceptableClientIds String[]     @default([]) @noCheck(elementNotNull) @map("acceptable_client_ids")
+    scopes              String[]     @default([]) @noCheck(elementNotNull)
+    pkceEnabled         Boolean      @default(true) @map("pkce_enabled")
+    attributeMapping    Jsonb        @default(dbgenerated("'{}'::jsonb")) @map("attribute_mapping")
+    authorizationParams Jsonb        @default(dbgenerated("'{}'::jsonb")) @map("authorization_params")
+    enabled             Boolean      @default(true)
+    emailOptional       Boolean      @default(false) @map("email_optional")
     issuer              String?
-    discoveryUrl        String?   @map("discovery_url")
-    skipNonceCheck      Boolean   @default(false) @map("skip_nonce_check")
-    cachedDiscovery     Jsonb?    @map("cached_discovery")
-    discoveryCachedAt   DateTime? @map("discovery_cached_at")
-    authorizationUrl    String?   @map("authorization_url")
-    tokenUrl            String?   @map("token_url")
-    userinfoUrl         String?   @map("userinfo_url")
-    jwksUri             String?   @map("jwks_uri")
-    createdAt           DateTime  @default(now()) @map("created_at")
-    updatedAt           DateTime  @default(now()) @map("updated_at")
+    discoveryUrl        String?      @map("discovery_url")
+    skipNonceCheck      Boolean      @default(false) @map("skip_nonce_check")
+    cachedDiscovery     Jsonb?       @map("cached_discovery")
+    discoveryCachedAt   Timestamptz? @map("discovery_cached_at")
+    authorizationUrl    String?      @map("authorization_url")
+    tokenUrl            String?      @map("token_url")
+    userinfoUrl         String?      @map("userinfo_url")
+    jwksUri             String?      @map("jwks_uri")
+    createdAt           Timestamptz  @default(now()) @map("created_at")
+    updatedAt           Timestamptz  @default(now()) @map("updated_at")
 
     @@index([createdAt], map: "custom_oauth_providers_created_at_idx")
     @@index([enabled], map: "custom_oauth_providers_enabled_idx")
     @@index([identifier], map: "custom_oauth_providers_identifier_idx")
     @@index([providerType], map: "custom_oauth_providers_provider_type_idx")
+    @@check(expression: "((authorization_url IS NULL) OR (authorization_url ~~ 'https://%'::text))", map: "custom_oauth_providers_authorization_url_https")
+    @@check(expression: "((authorization_url IS NULL) OR (char_length(authorization_url) <= 2048))", map: "custom_oauth_providers_authorization_url_length")
+    @@check(expression: "((char_length(client_id) >= 1) AND (char_length(client_id) <= 512))", map: "custom_oauth_providers_client_id_length")
+    @@check(expression: "((discovery_url IS NULL) OR (char_length(discovery_url) <= 2048))", map: "custom_oauth_providers_discovery_url_length")
+    @@check(expression: "(identifier ~ '^[a-z0-9][a-z0-9:-]{0,48}[a-z0-9]$'::text)", map: "custom_oauth_providers_identifier_format")
+    @@check(expression: "((issuer IS NULL) OR ((char_length(issuer) >= 1) AND (char_length(issuer) <= 2048)))", map: "custom_oauth_providers_issuer_length")
+    @@check(expression: "((jwks_uri IS NULL) OR (jwks_uri ~~ 'https://%'::text))", map: "custom_oauth_providers_jwks_uri_https")
+    @@check(expression: "((jwks_uri IS NULL) OR (char_length(jwks_uri) <= 2048))", map: "custom_oauth_providers_jwks_uri_length")
+    @@check(expression: "((char_length(name) >= 1) AND (char_length(name) <= 100))", map: "custom_oauth_providers_name_length")
+    @@check(expression: "((provider_type <> 'oauth2'::text) OR ((authorization_url IS NOT NULL) AND (token_url IS NOT NULL) AND (userinfo_url IS NOT NULL)))", map: "custom_oauth_providers_oauth2_requires_endpoints")
+    @@check(expression: "((provider_type <> 'oidc'::text) OR (discovery_url IS NULL) OR (discovery_url ~~ 'https://%'::text))", map: "custom_oauth_providers_oidc_discovery_url_https")
+    @@check(expression: "((provider_type <> 'oidc'::text) OR (issuer IS NULL) OR (issuer ~~ 'https://%'::text))", map: "custom_oauth_providers_oidc_issuer_https")
+    @@check(expression: "((provider_type <> 'oidc'::text) OR (issuer IS NOT NULL))", map: "custom_oauth_providers_oidc_requires_issuer")
+    @@check(expression: "(provider_type = ANY (ARRAY['oauth2'::text, 'oidc'::text]))", map: "custom_oauth_providers_provider_type_check")
+    @@check(expression: "((token_url IS NULL) OR (token_url ~~ 'https://%'::text))", map: "custom_oauth_providers_token_url_https")
+    @@check(expression: "((token_url IS NULL) OR (char_length(token_url) <= 2048))", map: "custom_oauth_providers_token_url_length")
+    @@check(expression: "((userinfo_url IS NULL) OR (userinfo_url ~~ 'https://%'::text))", map: "custom_oauth_providers_userinfo_url_https")
+    @@check(expression: "((userinfo_url IS NULL) OR (char_length(userinfo_url) <= 2048))", map: "custom_oauth_providers_userinfo_url_length")
     @@map("custom_oauth_providers")
   }
 
@@ -196,10 +220,10 @@ namespace auth {
     providerType         String                        @map("provider_type")
     providerAccessToken  String?                       @map("provider_access_token")
     providerRefreshToken String?                       @map("provider_refresh_token")
-    createdAt            DateTime?                     @map("created_at")
-    updatedAt            DateTime?                     @map("updated_at")
+    createdAt            Timestamptz?                  @map("created_at")
+    updatedAt            Timestamptz?                  @map("updated_at")
     authenticationMethod String                        @map("authentication_method")
-    authCodeIssuedAt     DateTime?                     @map("auth_code_issued_at")
+    authCodeIssuedAt     Timestamptz?                  @map("auth_code_issued_at")
     inviteToken          String?                       @map("invite_token")
     referrer             String?
     oauthClientStateId   Id?                           @map("oauth_client_state_id")
@@ -215,11 +239,11 @@ namespace auth {
   }
 
   model Instances {
-    id            Id        @id(map: "instances_pkey")
+    id            Id           @id(map: "instances_pkey")
     uuid          Id?
-    rawBaseConfig String?   @map("raw_base_config")
-    createdAt     DateTime? @map("created_at")
-    updatedAt     DateTime? @map("updated_at")
+    rawBaseConfig String?      @map("raw_base_config")
+    createdAt     Timestamptz? @map("created_at")
+    updatedAt     Timestamptz? @map("updated_at")
 
     @@rls
     @@map("instances")
@@ -228,8 +252,8 @@ namespace auth {
   model MfaAmrClaims {
     id                   Id          @id(map: "amr_id_pk")
     sessionId            Id          @map("session_id")
-    createdAt            DateTime    @map("created_at")
-    updatedAt            DateTime    @map("updated_at")
+    createdAt            Timestamptz @map("created_at")
+    updatedAt            Timestamptz @map("updated_at")
     authenticationMethod String      @map("authentication_method")
     session              AuthSession @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "mfa_amr_claims_session_id_fkey", index: false)
 
@@ -244,11 +268,11 @@ namespace auth {
     friendlyName              String?               @map("friendly_name")
     factorType                pg.enum(FactorType)   @map("factor_type")
     status                    pg.enum(FactorStatus)
-    createdAt                 DateTime              @map("created_at")
-    updatedAt                 DateTime              @map("updated_at")
+    createdAt                 Timestamptz           @map("created_at")
+    updatedAt                 Timestamptz           @map("updated_at")
     secret                    String?
     phone                     String?
-    lastChallengedAt          DateTime?             @unique(map: "mfa_factors_last_challenged_at_key") @map("last_challenged_at")
+    lastChallengedAt          Timestamptz?          @unique(map: "mfa_factors_last_challenged_at_key") @map("last_challenged_at")
     webAuthnCredential        Jsonb?                @map("web_authn_credential")
     webAuthnAaguid            Id?                   @map("web_authn_aaguid")
     lastWebauthnChallengeData Jsonb?                @map("last_webauthn_challenge_data")
@@ -264,14 +288,14 @@ namespace auth {
   }
 
   model MfaChallenges {
-    id                  Id         @id(map: "mfa_challenges_pkey")
-    factorId            Id         @map("factor_id")
-    createdAt           DateTime   @map("created_at")
-    verifiedAt          DateTime?  @map("verified_at")
-    ipAddress           IpAddress  @map("ip_address")
-    otpCode             String?    @map("otp_code")
-    webAuthnSessionData Jsonb?     @map("web_authn_session_data")
-    factor              MfaFactors @relation(fields: [factorId], references: [id], onDelete: Cascade, map: "mfa_challenges_auth_factor_id_fkey", index: false)
+    id                  Id           @id(map: "mfa_challenges_pkey")
+    factorId            Id           @map("factor_id")
+    createdAt           Timestamptz  @map("created_at")
+    verifiedAt          Timestamptz? @map("verified_at")
+    ipAddress           IpAddress    @map("ip_address")
+    otpCode             String?      @map("otp_code")
+    webAuthnSessionData Jsonb?       @map("web_authn_session_data")
+    factor              MfaFactors   @relation(fields: [factorId], references: [id], onDelete: Cascade, map: "mfa_challenges_auth_factor_id_fkey", index: false)
 
     @@index([createdAt], map: "mfa_challenge_created_at_idx")
     @@rls
@@ -289,25 +313,33 @@ namespace auth {
     resource            String?
     codeChallenge       String?                           @map("code_challenge")
     codeChallengeMethod pg.enum(CodeChallengeMethod)?     @map("code_challenge_method")
-    responseType        pg.enum(OauthResponseType)        @default(dbgenerated("'code'::auth.oauth_response_type")) @map("response_type")
-    status              pg.enum(OauthAuthorizationStatus) @default(dbgenerated("'pending'::auth.oauth_authorization_status"))
+    responseType        pg.enum(OauthResponseType)        @default("code") @map("response_type")
+    status              pg.enum(OauthAuthorizationStatus) @default("pending")
     authorizationCode   String?                           @unique(map: "oauth_authorizations_authorization_code_key") @map("authorization_code")
-    createdAt           DateTime                          @default(now()) @map("created_at")
-    expiresAt           DateTime                          @default(dbgenerated("(now() + '00:03:00'::interval)")) @map("expires_at")
-    approvedAt          DateTime?                         @map("approved_at")
+    createdAt           Timestamptz                       @default(now()) @map("created_at")
+    expiresAt           Timestamptz                       @default(dbgenerated("(now() + '00:03:00'::interval)")) @map("expires_at")
+    approvedAt          Timestamptz?                      @map("approved_at")
     nonce               String?
     client              OauthClients                      @relation(fields: [clientId], references: [id], onDelete: Cascade, map: "oauth_authorizations_client_id_fkey", index: false)
     user                AuthUser?                         @relation(fields: [userId], references: [id], onDelete: Cascade, map: "oauth_authorizations_user_id_fkey", index: false)
 
     @@index([expiresAt], map: "oauth_auth_pending_exp_idx", where: "(status = 'pending'::auth.oauth_authorization_status)")
+    @@check(expression: "(char_length(authorization_code) <= 255)", map: "oauth_authorizations_authorization_code_length")
+    @@check(expression: "(char_length(code_challenge) <= 128)", map: "oauth_authorizations_code_challenge_length")
+    @@check(expression: "(expires_at > created_at)", map: "oauth_authorizations_expires_at_future")
+    @@check(expression: "(char_length(nonce) <= 255)", map: "oauth_authorizations_nonce_length")
+    @@check(expression: "(char_length(redirect_uri) <= 2048)", map: "oauth_authorizations_redirect_uri_length")
+    @@check(expression: "(char_length(resource) <= 2048)", map: "oauth_authorizations_resource_length")
+    @@check(expression: "(char_length(scope) <= 4096)", map: "oauth_authorizations_scope_length")
+    @@check(expression: "(char_length(state) <= 4096)", map: "oauth_authorizations_state_length")
     @@map("oauth_authorizations")
   }
 
   model OauthClientStates {
-    id           Id       @id(map: "oauth_client_states_pkey")
-    providerType String   @map("provider_type")
-    codeVerifier String?  @map("code_verifier")
-    createdAt    DateTime @map("created_at")
+    id           Id          @id(map: "oauth_client_states_pkey")
+    providerType String      @map("provider_type")
+    codeVerifier String?     @map("code_verifier")
+    createdAt    Timestamptz @map("created_at")
 
     @@index([createdAt], map: "idx_oauth_client_states_created_at")
     @@map("oauth_client_states")
@@ -318,8 +350,8 @@ namespace auth {
     userId    Id           @map("user_id")
     clientId  Id           @map("client_id")
     scopes    String
-    grantedAt DateTime     @default(now()) @map("granted_at")
-    revokedAt DateTime?    @map("revoked_at")
+    grantedAt Timestamptz  @default(now()) @map("granted_at")
+    revokedAt Timestamptz? @map("revoked_at")
     client    OauthClients @relation(fields: [clientId], references: [id], onDelete: Cascade, map: "oauth_consents_client_id_fkey", index: false)
     user      AuthUser     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "oauth_consents_user_id_fkey", index: false)
 
@@ -327,6 +359,9 @@ namespace auth {
     @@index([clientId], map: "oauth_consents_active_client_idx", where: "(revoked_at IS NULL)")
     @@index([userId, clientId], map: "oauth_consents_active_user_client_idx", where: "(revoked_at IS NULL)")
     @@index([userId, grantedAt], map: "oauth_consents_user_order_idx")
+    @@check(expression: "((revoked_at IS NULL) OR (revoked_at >= granted_at))", map: "oauth_consents_revoked_after_granted")
+    @@check(expression: "(char_length(scopes) <= 2048)", map: "oauth_consents_scopes_length")
+    @@check(expression: "(char_length(TRIM(BOTH FROM scopes)) > 0)", map: "oauth_consents_scopes_not_empty")
     @@map("oauth_consents")
   }
 
@@ -343,6 +378,7 @@ namespace auth {
     @@index([relatesTo], map: "one_time_tokens_relates_to_hash_idx", type: "hash")
     @@index([tokenHash], map: "one_time_tokens_token_hash_hash_idx", type: "hash")
     @@index([userId, tokenType], map: "one_time_tokens_user_id_token_type_key", unique: true)
+    @@check(expression: "(char_length(token_hash) > 0)", map: "one_time_tokens_token_hash_check")
     @@rls
     @@map("one_time_tokens")
   }
@@ -353,8 +389,8 @@ namespace auth {
     token      Parent?      @unique(map: "refresh_tokens_token_unique")
     userId     Parent?      @map("user_id")
     revoked    Boolean?
-    createdAt  DateTime?    @map("created_at")
-    updatedAt  DateTime?    @map("updated_at")
+    createdAt  Timestamptz? @map("created_at")
+    updatedAt  Timestamptz? @map("updated_at")
     parent     Parent?
     sessionId  Id?          @map("session_id")
     session    AuthSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade, map: "refresh_tokens_session_id_fkey", index: false)
@@ -371,8 +407,8 @@ namespace auth {
   model SsoProviders {
     id              Id                @id(map: "sso_providers_pkey")
     resourceId      String?           @map("resource_id")
-    createdAt       DateTime?         @map("created_at")
-    updatedAt       DateTime?         @map("updated_at")
+    createdAt       Timestamptz?      @map("created_at")
+    updatedAt       Timestamptz?      @map("updated_at")
     disabled        Boolean?
     samlProviders   SamlProviders[]
     samlRelayStates SamlRelayStates[]
@@ -380,6 +416,7 @@ namespace auth {
 
     @@index(expression: "lower(resource_id)", map: "sso_providers_resource_id_idx", unique: true)
     @@index([resourceId], map: "sso_providers_resource_id_pattern_idx")
+    @@check(expression: "((resource_id = NULL::text) OR (char_length(resource_id) > 0))", map: "resource_id not empty")
     @@rls
     @@map("sso_providers")
   }
@@ -391,12 +428,15 @@ namespace auth {
     metadataXml      String       @map("metadata_xml")
     metadataUrl      String?      @map("metadata_url")
     attributeMapping Jsonb?       @map("attribute_mapping")
-    createdAt        DateTime?    @map("created_at")
-    updatedAt        DateTime?    @map("updated_at")
+    createdAt        Timestamptz? @map("created_at")
+    updatedAt        Timestamptz? @map("updated_at")
     nameIdFormat     String?      @map("name_id_format")
     ssoProvider      SsoProviders @relation(fields: [ssoProviderId], references: [id], onDelete: Cascade, map: "saml_providers_sso_provider_id_fkey")
 
     @@index([ssoProviderId], map: "saml_providers_sso_provider_id_idx")
+    @@check(expression: "(char_length(entity_id) > 0)", map: "entity_id not empty")
+    @@check(expression: "((metadata_url = NULL::text) OR (char_length(metadata_url) > 0))", map: "metadata_url not empty")
+    @@check(expression: "(char_length(metadata_xml) > 0)", map: "metadata_xml not empty")
     @@rls
     @@map("saml_providers")
   }
@@ -407,8 +447,8 @@ namespace auth {
     requestId     String       @map("request_id")
     forEmail      String?      @map("for_email")
     redirectTo    String?      @map("redirect_to")
-    createdAt     DateTime?    @map("created_at")
-    updatedAt     DateTime?    @map("updated_at")
+    createdAt     Timestamptz? @map("created_at")
+    updatedAt     Timestamptz? @map("updated_at")
     flowStateId   Id?          @map("flow_state_id")
     flowState     FlowState?   @relation(fields: [flowStateId], references: [id], onDelete: Cascade, map: "saml_relay_states_flow_state_id_fkey", index: false)
     ssoProvider   SsoProviders @relation(fields: [ssoProviderId], references: [id], onDelete: Cascade, map: "saml_relay_states_sso_provider_id_fkey")
@@ -416,6 +456,7 @@ namespace auth {
     @@index([createdAt], map: "saml_relay_states_created_at_idx")
     @@index([forEmail], map: "saml_relay_states_for_email_idx")
     @@index([ssoProviderId], map: "saml_relay_states_sso_provider_id_idx")
+    @@check(expression: "(char_length(request_id) > 0)", map: "request_id not empty")
     @@rls
     @@map("saml_relay_states")
   }
@@ -431,46 +472,48 @@ namespace auth {
     id            Id           @id(map: "sso_domains_pkey")
     ssoProviderId Id           @map("sso_provider_id")
     domain        String
-    createdAt     DateTime?    @map("created_at")
-    updatedAt     DateTime?    @map("updated_at")
+    createdAt     Timestamptz? @map("created_at")
+    updatedAt     Timestamptz? @map("updated_at")
     ssoProvider   SsoProviders @relation(fields: [ssoProviderId], references: [id], onDelete: Cascade, map: "sso_domains_sso_provider_id_fkey")
 
     @@index(expression: "lower(domain)", map: "sso_domains_domain_idx", unique: true)
     @@index([ssoProviderId], map: "sso_domains_sso_provider_id_idx")
+    @@check(expression: "(char_length(domain) > 0)", map: "domain not empty")
     @@rls
     @@map("sso_domains")
   }
 
   model WebauthnChallenges {
-    id            Id        @id(map: "webauthn_challenges_pkey") @default(dbgenerated("gen_random_uuid()"))
-    userId        Id?       @map("user_id")
-    challengeType String    @map("challenge_type")
-    sessionData   Jsonb     @map("session_data")
-    createdAt     DateTime  @default(now()) @map("created_at")
-    expiresAt     DateTime  @map("expires_at")
-    user          AuthUser? @relation(fields: [userId], references: [id], onDelete: Cascade, map: "webauthn_challenges_user_id_fkey")
+    id            Id          @id(map: "webauthn_challenges_pkey") @default(dbgenerated("gen_random_uuid()"))
+    userId        Id?         @map("user_id")
+    challengeType String      @map("challenge_type")
+    sessionData   Jsonb       @map("session_data")
+    createdAt     Timestamptz @default(now()) @map("created_at")
+    expiresAt     Timestamptz @map("expires_at")
+    user          AuthUser?   @relation(fields: [userId], references: [id], onDelete: Cascade, map: "webauthn_challenges_user_id_fkey")
 
     @@index([expiresAt], map: "webauthn_challenges_expires_at_idx")
     @@index([userId], map: "webauthn_challenges_user_id_idx")
+    @@check(expression: "(challenge_type = ANY (ARRAY['signup'::text, 'registration'::text, 'authentication'::text]))", map: "webauthn_challenges_challenge_type_check")
     @@map("webauthn_challenges")
   }
 
   model WebauthnCredentials {
-    id              Id        @id(map: "webauthn_credentials_pkey") @default(dbgenerated("gen_random_uuid()"))
-    userId          Id        @map("user_id")
-    credentialId    Bytes     @map("credential_id")
-    publicKey       Bytes     @map("public_key")
-    attestationType String    @default("") @map("attestation_type")
+    id              Id           @id(map: "webauthn_credentials_pkey") @default(dbgenerated("gen_random_uuid()"))
+    userId          Id           @map("user_id")
+    credentialId    Bytes        @map("credential_id")
+    publicKey       Bytes        @map("public_key")
+    attestationType String       @default("") @map("attestation_type")
     aaguid          Id?
-    signCount       BigInt    @default(0) @map("sign_count")
-    transports      Jsonb     @default(dbgenerated("'[]'::jsonb"))
-    backupEligible  Boolean   @default(false) @map("backup_eligible")
-    backedUp        Boolean   @default(false) @map("backed_up")
-    friendlyName    String    @default("") @map("friendly_name")
-    createdAt       DateTime  @default(now()) @map("created_at")
-    updatedAt       DateTime  @default(now()) @map("updated_at")
-    lastUsedAt      DateTime? @map("last_used_at")
-    user            AuthUser  @relation(fields: [userId], references: [id], onDelete: Cascade, map: "webauthn_credentials_user_id_fkey")
+    signCount       BigInt       @default(0) @map("sign_count")
+    transports      Jsonb        @default(dbgenerated("'[]'::jsonb"))
+    backupEligible  Boolean      @default(false) @map("backup_eligible")
+    backedUp        Boolean      @default(false) @map("backed_up")
+    friendlyName    String       @default("") @map("friendly_name")
+    createdAt       Timestamptz  @default(now()) @map("created_at")
+    updatedAt       Timestamptz  @default(now()) @map("updated_at")
+    lastUsedAt      Timestamptz? @map("last_used_at")
+    user            AuthUser     @relation(fields: [userId], references: [id], onDelete: Cascade, map: "webauthn_credentials_user_id_fkey")
 
     @@index([credentialId], map: "webauthn_credentials_credential_id_key", unique: true)
     @@index([userId], map: "webauthn_credentials_user_id_idx")
@@ -543,11 +586,11 @@ namespace storage {
   model BucketsAnalytics {
     id                Id                  @id(map: "buckets_analytics_pkey") @default(dbgenerated("gen_random_uuid()"))
     name              String
-    _type             pg.enum(Buckettype) @default(dbgenerated("'ANALYTICS'::storage.buckettype")) @map("type")
+    _type             pg.enum(Buckettype) @default("ANALYTICS") @map("type")
     format            String              @default("ICEBERG")
-    createdAt         DateTime            @default(now()) @map("created_at")
-    updatedAt         DateTime            @default(now()) @map("updated_at")
-    deletedAt         DateTime?           @map("deleted_at")
+    createdAt         Timestamptz         @default(now()) @map("created_at")
+    updatedAt         Timestamptz         @default(now()) @map("updated_at")
+    deletedAt         Timestamptz?        @map("deleted_at")
     icebergNamespaces IcebergNamespaces[]
     icebergTables     IcebergTables[]
 
@@ -558,9 +601,9 @@ namespace storage {
 
   model BucketsVectors {
     id            String              @id(map: "buckets_vectors_pkey")
-    _type         pg.enum(Buckettype) @default(dbgenerated("'VECTOR'::storage.buckettype")) @map("type")
-    createdAt     DateTime            @default(now()) @map("created_at")
-    updatedAt     DateTime            @default(now()) @map("updated_at")
+    _type         pg.enum(Buckettype) @default("VECTOR") @map("type")
+    createdAt     Timestamptz         @default(now()) @map("created_at")
+    updatedAt     Timestamptz         @default(now()) @map("updated_at")
     vectorIndexes VectorIndexes[]
 
     @@rls
@@ -571,8 +614,8 @@ namespace storage {
     id            Id               @id(map: "iceberg_namespaces_pkey") @default(dbgenerated("gen_random_uuid()"))
     bucketName    String           @map("bucket_name")
     name          String
-    createdAt     DateTime         @default(now()) @map("created_at")
-    updatedAt     DateTime         @default(now()) @map("updated_at")
+    createdAt     Timestamptz      @default(now()) @map("created_at")
+    updatedAt     Timestamptz      @default(now()) @map("updated_at")
     metadata      Jsonb            @default(dbgenerated("'{}'::jsonb"))
     catalogId     Id               @map("catalog_id")
     icebergTables IcebergTables[]
@@ -589,8 +632,8 @@ namespace storage {
     bucketName    String            @map("bucket_name")
     name          String
     location      String
-    createdAt     DateTime          @default(now()) @map("created_at")
-    updatedAt     DateTime          @default(now()) @map("updated_at")
+    createdAt     Timestamptz       @default(now()) @map("created_at")
+    updatedAt     Timestamptz       @default(now()) @map("updated_at")
     remoteTableId String?           @map("remote_table_id")
     shardKey      String?           @map("shard_key")
     shardId       String?           @map("shard_id")
@@ -618,14 +661,14 @@ namespace storage {
     id                      String                    @id(map: "buckets_pkey")
     name                    String
     owner                   Id?
-    createdAt               DateTime?                 @default(now()) @map("created_at")
-    updatedAt               DateTime?                 @default(now()) @map("updated_at")
+    createdAt               Timestamptz?              @default(now()) @map("created_at")
+    updatedAt               Timestamptz?              @default(now()) @map("updated_at")
     public                  Boolean?                  @default(false)
     avifAutodetection       Boolean?                  @default(false) @map("avif_autodetection")
     fileSizeLimit           BigInt?                   @map("file_size_limit")
     allowedMimeTypes        String[]?                 @noCheck(elementNotNull) @map("allowed_mime_types")
     ownerId                 String?                   @map("owner_id")
-    _type                   pg.enum(Buckettype)       @default(dbgenerated("'STANDARD'::storage.buckettype")) @map("type")
+    _type                   pg.enum(Buckettype)       @default("STANDARD") @map("type")
     objects                 StorageObject[]
     s3MultipartUploads      S3MultipartUploads[]
     s3MultipartUploadsParts S3MultipartUploadsParts[]
@@ -643,7 +686,7 @@ namespace storage {
     key                     String
     version                 String
     ownerId                 String?                   @map("owner_id")
-    createdAt               DateTime                  @default(now()) @map("created_at")
+    createdAt               Timestamptz               @default(now()) @map("created_at")
     userMetadata            Jsonb?                    @map("user_metadata")
     metadata                Jsonb?
     s3MultipartUploadsParts S3MultipartUploadsParts[]
@@ -664,7 +707,7 @@ namespace storage {
     etag       String
     ownerId    String?            @map("owner_id")
     version    String
-    createdAt  DateTime           @default(now()) @map("created_at")
+    createdAt  Timestamptz        @default(now()) @map("created_at")
     bucket     StorageBucket      @relation(fields: [bucketId], references: [id], map: "s3_multipart_uploads_parts_bucket_id_fkey", index: false)
     upload     S3MultipartUploads @relation(fields: [uploadId], references: [id], onDelete: Cascade, map: "s3_multipart_uploads_parts_upload_id_fkey", index: false)
 
@@ -677,9 +720,9 @@ namespace storage {
     bucketId       String?        @map("bucket_id")
     name           String?
     owner          Id?
-    createdAt      DateTime?      @default(now()) @map("created_at")
-    updatedAt      DateTime?      @default(now()) @map("updated_at")
-    lastAccessedAt DateTime?      @default(now()) @map("last_accessed_at")
+    createdAt      Timestamptz?   @default(now()) @map("created_at")
+    updatedAt      Timestamptz?   @default(now()) @map("updated_at")
+    lastAccessedAt Timestamptz?   @default(now()) @map("last_accessed_at")
     metadata       Jsonb?
     pathTokens     String[]?      @noCheck(elementNotNull) @map("path_tokens")
     version        String?
@@ -703,8 +746,8 @@ namespace storage {
     dimension             Int
     distanceMetric        String         @map("distance_metric")
     metadataConfiguration Jsonb?         @map("metadata_configuration")
-    createdAt             DateTime       @default(now()) @map("created_at")
-    updatedAt             DateTime       @default(now()) @map("updated_at")
+    createdAt             Timestamptz    @default(now()) @map("created_at")
+    updatedAt             Timestamptz    @default(now()) @map("updated_at")
     bucket                BucketsVectors @relation(fields: [bucketId], references: [id], map: "vector_indexes_bucket_id_fkey", index: false)
 
     @@index([name, bucketId], map: "vector_indexes_name_bucket_id_idx", unique: true)

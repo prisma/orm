@@ -15,7 +15,7 @@ import {
 } from '@repo/tsdown/shell-testkit';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
 const facade = '@prisma/orm-postgres';
 const platform: ShellName[] = [
   '@prisma/orm-framework',

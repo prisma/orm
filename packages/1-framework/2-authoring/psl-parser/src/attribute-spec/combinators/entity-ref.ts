@@ -1,5 +1,5 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import type { PslDiagnostic } from '../../diagnostic';
 import { IdentifierAst } from '../../syntax/ast/identifier';
 import type { AttributeCtx, EntityRefArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';

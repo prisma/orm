@@ -1,6 +1,7 @@
-import type { PslDiagnostic, PslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import type { PslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import { UNSPECIFIED_PSL_NAMESPACE_ID } from '@internal/framework-components/psl-ast';
-import { type Range, SourceFile } from './source-file';
+import type { PslDiagnostic } from './diagnostic';
+import { PslSources, SourceFile } from './source-file';
 import { DocumentAst } from './syntax/ast/declarations';
 import type { GreenNode } from './syntax/green';
 import { GreenNodeBuilder } from './syntax/green-builder';
@@ -8,16 +9,12 @@ import { createSyntaxTree } from './syntax/red';
 import type { SyntaxKind } from './syntax/syntax-kind';
 import { isTerminatedStringLiteral, type Token, Tokenizer, type TokenKind } from './tokenizer';
 
-export interface ParseDiagnostic {
-  readonly code: PslDiagnostic['code'];
-  readonly message: string;
-  readonly range: Range;
-}
+export type ParseDiagnostic = PslDiagnostic;
 
 export interface ParseResult {
   readonly document: DocumentAst;
   readonly diagnostics: readonly ParseDiagnostic[];
-  readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
 }
 
 export type PslGrammar = 'psl' | 'prisma7';
@@ -58,9 +55,9 @@ export class Cursor {
   #offset = 0;
   #depth = 0;
 
-  constructor(source: string) {
+  constructor(filename: string, source: string) {
     this.#tokenizer = new Tokenizer(source);
-    this.#sourceFile = new SourceFile(source);
+    this.#sourceFile = new SourceFile(filename, source);
   }
 
   get diagnostics(): readonly ParseDiagnostic[] {
@@ -166,6 +163,7 @@ export class Cursor {
     const start = mark.offset;
     const end = start + mark.length;
     this.#diagnostics.push({
+      filename: this.#sourceFile.filename,
       code,
       message,
       range: {
@@ -527,12 +525,13 @@ type MemberParser = (cursor: Cursor) => void;
  * Parses a full PSL document. Never throws — malformed input yields diagnostics
  * and a recovered tree, not an exception.
  */
-export function parse(source: string, options: ParseOptions = {}): ParseResult {
-  const cursor = new Cursor(source);
+export function parse(source: string, filename: string, options: ParseOptions = {}): ParseResult {
+  const cursor = new Cursor(filename, source);
   const green = parseDocument(cursor, options.grammar ?? 'psl');
   const root = createSyntaxTree(green);
   const document = DocumentAst.cast(root) ?? new DocumentAst(root);
-  return { document, diagnostics: cursor.diagnostics, sourceFile: cursor.sourceFile };
+  const sources = new PslSources([[document.syntax, cursor.sourceFile]]);
+  return { document, diagnostics: cursor.diagnostics, sources };
 }
 
 function parseDocument(cursor: Cursor, grammar: PslGrammar): GreenNode {

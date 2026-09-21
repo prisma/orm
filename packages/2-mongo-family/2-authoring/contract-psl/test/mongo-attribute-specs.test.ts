@@ -71,18 +71,25 @@ function namedType<Ctx extends AttributeCtx>(
 }
 
 function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecContext } {
-  const { document, sourceFile } = parse(`
+  const { document, sources } = parse(
+    `
     model Widget {
       id   ObjectId @id @map("_id")
       name String
     }
-  `);
-  const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
-  const model = table.topLevel.models['Widget'];
+  `,
+    'test.prisma',
+  );
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
+  const model = symbolTable.topLevel.models['Widget'];
   const field = model?.fields['name'];
   if (!model || !field) throw new Error('fixture declares Widget.name');
   const modelContext: AttributeSpecContext = {
-    symbols: table,
+    symbols: symbolTable,
     model,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),

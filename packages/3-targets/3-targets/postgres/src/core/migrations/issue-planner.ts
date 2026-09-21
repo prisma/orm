@@ -190,13 +190,10 @@ function classifyCall(call: PostgresOpFactoryCall): CallCategory {
       // to preserve the codec-emitted label and precheck/postcheck.
       // Classification falls back to inspecting the underlying op's target
       // details (`objectType: 'type'`).
-      const op = (
-        call as {
-          op?: {
-            target?: { details?: { objectType?: string } };
-          };
-        }
-      ).op;
+      const op = blindCast<
+        { op?: { target?: { details?: { objectType?: string } } } },
+        'RawSqlCall exposes op details used only for sequencing type operations'
+      >(call).op;
       const objectType = op?.target?.details?.objectType;
       if (objectType === 'type') return 'dep';
       return 'alter';
@@ -246,18 +243,21 @@ function locationForCall(call: PostgresOpFactoryCall): SqlPlannerConflict['locat
   // Most Postgres call classes expose `tableName`/`columnName`/`indexName`/
   // `constraintName` as readonly fields. We avoid `toOp()` here because a
   // `DataTransformCall` intentionally throws from `toOp`.
-  const anyCall = call as unknown as {
-    tableName?: string;
-    columnName?: string;
-    indexName?: string;
-    newIndexName?: string;
-    constraintName?: string;
-    newConstraintName?: string;
-    typeName?: string;
-    policyName?: string;
-    newPolicyName?: string;
-    policy?: { readonly name?: string };
-  };
+  const anyCall = blindCast<
+    {
+      tableName?: string;
+      columnName?: string;
+      indexName?: string;
+      newIndexName?: string;
+      constraintName?: string;
+      newConstraintName?: string;
+      typeName?: string;
+      policyName?: string;
+      newPolicyName?: string;
+      policy?: { readonly name?: string };
+    },
+    'Postgres migration call classes expose location-bearing readonly properties without a shared interface'
+  >(call);
   const location: {
     entityKind?: string;
     entityName?: string;
@@ -287,7 +287,12 @@ function locationForCall(call: PostgresOpFactoryCall): SqlPlannerConflict['locat
   if (anyCall.policyName) location.rlsPolicy = anyCall.policyName;
   else if (anyCall.policy?.name) location.rlsPolicy = anyCall.policy.name;
   else if (anyCall.newPolicyName) location.rlsPolicy = anyCall.newPolicyName;
-  return Object.keys(location).length > 0 ? (location as SqlPlannerConflictLocation) : undefined;
+  return Object.keys(location).length > 0
+    ? blindCast<
+        SqlPlannerConflictLocation,
+        'non-empty conflict location has at least one valid discriminating property'
+      >(location)
+    : undefined;
 }
 
 export function conflictForDisallowedCall(

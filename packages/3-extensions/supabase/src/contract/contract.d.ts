@@ -34,7 +34,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'ede079259d126d9153bcb4fc4aa6781d870a255585524e1e95fae9e5af4eef89'>;
+  StorageHashBase<'43f09411473534105017fa715b8932facbdf79feab1bfc75da681beb87f22cbc'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -3212,8 +3212,8 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly default: {
-                    readonly kind: 'function';
-                    readonly expression: "'code'::auth.oauth_response_type";
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/enum@1', 'code'>;
                   };
                   readonly typeParams: { readonly typeName: 'auth.oauth_response_type' };
                 };
@@ -3232,8 +3232,8 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly default: {
-                    readonly kind: 'function';
-                    readonly expression: "'pending'::auth.oauth_authorization_status";
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/enum@1', 'pending'>;
                   };
                   readonly typeParams: { readonly typeName: 'auth.oauth_authorization_status' };
                 };
@@ -3350,8 +3350,8 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly default: {
-                    readonly kind: 'function';
-                    readonly expression: "'confidential'::auth.oauth_client_type";
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/enum@1', 'confidential'>;
                   };
                   readonly typeParams: { readonly typeName: 'auth.oauth_client_type' };
                 };
@@ -4768,8 +4768,8 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly default: {
-                    readonly kind: 'function';
-                    readonly expression: "'STANDARD'::storage.buckettype";
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/enum@1', 'STANDARD'>;
                   };
                   readonly typeParams: { readonly typeName: 'storage.buckettype' };
                 };
@@ -4833,8 +4833,8 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly default: {
-                    readonly kind: 'function';
-                    readonly expression: "'ANALYTICS'::storage.buckettype";
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/enum@1', 'ANALYTICS'>;
                   };
                   readonly typeParams: { readonly typeName: 'storage.buckettype' };
                 };
@@ -4878,8 +4878,8 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly default: {
-                    readonly kind: 'function';
-                    readonly expression: "'VECTOR'::storage.buckettype";
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/enum@1', 'VECTOR'>;
                   };
                   readonly typeParams: { readonly typeName: 'storage.buckettype' };
                 };

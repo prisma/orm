@@ -1,9 +1,5 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
-import type {
-  ContributedPslDiagnosticCode,
-  PslDiagnostic,
-} from '@internal/framework-components/psl-ast';
+import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type {
   ArgType,
   AttributeCtx,
@@ -19,6 +15,7 @@ import type {
   ModelSymbol,
   NumLiteral,
   ParsedTaggedLiteral,
+  PslDiagnostic,
   PslSpan,
   RejectingArgType,
   SymbolTable,
@@ -26,6 +23,7 @@ import type {
 } from '@internal/psl-parser';
 import {
   bool,
+  diagnosticSource,
   entityRef,
   fieldAttribute,
   fieldRef,
@@ -39,6 +37,7 @@ import {
   numLiteral,
   oneOf,
   optional,
+  type PslDiagnosticCollector,
   record,
   referencedFieldRef,
   str,
@@ -48,7 +47,7 @@ import type {
   AstNode,
   FieldAttributeAst,
   ModelAttributeAst,
-  SourceFile,
+  PslSources,
 } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { notOk } from '@internal/utils/result';
@@ -75,12 +74,10 @@ export function findFieldAttributeNode(
 
 function buildModelAttributeCtx(input: {
   readonly selfModel: ModelSymbol;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
+  readonly sources: PslSources;
 }): ModelAttributeCtx {
   return {
-    sourceId: input.sourceId,
-    sourceFile: input.sourceFile,
+    sources: input.sources,
     selfModel: input.selfModel,
   };
 }
@@ -88,13 +85,11 @@ function buildModelAttributeCtx(input: {
 function buildFieldAttributeCtx(input: {
   readonly selfModel: ModelSymbol;
   readonly field: FieldSymbol;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
+  readonly sources: PslSources;
   readonly resolveReferencedModel?: (() => ModelSymbol | undefined) | undefined;
 }): FieldAttributeCtx {
   return {
-    sourceId: input.sourceId,
-    sourceFile: input.sourceFile,
+    sources: input.sources,
     selfModel: input.selfModel,
     resolveReferencedModel: input.resolveReferencedModel ?? (() => undefined),
     field: input.field,
@@ -108,21 +103,19 @@ export function interpretModelAttribute<Out>(input: {
   readonly node: ModelAttributeAst;
   readonly spec: AttributeSpec<Out, ModelAttributeCtx>;
   readonly model: ModelSymbol;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly sources: PslSources;
+  readonly diagnostics: PslDiagnosticCollector;
 }): Out | undefined {
   const result = interpretAttribute(
     input.node,
     input.spec,
     buildModelAttributeCtx({
       selfModel: input.model,
-      sourceFile: input.sourceFile,
-      sourceId: input.sourceId,
+      sources: input.sources,
     }),
   );
   if (!result.ok) {
-    for (const failure of result.failure) input.diagnostics.push(failure);
+    input.diagnostics.push(...result.failure);
     return undefined;
   }
   return result.value;
@@ -136,9 +129,8 @@ export function interpretFieldAttribute<Out>(input: {
   readonly spec: AttributeSpec<Out, FieldAttributeCtx>;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly sources: PslSources;
+  readonly diagnostics: PslDiagnosticCollector;
   readonly resolveReferencedModel?: () => ModelSymbol | undefined;
 }): Out | undefined {
   const result = interpretAttribute(
@@ -147,13 +139,12 @@ export function interpretFieldAttribute<Out>(input: {
     buildFieldAttributeCtx({
       selfModel: input.model,
       field: input.field,
-      sourceFile: input.sourceFile,
-      sourceId: input.sourceId,
+      sources: input.sources,
       resolveReferencedModel: input.resolveReferencedModel,
     }),
   );
   if (!result.ok) {
-    for (const failure of result.failure) input.diagnostics.push(failure);
+    input.diagnostics.push(...result.failure);
     return undefined;
   }
   return result.value;
@@ -546,7 +537,7 @@ const baseModelSpec = modelAttribute('base', {
 function relationAttributeSpan(ctx: FieldAttributeCtx): PslSpan {
   const node = findFieldAttributeNode(ctx.field, 'relation');
   if (node !== undefined) {
-    return nodePslSpan(node.syntax, ctx.sourceFile);
+    return nodePslSpan(node.syntax, ctx.sources);
   }
   return ctx.field.span;
 }
@@ -562,8 +553,7 @@ function relationInvariants(
       {
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message: `Relation field "${ctx.selfModel.name}.${ctx.field.name}" requires fields and references arguments`,
-        sourceId: ctx.sourceId,
-        span: relationAttributeSpan(ctx),
+        ...diagnosticSource(ctx.sources, ctx.field.node.syntax).at(relationAttributeSpan(ctx)),
       },
     ];
   }

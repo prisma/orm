@@ -51,10 +51,11 @@ const authoringContributions = assembleAuthoringContributions([
 function complete(markedSource: string) {
   const offset = markedSource.indexOf('|');
   const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
   const items = providePslCompletionItems({

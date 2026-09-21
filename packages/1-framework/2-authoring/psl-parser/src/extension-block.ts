@@ -7,13 +7,13 @@ import type { CodecLookup } from '@internal/framework-components/codec';
 import {
   makePslNamespace,
   makePslNamespaceEntries,
-  type PslDiagnostic,
   type PslModel,
   type PslSpan,
   UNSPECIFIED_PSL_NAMESPACE_ID,
   validateExtensionBlock,
 } from '@internal/framework-components/psl-ast';
-import type { SourceFile } from './source-file';
+import { diagnosticFromSpan, diagnosticSource, type PslDiagnostic } from './diagnostic';
+import type { PslSources } from './source-file';
 import type { BlockSymbol, ModelSymbol, SymbolTable } from './symbol-table';
 
 export function findBlockDescriptor(
@@ -37,17 +37,18 @@ export function validateExtensionBlockFromSymbol(input: {
   readonly block: BlockSymbol;
   readonly descriptor: AuthoringPslBlockDescriptor;
   readonly symbolTable: SymbolTable;
-  readonly sourceFile: SourceFile;
-  readonly sourceId: string;
+  readonly sources: PslSources;
   readonly codecLookup: CodecLookup;
 }): readonly PslDiagnostic[] {
   const refCtx = buildRefResolutionContext(input.symbolTable, input.block);
   return validateExtensionBlock(
     input.block.block,
     input.descriptor,
-    input.sourceId,
+    input.sources.sourceFileFor(input.block.node.syntax).filename,
     input.codecLookup,
     refCtx,
+  ).map((diagnostic) =>
+    diagnosticFromSpan(diagnostic, diagnosticSource(input.sources, input.block.node.syntax)),
   );
 }
 

@@ -1,7 +1,7 @@
 export type { ParseDiagnostic, ParseOptions, ParseResult } from '../parse';
 export { parse } from '../parse';
 export type { Position, Range } from '../source-file';
-export { SourceFile } from '../source-file';
+export { PslSources, SourceFile } from '../source-file';
 export {
   AttributeArgListAst,
   FieldAttributeAst,

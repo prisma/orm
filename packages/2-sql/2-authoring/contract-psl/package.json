@@ -49,12 +49,30 @@
   ],
   "types": "./dist/index.d.mts",
   "exports": {
-    ".": "./dist/index.mjs",
-    "./attribute-specs": "./dist/attribute-specs.mjs",
-    "./default-table-name": "./dist/default-table-name.mjs",
-    "./provider": "./dist/provider.mjs",
-    "./resolution": "./dist/resolution.mjs",
-    "./package.json": "./package.json"
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    },
+    "./attribute-specs": {
+      "types": "./dist/attribute-specs.d.mts",
+      "import": "./dist/attribute-specs.mjs"
+    },
+    "./default-table-name": {
+      "types": "./dist/default-table-name.d.mts",
+      "import": "./dist/default-table-name.mjs"
+    },
+    "./provider": {
+      "types": "./dist/provider.d.mts",
+      "import": "./dist/provider.mjs"
+    },
+    "./resolution": {
+      "types": "./dist/resolution.d.mts",
+      "import": "./dist/resolution.mjs"
+    },
+    "./package.json": {
+      "types": "./package.json",
+      "import": "./package.json"
+    }
   },
   "engines": {
     "node": ">=24"

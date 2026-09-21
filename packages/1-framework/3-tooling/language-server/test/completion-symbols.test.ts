@@ -11,8 +11,13 @@ function fields(
   typeConstructors?: AuthoringTypeNamespace,
 ) {
   const offset = sourceWithCursor.indexOf('|');
-  const { document, sourceFile } = parse(sourceWithCursor.replace('|', ''));
-  const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
+  const { document, sources } = parse(sourceWithCursor.replace('|', ''), 'test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
   const context = classifyPslCompletionContext({
     document,
     sourceFile,
@@ -22,8 +27,8 @@ function fields(
     throw new Error(`Unexpected context: ${context.kind}`);
   }
   return {
-    local: localFieldNames(context, table, scalarTypes, typeConstructors),
-    referenced: referencedFieldNames(context, table, scalarTypes, typeConstructors),
+    local: localFieldNames(context, symbolTable, scalarTypes, typeConstructors),
+    referenced: referencedFieldNames(context, symbolTable, scalarTypes, typeConstructors),
   };
 }
 

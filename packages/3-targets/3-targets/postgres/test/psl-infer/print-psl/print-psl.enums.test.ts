@@ -213,10 +213,10 @@ describe('pg.enum(Name) column emission', () => {
 
 describe('emitted PSL parses', () => {
   function parseDiagnostics(source: string) {
-    const { document, sourceFile } = parse(source);
+    const { document, sources } = parse(source, 'print-psl.enums.test.psl');
     const { diagnostics } = buildSymbolTable({
-      document,
-      sourceFile,
+      documents: [document],
+      sources,
       pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
     });
     return diagnostics;

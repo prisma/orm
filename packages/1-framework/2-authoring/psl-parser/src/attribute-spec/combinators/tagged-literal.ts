@@ -1,5 +1,5 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import type { PslDiagnostic } from '../../diagnostic';
 import { nodePslSpan } from '../../resolve';
 import { TaggedLiteralExprAst } from '../../syntax/ast/expressions';
 import type { AttributeCtx, ParsedTaggedLiteral, TaggedLiteralArgType } from '../types';
@@ -26,7 +26,7 @@ export function taggedLiteral(
       return ok({
         tag: literal.tagName(),
         canonicalization: literal.canonicalization(),
-        span: nodePslSpan(literal.syntax, ctx.sourceFile),
+        span: nodePslSpan(literal.syntax, ctx.sources),
       });
     },
   };

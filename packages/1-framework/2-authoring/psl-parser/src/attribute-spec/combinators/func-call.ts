@@ -1,5 +1,5 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import type { PslDiagnostic } from '../../diagnostic';
 import { nodePslSpan } from '../../resolve';
 import type { ExpressionAst } from '../../syntax/ast/expressions';
 import { FunctionCallAst } from '../../syntax/ast/expressions';
@@ -19,12 +19,13 @@ export function funcCall<const Name extends string, const Signature extends Func
     parse: (arg, ctx): Result<TypedFuncCall, readonly PslDiagnostic[]> => {
       const guard = matchCallee(arg, name, ctx);
       if (!guard.ok) return guard;
-      const span = nodePslSpan(guard.value.syntax, ctx.sourceFile);
+      const span = nodePslSpan(guard.value.syntax, ctx.sources);
       const bound = interpretArgs(
         guard.value.args(),
         { name, positional: sig.positional ?? [], named: sig.named ?? {} },
         ctx,
         span,
+        guard.value.syntax,
       );
       if (!bound.ok) return notOk<readonly PslDiagnostic[]>(bound.failure);
       return ok({ fn: name, span, args: bound.value });

@@ -1,5 +1,4 @@
 import type { PlanMeta } from '@internal/contract/types';
-import type { MigrationOperationClass } from '@internal/framework-components/control';
 import {
   type AnyMongoDdlCommand,
   type AnyMongoInspectionCommand,
@@ -46,6 +45,7 @@ import {
   RawUpdateManyCommand,
   RawUpdateOneCommand,
 } from '@internal/mongo-query-ast/execution';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { type } from 'arktype';
 import { mongoTargetError } from './mongo-target-errors';
@@ -140,6 +140,21 @@ const FieldFilterJson = type({
   value: 'unknown',
 });
 
+const AndFilterJson = type({
+  kind: '"and"',
+  exprs: 'Record<string, unknown>[]',
+});
+
+const OrFilterJson = type({
+  kind: '"or"',
+  exprs: 'Record<string, unknown>[]',
+});
+
+const NotFilterJson = type({
+  kind: '"not"',
+  expr: 'Record<string, unknown>',
+});
+
 const ExistsFilterJson = type({
   kind: '"exists"',
   field: 'string',
@@ -229,6 +244,41 @@ const QueryPlanJson = type({
   meta: PlanMetaJson,
 });
 
+const MatchStageJson = type({
+  kind: '"match"',
+  filter: 'Record<string, unknown>',
+});
+
+const LimitStageJson = type({
+  kind: '"limit"',
+  limit: 'number',
+});
+
+const SortStageJson = type({
+  kind: '"sort"',
+  sort: 'Record<string, 1 | -1>',
+});
+
+const ProjectStageJson = type({
+  kind: '"project"',
+  projection: 'Record<string, 0 | 1>',
+});
+
+const AddFieldsStageJson = type({
+  kind: '"addFields"',
+  fields: 'Record<string, unknown>',
+});
+
+const LookupStageJson = type({
+  kind: '"lookup"',
+  from: 'string',
+  as: 'string',
+  'localField?': 'string',
+  'foreignField?': 'string',
+  'pipeline?': 'Record<string, unknown>[]',
+  'let_?': 'Record<string, unknown>',
+});
+
 // ============================================================================
 // DDL check/step schemas
 // ============================================================================
@@ -271,6 +321,36 @@ const DataTransformOperationJson = type({
   postcheck: 'Record<string, unknown>[]',
 });
 
+type SerializedSlot =
+  | Record<string, unknown>
+  | readonly unknown[]
+  | string
+  | number
+  | boolean
+  | null
+  | undefined;
+
+function recordValue(json: unknown, key: string, context: string): SerializedSlot {
+  if (json === null || typeof json !== 'object') {
+    throw mongoTargetError(
+      'MIGRATION.INVALID_OPERATION_ENTRY',
+      `Invalid ${context}: expected object`,
+      {
+        meta: { context },
+      },
+    );
+  }
+  return blindCast<
+    SerializedSlot,
+    'serialized migration JSON slot may contain primitives, records, arrays, null, or undefined'
+  >(Reflect.get(json, key));
+}
+
+function recordKind(json: unknown, context: string): string {
+  const kind = recordValue(json, 'kind', context);
+  return typeof kind === 'string' ? kind : '';
+}
+
 function validate<T>(schema: { assert: (data: unknown) => T }, data: unknown, context: string): T {
   try {
     return schema.assert(stripUndefinedDeep(data));
@@ -305,7 +385,7 @@ function validate<T>(schema: { assert: (data: unknown) => T }, data: unknown, co
  * Top-level op IRs (class instances with `undefined` optional fields)
  * still get flattened to plain records as required by arktype.
  */
-function stripUndefinedDeep(value: unknown): unknown {
+function stripUndefinedDeep(value: unknown): SerializedSlot {
   if (Array.isArray(value)) {
     let changed = false;
     const next = value.map((item) => {
@@ -316,9 +396,11 @@ function stripUndefinedDeep(value: unknown): unknown {
     return changed ? next : value;
   }
   if (value === null || typeof value !== 'object') {
-    return value;
+    return blindCast<SerializedSlot, 'primitive serialized values are valid operation JSON slots'>(
+      value,
+    );
   }
-  const entries = Object.entries(value as Record<string, unknown>);
+  const entries = Object.entries(value);
   const out: Record<string, unknown> = {};
   let changed = false;
   for (const [key, val] of entries) {
@@ -330,49 +412,33 @@ function stripUndefinedDeep(value: unknown): unknown {
     if (stripped !== val) changed = true;
     out[key] = stripped;
   }
-  return changed ? out : value;
+  return changed
+    ? out
+    : blindCast<SerializedSlot, 'object serialized values are valid operation JSON slots'>(value);
 }
 
 function deserializeFilterExpr(json: unknown): MongoFilterExpr {
-  const record = json as Record<string, unknown>;
-  const kind = record['kind'] as string;
+  const kind = recordKind(json, 'filter expression');
   switch (kind) {
     case 'field': {
       const data = validate(FieldFilterJson, json, 'field filter');
-      return MongoFieldFilter.of(data.field, data.op, data.value as never);
+      return MongoFieldFilter.of(
+        data.field,
+        data.op,
+        blindCast<never, 'field filter values are carried opaquely by the query AST'>(data.value),
+      );
     }
     case 'and': {
-      const exprs = record['exprs'];
-      if (!Array.isArray(exprs)) {
-        throw mongoTargetError(
-          'MIGRATION.INVALID_OPERATION_ENTRY',
-          'Invalid and filter: missing exprs array',
-          { meta: { context: 'and filter' } },
-        );
-      }
-      return MongoAndExpr.of(exprs.map(deserializeFilterExpr));
+      const data = validate(AndFilterJson, json, 'and filter');
+      return MongoAndExpr.of(data.exprs.map(deserializeFilterExpr));
     }
     case 'or': {
-      const exprs = record['exprs'];
-      if (!Array.isArray(exprs)) {
-        throw mongoTargetError(
-          'MIGRATION.INVALID_OPERATION_ENTRY',
-          'Invalid or filter: missing exprs array',
-          { meta: { context: 'or filter' } },
-        );
-      }
-      return MongoOrExpr.of(exprs.map(deserializeFilterExpr));
+      const data = validate(OrFilterJson, json, 'or filter');
+      return MongoOrExpr.of(data.exprs.map(deserializeFilterExpr));
     }
     case 'not': {
-      const expr = record['expr'];
-      if (!expr || typeof expr !== 'object') {
-        throw mongoTargetError(
-          'MIGRATION.INVALID_OPERATION_ENTRY',
-          'Invalid not filter: missing expr',
-          { meta: { context: 'not filter' } },
-        );
-      }
-      return new MongoNotExpr(deserializeFilterExpr(expr));
+      const data = validate(NotFilterJson, json, 'not filter');
+      return new MongoNotExpr(deserializeFilterExpr(data.expr));
     }
     case 'exists': {
       const data = validate(ExistsFilterJson, json, 'exists filter');
@@ -392,20 +458,34 @@ function deserializeFilterExpr(json: unknown): MongoFilterExpr {
 // ============================================================================
 
 export function deserializePipelineStage(json: unknown): MongoPipelineStage {
-  const record = json as Record<string, unknown>;
-  const kind = record['kind'] as string;
+  const kind = recordKind(json, 'pipeline stage');
   switch (kind) {
-    case 'match':
-      return new MongoMatchStage(deserializeFilterExpr(record['filter']));
-    case 'limit':
-      return new MongoLimitStage(record['limit'] as number);
-    case 'sort':
-      return new MongoSortStage(record['sort'] as Record<string, 1 | -1>);
-    case 'project':
-      return new MongoProjectStage(record['projection'] as Record<string, 0 | 1>);
-    case 'addFields':
-      return new MongoAddFieldsStage(record['fields'] as Record<string, never>);
+    case 'match': {
+      const data = validate(MatchStageJson, json, 'match stage');
+      return new MongoMatchStage(deserializeFilterExpr(data.filter));
+    }
+    case 'limit': {
+      const data = validate(LimitStageJson, json, 'limit stage');
+      return new MongoLimitStage(data.limit);
+    }
+    case 'sort': {
+      const data = validate(SortStageJson, json, 'sort stage');
+      return new MongoSortStage(data.sort);
+    }
+    case 'project': {
+      const data = validate(ProjectStageJson, json, 'project stage');
+      return new MongoProjectStage(data.projection);
+    }
+    case 'addFields': {
+      const data = validate(AddFieldsStageJson, json, 'addFields stage');
+      return new MongoAddFieldsStage(
+        blindCast<Record<string, never>, 'addFields stage carries expression records opaquely'>(
+          data.fields,
+        ),
+      );
+    }
     case 'lookup': {
+      const data = validate(LookupStageJson, json, 'lookup stage');
       const opts: {
         from: string;
         as: string;
@@ -414,36 +494,58 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
         pipeline?: ReadonlyArray<MongoPipelineStage>;
         let_?: Record<string, never>;
       } = {
-        from: record['from'] as string,
-        as: record['as'] as string,
+        from: data.from,
+        as: data.as,
       };
-      if (record['localField'] !== undefined) opts.localField = record['localField'] as string;
-      if (record['foreignField'] !== undefined)
-        opts.foreignField = record['foreignField'] as string;
-      if (record['pipeline'] !== undefined)
-        opts.pipeline = (record['pipeline'] as unknown[]).map(deserializePipelineStage);
-      if (record['let_'] !== undefined) opts.let_ = record['let_'] as Record<string, never>;
+      if (data.localField !== undefined) opts.localField = data.localField;
+      if (data.foreignField !== undefined) opts.foreignField = data.foreignField;
+      if (data.pipeline !== undefined) opts.pipeline = data.pipeline.map(deserializePipelineStage);
+      if (data.let_ !== undefined)
+        opts.let_ = blindCast<
+          Record<string, never>,
+          'lookup let bindings carry expression records opaquely'
+        >(data.let_);
       return new MongoLookupStage(opts);
     }
     case 'merge': {
+      const whenMatched = recordValue(json, 'whenMatched', 'merge stage');
       const opts: {
         into: string | { db: string; coll: string };
         on?: string | ReadonlyArray<string>;
         whenMatched?: string | ReadonlyArray<MongoUpdatePipelineStage>;
         whenNotMatched?: string;
       } = {
-        into: record['into'] as string | { db: string; coll: string },
+        into: blindCast<
+          string | { db: string; coll: string },
+          'merge stage into is validated by MongoDB-compatible serialized operation authors'
+        >(recordValue(json, 'into', 'merge stage')),
       };
-      if (record['on'] !== undefined) opts.on = record['on'] as string | string[];
-      if (record['whenMatched'] !== undefined) {
-        const wm = record['whenMatched'];
+      const on = recordValue(json, 'on', 'merge stage');
+      if (on !== undefined)
+        opts.on = blindCast<
+          string | string[],
+          'merge stage on is either a field name or field-name array'
+        >(on);
+      if (whenMatched !== undefined) {
         opts.whenMatched =
-          typeof wm === 'string'
-            ? wm
-            : ((wm as unknown[]).map(deserializePipelineStage) as MongoUpdatePipelineStage[]);
+          typeof whenMatched === 'string'
+            ? whenMatched
+            : blindCast<
+                MongoUpdatePipelineStage[],
+                'merge stage whenMatched non-string branch is an update pipeline array'
+              >(
+                blindCast<
+                  unknown[],
+                  'merge stage whenMatched non-string branch is a serialized stage array'
+                >(whenMatched).map(deserializePipelineStage),
+              );
       }
-      if (record['whenNotMatched'] !== undefined)
-        opts.whenNotMatched = record['whenNotMatched'] as string;
+      const whenNotMatched = recordValue(json, 'whenNotMatched', 'merge stage');
+      if (whenNotMatched !== undefined)
+        opts.whenNotMatched = blindCast<
+          string,
+          'merge stage whenNotMatched is a Mongo merge action token'
+        >(whenNotMatched);
       return new MongoMergeStage(opts);
     }
     default:
@@ -460,8 +562,7 @@ export function deserializePipelineStage(json: unknown): MongoPipelineStage {
 // ============================================================================
 
 export function deserializeDmlCommand(json: unknown): AnyMongoCommand {
-  const record = json as Record<string, unknown>;
-  const kind = record['kind'] as string;
+  const kind = recordKind(json, 'DML command');
   switch (kind) {
     case 'rawInsertOne': {
       const data = validate(RawInsertOneJson, json, 'rawInsertOne command');
@@ -537,8 +638,7 @@ export function deserializeMongoQueryPlan(json: unknown): MongoQueryPlan {
 // ============================================================================
 
 function deserializeDdlCommand(json: unknown): AnyMongoDdlCommand {
-  const record = json as Record<string, unknown>;
-  const kind = record['kind'] as string;
+  const kind = recordKind(json, 'DDL command');
   switch (kind) {
     case 'createIndex': {
       const data = validate(CreateIndexJson, json, 'createIndex command');
@@ -597,8 +697,7 @@ function deserializeDdlCommand(json: unknown): AnyMongoDdlCommand {
 }
 
 function deserializeInspectionCommand(json: unknown): AnyMongoInspectionCommand {
-  const record = json as Record<string, unknown>;
-  const kind = record['kind'] as string;
+  const kind = recordKind(json, 'inspection command');
   switch (kind) {
     case 'listIndexes': {
       const data = validate(ListIndexesJson, json, 'listIndexes command');
@@ -636,11 +735,7 @@ function deserializeStep(json: unknown): MongoMigrationStep {
 }
 
 function isDataTransformJson(json: unknown): boolean {
-  return (
-    typeof json === 'object' &&
-    json !== null &&
-    (json as Record<string, unknown>)['operationClass'] === 'data'
-  );
+  return recordValue(json, 'operationClass', 'migration operation') === 'data';
 }
 
 function deserializeDdlOp(json: unknown): MongoMigrationPlanOperation {
@@ -648,7 +743,7 @@ function deserializeDdlOp(json: unknown): MongoMigrationPlanOperation {
   return {
     id: data.id,
     label: data.label,
-    operationClass: data.operationClass as MigrationOperationClass,
+    operationClass: data.operationClass,
     precheck: data.precheck.map(deserializeCheck),
     execute: data.execute.map(deserializeStep),
     postcheck: data.postcheck.map(deserializeCheck),

@@ -121,8 +121,9 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
 function help(markedSource: string, labelOffsets = true) {
   const offset = markedSource.indexOf('|');
   expect(offset).toBeGreaterThanOrEqual(0);
-  const { document, sourceFile } = parse(markedSource.replace('|', ''));
-  const { table: symbolTable } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors });
+  const { document, sources } = parse(markedSource.replace('|', ''), 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources, pslBlockDescriptors });
   parseArgument.mockClear();
   const result = providePslSignatureHelp({
     document,

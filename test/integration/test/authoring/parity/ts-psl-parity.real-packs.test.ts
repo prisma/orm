@@ -31,16 +31,16 @@ function buildColumnDescriptorMap() {
 
 function interpretWithRealPacks(schema: string) {
   const scalarColumnDescriptors = buildColumnDescriptorMap();
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'real-packs-parity.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
-    symbolTable: table,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    document,
+    symbolTable,
+    sources,
     target: postgresPack,
     scalarColumnDescriptors,
     controlMutationDefaults: stack.controlMutationDefaults,

@@ -1,11 +1,10 @@
 import { readFile } from 'node:fs/promises';
-import type { ContractConfig, ContractSourceDiagnostic } from '@internal/config/config-types';
+import type { ContractConfig } from '@internal/config/config-types';
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
-import { buildSymbolTable, rangeToPslSpan } from '@internal/psl-parser';
+import { buildSymbolTable, mapPslDiagnostics } from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
-import type { ParseDiagnostic, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -25,28 +24,15 @@ function collectScalarTypeCodecIds(namespace: AuthoringTypeNamespace): ReadonlyM
   );
 }
 
-function mapParseDiagnostics(
-  diagnostics: readonly ParseDiagnostic[],
-  sourceFile: SourceFile,
-  sourceId: string,
-): ContractSourceDiagnostic[] {
-  return diagnostics.map((diagnostic) => ({
-    code: diagnostic.code,
-    message: diagnostic.message,
-    sourceId,
-    span: rangeToPslSpan(diagnostic.range, sourceFile),
-  }));
-}
-
 export function mongoContract(schemaPath: string, options?: MongoContractOptions): ContractConfig {
   const source: PslInterpretCapable = {
     format: 'psl',
     inputs: [schemaPath],
     interpret(input, context) {
       return interpretPslDocumentToMongoContract({
+        document: input.document,
         symbolTable: input.symbolTable,
-        sourceFile: input.sourceFile,
-        sourceId: input.sourceId,
+        sources: input.sources,
         seedDiagnostics: [],
         scalarTypeCodecIds: collectScalarTypeCodecIds(context.authoringContributions.type),
         controlMutationDefaults: context.controlMutationDefaults,
@@ -80,22 +66,22 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
         });
       }
 
-      const { document, sourceFile, diagnostics: parseDiagnostics } = parse(schema);
-      const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-        document,
-        sourceFile,
+      const { document, sources, diagnostics: parseDiagnostics } = parse(schema, schemaPath);
+      const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+        documents: [document],
+        sources,
         pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
       });
 
       // Do not short-circuit on provider-level diagnostics; recovered CST can
       // still produce interpreter diagnostics in the same response.
-      const seedDiagnostics = [
-        ...mapParseDiagnostics(parseDiagnostics, sourceFile, schemaPath),
-        ...mapParseDiagnostics(symbolTableDiagnostics, sourceFile, schemaPath),
-      ];
+      const seedDiagnostics = mapPslDiagnostics(
+        [...parseDiagnostics, ...symbolTableDiagnostics],
+        sources,
+      );
 
       return withSeedDiagnostics(
-        this.interpret({ document, sourceFile, symbolTable, sourceId: schemaPath }, context),
+        this.interpret({ document, sources, symbolTable }, context),
         seedDiagnostics,
       );
     },

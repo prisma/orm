@@ -1,8 +1,9 @@
 import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
-import type { PslDiagnostic, PslSpan } from '@internal/framework-components/psl-ast';
+import type { PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { Simplify, UnionToIntersection } from '@internal/utils/types';
-import type { SourceFile } from '../source-file';
+import type { PslDiagnostic } from '../diagnostic';
+import type { PslSources } from '../source-file';
 import type { FieldSymbol, ModelSymbol } from '../symbol-table';
 import type { ExpressionAst } from '../syntax/ast/expressions';
 import type { AstNode } from '../syntax/ast-helpers';
@@ -10,8 +11,7 @@ import type { AstNode } from '../syntax/ast-helpers';
 export type AttributeLevel = 'field' | 'model' | 'block';
 
 export interface AttributeCtx {
-  readonly sourceId: string;
-  readonly sourceFile: SourceFile;
+  readonly sources: PslSources;
 }
 
 export interface ModelAttributeCtx extends AttributeCtx {

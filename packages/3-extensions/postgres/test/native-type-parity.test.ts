@@ -19,16 +19,16 @@ const stack = createControlStack({
 });
 
 function emit(schema: string) {
-  const { document, sourceFile } = parse(schema);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'native-type-parity.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: postgresPackRef,
     scalarColumnDescriptors: collectScalarTypeConstructors(stack.authoringContributions.type),
     authoringContributions: stack.authoringContributions,

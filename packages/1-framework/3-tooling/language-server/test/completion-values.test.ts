@@ -198,8 +198,9 @@ function complete(markedSource: string, snippets = false, parameterHints = false
   const offset = markedSource.indexOf('|');
   expect(offset).toBeGreaterThanOrEqual(0);
   const source = markedSource.slice(0, offset) + markedSource.slice(offset + 1);
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors });
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({ documents: [document], sources, pslBlockDescriptors });
   const items = providePslCompletionItems({
     context: classifyPslCompletionContext({
       document,
@@ -253,7 +254,7 @@ describe('classified positions without cursor AST', () => {
             existingNamedKeys: [],
             hasColon,
           },
-          sourceFile: new SourceFile('mode: Asc'),
+          sourceFile: new SourceFile('language-server-test.psl', 'mode: Asc'),
           clientSupportsSnippets: true,
           clientSupportsTriggerSuggestCommand: true,
         },
@@ -276,7 +277,7 @@ describe('classified positions without cursor AST', () => {
   );
 
   it('resolves all matching nested signatures using only a path and existing keys', () => {
-    const sourceFile = new SourceFile('');
+    const sourceFile = new SourceFile('language-server-test.psl', '');
     const items = provideAttributeNamedKeyCompletionItems(
       {
         context: {
@@ -315,7 +316,7 @@ describe('classified positions without cursor AST', () => {
           hasColon: false,
           positionalIndex: 0,
         },
-        sourceFile: new SourceFile(''),
+        sourceFile: new SourceFile('language-server-test.psl', ''),
         clientSupportsSnippets: false,
         fieldNames: () => [],
       },
@@ -347,7 +348,7 @@ describe('classified positions without cursor AST', () => {
           path: [{ kind: 'namedArgument', name: 'value' }],
           syntax: 'functionName',
         },
-        sourceFile: new SourceFile('f()'),
+        sourceFile: new SourceFile('language-server-test.psl', 'f()'),
         clientSupportsSnippets: true,
         fieldNames: () => [],
       },
@@ -363,7 +364,7 @@ describe('classified positions without cursor AST', () => {
   });
 
   it('renders a scalar edit from the supplied span without an attribute or owner AST', () => {
-    const sourceFile = new SourceFile('old');
+    const sourceFile = new SourceFile('language-server-test.psl', 'old');
     const items = provideAttributeValueCompletionItems(
       {
         context: {
@@ -530,8 +531,8 @@ describe('recursive attribute values', () => {
     const candidate = result.items[0];
     const edited = candidate === undefined ? result.source : result.apply(candidate.label);
     const source = `model Example {\n  value String @probe(${unchanged})\n}`;
-    expect(parse(source).diagnostics).toEqual([]);
-    expect(parse(edited).diagnostics).toEqual([]);
+    expect(parse(source, 'language-server-test.psl').diagnostics).toEqual([]);
+    expect(parse(edited, 'language-server-test.psl').diagnostics).toEqual([]);
     expect(edited).toBe(source);
     expect(result.items).toEqual([]);
   });
@@ -648,7 +649,7 @@ describe('recursive function arguments', () => {
           hasColon: false,
           positionalIndex: 0,
         },
-        sourceFile: new SourceFile(''),
+        sourceFile: new SourceFile('language-server-test.psl', ''),
         clientSupportsSnippets: true,
         clientSupportsTriggerParameterHintsCommand: true,
         fieldNames: () => [],

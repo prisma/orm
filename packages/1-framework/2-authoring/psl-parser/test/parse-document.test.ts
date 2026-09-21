@@ -45,13 +45,13 @@ function greenText(element: GreenElement): string {
 }
 
 function greenRoot(source: string): GreenNode {
-  return parse(source).document.syntax.green;
+  return parse(source, 'test.psl').document.syntax.green;
 }
 
 describe('parse() well-formed document conformance', () => {
   it('reproduces a model with a field and a field attribute', () => {
     const source = 'model User {\n  id Int @id\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -87,7 +87,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('reproduces a model with a field and a block attribute', () => {
     const source = 'model User {\n  id Int\n@@map\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -123,7 +123,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('reproduces an enum as a generic block with bare members', () => {
     const source = 'enum Role {\n  ADMIN\n  USER\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -153,7 +153,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('reproduces an enum with a @@type block attribute and key=value members', () => {
     const source = 'enum Role {\n  @@type("pg/text@1")\n  Admin = "admin"\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -196,7 +196,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('reproduces a types block with a named type', () => {
     const source = 'types {\n  UserId = Int\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -225,7 +225,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('reproduces a named-type declaration with an attribute inside a types block', () => {
     const source = 'types {\n  UserId = Int @db\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -260,7 +260,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('reproduces a generic block declaration with a key-value entry', () => {
     const source = 'datasource db {\n  provider = "postgresql"\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -290,7 +290,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('parses a @@-block attribute inside a generic block as a ModelAttribute member, not a spurious invalid member', () => {
     const source = 'enum2 Priority {\n  @@type("pg/text@1")\n  Low = "low"\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(result.diagnostics).toEqual([]);
     expect(greenText(result.document.syntax.green)).toBe(source);
@@ -351,7 +351,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('reproduces a composite type declaration', () => {
     const source = 'type Address {street String@@map}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -383,7 +383,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('reproduces a namespace with nested declarations', () => {
     const source = 'namespace auth {model User{}enum Role{}extend Something{}}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -423,7 +423,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('reproduces a document with mixed declarations', () => {
     const source = 'model User {}\nenum Role {}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
 
     expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
       "Document
@@ -451,7 +451,7 @@ describe('parse() well-formed document conformance', () => {
 
   it('preserves leading and trailing trivia losslessly', () => {
     const source = '\n// header\nmodel User {}\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(greenText(result.document.syntax.green)).toBe(source);
     expect(result.diagnostics).toEqual([]);
     const decls = Array.from(result.document.declarations());
@@ -506,13 +506,13 @@ describe('parse() representative multi-construct schema', () => {
   ].join('\n');
 
   it('parses every construct with zero diagnostics and round-trips', () => {
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([]);
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
 
   it('exposes the top-level declarations in order', () => {
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     const decls = Array.from(result.document.declarations());
     expect(decls).toHaveLength(6);
     expect(decls[0]).toBeInstanceOf(GenericBlockDeclarationAst);
@@ -524,7 +524,7 @@ describe('parse() representative multi-construct schema', () => {
   });
 
   it('exposes the namespace members', () => {
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     const ns = Array.from(result.document.declarations()).find(
       (d): d is NamespaceDeclarationAst => d instanceof NamespaceDeclarationAst,
     );
@@ -538,7 +538,7 @@ describe('parse() representative multi-construct schema', () => {
 describe('parse() round-trips lossless schemas', () => {
   it('parses an object-literal constructor argument into a queryable ObjectLiteralExpr node', () => {
     const source = 'model M {\n  id Json @default({ a: 1, nested: { b: 2 } })\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(greenText(result.document.syntax.green)).toBe(source);
     expect(result.diagnostics).toEqual([]);
     const decls = Array.from(result.document.declarations());
@@ -563,7 +563,7 @@ describe('parse() round-trips lossless schemas', () => {
 
   it('round-trips a schema with CRLF newlines', () => {
     const source = 'model User {\r\n  id Int @id\r\n}\r\nenum Role {\r\n  ADMIN\r\n}\r\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(greenText(result.document.syntax.green)).toBe(source);
     expect(result.diagnostics).toEqual([]);
     const decls = Array.from(result.document.declarations());
@@ -574,7 +574,7 @@ describe('parse() round-trips lossless schemas', () => {
 
   it('round-trips unicode identifiers losslessly', () => {
     const source = 'model 用户 {\n  имя String\n  café Int\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(greenText(result.document.syntax.green)).toBe(source);
     expect(result.diagnostics).toEqual([]);
     const decls = Array.from(result.document.declarations());
@@ -597,7 +597,7 @@ describe('parse() round-trips lossless schemas', () => {
 describe('parse() object-literal missing-colon recovery', () => {
   it('recovers a following field after a missing colon without corrupting the enclosing block', () => {
     const source = 'datasource db {\n  x = { a b: 1 }\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(greenText(result.document.syntax.green)).toBe(source); // round-trip holds
     // Two problems: the missing colon on `a`, and the missing comma before `b`.
     expect(result.diagnostics.map((d) => d.code)).toEqual([
@@ -609,7 +609,9 @@ describe('parse() object-literal missing-colon recovery', () => {
       'Expected "," between object-literal fields',
     ]);
     const [missingColon, missingComma] = result.diagnostics;
-    expect(highlight(result.sourceFile, missingColon!.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), missingColon!.range),
+    ).toMatchInlineSnapshot(`
       "
       datasource db {
         x = { a b: 1 }
@@ -618,7 +620,9 @@ describe('parse() object-literal missing-colon recovery', () => {
       "
     `);
     // The missing-comma `~` sits just after the `a` field (zero-width gap).
-    expect(highlight(result.sourceFile, missingComma!.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), missingComma!.range),
+    ).toMatchInlineSnapshot(`
       "
       datasource db {
         x = { a b: 1 }
@@ -673,14 +677,16 @@ describe('parse() object-literal missing-colon recovery', () => {
 
   it('flags a missing comma between two well-formed fields and parses both', () => {
     const source = 'datasource db {\n  x = { a: 1 b: 2 }\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(greenText(result.document.syntax.green)).toBe(source); // round-trip holds
     // One diagnostic: the missing comma between `a: 1` and `b: 2`.
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_INVALID_OBJECT_LITERAL']);
     const [diagnostic] = result.diagnostics;
     expect(diagnostic!.message).toBe('Expected "," between object-literal fields');
     // The `~` sits just after the `a: 1` field (zero-width gap before `b`).
-    expect(highlight(result.sourceFile, diagnostic!.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic!.range),
+    ).toMatchInlineSnapshot(`
       "
       datasource db {
         x = { a: 1 b: 2 }
@@ -712,14 +718,16 @@ describe('parse() object-literal missing-colon recovery', () => {
 
   it('recovers cleanly when a comma delimits the malformed field (contrast)', () => {
     const source = 'datasource db {\n  x = { a, b: 1 }\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(greenText(result.document.syntax.green)).toBe(source);
     // With the fix, `{ a b: 1 }` and `{ a, b: 1 }` recover to near-identical trees
     // (the comma is the only token difference): one diagnostic, `b: 1` a proper field.
     expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_INVALID_OBJECT_LITERAL']);
     const [diagnostic] = result.diagnostics;
     expect(diagnostic!.message).toBe('Expected ":" after "a"');
-    expect(highlight(result.sourceFile, diagnostic!.range)).toMatchInlineSnapshot(`
+    expect(
+      highlight(result.sources.sourceFileFor(result.document.syntax), diagnostic!.range),
+    ).toMatchInlineSnapshot(`
       "
       datasource db {
         x = { a, b: 1 }
@@ -731,7 +739,7 @@ describe('parse() object-literal missing-colon recovery', () => {
 
   it('accepts a string-literal key inside a block', () => {
     const source = 'datasource db {\n  x = { a: 1, "k": 2 }\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(greenText(result.document.syntax.green)).toBe(source); // round-trip holds
     // String-literal keys are accepted; no diagnostic, no cascade into the block.
     expect(result.diagnostics).toEqual([]);
@@ -746,7 +754,7 @@ describe('parse() object-literal missing-colon recovery', () => {
 describe('parse() treats declaration keywords as contextual, not reserved', () => {
   it('parses `model` as a model name', () => {
     const source = 'model model {\n  id Int\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([]);
     expect(greenText(result.document.syntax.green)).toBe(source);
     const decls = Array.from(result.document.declarations());
@@ -759,7 +767,7 @@ describe('parse() treats declaration keywords as contextual, not reserved', () =
 
   it('parses `model` as a field name', () => {
     const source = 'model User {\n  model String\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([]);
     expect(greenText(result.document.syntax.green)).toBe(source);
     const model = Array.from(result.document.declarations())[0];
@@ -771,7 +779,7 @@ describe('parse() treats declaration keywords as contextual, not reserved', () =
 
   it('parses `model` and `enum` as bare enum-block members', () => {
     const source = 'enum Role {\n  model\n  enum\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toEqual([]);
     expect(greenText(result.document.syntax.green)).toBe(source);
     const decl = Array.from(result.document.declarations())[0];
@@ -783,13 +791,13 @@ describe('parse() treats declaration keywords as contextual, not reserved', () =
 });
 
 function codes(source: string): readonly string[] {
-  return parse(source).diagnostics.map((d) => d.code);
+  return parse(source, 'test.psl').diagnostics.map((d) => d.code);
 }
 
 describe('parse() declaration-level diagnostics', () => {
   it('flags an unterminated block but still returns a tree', () => {
     const source = 'model User {\n  id Int';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_UNTERMINATED_BLOCK');
     expect(result.document).toBeInstanceOf(DocumentAst);
     expect(greenText(result.document.syntax.green)).toBe(source);
@@ -799,7 +807,7 @@ describe('parse() declaration-level diagnostics', () => {
 
   it('flags a malformed custom declaration and keeps parsing later declarations', () => {
     const source = 'oops\nmodel User {}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_INVALID_DECLARATION');
     expect(greenText(result.document.syntax.green)).toBe(source);
     const decls = Array.from(result.document.declarations());
@@ -810,7 +818,7 @@ describe('parse() declaration-level diagnostics', () => {
 
   it('flags a reserved namespace name and keeps parsing', () => {
     const source = 'namespace __unspecified__ {\n}\nmodel User {}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_INVALID_NAMESPACE_BLOCK');
     expect(greenText(result.document.syntax.green)).toBe(source);
     const decls = Array.from(result.document.declarations());
@@ -821,21 +829,21 @@ describe('parse() declaration-level diagnostics', () => {
 
   it('flags a recursive namespace block', () => {
     const source = 'namespace outer {\nnamespace inner {\n}\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_INVALID_NAMESPACE_BLOCK');
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
 
   it('flags a types block nested inside a namespace', () => {
     const source = 'namespace outer {\ntypes {\n}\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_INVALID_NAMESPACE_BLOCK');
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
 
   it('flags a malformed model member and keeps parsing the valid field', () => {
     const source = 'model M {\n  123 bad\n  id Int\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_INVALID_MODEL_MEMBER');
     expect(greenText(result.document.syntax.green)).toBe(source);
     const model = Array.from(result.document.declarations())[0];
@@ -851,7 +859,7 @@ describe('parse() declaration-level diagnostics', () => {
     // `enum` routes through the generic-block grammar, so a malformed member is
     // an extension-block-member diagnostic and the valid `OK` is a bare entry.
     const source = 'enum E {\n  123\n  OK\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_INVALID_EXTENSION_BLOCK_MEMBER');
     expect(greenText(result.document.syntax.green)).toBe(source);
     const decl = Array.from(result.document.declarations())[0];
@@ -865,7 +873,7 @@ describe('parse() declaration-level diagnostics', () => {
 
   it('flags a malformed types-block member and keeps parsing the valid named type', () => {
     const source = 'types {\n  123\n  Ok = Int\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_INVALID_TYPES_MEMBER');
     expect(greenText(result.document.syntax.green)).toBe(source);
     const decl = Array.from(result.document.declarations())[0];
@@ -880,7 +888,7 @@ describe('parse() declaration-level diagnostics', () => {
   it('parses two top-level types blocks without a uniqueness diagnostic', () => {
     const source = 'types {\n}\ntypes {\n}';
     expect(codes(source)).not.toContain('PSL_INVALID_TYPES_MEMBER');
-    const decls = Array.from(parse(source).document.declarations());
+    const decls = Array.from(parse(source, 'test.psl').document.declarations());
     expect(decls).toHaveLength(2);
     expect(decls.every((d) => d instanceof TypesBlockAst)).toBe(true);
     expect(greenText(greenRoot(source))).toBe(source);
@@ -888,7 +896,7 @@ describe('parse() declaration-level diagnostics', () => {
 
   it('flags a malformed generic-block entry and keeps parsing the valid entry', () => {
     const source = 'datasource db {\n  123\n  provider = "x"\n}';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_INVALID_EXTENSION_BLOCK_MEMBER');
     expect(greenText(result.document.syntax.green)).toBe(source);
     const decl = Array.from(result.document.declarations())[0];
@@ -902,7 +910,7 @@ describe('parse() declaration-level diagnostics', () => {
 
   it('never throws on adversarial input', () => {
     for (const source of ['', '{', '}', '@@@', 'model', 'type', 'namespace {', '== =']) {
-      expect(() => parse(source)).not.toThrow();
+      expect(() => parse(source, 'test.psl')).not.toThrow();
     }
   });
 });
@@ -916,7 +924,7 @@ describe('parse() declaration-level diagnostics', () => {
  * byte-for-byte (nothing dropped) and no diagnostic may have been emitted.
  */
 function expectNoOpReject(source: string, run: (cursor: Cursor) => GreenNode | undefined): void {
-  const cursor = new Cursor(source);
+  const cursor = new Cursor('test.psl', source);
   expect(run(cursor)).toBeUndefined();
   expect(cursor.diagnostics).toEqual([]);
   cursor.startNode('Document');
@@ -967,18 +975,18 @@ describe('ordered-alternative parsers are no-ops on non-match', () => {
 
 describe('Cursor.mark lookahead', () => {
   it('mark(0) spans the next significant token, skipping leading trivia', () => {
-    const cursor = new Cursor('  namespace Foo {');
+    const cursor = new Cursor('test.psl', '  namespace Foo {');
     expect(cursor.mark()).toEqual({ offset: 2, length: 'namespace'.length });
   });
 
   it('mark(1) spans the significant token after the next, trivia included in the offset', () => {
-    const cursor = new Cursor('namespace Foo {');
+    const cursor = new Cursor('test.psl', 'namespace Foo {');
     expect(cursor.mark(1)).toEqual({ offset: 'namespace '.length, length: 'Foo'.length });
   });
 });
 
 function onlyTypeConstructorArgs(source: string): readonly ExpressionAst[] {
-  const result = parse(source);
+  const result = parse(source, 'test.psl');
   expect(result.diagnostics).toHaveLength(0);
   expect(greenText(result.document.syntax.green)).toBe(source);
   const typesBlock = Array.from(result.document.declarations()).find(
@@ -1020,7 +1028,7 @@ describe('parse() accepts single-quoted string literals', () => {
 
   it('still diagnoses an unterminated single-quoted literal', () => {
     const source = "model M {\n  id Int @default('oops";
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_UNTERMINATED_STRING');
     expect(greenText(result.document.syntax.green)).toBe(source);
   });
@@ -1049,7 +1057,7 @@ describe('parse() accepts double-quoted object-literal keys', () => {
 describe('parse() accepts qualified default-function calls', () => {
   it('parses ns.fn() in default-value position as one qualified FunctionCall', () => {
     const source = 'model M {\n  id Int @default(temporal.updatedAt())\n}\n';
-    const result = parse(source);
+    const result = parse(source, 'test.psl');
     expect(result.diagnostics).toHaveLength(0);
     expect(greenText(result.document.syntax.green)).toBe(source);
 

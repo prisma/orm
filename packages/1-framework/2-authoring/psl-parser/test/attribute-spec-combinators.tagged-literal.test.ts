@@ -2,26 +2,25 @@ import { describe, expect, it } from 'vitest';
 import type { FieldAttributeCtx } from '../src/exports';
 import { taggedLiteral } from '../src/exports';
 import { Cursor, parse, parseAttribute } from '../src/parse';
-import type { SourceFile } from '../src/source-file';
+import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
 
-function makeCtx(sourceFile: SourceFile): FieldAttributeCtx {
-  const { document, sourceFile: modelSource } = parse('model M {\n  id Int @id\n}\n');
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile: modelSource,
+function makeCtx(sources: PslSources): FieldAttributeCtx {
+  const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources: modelSources,
     pslBlockDescriptors: {},
   });
-  const selfModel = table.topLevel.models['M'];
+  const selfModel = symbolTable.topLevel.models['M'];
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
   return {
-    sourceId: 'schema.prisma',
-    sourceFile,
+    sources,
     selfModel,
     field,
     resolveReferencedModel: () => undefined,
@@ -29,13 +28,14 @@ function makeCtx(sourceFile: SourceFile): FieldAttributeCtx {
 }
 
 function argOf(exprSource: string): { expr: ExpressionAst; ctx: FieldAttributeCtx } {
-  const cursor = new Cursor(`@x(${exprSource})`);
-  const node = FieldAttributeAst.cast(createSyntaxTree(parseAttribute(cursor)));
+  const cursor = new Cursor('schema.prisma', `@x(${exprSource})`);
+  const root = createSyntaxTree(parseAttribute(cursor));
+  const node = FieldAttributeAst.cast(root);
   if (!node) throw new Error('expected a field attribute');
   const first = [...(node.argList()?.args() ?? [])][0];
   const expr = first?.value();
   if (!expr) throw new Error('expected an argument expression');
-  return { expr, ctx: makeCtx(cursor.sourceFile) };
+  return { expr, ctx: makeCtx(new PslSources([[root, cursor.sourceFile]])) };
 }
 
 describe('taggedLiteral', () => {

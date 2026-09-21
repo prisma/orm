@@ -72,7 +72,7 @@ A registry of `AuthoringModelAttributeDescriptor`s. Each descriptor:
 
 - **claims a bare `@@` attribute name** (`attribute: 'rls'`);
 - **supplies a factory for the declarative parameter spec** — a `ModelAttributeSpecFactory`, called with the declaring model's context and returning a spec built with the same `modelAttribute(...)` constructors as every other declarative attribute ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)) — so parsing, validation, and printing come for free from the generic machinery. A spec that needs nothing from the context, like `@@rls`, returns a hoisted module constant so its identity is stable across calls;
-- **supplies a `lower` function** that turns the parsed attribute into a pack entity keyed into the namespace's `entries`. Since [ADR 253](ADR%20253%20-%20Target-owned%20built-in%20query%20operations.md) a lowering may instead return `{ index }`, which the family interpreter files onto the declaring model's table through the same path `@@index` uses — the Postgres `@@fullTextIndex` attribute is the first to do so.
+- **supplies a `lower` function** that turns the parsed attribute into a pack entity keyed into the namespace's `entries`. Since [ADR 254](ADR%20254%20-%20Target-owned%20built-in%20query%20operations.md) a lowering may instead return `{ index }`, which the family interpreter files onto the declaring model's table through the same path `@@index` uses — the Postgres `@@fullTextIndex` attribute is the first to do so.
 
 The factory indirection is uniform across every registered attribute spec, so one entry shape serves both this channel and the family built-ins that share the registry.
 

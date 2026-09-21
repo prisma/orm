@@ -41,6 +41,7 @@ import type { SqlSchemaIRNode, SqlTableIR } from '@internal/sql-schema-ir/types'
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import type { JsonObject } from '@internal/utils/json';
 import type { StructuredError } from '@internal/utils/structured-error';
 import type { SqlControlAdapter } from './control-adapter';
 import type {
@@ -88,10 +89,13 @@ function extractCodecTypeIdsFromContract(contract: unknown): readonly string[] {
     typeof contract.storage.namespaces === 'object' &&
     contract.storage.namespaces !== null
   ) {
-    const namespaces = contract.storage.namespaces as Record<
-      string,
-      { readonly entries: Readonly<Record<string, Readonly<Record<string, unknown>>>> }
-    >;
+    const namespaces = blindCast<
+      Record<
+        string,
+        { readonly entries: Readonly<Record<string, Readonly<Record<string, unknown>>>> }
+      >,
+      'runtime checks above proved storage.namespaces is a non-null object; this function only reads nested fields defensively'
+    >(contract.storage.namespaces);
     for (const ns of Object.values(namespaces)) {
       const tbls = ns.entries['table'];
       if (typeof tbls !== 'object' || tbls === null) continue;
@@ -103,7 +107,10 @@ function extractCodecTypeIdsFromContract(contract: unknown): readonly string[] {
           typeof table.columns === 'object' &&
           table.columns !== null
         ) {
-          const columns = table.columns as Record<string, { codecId: string } | undefined>;
+          const columns = blindCast<
+            Record<string, { codecId: string } | undefined>,
+            'runtime checks above proved table.columns is a non-null object; each column is validated before reading codecId'
+          >(table.columns);
           for (const column of Object.values(columns)) {
             if (
               column &&
@@ -158,7 +165,7 @@ function createVerifyResult(options: {
     meta.configPath = options.configPath;
   }
 
-  const result: VerifyDatabaseResult = {
+  return {
     ok: options.ok,
     summary: options.summary,
     contract,
@@ -167,29 +174,18 @@ function createVerifyResult(options: {
     timings: {
       total: options.totalTime,
     },
+    ...ifDefined('code', options.code),
+    ...(options.marker
+      ? {
+          marker: {
+            storageHash: options.marker.storageHash,
+            profileHash: options.marker.profileHash,
+          },
+        }
+      : {}),
+    ...ifDefined('missingCodecs', options.missingCodecs),
+    ...ifDefined('codecCoverageSkipped', options.codecCoverageSkipped),
   };
-
-  if (options.code) {
-    (result as { code?: string }).code = options.code;
-  }
-
-  if (options.marker) {
-    (result as { marker?: { storageHash: string; profileHash: string } }).marker = {
-      storageHash: options.marker.storageHash,
-      profileHash: options.marker.profileHash,
-    };
-  }
-
-  if (options.missingCodecs) {
-    (result as { missingCodecs?: readonly string[] }).missingCodecs = options.missingCodecs;
-  }
-
-  if (options.codecCoverageSkipped) {
-    (result as { codecCoverageSkipped?: boolean }).codecCoverageSkipped =
-      options.codecCoverageSkipped;
-  }
-
-  return result;
 }
 
 interface SqlTypeMetadata {
@@ -510,13 +506,18 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     throw new InternalError('SQL family requires an adapter descriptor in ControlStack');
   }
 
-  const target = stack.target as unknown as TargetDescriptor<'sql', TTargetId> &
-    DescriptorWithStorageTypes;
-  const adapter = stack.adapter as unknown as SqlControlAdapterDescriptor<TTargetId> &
-    DescriptorWithStorageTypes;
-  const extensions =
-    stack.extensions as unknown as readonly (SqlControlExtensionDescriptor<TTargetId> &
-      DescriptorWithStorageTypes)[];
+  const target = blindCast<
+    TargetDescriptor<'sql', TTargetId> & DescriptorWithStorageTypes,
+    'ControlStack is parameterized by this SQL target id; storage type metadata is optional and probed by the family'
+  >(stack.target);
+  const adapter = blindCast<
+    SqlControlAdapterDescriptor<TTargetId> & DescriptorWithStorageTypes,
+    'adapter descriptor comes from the same SQL control stack target id; storage type metadata is optional and probed by the family'
+  >(stack.adapter);
+  const extensions = blindCast<
+    readonly (SqlControlExtensionDescriptor<TTargetId> & DescriptorWithStorageTypes)[],
+    'extension descriptors come from the same SQL control stack target id; storage type metadata is optional and probed by the family'
+  >(stack.extensions);
 
   // Descriptor self-consistency check.
   // Each extension that exposes a `contractSpace` must publish a
@@ -567,14 +568,15 @@ export function createSqlFamilyInstance<TTargetId extends string>(
   const getControlAdapter = (): SqlControlAdapter<string> =>
     (controlAdapter ??= adapter.create(stack));
 
-  const targetSerializer = (
-    target as unknown as {
+  const targetSerializer = blindCast<
+    {
       contractSerializer?: {
         deserializeContract(json: unknown): Contract<SqlStorage>;
-        serializeContract(contract: Contract<SqlStorage>): unknown;
+        serializeContract(contract: Contract<SqlStorage>): JsonObject;
       };
-    }
-  ).contractSerializer;
+    },
+    'target descriptors may expose the optional SQL contractSerializer hook; absent hooks are handled below'
+  >(target).contractSerializer;
   // Database→PSL inference is target logic (it owns the dialect type/default
   // maps and walks its own schema tree), so it is read off the descriptor like
   // `contractSerializer`. Absent for targets without `contract infer` (Mongo).
@@ -628,7 +630,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
             >(contractOrJson),
           )
         : contractOrJson;
-    return serializer.deserializeContract(json) as Contract<SqlStorage>;
+    return serializer.deserializeContract(json);
   };
 
   return {
@@ -657,7 +659,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       } = verifyOptions;
       const startTime = Date.now();
 
-      const contract = deserializeWithTargetSerializer(rawContract) as Contract<SqlStorage>;
+      const contract = deserializeWithTargetSerializer(rawContract);
 
       const contractStorageHash = contract.storage.storageHash;
       const contractProfileHash = contract.profileHash;
@@ -773,7 +775,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       readonly strict: boolean;
       readonly frameworkComponents: ReadonlyArray<TargetBoundComponentDescriptor<'sql', string>>;
     }): VerifyDatabaseSchemaResult {
-      const contract = deserializeWithTargetSerializer(options.contract) as Contract<SqlStorage>;
+      const contract = deserializeWithTargetSerializer(options.contract);
       if (!diffSchema) {
         throw missingDescriptorOperationError(target.targetId, 'diffSchema');
       }
@@ -831,7 +833,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       const { driver, contract: contractInput, contractPath, configPath } = options;
       const startTime = Date.now();
 
-      const contract = deserializeWithTargetSerializer(contractInput) as Contract<SqlStorage>;
+      const contract = deserializeWithTargetSerializer(contractInput);
 
       const contractStorageHash = contract.storage.storageHash;
       const contractProfileHash =

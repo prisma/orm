@@ -15,6 +15,7 @@ import {
   str,
 } from '../src/exports';
 import { Cursor, parse, parseAttribute } from '../src/parse';
+import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
@@ -29,19 +30,23 @@ class ForeignCopyOfAnAstNode {
 }
 
 function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCtx } {
-  const cursor = new Cursor(`@demo(${source})`);
-  const node = FieldAttributeAst.cast(createSyntaxTree(parseAttribute(cursor)));
+  const cursor = new Cursor('schema.prisma', `@demo(${source})`);
+  const root = createSyntaxTree(parseAttribute(cursor));
+  const node = FieldAttributeAst.cast(root);
   const value = Array.from(node?.argList()?.args() ?? [])[0]?.value();
   if (value === undefined) throw new Error('expected one argument');
-  const { document, sourceFile } = parse('model M {\n  id Int @id\n}\n');
-  const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
-  const selfModel = table.topLevel.models['M'];
+  const { document, sources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
+  const selfModel = symbolTable.topLevel.models['M'];
   if (selfModel === undefined) throw new Error('expected model M');
   return {
     arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,
     ctx: {
-      sourceId: 'schema.prisma',
-      sourceFile: cursor.sourceFile,
+      sources: new PslSources([[root, cursor.sourceFile]]),
       selfModel,
     },
   };

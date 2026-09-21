@@ -1,3 +1,5 @@
+import { blindCast } from '@internal/utils/casts';
+
 export type TokenKind =
   | 'Ident'
   | 'StringLiteral'
@@ -66,7 +68,10 @@ export class Tokenizer {
       this.#buffer.push(token);
     }
 
-    return this.#buffer[offset] as Token;
+    return blindCast<
+      Token,
+      'For a nonnegative integer offset, the loop fills the buffer through that offset or returns EOF'
+    >(this.#buffer[offset]);
   }
 
   #scanNext(): Token {

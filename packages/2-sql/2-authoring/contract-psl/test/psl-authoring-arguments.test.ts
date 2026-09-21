@@ -1,6 +1,8 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { AuthoringArgumentDescriptor } from '@internal/framework-components/authoring';
 import type { PslSpan, ResolvedAttributeArg } from '@internal/psl-parser';
+import { createPslDiagnosticCollector, diagnosticSource } from '@internal/psl-parser';
+import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { mapPslHelperArgs } from '../src/psl-authoring-arguments';
 
@@ -21,17 +23,18 @@ function callMap(
   args: readonly ResolvedAttributeArg[],
   descriptors: readonly AuthoringArgumentDescriptor[],
 ): { result: readonly unknown[] | undefined; diagnostics: ContractSourceDiagnostic[] } {
-  const diagnostics: ContractSourceDiagnostic[] = [];
+  const { document, sources } = parse('', 'schema.prisma');
+  const diagnostics = createPslDiagnosticCollector(sources);
   const result = mapPslHelperArgs({
     args,
     descriptors,
     helperLabel: 'helper "test"',
     span: SPAN,
     diagnostics,
-    sourceId: 'schema.prisma',
+    source: diagnosticSource(sources, document.syntax),
     entityLabel: 'Field "Model.field"',
   });
-  return { result, diagnostics };
+  return { result, diagnostics: diagnostics.toExternal() };
 }
 
 describe('mapPslHelperArgs argument kinds', () => {

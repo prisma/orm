@@ -1,7 +1,6 @@
 import type { AuthoringPslBlockDescriptor } from '@internal/framework-components/authoring';
 import type {
   PslBlockParam,
-  PslDiagnostic,
   PslExtensionBlock,
   PslExtensionBlockAttribute,
   PslExtensionBlockParamValue,
@@ -13,13 +12,11 @@ import { interpretAttribute } from './attribute-spec/interpret';
 import type { BlockAttributeSpecFactory } from './attribute-spec/spec-context';
 import type { ParseDiagnostic } from './parse';
 import { nodePslSpan } from './resolve';
-import type { Range, SourceFile } from './source-file';
+import type { PslSources } from './source-file';
 import type { ModelAttributeAst } from './syntax/ast/attributes';
 import type { GenericBlockDeclarationAst, KeyValuePairAst } from './syntax/ast/declarations';
 import { ArrayLiteralAst, type ExpressionAst } from './syntax/ast/expressions';
 import { printSyntax } from './syntax/ast-helpers';
-
-const BLOCK_ATTRIBUTE_SOURCE_ID = 'unknown';
 
 /**
  * Descriptor-free and unknown parameters become `value` stubs so validation can
@@ -28,9 +25,10 @@ const BLOCK_ATTRIBUTE_SOURCE_ID = 'unknown';
 export function reconstructExtensionBlock(
   node: GenericBlockDeclarationAst,
   descriptor: AuthoringPslBlockDescriptor | undefined,
-  sourceFile: SourceFile,
+  sources: PslSources,
   diagnostics: ParseDiagnostic[],
 ): PslExtensionBlock {
+  const sourceFile = sources.sourceFileFor(node.syntax);
   const keyword = node.keyword()?.text ?? '';
   const blockName = node.name()?.name() ?? '';
 
@@ -44,10 +42,10 @@ export function reconstructExtensionBlock(
       return {
         kind: 'positional' as const,
         value: value === undefined ? '' : printSyntax(value.syntax).trim(),
-        span: nodePslSpan(arg.syntax, sourceFile),
+        span: nodePslSpan(arg.syntax, sources),
       };
     });
-    const span = nodePslSpan(attribute.syntax, sourceFile);
+    const span = nodePslSpan(attribute.syntax, sources);
     blockAttributes.push({ name, args, span });
     if (descriptor === undefined) continue;
     const parsed = parseBlockAttribute(
@@ -58,7 +56,7 @@ export function reconstructExtensionBlock(
       seenAttributeNames,
       keyword,
       blockName,
-      sourceFile,
+      sources,
     );
     if (parsed.ok) {
       attributes[name] = parsed.value;
@@ -71,9 +69,10 @@ export function reconstructExtensionBlock(
   for (const entry of node.entries()) {
     const key = entry.key()?.name();
     if (key === undefined) continue;
-    const span = nodePslSpan(entry.syntax, sourceFile);
+    const span = nodePslSpan(entry.syntax, sources);
     if (Object.hasOwn(parameters, key)) {
       diagnostics.push({
+        filename: sourceFile.filename,
         code: 'PSL_EXTENSION_DUPLICATE_PARAMETER',
         message: `Duplicate parameter "${key}" in "${keyword}" block "${blockName}"; first occurrence wins`,
         range: {
@@ -87,7 +86,7 @@ export function reconstructExtensionBlock(
       entry,
       descriptor?.parameters[key],
       span,
-      sourceFile,
+      sources,
       diagnostics,
     );
   }
@@ -99,7 +98,7 @@ export function reconstructExtensionBlock(
     parameters,
     blockAttributes,
     attributes,
-    span: nodePslSpan(node.syntax, sourceFile),
+    span: nodePslSpan(node.syntax, sources),
   };
 }
 
@@ -111,17 +110,19 @@ function parseBlockAttribute(
   seenNames: Set<string>,
   keyword: string,
   blockName: string,
-  sourceFile: SourceFile,
+  sources: PslSources,
 ):
   | { readonly ok: true; readonly value: PslExtensionBlockParsedAttribute }
   | { readonly ok: false; readonly diagnostics: readonly ParseDiagnostic[] } {
-  const range = pslSpanToRange(span, sourceFile);
+  const sourceFile = sources.sourceFileFor(attribute.syntax);
+  const range = sourceFile.pslSpanToRange(span);
   const declared = descriptor.attributes ?? {};
   if (!Object.hasOwn(declared, name)) {
     return {
       ok: false,
       diagnostics: [
         {
+          filename: sourceFile.filename,
           code: 'PSL_EXTENSION_UNKNOWN_BLOCK_ATTRIBUTE',
           message: `Unknown attribute "@@${name}" in "${keyword}" block "${blockName}"`,
           range,
@@ -134,6 +135,7 @@ function parseBlockAttribute(
       ok: false,
       diagnostics: [
         {
+          filename: sourceFile.filename,
           code: 'PSL_INVALID_EXTENSION_BLOCK_ATTRIBUTE',
           message: `Duplicate attribute "@@${name}" in "${keyword}" block "${blockName}"; first occurrence wins`,
           range,
@@ -146,60 +148,44 @@ function parseBlockAttribute(
     BlockAttributeSpecFactory,
     'framework core cannot name AttributeSpec, so block-attribute factories transit the descriptor erased as unknown; this is the single point that restores the factory type the descriptor surface documents'
   >(declared[name]);
-  const result = interpretAttribute(attribute, factory(), {
-    sourceId: BLOCK_ATTRIBUTE_SOURCE_ID,
-    sourceFile,
-  });
+  const result = interpretAttribute(attribute, factory(), { sources });
   if (!result.ok) {
     return {
       ok: false,
-      diagnostics: result.failure.map((diagnostic) => toParseDiagnostic(diagnostic, sourceFile)),
+      diagnostics: result.failure,
     };
   }
   return { ok: true, value: { args: result.value, span } };
-}
-
-function toParseDiagnostic(diagnostic: PslDiagnostic, sourceFile: SourceFile): ParseDiagnostic {
-  return {
-    code: diagnostic.code,
-    message: diagnostic.message,
-    range: pslSpanToRange(diagnostic.span, sourceFile),
-  };
-}
-
-function pslSpanToRange(span: PslSpan, sourceFile: SourceFile): Range {
-  return {
-    start: sourceFile.positionAt(span.start.offset),
-    end: sourceFile.positionAt(span.end.offset),
-  };
 }
 
 function reconstructParamValue(
   entry: KeyValuePairAst,
   param: PslBlockParam | undefined,
   span: PslSpan,
-  sourceFile: SourceFile,
+  sources: PslSources,
   diagnostics: ParseDiagnostic[],
 ): PslExtensionBlockParamValue {
   const value = entry.value();
   if (value === undefined) {
     return { kind: 'bare', span };
   }
-  return reconstructFromExpression(value, param, span, sourceFile, diagnostics);
+  return reconstructFromExpression(value, param, span, sources, diagnostics);
 }
 
 function reconstructFromExpression(
   value: ExpressionAst,
   param: PslBlockParam | undefined,
   span: PslSpan,
-  sourceFile: SourceFile,
+  sources: PslSources,
   diagnostics?: ParseDiagnostic[],
 ): PslExtensionBlockParamValue {
   const raw = printSyntax(value.syntax).trim();
   if (param?.kind === 'list') {
+    const sourceFile = sources.sourceFileFor(value.syntax);
     const array = ArrayLiteralAst.cast(value.syntax);
     if (!array) {
       diagnostics?.push({
+        filename: sourceFile.filename,
         code: 'PSL_EXTENSION_INVALID_VALUE',
         message: `List parameter expects an array literal, got ${raw}`,
         range: {
@@ -216,8 +202,8 @@ function reconstructFromExpression(
         reconstructFromExpression(
           element,
           param.of,
-          nodePslSpan(element.syntax, sourceFile),
-          sourceFile,
+          nodePslSpan(element.syntax, sources),
+          sources,
           diagnostics,
         ),
       );

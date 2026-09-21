@@ -4603,9 +4603,6 @@ importers:
       '@internal/extension-pgvector':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../3-extensions/pgvector
-      '@internal/publish-surface':
-        specifier: workspace:8.0.0-rc.11
-        version: link:../../../0-shared/publish-surface
       '@prisma/orm-target-postgres':
         specifier: workspace:8.0.0-rc.11
         version: link:../orm-target-postgres
@@ -4621,9 +4618,6 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/9-public/@prisma/orm-extension-postgis:
     dependencies:
@@ -4997,9 +4991,6 @@ importers:
       '@internal/postgres':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../3-extensions/postgres
-      '@internal/publish-surface':
-        specifier: workspace:8.0.0-rc.11
-        version: link:../../../0-shared/publish-surface
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../0-config/tsconfig
@@ -5012,9 +5003,6 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
   packages/9-public/@prisma/orm-sqlite:
     dependencies:
@@ -5532,6 +5520,9 @@ importers:
       '@internal/mongo-lowering':
         specifier: workspace:8.0.0-rc.11
         version: link:../../packages/2-mongo-family/6-transport/mongo-lowering
+      '@internal/publish-surface':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../packages/0-shared/publish-surface
       '@prisma/cli-engine':
         specifier: 0.4.0
         version: 0.4.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
@@ -5541,6 +5532,9 @@ importers:
       '@repo/tsconfig':
         specifier: workspace:8.0.0-rc.11
         version: link:../../packages/0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../packages/0-config/tsdown
       '@types/pg':
         specifier: 'catalog:'
         version: 8.20.4

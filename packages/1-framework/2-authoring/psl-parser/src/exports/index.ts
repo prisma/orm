@@ -8,7 +8,6 @@ export type {
   PslDefaultFunctionValue,
   PslDefaultLiteralValue,
   PslDefaultValue,
-  PslDiagnostic,
   PslDiagnosticCode,
   PslDocumentAst,
   PslExtensionBlock,
@@ -92,11 +91,17 @@ export type {
   TaggedLiteralArgType,
   TypedFuncCall,
 } from '../attribute-spec/types';
+export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
+export {
+  createPslDiagnosticCollector,
+  diagnosticFromSpan,
+  diagnosticSource,
+  mapPslDiagnostics,
+} from '../diagnostic';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
 export {
   keywordPslSpan,
   nodePslSpan,
-  rangeToPslSpan,
   readResolvedAttribute,
   readResolvedAttributes,
   readResolvedConstructorCall,

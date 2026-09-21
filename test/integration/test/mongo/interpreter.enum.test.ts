@@ -55,20 +55,22 @@ const mongoCodecLookup: CodecLookup = {
 
 function interpret(
   schema: string,
-  overrides?: Partial<Omit<InterpretPslDocumentToMongoContractInput, 'symbolTable' | 'sourceFile'>>,
+  overrides?: Partial<
+    Omit<InterpretPslDocumentToMongoContractInput, 'document' | 'symbolTable' | 'sources'>
+  >,
 ) {
   const contributions = overrides?.['authoringContributions'] ?? authoringContributions;
   const descriptors = contributions?.pslBlockDescriptors;
-  const { document, sourceFile } = parse(schema);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'mongo-enum-schema.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: descriptors ?? {},
   });
   return interpretPslDocumentToMongoContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'test.prisma',
+    sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
@@ -83,7 +85,9 @@ function interpret(
 
 function interpretOk(
   schema: string,
-  overrides?: Partial<Omit<InterpretPslDocumentToMongoContractInput, 'symbolTable' | 'sourceFile'>>,
+  overrides?: Partial<
+    Omit<InterpretPslDocumentToMongoContractInput, 'document' | 'symbolTable' | 'sources'>
+  >,
 ) {
   const result = interpret(schema, overrides);
   expect(result.ok).toBe(true);

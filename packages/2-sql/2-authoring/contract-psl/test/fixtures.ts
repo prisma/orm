@@ -35,10 +35,9 @@ import {
   num,
   oneOf,
   optional,
-  rangeToPslSpan,
   str,
 } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contract/validators';
@@ -465,7 +464,9 @@ export function buildSymbolTableInput(
     readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
   },
 ): {
+  document: DocumentAst;
   symbolTable: SymbolTable;
+  sources: PslSources;
   sourceFile: SourceFile;
   sourceId: string;
   seedDiagnostics: ContractSourceDiagnostic[];
@@ -473,20 +474,23 @@ export function buildSymbolTableInput(
 } {
   const sourceId = options?.sourceId ?? 'schema.prisma';
   const pslBlockDescriptors = options?.pslBlockDescriptors ?? {};
-  const { document, sourceFile } = parse(schema);
-  const { table, diagnostics } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, sourceId);
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable, diagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors,
   });
   const seedDiagnostics: ContractSourceDiagnostic[] = diagnostics.map((diagnostic) => ({
     code: diagnostic.code,
     message: diagnostic.message,
     sourceId,
-    span: rangeToPslSpan(diagnostic.range, sourceFile),
+    span: sourceFile.rangeToPslSpan(diagnostic.range),
   }));
   return {
-    symbolTable: table,
+    document,
+    symbolTable,
+    sources,
     sourceFile,
     sourceId,
     seedDiagnostics,
@@ -499,7 +503,9 @@ export function symbolTableInputFromParseArgs(args: {
   readonly sourceId?: string;
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
 }): {
+  document: DocumentAst;
   symbolTable: SymbolTable;
+  sources: PslSources;
   sourceFile: SourceFile;
   sourceId: string;
   seedDiagnostics: ContractSourceDiagnostic[];

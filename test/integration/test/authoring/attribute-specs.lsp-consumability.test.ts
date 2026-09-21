@@ -12,9 +12,13 @@ const mongoConfigPath = join(
 );
 
 function modelSymbolFor(source: string) {
-  const { document, sourceFile } = parse(source);
-  const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
-  return { table, model: table.topLevel.models['Widget'] };
+  const { document, sources } = parse(source, 'attribute-specs-consumability.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: {},
+  });
+  return { symbolTable, model: symbolTable.topLevel.models['Widget'] };
 }
 
 describe('postgres attribute specs are consumable from a resolved language-server project', () => {
@@ -36,12 +40,12 @@ describe('postgres attribute specs are consumable from a resolved language-serve
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const { table, model } = modelSymbolFor('model Widget {\n  id Int @id\n}\n');
+    const { symbolTable, model } = modelSymbolFor('model Widget {\n  id Int @id\n}\n');
     expect(model).toBeDefined();
     if (model === undefined) return;
 
     const ctx: AttributeSpecContext = {
-      symbols: table,
+      symbols: symbolTable,
       model,
       controlMutationDefaults: interpretation.context.controlMutationDefaults,
     };
@@ -83,12 +87,14 @@ describe('mongo attribute specs are consumable from a resolved language-server p
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const { table, model } = modelSymbolFor('model Widget {\n  id ObjectId @id @map("_id")\n}\n');
+    const { symbolTable, model } = modelSymbolFor(
+      'model Widget {\n  id ObjectId @id @map("_id")\n}\n',
+    );
     expect(model).toBeDefined();
     if (model === undefined) return;
 
     const ctx: AttributeSpecContext = {
-      symbols: table,
+      symbols: symbolTable,
       model,
       controlMutationDefaults: interpretation.context.controlMutationDefaults,
     };
@@ -146,7 +152,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
     expect(interpretation).toBeDefined();
     if (interpretation === undefined) return;
 
-    const { table, model } = modelSymbolFor('model Widget {\n  id Int @id\n}\n');
+    const { symbolTable, model } = modelSymbolFor('model Widget {\n  id Int @id\n}\n');
     const field = model?.fields['id'];
     expect(field).toBeDefined();
     if (model === undefined || field === undefined) return;
@@ -154,7 +160,7 @@ describe('mongo attribute specs are consumable from a resolved language-server p
     const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).field[
       'relation'
     ]?.({
-      symbols: table,
+      symbols: symbolTable,
       model,
       field,
       controlMutationDefaults: interpretation.context.controlMutationDefaults,

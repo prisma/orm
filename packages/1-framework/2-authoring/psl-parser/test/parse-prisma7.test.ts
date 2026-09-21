@@ -19,7 +19,7 @@ function greenText(element: GreenElement): string {
 }
 
 function onlyGenericBlock(source: string): GenericBlockDeclarationAst {
-  const result = parse(source, prisma7);
+  const result = parse(source, 'test.psl', prisma7);
   expect(result.diagnostics).toEqual([]);
   expect(greenText(result.document.syntax.green)).toBe(source);
   const [declaration] = Array.from(result.document.declarations());
@@ -61,7 +61,7 @@ describe('enum member attributes', () => {
     });
 
     it('parses a member attribute list as FieldAttribute children of the KeyValuePair', () => {
-      const result = parse('enum Role {\n  USER @map("user")\n}', prisma7);
+      const result = parse('enum Role {\n  USER @map("user")\n}', 'test.psl', prisma7);
       expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
         "Document
           GenericBlockDeclaration
@@ -94,7 +94,11 @@ describe('enum member attributes', () => {
     });
 
     it('keeps the invalid-member diagnostic for an entry attribute outside an enum block', () => {
-      const result = parse('datasource db {\n  provider = "postgresql" @map("x")\n}', prisma7);
+      const result = parse(
+        'datasource db {\n  provider = "postgresql" @map("x")\n}',
+        'test.psl',
+        prisma7,
+      );
       expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_INVALID_EXTENSION_BLOCK_MEMBER']);
       const [block] = Array.from(result.document.declarations());
       expect(block).toBeInstanceOf(GenericBlockDeclarationAst);
@@ -110,17 +114,18 @@ describe('enum member attributes', () => {
       for (const entry of block.entries()) {
         expect(Array.from(entry.attributes())).toEqual([]);
       }
-      expect(printTree(parse(source, prisma7).document.syntax.green)).toBe(
-        printTree(parse(source).document.syntax.green),
+      expect(printTree(parse(source, 'test.psl', prisma7).document.syntax.green)).toBe(
+        printTree(parse(source, 'test.psl').document.syntax.green),
       );
     });
   });
 
   describe('given the default grammar', () => {
     it('reports an attribute after an enum member as an invalid block entry at the attribute', () => {
-      const result = parse('enum Role {\n  USER @map("user")\n}');
+      const result = parse('enum Role {\n  USER @map("user")\n}', 'test.psl');
       expect(result.diagnostics).toEqual([
         {
+          filename: 'test.psl',
           code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
           message: 'Invalid block entry',
           range: { start: { line: 1, character: 7 }, end: { line: 1, character: 8 } },
@@ -129,9 +134,10 @@ describe('enum member attributes', () => {
     });
 
     it('reports an attribute after an enum member value as an invalid block entry', () => {
-      const result = parse('enum Role {\n  Admin = "admin" @map("ADMIN")\n}');
+      const result = parse('enum Role {\n  Admin = "admin" @map("ADMIN")\n}', 'test.psl');
       expect(result.diagnostics).toEqual([
         {
+          filename: 'test.psl',
           code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
           message: 'Invalid block entry',
           range: { start: { line: 1, character: 18 }, end: { line: 1, character: 19 } },
@@ -140,9 +146,13 @@ describe('enum member attributes', () => {
     });
 
     it('reports an attribute after an enum member inside a namespace block as an invalid block entry', () => {
-      const result = parse('namespace auth {\n  enum Role {\n    USER @map("user")\n  }\n}');
+      const result = parse(
+        'namespace auth {\n  enum Role {\n    USER @map("user")\n  }\n}',
+        'test.psl',
+      );
       expect(result.diagnostics).toEqual([
         {
+          filename: 'test.psl',
           code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
           message: 'Invalid block entry',
           range: { start: { line: 2, character: 9 }, end: { line: 2, character: 10 } },
@@ -172,7 +182,7 @@ describe('view blocks', () => {
     });
 
     it('parses a view body as FieldDeclaration children', () => {
-      const result = parse('view ActiveUsers {\n  id Int @unique\n}', prisma7);
+      const result = parse('view ActiveUsers {\n  id Int @unique\n}', 'test.psl', prisma7);
       expect(printTree(result.document.syntax.green)).toMatchInlineSnapshot(`
         "Document
           GenericBlockDeclaration
@@ -204,16 +214,17 @@ describe('view blocks', () => {
     });
 
     it('reports a malformed view member with the model-member diagnostic', () => {
-      const result = parse('view ActiveUsers {\n  123\n  id Int\n}', prisma7);
+      const result = parse('view ActiveUsers {\n  123\n  id Int\n}', 'test.psl', prisma7);
       expect(result.diagnostics.map((d) => d.code)).toEqual(['PSL_INVALID_MODEL_MEMBER']);
     });
   });
 
   describe('given the default grammar', () => {
     it('reports an attribute on a view field line as an invalid block entry', () => {
-      const result = parse('view ActiveUsers {\n  id Int @unique\n}');
+      const result = parse('view ActiveUsers {\n  id Int @unique\n}', 'test.psl');
       expect(result.diagnostics).toEqual([
         {
+          filename: 'test.psl',
           code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
           message: 'Invalid block entry',
           range: { start: { line: 1, character: 9 }, end: { line: 1, character: 10 } },
@@ -222,7 +233,7 @@ describe('view blocks', () => {
     });
 
     it('reads the words of a plain view field line as bare entries', () => {
-      const result = parse('view ActiveUsers {\n  id Int\n}');
+      const result = parse('view ActiveUsers {\n  id Int\n}', 'test.psl');
       expect(result.diagnostics).toEqual([]);
       const [block] = Array.from(result.document.declarations());
       expect(block).toBeInstanceOf(GenericBlockDeclarationAst);

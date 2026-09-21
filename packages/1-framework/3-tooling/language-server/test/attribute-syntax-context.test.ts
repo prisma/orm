@@ -10,7 +10,8 @@ import {
 
 function locate(source: string) {
   const offset = source.indexOf('|');
-  const { document, sourceFile } = parse(source.replace('|', ''));
+  const { document, sources } = parse(source.replace('|', ''), 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
   const cursor = locateAttributeSyntax({
     document,
     sourceFile,
@@ -33,7 +34,8 @@ describe('attribute syntax helpers', () => {
     ({ attribute, found }) => {
       const source = `model Example { value String ${attribute}`;
       const offset = source.indexOf('|');
-      const { document, sourceFile } = parse(source.replace('|', ''));
+      const { document, sources } = parse(source.replace('|', ''), 'language-server-test.psl');
+      const sourceFile = sources.sourceFileFor(document.syntax);
       const result = locateAttributeSyntax({
         document,
         sourceFile,

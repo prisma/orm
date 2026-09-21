@@ -36,16 +36,16 @@ const REPRESENTATIVE_SCHEMA = `model sample {
 `;
 
 function emit(scalarTypeCodecIds: ReadonlyMap<string, string>) {
-  const { document, sourceFile } = parse(REPRESENTATIVE_SCHEMA);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(REPRESENTATIVE_SCHEMA, 'representative-schema.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToMongoContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     scalarTypeCodecIds,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),

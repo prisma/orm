@@ -98,13 +98,13 @@ namespace public {
 `;
 
   function buildInput() {
-    const { document, sourceFile } = parse(source);
-    const { table, diagnostics } = buildSymbolTable({
-      document,
-      sourceFile,
+    const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
+    const { symbolTable, diagnostics } = buildSymbolTable({
+      documents: [document],
+      sources,
       pslBlockDescriptors: assembled.pslBlockDescriptors,
     });
-    return { symbolTable: table, sourceFile, diagnostics };
+    return { document, sources, symbolTable, diagnostics };
   }
 
   it('parses the policy_select block without diagnostics', () => {
@@ -221,19 +221,19 @@ namespace public {
   ]);
 
   it('lowers a policy_select block to entries.policy without test-side hand-lowering', () => {
-    const { document, sourceFile } = parse(source);
-    const { table: symbolTable, diagnostics } = buildSymbolTable({
-      document,
-      sourceFile,
+    const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
+    const { symbolTable, diagnostics } = buildSymbolTable({
+      documents: [document],
+      sources,
       pslBlockDescriptors: assembled.pslBlockDescriptors,
     });
 
     expect(diagnostics).toEqual([]);
 
     const result = interpretPslDocumentToSqlContract({
+      document,
       symbolTable,
-      sourceFile,
-      sourceId: 'schema.prisma',
+      sources,
       target: postgresTarget,
       scalarColumnDescriptors,
       authoringContributions: assembled,

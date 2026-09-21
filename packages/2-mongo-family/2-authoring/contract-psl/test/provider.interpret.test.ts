@@ -1,10 +1,14 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import type { ContractSourceContext } from '@internal/config/config-types';
+import type {
+  ContractSourceContext,
+  ContractSourceDiagnostic,
+} from '@internal/config/config-types';
+import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
 import { emptyCodecLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { hasPslInterpreter, type PslInterpretInput } from '@internal/psl-parser/interpret';
-import { parse } from '@internal/psl-parser/syntax';
+import { PslSources, parse } from '@internal/psl-parser/syntax';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { mongoContract } from '../src/exports/provider';
@@ -43,14 +47,18 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
   };
 }
 
-function buildInterpretInput(schema: string, context: ContractSourceContext): PslInterpretInput {
-  const { document, sourceFile } = parse(schema);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+function buildInterpretInput(
+  schema: string,
+  context: ContractSourceContext,
+  filename = SOURCE_ID,
+): PslInterpretInput {
+  const { document, sources } = parse(schema, filename);
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });
-  return { document, sourceFile, symbolTable, sourceId: SOURCE_ID };
+  return { document, sources, symbolTable };
 }
 
 function interpretCapableSource(schemaPath: string) {
@@ -192,6 +200,72 @@ model Other {
     expect(typeof result?.ok).toBe('boolean');
   });
 
+  it('derives cached field, default, and relation diagnostic source IDs from the parsed source name', () => {
+    const source = interpretCapableSource('./external-context.prisma');
+    const context = createMongoTestContext();
+    const cases = [
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        line: 3,
+        schema: `model User {
+  id ObjectId @id @map("_id")
+  bad Mystery
+}
+`,
+      },
+      {
+        code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+        line: 3,
+        schema: `model User {
+  id ObjectId @id @map("_id")
+  createdAt String @default("now")
+}
+`,
+      },
+      {
+        code: 'PSL_ORPHANED_BACKRELATION',
+        line: 3,
+        schema: `model User {
+  id ObjectId @id @map("_id")
+  posts Post[]
+}
+
+model Post {
+  id ObjectId @id @map("_id")
+}
+`,
+      },
+    ];
+
+    for (const testCase of cases) {
+      const result = source.interpret(
+        buildInterpretInput(testCase.schema, context, 'memory-schema.prisma'),
+        context,
+      );
+
+      expect(result.ok, testCase.code).toBe(false);
+      if (result.ok) continue;
+      const matching = result.failure.diagnostics.filter(
+        (diagnostic): diagnostic is ContractSourceDiagnostic => diagnostic.code === testCase.code,
+      );
+      expect(matching, testCase.code).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            sourceId: 'memory-schema.prisma',
+            span: expect.objectContaining({
+              start: expect.objectContaining({ line: testCase.line }),
+            }),
+          }),
+        ]),
+      );
+      expect(matching, testCase.code).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ sourceId: './external-context.prisma' }),
+        ]),
+      );
+    }
+  });
+
   it('load merges parse and symbol-table seeds ahead of interpreter findings', async () => {
     const schema = `model Dup {
   id ObjectId @id @map("_id")
@@ -227,4 +301,90 @@ model Other {
     expect(merged.slice(merged.length - interpreterFindings.length)).toEqual(interpreterFindings);
     expect(loadResult.failure.summary).toBe(`Schema has ${merged.length} errors`);
   });
+});
+
+it('attributes multi-document semantic failures to the owning file, not the entry or provider path', () => {
+  const context = createMongoTestContext();
+  const entry = parse('', 'entry.prisma');
+  const owned = parse(
+    'model User { id ObjectId @id @map("_id") }\nmodel Broken { id ObjectId @id(1) }',
+    'owned.prisma',
+  );
+  const sources = new PslSources([
+    [entry.document.syntax, entry.sources.sourceFileFor(entry.document.syntax)],
+    [owned.document.syntax, owned.sources.sourceFileFor(owned.document.syntax)],
+  ]);
+  const { symbolTable } = buildSymbolTable({
+    documents: [entry.document, owned.document],
+    sources,
+    pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
+  });
+  const result = interpretCapableSource('provider.prisma').interpret(
+    { document: entry.document, sources, symbolTable },
+    context,
+  );
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failure.diagnostics.length).toBeGreaterThan(0);
+  expect(
+    result.failure.diagnostics.every((diagnostic) => diagnostic.sourceId === 'owned.prisma'),
+  ).toBe(true);
+  expect(result.failure.diagnostics).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_SYNTAX', span: expect.any(Object) }),
+    ]),
+  );
+});
+
+it('preserves unlocated and foreign-file contribution diagnostics at the public boundary', () => {
+  const context = createMongoTestContext();
+  const unlocated = {
+    code: 'EXTERNAL_UNLOCATED',
+    message: 'Unlocated callback error',
+    sourceId: 'foreign.prisma',
+  };
+  const located = {
+    code: 'EXTERNAL_LOCATED',
+    message: 'Located callback error',
+    sourceId: 'foreign.prisma',
+    span: { start: { offset: 9, line: 3, column: 2 }, end: { offset: 10, line: 3, column: 3 } },
+  };
+  const customContext = {
+    ...context,
+    authoringContributions: {
+      ...context.authoringContributions,
+      entityTypes: {
+        ...context.authoringContributions.entityTypes,
+        enum: {
+          kind: 'entity' as const,
+          discriminator: 'enum',
+          output: {
+            factory: (_value: unknown, factoryContext: AuthoringEntityContext) => {
+              expect(factoryContext.sourceId).toBe('owned.prisma');
+              factoryContext.diagnostics?.push(unlocated);
+              factoryContext.diagnostics?.push(located);
+              return undefined;
+            },
+          },
+        },
+      },
+    },
+  };
+  const input = buildInterpretInput(
+    'enum Role { User }\nmodel User { id ObjectId @id @map("_id") }',
+    customContext,
+    'owned.prisma',
+  );
+  const entry = parse('', 'entry.prisma');
+  const sources = new PslSources([
+    [entry.document.syntax, entry.sources.sourceFileFor(entry.document.syntax)],
+    [input.document.syntax, input.sources.sourceFileFor(input.document.syntax)],
+  ]);
+  const result = interpretCapableSource('provider.prisma').interpret(
+    { ...input, document: entry.document, sources },
+    customContext,
+  );
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  expect(result.failure.diagnostics).toEqual([unlocated, located]);
 });

@@ -61,16 +61,16 @@ const assembled = assembleAuthoringContributions([
 ]);
 
 function authoredContract(schema: string): Contract<SqlStorage> {
-  const { document, sourceFile } = parse(schema);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'full-text-index-planning.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const result = interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target: postgresTargetDescriptorMeta,
     scalarColumnDescriptors: new Map([

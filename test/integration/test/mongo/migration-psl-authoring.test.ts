@@ -69,16 +69,16 @@ function pslToContract(schema: string): MongoContract {
     ['ObjectId', 'mongo/objectId@1'],
     ['Float', 'mongo/double@1'],
   ]);
-  const { document, sourceFile } = parse(schema);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'mongo-migration-schema.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
   const result = interpretPslDocumentToMongoContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'test.prisma',
+    sources,
     scalarTypeCodecIds,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),

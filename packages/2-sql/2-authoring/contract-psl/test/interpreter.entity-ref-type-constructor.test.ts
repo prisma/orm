@@ -26,7 +26,7 @@ import type {
   PslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { describe, expect, it } from 'vitest';
@@ -467,22 +467,25 @@ namespace docs {
     // ref (mirroring what a real namespace lowering pass would have
     // produced) but no `namespaceId` — a combination the exported function
     // signature permits even though production never produces it.
-    const { document, sourceFile } = parse(`
+    const { document, sources } = parse(
+      `
 model AuthSession {
   id Int @id
   aal pg.enum(AalLevel)
 }
-`);
-    const { table } = buildSymbolTable({
-      document,
-      sourceFile,
+`,
+      'schema.prisma',
+    );
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
       pslBlockDescriptors,
     });
-    const field = table.topLevel.models['AuthSession']?.fields['aal'];
+    const field = symbolTable.topLevel.models['AuthSession']?.fields['aal'];
     expect(field).toBeDefined();
     if (!field) return;
 
-    const diagnostics: Parameters<typeof resolveFieldTypeDescriptor>[0]['diagnostics'] = [];
+    const diagnostics = createPslDiagnosticCollector(sources);
     const result = resolveFieldTypeDescriptor({
       field,
       enumTypeDescriptors: new Map(),
@@ -493,7 +496,7 @@ model AuthSession {
       familyId: 'sql',
       targetId: 'postgres',
       diagnostics,
-      sourceId: 'schema.prisma',
+      sources,
       entityLabel: 'Field "AuthSession.aal"',
       namespaceExtensionEntities: {
         [NATIVE_ENUM_DISCRIMINATOR]: { AalLevel: { typeName: 'AalLevel', members: ['aal1'] } },
@@ -503,7 +506,7 @@ model AuthSession {
     });
 
     expect(result.ok).toBe(false);
-    expect(diagnostics).toEqual(
+    expect(diagnostics.toExternal()).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',

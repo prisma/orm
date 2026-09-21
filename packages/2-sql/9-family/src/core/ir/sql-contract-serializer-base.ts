@@ -104,11 +104,17 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
   deserializeContract<T extends TContract = TContract>(json: unknown): T {
     const validated = withSqlToOneRelationNullability(this.parseSqlContractStructure(json));
     const hydrated = this.hydrateSqlStorage(validated);
-    return this.constructTargetContract(hydrated) as T;
+    return blindCast<
+      T,
+      'target serializer constructTargetContract returns the requested contract subtype'
+    >(this.constructTargetContract(hydrated));
   }
 
   serializeContract(contract: TContract): JsonObject {
-    return contract as unknown as JsonObject;
+    return blindCast<
+      JsonObject,
+      'SQL contract instances are JSON-clean envelopes and stringify to the persisted contract object'
+    >(contract);
   }
 
   shouldPreserveEmpty = sqlContractCanonicalizationHooks.shouldPreserveEmpty;
@@ -221,7 +227,7 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
     if (typeof entry !== 'object' || entry === null) {
       return entry;
     }
-    const kind = (entry as { kind?: unknown }).kind;
+    const kind = isPlainRecord(entry) ? entry['kind'] : undefined;
     if (typeof kind !== 'string') {
       return entry;
     }
@@ -236,7 +242,10 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
   }
 
   protected constructTargetContract(hydrated: Contract<SqlStorage>): TContract {
-    return hydrated as TContract;
+    return blindCast<
+      TContract,
+      'base serializer target contract type is the hydrated SQL contract unless a target override refines it'
+    >(hydrated);
   }
 
   /**

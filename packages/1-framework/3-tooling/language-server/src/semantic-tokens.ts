@@ -531,10 +531,10 @@ function classifyTypeReference(
     return { tokenType: 'type' };
   }
 
-  const table = source.symbolTable;
+  const symbols = source.symbolTable;
   const namespaceName = path.length > 1 ? path[path.length - 2] : namespace;
   const namespaceScope =
-    namespaceName !== undefined ? table.topLevel.namespaces[namespaceName] : undefined;
+    namespaceName !== undefined ? symbols.topLevel.namespaces[namespaceName] : undefined;
 
   if (namespaceScope !== undefined) {
     if (Object.hasOwn(namespaceScope.models, name)) {
@@ -548,19 +548,19 @@ function classifyTypeReference(
     }
   }
 
-  if (Object.hasOwn(table.topLevel.models, name)) {
+  if (Object.hasOwn(symbols.topLevel.models, name)) {
     return { tokenType: 'class' };
   }
-  if (Object.hasOwn(table.topLevel.compositeTypes, name)) {
+  if (Object.hasOwn(symbols.topLevel.compositeTypes, name)) {
     return { tokenType: 'struct' };
   }
-  const namedType = table.topLevel.namedTypes[name];
+  const namedType = symbols.topLevel.namedTypes[name];
   if (namedType !== undefined) {
     return refinesScalarType(namedType, source.scalarTypes)
       ? { tokenType: 'type', modifierBitset: semanticTokenModifierBits.defaultLibrary }
       : { tokenType: 'type' };
   }
-  if (Object.hasOwn(table.topLevel.blocks, name)) {
+  if (Object.hasOwn(symbols.topLevel.blocks, name)) {
     return { tokenType: 'type' };
   }
 
@@ -571,8 +571,8 @@ function classifyTypeReference(
   return { tokenType: 'type' };
 }
 
-function isKnownNamespace(name: string, table: SymbolTable): boolean {
-  return Object.hasOwn(table.topLevel.namespaces, name);
+function isKnownNamespace(name: string, symbols: SymbolTable): boolean {
+  return Object.hasOwn(symbols.topLevel.namespaces, name);
 }
 
 function identifierSegments(name: QualifiedNameAst): readonly IdentifierSegment[] {

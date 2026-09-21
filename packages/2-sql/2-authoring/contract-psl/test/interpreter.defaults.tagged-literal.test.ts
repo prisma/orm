@@ -55,6 +55,21 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     });
   });
 
+  it.each([
+    [
+      'a dollar-brace sequence, which PSL needs no escape for',
+      `v String @default(sql\`'Home | $${'{user}'}'\`)`,
+      `'Home | $${'{user}'}'`,
+    ],
+    [
+      'a backslash before a dollar, kept as both characters',
+      'v String @default(sql`\\$1`)',
+      '\\$1',
+    ],
+  ])('lowers %s', (_name, fieldLine, expression) => {
+    expect(columnDefault(fieldLine, 'v')).toEqual({ kind: 'function', expression });
+  });
+
   it('lowers a multi-line body dedented', () => {
     expect(
       columnDefault(

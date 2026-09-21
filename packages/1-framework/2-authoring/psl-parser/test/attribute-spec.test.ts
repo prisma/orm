@@ -1,6 +1,6 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
+import { diagnosticSource, type PslDiagnostic } from '../src/diagnostic';
 import type { ArgType, AttributeCtx, FieldAttributeCtx } from '../src/exports';
 import {
   fieldAttribute,
@@ -11,26 +11,25 @@ import {
   optional,
 } from '../src/exports';
 import { Cursor, parse, parseAttribute } from '../src/parse';
-import type { SourceFile } from '../src/source-file';
+import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import { StringLiteralExprAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
 
-function makeCtx(sourceFile: SourceFile): FieldAttributeCtx {
-  const { document, sourceFile: modelSource } = parse('model M {\n  id Int @id\n}\n');
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile: modelSource,
+function makeCtx(sources: PslSources): FieldAttributeCtx {
+  const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources: modelSources,
     pslBlockDescriptors: {},
   });
-  const selfModel = table.topLevel.models['M'];
+  const selfModel = symbolTable.topLevel.models['M'];
   if (!selfModel) throw new Error('expected model M in the symbol table');
   const field = selfModel.fields['id'];
   if (!field) throw new Error('expected field id on model M');
   return {
-    sourceId: 'schema.prisma',
-    sourceFile,
+    sources,
     selfModel,
     field,
     resolveReferencedModel: () => undefined,
@@ -38,10 +37,11 @@ function makeCtx(sourceFile: SourceFile): FieldAttributeCtx {
 }
 
 function fieldAttr(source: string): { node: FieldAttributeAst; ctx: FieldAttributeCtx } {
-  const cursor = new Cursor(source);
-  const node = FieldAttributeAst.cast(createSyntaxTree(parseAttribute(cursor)));
+  const cursor = new Cursor('schema.prisma', source);
+  const root = createSyntaxTree(parseAttribute(cursor));
+  const node = FieldAttributeAst.cast(root);
   if (!node) throw new Error('expected a field attribute');
-  return { node, ctx: makeCtx(cursor.sourceFile) };
+  return { node, ctx: makeCtx(new PslSources([[root, cursor.sourceFile]])) };
 }
 
 function str(): ArgType<string, AttributeCtx> {
@@ -57,8 +57,7 @@ function str(): ArgType<string, AttributeCtx> {
         {
           code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
           message: 'expected a quoted string',
-          sourceId: ctx.sourceId,
-          span: nodePslSpan(arg.syntax, ctx.sourceFile),
+          ...diagnosticSource(ctx.sources, arg.syntax).at(nodePslSpan(arg.syntax, ctx.sources)),
         },
       ]);
     },
@@ -68,8 +67,8 @@ function str(): ArgType<string, AttributeCtx> {
 const FAILING_DIAGNOSTIC: PslDiagnostic = {
   code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
   message: 'this leaf always fails',
-  sourceId: 'schema.prisma',
-  span: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } },
+  filename: 'schema.prisma',
+  range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
 };
 
 function failing(): ArgType<never, AttributeCtx> {
@@ -115,7 +114,11 @@ describe('interpretAttribute positional binding', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).toEqual(nodePslSpan(node.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 });
@@ -151,7 +154,11 @@ describe('interpretAttribute named binding', () => {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
       expect(result.failure[0]?.message).toContain('foo');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 });
@@ -177,7 +184,11 @@ describe('interpretAttribute positional-or-named duplicate', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 
@@ -201,7 +212,11 @@ describe('interpretAttribute positional-or-named duplicate', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 });
@@ -220,7 +235,11 @@ describe('interpretAttribute duplicate named arguments', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 
@@ -312,8 +331,9 @@ describe('interpretAttribute refine', () => {
           {
             code: 'PSL_INVALID_RELATION_ATTRIBUTE',
             message: 'refine rejected the value',
-            sourceId: refineCtx.sourceId,
-            span: nodePslSpan(node.syntax, refineCtx.sourceFile),
+            ...diagnosticSource(refineCtx.sources, node.syntax).at(
+              nodePslSpan(node.syntax, refineCtx.sources),
+            ),
           },
         ];
       },
@@ -382,7 +402,7 @@ describe('interpretAttribute leaf purity', () => {
 describe('interpretArgs', () => {
   it('binds arguments into a plain record from an argument iterable', () => {
     const { node, ctx } = fieldAttr('@rel(size: 16)');
-    const span = nodePslSpan(node.syntax, ctx.sourceFile);
+    const span = nodePslSpan(node.syntax, ctx.sources);
 
     const result = interpretArgs(
       node.argList()?.args() ?? [],
@@ -393,6 +413,7 @@ describe('interpretArgs', () => {
       },
       ctx,
       span,
+      node.syntax,
     );
 
     expect(result.ok).toBe(true);
@@ -401,7 +422,7 @@ describe('interpretArgs', () => {
 
   it('anchors a missing-required diagnostic to the provided span', () => {
     const { node, ctx } = fieldAttr('@rel()');
-    const span = nodePslSpan(node.syntax, ctx.sourceFile);
+    const span = nodePslSpan(node.syntax, ctx.sources);
 
     const result = interpretArgs(
       node.argList()?.args() ?? [],
@@ -412,6 +433,7 @@ describe('interpretArgs', () => {
       },
       ctx,
       span,
+      node.syntax,
     );
 
     expect(result.ok).toBe(false);
@@ -420,7 +442,9 @@ describe('interpretArgs', () => {
       expect(result.failure[0]?.message).toBe(
         'Attribute "rel" is missing required argument "size"',
       );
-      expect(result.failure[0]?.span).toEqual(span);
+      expect(result.failure[0]?.range).toEqual(
+        ctx.sources.sourceFileFor(node.syntax).pslSpanToRange(span),
+      );
     }
   });
 });

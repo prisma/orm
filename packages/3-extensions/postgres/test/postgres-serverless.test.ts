@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('pg', () => {
   class Pool {
     on = vi.fn().mockReturnThis();
-    constructor(_options?: unknown) {}
     connect = vi.fn().mockResolvedValue({
       query: vi.fn().mockResolvedValue({ rows: [], rowCount: 0 }),
       release: vi.fn(),

@@ -8,7 +8,7 @@ function modelsOf(ir: Contract): Record<string, unknown> {
 }
 
 import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { interpretPslDocumentToMongoContract } from '../src/interpreter';
@@ -56,17 +56,17 @@ function mongoCollectionsOf(ir: { readonly storage: unknown }): Record<string, u
 }
 
 function buildSymbolTableInput(schema: string): {
+  document: DocumentAst;
   symbolTable: SymbolTable;
-  sourceFile: SourceFile;
-  sourceId: string;
+  sources: PslSources;
 } {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'test.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
-  return { symbolTable: table, sourceFile, sourceId: 'test.prisma' };
+  return { document, symbolTable, sources };
 }
 
 function interpret(schema: string) {

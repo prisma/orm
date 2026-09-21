@@ -10,7 +10,7 @@ import {
   readResolvedAttributes,
   readResolvedConstructorCall,
 } from './resolve';
-import type { Range, SourceFile } from './source-file';
+import type { PslSources, Range } from './source-file';
 import {
   CompositeTypeDeclarationAst,
   type DocumentAst,
@@ -118,13 +118,13 @@ export interface FieldSymbol {
 }
 
 export interface BuildSymbolTableOptions {
-  readonly document: DocumentAst;
-  readonly sourceFile: SourceFile;
+  readonly documents: readonly DocumentAst[];
+  readonly sources: PslSources;
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
 }
 
 export interface SymbolTableResult {
-  readonly table: SymbolTable;
+  readonly symbolTable: SymbolTable;
   readonly diagnostics: readonly ParseDiagnostic[];
 }
 
@@ -133,7 +133,7 @@ export interface SymbolTableResult {
  * should consume first-wins symbols rather than re-emitting duplicate diagnostics.
  */
 export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableResult {
-  const { document, sourceFile, pslBlockDescriptors } = options;
+  const { documents, sources, pslBlockDescriptors } = options;
   const diagnostics: ParseDiagnostic[] = [];
 
   const namespaces: Record<string, NamespaceSymbol> = Object.create(null);
@@ -143,109 +143,113 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   const compositeTypes: Record<string, CompositeTypeSymbol> = {};
   const topLevelNames = new Set<string>();
 
-  const claim = (taken: Set<string>, name: IdentifierAst | undefined): string | undefined => {
-    const text = name?.name();
-    if (text === undefined) return undefined;
-    if (taken.has(text)) {
-      const range = nameRange(name, sourceFile);
-      if (range) {
-        diagnostics.push({
-          code: 'PSL_DUPLICATE_DECLARATION',
-          message: `Duplicate declaration of "${text}"`,
-          range,
-        });
+  for (const document of documents) {
+    const sourceFile = sources.sourceFileFor(document.syntax);
+    const claim = (taken: Set<string>, name: IdentifierAst | undefined): string | undefined => {
+      const text = name?.name();
+      if (text === undefined) return undefined;
+      if (taken.has(text)) {
+        const range = nameRange(name, sources);
+        if (range) {
+          diagnostics.push({
+            code: 'PSL_DUPLICATE_DECLARATION',
+            message: `Duplicate declaration of "${text}"`,
+            filename: sourceFile.filename,
+            range,
+          });
+        }
+        return undefined;
       }
-      return undefined;
-    }
-    taken.add(text);
-    return text;
-  };
+      taken.add(text);
+      return text;
+    };
 
-  for (const declaration of document.declarations()) {
-    if (declaration instanceof ModelDeclarationAst) {
-      const name = claim(topLevelNames, declaration.name());
-      if (name !== undefined) models[name] = buildModel(name, declaration, sourceFile, diagnostics);
-    } else if (declaration instanceof CompositeTypeDeclarationAst) {
-      const name = claim(topLevelNames, declaration.name());
-      if (name !== undefined) {
-        compositeTypes[name] = buildCompositeType(name, declaration, sourceFile, diagnostics);
-      }
-    } else if (declaration instanceof GenericBlockDeclarationAst) {
-      const name = claim(topLevelNames, declaration.name());
-      if (name !== undefined) {
-        blocks[name] = buildBlock(name, declaration, sourceFile, pslBlockDescriptors, diagnostics);
-      }
-    } else if (declaration instanceof NamespaceDeclarationAst) {
-      const declaredName = declaration.name()?.name();
-      if (declaredName === undefined) continue;
-      let namespace = namespaces[declaredName];
-      if (namespace === undefined) {
+    for (const declaration of document.declarations()) {
+      if (declaration instanceof ModelDeclarationAst) {
         const name = claim(topLevelNames, declaration.name());
-        if (name === undefined) continue;
-        namespace = {
-          kind: 'namespace',
-          name,
-          declarations: [],
-          models: Object.create(null),
-          compositeTypes: Object.create(null),
-          blocks: Object.create(null),
-        };
-        namespaces[name] = namespace;
-      }
-      extendNamespace(namespace, declaration, diagnostics, sourceFile, pslBlockDescriptors);
-    } else if (declaration instanceof TypesBlockAst) {
-      for (const binding of declaration.declarations()) {
-        const name = claim(topLevelNames, binding.name());
-        if (name === undefined) continue;
-        const resolved = resolveNamedTypeBinding(binding, sourceFile);
-        const span = nodePslSpan(binding.syntax, sourceFile);
-        namedTypes[name] = { kind: 'namedType', name, node: binding, span, ...resolved };
+        if (name !== undefined) models[name] = buildModel(name, declaration, sources, diagnostics);
+      } else if (declaration instanceof CompositeTypeDeclarationAst) {
+        const name = claim(topLevelNames, declaration.name());
+        if (name !== undefined) {
+          compositeTypes[name] = buildCompositeType(name, declaration, sources, diagnostics);
+        }
+      } else if (declaration instanceof GenericBlockDeclarationAst) {
+        const name = claim(topLevelNames, declaration.name());
+        if (name !== undefined) {
+          blocks[name] = buildBlock(name, declaration, sources, pslBlockDescriptors, diagnostics);
+        }
+      } else if (declaration instanceof NamespaceDeclarationAst) {
+        const declaredName = declaration.name()?.name();
+        if (declaredName === undefined) continue;
+        let namespace = namespaces[declaredName];
+        if (namespace === undefined) {
+          const name = claim(topLevelNames, declaration.name());
+          if (name === undefined) continue;
+          namespace = {
+            kind: 'namespace',
+            name,
+            declarations: [],
+            models: Object.create(null),
+            compositeTypes: Object.create(null),
+            blocks: Object.create(null),
+          };
+          namespaces[name] = namespace;
+        }
+        extendNamespace(namespace, declaration, diagnostics, sources, pslBlockDescriptors);
+      } else if (declaration instanceof TypesBlockAst) {
+        for (const binding of declaration.declarations()) {
+          const name = claim(topLevelNames, binding.name());
+          if (name === undefined) continue;
+          const resolved = resolveNamedTypeBinding(binding, sources);
+          const span = nodePslSpan(binding.syntax, sources);
+          namedTypes[name] = { kind: 'namedType', name, node: binding, span, ...resolved };
+        }
       }
     }
   }
 
-  const table: SymbolTable = {
+  const symbolTable: SymbolTable = {
     topLevel: { namespaces, namedTypes, blocks, models, compositeTypes },
   };
-  return { table, diagnostics };
+  return { symbolTable, diagnostics };
 }
 
 function buildModel(
   name: string,
   node: ModelDeclarationAst,
-  sourceFile: SourceFile,
+  sources: PslSources,
   diagnostics: ParseDiagnostic[],
 ): ModelSymbol {
   return {
     kind: 'model',
     name,
     node,
-    span: nodePslSpan(node.syntax, sourceFile),
-    fields: buildFields(name, node.fields(), sourceFile, diagnostics),
-    attributes: readResolvedAttributes(node.attributes(), sourceFile),
+    span: nodePslSpan(node.syntax, sources),
+    fields: buildFields(name, node.fields(), sources, diagnostics),
+    attributes: readResolvedAttributes(node.attributes(), sources),
   };
 }
 
 function buildCompositeType(
   name: string,
   node: CompositeTypeDeclarationAst,
-  sourceFile: SourceFile,
+  sources: PslSources,
   diagnostics: ParseDiagnostic[],
 ): CompositeTypeSymbol {
   return {
     kind: 'compositeType',
     name,
     node,
-    span: nodePslSpan(node.syntax, sourceFile),
-    fields: buildFields(name, node.fields(), sourceFile, diagnostics),
-    attributes: readResolvedAttributes(node.attributes(), sourceFile),
+    span: nodePslSpan(node.syntax, sources),
+    fields: buildFields(name, node.fields(), sources, diagnostics),
+    attributes: readResolvedAttributes(node.attributes(), sources),
   };
 }
 
 function buildBlock(
   name: string,
   node: GenericBlockDeclarationAst,
-  sourceFile: SourceFile,
+  sources: PslSources,
   pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
   diagnostics: ParseDiagnostic[],
 ): BlockSymbol {
@@ -256,8 +260,8 @@ function buildBlock(
     name,
     keyword,
     node,
-    span: nodePslSpan(node.syntax, sourceFile),
-    block: reconstructExtensionBlock(node, descriptor, sourceFile, diagnostics),
+    span: nodePslSpan(node.syntax, sources),
+    block: reconstructExtensionBlock(node, descriptor, sources, diagnostics),
   };
 }
 
@@ -265,11 +269,11 @@ function extendNamespace(
   namespace: NamespaceSymbol,
   node: NamespaceDeclarationAst,
   diagnostics: ParseDiagnostic[],
-  sourceFile: SourceFile,
+  sources: PslSources,
   pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
 ): void {
   const { models, compositeTypes, blocks } = namespace;
-  namespace.declarations.push({ node, span: nodePslSpan(node.syntax, sourceFile) });
+  namespace.declarations.push({ node, span: nodePslSpan(node.syntax, sources) });
 
   for (const member of node.declarations()) {
     const memberName = member.name()?.name();
@@ -279,25 +283,26 @@ function extendNamespace(
       Object.hasOwn(compositeTypes, memberName) ||
       Object.hasOwn(blocks, memberName)
     ) {
-      const range = nameRange(member.name(), sourceFile);
+      const range = nameRange(member.name(), sources);
       if (range) {
         diagnostics.push({
           code: 'PSL_DUPLICATE_DECLARATION',
           message: `Duplicate declaration of "${memberName}"`,
+          filename: sources.sourceFileFor(member.syntax).filename,
           range,
         });
       }
       continue;
     }
     if (member instanceof ModelDeclarationAst) {
-      models[memberName] = buildModel(memberName, member, sourceFile, diagnostics);
+      models[memberName] = buildModel(memberName, member, sources, diagnostics);
     } else if (member instanceof CompositeTypeDeclarationAst) {
-      compositeTypes[memberName] = buildCompositeType(memberName, member, sourceFile, diagnostics);
+      compositeTypes[memberName] = buildCompositeType(memberName, member, sources, diagnostics);
     } else if (member instanceof GenericBlockDeclarationAst) {
       blocks[memberName] = buildBlock(
         memberName,
         member,
-        sourceFile,
+        sources,
         pslBlockDescriptors,
         diagnostics,
       );
@@ -308,7 +313,7 @@ function extendNamespace(
 function buildFields(
   ownerName: string,
   fields: Iterable<FieldDeclarationAst>,
-  sourceFile: SourceFile,
+  sources: PslSources,
   diagnostics: ParseDiagnostic[],
 ): Record<string, FieldSymbol> {
   const result: Record<string, FieldSymbol> = {};
@@ -317,17 +322,18 @@ function buildFields(
     const name = nameNode?.name();
     if (name === undefined) continue;
     if (Object.hasOwn(result, name)) {
-      const range = nameRange(nameNode, sourceFile);
+      const range = nameRange(nameNode, sources);
       if (range) {
         diagnostics.push({
           code: 'PSL_DUPLICATE_DECLARATION',
           message: `Duplicate declaration of "${name}"`,
+          filename: sources.sourceFileFor(field.syntax).filename,
           range,
         });
       }
       continue;
     }
-    result[name] = buildField(ownerName, name, field, sourceFile, diagnostics);
+    result[name] = buildField(ownerName, name, field, sources, diagnostics);
   }
   return result;
 }
@@ -336,11 +342,11 @@ function buildField(
   ownerName: string,
   name: string,
   node: FieldDeclarationAst,
-  sourceFile: SourceFile,
+  sources: PslSources,
   diagnostics: ParseDiagnostic[],
 ): FieldSymbol {
-  const attributes = readResolvedAttributes(node.attributes(), sourceFile);
-  const span = nodePslSpan(node.syntax, sourceFile);
+  const attributes = readResolvedAttributes(node.attributes(), sources);
+  const span = nodePslSpan(node.syntax, sources);
   const annotation = node.typeAnnotation();
   const typeName = annotation?.name();
 
@@ -349,7 +355,8 @@ function buildField(
     diagnostics.push({
       code: 'PSL_INVALID_QUALIFIED_TYPE',
       message: `Field "${ownerName}.${name}" has an invalid qualified type "${path.join('.')}"; use at most one namespace qualifier (e.g. "ns.TypeName")`,
-      range: nodeRange(typeName.syntax, sourceFile),
+      filename: sources.sourceFileFor(typeName.syntax).filename,
+      range: nodeRange(typeName.syntax, sources),
     });
     return {
       kind: 'field',
@@ -365,7 +372,7 @@ function buildField(
   }
 
   const typeConstructor = annotation?.isConstructor()
-    ? readResolvedConstructorCall(annotation, sourceFile)
+    ? readResolvedConstructorCall(annotation, sources)
     : undefined;
   const typeNamespaceId = typeName?.namespace()?.name();
   const typeContractSpaceId = typeName?.space()?.name();
@@ -387,7 +394,7 @@ function buildField(
 
 function resolveNamedTypeBinding(
   node: NamedTypeDeclarationAst,
-  sourceFile: SourceFile,
+  sources: PslSources,
 ): {
   baseType?: string;
   typeConstructor?: ResolvedTypeConstructorCall;
@@ -397,17 +404,18 @@ function resolveNamedTypeBinding(
   const annotation = node.typeAnnotation();
   const isConstructor = annotation?.isConstructor() ?? false;
   const baseType = annotation?.name()?.identifier()?.name();
-  const typeConstructor = readResolvedConstructorCall(annotation, sourceFile);
+  const typeConstructor = readResolvedConstructorCall(annotation, sources);
   return {
     isConstructor,
     ...(!isConstructor && baseType !== undefined ? { baseType } : {}),
     ...(typeConstructor !== undefined ? { typeConstructor } : {}),
-    attributes: readResolvedAttributes(node.attributes(), sourceFile),
+    attributes: readResolvedAttributes(node.attributes(), sources),
   };
 }
 
-function nameRange(name: IdentifierAst | undefined, sourceFile: SourceFile): Range | undefined {
+function nameRange(name: IdentifierAst | undefined, sources: PslSources): Range | undefined {
   if (name === undefined) return undefined;
+  const sourceFile = sources.sourceFileFor(name.syntax);
   for (const token of name.syntax.tokens()) {
     if (token.kind === 'Ident') {
       return {
@@ -419,7 +427,8 @@ function nameRange(name: IdentifierAst | undefined, sourceFile: SourceFile): Ran
   return undefined;
 }
 
-function nodeRange(node: SyntaxNode, sourceFile: SourceFile): Range {
+function nodeRange(node: SyntaxNode, sources: PslSources): Range {
+  const sourceFile = sources.sourceFileFor(node);
   const start = node.offset;
   const end = start + node.green.textLength;
   return {

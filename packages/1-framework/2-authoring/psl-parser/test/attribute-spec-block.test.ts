@@ -2,16 +2,18 @@ import { describe, expect, it } from 'vitest';
 import type { AttributeCtx } from '../src/exports';
 import { blockAttribute, interpretAttribute, leafDiagnostic, str } from '../src/exports';
 import { Cursor, parseAttribute } from '../src/parse';
+import { PslSources } from '../src/source-file';
 import { ModelAttributeAst } from '../src/syntax/ast/attributes';
 import { createSyntaxTree } from '../src/syntax/red';
 
 function blockAttr(source: string): { node: ModelAttributeAst; ctx: AttributeCtx } {
-  const cursor = new Cursor(source);
-  const node = ModelAttributeAst.cast(createSyntaxTree(parseAttribute(cursor)));
+  const cursor = new Cursor('schema.prisma', source);
+  const root = createSyntaxTree(parseAttribute(cursor));
+  const node = ModelAttributeAst.cast(root);
   if (!node) throw new Error('expected a block attribute');
   return {
     node,
-    ctx: { sourceId: 'schema.prisma', sourceFile: cursor.sourceFile },
+    ctx: { sources: new PslSources([[root, cursor.sourceFile]]) },
   };
 }
 
@@ -60,7 +62,7 @@ describe('blockAttribute', () => {
       expect.objectContaining({
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message: 'Attribute "map" is missing required argument "name"',
-        sourceId: 'schema.prisma',
+        filename: 'schema.prisma',
       }),
     ]);
   });

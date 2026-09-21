@@ -28,6 +28,7 @@ import {
   keepInternalSpecifiers,
 } from '@internal/framework-components/emission';
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok } from '@internal/utils/result';
@@ -153,8 +154,12 @@ class ControlClientImpl implements ControlClient {
       );
     }
 
-    // biome-ignore lint/suspicious/noExplicitAny: required for runtime connection type flexibility
-    this.driver = await this.stack.driver.create(resolvedConnection as any);
+    this.driver = await this.stack.driver.create(
+      blindCast<
+        Parameters<typeof this.stack.driver.create>[0],
+        'Connection shape is validated by the selected driver at runtime'
+      >(resolvedConnection),
+    );
   }
 
   async close(): Promise<void> {
@@ -674,15 +679,6 @@ class ControlClientImpl implements ControlClient {
         code: 'CONTRACT_SOURCE_INVALID',
         summary: 'Failed to resolve contract source',
         why: message,
-        diagnostics: {
-          summary: 'Contract source provider threw an exception',
-          diagnostics: [
-            {
-              code: 'PROVIDER_THROW',
-              message,
-            },
-          ],
-        },
         meta: undefined,
       });
     }
@@ -704,7 +700,10 @@ class ControlClientImpl implements ControlClient {
       // seam-of-record and the only thing that may surface
       // structural errors to the caller.
       const enrichedIR = enrichContract(
-        contractRaw as unknown as Contract,
+        blindCast<
+          Contract,
+          'Provider payload is enriched before target serialization and family validation'
+        >(contractRaw),
         this.frameworkComponents ?? [],
       );
       const rawContractJson = this.options.target.contractSerializer.serializeContract(enrichedIR);
