@@ -230,7 +230,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
       db()
         .public.comments.select('id')
         .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
-        .where((f, fns) => fns.eq(f.postId, 1))
+        .where((f, fns) => fns.eq(f.post_id, 1))
         .build(),
     );
 
