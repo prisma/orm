@@ -434,6 +434,13 @@
                   "name": "people_manager_id_idx_c3dee277",
                   "prefix": "people_manager_id_idx",
                   "unique": false
+                },
+                {
+                  "expression": "to_tsvector('english', \"name\")",
+                  "name": "person_name_search_2455a3e1",
+                  "prefix": "person_name_search",
+                  "type": "gin",
+                  "unique": false
                 }
               ],
               "primaryKey": {
@@ -606,7 +613,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "03064b14cc66f1a136c019a42aef7f614624869dca2bd20211872b482eb8fb2a"
+    "storageHash": "68cbf64f1e2ea804ae94e926908ae4a093edc4f7e897b835b1eacc66ddd89b2b"
   },
   "capabilities": {
     "postgres": {

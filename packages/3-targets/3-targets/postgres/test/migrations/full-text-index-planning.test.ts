@@ -1,8 +1,9 @@
 /**
- * A GIN index over `to_tsvector(...)`, authored in PSL, reaches the planner as
- * a `PostgresCreateIndex` carrying the access method and the expression
- * verbatim. The SQL bytes are asserted beside the renderer in the adapter
- * package.
+ * A GIN index over `to_tsvector(...)` reaches the planner as a
+ * `PostgresCreateIndex` carrying the access method and the expression
+ * verbatim — whether it came from `@@fullTextIndex`, which renders the
+ * expression, or from a hand-written `@@index(expression:)`. The SQL bytes are
+ * asserted beside the renderer in the adapter package.
  */
 import type { Contract } from '@internal/contract/types';
 import type { ExecuteRequestLowerer } from '@internal/family-sql/control-adapter';
@@ -18,6 +19,7 @@ import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
+  postgresAuthoringModelAttributes,
   postgresAuthoringPslBlockDescriptors,
 } from '../../src/core/authoring';
 import { PostgresCreateIndex } from '../../src/core/ddl/nodes';
@@ -28,7 +30,15 @@ import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-da
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 
-const SCHEMA = `
+const TYPED_ATTRIBUTE_SCHEMA = `
+model Message {
+  id   Int    @id
+  text String
+  @@fullTextIndex([text], name: "message_text_search")
+}
+`;
+
+const HAND_WRITTEN_EXPRESSION_SCHEMA = `
 model Message {
   id   Int    @id
   text String
@@ -41,6 +51,7 @@ const assembled = assembleAuthoringContributions([
     authoring: {
       entityTypes: postgresAuthoringEntityTypes,
       pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
+      modelAttributes: postgresAuthoringModelAttributes,
       type: {
         Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
         String: { kind: 'typeConstructor', output: { codecId: 'pg/text@1', nativeType: 'text' } },
@@ -49,8 +60,8 @@ const assembled = assembleAuthoringContributions([
   },
 ]);
 
-function authoredContract(): Contract<SqlStorage> {
-  const { document, sourceFile } = parse(SCHEMA);
+function authoredContract(schema: string): Contract<SqlStorage> {
+  const { document, sourceFile } = parse(schema);
   const { table: symbolTable } = buildSymbolTable({
     document,
     sourceFile,
@@ -106,7 +117,7 @@ function liveSchemaWithoutTheIndex(): PostgresDatabaseSchemaNode {
   });
 }
 
-async function plannedCreateIndexNodes(): Promise<readonly PostgresCreateIndex[]> {
+async function plannedCreateIndexNodes(schema: string): Promise<readonly PostgresCreateIndex[]> {
   const lowered: unknown[] = [];
   const lowerer: ExecuteRequestLowerer = {
     lower: () => ({ sql: 'stub', params: [] }),
@@ -116,7 +127,7 @@ async function plannedCreateIndexNodes(): Promise<readonly PostgresCreateIndex[]
     },
   };
   const result = createPostgresMigrationPlanner(lowerer).plan({
-    contract: authoredContract(),
+    contract: authoredContract(schema),
     schema: liveSchemaWithoutTheIndex(),
     policy: { allowedOperationClasses: ['additive', 'widening', 'destructive'] },
     fromContract: null,
@@ -131,8 +142,18 @@ async function plannedCreateIndexNodes(): Promise<readonly PostgresCreateIndex[]
 }
 
 describe('a GIN index over to_tsvector, authored in PSL', () => {
-  it('plans one CREATE INDEX carrying the access method and the expression verbatim', async () => {
-    const nodes = await plannedCreateIndexNodes();
+  it('plans one CREATE INDEX from @@fullTextIndex', async () => {
+    const nodes = await plannedCreateIndexNodes(TYPED_ATTRIBUTE_SCHEMA);
+    expect(nodes).toHaveLength(1);
+    const node = nodes[0]!;
+    expect(node.type).toBe('gin');
+    expect(node.elements).toEqual({ expression: `to_tsvector('english', "text")` });
+    expect(node.table).toBe('Message');
+    expect(node.name.startsWith('message_text_search')).toBe(true);
+  });
+
+  it('plans the same CREATE INDEX from a hand-written @@index(expression:)', async () => {
+    const nodes = await plannedCreateIndexNodes(HAND_WRITTEN_EXPRESSION_SCHEMA);
     expect(nodes).toHaveLength(1);
     const node = nodes[0]!;
     expect(node.type).toBe('gin');
