@@ -1,6 +1,9 @@
+import type { AuthoringDataTypeEntry } from '@internal/framework-components/authoring';
+import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresCodecLookup,
@@ -12,25 +15,26 @@ import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contr
 
 describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
   const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
-  /** A tag naming a literal type that is not `json`, to exercise the other bodies a tag can hold. */
-  const withBoolTag = {
-    ...builtinControlMutationDefaults,
-    defaultLiteralTagRegistry: new Map([
-      ...builtinControlMutationDefaults.defaultLiteralTagRegistry,
-      [
-        'bool',
-        {
-          usage: 'bool`...`',
-          documentation: 'Reads the body as a boolean.',
-          literalType: 'boolean' as const,
+  /** A tag naming a data type that is not the JSON one, to exercise the other bodies a tag holds. */
+  const withBoolTag: Readonly<Record<string, AuthoringDataTypeEntry>> = {
+    ...fixtureDataTypeSupport.entries,
+    'pg/bool': {
+      written: {
+        kind: 'tag',
+        tag: 'bool',
+        parse: (text: string) => {
+          if (text === 'true' || text === 'false') return text === 'true';
+          throw structuredError('CONTRACT.INVALID_DEFAULT_LITERAL', `"${text}" is not a boolean.`, {
+            why: 'A boolean is written as true or false.',
+            fix: 'Write true or false.',
+          });
         },
-      ],
-    ]),
+      },
+      print: (value) => String(value),
+      documentation: 'Reads the body as a boolean.',
+    },
   };
-  const interpret = (
-    fieldLine: string,
-    controlMutationDefaults = builtinControlMutationDefaults,
-  ) => {
+  const interpret = (fieldLine: string, entries = fixtureDataTypeSupport.entries) => {
     const document = symbolTableInputFromParseArgs({
       schema: `model Lit {\n  id Int @id\n  ${fieldLine}\n}\n`,
       sourceId: 'schema.prisma',
@@ -43,25 +47,24 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
       ...document,
-      controlMutationDefaults,
+      controlMutationDefaults: builtinControlMutationDefaults,
+      authoringContributions: { dataTypes: entries },
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
     });
   };
   const columnDefault = (
     fieldLine: string,
     column: string,
-    controlMutationDefaults = builtinControlMutationDefaults,
+    entries = fixtureDataTypeSupport.entries,
   ) => {
-    const result = interpret(fieldLine, controlMutationDefaults);
+    const result = interpret(fieldLine, entries);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
     return sqlStorageFromSuccessfulSqlInterpretation(result.value).namespaces['public']?.entries
       .table?.['Lit']?.columns[column]?.default;
   };
-  const diagnostics = (
-    fieldLine: string,
-    controlMutationDefaults = builtinControlMutationDefaults,
-  ) => {
-    const result = interpret(fieldLine, controlMutationDefaults);
+  const diagnostics = (fieldLine: string, entries = fixtureDataTypeSupport.entries) => {
+    const result = interpret(fieldLine, entries);
     expect(result.ok).toBe(false);
     return result.ok ? [] : result.failure.diagnostics;
   };
@@ -125,7 +128,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       {
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message:
-          'Expected one of: string | number | boolean | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | dbgenerated() | sql`...` | json`...` | list of (string | number | boolean | sql`...` | json`...`)',
+          'Expected one of: string | number | boolean | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | dbgenerated() | json`...` | sql`...` | list of (string | number | boolean | json`...` | sql`...`)',
         sourceId: 'schema.prisma',
         span: lineThreeSpan(21, 'gen_random_uuid()'.length),
       },
@@ -136,7 +139,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     expect(diagnostics('v String @default(sqlite.sql`x`)')).toEqual([
       {
         code: 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
-        message: 'Unknown literal tag "sqlite.sql". Known tags: sql, pg.sql, json.',
+        message: 'Unknown literal tag "sqlite.sql". Known tags: json, sql, pg.sql.',
         sourceId: 'schema.prisma',
         span: lineThreeSpan(21, 'sqlite.sql`x`'.length),
       },
@@ -239,11 +242,11 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       ]);
     });
 
-    it('refuses a json literal on a column whose codec does not accept one', () => {
+    it('refuses a JSON document on a column whose type does not cast from one', () => {
       expect(diagnostics('v Int @default(json`1`)')).toEqual([
         expect.objectContaining({
-          code: 'PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE',
-          message: expect.stringContaining('is not compatible with a json literal'),
+          code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+          message: expect.stringContaining('pg/int4 has no cast from pg/json'),
         }),
       ]);
     });
@@ -261,7 +264,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
     ]);
   });
 
-  describe('a tag naming the boolean literal type', () => {
+  describe('a tag naming the boolean data type', () => {
     it.each([
       ['true', true],
       ['false', false],
@@ -276,7 +279,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       expect(diagnostics(`v Boolean @default(bool\`${body}\`)`, withBoolTag)).toEqual([
         expect.objectContaining({
           code: 'PSL_INVALID_DEFAULT_LITERAL',
-          message: expect.stringContaining(`"${body}" is not a boolean literal.`),
+          message: expect.stringContaining(`"${body}" is not a boolean.`),
         }),
       ]);
     });

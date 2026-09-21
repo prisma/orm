@@ -18,11 +18,8 @@ import {
   type PslExtensionBlock,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
-import { jsonDefaultLiteralTagEntry } from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
-  ControlDefaultLiteralTagEntry,
-  ControlDefaultLiteralTagLoweringEntry,
   ControlMutationDefaultEntry,
   ControlMutationDefaults,
   DefaultFunctionLoweringContext,
@@ -41,11 +38,11 @@ import {
 import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
-import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contract/validators';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { postgresCodecLookup } from './fixture-codec-descriptors';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 
 function testEnumFactory(
   block: PslExtensionBlock,
@@ -556,7 +553,7 @@ export function createPostgresTestContext(
     composedExtensions: [],
     composedExtensionContracts: new Map(),
     authoringContributions: {
-      dataTypes: {},
+      dataTypes: fixtureDataTypeSupport.entries,
       field: {},
       type: postgresScalarAuthoringTypes,
       entityTypes: {},
@@ -567,6 +564,7 @@ export function createPostgresTestContext(
     },
     codecLookup: postgresCodecLookup,
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     resolvedInputs: [],
     capabilities: { sql: { scalarList: true } },
     ...overrides,
@@ -617,40 +615,6 @@ const dbgeneratedSig: FuncCallSig = {
     },
   ],
 };
-
-// Mirrors the SQL family's `sqlDefaultLiteralTagEntry`; the authoring layer's tests cannot import the family.
-function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagLoweringEntry {
-  return {
-    usage,
-    documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
-    lower: ({ literal, context }) => {
-      const reject = (message: string) => ({
-        ok: false as const,
-        diagnostic: {
-          code: 'PSL_INVALID_DEFAULT_SQL',
-          message,
-          sourceId: context.sourceId,
-          span: literal.span,
-        },
-      });
-      const reserved = reservedSqlDefaultBody(literal.body);
-      if (reserved !== undefined) {
-        return reject(
-          `Write @default(${reserved}()) instead of ${literal.tag}\`${reserved}()\`; ${reserved}() is a Prisma default function, not raw SQL.`,
-        );
-      }
-      const unsafe = checkSqlDefaultBody(literal.body);
-      if (unsafe !== undefined) return reject(unsafe);
-      return {
-        ok: true as const,
-        value: {
-          kind: 'storage' as const,
-          defaultValue: { kind: 'function' as const, expression: literal.body },
-        },
-      };
-    },
-  };
-}
 
 export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefaults {
   return {
@@ -747,11 +711,6 @@ export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefau
           usageSignatures: ['dbgenerated("...")'],
         },
       ],
-    ]),
-    defaultLiteralTagRegistry: new Map<string, ControlDefaultLiteralTagEntry>([
-      ['sql', sqlLiteralTagEntry('sql`...`')],
-      ['pg.sql', sqlLiteralTagEntry('pg.sql`...`')],
-      ['json', jsonDefaultLiteralTagEntry()],
     ]),
     generatorDescriptors: [
       {

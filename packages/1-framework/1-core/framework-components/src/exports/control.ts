@@ -131,10 +131,6 @@ export type {
 } from '../control/verifier-disposition';
 export { dispositionForCategory } from '../control/verifier-disposition';
 export type {
-  ControlDefaultLiteralTagEntry,
-  ControlDefaultLiteralTagLoweringEntry,
-  ControlDefaultLiteralTagRegistry,
-  ControlDefaultLiteralTagTypeEntry,
   ControlDefaultRegistries,
   ControlMutationDefaultEntry,
   ControlMutationDefaultRegistry,
@@ -148,7 +144,6 @@ export type {
   TaggedLiteralValue,
   TypedDefaultFunctionCall,
 } from '../shared/mutation-default-types';
-export { isDefaultLiteralTagLoweringEntry } from '../shared/mutation-default-types';
 export type { TaggedLiteralCanonicalization } from '../shared/tagged-literal';
 export {
   canonicalizeTaggedLiteralBody,

@@ -23,7 +23,6 @@ import {
   type ColumnSpec,
   column,
   dataTypeId,
-  type LiteralTypeDeclaration,
   voidParamsSchema,
 } from '../src/exports/codec';
 
@@ -214,28 +213,4 @@ test('AnyCodecDescriptor stores parameterized + non-parameterized descriptors wi
   reg.set(int4FixtureDescriptor.codecId, int4FixtureDescriptor);
   reg.set(vectorFixtureDescriptor.codecId, vectorFixtureDescriptor);
   expectTypeOf<typeof reg>().toMatchTypeOf<Map<string, AnyCodecDescriptor>>();
-});
-
-test('literalTypes is optional and typed as the declaration union', () => {
-  expectTypeOf<CodecDescriptor<void>['literalTypes']>().toEqualTypeOf<
-    readonly LiteralTypeDeclaration[] | undefined
-  >();
-  expectTypeOf<LiteralTypeDeclaration>().not.toBeAny();
-
-  class DeclaringDescriptor extends Int4FixtureDescriptor {
-    override readonly literalTypes = ['i8', 'i16', { list: ['i8'] }] as const;
-  }
-  const declaring: CodecDescriptor<void> = new DeclaringDescriptor();
-  expectTypeOf(declaring.literalTypes).toEqualTypeOf<
-    readonly LiteralTypeDeclaration[] | undefined
-  >();
-
-  class UndeclaredDescriptor extends Int4FixtureDescriptor {}
-  new UndeclaredDescriptor() satisfies CodecDescriptor<void>;
-
-  class WrongDeclaration extends Int4FixtureDescriptor {
-    // @ts-expect-error -- "int" is not a literal type name
-    override readonly literalTypes = ['int'] as const;
-  }
-  expectTypeOf<WrongDeclaration>().not.toBeAny();
 });

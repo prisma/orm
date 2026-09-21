@@ -144,6 +144,15 @@ function encodeColumnDefault(
   if (defaultInput.kind === 'function') {
     return { kind: 'function', expression: defaultInput.expression };
   }
+  if ('canonical' in defaultInput && defaultInput.canonical === true) {
+    return {
+      kind: 'literal',
+      value: blindCast<
+        ColumnDefault extends { kind: 'literal'; value: infer V } ? V : never,
+        'a text contract source stores the canonical form its data type produced'
+      >(defaultInput.value),
+    };
+  }
   if (many) {
     if (!Array.isArray(defaultInput.value)) {
       throw new InternalError(

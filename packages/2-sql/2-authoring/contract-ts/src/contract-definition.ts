@@ -48,7 +48,17 @@ export type AuthoredColumnDefaultLiteralValue =
 
 export type AuthoredColumnDefault =
   | ColumnDefault
-  | { readonly kind: 'literal'; readonly value: AuthoredColumnDefaultLiteralValue };
+  | {
+      readonly kind: 'literal';
+      readonly value: AuthoredColumnDefaultLiteralValue;
+      /**
+       * Whether the value is already the canonical form the contract stores. A text contract source
+       * reads a written default into the canonical form itself, through the column's data type and
+       * its casts, so the build stores it as it stands; a TypeScript `.default(value)` hands over an
+       * application value, which the column's codec encodes. ADR 254.
+       */
+      readonly canonical?: boolean;
+    };
 
 export interface FieldNode {
   readonly fieldName: string;

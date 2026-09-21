@@ -638,6 +638,7 @@ class ControlClientImpl implements ControlClient {
         authoringContributions: stack.authoringContributions,
         codecLookup: stack.codecLookup,
         controlMutationDefaults: stack.controlMutationDefaults,
+        dataTypeLookup: stack.dataTypeLookup,
         resolvedInputs: contractConfig.source.inputs ?? [],
         capabilities: stack.capabilities,
       };

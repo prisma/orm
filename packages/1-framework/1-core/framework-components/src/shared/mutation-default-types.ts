@@ -3,7 +3,7 @@ import type {
   ExecutionMutationDefaultPhases,
   ExecutionMutationDefaultValue,
 } from '@internal/contract/types';
-import type { LiteralTypeName } from './literal-types';
+import type { AuthoringDataTypeEntry } from './framework-authoring';
 
 interface SourcePosition {
   readonly offset: number;
@@ -89,52 +89,16 @@ export interface TaggedLiteralValue {
   readonly span: SourceSpan;
 }
 
-interface ControlDefaultLiteralTagDescription {
-  /** How the tag is written, for messages: `` sql`...` ``. */
-  readonly usage: string;
-  /** What the literal does, shown as signature help. */
-  readonly documentation: string;
-}
-
-/**
- * A tag whose body the family lowers itself, into a storage default or an execution default. The
- * `literalType` slot is closed so an entry cannot claim to be both kinds at once.
- */
-export interface ControlDefaultLiteralTagLoweringEntry extends ControlDefaultLiteralTagDescription {
-  readonly lower: (input: {
-    readonly literal: TaggedLiteralValue;
-    readonly context: DefaultFunctionLoweringContext;
-  }) => LoweredDefaultResult;
-  readonly literalType?: never;
-}
-
-/** A tag whose body is a literal of one type, checked against the field's codec like any other literal. */
-export interface ControlDefaultLiteralTagTypeEntry extends ControlDefaultLiteralTagDescription {
-  readonly literalType: LiteralTypeName;
-  readonly lower?: never;
-}
-
-export type ControlDefaultLiteralTagEntry =
-  | ControlDefaultLiteralTagLoweringEntry
-  | ControlDefaultLiteralTagTypeEntry;
-
-/** Which of the two kinds of tag entry this is; the only place the discriminating key is named. */
-export function isDefaultLiteralTagLoweringEntry(
-  entry: ControlDefaultLiteralTagEntry,
-): entry is ControlDefaultLiteralTagLoweringEntry {
-  return 'lower' in entry;
-}
-
-export type ControlDefaultLiteralTagRegistry = ReadonlyMap<string, ControlDefaultLiteralTagEntry>;
-
 export interface ControlMutationDefaults {
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
   readonly generatorDescriptors: readonly MutationDefaultGeneratorDescriptor[];
 }
 
-/** The two registries an attribute spec needs to build its `@default` arms. */
-export type ControlDefaultRegistries = Pick<
-  ControlMutationDefaults,
-  'defaultFunctionRegistry' | 'defaultLiteralTagRegistry'
->;
+/**
+ * What an attribute spec needs to build its `@default` arms: the functions a stack registers, and
+ * the PSL support for its data types, which is where the tags live. ADR 254.
+ */
+export interface ControlDefaultRegistries
+  extends Pick<ControlMutationDefaults, 'defaultFunctionRegistry'> {
+  readonly dataTypeEntries: Readonly<Record<string, AuthoringDataTypeEntry>>;
+}

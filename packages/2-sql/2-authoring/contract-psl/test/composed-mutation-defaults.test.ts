@@ -73,7 +73,6 @@ describe('composed mutation default registries', () => {
     const result = interpretPslDocumentToSqlContract({
       ...document,
       controlMutationDefaults: {
-        defaultLiteralTagRegistry: new Map(),
         defaultFunctionRegistry: new Map([
           [
             'slugid',
@@ -132,7 +131,6 @@ describe('composed mutation default registries', () => {
     const result = interpretPslDocumentToSqlContract({
       ...document,
       controlMutationDefaults: {
-        defaultLiteralTagRegistry: new Map(),
         defaultFunctionRegistry: new Map([
           [
             'slugid',

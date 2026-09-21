@@ -64,7 +64,10 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        controlMutationDefaults: source.controlMutationDefaults,
+        controlMutationDefaults: {
+          ...source.controlMutationDefaults,
+          dataTypeEntries: source.authoringContributions.dataTypes ?? {},
+        },
       };
       return (name) => specs.model[name]?.(specContext);
     }
@@ -80,7 +83,10 @@ export function attributeSpecResolver(
       const specContext = {
         symbols: source.symbolTable,
         model,
-        controlMutationDefaults: source.controlMutationDefaults,
+        controlMutationDefaults: {
+          ...source.controlMutationDefaults,
+          dataTypeEntries: source.authoringContributions.dataTypes ?? {},
+        },
       };
       return (name) => specs.field[name]?.({ ...specContext, field });
     }

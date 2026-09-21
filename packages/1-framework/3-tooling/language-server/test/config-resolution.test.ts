@@ -65,7 +65,6 @@ function stubStackWithContext(): ControlStack {
     },
     codecLookup: { get: () => undefined },
     controlMutationDefaults: {
-      defaultLiteralTagRegistry: new Map(),
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
     },

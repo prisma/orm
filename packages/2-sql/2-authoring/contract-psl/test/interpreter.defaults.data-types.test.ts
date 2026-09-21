@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   pgvectorAuthoringContributions,
@@ -18,7 +19,11 @@ function interpret(schema: string, codecLookup = postgresCodecLookup) {
     ...document,
     target: postgresTarget,
     scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-    authoringContributions: pgvectorAuthoringContributions,
+    authoringContributions: {
+      ...pgvectorAuthoringContributions,
+      dataTypes: fixtureDataTypeSupport.entries,
+    },
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
@@ -46,8 +51,8 @@ function diagnostics(schema: string) {
 
 const model = (fields: string) => `model N {\n  id Int @id\n${fields}\n}\n`;
 
-describe('literal defaults the codec accepts', () => {
-  it('reads every literal form in the outcome schema', () => {
+describe('written defaults a column takes', () => {
+  it('reads every written form in the outcome schema', () => {
     expect(
       columnDefaults(
         model(`  name     String   @default("anonymous")
@@ -69,7 +74,7 @@ describe('literal defaults the codec accepts', () => {
       count: { kind: 'literal', value: 100000 },
       balance: { kind: 'literal', value: '100000000000000099' },
       price: { kind: 'literal', value: '1.50' },
-      ratio: { kind: 'literal', value: Number.NaN },
+      ratio: { kind: 'literal', value: 'NaN' },
       active: { kind: 'literal', value: true },
       meta: { kind: 'literal', value: { plan: 'free', seats: 1 } },
       scores: { kind: 'literal', value: [1, 2] },
@@ -86,12 +91,7 @@ describe('literal defaults the codec accepts', () => {
     ['a decimal keeping its trailing zeros', 'price Decimal @default(1.50)', 'price', '1.50'],
     ['leading zeros dropped', 'price Decimal @default(007.50)', 'price', '7.50'],
     ['the sign of zero dropped', 'price Decimal @default(-0.0)', 'price', '0.0'],
-    [
-      'Infinity on a float column',
-      'ratio Float @default(Infinity)',
-      'ratio',
-      Number.POSITIVE_INFINITY,
-    ],
+    ['Infinity on a float column', 'ratio Float @default(Infinity)', 'ratio', 'Infinity'],
     ['a json null', 'meta Jsonb @default(json`null`)', 'meta', null],
   ])('reads %s', (_name, field, column, expected) => {
     expect(columnDefaults(model(`  ${field}`))[column]).toEqual({
@@ -100,7 +100,7 @@ describe('literal defaults the codec accepts', () => {
     });
   });
 
-  it('emits a bigint default as the decimal text its codec encodes', () => {
+  it('stores a whole number past a double as the digit text its type holds', () => {
     expect(columnDefaults(model('  balance BigInt @default(9007199254740993)'))['balance']).toEqual(
       {
         kind: 'literal',
@@ -110,57 +110,67 @@ describe('literal defaults the codec accepts', () => {
   });
 });
 
-describe('literal defaults the codec refuses', () => {
+describe('written defaults a column refuses', () => {
   it.each([
     [
-      'a bigint literal on an int column',
+      'a number too wide for the column',
       'count Int @default(100000000000000099)',
-      'N.count": pg/int4@1 is not compatible with an i64 literal; it accepts i8, i16, i32 literals',
+      'N.count": pg/int4 has no cast from pg/int8; it casts from pg/int2',
     ],
     [
-      'a decimal literal on an int column',
+      'a number with a fraction on a whole-number column',
       'count Int @default(1.5)',
-      'N.count": pg/int4@1 is not compatible with a decimal literal; it accepts i8, i16, i32 literals',
+      'N.count": pg/int4 has no cast from pg/numeric; it casts from pg/int2',
     ],
     [
-      'a string literal on a jsonb column',
+      'a quoted document on a jsonb column',
       'meta Jsonb @default("{}")',
-      'N.meta": pg/jsonb@1 is not compatible with a string literal; it accepts json literals',
+      'N.meta": pg/jsonb has no cast from pg/text; it casts from pg/json',
     ],
     [
-      'a string literal on a decimal column',
+      'quoted digits on a numeric column',
       'price Decimal @default("1.50")',
-      'N.price": pg/numeric@1 is not compatible with a string literal;',
+      'N.price": pg/numeric has no cast from pg/text;',
     ],
     [
-      'a string literal on an int column',
+      'quoted digits on an int column',
       'count Int @default("1")',
-      'N.count": pg/int4@1 is not compatible with a string literal;',
+      'N.count": pg/int4 has no cast from pg/text;',
     ],
     [
-      'a json literal on an int column',
+      'a JSON document on an int column',
       'count Int @default(json`1`)',
-      'N.count": pg/int4@1 is not compatible with a json literal;',
+      'N.count": pg/int4 has no cast from pg/json;',
     ],
     [
-      'a list literal on a column whose codec names no list',
+      'a written list on a column that holds one value',
       'count Int @default([1, 2])',
-      'N.count": pg/int4@1 is not compatible with a list literal;',
+      'N.count": pg/int4 has no cast from a list;',
     ],
     [
-      'a string element in a list of ints',
+      'text among a list of numbers',
       'scores Int[] @default([1, "x"])',
-      'N.scores" at element 2: pg/int4@1 is not compatible with a string literal; it accepts i8, i16, i32 literals',
+      'N.scores" at element 2: pg/int4 has no cast from pg/text; it casts from pg/int2',
     ],
     [
-      'a list literal on a jsonb column',
+      'a written list on a jsonb column',
       'meta Jsonb @default([1, 2])',
-      'N.meta": pg/jsonb@1 is not compatible with a list literal; it accepts json literals',
+      'N.meta": pg/jsonb has no cast from a list; it casts from pg/json',
     ],
-  ])('refuses %s as incompatible', (_name, field, message) => {
+    [
+      'a non-finite word on a whole-number column',
+      'count Int @default(NaN)',
+      'N.count": pg/int4 has no cast from pg/numeric; it casts from pg/int2',
+    ],
+    [
+      'a number on a column whose type takes only text',
+      'payload Bytes @default(1234)',
+      'N.payload": pg/bytea has no cast from pg/int2; it casts from pg/text',
+    ],
+  ])('refuses %s', (_name, field, message) => {
     expect(diagnostics(model(`  ${field}`))).toEqual([
       expect.objectContaining({
-        code: 'PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE',
+        code: 'PSL_DEFAULT_TYPE_INCOMPATIBLE',
         message: expect.stringContaining(message),
         sourceId: 'schema.prisma',
         span: expect.objectContaining({ start: expect.objectContaining({ line: 3 }) }),
@@ -186,24 +196,11 @@ describe('literal defaults the codec refuses', () => {
     ]);
   });
 
-  it('refuses a non-finite literal on a codec that names no float', () => {
-    expect(diagnostics(model('  count Int @default(NaN)'))).toEqual([
+  it('refuses a tag no pack registered, listing the tags the stack knows', () => {
+    expect(diagnostics(model('  meta Jsonb @default(sqlite.sql`x`)'))).toEqual([
       expect.objectContaining({
-        code: 'PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE',
-        message: expect.stringContaining(
-          'pg/int4@1 is not compatible with a float literal; it accepts i8, i16, i32 literals',
-        ),
-      }),
-    ]);
-  });
-
-  it('refuses a number on a column whose codec names only string', () => {
-    expect(diagnostics(model('  payload Bytes @default(1234)'))).toEqual([
-      expect.objectContaining({
-        code: 'PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE',
-        message: expect.stringContaining(
-          'pg/bytea@1 is not compatible with an i16 literal; it accepts string literals',
-        ),
+        code: 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
+        message: expect.stringContaining('Unknown literal tag "sqlite.sql"'),
       }),
     ]);
   });

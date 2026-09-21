@@ -112,7 +112,10 @@ describe('assembled attribute specs are consumable from a resolved project', () 
       symbols: pipeline.symbolTable,
       model,
       field,
-      controlMutationDefaults: interpretation.context.controlMutationDefaults,
+      controlMutationDefaults: {
+        ...interpretation.context.controlMutationDefaults,
+        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
+      },
     });
     expect(spec).toMatchObject({
       name: 'marker',
@@ -143,7 +146,10 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     const ctx: AttributeSpecContext = {
       symbols: pipeline.symbolTable,
       model,
-      controlMutationDefaults: interpretation.context.controlMutationDefaults,
+      controlMutationDefaults: {
+        ...interpretation.context.controlMutationDefaults,
+        dataTypeEntries: interpretation.context.authoringContributions.dataTypes,
+      },
     };
 
     const spec = assembleAttributeSpecs(interpretation.context.authoringContributions).model[

@@ -1,8 +1,8 @@
 /**
- * Codec descriptors for the interpreter fixtures. A literal default resolves through the column's
- * codec descriptor, so the fixture lookup carries one per codec: what it accepts as a literal and
- * how it decodes one, mirroring the real Postgres codecs closely enough for the interpreter's
- * literal path. `test/integration` covers the real packs.
+ * Codec descriptors for the interpreter fixtures. A written default resolves through the column's
+ * codec descriptor, so the fixture lookup carries one per codec: the data type it represents and
+ * how it reads that type's canonical form, mirroring the real Postgres codecs closely enough for
+ * the interpreter's default path. `test/integration` covers the real packs. ADR 254.
  */
 
 import type { JsonValue } from '@internal/contract/types';
@@ -10,15 +10,31 @@ import {
   type AnyCodecDescriptor,
   type CodecLookup,
   type CodecTrait,
-  dataTypeId,
-  integerLiteralTypesUpTo,
-  isNonFiniteText,
-  isNumeralText,
-  type LiteralTypeDeclaration,
+  type DataTypeId,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
-import { ifDefined } from '@internal/utils/defined';
+import {
+  pgBool,
+  pgBytea,
+  pgChar,
+  pgDate,
+  pgFloat4,
+  pgFloat8,
+  pgInt2,
+  pgInt4,
+  pgInt8,
+  pgJson,
+  pgJsonb,
+  pgNumeric,
+  pgText,
+  pgTime,
+  pgTimestamp,
+  pgTimestamptz,
+  pgTimetz,
+  pgVarchar,
+  pgvectorVector,
+} from './fixture-data-types';
 
 const targetTypesByCodecId: Record<string, readonly string[]> = {
   'pg/text@1': ['text'],
@@ -43,7 +59,30 @@ const targetTypesByCodecId: Record<string, readonly string[]> = {
   'pg/vector@1': ['vector'],
 };
 
-const wholeNumbers = integerLiteralTypesUpTo('i64');
+const NON_FINITE: ReadonlySet<string> = new Set(['NaN', 'Infinity', '-Infinity']);
+
+const dataTypeByCodecId: Readonly<Record<string, DataTypeId>> = {
+  'pg/text@1': pgText.id,
+  'sql/char@1': pgChar.id,
+  'sql/varchar@1': pgVarchar.id,
+  'pg/bytea@1': pgBytea.id,
+  'pg/timestamptz-temporal@1': pgTimestamptz.id,
+  'pg/timestamp-temporal@1': pgTimestamp.id,
+  'pg/date-temporal@1': pgDate.id,
+  'pg/time-temporal@1': pgTime.id,
+  'pg/timetz@1': pgTimetz.id,
+  'pg/bool@1': pgBool.id,
+  'pg/int2@1': pgInt2.id,
+  'pg/int4@1': pgInt4.id,
+  'pg/int@1': pgInt4.id,
+  'pg/int8@1': pgInt8.id,
+  'pg/numeric@1': pgNumeric.id,
+  'pg/float4@1': pgFloat4.id,
+  'pg/float8@1': pgFloat8.id,
+  'pg/json@1': pgJson.id,
+  'pg/jsonb@1': pgJsonb.id,
+  'pg/vector@1': pgvectorVector.id,
+};
 
 /**
  * What each fixture codec accepts as a literal default and how it decodes one. Mirrors the real
@@ -55,7 +94,6 @@ const fixtureCodecs: Readonly<
     string,
     {
       readonly traits: readonly CodecTrait[];
-      readonly literalTypes?: readonly LiteralTypeDeclaration[];
       readonly encodeJson?: (value: unknown) => JsonValue;
       readonly decodeJson: (json: JsonValue, typeParams: Record<string, unknown>) => unknown;
     }
@@ -65,41 +103,34 @@ const fixtureCodecs: Readonly<
     if (typeof json !== 'string') throw new Error('value must be text');
     return json;
   };
-  const asNumber = (json: JsonValue): number => {
-    if (typeof json === 'number') return json;
-    if (typeof json === 'string' && (isNumeralText(json) || isNonFiniteText(json))) {
-      return Number(json);
+  const asWholeNumber = (json: JsonValue): number => {
+    if (typeof json !== 'number' || !Number.isInteger(json)) {
+      throw new Error('value must be a whole number');
     }
+    return json;
+  };
+  const asDouble = (json: JsonValue): number => {
+    if (typeof json === 'number') return json;
+    if (typeof json === 'string' && NON_FINITE.has(json)) return Number(json);
     throw new Error('value must be a number');
   };
   const text = {
     traits: ['equality', 'order', 'textual'] as const,
-    literalTypes: ['string'] as const,
     decodeJson: asText,
   };
-  const wholeNumber = (accepts: readonly LiteralTypeDeclaration[]) => ({
+  const wholeNumber = {
     traits: ['equality', 'order', 'numeric'] as const,
-    literalTypes: accepts,
-    decodeJson: (json: JsonValue): number => {
-      const value = asNumber(json);
-      if (!Number.isInteger(value)) throw new Error('value must be a whole number');
-      return value;
-    },
-  });
+    decodeJson: asWholeNumber,
+  };
   const json = {
     traits: ['equality'] as const,
-    literalTypes: ['json'] as const,
     decodeJson: (value: JsonValue) => value,
   };
   return {
     'pg/text@1': text,
     'sql/char@1': text,
     'sql/varchar@1': text,
-    'pg/bytea@1': {
-      traits: ['equality'] as const,
-      literalTypes: ['string'] as const,
-      decodeJson: asText,
-    },
+    'pg/bytea@1': { traits: ['equality'] as const, decodeJson: asText },
     'pg/timestamptz-temporal@1': text,
     'pg/timestamp-temporal@1': text,
     'pg/date-temporal@1': text,
@@ -107,44 +138,32 @@ const fixtureCodecs: Readonly<
     'pg/timetz@1': text,
     'pg/bool@1': {
       traits: ['equality', 'boolean'] as const,
-      literalTypes: ['boolean'] as const,
       decodeJson: (value: JsonValue) => {
         if (typeof value !== 'boolean') throw new Error('value must be a boolean');
         return value;
       },
     },
-    'pg/int2@1': wholeNumber(integerLiteralTypesUpTo('i16')),
-    'pg/int4@1': wholeNumber(integerLiteralTypesUpTo('i32')),
-    'pg/int@1': wholeNumber(integerLiteralTypesUpTo('i32')),
+    'pg/int2@1': wholeNumber,
+    'pg/int4@1': wholeNumber,
+    'pg/int@1': wholeNumber,
     'pg/int8@1': {
       traits: ['equality', 'order', 'numeric'] as const,
-      literalTypes: wholeNumbers,
       encodeJson: (value: unknown) => String(value),
-      decodeJson: (value: JsonValue) => BigInt(typeof value === 'number' ? value : asText(value)),
+      decodeJson: (value: JsonValue) => BigInt(asText(value)),
     },
     'pg/numeric@1': {
       traits: ['equality', 'order', 'numeric'] as const,
-      literalTypes: [...wholeNumbers, 'bigint', 'decimal', 'float'] as const,
-      decodeJson: (value: JsonValue) => (typeof value === 'number' ? String(value) : asText(value)),
+      decodeJson: asText,
     },
-    'pg/float4@1': {
-      traits: ['equality', 'order', 'numeric'] as const,
-      literalTypes: [...wholeNumbers, 'bigint', 'decimal', 'float'] as const,
-      decodeJson: asNumber,
-    },
-    'pg/float8@1': {
-      traits: ['equality', 'order', 'numeric'] as const,
-      literalTypes: [...wholeNumbers, 'bigint', 'decimal', 'float'] as const,
-      decodeJson: asNumber,
-    },
+    'pg/float4@1': { traits: ['equality', 'order', 'numeric'] as const, decodeJson: asDouble },
+    'pg/float8@1': { traits: ['equality', 'order', 'numeric'] as const, decodeJson: asDouble },
     'pg/json@1': json,
     'pg/jsonb@1': json,
     'pg/vector@1': {
       traits: ['equality'] as const,
-      literalTypes: [{ list: [...wholeNumbers, 'bigint', 'decimal'] }] as const,
       decodeJson: (value: JsonValue, typeParams: Record<string, unknown>) => {
         if (!Array.isArray(value)) throw new Error('Vector value must be an array of numbers');
-        const elements = value.map(asNumber);
+        const elements = value.map(asDouble);
         if (elements.length !== typeParams['length']) {
           throw new Error(
             `Vector length mismatch: expected ${String(typeParams['length'])}, got ${elements.length}`,
@@ -172,10 +191,9 @@ function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
   const parameterized = codecId === 'pg/vector@1';
   return {
     codecId,
-    dataType: dataTypeId(codecId.split('@')[0] ?? 'demo/fixture'),
+    dataType: dataTypeByCodecId[codecId] ?? pgText.id,
     traits: codec.traits,
     targetTypes: targetTypesByCodecId[codecId] ?? [],
-    ...ifDefined('literalTypes', codec.literalTypes),
     paramsSchema: parameterized ? vectorParamsSchema : voidParamsSchema,
     isParameterized: parameterized,
     factory: (params: unknown) => () => ({

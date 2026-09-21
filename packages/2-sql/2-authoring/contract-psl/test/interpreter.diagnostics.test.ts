@@ -4,6 +4,7 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
@@ -22,7 +23,11 @@ const baseInput = {
   target: postgresTarget,
   codecLookup: postgresCodecLookup,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-  authoringContributions: { type: postgresScalarAuthoringTypes },
+  authoringContributions: {
+    type: postgresScalarAuthoringTypes,
+    dataTypes: fixtureDataTypeSupport.entries,
+  },
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,
   capabilities: { sql: { scalarList: true } },

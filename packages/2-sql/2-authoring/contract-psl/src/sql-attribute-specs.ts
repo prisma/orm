@@ -182,10 +182,11 @@ function scalarDefaultArms(
   // One arm per distinct documentation, so each tag's completion and signature help carries the
   // text of the tag it names rather than every registered tag's text run together.
   const tagsByDocumentation = new Map<string, string[]>();
-  for (const [tag, entry] of registries.defaultLiteralTagRegistry) {
+  for (const entry of Object.values(registries.dataTypeEntries)) {
+    if (entry.written.kind !== 'tag') continue;
     const tags = tagsByDocumentation.get(entry.documentation);
-    if (tags === undefined) tagsByDocumentation.set(entry.documentation, [tag]);
-    else tags.push(tag);
+    if (tags === undefined) tagsByDocumentation.set(entry.documentation, [entry.written.tag]);
+    else tags.push(entry.written.tag);
   }
   const tagArms = () =>
     [...tagsByDocumentation].map(([documentation, tags]) => taggedLiteral(tags, { documentation }));

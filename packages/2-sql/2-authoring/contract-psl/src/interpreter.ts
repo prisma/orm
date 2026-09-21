@@ -31,13 +31,13 @@ import {
   isAuthoringPslBlockDescriptor,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup, type DataTypeLookup } from '@internal/framework-components/codec';
 import type {
   CapabilityMatrix,
   ExtensionPackRef,
   TargetPackRef,
 } from '@internal/framework-components/components';
 import type {
-  ControlDefaultLiteralTagRegistry,
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
   MutationDefaultGeneratorDescriptor,
@@ -88,7 +88,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { contractError } from './contract-errors';
-
+import type { DataTypeSupport } from './data-type-default';
 import { getAttribute, getNamedArgument, mapFieldNamesToColumns } from './psl-attribute-parsing';
 import type { ColumnDescriptor } from './psl-column-resolution';
 import {
@@ -131,6 +131,8 @@ export interface InterpretPslDocumentToSqlContractInput {
   readonly composedExtensions?: readonly string[];
   readonly composedExtensionPackRefs?: readonly ExtensionPackRef<'sql', string>[];
   readonly controlMutationDefaults?: ControlMutationDefaults;
+  /** The stack's data types; the PSL support for them travels in `authoringContributions`. ADR 254. */
+  readonly dataTypeLookup?: DataTypeLookup;
   readonly authoringContributions?: AuthoringContributions;
   /**
    * Extension contracts keyed by space ID. Required for cross-space FK
@@ -636,7 +638,7 @@ interface BuildModelNodeInput {
   readonly targetId: string;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
+  readonly dataTypeSupport: DataTypeSupport;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly sources: PslSources;
@@ -747,7 +749,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     familyId: input.familyId,
     targetId: input.targetId,
     defaultFunctionRegistry: input.defaultFunctionRegistry,
-    defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+    dataTypeSupport: input.dataTypeSupport,
     generatorDescriptorById: input.generatorDescriptorById,
     diagnostics,
     sources: input.sources,
@@ -1144,7 +1146,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
           model,
           controlMutationDefaults: {
             defaultFunctionRegistry: input.defaultFunctionRegistry,
-            defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+            dataTypeEntries: input.dataTypeSupport.entries,
           },
         }),
         model,
@@ -2139,8 +2141,10 @@ export function interpretPslDocumentToSqlContract(
     input.composedExtensionContracts;
   const defaultFunctionRegistry: ControlMutationDefaultRegistry =
     input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map();
-  const defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry =
-    input.controlMutationDefaults?.defaultLiteralTagRegistry ?? new Map();
+  const dataTypeSupport: DataTypeSupport = {
+    entries: input.authoringContributions?.dataTypes ?? {},
+    lookup: input.dataTypeLookup ?? createDataTypeLookup([]),
+  };
   const generatorDescriptors = input.controlMutationDefaults?.generatorDescriptors ?? [];
   const generatorDescriptorById = new Map<string, MutationDefaultGeneratorDescriptor>();
   for (const descriptor of generatorDescriptors) {
@@ -2464,7 +2468,7 @@ export function interpretPslDocumentToSqlContract(
       targetId: input.target.targetId,
       authoringContributions: input.authoringContributions,
       defaultFunctionRegistry,
-      defaultLiteralTagRegistry,
+      dataTypeSupport,
       generatorDescriptorById,
       scalarColumnDescriptors: input.scalarColumnDescriptors,
       sources: input.sources,

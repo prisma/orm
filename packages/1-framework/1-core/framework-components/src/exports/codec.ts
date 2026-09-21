@@ -44,26 +44,6 @@ export {
   dataType,
   dataTypeId,
 } from '../shared/data-type';
-export { jsonDefaultLiteralTagEntry } from '../shared/json-default-literal-tag';
-export type {
-  Literal,
-  LiteralRefusal,
-  LiteralTypeDeclaration,
-  LiteralTypeName,
-  ReadLiteralResult,
-  ScalarLiteral,
-  WrittenLiteral,
-} from '../shared/literal-types';
-export {
-  describeDeclarations,
-  integerLiteralTypesUpTo,
-  isCompatible,
-  isNonFiniteText,
-  isNumeralText,
-  readLiteral,
-} from '../shared/literal-types';
-export type { WrittenLiteralText } from '../shared/literal-types-write';
-export { escapePslString, numeralText, writeLiteral } from '../shared/literal-types-write';
 export { renderTsLiteral } from '../shared/render-ts-literal';
 export {
   CONTRACT_CODEC_DESCRIPTOR_MISSING,

@@ -3,6 +3,7 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresCodecLookup,
@@ -39,7 +40,15 @@ export const interpretPslDocumentToSqlContract = (
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     ...interpreterInput,
+    authoringContributions: {
+      ...interpreterInput.authoringContributions,
+      dataTypes: {
+        ...fixtureDataTypeSupport.entries,
+        ...interpreterInput.authoringContributions?.dataTypes,
+      },
+    },
   });
 };
 

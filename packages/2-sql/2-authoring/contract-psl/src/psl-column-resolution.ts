@@ -19,19 +19,15 @@ import {
   isAuthoringEntityTypeDescriptor,
   isAuthoringFieldPresetDescriptor,
   isAuthoringTypeConstructorDescriptor,
+  isDataTypeLoweringEntry,
+  loweringEntryKey,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
-import type {
-  AnyCodecDescriptor,
-  CodecLookup,
-  WrittenLiteral,
-} from '@internal/framework-components/codec';
+import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
 import {
-  type ControlDefaultLiteralTagRegistry,
   type ControlMutationDefaultRegistry,
   type DefaultFunctionLoweringContext,
   describeTaggedLiteralFailure,
-  isDefaultLiteralTagLoweringEntry,
   type MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
 import type {
@@ -53,14 +49,17 @@ import type { AuthoredColumnDefault } from '@internal/sql-contract-ts/contract-b
 import { InternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
 import {
+  type DataTypeSupport,
+  entryForTag,
+  knownTags,
+  lowerDataTypeDefault,
+  PSL_INVALID_DEFAULT_LITERAL,
+  type WrittenValue,
+} from './data-type-default';
+import {
   type LoweredPslDefaultResult,
   lowerDefaultFunctionWithRegistry,
 } from './default-function-registry';
-import {
-  lowerLiteralDefault,
-  PSL_INVALID_DEFAULT_LITERAL,
-  writtenLiteralForTagBody,
-} from './literal-default';
 
 import { mapPslHelperArgs } from './psl-authoring-arguments';
 import {
@@ -713,14 +712,14 @@ const TAGGED_LITERAL_CANONICALIZATION_CODES = {
   'too-large': 'PSL_TAGGED_LITERAL_TOO_LARGE',
 } as const;
 
-/** A tag naming a literal type yields the written literal its body is; every other tag lowers itself. */
+/** A tag naming a data type yields the written value its body is; a lowering tag lowers itself. */
 type TaggedLiteralLowering =
   | LoweredPslDefaultResult
-  | { readonly ok: true; readonly written: WrittenLiteral };
+  | { readonly ok: true; readonly written: WrittenValue };
 
 function lowerTaggedLiteral(
   literal: ParsedTaggedLiteral,
-  registry: ControlDefaultLiteralTagRegistry,
+  support: DataTypeSupport,
   context: DefaultFunctionLoweringContext,
   source: DiagnosticSource,
 ): TaggedLiteralLowering {
@@ -733,11 +732,12 @@ function lowerTaggedLiteral(
       ...source.at(literal.span),
     },
   });
-  const entry = registry.get(literal.tag);
+  const entry =
+    support.entries[loweringEntryKey(literal.tag)] ?? entryForTag(support, literal.tag)?.entry;
   if (entry === undefined) {
     return reject(
       'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
-      `Unknown literal tag "${literal.tag}". Known tags: ${[...registry.keys()].join(', ')}.`,
+      `Unknown literal tag "${literal.tag}". Known tags: ${knownTags(support).join(', ')}.`,
     );
   }
   const { canonicalization } = literal;
@@ -747,11 +747,8 @@ function lowerTaggedLiteral(
       describeTaggedLiteralFailure(canonicalization.reason),
     );
   }
-  if (!isDefaultLiteralTagLoweringEntry(entry)) {
-    const written = writtenLiteralForTagBody(entry.literalType, canonicalization.body);
-    return 'ok' in written
-      ? reject(PSL_INVALID_DEFAULT_LITERAL, written.message)
-      : { ok: true, written };
+  if (!isDataTypeLoweringEntry(entry)) {
+    return { ok: true, written: { kind: 'tag', tag: literal.tag, body: canonicalization.body } };
   }
   const result = entry.lower({
     literal: { tag: literal.tag, body: canonicalization.body, span: literal.span },
@@ -770,7 +767,7 @@ export function lowerDefaultForField(input: {
   readonly columnDescriptor: ColumnDescriptor;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
+  readonly dataTypeSupport: DataTypeSupport;
   readonly codecLookup: CodecLookup | undefined;
   readonly diagnostics: PslDiagnosticCollector;
 }): {
@@ -787,7 +784,7 @@ export function lowerDefaultForField(input: {
       field: input.field,
       controlMutationDefaults: {
         defaultFunctionRegistry: input.defaultFunctionRegistry,
-        defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+        dataTypeEntries: input.dataTypeSupport.entries,
       },
     }),
   );
@@ -807,12 +804,13 @@ export function lowerDefaultForField(input: {
     fieldName: input.fieldName,
     columnCodecId: input.columnDescriptor.codecId,
   };
-  const readAsLiteral = (written: WrittenLiteral) => {
-    const lowered = lowerLiteralDefault({
+  const readAsLiteral = (written: WrittenValue) => {
+    const lowered = lowerDataTypeDefault({
       written,
       isList: input.field.list,
       column: input.columnDescriptor,
       codecLookup: input.codecLookup,
+      support: input.dataTypeSupport,
       fieldPath: `${input.modelName}.${input.fieldName}`,
     });
     if (!lowered.ok) {
@@ -823,16 +821,16 @@ export function lowerDefaultForField(input: {
       });
       return {};
     }
-    return { defaultValue: { kind: 'literal' as const, value: lowered.value } };
+    return { defaultValue: { kind: 'literal' as const, value: lowered.value, canonical: true } };
   };
 
   const writtenElement = (
     element: string | boolean | NumLiteral | ParsedTaggedLiteral,
-  ): WrittenLiteral | { readonly ok: false } => {
+  ): WrittenValue | { readonly ok: false } => {
     if (typeof element === 'string') return { kind: 'string', text: element };
     if (typeof element === 'boolean') return { kind: 'boolean', value: element };
     if ('text' in element) return { kind: 'number', text: element.text };
-    const lowered = lowerTaggedLiteral(element, input.defaultLiteralTagRegistry, context, source);
+    const lowered = lowerTaggedLiteral(element, input.dataTypeSupport, context, source);
     if (!lowered.ok) {
       if (lowered.kind === 'owned') input.diagnostics.push(lowered.diagnostic);
       else input.diagnostics.pushExternal(lowered.diagnostic);
@@ -850,7 +848,7 @@ export function lowerDefaultForField(input: {
   };
 
   if (Array.isArray(value)) {
-    const elements: WrittenLiteral[] = [];
+    const elements: WrittenValue[] = [];
     for (const element of value) {
       const written = writtenElement(element);
       if ('ok' in written) return {};
@@ -874,7 +872,7 @@ export function lowerDefaultForField(input: {
 
   const lowered =
     'tag' in value
-      ? lowerTaggedLiteral(value, input.defaultLiteralTagRegistry, context, source)
+      ? lowerTaggedLiteral(value, input.dataTypeSupport, context, source)
       : lowerDefaultFunctionWithRegistry({
           call: value,
           registry: input.defaultFunctionRegistry,

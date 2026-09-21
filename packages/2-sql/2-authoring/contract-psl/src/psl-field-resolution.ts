@@ -6,7 +6,6 @@ import type { AuthoringContributions } from '@internal/framework-components/auth
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
-  ControlDefaultLiteralTagRegistry,
   ControlMutationDefaultRegistry,
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
@@ -26,6 +25,7 @@ import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import type { DataTypeSupport } from './data-type-default';
 import { defaultTableName } from './default-table-name';
 import { formatDbAttributeMigrationMessage, getAttribute } from './psl-attribute-parsing';
 import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
@@ -58,7 +58,7 @@ function lowerEnumDefaultForField(input: {
   readonly sources: PslSources;
   readonly enumHandle: EnumTypeHandle;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
+  readonly dataTypeSupport: DataTypeSupport;
   readonly diagnostics: PslDiagnosticCollector;
 }): LoweredFieldDefault {
   const { field, model, enumHandle, diagnostics } = input;
@@ -72,7 +72,7 @@ function lowerEnumDefaultForField(input: {
       field,
       controlMutationDefaults: {
         defaultFunctionRegistry: input.defaultFunctionRegistry,
-        defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+        dataTypeEntries: input.dataTypeSupport.entries,
       },
     }),
   );
@@ -161,7 +161,7 @@ export interface CollectResolvedFieldsInput {
   readonly familyId: string;
   readonly targetId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
+  readonly dataTypeSupport: DataTypeSupport;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
@@ -391,7 +391,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     familyId,
     targetId,
     defaultFunctionRegistry,
-    defaultLiteralTagRegistry,
+    dataTypeSupport,
     generatorDescriptorById,
     diagnostics,
     sources,
@@ -574,7 +574,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             sources: input.sources,
             enumHandle,
             defaultFunctionRegistry,
-            defaultLiteralTagRegistry,
+            dataTypeSupport,
             diagnostics,
           })
         : lowerDefaultForField({
@@ -587,7 +587,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             columnDescriptor: descriptor,
             generatorDescriptorById,
             defaultFunctionRegistry,
-            defaultLiteralTagRegistry,
+            dataTypeSupport,
             codecLookup,
             diagnostics,
           })

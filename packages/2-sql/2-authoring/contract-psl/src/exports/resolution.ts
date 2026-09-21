@@ -1,11 +1,13 @@
-export { buildEntityTypesByDiscriminator } from '../interpreter';
 export {
-  describeLiteralType,
-  type LiteralDefaultColumn,
-  type LiteralDefaultRefusal,
-  type ReadLiteralDefaultResult,
-  readLiteralDefault,
-} from '../literal-default';
+  type DataTypeSupport,
+  type DefaultColumn,
+  type DefaultRefusal,
+  entryForTag,
+  type ReadDefaultResult,
+  readDataTypeDefault,
+  type WrittenValue,
+} from '../data-type-default';
+export { buildEntityTypesByDiscriminator } from '../interpreter';
 export {
   type ColumnDescriptor,
   type ResolveFieldTypeResult,
