@@ -261,3 +261,33 @@ describe('the binder is the only resolution path', () => {
     expect(binderDiagnostics).toEqual([]);
   });
 });
+
+describe('a binder built over another snapshot', () => {
+  it('fails loudly instead of silently forgoing the check', () => {
+    const first = bind(RELATION_SCHEMA);
+    const second = bind(RELATION_SCHEMA);
+    const post = second.symbolTable.topLevel.models['Post']!;
+    const field = post.fields['author']!;
+    const ctx = fieldAttributeContext({
+      binder: first.binder,
+      sources: second.sources,
+      model: post,
+      field,
+    });
+
+    expect(() =>
+      interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx),
+    ).toThrow(/same snapshot/i);
+  });
+
+  it('resolves normally when the binder and the context share a snapshot', () => {
+    const { sources, symbolTable, binder } = bind(RELATION_SCHEMA);
+    const post = symbolTable.topLevel.models['Post']!;
+    const field = post.fields['author']!;
+    const ctx = fieldAttributeContext({ binder, sources, model: post, field });
+
+    const result = interpretAttribute(fieldAttributeNode(field, 'relation'), relationSpec, ctx);
+
+    expect(result.ok).toBe(true);
+  });
+});

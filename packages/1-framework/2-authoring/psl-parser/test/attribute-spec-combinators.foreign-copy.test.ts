@@ -89,10 +89,7 @@ describe('combinators dispatch on syntax kind, not on AST class identity', () =>
   it('fieldRef dispatches on the syntax kind of a node from another module copy', () => {
     const { arg, ctx } = foreignArg('id');
 
-    const result = fieldRef().parse(arg, ctx);
-
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.failure).toEqual([]);
+    expect(() => fieldRef().parse(arg, ctx)).toThrow(/same snapshot/i);
   });
 
   it('funcCall accepts a node from another module copy', () => {

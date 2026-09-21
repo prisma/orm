@@ -845,7 +845,7 @@ describe('referencedFieldRef on a cross-space list', () => {
 });
 
 describe('createBinder — reference slots the binder stays silent about', () => {
-  it('records nothing for a referencedFieldRef outside a field attribute', () => {
+  it('stays wordless for a referencedFieldRef outside a field attribute', () => {
     const { symbolTable, binder, diagnostics } = bind(
       'model User {\n  id Int\n  @@borrowed([id])\n}',
     );
@@ -853,7 +853,10 @@ describe('createBinder — reference slots the binder stays silent about', () =>
     const [node] = attributeNodes(user, 'borrowed');
 
     expect(node).toBeDefined();
-    expect(node === undefined ? undefined : binder.symbolForNode(node)).toBeUndefined();
+    expect(node === undefined ? undefined : binder.symbolForNode(node)).toEqual({
+      kind: 'unresolved',
+      name: 'id',
+    });
     expect(diagnostics).toEqual([]);
   });
 
@@ -934,5 +937,50 @@ describe('binder diagnostics carry their reference class', () => {
       ['PSL_UNRESOLVED_REFERENCE', 'entity'],
       ['PSL_UNRESOLVED_ATTRIBUTE', 'attribute'],
     ]);
+  });
+});
+
+describe('the references table records what it examined', () => {
+  it('records an unresolved entry for a type it could not resolve', () => {
+    const { symbolTable, binder } = bind('model Cart {\n  owner Ghost\n}');
+
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'Cart', 'owner'))).toEqual({
+      kind: 'unresolved',
+      name: 'Ghost',
+    });
+  });
+
+  it('records an unresolved entry for an attribute argument it could not resolve', () => {
+    const { symbolTable, binder } = bind('model User {\n  id Int\n  @@index([missing])\n}');
+    const user = symbolTable.topLevel.models['User']!;
+    const [node] = attributeNodes(user, 'index');
+
+    expect(node).toBeDefined();
+    expect(node === undefined ? undefined : binder.symbolForNode(node)).toEqual({
+      kind: 'unresolved',
+      name: 'missing',
+    });
+  });
+
+  it('records an unresolved entry for a referenced field with no declaring field', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      'model User {\n  id Int\n  @@borrowed([id])\n}',
+    );
+    const user = symbolTable.topLevel.models['User']!;
+    const [node] = attributeNodes(user, 'borrowed');
+
+    expect(node).toBeDefined();
+    expect(node === undefined ? undefined : binder.symbolForNode(node)).toEqual({
+      kind: 'unresolved',
+      name: 'id',
+    });
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('leaves a malformed type unexamined', () => {
+    const { symbolTable, binder } = bind('model Cart {\n  value a.b.c\n}');
+
+    expect(fieldOf(symbolTable, 'Cart', 'value').malformedType).toBe(true);
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'Cart', 'value'))).toBeUndefined();
   });
 });

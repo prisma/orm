@@ -122,7 +122,11 @@ Shape and arity stay the combinator's voice — "Expected a field name", "Expect
 
 This lookup rests on red-node identity (below): the combinator receives the very `SyntaxNode` the binder keyed its result under.
 
-**Precondition.** The binder on the context must be built over the *same snapshot* — the same symbol table and `PslSources` — and the same `typeConstructors` / `attributeSpecs` registries as the interpretation consuming it. The combinators trust the binder's answer rather than re-deriving it, so a binder from a different snapshot or from registries that disagree with the specs being interpreted will bind nothing for those nodes: every reference argument fails to parse while the binder's own diagnostics describe a different document. Build the binder and run interpretation over one snapshot.
+**Precondition, enforced.** The binder on the context must be built over the *same snapshot* — the same symbol table and `PslSources` — and the same `typeConstructors` / `attributeSpecs` registries as the interpretation consuming it.
+
+The binder records what it examined, including its failures: a reference it could not resolve gets an explicit `unresolved` entry rather than no entry at all. So for a node in reference position, an absent entry cannot mean "the author made a mistake" — it can only mean this binder never saw this tree. The reference combinators therefore **throw an `InternalError`** on a missing entry instead of quietly skipping the check. A mismatched binder fails loudly at the first reference argument rather than silently forgoing existence checking across the whole document.
+
+Fields whose type is malformed are the one deliberate absence: the binder does not examine them, and no combinator reads a type node.
 
 ### Snapshot lifetime
 
