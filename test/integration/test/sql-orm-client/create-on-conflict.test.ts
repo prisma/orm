@@ -118,6 +118,52 @@ describe('integration/create on conflict skip', () => {
   );
 
   it(
+    'two rows colliding with each other inside one batch keep only the first',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const returningUsers = createReturningUsersCollection(runtime);
+        const countingUsers = createUsersCollection(runtime);
+
+        const inserted = await returningUsers
+          .select('id', 'name')
+          .createAll(
+            [
+              { id: 30, name: 'First', email: 'first@example.com', invitedById: null },
+              { id: 30, name: 'Duplicate of first', email: 'dup@example.com', invitedById: null },
+              { id: 31, name: 'Second', email: 'second@example.com', invitedById: null },
+            ],
+            { onConflict: 'skip' },
+          )
+          .toArray();
+
+        expect(inserted).toEqual([
+          { id: 30, name: 'First' },
+          { id: 31, name: 'Second' },
+        ]);
+
+        const count = await countingUsers.createAndCount(
+          [
+            { id: 40, name: 'Third', email: 'third@example.com', invitedById: null },
+            { id: 40, name: 'Duplicate of third', email: 'dup2@example.com', invitedById: null },
+          ],
+          { onConflict: 'skip' },
+        );
+        expect(count).toBe(1);
+
+        const rows = await runtime.query<{ id: number; name: string }>(
+          'select id, name from users order by id',
+        );
+        expect(rows).toEqual([
+          { id: 30, name: 'First' },
+          { id: 31, name: 'Second' },
+          { id: 40, name: 'Third' },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'a batch where every row collides inserts nothing and raises nothing',
     async () => {
       await withCollectionRuntime(async (runtime) => {

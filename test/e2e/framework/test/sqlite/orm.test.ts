@@ -160,6 +160,37 @@ describe('e2e: ORM on SQLite', { timeout: timeouts.databaseOperation }, () => {
       });
     });
 
+    it('keeps only the first of two rows colliding with each other inside one batch', async () => {
+      await withSqliteTestRuntime<Contract>(contractJsonPath, async ({ ormClient }) => {
+        const rows = await ormClient[UNBOUND_NAMESPACE_ID].User.select('id', 'name').createAll(
+          [
+            { id: 730, name: 'First', email: 'first@example.com' },
+            { id: 730, name: 'Duplicate of first', email: 'dup@example.com' },
+            { id: 731, name: 'Second', email: 'second@example.com' },
+          ],
+          { onConflict: 'skip' },
+        );
+
+        expect(rows).toEqual([
+          { id: 730, name: 'First' },
+          { id: 731, name: 'Second' },
+        ]);
+
+        const count = await ormClient[UNBOUND_NAMESPACE_ID].User.createAndCount(
+          [
+            { id: 740, name: 'Third', email: 'third@example.com' },
+            { id: 740, name: 'Duplicate of third', email: 'dup2@example.com' },
+          ],
+          { onConflict: 'skip' },
+        );
+        expect(count).toBe(1);
+
+        await ormClient[UNBOUND_NAMESPACE_ID].User.where({ id: 730 }).deleteAndCount();
+        await ormClient[UNBOUND_NAMESPACE_ID].User.where({ id: 731 }).deleteAndCount();
+        await ormClient[UNBOUND_NAMESPACE_ID].User.where({ id: 740 }).deleteAndCount();
+      });
+    });
+
     it('skips on a named conflict target', async () => {
       await withSqliteTestRuntime<Contract>(contractJsonPath, async ({ ormClient }) => {
         const count = await ormClient[UNBOUND_NAMESPACE_ID].User.createAndCount(
