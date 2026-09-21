@@ -57,6 +57,11 @@ Agreed with Will and Serhii on 2026-09-21.
 - **Data type ids are lower case** (`mongo/objectid`). `pg/char@1` and `pg/varchar@1` name `pg/char` and `pg/varchar`; SQLite's adapted `sql/char@1`, `sql/varchar@1` name `sqlite/text`, `sql/int@1` names `sqlite/integer`, `sql/float@1` names `sqlite/real`. SQLite binds no `Boolean`, so the boolean halt condition does not apply. (R1.)
 - **`dataTypes` sits at `types.codecTypes.dataTypes`** beside `codecDescriptors`; the assembled authoring contribution's `dataTypes` is required. The four invariants run behind one seam, `enforceDataTypeInvariants`, enabled once any component registers a type; R2 removes the gate. (R1.)
 
+- **The plain-number authoring entry declares the types its classifier can return** (`types`), and assembly counts those as writable for invariant 4, since `pg/int2` and friends have no entry of their own and are reached only through the classifier. The number form carries `classify` instead of `parse`. (R2.)
+- **Data types are registered on `ComponentMetadata.dataTypes`**, a sibling of `types`, `authoring` and `controlMutationDefaults`, not under `types.codecTypes`: an extension's `types` block is copied into its contract space, and a cast is a function no contract can hold. (R2.)
+- **SQLite has no boolean data type and no boolean entry.** A plain `true`/`false` on SQLite is refused with a diagnostic saying the target has no data type for a boolean value; nothing on `main` accepted it either, since SQLite binds no `Boolean`. (R2, for R3.)
+- **`@prisma/orm-postgres` exposes a `./data-types` subpath** so the target's declarations are reachable through the facade. (R2.)
+
 ## Design
 
 ### B1. Data types in the framework
