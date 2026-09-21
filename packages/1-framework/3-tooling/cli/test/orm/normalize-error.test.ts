@@ -142,6 +142,25 @@ describe('normalizeError', () => {
     });
   });
 
+  describe('a prisma/prisma error carrying accompanying findings', () => {
+    const finding = {
+      code: 'PSL.PRISMA7_VIEW_UNSUPPORTED' as const,
+      severity: 'error' as const,
+      summary: 'schema.prisma:9:1 View "ActiveUsers" is not supported',
+      nextActions: [],
+      where: { path: 'schema.prisma', line: 9 },
+    };
+
+    it('hands the findings to the engine so it prints and serializes them', () => {
+      const raised = new CliStructuredError('CONTRACT.SOURCE_LOAD_FAILED', 'Failed to resolve', {
+        fix: 'Edit the schema where each diagnostic points.',
+        diagnostics: [finding],
+      });
+
+      expect(normalizeError(raised).diagnostics).toEqual([finding]);
+    });
+  });
+
   describe('a bare throw', () => {
     it('wraps an Error as CLI.UNEXPECTED with its message', () => {
       const normalized = normalizeError(new Error('connection reset'));

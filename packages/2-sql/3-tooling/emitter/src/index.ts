@@ -509,6 +509,7 @@ export const sqlEmission = {
     return [
       'import type {',
       '  ContractWithTypeMaps,',
+      '  RelationKeys,',
       '  TypeMaps as TypeMapsType,',
       `} from '${resolveImportSpecifier('@internal/sql-contract/types')}';`,
     ];

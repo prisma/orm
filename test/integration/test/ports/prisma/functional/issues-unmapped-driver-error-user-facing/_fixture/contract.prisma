@@ -12,4 +12,5 @@ model User {
   id    String  @id
   email String  @unique
   name  String?
+  @@map("user")
 }

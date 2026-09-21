@@ -206,6 +206,9 @@ export interface TargetDescriptor<TFamilyId extends string, TTargetId extends st
 
   /** The target identifier (e.g., 'postgres', 'mysql', 'mongodb') */
   readonly targetId: TTargetId;
+
+  /** Whether the target has a namespace mechanism (Postgres schemas, Mongo namespaces). Absent means true. When false, emitted `Models` member names and the `models` constant drop the namespace segment. */
+  readonly supportsNamespaces?: boolean;
 }
 
 /**
@@ -229,6 +232,7 @@ export type TargetPackRef<
   readonly targetId: TTargetId;
   /** The namespace a bare (un-namespaced) entity name resolves to for this target (e.g. Postgres `'public'`). */
   readonly defaultNamespaceId: string;
+  readonly supportsNamespaces?: boolean;
 };
 
 export type AdapterPackRef<

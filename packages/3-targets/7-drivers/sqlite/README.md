@@ -1,6 +1,6 @@
 # @internal/driver-sqlite
 
-SQLite driver for Prisma Next.
+SQLite driver for Prisma 8.
 
 ## Package Classification
 
@@ -12,7 +12,7 @@ SQLite driver for Prisma Next.
 
 The SQLite driver provides transport and connection management for SQLite databases using Node.js built-in `node:sqlite` module (`DatabaseSync`). It implements the `SqlDriver` interface for executing SQL statements, explaining queries, and managing connections.
 
-In Prisma Next, "driver" refers to the Prisma Next interface (not the underlying `node:sqlite` API). Drivers own connection management and transport, but contain no dialect-specific logic. All dialect behavior lives in adapters. Instantiation is separate from connection; `create()` returns an unbound driver, `connect(binding)` binds at the boundary ([ADR 159](../../../../docs/architecture%20docs/adrs/ADR%20159%20-%20Driver%20Terminology%20and%20Lifecycle.md)).
+In Prisma 8, "driver" refers to the Prisma 8 interface (not the underlying `node:sqlite` API). Drivers own connection management and transport, but contain no dialect-specific logic. All dialect behavior lives in adapters. Instantiation is separate from connection; `create()` returns an unbound driver, `connect(binding)` binds at the boundary ([ADR 159](../../../../docs/architecture%20docs/adrs/ADR%20159%20-%20Driver%20Terminology%20and%20Lifecycle.md)).
 
 This package spans multiple planes:
 - **Migration plane** (`src/exports/control.ts`): Control plane entry point for driver descriptors

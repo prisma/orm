@@ -25,6 +25,35 @@ const FILE_ONE_LINE_MANY_TERMS = "export const columnTable = 'postgres table';\n
 // Vocabulary only in comments.
 const FILE_COMMENTS_ONLY =
   '// a postgres table column\n/**\n * nativeType, primary key, mongo collection\n */\nexport const x = 1;\n';
+const FILE_SOURCE_COORDINATES =
+  'export function offsetToPslPosition(offset, position) { return { offset, line: position.line + 1, column: position.character + 1 }; }\n';
+const FILE_ZERO_SPAN_COORDINATES =
+  'const ZERO_SPAN = { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } };\n';
+const FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN = `${FILE_SOURCE_COORDINATES}export const column = 1;\n`;
+const FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN_MEMBER = `${FILE_SOURCE_COORDINATES}export const storage = { column: 'id' };\n`;
+const FILE_SOURCE_COORDINATES_WITH_STORAGE_STRING_KEY = `${FILE_SOURCE_COORDINATES}export const storage = { 'column': 'id' };\n`;
+const FILE_SYMBOL_TABLE =
+  'export interface SymbolTableResult { readonly symbolTable: SymbolTable }\nconst symbolTable = {};\nexport function buildSymbolTable() { return { symbolTable }; }\n';
+const FILE_SYMBOL_TABLE_WITH_STORAGE_TABLE = `${FILE_SYMBOL_TABLE}export const storageTable = 1;\n`;
+const FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS =
+  'const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({ document, sources });\n';
+const FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_STORAGE_TABLE_ARGUMENT =
+  'const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({\n  document,\n  sources,\n  pslBlockDescriptors: storage.table,\n});\n';
+const FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_TABLE_LITERAL_ARGUMENT =
+  'const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({\n  document,\n  sources,\n  pslBlockDescriptors: {\n    table: value,\n  },\n});\n';
+const FILE_LANGUAGE_SERVER_DIRECT_SYMBOL_TABLE_ACCESS =
+  'const symbolTable = buildSymbolTable(symbolTableInput).symbolTable;\n';
+const FILE_LANGUAGE_SERVER_UNRELATED_SYMBOL_RESULT_TABLE =
+  'const symbolResult = getStorage();\nconst result = symbolResult.table;\n';
+const FILE_LANGUAGE_SERVER_ALIAS_TABLE =
+  'const symbolResult = getStorage();\nconst storageAlias = symbolResult;\nconst result = storageAlias.table;\n';
+const FILE_LANGUAGE_SERVER_SHADOWED_SYMBOL_RESULT_TABLE = `${FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS}function read(symbolResult) { return symbolResult.table; }\n`;
+const FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_STORAGE_TABLE = `${FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS}const storage = getStorage();\nconst result = storage.table;\n`;
+const FILE_FORMATTER_ALIGNMENT_COLUMNS =
+  'export function alignmentColumns(rows) { const typeColumn = 1; return { typeColumn, attributeColumn: 2 }; }\n';
+const FILE_FORMATTER_ALIGNMENT_WITH_STORAGE_COLUMN = `${FILE_FORMATTER_ALIGNMENT_COLUMNS}export const storageColumn = 1;\n`;
+const FILE_FORBIDDEN_STORAGE_VOCABULARY =
+  'export interface StorageShape { readonly tableName: string; readonly columnName: string; readonly nativeType: string; }\n';
 
 let repo;
 
@@ -153,6 +182,223 @@ describe('lint-framework-vocabulary — counting', () => {
   it('counts a line carrying several terms once', () => {
     writeConfig(1);
     writeRepoFile(`${SCOPE}/src/app.ts`, FILE_ONE_LINE_MANY_TERMS);
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  it('counts bare column keys even in source-coordinate positions', () => {
+    writeConfig(2);
+    writeRepoFile(`${SCOPE}/2-authoring/psl-parser/src/source-file.ts`, FILE_SOURCE_COORDINATES);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/extension-block.ts`,
+      FILE_ZERO_SPAN_COORDINATES,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=2 threshold=2/);
+  });
+
+  it('does not count parser symbol tables or formatter alignment columns as family vocabulary', () => {
+    writeConfig(0);
+    writeRepoFile(`${SCOPE}/2-authoring/psl-parser/src/symbol-table.ts`, FILE_SYMBOL_TABLE);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/format/emit.ts`,
+      FILE_FORMATTER_ALIGNMENT_COLUMNS,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=0 threshold=0/);
+  });
+
+  it('does not count language-server buildSymbolTable result access as family vocabulary', () => {
+    writeConfig(0);
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/pipeline.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_ACCESS,
+    );
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/project-artifacts.ts`,
+      FILE_LANGUAGE_SERVER_DIRECT_SYMBOL_TABLE_ACCESS,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=0 threshold=0/);
+  });
+
+  it('still counts storage.table inside buildSymbolTable call arguments', () => {
+    writeConfig(2);
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/pipeline.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_STORAGE_TABLE_ARGUMENT,
+    );
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/project-artifacts.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_STORAGE_TABLE_ARGUMENT,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=2 threshold=2/);
+  });
+
+  it('still counts table object-literal members inside buildSymbolTable call arguments', () => {
+    writeConfig(2);
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/pipeline.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_TABLE_LITERAL_ARGUMENT,
+    );
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/project-artifacts.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_TABLE_LITERAL_ARGUMENT,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=2 threshold=2/);
+  });
+
+  it('still counts unrelated symbolResult.table access in language-server files', () => {
+    writeConfig(2);
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/pipeline.ts`,
+      FILE_LANGUAGE_SERVER_UNRELATED_SYMBOL_RESULT_TABLE,
+    );
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/project-artifacts.ts`,
+      FILE_LANGUAGE_SERVER_UNRELATED_SYMBOL_RESULT_TABLE,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=2 threshold=2/);
+  });
+
+  it('still counts aliased table access in language-server files', () => {
+    writeConfig(2);
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/pipeline.ts`,
+      FILE_LANGUAGE_SERVER_ALIAS_TABLE,
+    );
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/project-artifacts.ts`,
+      FILE_LANGUAGE_SERVER_ALIAS_TABLE,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=2 threshold=2/);
+  });
+
+  it('still counts shadowed symbolResult.table access in language-server files', () => {
+    writeConfig(2);
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/pipeline.ts`,
+      FILE_LANGUAGE_SERVER_SHADOWED_SYMBOL_RESULT_TABLE,
+    );
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/project-artifacts.ts`,
+      FILE_LANGUAGE_SERVER_SHADOWED_SYMBOL_RESULT_TABLE,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=2 threshold=2/);
+  });
+
+  it('still counts storage table vocabulary beside language-server symbol-table access', () => {
+    writeConfig(2);
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/pipeline.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_STORAGE_TABLE,
+    );
+    writeRepoFile(
+      `${SCOPE}/3-tooling/language-server/src/project-artifacts.ts`,
+      FILE_LANGUAGE_SERVER_SYMBOL_TABLE_WITH_STORAGE_TABLE,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=2 threshold=2/);
+  });
+
+  it('still counts genuine storage vocabulary in framework code', () => {
+    writeConfig(1);
+    writeRepoFile(`${SCOPE}/src/storage-shape.ts`, FILE_FORBIDDEN_STORAGE_VOCABULARY);
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  for (const filename of ['source-file.ts', 'extension-block.ts']) {
+    for (const [kind, content] of [
+      ['identifier', FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN],
+      ['member', FILE_SOURCE_COORDINATES_WITH_STORAGE_COLUMN_MEMBER],
+      ['string key', FILE_SOURCE_COORDINATES_WITH_STORAGE_STRING_KEY],
+    ]) {
+      it(`counts both coordinate and storage column ${kind} in ${filename}`, () => {
+        writeConfig(2);
+        writeRepoFile(`${SCOPE}/2-authoring/psl-parser/src/${filename}`, content);
+
+        const result = runScript();
+        assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+        assert.match(result.stdout, /count=2 threshold=2/);
+      });
+    }
+  }
+
+  for (const filename of [
+    '2-authoring/psl-parser/src/symbol-table.ts',
+    '2-authoring/psl-parser/src/format/emit.ts',
+    '3-tooling/language-server/src/pipeline.ts',
+    '3-tooling/language-server/src/project-artifacts.ts',
+    'src/other.ts',
+  ]) {
+    it(`allows explicit compounds in ${filename}`, () => {
+      writeConfig(0);
+      writeRepoFile(`${SCOPE}/${filename}`, FILE_SYMBOL_TABLE + FILE_FORMATTER_ALIGNMENT_COLUMNS);
+
+      const result = runScript();
+      assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+      assert.match(result.stdout, /count=0 threshold=0/);
+    });
+
+    it(`counts bare terms beside allowed compounds in ${filename}`, () => {
+      writeConfig(4);
+      writeRepoFile(
+        `${SCOPE}/${filename}`,
+        'const table = symbolTable;\nconst tables = symbolTable;\nconst column = alignmentColumns([]);\nconst columns = alignmentColumns([]);\n',
+      );
+
+      const result = runScript();
+      assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+      assert.match(result.stdout, /count=4 threshold=4/);
+    });
+  }
+
+  it('still counts storage table vocabulary in parser symbol-table code', () => {
+    writeConfig(1);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/symbol-table.ts`,
+      FILE_SYMBOL_TABLE_WITH_STORAGE_TABLE,
+    );
+
+    const result = runScript();
+    assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);
+    assert.match(result.stdout, /count=1 threshold=1/);
+  });
+
+  it('still counts storage column vocabulary in formatter code', () => {
+    writeConfig(1);
+    writeRepoFile(
+      `${SCOPE}/2-authoring/psl-parser/src/format/emit.ts`,
+      FILE_FORMATTER_ALIGNMENT_WITH_STORAGE_COLUMN,
+    );
 
     const result = runScript();
     assert.equal(result.status, 0, `expected exit 0; stderr=${result.stderr}`);

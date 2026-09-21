@@ -10,8 +10,8 @@ import {
   rawSql,
   unique,
 } from '@prisma/orm-postgres/target/migration';
-import type { Contract as End } from '../../snapshots/b1643ad5e63c8896f80a44f59430cefd17a44554e3b5458121bf1bc87a89bbc0/contract';
-import endContract from '../../snapshots/b1643ad5e63c8896f80a44f59430cefd17a44554e3b5458121bf1bc87a89bbc0/contract.json' with {
+import type { Contract as End } from '../../snapshots/f62a4154d0b48cb144ca4f74667fc6922e770f81edd5517393285fb92d07dddc/contract';
+import endContract from '../../snapshots/f62a4154d0b48cb144ca4f74667fc6922e770f81edd5517393285fb92d07dddc/contract.json' with {
   type: 'json',
 };
 
@@ -94,16 +94,13 @@ export default class M extends Migration<never, End> {
           col('createdAt', 'timestamptz', { notNull: true, default: fn('now()') }),
           col('embedding', 'vector(1536)'),
           col('id', 'uuid', { notNull: true }),
-          col('priority', 'text', { notNull: true, default: lit('low') }),
+          col('priority', 'int4', { notNull: true, default: lit(0) }),
           col('title', 'text', { notNull: true }),
           col('userId', 'uuid', { notNull: true }),
         ],
         constraints: [
           primaryKey(['id']),
-          checkExpression(
-            'post_priority_check_09b41aa0',
-            "\"priority\" IN ('low', 'high', 'urgent')",
-          ),
+          checkExpression('post_priority_check_b236ace9', '"priority" IN (0, 1, 2)'),
         ],
       }),
       this.createTable({

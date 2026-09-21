@@ -6,7 +6,12 @@ import { generateId } from '@internal/ids/runtime';
 import type { Adapter, AnyQueryAst } from '@internal/sql-relational-core/ast';
 import type { SqlRuntimeAdapterDescriptor } from '@internal/sql-runtime';
 import { postgresCodecRegistry } from '@internal/target-postgres/codecs';
-import { INSTANT_NOW_GENERATOR_ID, instantNow } from '@internal/target-postgres/runtime';
+import {
+  INSTANT_NOW_GENERATOR_ID,
+  instantNow,
+  PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+  plainDateTimeNow,
+} from '@internal/target-postgres/runtime';
 import { createPostgresAdapterWithCodecRegistry, postgresRawCodecInferer } from '../core/adapter';
 import { assemblePostgresCodecRegistry } from '../core/codec-lookup';
 import { postgresAdapterDescriptorMeta, postgresQueryOperations } from '../core/descriptor-meta';
@@ -30,6 +35,11 @@ function createPostgresMutationDefaultGenerators() {
     {
       id: INSTANT_NOW_GENERATOR_ID,
       generate: () => instantNow(),
+      stability: 'query' as const,
+    },
+    {
+      id: PLAIN_DATE_TIME_NOW_GENERATOR_ID,
+      generate: () => plainDateTimeNow(),
       stability: 'query' as const,
     },
   ];

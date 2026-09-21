@@ -17,7 +17,7 @@ export interface CommanderResultShape {
   /**
    * The full command path from the root program to the leaf, including
    * the root program name as the first element (the sanitiser drops it).
-   * Example: `['prisma-next', 'migration', 'new']`.
+   * Example: `['prisma', 'migration', 'new']`.
    */
   readonly commandPath: readonly string[];
   /**

@@ -10,6 +10,7 @@ import {
   field,
   member,
   model,
+  now,
 } from '@internal/postgres/contract-builder';
 
 const pgText = { codecId: 'pg/text@1', nativeType: 'text' } as const;
@@ -42,7 +43,7 @@ const Account = model('Account', {
     email: field.column(varcharColumn(320)).unique(),
     status: field.namedType(enums.AccountStatus),
     profile: field.column(jsonbColumn).optional(),
-    createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()'),
+    createdAt: field.column(timestamptzTemporalColumn).default(now()),
   },
 }).sql({ table: 'account' });
 
@@ -58,7 +59,7 @@ const Project = model('Project', {
     name: field.column(textColumn),
     visibility: field.namedType(enums.ProjectVisibility),
     metadata: field.column(jsonbColumn).optional(),
-    createdAt: field.column(timestamptzTemporalColumn).defaultSql('now()'),
+    createdAt: field.column(timestamptzTemporalColumn).default(now()),
   },
 }).sql(({ cols, constraints }) => ({
   table: 'project',

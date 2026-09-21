@@ -1,5 +1,5 @@
 /**
- * Prisma Next config for the `extension-paradedb` package.
+ * Prisma 8 config for the `extension-paradedb` package.
  *
  * The extension package is treated as a self-contained "project" for
  * the CLI: `prisma contract emit` writes

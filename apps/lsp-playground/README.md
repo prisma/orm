@@ -1,6 +1,6 @@
 # lsp-playground (private)
 
-A throwaway dev playground that opens a `.psl` file in a browser Monaco editor wired to the Prisma Next language server (`prisma lsp --stdio`) for live PSL diagnostics, folding ranges, whole-document formatting, and server-driven semantic tokens.
+A throwaway dev playground that opens a `.psl` file in a browser Monaco editor wired to the Prisma 8 language server (`prisma lsp --stdio`) for live PSL diagnostics, folding ranges, whole-document formatting, and server-driven semantic tokens.
 
 It is a private, unpublished `apps/` package — not part of the framework build graph and exempt from `lint:deps` layering.
 
@@ -10,7 +10,7 @@ It is a private, unpublished `apps/` package — not part of the framework build
 # 1. Build the playground dependency closure once so the bridge can spawn the built CLI and generated configs can import workspace packages:
 pnpm --filter lsp-playground... run --if-present build
 
-# 2a. Open a blank scratch schema (no file needed):
+# 2a. Open a scratch schema (no file needed):
 psl-playground
 
 # 2b. Or open an existing PSL file:
@@ -20,7 +20,7 @@ psl-playground path/to/schema.psl
 pnpm --filter lsp-playground start path/to/schema.psl
 ```
 
-The PSL file is **optional**. With no argument — or a path that does not yet exist — the playground opens a writable scratch schema under `.playground/` so you can start authoring immediately. Then open the printed `http://localhost:5295/` URL; parse diagnostics update live as you edit, folding controls are available in the editor gutter, semantic highlighting is requested through the language client, and the header's **Format** button sends `textDocument/formatting` to the language server.
+The PSL file is **optional**. With no argument — or a path that does not yet exist — the playground opens a writable scratch schema under `.playground/` so you can start authoring immediately. New scratch schemas start with `// use prisma-8` to enable language-server features; existing files are preserved. Then open the printed `http://localhost:5295/` URL; parse diagnostics update live as you edit, folding controls are available in the editor gutter, semantic highlighting is requested through the language client, and the header's **Format** button sends `textDocument/formatting` to the language server.
 
 Everything (editor + LSP) is served on the single port `5295`.
 
@@ -60,6 +60,7 @@ Use this path when changing the language server, playground wiring, or docs for 
 2. Create or choose a representative PSL file that includes a namespace, models, a composite type, a `types` block, attributes, strings, numbers, booleans, and a comment. For example:
 
 ```psl
+// use prisma-8
 // leading comment
 namespace billing {
   model Invoice {

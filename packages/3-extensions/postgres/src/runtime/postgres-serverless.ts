@@ -18,6 +18,7 @@ import type {
 } from '@internal/sql-runtime';
 import { createExecutionContext, createSqlExecutionStack } from '@internal/sql-runtime';
 import postgresTarget, { PostgresContractSerializer } from '@internal/target-postgres/runtime';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { Client } from 'pg';
@@ -73,7 +74,10 @@ function resolveContract<TContract extends Contract<SqlStorage>>(
   const contractJson = hasContractJson(options)
     ? options.contractJson
     : contractSerializer.serializeContract(options.contract);
-  return contractSerializer.deserializeContract(contractJson) as TContract;
+  return blindCast<
+    TContract,
+    'caller supplies the generic contract type that matches the serialized Postgres contract'
+  >(contractSerializer.deserializeContract(contractJson));
 }
 
 function validateConnectionString(url: string): string {
@@ -185,7 +189,10 @@ export default function postgresServerless<TContract extends Contract<SqlStorage
         enumerable: false,
       });
 
-      return runtime as Runtime & AsyncDisposable;
+      return blindCast<
+        Runtime & AsyncDisposable,
+        'Symbol.asyncDispose is defined on the runtime before returning'
+      >(runtime);
     },
   };
 }

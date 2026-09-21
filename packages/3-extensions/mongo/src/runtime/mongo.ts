@@ -10,6 +10,7 @@ import type { MongoOrmClient, MongoQueryPlan, MongoRawClient } from '@internal/m
 import { mongoOrm } from '@internal/mongo-orm';
 import type { MongoMiddleware, MongoRuntime } from '@internal/mongo-runtime';
 import { createMongoRuntime, type MongoExecutionContext } from '@internal/mongo-runtime';
+import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { buildMongoStaticContext, type MongoStaticContext } from '../static/mongo-static';
 import {
@@ -96,7 +97,10 @@ function resolveContract<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(options: MongoOptions<TContract>): TContract {
   const contractInput = hasContractJson(options) ? options.contractJson : options.contract;
-  return new MongoContractSerializer().deserializeContract(contractInput) as TContract;
+  return blindCast<
+    TContract,
+    'serializer validates the runtime contract while the caller supplies the named generated contract type'
+  >(new MongoContractSerializer().deserializeContract(contractInput));
 }
 
 /**

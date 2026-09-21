@@ -21,7 +21,7 @@ export interface ContractSourceDiagnosticSpan {
 export interface ContractSourceDiagnostic {
   readonly code: string;
   readonly message: string;
-  readonly sourceId?: string;
+  readonly sourceId: string;
   readonly span?: ContractSourceDiagnosticSpan;
   /**
    * Optional structured payload for machine-readable consumers (agents,

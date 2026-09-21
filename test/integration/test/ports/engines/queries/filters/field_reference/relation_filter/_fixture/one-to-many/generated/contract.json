@@ -51,6 +51,7 @@
             "relations": {
               "test": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "testId"

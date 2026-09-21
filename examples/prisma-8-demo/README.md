@@ -1,23 +1,23 @@
-# Prisma Next Demo
+# Prisma 8 Demo
 
-This example demonstrates **Prisma Next in its native form**, using the Prisma Next APIs directly without the compatibility layer.
+This example demonstrates **Prisma 8 in its native form**, using the Prisma 8 APIs directly without the compatibility layer.
 
 ## Purpose
 
 This demo shows:
 
-- Using Prisma Next's query lanes (SQL DSL, Raw SQL, etc.)
+- Using Prisma 8's query lanes (SQL DSL, Raw SQL, etc.)
 - Creating Plans and executing them via the Runtime
 - Contract verification and marker management
-- Native Prisma Next patterns and best practices
+- Native Prisma 8 patterns and best practices
 - ORM client end-to-end examples using `@internal/sql-orm-client`
 - **Two workflows**: Emit workflow (JSON-based) and No-Emit workflow (TypeScript-based)
 - Client-generated UUID identifiers via `@internal/ids`
 
 ## Comparison
 
-- **`prisma-8-demo`** (this example): Shows Prisma Next native APIs
-- **`prisma-orm-demo`**: Shows using Prisma Next via the compatibility layer (mimics Prisma 7 API)
+- **`prisma-8-demo`** (this example): Shows Prisma 8 native APIs
+- **`prisma-orm-demo`**: Shows using Prisma 8 via the compatibility layer (mimics Prisma 7 API)
 
 ## Workflows
 
@@ -102,6 +102,7 @@ The demo includes ORM client examples under `src/orm-client/`:
 - `ormClientGetAdminUsers(limit, runtime)` — filter through a custom collection scope
 - `ormClientFindUserByEmail(email, runtime)` — `first()` with collection helpers
 - `ormClientGetUserPosts(userId, limit, runtime)` — fetch user posts with collection filters + ordering
+- `ormClientGetUserProfile(userId, runtime)` — **`Shape`-declared response type**: `UserProfile` is `Shape<Models.public_User, { '-': 'email'; posts: { '+': 'id' | 'title' | 'tags' } }>`; the nested include (`User → posts → tags`) is an implementation detail the compiler checks at the `return`
 - `ormClientGetDashboardUsers(emailDomain, postTitleTerm, limit, postsPerUser, runtime)` — compound `and/or/not` filters + relation filters + `select()` and `include()` composition
 - `ormClientGetPostFeed(postTitleTerm, limit, runtime)` — to-one include (`post -> user`) with projected fields
 - `ormClientGetUserTaskBoard(limit, runtime)` — **polymorphic-target include**: `User.include('tasks')` where `Task` is a discriminated base; each included row is decoded into its variant shape (`Bug` → `severity`/`stepsToRepro`, `Feature` → `priority`/`targetRelease`) in a single read
@@ -142,6 +143,8 @@ pnpm start -- repo-latest-per-kind
 pnpm start -- repo-user-insights 5
 pnpm start -- repo-kind-breakdown 1
 pnpm start -- repo-upsert-user 00000000-0000-0000-0000-000000000099 demo@example.com user
+# Shape-declared response type (see src/orm-client/get-user-profile.ts; user ids are printed by the seed)
+pnpm start -- orm-user-profile <userId>
 # Many-to-many (post and tag ids are printed by the seed)
 pnpm start -- repo-post-tags <postId>
 pnpm start -- repo-tag-posts <tagId>
@@ -385,7 +388,7 @@ Relevant points:
 
 2. Set up your database connection:
    - Create a `.env` file
-   - Add your PostgreSQL connection string: `DATABASE_URL=postgresql://user:pass@localhost:5432/prisma_next_demo?schema=public`
+   - Add your PostgreSQL connection string: `DATABASE_URL=postgresql://user:pass@localhost:5432/prisma_8_demo?schema=public`
    - **Note**: This demo uses the pgvector extension. Ensure pgvector is installed in your PostgreSQL database:
 
      ```sql
@@ -435,7 +438,7 @@ Run `pnpm dev` for the Vite app that visualizes the contract. It renders directl
 - `scripts/stamp-marker.ts` - Contract marker management
 - `scripts/seed.ts` - Database seeding (includes vector embeddings)
 - `src/queries/similarity-search.ts` - Example vector similarity search query
-- `test/` - Integration tests demonstrating Prisma Next usage
+- `test/` - Integration tests demonstrating Prisma 8 usage
 
 ## Features Demonstrated
 

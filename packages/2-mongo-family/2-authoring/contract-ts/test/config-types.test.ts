@@ -18,9 +18,11 @@ const emptyContext: ContractSourceContext = {
     entityTypes: {},
     pslBlockDescriptors: {},
     modelAttributes: {},
+    attributeSpecs: { model: {}, field: {} },
   },
   codecLookup: emptyCodecLookup,
   controlMutationDefaults: {
+    defaultLiteralTagRegistry: new Map(),
     defaultFunctionRegistry: new Map(),
     generatorDescriptors: [],
   },

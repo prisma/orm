@@ -1,5 +1,6 @@
 import type { Contract } from '@internal/contract/types';
 import { createControlStack } from '@internal/framework-components/control';
+import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import type { MigrationGraph } from '@internal/migration-tools/graph';
 import type { RefEntry, Refs } from '@internal/migration-tools/refs';
 import { blindCast, castAs } from '@internal/utils/casts';
@@ -8,6 +9,7 @@ import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
 import type { CliStructuredError, Result } from '@prisma/cli-engine/protocol';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
+import { join } from 'pathe';
 import { createControlClient } from '../control-api/client';
 import { mapCaughtMigrationError } from '../control-api/operations/caught-errors';
 import { mapContractAtError } from '../control-api/operations/contract-at-errors';
@@ -21,7 +23,11 @@ import {
   executeMigrateShowPlan,
   type MigrateShowMigration,
 } from '../control-api/operations/migrate-show';
-import { advanceRefSafely, readContractIR } from '../control-api/operations/ref-advancement';
+import {
+  advanceRefSafely,
+  type ContractIR,
+  preflightRefAdvancement,
+} from '../control-api/operations/ref-advancement';
 import { resolveContractRef } from '../control-api/operations/ref-resolution';
 import type {
   CreateControlClient,
@@ -45,7 +51,7 @@ import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
 import { defineOrmCommand } from './define-command';
 import { dbFlag } from './flags';
-import { displayPath, migrationsDirFor } from './migration/paths';
+import { displayPath, migrationsDirFor, projectConfigPathFor } from './migration/paths';
 import { normalizeError } from './normalize-error';
 import { controlProgressReporter } from './progress';
 
@@ -380,7 +386,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         // THAT bundle's destination rather than the emitted contract.json.
         let applyContract: Contract = appContract;
         let snapshotContractJson: Record<string, unknown> = contractJson;
-        let snapshotContractDts: string | undefined;
+        let snapshotContractPath = contractPath;
         if (args.flags.to !== undefined && refEntry !== undefined) {
           const matching = aggregate.app.packages.find((p) => p.metadata.to === refEntry.hash);
           if (matching !== undefined) {
@@ -394,7 +400,10 @@ export function createMigrateCommand(createClient: CreateControlClient) {
                 Record<string, unknown>,
                 'contractAt reads the stored contract.json, whose top level is a JSON object by construction'
               >(at.contractJson);
-              snapshotContractDts = at.contractDts;
+              snapshotContractPath = join(
+                contractSnapshotDir(migrationsDir, refEntry.hash),
+                'contract.json',
+              );
             } catch (error) {
               const mapped = mapContractAtError(error, { artifactRole: 'to' });
               if (!mapped.ok) {
@@ -403,6 +412,24 @@ export function createMigrateCommand(createClient: CreateControlClient) {
               throw error;
             }
           }
+        }
+
+        // The last thing before the apply: the snapshot the ref advance will
+        // write is rendered now, so a contract that cannot be snapshotted
+        // refuses the run before any migration executes.
+        let advancement: { readonly name: string; readonly contractIR: ContractIR } | null = null;
+        if (args.flags.advanceRef !== undefined) {
+          const preflight = await preflightRefAdvancement({
+            name: args.flags.advanceRef,
+            contractJson: snapshotContractJson,
+            contractJsonPath: snapshotContractPath,
+            configPath: projectConfigPathFor(ctx.cwd),
+            client,
+          });
+          if (!preflight.ok) {
+            return notOk(normalizeError(preflight.failure));
+          }
+          advancement = { name: args.flags.advanceRef, contractIR: preflight.value };
         }
 
         const applied = await client.migrate({
@@ -419,17 +446,13 @@ export function createMigrateCommand(createClient: CreateControlClient) {
         const { value } = applied;
 
         let advancedRef: { name: string; hash: string } | null = null;
-        if (args.flags.advanceRef !== undefined) {
-          const contractIR =
-            snapshotContractDts === undefined
-              ? await readContractIR(snapshotContractJson, contractPath)
-              : { contract: snapshotContractJson, contractDts: snapshotContractDts };
+        if (advancement !== null) {
           const advanced = await advanceRefSafely({
             refsDir,
             migrationsDir,
-            name: args.flags.advanceRef,
+            name: advancement.name,
             hash: value.markerHash,
-            contractIR,
+            contractIR: advancement.contractIR,
           });
           if (!advanced.ok) {
             return notOk(normalizeError(advanced.failure));

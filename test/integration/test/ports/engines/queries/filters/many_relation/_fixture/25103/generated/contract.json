@@ -129,6 +129,7 @@
             "relations": {
               "contact": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "contactId"
@@ -205,6 +206,7 @@
             "relations": {
               "audience": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "audienceId"
@@ -220,6 +222,7 @@
               },
               "identity": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "identityId"

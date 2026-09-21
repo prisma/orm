@@ -241,6 +241,20 @@ describe('sql-target-family-hook', () => {
           },
           relations: {},
         },
+        Comment: {
+          storage: {
+            table: 'comment',
+            fields: {
+              id: { column: 'id' },
+              authorId: { column: 'authorId' },
+            },
+          },
+          fields: {
+            id: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+            authorId: { nullable: false, type: { kind: 'scalar', codecId: 'pg/int4@1' } },
+          },
+          relations: {},
+        },
       },
       storage: {
         tables: {
@@ -257,6 +271,16 @@ describe('sql-target-family-hook', () => {
             columns: {
               id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
               userId: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+            },
+            primaryKey: { columns: ['id'] },
+            uniques: [],
+            indexes: [],
+            foreignKeys: [],
+          },
+          comment: {
+            columns: {
+              id: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
+              authorId: { nativeType: 'int4', codecId: 'pg/int4@1', nullable: false },
             },
             primaryKey: { columns: ['id'] },
             uniques: [],
@@ -467,10 +491,24 @@ describe('sql-target-family-hook', () => {
             partialRel: { to: crossRef('Post') } as unknown as ContractRelation,
           },
         },
+        Post: {
+          storage: {
+            table: 'post',
+            fields: {},
+          },
+          fields: {},
+          relations: {},
+        },
       },
       storage: {
         tables: {
           user: {
+            columns: {},
+            uniques: [],
+            indexes: [],
+            foreignKeys: [],
+          },
+          post: {
             columns: {},
             uniques: [],
             indexes: [],

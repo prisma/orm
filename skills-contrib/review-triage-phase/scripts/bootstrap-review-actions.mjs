@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { assertReviewStateV1 } from '../../review-fetch-phase/scripts/review-artifacts.mjs';
+import { assertReviewStateV2 } from '../../review-fetch-phase/scripts/review-artifacts.mjs';
 import { assertReviewActionsV1 } from './review-artifacts.mjs';
 
 const EXIT_SUCCESS = 0;
@@ -124,7 +124,7 @@ async function main() {
 
   const raw = await readFile(args.inPath, 'utf8');
   const reviewState = JSON.parse(raw);
-  assertReviewStateV1(reviewState);
+  assertReviewStateV2(reviewState);
 
   const reviewActions = buildReviewActions(reviewState, args.inPath);
   assertReviewActionsV1(reviewActions);

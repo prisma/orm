@@ -1,6 +1,6 @@
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withMongoPort } from '../../../_harness/mongo';
+import { timeouts, withMongoPort } from '../../../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -8,7 +8,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (mongodb matrix entry). Upstream seeds one Comment (required content, always set),
 // deletes it by id, then asserts `count === 0` via a follow-up count().
 //
-// prisma-next has no read-side count(), so the "row is gone" post-condition is
+// Prisma 8 has no read-side count(), so the "row is gone" post-condition is
 // verified faithfully by re-reading the row: `.where({ _id }).first()` returns null.
 // The subject under test is delete(), not count().
 //

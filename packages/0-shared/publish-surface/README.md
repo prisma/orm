@@ -7,7 +7,7 @@ The canonical map from internal workspace packages to the published `@prisma/orm
 ## Responsibilities
 
 - **`./shells`** — the mapping table. Every internal package belongs to exactly one published shell and becomes a subpath entrypoint of it: `@internal/<pkg>/<sub>` → `@prisma/<shell>/<entry>/<sub>`. Facades additionally republish sibling surfaces, because an application depends on one facade and nothing else: everything it names — its generated files, its query code, its migration scripts — has to have a name under the facade. Republished entries keep the name the platform shell gives the same package, except where the facade's own wiring already owns it (`family-runtime` for the family's runtime, `family-contract` for its contract, since `runtime` and `contract` are the facade's own).
-- **`./import-roots`** — turns an internal specifier into the name generated code should carry, given how the application installed Prisma Next:
+- **`./import-roots`** — turns an internal specifier into the name generated code should carry, given how the application installed Prisma 8:
 
   | Root | `@internal/sql-contract/types` becomes |
   |---|---|

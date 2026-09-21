@@ -15,26 +15,27 @@ import {
   MongoValidator,
 } from '@internal/mongo-contract';
 import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources, SyntaxNode } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { JsonObject } from '@internal/utils/json';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   type InterpretPslDocumentToMongoContractInput,
   interpretPslDocumentToMongoContract,
 } from '../src/interpreter';
+import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
 
 function buildSymbolTableInput(
   schema: string,
-  sourceId = 'test.prisma',
-): { symbolTable: SymbolTable; sourceFile: SourceFile; sourceId: string } {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
+  filename = 'test.prisma',
+): { document: DocumentAst; symbolTable: SymbolTable; sources: PslSources } {
+  const { document, sources } = parse(schema, filename);
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
-  return { symbolTable: table, sourceFile, sourceId };
+  return { document, symbolTable, sources };
 }
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
@@ -104,12 +105,16 @@ function model(ir: Contract, name: string): MongoModel {
 function interpret(
   schema: string,
   overrides?: Partial<
-    Omit<InterpretPslDocumentToMongoContractInput, 'symbolTable' | 'sourceFile' | 'sourceId'>
+    Omit<InterpretPslDocumentToMongoContractInput, 'document' | 'symbolTable' | 'sources'>
   >,
 ) {
   return interpretPslDocumentToMongoContract({
     ...buildSymbolTableInput(schema),
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
     codecLookup: mongoCodecLookup,
     ...overrides,
   });
@@ -118,7 +123,7 @@ function interpret(
 function interpretOk(
   schema: string,
   overrides?: Partial<
-    Omit<InterpretPslDocumentToMongoContractInput, 'symbolTable' | 'sourceFile' | 'sourceId'>
+    Omit<InterpretPslDocumentToMongoContractInput, 'document' | 'symbolTable' | 'sources'>
   >,
 ) {
   const result = interpret(schema, overrides);
@@ -137,6 +142,44 @@ function getIndexes(
 }
 
 describe('interpretPslDocumentToMongoContract', () => {
+  it('resolves missing enum factory diagnostics from the enum block node', () => {
+    const input = buildSymbolTableInput(
+      `enum Role {
+  USER
+}
+`,
+      'enum-owned.prisma',
+    );
+    const enumBlock = input.symbolTable.topLevel.blocks['Role'];
+    expect(enumBlock).toBeDefined();
+    if (enumBlock === undefined) return;
+
+    const originalSourceFileFor = input.sources.sourceFileFor.bind(input.sources);
+    const sourceFileFor = vi.fn((node: SyntaxNode) => originalSourceFileFor(node));
+    input.sources.sourceFileFor = sourceFileFor;
+
+    const result = interpretPslDocumentToMongoContract({
+      ...input,
+      scalarTypeCodecIds: mongoScalarTypeDescriptors,
+      controlMutationDefaults: {
+        defaultFunctionRegistry: new Map(),
+        defaultLiteralTagRegistry: new Map(),
+      },
+      codecLookup: mongoCodecLookup,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_ENUM_MISSING_FACTORY',
+        sourceId: 'enum-owned.prisma',
+        span: enumBlock.span,
+      }),
+    ]);
+    expect(sourceFileFor).toHaveBeenCalledWith(enumBlock.node.syntax);
+  });
+
   describe('scalar type mapping', () => {
     it('maps standard PSL types to Mongo codec IDs', () => {
       const ir = interpretOk(`
@@ -251,7 +294,7 @@ describe('interpretPslDocumentToMongoContract', () => {
   });
 
   describe('collection naming', () => {
-    it('uses lowerFirst(modelName) as default collection name', () => {
+    it('uses the model name verbatim as the default collection name', () => {
       const ir = interpretOk(`
         model UserProfile {
           id ObjectId @id @map("_id")
@@ -259,16 +302,9 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
 
       expect(modelsOf(ir)['UserProfile']).toMatchObject({
-        storage: { collection: 'userProfile' },
+        storage: { collection: 'UserProfile' },
       });
-      expect(ir.storage).toMatchObject({
-        namespaces: {
-          [UNBOUND_NAMESPACE_ID]: {
-            id: UNBOUND_NAMESPACE_ID,
-            entries: { collection: { userProfile: {} } },
-          },
-        },
-      });
+      expect(Object.keys(mongoCollectionsFromIr(ir))).toEqual(['UserProfile']);
     });
 
     it('uses @@map() to override collection name', () => {
@@ -373,12 +409,84 @@ describe('interpretPslDocumentToMongoContract', () => {
         author: {
           to: crossRef('User'),
           cardinality: 'N:1',
+          nullable: false,
           on: {
             localFields: ['authorId'],
             targetFields: ['_id'],
           },
         },
       });
+    });
+
+    it('records nullable: true on an optional relation field backed by an optional FK field', () => {
+      const ir = interpretOk(`
+        model User {
+          id    ObjectId @id @map("_id")
+          posts Post[]
+        }
+
+        model Post {
+          id       ObjectId @id @map("_id")
+          authorId ObjectId?
+          author   User? @relation(fields: [authorId], references: [id])
+        }
+      `);
+
+      expect(model(ir, 'Post').relations).toMatchObject({
+        author: { cardinality: 'N:1', nullable: true },
+      });
+      expect(model(ir, 'User').relations).toMatchObject({
+        posts: expect.not.objectContaining({ nullable: expect.anything() }),
+      });
+    });
+
+    it('reports an unnamed backrelation as orphaned when only a differently named FK side was rejected', () => {
+      const result = interpret(`
+        model A {
+          id  ObjectId @id @map("_id")
+          bId ObjectId?
+          b   B @relation("named", fields: [bId], references: [id])
+        }
+
+        model B {
+          id ObjectId @id @map("_id")
+          as A[]
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics.map((diagnostic) => diagnostic.code).sort()).toEqual([
+        'PSL_ORPHANED_BACKRELATION',
+        'PSL_RELATION_NULLABILITY_MISMATCH',
+      ]);
+    });
+
+    it.each([
+      ['required relation field on an optional FK field', 'ObjectId?', 'User', 'is required'],
+      ['optional relation field on a required FK field', 'ObjectId', 'User?', 'is optional'],
+    ])('rejects a %s', (_label, fkType, relationType, expectedMessage) => {
+      const result = interpret(`
+        model User {
+          id    ObjectId @id @map("_id")
+          posts Post[]
+        }
+
+        model Post {
+          id       ObjectId @id @map("_id")
+          authorId ${fkType}
+          author   ${relationType} @relation(fields: [authorId], references: [id])
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_RELATION_NULLABILITY_MISMATCH',
+          message: expect.stringContaining(`Relation field "Post.author" ${expectedMessage}`),
+        }),
+      ]);
     });
 
     it('creates 1:N backrelation for list fields referencing other models', () => {
@@ -394,6 +502,23 @@ describe('interpretPslDocumentToMongoContract', () => {
           },
         },
       });
+    });
+
+    it('emits one syntax diagnostic for a malformed target field @map', () => {
+      const result = interpret(`
+        model Parent {
+          id       ObjectId @id @map(42)
+          children Child[]
+        }
+
+        model Child {
+          id       ObjectId @id @map("_id")
+          parentId ObjectId
+          parent   Parent @relation(fields: [parentId], references: [id])
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /Expected a string literal/);
     });
 
     it('uses mapped field names in relation on-clauses', () => {
@@ -492,6 +617,32 @@ describe('interpretPslDocumentToMongoContract', () => {
       );
     });
 
+    it('rejects a required 1:1 inverse relation field and tells the user to make it optional', () => {
+      const result = interpret(`
+        model User {
+          id      ObjectId @id @map("_id")
+          profile Profile
+        }
+
+        model Profile {
+          id     ObjectId @id @map("_id")
+          userId ObjectId @unique
+          user   User @relation(fields: [userId], references: [id])
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_REQUIRED_ONE_TO_ONE_BACKRELATION',
+          message: expect.stringContaining(
+            'Backrelation field "User.profile" is required, but "Profile" holds the relation fields',
+          ),
+        }),
+      ]);
+    });
+
     it('creates 1:1 inverse relation for singular non-FK relation field', () => {
       const ir = interpretOk(`
         model User {
@@ -510,6 +661,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         profile: {
           to: crossRef('Profile'),
           cardinality: '1:1',
+          nullable: true,
           on: {
             localFields: ['_id'],
             targetFields: ['userId'],
@@ -520,6 +672,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         user: {
           to: crossRef('User'),
           cardinality: 'N:1',
+          nullable: false,
           on: {
             localFields: ['userId'],
             targetFields: ['_id'],
@@ -549,6 +702,21 @@ describe('interpretPslDocumentToMongoContract', () => {
           }),
         ]),
       );
+    });
+
+    it('rejects @relation naming a field that does not exist on the model', () => {
+      const result = interpret(`
+        model User {
+          id ObjectId @id @map("_id")
+        }
+
+        model Post {
+          id       ObjectId @id @map("_id")
+          authorId ObjectId
+          author   User @relation(fields: [missing], references: [id])
+        }
+      `);
+      expectInvalidAttributeSyntax(result, /missing.*does not exist/i);
     });
   });
 
@@ -704,7 +872,7 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
 
       expect(ir.roots).toEqual({
-        user: crossRef('User'),
+        User: crossRef('User'),
         blog_posts: crossRef('Post'),
       });
     });
@@ -737,8 +905,8 @@ describe('interpretPslDocumentToMongoContract', () => {
             id: UNBOUND_NAMESPACE_ID,
             entries: {
               collection: {
-                user: {},
-                post: {},
+                User: {},
+                Post: {},
               },
             },
           },
@@ -954,6 +1122,7 @@ describe('interpretPslDocumentToMongoContract', () => {
                     author: {
                       to: crossRef('User'),
                       cardinality: 'N:1',
+                      nullable: false,
                       on: { localFields: ['authorId'], targetFields: ['_id'] },
                     },
                   },
@@ -1020,7 +1189,7 @@ describe('interpretPslDocumentToMongoContract', () => {
   });
 
   describe('index authoring', () => {
-    it('creates ascending index from @@index', () => {
+    it('defaults index direction to the ascending literal', () => {
       const ir = interpretOk(`
         model User {
           id    ObjectId @id @map("_id")
@@ -1028,11 +1197,22 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([email])
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['user']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['User']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([{ field: 'email', direction: 1 }]);
+    });
+
+    it('uses the exact descending index type literal', () => {
+      const ir = interpretOk(`
+        model User {
+          id    ObjectId @id @map("_id")
+          email String
+          @@index([email], type: -1)
+        }
+      `);
+      expect(getIndexes(ir, 'User')?.[0]?.['keys']).toEqual([{ field: 'email', direction: -1 }]);
     });
 
     it('creates unique index from @@unique', () => {
@@ -1043,7 +1223,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([email])
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['user']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['User']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes).toHaveLength(1);
@@ -1059,7 +1239,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([email, name])
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['user']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['User']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes).toHaveLength(1);
@@ -1076,7 +1256,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           email String   @unique
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['user']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['User']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes).toHaveLength(1);
@@ -1092,7 +1272,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([expiresAt], sparse: true, expireAfterSeconds: 3600)
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['session']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['Session']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes).toHaveLength(1);
@@ -1108,7 +1288,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([email])
         }
       `);
-      const indexes = mongoCollectionsFromIr(ir)['user']?.['indexes'] as
+      const indexes = mongoCollectionsFromIr(ir)['User']?.['indexes'] as
         | ReadonlyArray<Record<string, unknown>>
         | undefined;
       expect(indexes![0]!['keys']).toEqual([{ field: 'email_address', direction: 1 }]);
@@ -1120,7 +1300,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           id ObjectId @id @map("_id")
         }
       `);
-      const userColl = mongoCollectionsFromIr(ir)['user'];
+      const userColl = mongoCollectionsFromIr(ir)['User'];
       expect(userColl?.['indexes']).toBeUndefined();
     });
 
@@ -1132,7 +1312,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard()])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([{ field: '$**', direction: 1 }]);
     });
@@ -1145,7 +1325,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard(metadata)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([{ field: 'metadata.$**', direction: 1 }]);
     });
@@ -1159,7 +1339,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([tenantId, wildcard(metadata)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([
         { field: 'tenantId', direction: 1 },
@@ -1175,8 +1355,20 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([wildcard(meta)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['keys']).toEqual([{ field: 'metadata.$**', direction: 1 }]);
+    });
+
+    it('treats a declared wildcard field with sort as a normal field', () => {
+      const ir = interpretOk(`
+        model Events {
+          id       ObjectId @id @map("_id")
+          wildcard String
+          @@index([wildcard(sort: Desc)])
+        }
+      `);
+      const indexes = getIndexes(ir, 'Events');
+      expect(indexes![0]!['keys']).toEqual([{ field: 'wildcard', direction: -1 }]);
     });
 
     it('creates descending index from sort: Desc', () => {
@@ -1187,7 +1379,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([createdAt(sort: Desc)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['keys']).toEqual([{ field: 'createdAt', direction: -1 }]);
     });
 
@@ -1200,7 +1392,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([status, createdAt(sort: Desc)])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['keys']).toEqual([
         { field: 'status', direction: 1 },
         { field: 'createdAt', direction: -1 },
@@ -1215,7 +1407,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([tenantId], type: "hashed")
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['keys']).toEqual([{ field: 'tenantId', direction: 'hashed' }]);
     });
 
@@ -1227,7 +1419,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([location], type: "2dsphere")
         }
       `);
-      const indexes = getIndexes(ir, 'places');
+      const indexes = getIndexes(ir, 'Places');
       expect(indexes![0]!['keys']).toEqual([{ field: 'location', direction: '2dsphere' }]);
     });
 
@@ -1239,7 +1431,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([status], filter: "{\\"status\\": \\"active\\"}")
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['partialFilterExpression']).toEqual({ status: 'active' });
     });
 
@@ -1251,7 +1443,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([status], collationLocale: "fr", collationStrength: 2)
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['collation']).toEqual({ locale: 'fr', strength: 2 });
     });
 
@@ -1263,7 +1455,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([status], collationLocale: "en", collationStrength: 2, collationCaseLevel: true, collationCaseFirst: "upper", collationNumericOrdering: true, collationAlternate: "shifted", collationMaxVariable: "punct", collationBackwards: false, collationNormalization: true)
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['collation']).toEqual({
         locale: 'en',
         strength: 2,
@@ -1277,28 +1469,103 @@ describe('interpretPslDocumentToMongoContract', () => {
       });
     });
 
-    it('parses include as wildcardProjection with 1 values', () => {
+    it.each(['index', 'textIndex'])('accepts every finite collation value for @@%s', (kind) => {
+      const options = [
+        'collationStrength: 1',
+        'collationStrength: 5',
+        'collationCaseFirst: "upper"',
+        'collationCaseFirst: "lower"',
+        'collationCaseFirst: "off"',
+        'collationAlternate: "non-ignorable"',
+        'collationAlternate: "shifted"',
+        'collationMaxVariable: "punct"',
+        'collationMaxVariable: "space"',
+      ];
+      const models = options
+        .map(
+          (option, index) => `
+            model Item${index} {
+              id    ObjectId @id @map("_id")
+              value String
+              @@${kind}([value], collationLocale: "en", ${option})
+            }
+          `,
+        )
+        .join('\n');
+
+      expect(interpret(models).ok).toBe(true);
+    });
+
+    it.each(['index', 'textIndex'])('rejects invalid finite collation values for @@%s', (kind) => {
+      const invalidOptions = [
+        'collationStrength: 0',
+        'collationStrength: 6',
+        'collationCaseFirst: "invalid"',
+        'collationAlternate: "invalid"',
+        'collationMaxVariable: "invalid"',
+      ];
+
+      for (const option of invalidOptions) {
+        const result = interpret(`
+          model Item {
+            id    ObjectId @id @map("_id")
+            value String
+            @@${kind}([value], collationLocale: "en", ${option})
+          }
+        `);
+
+        expectInvalidAttributeSyntax(result, /Expected one of/);
+      }
+    });
+
+    it('parses native include paths as wildcardProjection with 1 values', () => {
       const ir = interpretOk(`
         model Events {
           id       ObjectId @id @map("_id")
           metadata String
-          tags     String
-          @@index([wildcard()], include: "[metadata, tags]")
+          @@index([wildcard()], include: ["metadata", "nested.path"])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
-      expect(indexes![0]!['wildcardProjection']).toEqual({ metadata: 1, tags: 1 });
+      const indexes = getIndexes(ir, 'Events');
+      expect(indexes![0]!['wildcardProjection']).toEqual({ metadata: 1, 'nested.path': 1 });
     });
 
-    it('parses exclude as wildcardProjection with 0 values', () => {
+    it('rejects a non-list projection at the attribute boundary', () => {
+      const result = interpret(`
+        model Events {
+          id       ObjectId @id @map("_id")
+          metadata String
+          @@index([wildcard()], include: "metadata")
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /Expected a list/);
+    });
+
+    it.each(['include', 'exclude'])(
+      'rejects @@textIndex %s at the attribute boundary',
+      (option) => {
+        const result = interpret(`
+          model Article {
+            id    ObjectId @id @map("_id")
+            title String
+            @@textIndex([title], ${option}: ["title"])
+          }
+        `);
+
+        expectInvalidAttributeSyntax(result, /received unknown argument/i);
+      },
+    );
+
+    it('parses native exclude paths as wildcardProjection with 0 values', () => {
       const ir = interpretOk(`
         model Events {
           id       ObjectId @id @map("_id")
           internal String
-          @@index([wildcard()], exclude: "[internal, _class]")
+          @@index([wildcard()], exclude: ["internal", "_class"])
         }
       `);
-      const indexes = getIndexes(ir, 'events');
+      const indexes = getIndexes(ir, 'Events');
       expect(indexes![0]!['wildcardProjection']).toEqual({ internal: 0, _class: 0 });
     });
 
@@ -1311,7 +1578,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@textIndex([title, body])
         }
       `);
-      const indexes = getIndexes(ir, 'article');
+      const indexes = getIndexes(ir, 'Article');
       expect(indexes).toHaveLength(1);
       expect(indexes![0]!['keys']).toEqual([
         { field: 'title', direction: 'text' },
@@ -1325,13 +1592,48 @@ describe('interpretPslDocumentToMongoContract', () => {
           id    ObjectId @id @map("_id")
           title String
           body  String
-          @@textIndex([title, body], weights: "{\\"title\\": 10, \\"body\\": 5}", language: "english", languageOverride: "idioma")
+          @@textIndex([title, body], weights: { title: 1, body: 99999 }, language: "english", languageOverride: "idioma")
         }
       `);
-      const indexes = getIndexes(ir, 'article');
-      expect(indexes![0]!['weights']).toEqual({ title: 10, body: 5 });
+      const indexes = getIndexes(ir, 'Article');
+      expect(indexes![0]!['weights']).toEqual({ title: 1, body: 99999 });
       expect(indexes![0]!['default_language']).toBe('english');
       expect(indexes![0]!['language_override']).toBe('idioma');
+    });
+
+    it('preserves an own __proto__ text-index weight', () => {
+      const ir = interpretOk(`
+        model Article {
+          id    ObjectId @id @map("_id")
+          title String
+          @@textIndex([title], weights: { "__proto__": 10 })
+        }
+      `);
+      const weights = getIndexes(ir, 'Article')?.[0]?.['weights'];
+
+      expect(weights).not.toBeNull();
+      expect(typeof weights).toBe('object');
+      if (typeof weights !== 'object' || weights === null)
+        throw new Error('Expected weights object');
+      expect(Object.hasOwn(weights, '__proto__')).toBe(true);
+      expect(Object.getOwnPropertyDescriptor(weights, '__proto__')?.value).toBe(10);
+    });
+
+    it.each([
+      ['nonnumeric', '{ title: "high" }'],
+      ['below range', '{ title: 0 }'],
+      ['above range', '{ title: 100000 }'],
+      ['non-integer', '{ title: 1.5 }'],
+    ])('rejects %s native text-index weights at the attribute boundary', (_label, weights) => {
+      const result = interpret(`
+        model Article {
+          id    ObjectId @id @map("_id")
+          title String
+          @@textIndex([title], weights: ${weights})
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /integer|between|99,?999/i);
     });
 
     it('creates @@unique with collation', () => {
@@ -1342,7 +1644,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([email], collationLocale: "en", collationStrength: 2)
         }
       `);
-      const indexes = getIndexes(ir, 'user');
+      const indexes = getIndexes(ir, 'User');
       expect(indexes![0]!['unique']).toBe(true);
       expect(indexes![0]!['collation']).toEqual({ locale: 'en', strength: 2 });
     });
@@ -1355,9 +1657,25 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([email], filter: "{\\"active\\": true}")
         }
       `);
-      const indexes = getIndexes(ir, 'user');
+      const indexes = getIndexes(ir, 'User');
       expect(indexes![0]!['unique']).toBe(true);
       expect(indexes![0]!['partialFilterExpression']).toEqual({ active: true });
+    });
+
+    it('creates a distinct index per @@index on the same model', () => {
+      const ir = interpretOk(`
+        model User {
+          id    ObjectId @id @map("_id")
+          email String
+          name  String
+          @@index([email])
+          @@index([name])
+        }
+      `);
+      const indexes = getIndexes(ir, 'User');
+      expect(indexes).toHaveLength(2);
+      expect(indexes![0]!['keys']).toEqual([{ field: 'email', direction: 1 }]);
+      expect(indexes![1]!['keys']).toEqual([{ field: 'name', direction: 1 }]);
     });
   });
 
@@ -1402,7 +1720,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Events {
           id       ObjectId @id @map("_id")
           metadata String
-          @@index([wildcard()], include: "[metadata]", exclude: "[_class]")
+          @@index([wildcard()], include: ["metadata"], exclude: ["_class"])
         }
       `);
       expect(result.ok).toBe(false);
@@ -1420,7 +1738,7 @@ describe('interpretPslDocumentToMongoContract', () => {
         model Events {
           id     ObjectId @id @map("_id")
           status String
-          @@index([status], include: "[status]")
+          @@index([status], include: ["status"])
         }
       `);
       expect(result.ok).toBe(false);
@@ -1532,14 +1850,9 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([nonexistent])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
-      expect(diag?.message).toMatch(/User/);
-      expect(diag?.span?.start.offset).toBeGreaterThan(0);
-      expect(diag?.span?.end.offset).toBeGreaterThan(diag?.span?.start.offset ?? 0);
+      const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
+      expect(diag.span?.start.offset).toBeGreaterThan(0);
+      expect(diag.span?.end.offset).toBeGreaterThan(diag.span?.start.offset ?? 0);
     });
 
     it('rejects @@unique that references an undeclared field', () => {
@@ -1550,11 +1863,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@unique([nonexistent])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
+      expectInvalidAttributeSyntax(result, /Expected one of/);
     });
 
     it('rejects @@textIndex that references an undeclared field', () => {
@@ -1565,11 +1874,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@textIndex([nonexistent])
         }
       `);
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
+      expectInvalidAttributeSyntax(result, /Expected one of/);
     });
 
     it('rejects @@index wildcard scope referencing an undeclared field', () => {
@@ -1582,27 +1887,33 @@ describe('interpretPslDocumentToMongoContract', () => {
       `);
       expect(result.ok).toBe(false);
       if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/nonexistent/);
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_INDEX_FIELD_NOT_FOUND',
+          message: expect.stringMatching(/nonexistent/),
+        }),
+      ]);
     });
 
-    it('emits one diagnostic naming the missing field when one of multiple keys is undeclared', () => {
-      const result = interpret(`
+    it('emits one diagnostic when one of multiple keys is undeclared', () => {
+      const source = `
         model User {
           id    ObjectId @id @map("_id")
           email String
           @@index([email, nonexistent])
         }
-      `);
+      `;
+      const result = interpret(source);
       expect(result.ok).toBe(false);
       if (result.ok) return;
       const diags = result.failure.diagnostics.filter(
-        (d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND',
+        (d) => d.code === 'PSL_INVALID_ATTRIBUTE_SYNTAX',
       );
       expect(diags).toHaveLength(1);
-      expect(diags[0]?.message).toMatch(/nonexistent/);
-      expect(diags[0]?.message).not.toMatch(/email/);
+      expect(diags[0]?.span).toMatchObject({
+        start: { offset: source.indexOf('nonexistent') },
+        end: { offset: source.indexOf('nonexistent') + 'nonexistent'.length },
+      });
     });
 
     it('accepts @@index([wildcard()]) (unscoped wildcard) without a field-existence diagnostic', () => {
@@ -1699,7 +2010,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           age   Int
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       expect(validator).toBeDefined();
       expect(validator!['validationLevel']).toBe('strict');
       expect(validator!['validationAction']).toBe('error');
@@ -1718,7 +2029,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           bio  String?
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
       expect(props['bio']).toEqual({ bsonType: ['null', 'string'] });
@@ -1731,7 +2042,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           tags String[]
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
       expect(props['tags']).toEqual({ bsonType: 'array', items: { bsonType: 'string' } });
@@ -1744,7 +2055,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           firstName String   @map("first_name")
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
       expect(props['first_name']).toEqual({ bsonType: 'string' });
@@ -1759,7 +2070,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           bio  String?
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const required = schema['required'] as string[];
       expect(required).toContain('_id');
@@ -1775,7 +2086,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           @@index([email])
         }
       `);
-      const userColl = mongoCollectionsFromIr(ir as { storage: unknown })['user'];
+      const userColl = mongoCollectionsFromIr(ir as { storage: unknown })['User'];
       expect(userColl?.['indexes']).toBeDefined();
       expect(userColl?.['validator']).toBeDefined();
     });
@@ -1792,7 +2103,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           address Address
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
       expect(props['address']).toEqual({
@@ -1818,7 +2129,7 @@ describe('interpretPslDocumentToMongoContract', () => {
           address Address?
         }
       `);
-      const validator = getValidator(ir, 'user');
+      const validator = getValidator(ir, 'User');
       const schema = validator!['jsonSchema'] as Record<string, unknown>;
       const props = schema['properties'] as Record<string, Record<string, unknown>>;
       expect(props['address']).toEqual({
@@ -1909,6 +2220,10 @@ describe('interpretPslDocumentToMongoContract', () => {
           'schema.prisma',
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
+        controlMutationDefaults: {
+          defaultFunctionRegistry: new Map(),
+          defaultLiteralTagRegistry: new Map(),
+        },
       });
 
       expect(result.ok).toBe(false);
@@ -1939,6 +2254,10 @@ describe('interpretPslDocumentToMongoContract', () => {
           'schema.prisma',
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
+        controlMutationDefaults: {
+          defaultFunctionRegistry: new Map(),
+          defaultLiteralTagRegistry: new Map(),
+        },
       });
 
       expect(result.ok).toBe(false);
@@ -1961,6 +2280,10 @@ describe('interpretPslDocumentToMongoContract', () => {
           'schema.prisma',
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
+        controlMutationDefaults: {
+          defaultFunctionRegistry: new Map(),
+          defaultLiteralTagRegistry: new Map(),
+        },
       });
 
       expect(result.ok).toBe(true);

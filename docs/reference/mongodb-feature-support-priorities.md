@@ -1,6 +1,6 @@
 # MongoDB Feature Support Priorities
 
-A prioritized inventory of MongoDB features and their support status in Prisma ORM (v1). This informs Prisma Next's design — features marked "Unsupported" or "Partial" are opportunities for PN to deliver a genuinely Mongo-native experience. Based on input from MongoDB's Node.js Driver team.
+A prioritized inventory of MongoDB features and their support status in Prisma ORM (v1). This informs Prisma 8's design — features marked "Unsupported" or "Partial" are opportunities for PN to deliver a genuinely Mongo-native experience. Based on input from MongoDB's Node.js Driver team.
 
 ## High priority
 

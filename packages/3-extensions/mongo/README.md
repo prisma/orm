@@ -1,6 +1,6 @@
 # @internal/mongo
 
-One-package MongoDB setup for Prisma Next. Install this single package to get config, runtime, contract authoring, control-plane access, and BSON value constructors — no reach-ins to internal packages required.
+One-package MongoDB setup for Prisma 8. Install this single package to get config, runtime, contract authoring, control-plane access, and BSON value constructors — no reach-ins to internal packages required.
 
 > **Breaking change:** the top-level `@internal/mongo` barrel (`import { ObjectId } from '@internal/mongo'`) has been removed. Move BSON constructor imports to `@internal/mongo/bson`:
 >

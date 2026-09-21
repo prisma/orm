@@ -20,7 +20,11 @@ import type {
   Varchar,
 } from '@internal/target-postgres/codec-types';
 
-import type { ContractWithTypeMaps, TypeMaps as TypeMapsType } from '@internal/sql-contract/types';
+import type {
+  ContractWithTypeMaps,
+  RelationKeys,
+  TypeMaps as TypeMapsType,
+} from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
@@ -115,6 +119,10 @@ export type AggregateTypes = {
         readonly output: 'pg/timestamp-temporal@1';
         readonly nullable: true;
       };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
+        readonly nullable: true;
+      };
       readonly 'pg/timestamptz-string@1': {
         readonly output: 'pg/timestamptz-string@1';
         readonly nullable: true;
@@ -169,6 +177,10 @@ export type AggregateTypes = {
       };
       readonly 'pg/timestamp-temporal@1': {
         readonly output: 'pg/timestamp-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
         readonly nullable: true;
       };
       readonly 'pg/timestamptz-string@1': {
@@ -299,6 +311,39 @@ export type StorageColumnInputTypes = {
     };
   };
 };
+
+export namespace Models {
+  export type public_Company = {
+    id: CodecTypes['pg/int4@1']['output'];
+    name: CodecTypes['pg/text@1']['output'] | null;
+    companyLocations: public_CompanyLocation[];
+    locations: public_Location[];
+    readonly [RelationKeys]?: 'companyLocations' | 'locations';
+  };
+  export type public_CompanyLocation = {
+    companyId: CodecTypes['pg/int4@1']['output'];
+    locationId: CodecTypes['pg/int4@1']['output'];
+    company: public_Company;
+    location: public_Location;
+    readonly [RelationKeys]?: 'company' | 'location';
+  };
+  export type public_Location = {
+    id: CodecTypes['pg/int4@1']['output'];
+    name: CodecTypes['pg/text@1']['output'] | null;
+    companies: public_Company[];
+    companyLocations: public_CompanyLocation[];
+    readonly [RelationKeys]?: 'companies' | 'companyLocations';
+  };
+}
+
+export declare const models: {
+  public: {
+    Company: Models.public_Company;
+    CompanyLocation: Models.public_CompanyLocation;
+    Location: Models.public_Location;
+  };
+};
+
 export type TypeMaps = TypeMapsType<
   CodecTypes,
   QueryOperationTypes,
@@ -420,12 +465,12 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
-    readonly location: { readonly namespace: 'public' & NamespaceId; readonly model: 'Location' };
     readonly company: { readonly namespace: 'public' & NamespaceId; readonly model: 'Company' };
     readonly companyLocation: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'CompanyLocation';
     };
+    readonly location: { readonly namespace: 'public' & NamespaceId; readonly model: 'Location' };
   };
   readonly domain: {
     readonly namespaces: {
@@ -500,6 +545,7 @@ type ContractBase = Omit<
                   readonly model: 'Company';
                 };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['companyId'];
                   readonly targetFields: readonly ['id'];
@@ -511,6 +557,7 @@ type ContractBase = Omit<
                   readonly model: 'Location';
                 };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['locationId'];
                   readonly targetFields: readonly ['id'];

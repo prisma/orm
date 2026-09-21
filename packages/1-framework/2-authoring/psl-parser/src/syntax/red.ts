@@ -226,6 +226,14 @@ export class SyntaxNode {
     }
   }
 
+  root(): SyntaxNode {
+    let current: SyntaxNode = this;
+    for (const parent of this.ancestors()) {
+      current = parent;
+    }
+    return current;
+  }
+
   *ancestors(): Iterable<SyntaxNode> {
     let current: SyntaxNode | undefined = this.parent;
     while (current) {

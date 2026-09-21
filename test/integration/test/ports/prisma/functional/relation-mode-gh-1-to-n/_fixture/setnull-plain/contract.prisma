@@ -3,16 +3,19 @@ model UserOneToMany {
   posts         PostOneToMany[]
   postOptionals PostOptionalOneToMany[]
   enabled       Boolean?
+  @@map("userOneToMany")
 }
 
 model PostOneToMany {
   id       String        @id
   author   UserOneToMany @relation(fields: [authorId], references: [id])
   authorId String
+  @@map("postOneToMany")
 }
 
 model PostOptionalOneToMany {
   id       String         @id
   author   UserOneToMany? @relation(fields: [authorId], references: [id], onUpdate: SetNull, onDelete: SetNull)
   authorId String?
+  @@map("postOptionalOneToMany")
 }

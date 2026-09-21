@@ -1,6 +1,6 @@
 # @internal/sql-schema-ir
 
-SQL Schema Intermediate Representation (IR) types for Prisma Next.
+SQL Schema Intermediate Representation (IR) types for Prisma 8.
 
 ## Overview
 

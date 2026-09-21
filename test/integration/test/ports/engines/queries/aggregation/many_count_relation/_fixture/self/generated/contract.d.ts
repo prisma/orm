@@ -20,7 +20,11 @@ import type {
   Varchar,
 } from '@internal/target-postgres/codec-types';
 
-import type { ContractWithTypeMaps, TypeMaps as TypeMapsType } from '@internal/sql-contract/types';
+import type {
+  ContractWithTypeMaps,
+  RelationKeys,
+  TypeMaps as TypeMapsType,
+} from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
@@ -115,6 +119,10 @@ export type AggregateTypes = {
         readonly output: 'pg/timestamp-temporal@1';
         readonly nullable: true;
       };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
+        readonly nullable: true;
+      };
       readonly 'pg/timestamptz-string@1': {
         readonly output: 'pg/timestamptz-string@1';
         readonly nullable: true;
@@ -169,6 +177,10 @@ export type AggregateTypes = {
       };
       readonly 'pg/timestamp-temporal@1': {
         readonly output: 'pg/timestamp-temporal@1';
+        readonly nullable: true;
+      };
+      readonly 'pg/timestamptz-date@1': {
+        readonly output: 'pg/timestamptz-date@1';
         readonly nullable: true;
       };
       readonly 'pg/timestamptz-string@1': {
@@ -242,8 +254,8 @@ export type FieldOutputTypes = {
       readonly name: CodecTypes['pg/text@1']['output'];
     };
     readonly UserFollow: {
-      readonly followerId: CodecTypes['pg/int4@1']['output'];
       readonly followeeId: CodecTypes['pg/int4@1']['output'];
+      readonly followerId: CodecTypes['pg/int4@1']['output'];
     };
   };
 };
@@ -254,8 +266,8 @@ export type FieldInputTypes = {
       readonly name: CodecTypes['pg/text@1']['input'];
     };
     readonly UserFollow: {
-      readonly followerId: CodecTypes['pg/int4@1']['input'];
       readonly followeeId: CodecTypes['pg/int4@1']['input'];
+      readonly followerId: CodecTypes['pg/int4@1']['input'];
     };
   };
 };
@@ -283,6 +295,31 @@ export type StorageColumnInputTypes = {
     };
   };
 };
+
+export namespace Models {
+  export type public_User = {
+    id: CodecTypes['pg/int4@1']['output'];
+    name: CodecTypes['pg/text@1']['output'];
+    followers: public_User[];
+    following: public_User[];
+    readonly [RelationKeys]?: 'followers' | 'following';
+  };
+  export type public_UserFollow = {
+    followeeId: CodecTypes['pg/int4@1']['output'];
+    followerId: CodecTypes['pg/int4@1']['output'];
+    followee: public_User;
+    follower: public_User;
+    readonly [RelationKeys]?: 'followee' | 'follower';
+  };
+}
+
+export declare const models: {
+  public: {
+    User: Models.public_User;
+    UserFollow: Models.public_UserFollow;
+  };
+};
+
 export type TypeMaps = TypeMapsType<
   CodecTypes,
   QueryOperationTypes,
@@ -321,12 +358,12 @@ type ContractBase = Omit<
             };
             readonly userFollow: {
               columns: {
-                readonly followerId: {
+                readonly followeeId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
                 };
-                readonly followeeId: {
+                readonly followerId: {
                   readonly nativeType: 'int4';
                   readonly codecId: 'pg/int4@1';
                   readonly nullable: false;
@@ -336,15 +373,15 @@ type ContractBase = Omit<
               uniques: readonly [];
               indexes: readonly [
                 {
-                  readonly name: 'userFollow_followerId_idx_2aa6c62d';
-                  readonly prefix: 'userFollow_followerId_idx';
-                  readonly columns: readonly ['followerId'];
-                  readonly unique: false;
-                },
-                {
                   readonly name: 'userFollow_followeeId_idx_698b9f79';
                   readonly prefix: 'userFollow_followeeId_idx';
                   readonly columns: readonly ['followeeId'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'userFollow_followerId_idx_2aa6c62d';
+                  readonly prefix: 'userFollow_followerId_idx';
+                  readonly columns: readonly ['followerId'];
                   readonly unique: false;
                 },
               ];
@@ -450,11 +487,11 @@ type ContractBase = Omit<
           };
           readonly UserFollow: {
             readonly fields: {
-              readonly followerId: {
+              readonly followeeId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
-              readonly followeeId: {
+              readonly followerId: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
               };
@@ -463,6 +500,7 @@ type ContractBase = Omit<
               readonly followee: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['followeeId'];
                   readonly targetFields: readonly ['id'];
@@ -471,6 +509,7 @@ type ContractBase = Omit<
               readonly follower: {
                 readonly to: { readonly namespace: 'public' & NamespaceId; readonly model: 'User' };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['followerId'];
                   readonly targetFields: readonly ['id'];
@@ -481,8 +520,8 @@ type ContractBase = Omit<
               readonly table: 'userFollow';
               readonly namespaceId: 'public';
               readonly fields: {
-                readonly followerId: { readonly column: 'followerId' };
                 readonly followeeId: { readonly column: 'followeeId' };
+                readonly followerId: { readonly column: 'followerId' };
               };
             };
           };

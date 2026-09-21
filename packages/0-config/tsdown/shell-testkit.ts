@@ -8,9 +8,9 @@ import { init as initLexer, parse as parseModule } from 'es-module-lexer';
 class ShellTestError extends Error {}
 
 /**
- * The supply-chain cooldown a scratch project installs under. Kept in step with
- * `minimumReleaseAge` / `minimumReleaseAgeExclude` in the repo's pnpm-workspace.yaml, which a
- * scratch project outside the workspace does not inherit.
+ * The supply-chain settings a scratch project installs under. Kept in step with
+ * `minimumReleaseAge` / `minimumReleaseAgeExclude` and `trustPolicy` / `trustPolicyExclude` in
+ * the repo's pnpm-workspace.yaml, which a scratch project outside the workspace does not inherit.
  */
 const MINIMUM_RELEASE_AGE_MINUTES = 1440;
 const MINIMUM_RELEASE_AGE_EXCLUDE = [
@@ -18,7 +18,14 @@ const MINIMUM_RELEASE_AGE_EXCLUDE = [
   '@prisma/dev',
   '@prisma/streams-local',
 ] as const;
-
+const TRUST_POLICY = 'no-downgrade';
+const TRUST_POLICY_EXCLUDE = [
+  'chokidar@4.0.3',
+  'evlog@1.9.0',
+  'semver@6.3.1',
+  'undici@5.29.0',
+  'undici-types@6.21.0',
+] as const;
 export interface PackedShell {
   readonly name: string;
   readonly tarball: string;
@@ -150,16 +157,20 @@ export function tryInstallShells(
     const scalar = /^(true|false|\d+)$/.test(value) ? value : JSON.stringify(value);
     return `${camelKey}: ${scalar}`;
   });
-  // The repo's release-age cooldown reaches this scratch project through the
-  // outer workspace, but its exemption list does not, so a first-party pin
-  // published today fails the install. Restate both: the cooldown still
-  // defends every third-party dependency, and only the first-party packages
-  // pnpm-workspace.yaml already exempts are allowed past it.
+  // The repo's release-age cooldown and trust policy reach this scratch
+  // project through the outer workspace, but their exemption lists do not, so
+  // a first-party pin published today or a third-party release that
+  // pnpm-workspace.yaml already vouches for fails the install. Restate all
+  // four: the cooldown and the policy still defend every other dependency,
+  // and only the packages the workspace already exempts are allowed past them.
   const workspaceYaml = [
     ...(overrideLines.length > 0 ? ['overrides:', ...overrideLines] : []),
     `minimumReleaseAge: ${MINIMUM_RELEASE_AGE_MINUTES}`,
     'minimumReleaseAgeExclude:',
     ...MINIMUM_RELEASE_AGE_EXCLUDE.map((name) => `  - ${JSON.stringify(name)}`),
+    `trustPolicy: ${TRUST_POLICY}`,
+    'trustPolicyExclude:',
+    ...TRUST_POLICY_EXCLUDE.map((spec) => `  - ${JSON.stringify(spec)}`),
     ...settingLines,
   ];
   writeFileSync(

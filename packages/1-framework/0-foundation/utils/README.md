@@ -1,12 +1,12 @@
 # @internal/utils
 
-> **Internal package.** This package is an implementation detail of Prisma Next and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
+> **Internal package.** This package is an implementation detail of Prisma 8 and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
 
-Shared utility functions for Prisma Next.
+Shared utility functions for Prisma 8.
 
 ## Overview
 
-This package provides general-purpose utility functions used across the Prisma Next codebase. These utilities are target-agnostic and have no dependencies on other Prisma Next packages.
+This package provides general-purpose utility functions used across the Prisma 8 codebase. These utilities are target-agnostic and have no dependencies on other Prisma 8 packages.
 
 ## Utilities
 

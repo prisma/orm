@@ -1,7 +1,10 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import type { Contract } from '@internal/contract/types';
+import type { Contract, ContractRelation } from '@internal/contract/types';
+import { crossRef, UNBOUND_DOMAIN_NAMESPACE_ID } from '@internal/contract/types';
+import { validateContractDomain } from '@internal/contract/validate-domain';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
+import { blindCast } from '@internal/utils/casts';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { createSqlContract } from '@repo/test-utils';
 import { join } from 'pathe';
@@ -248,6 +251,72 @@ describe('loadContractSpaceAggregate', () => {
       const first = space?.contract();
       expect(first).toBe(space?.contract());
       expect(first?.target).toBe('postgres');
+    });
+  });
+
+  describe('old-format snapshots', () => {
+    /** Runs the framework domain validator the family deserializers run on every load. */
+    const validatingDeserialize = (json: unknown): Contract => {
+      const contract = json as Contract;
+      validateContractDomain(contract);
+      return contract;
+    };
+
+    /** An rc.9 snapshot: the to-one relation has no `nullable` key. */
+    function oldFormatContract(): Contract {
+      const int = { nullable: false, type: { kind: 'scalar' as const, codecId: 'pg/int4@1' } };
+      const author = blindCast<
+        ContractRelation,
+        'an rc.9 contract.json relation has no nullable key'
+      >({
+        to: crossRef('User', UNBOUND_DOMAIN_NAMESPACE_ID),
+        cardinality: 'N:1',
+        on: { localFields: ['authorId'], targetFields: ['id'] },
+      });
+      return createSqlContract({
+        roots: { posts: crossRef('Post', UNBOUND_DOMAIN_NAMESPACE_ID) },
+        models: {
+          Post: {
+            fields: { id: int, authorId: int },
+            relations: { author },
+            storage: { namespaceId: UNBOUND_NAMESPACE_ID, table: 'post', fields: {} },
+          },
+          User: {
+            fields: { id: int },
+            relations: {},
+            storage: { namespaceId: UNBOUND_NAMESPACE_ID, table: 'user', fields: {} },
+          },
+        },
+        storage: {
+          namespaces: {
+            [UNBOUND_NAMESPACE_ID]: {
+              id: UNBOUND_NAMESPACE_ID,
+              entries: { table: { post: { columns: {} }, user: { columns: {} } } },
+            },
+          },
+        },
+      });
+    }
+
+    it('loads an extension snapshot whose to-one relations predate the nullable flag', async () => {
+      const extContract = oldFormatContract();
+      const headHash = extContract.storage.storageHash;
+      await writePackage('cipherstash', '20260101T0000_init', { from: null, to: headHash });
+      await writeHeadRef('cipherstash', { hash: headHash, invariants: [] });
+      await writeContractSnapshotEntry(headHash, extContract);
+      const rewrite = await writeContractSnapshot(migrationsDir, headHash, {
+        contractJson: { ...extContract, rewritten: true },
+        contractDts: 'export type Contract = unknown;\n',
+      });
+      expect(rewrite.written).toBe(false);
+
+      const aggregate = await loadContractSpaceAggregate({
+        migrationsDir,
+        deserializeContract: validatingDeserialize,
+        appContract: APP_CONTRACT,
+      });
+      const loaded = aggregate.space('cipherstash')?.contract();
+      expect(loaded?.storage.storageHash).toBe(headHash);
     });
   });
 

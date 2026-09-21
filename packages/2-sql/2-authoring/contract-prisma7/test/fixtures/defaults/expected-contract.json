@@ -1,0 +1,472 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Defaults": {
+            "storage": {
+              "table": "Defaults",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "bigSequence": {
+                  "column": "bigSequence"
+                },
+                "createdAt": {
+                  "column": "createdAt"
+                },
+                "createdAtTz": {
+                  "column": "createdAtTz"
+                },
+                "generated": {
+                  "column": "generated"
+                },
+                "stringLiteral": {
+                  "column": "stringLiteral"
+                },
+                "intLiteral": {
+                  "column": "intLiteral"
+                },
+                "bigIntLiteral": {
+                  "column": "bigIntLiteral"
+                },
+                "floatLiteral": {
+                  "column": "floatLiteral"
+                },
+                "decimalLiteral": {
+                  "column": "decimalLiteral"
+                },
+                "booleanLiteral": {
+                  "column": "booleanLiteral"
+                },
+                "dateTimeLiteral": {
+                  "column": "dateTimeLiteral"
+                },
+                "jsonLiteral": {
+                  "column": "jsonLiteral"
+                },
+                "bytesLiteral": {
+                  "column": "bytesLiteral"
+                },
+                "stringList": {
+                  "column": "stringList"
+                },
+                "intList": {
+                  "column": "intList"
+                },
+                "enumMember": {
+                  "column": "enumMember"
+                },
+                "enumList": {
+                  "column": "enumList"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "bigSequence": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int8@1"
+                },
+                "nullable": false
+              },
+              "createdAt": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": false
+              },
+              "createdAtTz": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "typeParams": {
+                    "precision": 6
+                  }
+                },
+                "nullable": false
+              },
+              "generated": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/uuid@1"
+                },
+                "nullable": false
+              },
+              "stringLiteral": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "intLiteral": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "bigIntLiteral": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int8@1"
+                },
+                "nullable": false
+              },
+              "floatLiteral": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/float8@1"
+                },
+                "nullable": false
+              },
+              "decimalLiteral": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/numeric@1",
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  }
+                },
+                "nullable": false
+              },
+              "booleanLiteral": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bool@1"
+                },
+                "nullable": false
+              },
+              "dateTimeLiteral": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "typeParams": {
+                    "precision": 3
+                  }
+                },
+                "nullable": false
+              },
+              "jsonLiteral": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/jsonb@1"
+                },
+                "nullable": false
+              },
+              "bytesLiteral": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/bytea@1"
+                },
+                "nullable": false
+              },
+              "stringList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "intList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": true,
+                "many": true
+              },
+              "enumMember": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/enum@1",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                },
+                "nullable": false
+              },
+              "enumList": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/enum@1",
+                  "typeParams": {
+                    "typeName": "user_role"
+                  }
+                },
+                "nullable": true,
+                "many": true
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Defaults": {
+      "namespace": "public",
+      "model": "Defaults"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "bf36708c84339e57f8a36b9cef40a9b10fe0f83299fa25016bc67330c5d72255",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Defaults": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "function",
+                    "expression": "autoincrement()"
+                  }
+                },
+                "bigSequence": {
+                  "nativeType": "int8",
+                  "codecId": "pg/int8@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "function",
+                    "expression": "autoincrement()"
+                  }
+                },
+                "createdAt": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "now()"
+                  }
+                },
+                "createdAtTz": {
+                  "nativeType": "timestamptz",
+                  "codecId": "pg/timestamptz-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 6
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "now()"
+                  }
+                },
+                "generated": {
+                  "nativeType": "uuid",
+                  "codecId": "pg/uuid@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "function",
+                    "expression": "gen_random_uuid()"
+                  }
+                },
+                "stringLiteral": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "hello"
+                  }
+                },
+                "intLiteral": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": 42
+                  }
+                },
+                "bigIntLiteral": {
+                  "nativeType": "int8",
+                  "codecId": "pg/int8@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": "9007199254740993"
+                  }
+                },
+                "floatLiteral": {
+                  "nativeType": "float8",
+                  "codecId": "pg/float8@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": 1.5
+                  }
+                },
+                "decimalLiteral": {
+                  "nativeType": "numeric",
+                  "codecId": "pg/numeric@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 65,
+                    "scale": 30
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": "12.34"
+                  }
+                },
+                "booleanLiteral": {
+                  "nativeType": "bool",
+                  "codecId": "pg/bool@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": true
+                  }
+                },
+                "dateTimeLiteral": {
+                  "nativeType": "timestamp",
+                  "codecId": "pg/timestamp-temporal@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "precision": 3
+                  },
+                  "default": {
+                    "kind": "function",
+                    "expression": "'2024-01-01 00:00:00'"
+                  }
+                },
+                "jsonLiteral": {
+                  "nativeType": "jsonb",
+                  "codecId": "pg/jsonb@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "literal",
+                    "value": {
+                      "a": 1
+                    }
+                  }
+                },
+                "bytesLiteral": {
+                  "nativeType": "bytea",
+                  "codecId": "pg/bytea@1",
+                  "nullable": false,
+                  "default": {
+                    "kind": "function",
+                    "expression": "'\\x68656c6c6f'"
+                  }
+                },
+                "stringList": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "default": {
+                    "kind": "literal",
+                    "value": ["a", "b"]
+                  }
+                },
+                "intList": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "default": {
+                    "kind": "literal",
+                    "value": [1, 2]
+                  }
+                },
+                "enumMember": {
+                  "nativeType": "user_role",
+                  "codecId": "pg/enum@1",
+                  "nullable": false,
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": "user"
+                  },
+                  "valueSet": {
+                    "plane": "storage",
+                    "entityKind": "valueSet",
+                    "namespaceId": "public",
+                    "entityName": "Role"
+                  }
+                },
+                "enumList": {
+                  "nativeType": "user_role",
+                  "codecId": "pg/enum@1",
+                  "nullable": true,
+                  "many": true,
+                  "noCheck": ["elementNotNull"],
+                  "typeParams": {
+                    "typeName": "user_role"
+                  },
+                  "default": {
+                    "kind": "literal",
+                    "value": ["ADMIN"]
+                  },
+                  "valueSet": {
+                    "plane": "storage",
+                    "entityKind": "valueSet",
+                    "namespaceId": "public",
+                    "entityName": "Role"
+                  }
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          },
+          "native_enum": {
+            "user_role": {
+              "kind": "postgres-enum",
+              "typeName": "user_role",
+              "members": ["user", "ADMIN"]
+            }
+          },
+          "valueSet": {
+            "Role": {
+              "kind": "valueSet",
+              "values": ["user", "ADMIN"]
+            }
+          }
+        }
+      }
+    }
+  }
+}

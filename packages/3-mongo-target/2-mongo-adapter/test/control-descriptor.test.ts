@@ -21,6 +21,7 @@ describe('mongoScalarAuthoringTypes', () => {
     for (const [name, codecId] of expectedScalars) {
       expect(mongoScalarAuthoringTypes[name]).toEqual({
         kind: 'typeConstructor',
+        documentation: expect.stringMatching(/\S/),
         output: { codecId, nativeType: mongoDescriptorById(codecId)?.targetTypes?.[0] },
       });
     }

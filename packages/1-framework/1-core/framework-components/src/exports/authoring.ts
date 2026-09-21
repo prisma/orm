@@ -1,6 +1,7 @@
 export type {
   AuthoringArgRef,
   AuthoringArgumentDescriptor,
+  AuthoringAttributeSpecContributions,
   AuthoringColumnDefaultTemplate,
   AuthoringContributions,
   AuthoringDiagnosticSink,
@@ -62,4 +63,5 @@ export type {
   PslExtensionBlockParamRef,
   PslExtensionBlockParamScalarValue,
   PslExtensionBlockParamValue,
+  PslExtensionBlockParsedAttribute,
 } from '../shared/psl-extension-block';

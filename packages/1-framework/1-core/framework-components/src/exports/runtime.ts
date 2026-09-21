@@ -41,5 +41,7 @@ export type {
   RuntimeStatementStats,
 } from '../execution/runtime-middleware';
 export { checkMiddlewareCompatibility } from '../execution/runtime-middleware';
+export type { RelationNamesOf, Scalars, Shape, ShapeSpec } from '../execution/shape';
+export { RelationKeys } from '../execution/shape';
 export type { LaneMetaBuilder, MetaBuilder } from '../meta-builder';
 export { createMetaBuilder } from '../meta-builder';

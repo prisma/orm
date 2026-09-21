@@ -284,6 +284,32 @@ userCollection.create({
 userCollection.create({ id: 'user_only_id' });
 // @ts-expect-error Post has no relation callbacks to satisfy required userId in create()
 postCollection.create({ id: 'post_missing_user', title: 'Missing owner' });
+const createNestedPosts: NonNullable<
+  import('../src/types').CreateInput<GeneratedLikeContract, 'User'>['posts']
+> = (posts) => posts.create([{ id: 'post_001', title: 'Nested' }]);
+const scalarUserCreateInput = {
+  id: 'user_001',
+  name: 'Alice',
+  email: 'alice@example.com',
+  active: true,
+  metadata: {},
+};
+userCollection.createAll([scalarUserCreateInput]);
+userCollection.createAll([
+  {
+    ...scalarUserCreateInput,
+    // @ts-expect-error createAll does not support relation callbacks
+    posts: createNestedPosts,
+  },
+]);
+userCollection.createAndCount([scalarUserCreateInput]);
+userCollection.createAndCount([
+  {
+    ...scalarUserCreateInput,
+    // @ts-expect-error createAndCount does not support relation callbacks
+    posts: createNestedPosts,
+  },
+]);
 userCollection.upsert({
   create: { id: 'user_001', name: 'Alice', email: 'alice@example.com', active: true, metadata: {} },
   update: { name: 'Alice Updated' },
@@ -291,6 +317,18 @@ userCollection.upsert({
 });
 userCollection.upsert({
   create: { id: 'user_001', name: 'Alice', email: 'alice@example.com', active: true, metadata: {} },
+  update: { name: 'Alice Updated' },
+});
+userCollection.upsert({
+  create: {
+    id: 'user_001',
+    name: 'Alice',
+    email: 'alice@example.com',
+    active: true,
+    metadata: {},
+    // @ts-expect-error upsert create does not support relation callbacks
+    posts: createNestedPosts,
+  },
   update: { name: 'Alice Updated' },
 });
 userCollection.upsert({

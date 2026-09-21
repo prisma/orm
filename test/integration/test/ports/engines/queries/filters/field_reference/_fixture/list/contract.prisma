@@ -28,4 +28,5 @@ model TestModel {
   dt       DateTime?
   dt_list  DateTime[]
   dt_list2 DateTime[]
+  @@map("testModel")
 }

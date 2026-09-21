@@ -1,6 +1,6 @@
 # @internal/mongo-contract-ts
 
-Mongo-specific TypeScript contract authoring surface for Prisma Next.
+Mongo-specific TypeScript contract authoring surface for Prisma 8.
 
 ## Purpose
 

@@ -5,7 +5,7 @@
 //   model User { id String @id; status Status }
 //   enum Status { ACTIVE INACTIVE }
 //
-// prisma-next: native PG ENUM uses native_enum block + pg.enum() column type.
+// Prisma 8: native PG ENUM uses native_enum block + pg.enum() column type.
 // The test adds an unknown value to the DB enum after schema push and then reads it.
 
 native_enum Status {
@@ -16,4 +16,5 @@ native_enum Status {
 model User {
   id     String         @id
   status pg.enum(Status)
+  @@map("user")
 }

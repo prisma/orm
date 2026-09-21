@@ -210,17 +210,17 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
   const assembled = assembleAuthoringContributions([postgresTargetDescriptor]);
   const scalarTypeDescriptors = buildScalarTypeDescriptors();
 
-  const { document, sourceFile } = parse(psl);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(psl, 'native-enum-lifecycle-e2e.integration.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
 
   const result = interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     // Carries the REAL Postgres target pack's authoring contributions
     // (`postgresTargetDescriptor.authoring`, including `qualifyColumnType` =
     // `postgresQualifyColumnType`), which schema-qualifies a `pg.enum` column's
@@ -343,7 +343,7 @@ function orderStatusRefusalMessage(
   return (
     'Native enum type "public"."order_status" changed beyond appending new values ' +
     `(contract declares [${expectedMembers.join(', ')}], database has [${actualMembers.join(', ')}]). ` +
-    "Prisma Next does not modify a native enum's existing values (rename, removal, reorder) — " +
+    "Prisma 8 does not modify a native enum's existing values (rename, removal, reorder) — " +
     'see https://pris.ly/d/postgres-native-enums. Author the change manually with `migration new`.'
   );
 }

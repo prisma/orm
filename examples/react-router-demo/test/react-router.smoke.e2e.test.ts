@@ -9,7 +9,7 @@ const exampleDir = dirname(dirname(fileURLToPath(import.meta.url)));
 const schemaPath = join(exampleDir, 'src', 'prisma', 'contract.prisma');
 const contractJsonPath = join(exampleDir, 'src', 'prisma', 'contract.json');
 
-// Bootstraps Prisma Next's marker table plus our own model tables via raw DDL
+// Bootstraps Prisma 8's marker table plus our own model tables via raw DDL
 // rather than going through the control client's `dbInit`. This smoke test's job
 // is to validate auto-emit and serving through the framework runtime, not to
 // exercise the migration system — that is covered by the `db init` integration

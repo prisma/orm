@@ -25,6 +25,7 @@ import type {
   MongoMigrationCheck,
   MongoMigrationPlanOperation,
 } from '@internal/mongo-query-ast/control';
+import { blindCast } from '@internal/utils/casts';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { FilterEvaluator } from './filter-evaluator';
@@ -83,7 +84,12 @@ export class MongoMigrationRunner {
 
   async execute(options: MongoMigrationRunnerExecuteOptions): Promise<MongoMigrationRunnerResult> {
     const { inspectionExecutor, adapter, driver, executeDdl, markerOps } = this.deps;
-    const operations = deserializeMongoOps(options.plan.operations as readonly unknown[]);
+    const operations = deserializeMongoOps(
+      blindCast<
+        readonly unknown[],
+        'framework migration plans serialize operations as a readonly JSON entry array'
+      >(options.plan.operations),
+    );
     // Plans produced by the contract-space-aware planner stamp `spaceId`
     // onto the plan; plans without one fall through to the application's
     // well-known space.
@@ -111,7 +117,10 @@ export class MongoMigrationRunner {
       try {
         if (operation.operationClass === 'data') {
           const result = await this.executeDataTransform(
-            operation as MongoDataTransformOperation,
+            blindCast<
+              MongoDataTransformOperation,
+              'operationClass data discriminates Mongo data transform operations'
+            >(operation),
             adapter,
             driver,
             filterEvaluator,
@@ -126,7 +135,10 @@ export class MongoMigrationRunner {
           continue;
         }
 
-        const ddlOp = operation as MongoMigrationPlanOperation;
+        const ddlOp = blindCast<
+          MongoMigrationPlanOperation,
+          'non-data Mongo operations are DDL migration plan operations'
+        >(operation);
 
         if (runPostchecks && runIdempotency) {
           const allSatisfied = await this.allChecksSatisfied(

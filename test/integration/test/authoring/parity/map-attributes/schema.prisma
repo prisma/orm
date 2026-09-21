@@ -1,4 +1,4 @@
-// use prisma-next
+// use prisma-8
 
 model Team {
   id Int @id @map("team_id")

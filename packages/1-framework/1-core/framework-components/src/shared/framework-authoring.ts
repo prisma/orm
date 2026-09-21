@@ -7,6 +7,7 @@ import {
   isColumnDefaultLiteralInputValue,
   isExecutionMutationDefaultValue,
 } from '@internal/contract/types';
+import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -117,6 +118,7 @@ export interface AuthoringTypeConstructorEntityRef {
 
 export interface AuthoringTypeConstructorDescriptor {
   readonly kind: 'typeConstructor';
+  readonly documentation?: string;
   readonly args?: readonly AuthoringArgumentDescriptor[];
   readonly output: AuthoringStorageTypeTemplate;
   /** Present when one of this constructor's positional arguments names another document-local entity instead of carrying a literal value. Absent for ordinary literal-argument constructors. */
@@ -330,7 +332,7 @@ export function resolveEnumCodecId(
   ctx: AuthoringEntityContext,
 ): { readonly codecId: string; readonly codecSpan: PslSpan } | undefined {
   const sourceId = ctx.sourceId ?? 'unknown';
-  const typeAttr = block.blockAttributes.find((a) => a.name === 'type');
+  const typeAttr = block.attributes['type'];
 
   if (typeAttr === undefined) {
     const inferredKind = classifyEnumMemberType(block);
@@ -346,21 +348,9 @@ export function resolveEnumCodecId(
     return { codecId: ctx.enumInferenceCodecs[inferredKind], codecSpan: block.span };
   }
 
-  const rawCodecArg = typeAttr.args[0]?.value;
-  const codecId =
-    rawCodecArg?.startsWith('"') && rawCodecArg.endsWith('"') && rawCodecArg.length >= 2
-      ? rawCodecArg.slice(1, -1)
-      : undefined;
-  if (codecId === undefined) {
-    ctx.diagnostics?.push({
-      code: 'PSL_ENUM_MISSING_TYPE',
-      message: `enum "${block.name}" @@type attribute must have a quoted codec id argument`,
-      sourceId,
-      span: typeAttr.span,
-    });
-    return undefined;
-  }
-  return { codecId, codecSpan: typeAttr.args[0]?.span ?? typeAttr.span };
+  const codecId = typeAttr.args['codecId'];
+  invariant(typeof codecId === 'string', '@@type on an enum block parses one string argument');
+  return { codecId, codecSpan: typeAttr.span };
 }
 
 export interface AuthoringEntityTypeTemplateOutput {
@@ -431,6 +421,7 @@ export type AuthoringEntityTypeNamespace = {
  */
 export interface AuthoringPslBlockDescriptor {
   readonly kind: 'pslBlock';
+  readonly documentation?: string;
   readonly keyword: string;
   readonly discriminator: string;
   readonly name: { readonly required: boolean };
@@ -464,6 +455,7 @@ export interface AuthoringPslBlockDescriptor {
     readonly parameter: string;
     readonly attribute: string;
   };
+  readonly attributes?: Readonly<Record<string, unknown>>;
 }
 
 export type AuthoringPslBlockDescriptorNamespace = {
@@ -507,12 +499,6 @@ export interface AuthoringModelAttributeLoweringOutput {
  * - `attribute` is the bare `@@` attribute name this descriptor claims and,
  *   by the one-string rule, the `entries` slot its lowered entities are
  *   grouped under (`entries[attribute][key]`).
- * - `spec` is opaque to the framework core: an ADR-231 attribute-spec kit
- *   `AttributeSpec<Out>` value (`modelAttribute(name, {...})` from
- *   `@internal/psl-parser`). Framework core does not depend on
- *   psl-parser and never inspects this field; the family interpreter,
- *   which does depend on psl-parser, parses the attribute's arguments
- *   against it.
  * - `lower` receives the parsed arguments and the declaring model's
  *   context, and returns the entity to file into `entries`, or `undefined`
  *   after pushing a diagnostic via `ctx.diagnostics`.
@@ -537,6 +523,11 @@ export type AuthoringModelAttributeDescriptorNamespace = {
     | AuthoringModelAttributeDescriptor
     | AuthoringModelAttributeDescriptorNamespace;
 };
+
+export interface AuthoringAttributeSpecContributions {
+  readonly model: Readonly<Record<string, unknown>>;
+  readonly field: Readonly<Record<string, unknown>>;
+}
 
 export interface AuthoringContributions {
   readonly type?: AuthoringTypeNamespace;
@@ -563,6 +554,7 @@ export interface AuthoringContributions {
    * declarative spec and the lowering.
    */
   readonly modelAttributes?: AuthoringModelAttributeDescriptorNamespace;
+  readonly attributeSpecs?: AuthoringAttributeSpecContributions;
   /**
    * Names the top-level type constructor that stores embedded value-object
    * fields (fields typed as a value-object `type` block). A single named
@@ -735,7 +727,15 @@ function isWellFormedDescriptor(value: unknown, descriptorKind: string): boolean
       if (!('required' in name) || typeof name.required !== 'boolean') return false;
       if (!('parameters' in value)) return false;
       const parameters = value.parameters;
-      return typeof parameters === 'object' && parameters !== null && !Array.isArray(parameters);
+      if (typeof parameters !== 'object' || parameters === null || Array.isArray(parameters)) {
+        return false;
+      }
+      if (!('attributes' in value) || value.attributes === undefined) return true;
+      const attributes = value.attributes;
+      if (typeof attributes !== 'object' || attributes === null || Array.isArray(attributes)) {
+        return false;
+      }
+      return Object.values(attributes).every((factory) => typeof factory === 'function');
     }
     case 'modelAttribute': {
       if (
@@ -842,6 +842,57 @@ export function mergeAuthoringNamespaces(
     }
 
     mergeAuthoringNamespaces(existingValue, sourceValue, currentPath, descriptorKind, label);
+  }
+}
+
+const ATTRIBUTE_SPEC_LEVELS = ['model', 'field'] as const;
+
+export function mergeAuthoringAttributeSpecs(
+  target: { readonly model: Record<string, unknown>; readonly field: Record<string, unknown> },
+  source: AuthoringAttributeSpecContributions,
+  contributedBy: string,
+  owners: Map<string, string>,
+): void {
+  const invalidContribution = (detail: string) =>
+    runtimeError(
+      'CONTRACT.PACK_CONTRIBUTION_INVALID',
+      `Invalid authoring attributeSpecs contribution from descriptor "${contributedBy}". ${detail}`,
+    );
+  if (!isCopyableNamespaceObject(source)) {
+    throw invalidContribution('Expected a record carrying a "model" and a "field" level.');
+  }
+  for (const level of ATTRIBUTE_SPEC_LEVELS) {
+    const contributed: unknown = source[level];
+    if (!isCopyableNamespaceObject(contributed)) {
+      throw invalidContribution(
+        `The "${level}" level must be a record of spec factories keyed by attribute name.`,
+      );
+    }
+    for (const [attribute, factory] of Object.entries(contributed)) {
+      const entryPath = `${level}.${attribute}`;
+      const invalidEntry = (detail: string) =>
+        runtimeError(
+          'CONTRACT.PACK_CONTRIBUTION_INVALID',
+          `Invalid authoring attributeSpecs entry "${entryPath}" contributed by descriptor "${contributedBy}". ${detail}`,
+        );
+      if (attribute === '__proto__' || attribute === 'constructor' || attribute === 'prototype') {
+        throw invalidEntry(`Attribute names must not use "${attribute}".`);
+      }
+      if (typeof factory !== 'function') {
+        throw invalidEntry('Each entry must be a spec factory function.');
+      }
+      const existingOwner = owners.get(entryPath);
+      if (existingOwner !== undefined) {
+        throw runtimeError(
+          'CONTRACT.PACK_CONTRIBUTION_INVALID',
+          `Duplicate authoring attributeSpecs entry "${entryPath}". ` +
+            `Descriptor "${contributedBy}" conflicts with "${existingOwner}". ` +
+            'Each attribute name may be claimed once per level.',
+        );
+      }
+      owners.set(entryPath, contributedBy);
+      target[level][attribute] = factory;
+    }
   }
 }
 

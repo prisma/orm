@@ -49,7 +49,7 @@ describe('printPsl', () => {
     });
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Post {
@@ -92,7 +92,7 @@ describe('printPsl', () => {
     });
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Contact {
@@ -143,7 +143,7 @@ describe('printPsl', () => {
     });
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Price {
@@ -201,7 +201,7 @@ describe('printPsl', () => {
 
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Account {
@@ -249,7 +249,7 @@ describe('printPsl', () => {
 
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model User {
@@ -290,7 +290,7 @@ describe('printPsl', () => {
     });
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model GeoData {
@@ -326,7 +326,7 @@ describe('printPsl', () => {
     });
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Item {
@@ -376,7 +376,7 @@ describe('printPsl', () => {
 
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Schedule {
@@ -427,7 +427,7 @@ describe('printPsl', () => {
     });
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Data {
@@ -437,40 +437,6 @@ describe('printPsl', () => {
         touchedAt Timestamptz @default(dbgenerated("clock_timestamp()")) @map("touched_at")
 
         @@map("data")
-      }
-      "
-    `);
-  });
-
-  it('renders raw bigint defaults as numbers', () => {
-    const schemaIR = new SqlSchemaIR({
-      tables: {
-        counter: {
-          name: 'counter',
-          columns: {
-            id: {
-              name: 'id',
-              nativeType: 'int8',
-              nullable: false,
-              default: '9223372036854775807',
-            },
-          },
-          primaryKey: { columns: ['id'] },
-          foreignKeys: [],
-          uniques: [],
-          indexes: [],
-        },
-      },
-    });
-    const result = printPslFromSql(schemaIR);
-    expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
-      // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
-
-      model Counter {
-        id BigInt @id @default(9223372036854776000)
-
-        @@map("counter")
       }
       "
     `);

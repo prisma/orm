@@ -20,7 +20,7 @@ export interface PostgresCheckExpressionInput {
   readonly tableName: string;
   readonly columnName: string;
   readonly many: boolean;
-  readonly memberValues: readonly string[] | undefined;
+  readonly memberValues: readonly (string | number)[] | undefined;
 }
 
 /**
@@ -40,17 +40,15 @@ export interface PostgresCheckExpressionCandidate {
 /**
  * Renders the checks a Postgres column needs, as opaque predicate text.
  *
- * A text-backed domain enum has no type-level enforcement, so membership is a
+ * A domain enum has no type-level enforcement, so membership is a
  * predicate: `IN` for a scalar, and `<@` containment for an array — an array
  * column cannot use `IN` at all (`operator does not exist: text[] = text`),
  * and containment additionally rejects NULL elements. Every list column also
  * gets an element-non-null check, which no Postgres column type can express.
  *
- * The array side casts the COLUMN to `text[]` rather than assuming its element
- * type already is: `<@` needs both operands in one type, so a `varchar[]` or
- * `char[]` column meeting a bare `text[]` literal raises the same
- * `operator does not exist` this project exists to eliminate. The scalar `IN`
- * form needs no cast — `varchar = text` resolves on its own.
+ * Array containment casts both operands to `numeric[]` for numeric members or
+ * `text[]` for string members, so different storage types share an operator
+ * without comparing numbers as text. The scalar `IN` form needs no cast.
  */
 export function postgresRenderCheckExpressions(
   input: PostgresCheckExpressionInput,
@@ -63,12 +61,24 @@ export function postgresRenderCheckExpressions(
       input.memberValues.length > 0,
       `check for "${input.tableName}"."${input.columnName}": empty member set; both authoring surfaces reject a member-less enum before rendering`,
     );
-    const members = input.memberValues.map((value) => `'${escapeLiteral(value)}'`).join(', ');
+    const members = input.memberValues
+      .map((value) => {
+        if (typeof value === 'string') return `'${escapeLiteral(value)}'`;
+        invariant(
+          Number.isFinite(value),
+          `check for "${input.tableName}"."${input.columnName}": non-finite numeric member`,
+        );
+        return String(value);
+      })
+      .join(', ');
+    const arrayType = input.memberValues.every((value) => typeof value === 'number')
+      ? 'numeric[]'
+      : 'text[]';
     candidates.push({
       kind: 'membership',
       columnName: input.columnName,
       expression: input.many
-        ? `${column}::text[] <@ ARRAY[${members}]::text[]`
+        ? `${column}::${arrayType} <@ ARRAY[${members}]::${arrayType}`
         : `${column} IN (${members})`,
     });
   }

@@ -48,7 +48,7 @@ import {
 
 // The counter reads one package's `dev` dist-tag as the high-water mark, so
 // that package must be one this repo still publishes on every dev build.
-// `prisma-next` used to be it, but #30005 retired the bin and stopped
+// The standalone bin used to be it, but #30005 retired it and stopped
 // publishing it — leaving its `dev` tag frozen one build behind the packages
 // that do ship. A frozen anchor re-issues a `<base>-dev.N` npm already holds
 // and fails the publish, so anchor on the toolchain shell instead.

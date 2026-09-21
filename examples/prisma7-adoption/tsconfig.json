@@ -1,0 +1,17 @@
+{
+  "extends": ["@repo/tsconfig/base"],
+  "compilerOptions": {
+    "outDir": "dist",
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "scripts/**/*.ts",
+    "generated/prisma8/*.d.ts",
+    "prisma.config.ts",
+    "prisma7.config.ts"
+  ],
+  "exclude": ["dist"]
+}

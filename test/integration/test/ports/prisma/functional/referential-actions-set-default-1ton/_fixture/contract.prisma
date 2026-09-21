@@ -28,21 +28,25 @@
 model UserOneToOne {
   id      Int              @id
   profile ProfileOneToOne?
+  @@map("userOneToOne")
 }
 
 model ProfileOneToOne {
   id     Int           @id
   user   UserOneToOne? @relation(fields: [userId], references: [id], onUpdate: SetDefault, onDelete: SetDefault)
   userId Int?          @default(3) @unique
+  @@map("profileOneToOne")
 }
 
 model UserOneToMany {
   id    Int             @id
   posts PostOneToMany[]
+  @@map("userOneToMany")
 }
 
 model PostOneToMany {
   id     Int            @id
   user   UserOneToMany? @relation(fields: [userId], references: [id], onUpdate: SetDefault, onDelete: SetDefault)
   userId Int?           @default(3)
+  @@map("postOneToMany")
 }

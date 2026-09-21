@@ -12,6 +12,7 @@ export type {
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
 export { assembleAuthoringContributions } from '@internal/framework-components/control';
+export { checkSqlDefaultBody } from '@internal/sql-contract/validators';
 export { extractCodecControlHooks } from '../core/assembly';
 export type { SqlControlFamilyInstance } from '../core/control-instance';
 export type {
@@ -53,6 +54,11 @@ export type {
   SqlSchemaDiffInput,
   SqlSchemaDiffResult,
 } from '../core/migrations/schema-differ';
+export type { TableNameCaseGuardTable } from '../core/migrations/table-name-case-guard';
+export {
+  detectTableNameCaseChanges,
+  TABLE_NAME_CASE_CHANGED_CODE,
+} from '../core/migrations/table-name-case-guard';
 export type {
   CodecControlHooks,
   CreateSqlMigrationPlanOptions,
@@ -86,6 +92,11 @@ export type {
   StorageTypePlanResult,
 } from '../core/migrations/types';
 export {
+  PSL_INVALID_DEFAULT_SQL,
+  sqlDefaultLiteralTagEntry,
+} from '../core/sql-default-literal-tag';
+export {
+  TIMESTAMP_NOW_GENERATOR_ID,
   temporalAuthoringPresets,
   temporalCodecPreset,
   temporalCodecPresetWithPrecision,

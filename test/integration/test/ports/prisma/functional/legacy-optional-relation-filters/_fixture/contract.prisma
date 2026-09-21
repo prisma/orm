@@ -21,6 +21,7 @@ model User {
   id    String @id
   email String @unique
   bio   Bio?
+  @@map("user")
 }
 
 model Bio {
@@ -28,4 +29,5 @@ model Bio {
   text   String?
   user   User?   @relation(fields: [userId], references: [id])
   userId String? @unique
+  @@map("bio")
 }

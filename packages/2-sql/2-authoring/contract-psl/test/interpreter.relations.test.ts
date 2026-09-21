@@ -45,8 +45,8 @@ model Post {
     if (!result.ok) return;
 
     expect(result.value.roots).toEqual({
-      user: crossRef('User', 'public'),
-      post: crossRef('Post', 'public'),
+      User: crossRef('User', 'public'),
+      Post: crossRef('Post', 'public'),
     });
 
     const models = modelsOf(result.value) as Record<
@@ -67,12 +67,135 @@ model Post {
       user: {
         to: crossRef('User', 'public'),
         cardinality: 'N:1',
+        nullable: false,
         on: {
           localFields: ['userId'],
           targetFields: ['id'],
         },
       },
     });
+  });
+
+  it('records nullable: true on an optional relation field backed by an optional FK field', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model User {
+  id Int @id
+  posts Post[]
+}
+
+model Post {
+  id Int @id
+  userId Int?
+  user User? @relation(fields: [userId], references: [id])
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const models = modelsOf(result.value) as Record<
+      string,
+      { relations?: Record<string, unknown> }
+    >;
+    expect(models['Post']?.relations).toMatchObject({
+      user: { cardinality: 'N:1', nullable: true },
+    });
+    expect(models['User']?.relations).toMatchObject({
+      posts: expect.not.objectContaining({ nullable: expect.anything() }),
+    });
+  });
+
+  it('records the 1:1 back side as nullable from its own optionality', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model User {
+  id Int @id
+  profile Profile?
+}
+
+model Profile {
+  id Int @id
+  userId Int @unique
+  user User @relation(fields: [userId], references: [id])
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const models = modelsOf(result.value) as Record<
+      string,
+      { relations?: Record<string, unknown> }
+    >;
+    expect(models['User']?.relations).toMatchObject({
+      profile: { cardinality: '1:1', nullable: true },
+    });
+    expect(models['Profile']?.relations).toMatchObject({
+      user: { cardinality: 'N:1', nullable: false },
+    });
+  });
+
+  it('rejects a required relation field whose FK fields include an optional field', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model User {
+  id Int @id
+  posts Post[]
+}
+
+model Post {
+  id Int @id
+  userId Int?
+  user User @relation(fields: [userId], references: [id])
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_RELATION_NULLABILITY_MISMATCH',
+        message: expect.stringContaining('Relation field "Post.user" is required'),
+      }),
+    ]);
+  });
+
+  it('rejects an optional relation field whose FK fields are all required', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model User {
+  id Int @id
+  posts Post[]
+}
+
+model Post {
+  id Int @id
+  userId Int
+  user User? @relation(fields: [userId], references: [id])
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_RELATION_NULLABILITY_MISMATCH',
+        message: expect.stringContaining('Relation field "Post.user" is optional'),
+      }),
+    ]);
   });
 
   it('accepts a bare model-typed optional field with no @relation as the 1:1 back side', () => {
@@ -104,6 +227,7 @@ model Profile {
       profile: {
         to: crossRef('Profile', 'public'),
         cardinality: '1:1',
+        nullable: true,
         on: {
           localFields: ['id'],
           targetFields: ['userId'],
@@ -120,6 +244,32 @@ model Profile {
         },
       },
     });
+  });
+
+  it('reports an unnamed backrelation as orphaned when only a differently named FK side was rejected', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: `model A {
+  id Int @id
+  bId Int?
+  b B @relation("named", fields: [bId], references: [id])
+}
+
+model B {
+  id Int @id
+  as A[]
+}
+`,
+      sourceId: 'schema.prisma',
+    });
+
+    const result = interpretPslDocumentToSqlContract({ ...baseInput, ...document });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map((diagnostic) => diagnostic.code).sort()).toEqual([
+      'PSL_ORPHANED_BACKRELATION',
+      'PSL_RELATION_NULLABILITY_MISMATCH',
+    ]);
   });
 
   it('reports an orphaned 1:1 backrelation candidate when no FK points back at it', () => {
@@ -254,10 +404,10 @@ model Member {
     if (!result.ok) return;
 
     expect(result.value.roots).toEqual({
-      user: crossRef('User', 'public'),
-      post: crossRef('Post', 'public'),
-      team: crossRef('Team', 'public'),
-      member: crossRef('Member', 'public'),
+      User: crossRef('User', 'public'),
+      Post: crossRef('Post', 'public'),
+      Team: crossRef('Team', 'public'),
+      Member: crossRef('Member', 'public'),
     });
 
     const models = modelsOf(result.value) as Record<
@@ -405,13 +555,13 @@ model Member {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    const memberTable = unboundTables(storage)['member'];
+    const memberTable = unboundTables(storage)['Member'];
     const fks = memberTable?.foreignKeys ?? [];
     expect(fks[0]).not.toHaveProperty('index');
     expect(memberTable?.indexes).toEqual([
       {
-        name: 'member_teamId_idx_f2b72ab3',
-        prefix: 'member_teamId_idx',
+        name: 'Member_teamId_idx_f2b72ab3',
+        prefix: 'Member_teamId_idx',
         columns: ['teamId'],
         unique: false,
       },
@@ -440,7 +590,7 @@ model Member {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    const memberTable = unboundTables(storage)['member'];
+    const memberTable = unboundTables(storage)['Member'];
     const fks = memberTable?.foreignKeys ?? [];
     expect(fks[0]).not.toHaveProperty('index');
     expect(memberTable?.indexes).toEqual([]);

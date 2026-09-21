@@ -147,7 +147,7 @@ model User {
         public: {
           entries: {
             table: {
-              user: {
+              User: {
                 columns: {
                   homeAddress: {
                     nativeType: 'jsonb',
@@ -197,7 +197,7 @@ model User {
         public: {
           entries: {
             table: {
-              user: {
+              User: {
                 columns: {
                   tags: {
                     nativeType: 'text',
@@ -248,7 +248,7 @@ model User {
         public: {
           entries: {
             table: {
-              user: {
+              User: {
                 columns: {
                   tags: {
                     nativeType: 'text',
@@ -304,7 +304,7 @@ model User {
         public: {
           entries: {
             table: {
-              user: {
+              User: {
                 columns: {
                   addresses: {
                     nativeType: 'jsonb',
@@ -430,7 +430,7 @@ model User {
     expect(namespace).toMatchObject({
       entries: {
         table: {
-          user: {
+          User: {
             columns: {
               homeAddress: {
                 codecId: 'sqlite/json@1',
@@ -475,7 +475,7 @@ model User {
         public: {
           entries: {
             table: {
-              user: {
+              User: {
                 columns: expect.not.objectContaining({ homeAddress: expect.anything() }),
               },
             },

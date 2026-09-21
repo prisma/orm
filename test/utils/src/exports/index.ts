@@ -19,8 +19,18 @@ function normalizeConnectionString(raw: string): string {
 
 export interface DevDatabase {
   readonly connectionString: string;
+  /** How long the server keeps an idle connection open before closing it. */
+  readonly databaseIdleTimeoutMillis: number;
   close(): Promise<void>;
 }
+
+/**
+ * The Postgres driver's pool keeps an idle client for 30 s. The dev server must
+ * not close a connection sooner, or the pool hands a test a dead client the
+ * first time it pauses between queries — which a slow or coverage-instrumented
+ * run does routinely.
+ */
+const DEFAULT_IDLE_TIMEOUT_MS = 30_000;
 
 /**
  * Creates a dev database instance for testing.
@@ -29,13 +39,15 @@ export interface DevDatabase {
  * active connection (second connections are rejected until the first is closed).
  */
 export async function createDevDatabase(options?: ServerOptions): Promise<DevDatabase> {
-  const server = await startPrismaDevServer({
+  const settings = {
     databaseConnectTimeoutMillis: 1000,
-    databaseIdleTimeoutMillis: 1000,
+    databaseIdleTimeoutMillis: DEFAULT_IDLE_TIMEOUT_MS,
     ...options,
-  });
+  };
+  const server = await startPrismaDevServer(settings);
   return {
     ...server,
+    databaseIdleTimeoutMillis: settings.databaseIdleTimeoutMillis,
     connectionString: normalizeConnectionString(server.database.connectionString),
   };
 }

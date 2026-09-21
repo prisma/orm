@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Dependency Cruiser configuration for Prisma Next.
+ * Dependency Cruiser configuration for Prisma 8.
  *
  * It derives module groups from architecture.config.json and encodes the same-layer/
  * downward-only semantics. Plane import constraints and cross-domain exceptions are

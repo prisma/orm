@@ -3,7 +3,7 @@ description: >
   Classify the current diff as "inert" — touching only files that cannot
   affect build/test/fixture results (docs, markdown, rules, contributor
   skill sources under skills-contrib, transient project artefacts). The
-  user-facing skills/ tree is NOT inert — `prisma-next init` installs it
+  user-facing skills/ tree is NOT inert — `prisma init` installs it
   and an integration test covers it. Fail-safe: a diff is inert only if
   *every* changed file matches the allow-list below; any unrecognized path
   yields inert=false. Works from a shallow checkout by fetching the exact

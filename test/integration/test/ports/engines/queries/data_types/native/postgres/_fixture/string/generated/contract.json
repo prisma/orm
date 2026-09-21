@@ -91,6 +91,7 @@
             "relations": {
               "parent": {
                 "cardinality": "1:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "id"
@@ -156,6 +157,7 @@
             "relations": {
               "child": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "childId"

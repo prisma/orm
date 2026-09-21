@@ -48,6 +48,7 @@
             "relations": {
               "test": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "testId"
@@ -63,6 +64,7 @@
               },
               "toOne": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "toOneId"
@@ -157,6 +159,7 @@
             "relations": {
               "toMany": {
                 "cardinality": "1:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "id"

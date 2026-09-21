@@ -134,6 +134,7 @@ describe('assembleAuthoringContributions', () => {
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
+      attributeSpecs: { model: {}, field: {} },
     });
   });
 
@@ -721,6 +722,71 @@ describe('assembleAuthoringContributions', () => {
     ).toThrow(/Malformed authoring pslBlock contribution at "broken"/);
   });
 
+  it('keeps a pslBlockDescriptors entry that declares block attributes', () => {
+    const mapFactory = () => ({ level: 'block', name: 'map' });
+    const result = assembleAuthoringContributions([
+      createDescriptor({
+        authoring: {
+          entityTypes: {
+            foo: { kind: 'entity', discriminator: 'fake-foo', output: { factory: () => ({}) } },
+          },
+          pslBlockDescriptors: {
+            fooBlock: {
+              ...makeDeclarativePslBlockDescriptor('fake-foo'),
+              attributes: { map: mapFactory },
+            },
+          },
+        },
+      }),
+    ]);
+    expect(result.pslBlockDescriptors['fooBlock']).toMatchObject({
+      attributes: { map: mapFactory },
+    });
+  });
+
+  it.each([
+    ['an undefined factory', { map: undefined }],
+    ['a non-function factory', { map: 'map' }],
+  ])('rejects a pslBlockDescriptors entry whose attributes carries %s', (_label, attributes) => {
+    expect(() =>
+      assembleAuthoringContributions([
+        createDescriptor({
+          authoring: {
+            entityTypes: {
+              foo: { kind: 'entity', discriminator: 'fake-foo', output: { factory: () => ({}) } },
+            },
+            pslBlockDescriptors: {
+              fooBlock: {
+                ...makeDeclarativePslBlockDescriptor('fake-foo'),
+                attributes,
+              } as unknown as never,
+            },
+          },
+        }),
+      ]),
+    ).toThrow(/Malformed authoring pslBlock contribution at "fooBlock"/);
+  });
+
+  it('rejects a pslBlockDescriptors entry whose attributes is not a record', () => {
+    expect(() =>
+      assembleAuthoringContributions([
+        createDescriptor({
+          authoring: {
+            entityTypes: {
+              foo: { kind: 'entity', discriminator: 'fake-foo', output: { factory: () => ({}) } },
+            },
+            pslBlockDescriptors: {
+              fooBlock: {
+                ...makeDeclarativePslBlockDescriptor('fake-foo'),
+                attributes: 'map',
+              } as unknown as never,
+            },
+          },
+        }),
+      ]),
+    ).toThrow(/Malformed authoring pslBlock contribution at "fooBlock"/);
+  });
+
   it('descends into a pslBlockDescriptors sub-namespace whose key is "kind" or "discriminator" without triggering malformed check', () => {
     // A sub-namespace keyed "kind" or "discriminator" that does not itself
     // look like a descriptor must descend normally.
@@ -1182,6 +1248,7 @@ describe('assembleControlMutationDefaults', () => {
       createDescriptor({
         id: 'desc-a',
         controlMutationDefaults: {
+          defaultLiteralTagRegistry: new Map(),
           defaultFunctionRegistry: new Map([['now', { lower: stubLower }]]),
           generatorDescriptors: [],
         },
@@ -1189,6 +1256,7 @@ describe('assembleControlMutationDefaults', () => {
       createDescriptor({
         id: 'desc-b',
         controlMutationDefaults: {
+          defaultLiteralTagRegistry: new Map(),
           defaultFunctionRegistry: new Map([['uuid', { lower: stubLower }]]),
           generatorDescriptors: [{ id: 'uuidv4', applicableCodecIds: ['pg/text@1'] }],
         },
@@ -1206,6 +1274,7 @@ describe('assembleControlMutationDefaults', () => {
         createDescriptor({
           id: 'desc-a',
           controlMutationDefaults: {
+            defaultLiteralTagRegistry: new Map(),
             defaultFunctionRegistry: new Map([['now', { lower: stubLower }]]),
             generatorDescriptors: [],
           },
@@ -1213,6 +1282,7 @@ describe('assembleControlMutationDefaults', () => {
         createDescriptor({
           id: 'desc-b',
           controlMutationDefaults: {
+            defaultLiteralTagRegistry: new Map(),
             defaultFunctionRegistry: new Map([['now', { lower: stubLower }]]),
             generatorDescriptors: [],
           },
@@ -1221,12 +1291,61 @@ describe('assembleControlMutationDefaults', () => {
     ).toThrow(/Duplicate mutation default function "now".*"desc-b".*"desc-a"/);
   });
 
+  it('merges literal tag registries from multiple descriptors', () => {
+    const entry = { usage: 'sql`...`', documentation: 'Raw SQL.', lower: stubLower };
+    const result = assembleControlMutationDefaults([
+      createDescriptor({
+        id: 'desc-a',
+        controlMutationDefaults: {
+          defaultFunctionRegistry: new Map(),
+          defaultLiteralTagRegistry: new Map([['sql', entry]]),
+          generatorDescriptors: [],
+        },
+      }),
+      createDescriptor({
+        id: 'desc-b',
+        controlMutationDefaults: {
+          defaultFunctionRegistry: new Map(),
+          defaultLiteralTagRegistry: new Map([['pg.sql', entry]]),
+          generatorDescriptors: [],
+        },
+      }),
+    ]);
+    expect([...result.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+    expect(result.defaultLiteralTagRegistry.get('pg.sql')).toBe(entry);
+  });
+
+  it('throws on a duplicate literal tag, naming both descriptors', () => {
+    const entry = { usage: 'sql`...`', documentation: 'Raw SQL.', lower: stubLower };
+    expect(() =>
+      assembleControlMutationDefaults([
+        createDescriptor({
+          id: 'desc-a',
+          controlMutationDefaults: {
+            defaultFunctionRegistry: new Map(),
+            defaultLiteralTagRegistry: new Map([['sql', entry]]),
+            generatorDescriptors: [],
+          },
+        }),
+        createDescriptor({
+          id: 'desc-b',
+          controlMutationDefaults: {
+            defaultFunctionRegistry: new Map(),
+            defaultLiteralTagRegistry: new Map([['sql', entry]]),
+            generatorDescriptors: [],
+          },
+        }),
+      ]),
+    ).toThrow(/Duplicate default literal tag "sql".*"desc-b".*"desc-a"/);
+  });
+
   it('throws on duplicate generator id', () => {
     expect(() =>
       assembleControlMutationDefaults([
         createDescriptor({
           id: 'desc-a',
           controlMutationDefaults: {
+            defaultLiteralTagRegistry: new Map(),
             defaultFunctionRegistry: new Map(),
             generatorDescriptors: [{ id: 'uuidv4', applicableCodecIds: ['a@1'] }],
           },
@@ -1234,6 +1353,7 @@ describe('assembleControlMutationDefaults', () => {
         createDescriptor({
           id: 'desc-b',
           controlMutationDefaults: {
+            defaultLiteralTagRegistry: new Map(),
             defaultFunctionRegistry: new Map(),
             generatorDescriptors: [{ id: 'uuidv4', applicableCodecIds: ['b@1'] }],
           },
@@ -1342,6 +1462,7 @@ describe('createControlStack', () => {
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
+      attributeSpecs: { model: {}, field: {} },
     });
     expect(state.scalarTypes).toEqual([]);
   });

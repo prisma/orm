@@ -58,12 +58,26 @@ export type ContractManyToManyRelation = {
   readonly through: ContractRelationThrough;
 };
 
-export type ContractNonJunctionRelation = {
+/**
+ * A to-one reference relation. `nullable` records whether the related row may be
+ * absent, as stated by the schema (`author User?` versus `author User`).
+ */
+export type ContractToOneRelation = {
   readonly to: CrossReference;
-  readonly cardinality: '1:1' | '1:N' | 'N:1';
+  readonly cardinality: '1:1' | 'N:1';
+  readonly nullable: boolean;
   readonly on: ContractRelationOn;
   readonly through?: never;
 };
+
+export type ContractToManyRelation = {
+  readonly to: CrossReference;
+  readonly cardinality: '1:N';
+  readonly on: ContractRelationOn;
+  readonly through?: never;
+};
+
+export type ContractNonJunctionRelation = ContractToOneRelation | ContractToManyRelation;
 
 export type ContractReferenceRelation = ContractManyToManyRelation | ContractNonJunctionRelation;
 

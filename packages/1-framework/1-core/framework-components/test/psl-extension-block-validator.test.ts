@@ -127,6 +127,7 @@ function validNode(): PslExtensionBlock {
       using: { kind: 'value', raw: '"auth.uid() = user_id"', span: stubSpan() },
     },
     blockAttributes: [],
+    attributes: {},
   };
 }
 
@@ -511,6 +512,7 @@ describe('validateExtensionBlock', () => {
             target: { kind: 'ref', identifier: 'Post', span: stubSpan() },
           },
           blockAttributes: [],
+          attributes: {},
         };
 
         const diagnostics = validateExtensionBlock(
@@ -550,6 +552,7 @@ describe('validateExtensionBlock', () => {
             target: { kind: 'ref', identifier: 'Ghost', span: stubSpan() },
           },
           blockAttributes: [],
+          attributes: {},
         };
 
         const diagnostics = validateExtensionBlock(
@@ -638,6 +641,7 @@ describe('validateExtensionBlock', () => {
           },
         },
         blockAttributes: [],
+        attributes: {},
       };
 
       const diagnostics = validateExtensionBlock(node, listDescriptor, SOURCE_ID, codecLookup);
@@ -686,6 +690,7 @@ describe('validateExtensionBlock', () => {
           using: { kind: 'value', raw: 'not_quoted', span: stubSpan() },
         },
         blockAttributes: [],
+        attributes: {},
         // target (required) is missing
         // using (required) — present but invalid
       };

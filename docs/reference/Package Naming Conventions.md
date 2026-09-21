@@ -12,7 +12,7 @@ Every workspace package belongs to exactly one scope, and the scope tells you it
 | `@internal/*` | This repository. ORM implementation packages. | No — `private: true`; code reaches npm only bundled inside published packages | `packages/{0-shared,1-framework,2-*,3-*}/**` |
 | `@repo/*` | This repository. Build/tooling config consumed by other workspace packages (tsconfig, tsdown presets). | No | `packages/0-config/*` |
 
-One thing intentionally falls outside the scopes: the private example/app/test packages, which use bare directory names. (The unscoped `prisma-next` bin shim is gone — the unified `prisma` CLI is the only user-facing binary; see the supersession note in [ADR 211](../architecture%20docs/adrs/ADR%20211%20-%20prisma-next%20bin-only%20distribution.md).)
+One thing intentionally falls outside the scopes: the private example/app/test packages, which use bare directory names. (The unscoped bin shim is gone — the unified `prisma` CLI is the only user-facing binary; see the supersession note in [ADR 211](../architecture%20docs/adrs/ADR%20211%20-%20prisma-next%20bin-only%20distribution.md).)
 
 ## The published surface
 

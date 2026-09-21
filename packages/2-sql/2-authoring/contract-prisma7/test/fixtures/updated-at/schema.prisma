@@ -1,0 +1,9 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model Timestamps {
+  id          Int      @id
+  updatedAt   DateTime @updatedAt
+  updatedAtTz DateTime @updatedAt @db.Timestamptz(6)
+}

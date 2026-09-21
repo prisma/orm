@@ -17,7 +17,7 @@ const controlStack: PipelineInputs = {
   pslBlockDescriptors: {},
 };
 
-const directive = '// use prisma-next';
+const directive = '// use prisma-8';
 
 const duplicateModelSource = [
   directive,
@@ -32,17 +32,19 @@ const duplicateModelSource = [
 
 describe('computeDocumentDiagnostics', () => {
   it('publishes parser diagnostics for a configured PSL input with a parse error', () => {
-    const source = '// use prisma-next\nmodel {';
+    const source = '// use prisma-8\nmodel {';
     const result = computeDocumentDiagnostics(schemaUri, source, inputs, controlStack);
     expect(result).not.toBeNull();
-    expect(result?.diagnostics).toEqual(mapParseDiagnostics(parse(source).diagnostics));
+    expect(result?.diagnostics).toEqual(
+      mapParseDiagnostics(parse(source, 'language-server-test.psl').diagnostics),
+    );
     expect(result?.diagnostics.length).toBeGreaterThan(0);
   });
 
   it('publishes an empty array for a clean configured PSL input', () => {
     const result = computeDocumentDiagnostics(
       schemaUri,
-      '// use prisma-next\nmodel User {\n  id Int @id\n}\n',
+      '// use prisma-8\nmodel User {\n  id Int @id\n}\n',
       inputs,
       controlStack,
     );
@@ -55,7 +57,7 @@ describe('computeDocumentDiagnostics', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null for a configured input without the prisma-next directive', () => {
+  it('returns null for a configured input without the prisma-8 directive', () => {
     const result = computeDocumentDiagnostics(schemaUri, 'model {', inputs, controlStack);
     expect(result).toBeNull();
   });
@@ -74,10 +76,14 @@ describe('computeDocumentDiagnostics', () => {
 
   it('matches the merged parse + symbol-table diagnostics for the same inputs', () => {
     const source = [directive, 'model Profile {', '  user a.b.c', '}'].join('\n');
-    const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
-    const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+    const {
       document,
-      sourceFile,
+      sources,
+      diagnostics: parseDiagnostics,
+    } = parse(source, 'language-server-test.psl');
+    const { diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+      documents: [document],
+      sources,
       pslBlockDescriptors: controlStack.pslBlockDescriptors,
     });
 
@@ -91,7 +97,7 @@ describe('computeDocumentDiagnostics', () => {
   it('exposes the parsed AST and the symbol table as artifacts', () => {
     const result = computeDocumentDiagnostics(
       schemaUri,
-      '// use prisma-next\nmodel User {\n  id Int @id\n}\n',
+      '// use prisma-8\nmodel User {\n  id Int @id\n}\n',
       inputs,
       controlStack,
     );
@@ -111,7 +117,7 @@ describe('computeDocumentDiagnostics', () => {
     expect(() =>
       computeDocumentDiagnostics(
         schemaUri,
-        '// use prisma-next\nmodel User {\n  id ',
+        '// use prisma-8\nmodel User {\n  id ',
         inputs,
         controlStack,
       ),

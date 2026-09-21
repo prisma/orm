@@ -1,6 +1,6 @@
 # Capabilities Reference
 
-This document defines the canonical capability keys and reserved namespaces used throughout Prisma Next for adapter negotiation, feature gating, and extension integration.
+This document defines the canonical capability keys and reserved namespaces used throughout Prisma 8 for adapter negotiation, feature gating, and extension integration.
 
 Capabilities describe **what the database environment can do**. Adapters report capabilities at connect time, and the runtime negotiates them with extension packs. The contract only **declares requirements** (`contract.capabilities`) and pins the resulting `profileHash`; it does not define capabilities.
 

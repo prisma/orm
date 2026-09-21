@@ -1,6 +1,6 @@
 # @internal/sql-runtime
 
-SQL runtime implementation for Prisma Next.
+SQL runtime implementation for Prisma 8.
 
 ## Package Classification
 

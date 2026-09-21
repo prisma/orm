@@ -8,7 +8,7 @@ export default function App() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
-        <title>Prisma Next · React Router demo</title>
+        <title>Prisma 8 · React Router demo</title>
       </head>
       <body>
         <Outlet />

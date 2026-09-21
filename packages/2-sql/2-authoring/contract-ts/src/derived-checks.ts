@@ -63,7 +63,7 @@ export function applySqlSpecifierControlPolicy(
  *
  * Why derivation stops at the namespace boundary: the contract *describes* an
  * external schema, it does not *prescribe* enforcement for it. Deriving a check
- * for a table Prisma Next never creates declares a constraint the live database
+ * for a table Prisma 8 never creates declares a constraint the live database
  * has no reason to carry, and `external` fails verify on a declared shape the
  * database lacks — an unfixable failure, since no plan may emit DDL there
  * either.

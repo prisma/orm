@@ -4,7 +4,7 @@ Source: `packages/client/tests/functional/extensions/client.ts`
 
 Every test in this file exercises the Prisma Client `$extends({ client: {...} })` client-component
 extension mechanism (client methods, `Prisma.getExtensionContext(this)`, `$parent`, overriding
-built-in methods, Prisma type-utility usage). prisma-next has no `$extends` client-extension surface
+built-in methods, Prisma type-utility usage). Prisma 8 has no `$extends` client-extension surface
 (zero hits for `$extends`/`getExtensionContext`/`defineExtension`/`$parent`/`customDataProxyFetch`
 across `packages/` outside node_modules/dist; `packages/3-extensions/` is database extensions, not
 client extensions). The subject of each test IS the client-extension mechanism itself.

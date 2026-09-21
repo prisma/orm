@@ -1,162 +1,24 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises';
-import type {
-  MigrationPlanOperation,
-  SchemaDiffIssue,
-  SignDatabaseResult,
-  VerifyDatabaseSchemaResult,
-} from '@internal/framework-components/control';
-import { writeContractSnapshot } from '@internal/migration-tools/contract-snapshot-store';
-import { computeMigrationHash } from '@internal/migration-tools/hash';
-import { writeMigrationPackage } from '@internal/migration-tools/io';
-import type { MigrationMetadata } from '@internal/migration-tools/metadata';
-import { blindCast } from '@internal/utils/casts';
-import type { MountedTree, PresentedResult } from '@prisma/cli-engine';
-import type { Diagnostic } from '@prisma/cli-engine/protocol';
-import { createTestCli } from '@prisma/cli-engine/testing';
-import { join } from 'pathe';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ControlClient } from '../../src/control-api/types';
-import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
-import { createDbSignCommand } from '../../src/orm/db/sign';
-import { createTestProjectDir } from '../utils/test-project-dir';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import {
+  CONNECTION,
+  cleanupProjectDirs,
+  diagnosticsOf,
+  envelopeOf,
+  HASH_A,
+  HASH_PREVIOUS,
+  harness,
+  MASKED_CONNECTION,
+  MISSING_COLUMN,
+  mocks,
+  ormConfig,
+  projectDir,
+  resetMocks,
+  schemaResult,
+  signResult,
+} from './db-sign-fixtures';
 
-const HASH_A = `4cb4256${'0'.repeat(57)}`;
-const HASH_PREVIOUS = `9d0f118${'2'.repeat(57)}`;
-const CONNECTION = 'postgres://user:secret@localhost:5432/appdb';
-const MASKED_CONNECTION = 'postgres://****:****@localhost:5432/appdb';
-
-const mocks = {
-  connect: vi.fn(),
-  close: vi.fn(),
-  schemaVerify: vi.fn(),
-  sign: vi.fn(),
-};
-
-/**
- * The command is mounted over a fake control client instead of the module
- * being mocked: `createDbSignCommand` takes the client factory as its seam.
- */
-const commands: MountedTree = {
-  ...BIN_COMMANDS,
-  'db sign': createDbSignCommand(() =>
-    blindCast<ControlClient, 'the fake implements only what db sign touches'>({
-      connect: mocks.connect,
-      schemaVerify: mocks.schemaVerify,
-      sign: mocks.sign,
-      close: mocks.close,
-    }),
-  ),
-};
-const groups = BIN_GROUPS;
-
-const dirs: string[] = [];
-
-async function projectDir(options: { readonly contract?: boolean } = {}): Promise<string> {
-  const dir = createTestProjectDir('orm-db-sign');
-  dirs.push(dir);
-  if (options.contract !== false) {
-    await mkdir(join(dir, 'output'), { recursive: true });
-    await writeFile(
-      join(dir, 'output', 'contract.json'),
-      JSON.stringify({ storage: { storageHash: HASH_A }, target: 'postgres' }),
-      'utf-8',
-    );
-  }
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of dirs.splice(0)) {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-const DESCRIPTOR = { familyId: 'sql', targetId: 'postgres', version: '1.0.0', create: () => ({}) };
-
-/**
- * The fake family stamps every contract it hydrates, so a test can tell a
- * value that crossed the `deserializeContract` seam from a bare `JSON.parse`.
- */
-function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    family: {
-      kind: 'family',
-      id: 'sql',
-      familyId: 'sql',
-      version: '1.0.0',
-      emission: {},
-      create: () => ({
-        deserializeContract: (json: unknown) => ({ ...Object(json), hydrated: true }),
-      }),
-    },
-    target: { ...DESCRIPTOR, kind: 'target', id: 'postgres', migrations: {} },
-    adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
-    driver: { ...DESCRIPTOR, kind: 'driver', id: 'pg-driver' },
-    db: { connection: CONNECTION },
-    contract: {
-      source: { format: 'typescript', inputs: [], load: async () => ({}) },
-      output: 'output/contract.json',
-    },
-    ...overrides,
-  };
-}
-
-function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups, config: { orm: config } });
-}
-
-const MISSING_COLUMN = blindCast<
-  SchemaDiffIssue,
-  'The renderer reads the path and which side is present'
->({ path: ['public', 'users', 'email'], expected: { id: 'email', nodeKind: 'column' } });
-
-function schemaResult(
-  overrides: Partial<VerifyDatabaseSchemaResult> = {},
-): VerifyDatabaseSchemaResult {
-  return {
-    ok: true,
-    summary: 'Database schema satisfies contract',
-    contract: { storageHash: HASH_A },
-    target: { expected: 'postgres' },
-    schema: { issues: [] },
-    meta: { strict: false },
-    timings: { total: 1 },
-    ...overrides,
-  };
-}
-
-function signResult(): SignDatabaseResult {
-  return {
-    ok: true,
-    summary: 'Database signed',
-    contract: { storageHash: HASH_A },
-    target: { expected: 'postgres' },
-    marker: { created: false, updated: true, previous: { storageHash: HASH_PREVIOUS } },
-    timings: { total: 2 },
-  };
-}
-
-beforeEach(() => {
-  mocks.connect.mockReset().mockResolvedValue(undefined);
-  mocks.close.mockReset().mockResolvedValue(undefined);
-  mocks.schemaVerify.mockReset().mockResolvedValue(schemaResult());
-  mocks.sign.mockReset().mockResolvedValue(signResult());
-});
-
-function diagnosticsOf(run: {
-  readonly presented: PresentedResult<unknown> | undefined;
-}): readonly Diagnostic[] {
-  return run.presented?.diagnostics ?? [];
-}
-
-function envelopeOf(run: { readonly json: readonly { readonly kind: string }[] }) {
-  const terminal = run.json.at(-1);
-  return terminal !== undefined && terminal.kind === 'result'
-    ? blindCast<{ ok: boolean; error?: { code: string }; exitCode?: number }, 'terminal frame'>(
-        Reflect.get(terminal, 'envelope'),
-      )
-    : undefined;
-}
+beforeEach(resetMocks);
+afterEach(cleanupProjectDirs);
 
 describe('db sign', () => {
   describe('verification passes', () => {
@@ -168,7 +30,10 @@ describe('db sign', () => {
       expect(run.exitCode).toBe(0);
       expect(diagnosticsOf(run)).toEqual([]);
       expect(mocks.sign).toHaveBeenCalledTimes(1);
-      expect(run.presented?.data).toEqual(signResult());
+      expect(run.presented?.data).toEqual({
+        ...signResult(),
+        advancedRef: { name: 'db', hash: HASH_A },
+      });
     });
 
     it('reads the contract through the family seam rather than a bare JSON.parse', async () => {
@@ -208,6 +73,11 @@ describe('db sign', () => {
             { label: 'from', value: [{ text: HASH_PREVIOUS, tone: 'identifier' }] },
             { label: 'to', value: [{ text: HASH_A, tone: 'identifier' }] },
           ],
+        },
+        {
+          kind: 'summary',
+          status: 'ok',
+          text: [{ text: 'Advanced ref "db" → ' }, { text: HASH_A, tone: 'identifier' }],
         },
       ]);
       expect(run.presented?.presentation.stdout).toEqual([]);
@@ -375,48 +245,6 @@ describe('db sign', () => {
         ok: false,
         error: { code: 'CONFIG.DRIVER_REQUIRED' },
       });
-    });
-
-    it('signs against the destination contract of a named migration dir', async () => {
-      const dir = await projectDir();
-      const HASH_B = `55bada2${'0'.repeat(57)}`;
-      const dirName = '20260102T0000_add_users';
-      const ops = [
-        blindCast<MigrationPlanOperation, 'db sign reads only the destination hash'>({
-          id: 'table.users',
-          label: 'Create users',
-          operationClass: 'additive',
-        }),
-      ];
-      const base = blindCast<
-        Omit<MigrationMetadata, 'migrationHash'>,
-        'db sign reads only from/to'
-      >({
-        from: HASH_A,
-        to: HASH_B,
-        providedInvariants: [],
-        createdAt: '2026-01-02T10:00:00.000Z',
-      });
-      const metadata: MigrationMetadata = {
-        ...base,
-        migrationHash: computeMigrationHash(base, ops),
-      };
-      await writeMigrationPackage(join(dir, 'migrations', 'app', dirName), metadata, ops);
-      await writeContractSnapshot(join(dir, 'migrations'), HASH_B, {
-        contractJson: { storage: { storageHash: HASH_B }, target: 'postgres' },
-        contractDts: 'export type Contract = unknown;\n',
-      });
-
-      const run = await harness(ormConfig()).run(['db', 'sign', dirName, '--json'], {
-        cwd: dir,
-      });
-
-      expect(run.exitCode).toBe(0);
-      expect(mocks.sign).toHaveBeenCalledTimes(1);
-      const signArg = mocks.sign.mock.calls[0]?.[0] as {
-        contract: { storage: { storageHash: string } };
-      };
-      expect(signArg.contract.storage.storageHash).toBe(HASH_B);
     });
 
     it('errors at exit 2 when the named contract reference resolves against nothing', async () => {

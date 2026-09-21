@@ -1,10 +1,10 @@
 # @internal/sql-contract-emitter
 
-SQL emitter hook for Prisma Next.
+SQL emitter hook for Prisma 8.
 
 ## Overview
 
-This package provides the SQL-specific emitter hook implementation for the Prisma Next emitter. It validates SQL contracts and generates TypeScript type definitions for SQL contracts. It's part of the SQL tooling layer (migration plane) and implements the `TargetFamilyHook` interface.
+This package provides the SQL-specific emitter hook implementation for the Prisma 8 emitter. It validates SQL contracts and generates TypeScript type definitions for SQL contracts. It's part of the SQL tooling layer (migration plane) and implements the `TargetFamilyHook` interface.
 
 ## Responsibilities
 

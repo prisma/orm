@@ -4,7 +4,7 @@
  *
  * Emission writes package names into files the user keeps — generated
  * contract types, scaffolded migrations, `prisma orm init` output. Which
- * name is correct depends on how the application installed Prisma Next, so
+ * name is correct depends on how the application installed Prisma 8, so
  * every emitter resolves through an {@link ImportRoot} rather than hardcoding
  * a specifier. The mapping itself is `./shells`; nothing here duplicates it.
  */

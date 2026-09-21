@@ -1,6 +1,6 @@
 # @internal/extension-supabase
 
-Supabase extension pack for Prisma Next.
+Supabase extension pack for Prisma 8.
 
 ## Overview
 
@@ -121,7 +121,7 @@ The example authors its RLS policies in PSL (`policy_select` / `policy_update` +
 - **Direct merged cross-space queries** — `db.sql.auth.users` off the app db does not exist by design (cross-space *querying* was not built; only FK *references* cross the boundary). Use `db.asServiceRole().supabase.sql.auth.users` for Supabase-internal tables.
 - **Supabase Realtime** — the WebSocket change feed is a separate subsystem.
 - **Storage uploads** — `storage.*` tables are declared for reference/reads; file upload/download helpers are out of scope (use `@supabase/storage-js`).
-- **PostgREST / `@supabase/supabase-js` interop** — Prisma Next connects directly to Postgres; there is no `serviceRoleKey` / PostgREST path.
+- **PostgREST / `@supabase/supabase-js` interop** — Prisma 8 connects directly to Postgres; there is no `serviceRoleKey` / PostgREST path.
 - **Edge runtimes** — the runtime needs a Postgres driver; Cloudflare Workers / Deno / Vercel Edge are out of scope (Node.js + Bun for v0.1).
 - **Triggers & functions as first-class IR** — the "create a profile on signup" trigger is a documented raw-SQL recipe, not contract-authored (functions are not contract elements). `auth.uid()` etc. live inside opaque RLS predicate strings.
 

@@ -22,6 +22,10 @@ const pslBlockDescriptors = {
   },
 };
 
+const auditedModelSpec = modelAttribute('audited', {
+  documentation: 'Allows audit rules to target this model.',
+});
+
 const auditContributions: AuthoringContributions = {
   entityTypes: {
     audit_rule: {
@@ -35,7 +39,7 @@ const auditContributions: AuthoringContributions = {
     audited: {
       kind: 'modelAttribute',
       attribute: 'audited',
-      spec: modelAttribute('audited', {}),
+      spec: () => auditedModelSpec,
       lower: (_parsed: Record<never, never>, ctx) => ({
         key: ctx.storageName,
         entity: { kind: 'audited', storageName: ctx.storageName },

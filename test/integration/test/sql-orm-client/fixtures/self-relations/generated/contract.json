@@ -126,6 +126,7 @@
               },
               "manager": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "managerId"
@@ -156,6 +157,7 @@
               },
               "partner": {
                 "cardinality": "N:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "partnerId"
@@ -171,6 +173,7 @@
               },
               "partneredBy": {
                 "cardinality": "1:1",
+                "nullable": true,
                 "on": {
                   "localFields": [
                     "id"
@@ -246,6 +249,7 @@
             "relations": {
               "source": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "sourceId"
@@ -261,6 +265,7 @@
               },
               "target": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "targetId"
@@ -311,6 +316,7 @@
             "relations": {
               "followee": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "followeeId"
@@ -326,6 +332,7 @@
               },
               "follower": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "followerId"

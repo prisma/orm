@@ -1,6 +1,7 @@
 import { PostgresContractSerializer } from '@prisma/orm-postgres/target/runtime';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { NotFoundError } from '../errors';
 import type { Contract } from '../prisma/contract.d';
 import contractJson from '../prisma/contract.json' with { type: 'json' };
 import { App } from './App';
@@ -15,7 +16,7 @@ function renderApp(json: unknown) {
 }
 
 const el = document.getElementById('root');
-if (!el) throw new Error('Missing #root element');
+if (!el) throw new NotFoundError('Missing #root element');
 const root = createRoot(el);
 renderApp(contractJson);
 

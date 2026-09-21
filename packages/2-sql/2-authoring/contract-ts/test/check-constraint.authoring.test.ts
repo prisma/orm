@@ -1,5 +1,6 @@
 import { applySpecifierDefaultControlPolicy } from '@internal/contract/apply-specifier-default-control-policy';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
+import { type Codec, emptyCodecLookup } from '@internal/framework-components/codec';
 import type { FamilyPackRef, TargetPackRef } from '@internal/framework-components/components';
 import {
   CheckConstraint,
@@ -42,7 +43,7 @@ interface RenderInput {
   readonly tableName: string;
   readonly columnName: string;
   readonly many: boolean;
-  readonly memberValues: readonly string[] | undefined;
+  readonly memberValues: readonly (string | number)[] | undefined;
 }
 
 /**
@@ -66,12 +67,15 @@ function renderCheckExpressions(input: RenderInput): ReadonlyArray<{
   }> = [];
   const column = `"${input.columnName}"`;
   if (input.memberValues !== undefined) {
-    const members = input.memberValues.map((v) => `'${v}'`).join(', ');
+    const members = input.memberValues
+      .map((v) => (typeof v === 'number' ? String(v) : `'${v}'`))
+      .join(', ');
+    const arrayType = input.memberValues.every((v) => typeof v === 'number') ? 'numeric' : 'text';
     candidates.push({
       kind: 'membership',
       columnName: input.columnName,
       expression: input.many
-        ? `${column}::text[] <@ ARRAY[${members}]::text[]`
+        ? `${column}::${arrayType}[] <@ ARRAY[${members}]::${arrayType}[]`
         : `${column} IN (${members})`,
     });
   }
@@ -434,24 +438,143 @@ describe('check emission — guards', () => {
     expect(checks[0]?.name).not.toBe(checks[1]?.name);
   });
 
-  it('rejects a value set with a non-string member', () => {
-    const Level = enumType('Level', { codecId: 'pg/int4@1', nativeType: 'int4' }, member('One', 1));
-    expect(() =>
-      defineContract(
+  it.each([true, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'rejects unsupported membership value %s',
+    (value) => {
+      const Flag = enumType(
+        'Flag',
+        { codecId: 'pg/bool@1', nativeType: 'bool' },
+        member('On', value),
+      );
+      expect(() =>
+        defineContract(
+          {
+            family: sqlFamilyPack,
+            target: postgresTargetPack,
+            createNamespace: createTestSqlNamespace,
+            enums: { Flag },
+          },
+          ({ field: f, model: m }) => ({
+            models: { User: m('User', { fields: { id: f.text().id(), flag: f.namedType(Flag) } }) },
+          }),
+        ),
+      ).toThrow(/CHECK constraint members must encode to strings or finite numbers/);
+    },
+  );
+
+  it.each([
+    { first: 1, second: 'two', many: false },
+    { first: 'one', second: 2, many: false },
+    { first: 1, second: 'two', many: true },
+    { first: 'one', second: 2, many: true },
+  ])(
+    'rejects mixed members $first/$second with many=$many before rendering',
+    ({ first, second, many }) => {
+      const Mixed = enumType('Mixed', pgText, member('First', first), member('Second', second));
+      hookCalls.length = 0;
+
+      expect(() =>
+        defineContract(
+          {
+            family: sqlFamilyPack,
+            target: postgresTargetPack,
+            createNamespace: createTestSqlNamespace,
+            enums: { Mixed },
+          },
+          ({ field: f, model: m }) => ({
+            models: {
+              User: m('User', {
+                fields: {
+                  id: f.text().id(),
+                  mixed: many ? f.namedType(Mixed).many() : f.namedType(Mixed),
+                },
+              }),
+            },
+          }),
+        ),
+      ).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.ENUM_INVALID',
+          meta: { enumName: 'Mixed', reason: 'mixed-member-types' },
+        }),
+      );
+      expect(hookCalls).toEqual([
+        { tableName: 'User', columnName: 'id', many: false, memberValues: undefined },
+      ]);
+    },
+  );
+
+  it.each([false, true])(
+    'accepts mixed authored types normalized by a codec with many=%s',
+    (many) => {
+      const Normalized = enumType('Normalized', pgText, member('One', 1), member('Two', 'two'));
+      const codec: Codec = {
+        id: 'pg/text@1',
+        encodeJson: ((value: unknown) => String(value)) as Codec['encodeJson'],
+        decodeJson: (() => {
+          throw new Error('unused');
+        }) as Codec['decodeJson'],
+        encode: (() => {
+          throw new Error('unused');
+        }) as Codec['encode'],
+        decode: (() => {
+          throw new Error('unused');
+        }) as Codec['decode'],
+      };
+      hookCalls.length = 0;
+      const contract = defineContract(
         {
           family: sqlFamilyPack,
           target: postgresTargetPack,
           createNamespace: createTestSqlNamespace,
-          enums: { Level },
+          enums: { Normalized },
+          codecLookup: { ...emptyCodecLookup, get: (id) => (id === codec.id ? codec : undefined) },
         },
-        ({ field: f, model: m }) =>
-          ({
-            models: {
-              User: m('User', { fields: { id: f.text().id(), level: f.namedType(Level) } }),
-            },
-          }) as const,
-      ),
-    ).toThrow(/numeric-enum CHECK constraints are not yet supported/);
+        ({ field: f, model: m }) => ({
+          models: {
+            User: m('User', {
+              fields: {
+                id: f.text().id(),
+                normalized: many ? f.namedType(Normalized).many() : f.namedType(Normalized),
+              },
+            }),
+          },
+        }),
+      ) as Contract<SqlStorage>;
+      expect(hookCalls.at(-1)).toEqual({
+        tableName: 'User',
+        columnName: 'normalized',
+        many,
+        memberValues: ['1', 'two'],
+      });
+      expect(flatten(checksOf(contract))).toEqual(
+        many
+          ? [
+              wire('User_normalized_check', `"normalized"::text[] <@ ARRAY['1', 'two']::text[]`),
+              wire('User_normalized_elem_not_null', `array_position("normalized", NULL) IS NULL`),
+            ]
+          : [wire('User_normalized_check', `"normalized" IN ('1', 'two')`)],
+      );
+    },
+  );
+
+  it('passes numeric member values to the check renderer', () => {
+    const Level = enumType('Level', { codecId: 'pg/int4@1', nativeType: 'int4' }, member('One', 1));
+    const contract = defineContract(
+      {
+        family: sqlFamilyPack,
+        target: postgresTargetPack,
+        createNamespace: createTestSqlNamespace,
+        enums: { Level },
+      },
+      ({ field: f, model: m }) => ({
+        models: {
+          User: m('User', { fields: { id: f.text().id(), level: f.namedType(Level) } }),
+        },
+      }),
+    ) as Contract<SqlStorage>;
+    expect(checksOf(contract)).toEqual([expect.objectContaining({ expression: '"level" IN (1)' })]);
+    expect(hookCalls.at(-1)?.memberValues).toEqual([1]);
   });
 });
 
@@ -850,7 +973,7 @@ describe('noCheck — wire schema', () => {
   });
 });
 
-// Enforcement is derived only for tables Prisma Next owns. The policy reaches
+// Enforcement is derived only for tables Prisma 8 owns. The policy reaches
 // the builder two ways — declared in the source, or stamped onto the finished
 // contract by a contract specifier — so the rule is applied twice.
 describe('check emission — derivation is scoped to managed tables', () => {

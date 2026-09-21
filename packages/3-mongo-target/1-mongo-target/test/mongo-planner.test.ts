@@ -1085,7 +1085,7 @@ describe('MongoMigrationPlanner', () => {
 
     // TML-2486: bare collections (no validator/options/indexes) must still
     // round-trip through `db init`. MongoDB creates collections implicitly
-    // on first insert, but Prisma Next's schema verifier treats a contract-
+    // on first insert, but Prisma 8's schema verifier treats a contract-
     // declared collection that is absent from the live database as a
     // `missing_table` issue. The planner therefore has to emit an explicit
     // createCollection op so the runner provisions the collection before

@@ -97,7 +97,7 @@ bash: Recovery: command not found
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > Recovery # re-add missing column, update marker [email column missing, contract expects it]
 bash: Recovery: command not found
-> prisma-next db update
+> prisma db update
 
 
 
@@ -129,7 +129,7 @@ bash: Recovery: command not found
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > Recovery # re-add missing column, update marker [email column missing, contract expects it]
 bash: Recovery: command not found
-> prisma-next db update
+> prisma db update
 
 
 
@@ -161,7 +161,7 @@ bash: Recovery: command not found
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > Recovery # re-add missing column, update marker [email column missing, contract expects it]
 bash: Recovery: command not found
-> prisma-next db update
+> prisma db update
 
 
 
@@ -193,9 +193,9 @@ bash: Recovery: command not found
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
 > Recovery # re-add missing column, update marker [email column missing, contract expects it]
 bash: Recovery: command not found
-> prisma-next db update
+> prisma db update
 bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
-prisma-next db update → Update your database schema to match your contract
+prisma db update → Update your database schema to match your contract
 │
 │ config:               prisma.config.ts
 │ contract:             contract.json
@@ -206,7 +206,7 @@ prisma-next db update → Update your database schema to match your contract
 │
 ■  ✖ Database schema does not satisfy contract (4 failures) (PN-RUN-3020)
 │    Why: The resulting database schema does not satisfy the destination contract.
-│    Fix: Inspect the reported conflict, reconcile schema drift if needed, then re-run `prisma-next db update`
+│    Fix: Inspect the reported conflict, reconcile schema drift if needed, then re-run `prisma db update`
 │    Issues (showing 1 of 1):
 │      - [missing_column] Column "user"."email" is missing from database
 >

@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL.PRISMA7_RELATION_UNRESOLVED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Relation field \"User.posts\" has no matching relation field on \"Post\"."
+  },
+  {
+    "code": "PSL.PRISMA7_RELATION_UNRESOLVED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Backrelation field \"User.notes\" is singular, but the matching FK on \"Note\" (fields \"userId\") is not unique. A singular back-relation implies at most one related row; add @unique (or @@unique([...])) to the FK fields, or make \"notes\" a list."
+  }
+]

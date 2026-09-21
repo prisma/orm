@@ -11,7 +11,7 @@ Two gap classes below.
 
 ## No nested `delete` mutator
 
-prisma-next's nested-update relation mutator exposes only `create`/`connect`/`disconnect` — there
+Prisma 8's nested-update relation mutator exposes only `create`/`connect`/`disconnect` — there
 is no nested `delete` mutator (`RelationMutation` union in
 `packages/3-extensions/sql-orm-client/src/types.ts` is `Create | Connect | Disconnect`; the
 factory in `relation-mutator.ts` has no `delete`). The nested-`delete` referential-action behaviour
@@ -24,7 +24,7 @@ foreignKeys actions).
 
 ## No relationMode=prisma emulation
 
-prisma-next has no client-side relationMode=prisma referential-action emulation; it relies on DB
+Prisma 8 has no client-side relationMode=prisma referential-action emulation; it relies on DB
 foreign keys. Every `relationMode=prisma` matrix entry is non-ported. One line per source test,
 mode=prisma.
 

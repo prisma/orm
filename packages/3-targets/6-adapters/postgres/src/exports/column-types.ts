@@ -25,6 +25,7 @@ import {
   PG_TIME_TEMPORAL_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMPTZ_DATE_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
@@ -97,9 +98,8 @@ export function numericColumn(
 }
 
 /**
- * The representation-explicit temporal descriptors. Both halves declare the same column; they differ
- * only in what a read hands back — a `Temporal.*` value, or PostgreSQL's own text for the values
- * Temporal cannot express.
+ * Representation-explicit temporal descriptors share storage types but select different application
+ * values: `Temporal.*`, PostgreSQL text, or a JavaScript `Date` for `timestamptz`.
  */
 export const dateTemporalColumn = {
   codecId: PG_DATE_TEMPORAL_CODEC_ID,
@@ -123,6 +123,11 @@ export const timestampStringColumn = {
 
 export const timestamptzTemporalColumn = {
   codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
+  nativeType: 'timestamptz',
+} as const satisfies ColumnTypeDescriptor;
+
+export const timestamptzJsDateColumn = {
+  codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
   nativeType: 'timestamptz',
 } as const satisfies ColumnTypeDescriptor;
 

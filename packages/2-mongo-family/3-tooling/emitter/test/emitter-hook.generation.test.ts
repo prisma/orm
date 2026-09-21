@@ -1,6 +1,7 @@
 import { crossRef } from '@internal/contract/types';
 import { generateContractDts } from '@internal/emitter';
 import type { TypesImportSpec } from '@internal/framework-components/emission';
+import { keepInternalSpecifiers } from '@internal/framework-components/emission';
 import { describe, expect, it } from 'vitest';
 import { mongoEmission } from '../src/index';
 import {
@@ -152,6 +153,7 @@ describe('mongoEmission.generateContractTypes', () => {
               author: {
                 to: crossRef('User'),
                 cardinality: 'N:1',
+                nullable: false,
                 on: { localFields: ['authorId'], targetFields: ['_id'] },
               },
             },
@@ -526,5 +528,13 @@ describe('mongoEmission.generateContractTypes', () => {
       expect(types).toContain('CodecTypes["mongo/objectId@1"]["input"]');
       expect(types).toContain('CodecTypes["mongo/string@1"]["input"]');
     });
+  });
+});
+
+describe('mongoEmission.getFamilyImports', () => {
+  it('imports RelationKeys from the family contract entrypoint', () => {
+    expect(mongoEmission.getFamilyImports(keepInternalSpecifiers).join('\n')).toContain(
+      'RelationKeys,',
+    );
   });
 });

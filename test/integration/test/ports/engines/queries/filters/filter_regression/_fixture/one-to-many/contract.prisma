@@ -3,10 +3,12 @@ model Location {
   name      String?
   companyId Int?
   company   Company? @relation(fields: [companyId], references: [id])
+  @@map("location")
 }
 
 model Company {
   id        Int        @id
   name      String?
   locations Location[]
+  @@map("company")
 }

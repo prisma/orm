@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import type { ProjectionItem, SelectAst } from '@internal/sql-relational-core/ast';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { resolveIncludeRelation } from '../src/collection-contract';
 import { dispatchCollectionRows } from '../src/collection-dispatch';
 import { type CollectionState, emptyState, type IncludeExpr } from '../src/types';
@@ -76,6 +76,7 @@ function withEmittedSqlCapabilities(contract: TestContract) {
 function addConnection(
   runtime: MockRuntime,
   onRelease: () => void,
+  onAcquire: () => void = () => {},
 ): MockRuntime & {
   connection: () => Promise<{
     query: MockRuntime['query'];
@@ -85,6 +86,7 @@ function addConnection(
 } {
   return Object.assign(runtime, {
     async connection() {
+      onAcquire();
       return {
         query: runtime.query.bind(runtime),
         execute: runtime.execute.bind(runtime),
@@ -139,6 +141,88 @@ describe('collection-dispatch', () => {
     ]);
     // The point of the test: 1 execution, not N+1.
     expect(runtime.executions).toHaveLength(1);
+  });
+
+  it('reuses include column bindings across parents without retaining them across executions', async () => {
+    const contract = withEmittedSqlCapabilities(getTestContract());
+    const { collection, runtime } = createCollectionFor('User', contract);
+    const scoped = collection
+      .select('name')
+      .include('posts', (posts) => posts.select('title', 'views'));
+    const viewsCodec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'views');
+    if (!viewsCodec) throw new Error('Missing views codec');
+    const decodeJson = vi.spyOn(viewsCodec, 'decodeJson');
+    const forColumn = vi.spyOn(collection.ctx.context.contractCodecs, 'forColumn');
+
+    for (let execution = 0; execution < 2; execution++) {
+      runtime.setNextResults([
+        [
+          { name: 'Alice', posts: [{ title: null, views: 1 }] },
+          {
+            name: 'Bob',
+            posts: [
+              { title: 'B', views: 2 },
+              { title: 'C', views: 3 },
+            ],
+          },
+        ],
+      ]);
+      const rows = await dispatchCollectionRows<Record<string, unknown>>({
+        context: collection.ctx.context,
+        runtime,
+        state: scoped.state,
+        tableName: scoped.tableName,
+        namespaceId: 'public',
+        modelName: scoped.modelName,
+      }).toArray();
+      expect(rows).toEqual([
+        { name: 'Alice', posts: [{ title: null, views: 1 }] },
+        {
+          name: 'Bob',
+          posts: [
+            { title: 'B', views: 2 },
+            { title: 'C', views: 3 },
+          ],
+        },
+      ]);
+      expect(forColumn).toHaveBeenCalledTimes((execution + 1) * 2);
+      expect(decodeJson).toHaveBeenCalledTimes((execution + 1) * 3);
+    }
+    expect(forColumn.mock.calls).toEqual([
+      ['public', 'posts', 'views'],
+      ['public', 'posts', 'title'],
+      ['public', 'posts', 'views'],
+      ['public', 'posts', 'title'],
+    ]);
+  });
+
+  it('preserves failure details when a later included value fails synchronous JSON decoding', async () => {
+    const contract = withEmittedSqlCapabilities(getTestContract());
+    const { collection, runtime } = createCollectionFor('User', contract);
+    const scoped = collection.select('name').include('posts', (posts) => posts.select('views'));
+    const codec = collection.ctx.context.contractCodecs.forColumn('public', 'posts', 'views');
+    if (!codec) throw new Error('Missing views codec');
+    const cause = new Error('invalid views');
+    const decodeJson = vi.spyOn(codec, 'decodeJson').mockImplementation((value) => {
+      if (value === 2) throw cause;
+      return value;
+    });
+    runtime.setNextResults([[{ name: 'Alice', posts: [{ views: 1 }, { views: 2 }] }]]);
+    await expect(
+      dispatchCollectionRows<Record<string, unknown>>({
+        context: collection.ctx.context,
+        runtime,
+        state: scoped.state,
+        tableName: scoped.tableName,
+        namespaceId: 'public',
+        modelName: scoped.modelName,
+      }).toArray(),
+    ).rejects.toMatchObject({
+      code: 'RUNTIME.DECODE_FAILED',
+      details: { table: 'posts', column: 'views', codec: 'pg/int4@1' },
+      cause,
+    });
+    expect(decodeJson.mock.calls).toEqual([[1], [2]]);
   });
 
   it('dispatchCollectionRows() depth-2 nested include with emitted-shape capabilities fires a single SQL execution', async () => {
@@ -256,16 +340,17 @@ describe('collection-dispatch', () => {
     expect(runtime.executions).toHaveLength(1);
   });
 
-  it('dispatchCollectionRows() single-query path returns empty rows and releases scope', async () => {
+  it('dispatchCollectionRows() single-query path returns empty rows without acquiring a scope', async () => {
     const contract = withSingleQueryCapabilities(getTestContract());
     const { collection, runtime } = createCollectionFor('User', contract);
-    const scoped = collection.include('posts');
+    const scoped = collection.select('name').include('posts', (posts) => posts.select('title'));
     runtime.setNextResults([[]]);
 
     let released = false;
     const runtimeWithConnection = addConnection(runtime, () => {
       released = true;
     });
+    const connection = vi.spyOn(runtimeWithConnection, 'connection');
 
     const rows = await dispatchCollectionRows<Record<string, unknown>>({
       context: collection.ctx.context,
@@ -277,7 +362,85 @@ describe('collection-dispatch', () => {
     }).toArray();
 
     expect(rows).toEqual([]);
-    expect(released).toBe(true);
+    expect(connection).not.toHaveBeenCalled();
+    expect(released).toBe(false);
+  });
+
+  it.each(['connection', 'transaction'])('uses the caller-pinned %s unchanged', async (kind) => {
+    const contract = withSingleQueryCapabilities(getTestContract());
+    const { collection, runtime } = createCollectionFor('User', contract);
+    const scoped = collection.select('name').include('posts', (posts) => posts.select('title'));
+    const release = vi.fn(async () => {});
+    const commit = vi.fn(async () => {});
+    const rollback = vi.fn(async () => {});
+    const callerScope = Object.assign(
+      createMockRuntime(),
+      kind === 'connection' ? { release } : { commit, rollback },
+    );
+    const query = vi.spyOn(callerScope, 'query');
+    callerScope.setNextResults([[{ name: 'Alice', posts: '[{"title":"Post A"}]' }]]);
+
+    const rows = await dispatchCollectionRows<Record<string, unknown>>({
+      context: collection.ctx.context,
+      runtime: callerScope,
+      state: scoped.state,
+      tableName: scoped.tableName,
+      namespaceId: 'public',
+      modelName: scoped.modelName,
+    }).toArray();
+
+    expect(rows).toEqual([{ name: 'Alice', posts: [{ title: 'Post A' }] }]);
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(query.mock.contexts).toEqual([callerScope]);
+    expect(runtime.executions).toEqual([]);
+    expect(release).not.toHaveBeenCalled();
+    expect(commit).not.toHaveBeenCalled();
+    expect(rollback).not.toHaveBeenCalled();
+  });
+
+  it('does not retain an internal scope while an include consumer pauses for an independent query', async () => {
+    const contract = withSingleQueryCapabilities(getTestContract());
+    const { collection, runtime } = createCollectionFor('User', contract);
+    const scoped = collection.select('name').include('posts', (posts) => posts.select('title'));
+    let acquired = false;
+    const runtimeWithConnection = addConnection(
+      runtime,
+      () => {
+        acquired = false;
+      },
+      () => {
+        acquired = true;
+      },
+    );
+    const connection = vi.spyOn(runtimeWithConnection, 'connection');
+    runtime.setNextResults([[{ name: 'Alice', posts: '[{"title":"Post A"}]' }], [{ name: 'Bob' }]]);
+    const options = {
+      context: collection.ctx.context,
+      runtime: runtimeWithConnection,
+      state: scoped.state,
+      tableName: scoped.tableName,
+      namespaceId: 'public',
+      modelName: scoped.modelName,
+    };
+    const iterator =
+      dispatchCollectionRows<Record<string, unknown>>(options)[Symbol.asyncIterator]();
+
+    try {
+      expect(await iterator.next()).toEqual({
+        done: false,
+        value: { name: 'Alice', posts: [{ title: 'Post A' }] },
+      });
+      expect(acquired).toBe(false);
+      const independent = await dispatchCollectionRows<Record<string, unknown>>({
+        ...options,
+        state: collection.select('name').state,
+      }).toArray();
+      expect(independent).toEqual([{ name: 'Bob' }]);
+      expect(connection).not.toHaveBeenCalled();
+      expect(runtime.executions).toHaveLength(2);
+    } finally {
+      await iterator.return?.();
+    }
   });
 
   it('dispatchCollectionRows() keeps correlated parent join keys out of the projection', async () => {

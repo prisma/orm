@@ -26,6 +26,7 @@ export default defineConfig({
     'src/exports/planner-sql-checks.ts',
     'src/exports/planner-target-details.ts',
     'src/exports/planner.ts',
+    'src/exports/prisma7-binding.ts',
     'src/exports/render-ops.ts',
     'src/exports/render-typescript.ts',
     'src/exports/rls-canonicalize.ts',

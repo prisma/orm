@@ -9,7 +9,7 @@ import {
 import type { SqlExecutionPlan } from '@internal/sql-relational-core/plan';
 import { structuredError } from '@internal/utils/structured-error';
 import { describe, expect, it } from 'vitest';
-import { buildDecodeContext, decodeRow } from '../src/codecs/decoding';
+import { buildDecodeContext, decodeRow, sqlNativeArrayListDecoder } from '../src/codecs/decoding';
 import { defineTestCodec } from './test-codec';
 import { buildTestContractCodecs } from './utils';
 
@@ -55,6 +55,7 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toBe(original);
   });
@@ -77,6 +78,7 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toBe(original);
   });
@@ -101,6 +103,7 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toBe(original);
   });
@@ -129,6 +132,7 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         { value: ['wire'] },
         buildDecodeContext(ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toBe(original);
   });
@@ -151,6 +155,7 @@ describe('decodeRow — runtime-envelope passthrough', () => {
         { value: 'wire' },
         buildDecodeContext(buildPlan().ast, buildTestContractCodecs(registry)),
         {},
+        sqlNativeArrayListDecoder,
       ),
     ).rejects.toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',

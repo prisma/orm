@@ -140,7 +140,7 @@ export async function planMigration<TFamilyId extends string, TTargetId extends 
 
     // Advancing without migrations is valid exclusively for a space whose
     // elements are ALL externally managed (e.g. Supabase's `auth`/`storage`
-    // — nothing Prisma Next owns exists there, so the declared state needs
+    // — nothing Prisma 8 owns exists there, so the declared state needs
     // no migration to be true). A space that declares a managed element but
     // ships no migration graph is an authoring bug and must fail loudly.
     // The same predicate guards the replay path in the CLI's

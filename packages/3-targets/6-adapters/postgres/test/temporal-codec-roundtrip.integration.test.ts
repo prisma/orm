@@ -329,7 +329,12 @@ describe('Temporal codecs round-trip through PostgreSQL', () => {
     Reflect.deleteProperty(globalThis, 'Temporal');
     try {
       await expect(
-        decodeRow({ tstz: '2026-01-02 03:04:05.123456+00' }, decodeCtx, {}),
+        decodeRow(
+          { tstz: '2026-01-02 03:04:05.123456+00' },
+          decodeCtx,
+          {},
+          postgresRuntimeTargetDescriptor.listDecoder(),
+        ),
       ).rejects.toMatchObject({
         code: 'RUNTIME.TEMPORAL_UNAVAILABLE',
         meta: { codecId: 'pg/timestamptz-temporal@1', operation: 'decode' },

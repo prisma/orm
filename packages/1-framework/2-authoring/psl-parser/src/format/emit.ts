@@ -1,3 +1,4 @@
+import { InternalError } from '@internal/utils/internal-error';
 import { ModelAttributeAst } from '../syntax/ast/attributes';
 import {
   CompositeTypeDeclarationAst,
@@ -110,6 +111,8 @@ function spaceBetween(
 ): boolean {
   if (prev === undefined) return false;
   if (inQualifiedName) return false;
+  // Only a tagged literal puts a string directly after an identifier, and its tag and string hug.
+  if (prev === 'Ident' && cur === 'StringLiteral') return false;
 
   switch (cur) {
     case 'LParen':
@@ -177,9 +180,9 @@ function closeContinuation(writer: LineWriter, count: number): void {
 function emitField(
   writer: LineWriter,
   field: FieldDeclarationAst,
-  columns: AlignmentColumns | undefined,
+  alignmentColumns: AlignmentColumns | undefined,
 ): number {
-  return streamRow(writer, field.syntax, columns);
+  return streamRow(writer, field.syntax, alignmentColumns);
 }
 
 function emitNamedType(writer: LineWriter, decl: NamedTypeDeclarationAst): number {
@@ -189,7 +192,7 @@ function emitNamedType(writer: LineWriter, decl: NamedTypeDeclarationAst): numbe
 function streamRow(
   writer: LineWriter,
   row: SyntaxNode,
-  columns: AlignmentColumns | undefined,
+  alignmentColumns: AlignmentColumns | undefined,
 ): number {
   let continuation = 0;
   let sawAttribute = false;
@@ -198,10 +201,10 @@ function streamRow(
     if (child instanceof SyntaxNode) {
       let padTo: number | undefined;
       if (child.kind === 'TypeAnnotation' && continuation === 0) {
-        padTo = columns?.typeColumn;
+        padTo = alignmentColumns?.typeColumn;
       } else if (child.kind === 'FieldAttribute') {
         if (continuation > 0) writer.newline();
-        else if (!sawAttribute) padTo = columns?.attributeColumn;
+        else if (!sawAttribute) padTo = alignmentColumns?.attributeColumn;
         sawAttribute = true;
       }
       continuation += streamNode(writer, child, padTo);
@@ -233,20 +236,24 @@ type MemberCategory = 'regular' | 'blockAttribute' | 'nestedBlock';
 
 interface BlockMember {
   readonly category: MemberCategory;
-  emit(trailing: string | undefined): number;
+  /** Stays on the source line it shares with the member that follows it. */
+  readonly keepsSourceLine: boolean;
+  emit(trailing: string | undefined, endLine: boolean): number;
 }
 
 function leafMember(
   writer: LineWriter,
   category: MemberCategory,
   print: () => number,
+  keepsSourceLine = false,
 ): BlockMember {
   return {
     category,
-    emit(trailing) {
+    keepsSourceLine,
+    emit(trailing, endLine) {
       const continuation = print();
       if (trailing !== undefined) writer.comment(trailing);
-      else writer.newline();
+      else if (endLine) writer.newline();
       return continuation;
     },
   };
@@ -259,10 +266,11 @@ function emitModel(
   model: ModelDeclarationAst,
   trailing: string | undefined,
 ): void {
-  const columns = alignmentMap(model.syntax);
+  const alignmentColumns = alignmentMap(model.syntax);
   emitBlockBody(writer, model.syntax, trailing, (node) => {
     const field = FieldDeclarationAst.cast(node);
-    if (field) return leafMember(writer, 'regular', () => emitField(writer, field, columns));
+    if (field)
+      return leafMember(writer, 'regular', () => emitField(writer, field, alignmentColumns));
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
@@ -275,10 +283,11 @@ function emitCompositeType(
   composite: CompositeTypeDeclarationAst,
   trailing: string | undefined,
 ): void {
-  const columns = alignmentMap(composite.syntax);
+  const alignmentColumns = alignmentMap(composite.syntax);
   emitBlockBody(writer, composite.syntax, trailing, (node) => {
     const field = FieldDeclarationAst.cast(node);
-    if (field) return leafMember(writer, 'regular', () => emitField(writer, field, columns));
+    if (field)
+      return leafMember(writer, 'regular', () => emitField(writer, field, alignmentColumns));
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
@@ -286,14 +295,28 @@ function emitCompositeType(
   });
 }
 
+/**
+ * With the `prisma7` grammar a `view` body holds `FieldDeclaration` members, so they print through
+ * the model field path. With the `psl` grammar the same source line reads as several entries with
+ * no `=`; those entries keep the source line they share, so `id Int` does not become two lines.
+ */
 function emitGenericBlock(
   writer: LineWriter,
   block: GenericBlockDeclarationAst,
   trailing: string | undefined,
 ): void {
+  const alignment = alignmentMap(block.syntax);
   emitBlockBody(writer, block.syntax, trailing, (node) => {
+    const field = FieldDeclarationAst.cast(node);
+    if (field) return leafMember(writer, 'regular', () => emitField(writer, field, alignment));
     const entry = KeyValuePairAst.cast(node);
-    if (entry) return leafMember(writer, 'regular', () => emitKeyValue(writer, entry));
+    if (entry)
+      return leafMember(
+        writer,
+        'regular',
+        () => emitKeyValue(writer, entry),
+        entry.equals() === undefined,
+      );
     const attribute = ModelAttributeAst.cast(node);
     if (attribute)
       return leafMember(writer, 'blockAttribute', () => emitBlockAttribute(writer, attribute));
@@ -338,6 +361,7 @@ type BlockEmitter = (writer: LineWriter, trailing: string | undefined) => void;
 function nestedBlockMember(writer: LineWriter, block: BlockEmitter): BlockMember {
   return {
     category: 'nestedBlock',
+    keepsSourceLine: false,
     emit(trailing) {
       block(writer, trailing);
       return 0;
@@ -430,7 +454,11 @@ function walkRegion(
     if (element instanceof SyntaxNode) {
       if (!sawOpenBrace) continue;
       const member = classify(element);
-      if (member === undefined) continue;
+      if (member === undefined) {
+        throw new InternalError(
+          `Formatter has no rule for a ${element.kind} node at offset ${element.offset}; formatting would drop its text`,
+        );
+      }
       if (!ledByComment) {
         if (newlines >= 2 && sawContent && !writer.lastIsBlank()) writer.blank();
         else if (separationBlankWanted(writer, member.category, sawContent, lastWasRegular)) {
@@ -439,7 +467,8 @@ function walkRegion(
       }
 
       const trailing = sameLineTrailingComment(elements, i);
-      closeContinuation(writer, member.emit(trailing.text));
+      const endLine = !member.keepsSourceLine || !memberFollowsOnSameLine(elements, i);
+      closeContinuation(writer, member.emit(trailing.text, endLine));
       if (trailing.index !== undefined) i = trailing.index;
       sawContent = true;
       lastWasRegular = member.category !== 'blockAttribute';
@@ -477,6 +506,17 @@ function walkRegion(
       newlines = 0;
     }
   }
+}
+
+function memberFollowsOnSameLine(elements: readonly SyntaxElement[], memberIndex: number): boolean {
+  for (let i = memberIndex + 1; i < elements.length; i++) {
+    const element = elements[i];
+    if (element === undefined) continue;
+    if (element instanceof SyntaxNode) return true;
+    if (element.kind === 'Whitespace') continue;
+    return false;
+  }
+  return false;
 }
 
 function separationBlankWanted(

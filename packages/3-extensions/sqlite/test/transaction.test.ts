@@ -1,6 +1,8 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash, profileHash } from '@internal/contract/types';
 import { SqlStorage } from '@internal/sql-contract/types';
+import { RawQueryAst } from '@internal/sql-relational-core/ast';
+import { planFromAst } from '@internal/sql-relational-core/plan';
 import { sqliteCreateNamespace } from '@internal/target-sqlite/control';
 import { applicationDomainOf } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
@@ -73,6 +75,39 @@ describe('sqlite transaction()', () => {
 
     expect(db.runtime()).toBeDefined();
     await db.close();
+  });
+
+  it('rejects escaped queries and delayed prepared rows after callback completion', async () => {
+    const db = sqlite({ contract, path: ':memory:' });
+    try {
+      const plan = planFromAst<{ id: number }>(
+        RawQueryAst.rows(['select 1 as id'], {
+          id: { codecId: 'sqlite/integer@1', nullable: false },
+        }),
+        db.contract,
+      );
+      const prepared = await db.prepare({}, () => plan);
+      const escaped = await db.transaction(async (tx) => {
+        expect(await tx.query(plan)).toEqual([{ id: 1 }]);
+        expect(await prepared.query(tx, {})).toEqual([{ id: 1 }]);
+        return {
+          tx,
+          rows: tx.query(plan),
+          preparedRows: prepared.query(tx, {}),
+        };
+      });
+
+      expect(() => escaped.tx.query(plan)).toThrow(/transaction has ended/);
+      expect(() => prepared.query(escaped.tx, {})).toThrow(/transaction has ended/);
+      await expect(escaped.rows.toArray()).rejects.toMatchObject({
+        code: 'RUNTIME.TRANSACTION_CLOSED',
+      });
+      await expect(escaped.preparedRows.toArray()).rejects.toMatchObject({
+        code: 'RUNTIME.TRANSACTION_CLOSED',
+      });
+    } finally {
+      await db.close();
+    }
   });
 
   it('transaction() rejects with "SQLite client is closed" after close()', async () => {

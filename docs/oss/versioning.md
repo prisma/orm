@@ -1,19 +1,19 @@
 # Versioning
 
-This page covers the **version contract** Prisma Next offers to its users and ecosystem, and the **mechanism** that delivers it. The first half is the policy you can rely on; the second half is the procedure maintainers follow to honour it.
+This page covers the **version contract** Prisma 8 offers to its users and ecosystem, and the **mechanism** that delivers it. The first half is the policy you can rely on; the second half is the procedure maintainers follow to honour it.
 
 ## Pre-1.0: deliberately unstable
 
 > **Note:** releases now ship on the v8 RC line (`8.0.0-rc.N`) rather than as `0.x` minors — see [The v8 RC line](#the-v8-rc-line) below. The latitude described here carries over: RC respins may include breaking changes until `8.0.0` final ships.
 
-Prisma Next is in early access and is deliberately pre-`1.0`. Per [SemVer §4](https://semver.org/#spec-item-4), the `0.x` range carries no backwards-compatibility promise, and we use that latitude. Concretely:
+Prisma 8 is in early access and is deliberately pre-`1.0`. Per [SemVer §4](https://semver.org/#spec-item-4), the `0.x` range carries no backwards-compatibility promise, and we use that latitude. Concretely:
 
 - **Breaking changes ship in regular minor bumps.** A `0.7.0` to `0.8.0` upgrade may include API removals, semantic changes to existing APIs, or contract-format changes.
 - **Releases are frequent.** The cadence is "ship a minor whenever the next batch of work is cohesive enough to warrant one", not a fixed weekly/monthly schedule. Expect minors more often than you would expect them from a 1.x project.
 - **There are no patch releases of older minors.** Once `0.8.0` ships, `0.7.x` receives no further updates — no security patches, no regression fixes, no cherry-picks. If you hit a regression in the latest `latest` we may cut a `0.8.1`, but you are expected to keep up rather than pin and wait.
-- **The agent-driven upgrade skill is the long-run answer to keeping consumers current with minimal churn.** Each minor will ship with a machine-readable upgrade recipe that the skill applies; the upgrade contract — what the recipes are allowed to assume, what they're allowed to change — will be documented separately in `docs/oss/upgrade-policy.md` once that work lands. Until then, breaking changes are surfaced through release notes only.
+- **Agent-driven upgrade guides help consumers keep current.** Feature PRs contribute independent, unversioned instructions. Release preparation assembles one guide per audience, alongside release notes, and archives the originals outside published packages. See the [upgrade instruction lifecycle](../../upgrade-instructions/README.md).
 
-If your project cannot tolerate this cadence today, Prisma Next is not the right choice yet. The promise we make instead is that you can always read a single number — the root `package.json` `version` of any commit — and know exactly what you have.
+If your project cannot tolerate this cadence today, Prisma 8 is not the right choice yet. The promise we make instead is that you can always read a single number — the root `package.json` `version` of any commit — and know exactly what you have.
 
 ## Lockstep across the workspace
 
@@ -22,10 +22,10 @@ Every workspace package — publishable, private, the workspace root, and exampl
 This invariant has consequences that ecosystem participants need to plan for:
 
 - **Agent skills, the upgrade instructions, and any other tooling we ship alongside the framework version in lockstep with it.** A skill installed at the same time as `@internal/postgres@0.8.0` is a `0.8.0` skill and reasons about a `0.8.0` contract. There is no separate skill-version axis to track. This is now physical rather than conventional: the `prisma-8` skill ships inside the `@prisma/orm-postgres`, `@prisma/orm-sqlite` and `@prisma/orm-mongo` tarballs (copied in by each package's `prepack`), and `scripts/set-version.ts` stamps its `metadata.library_version` frontmatter with the version being published. Getting the skill and getting the code are one install, and a consumer can compare the stamp on its synced copy against its installed packages.
-- **Extension authors that depend on internal framework packages must pin those dependencies to the framework version their consumers will use.** If your extension depends on `@internal/sql-core` (an internal framework package), publish each version of your extension targeting one specific Prisma Next minor and pin to it exactly (`"@internal/sql-core": "0.8.0"`, not `"^0.8.0"`). Internal packages do not promise inter-minor compatibility — `0.8.x` and `0.9.x` may have incompatible internals even when the user-visible surface looks similar. The extension's published version range communicates which framework minor it targets.
+- **Extension authors that depend on internal framework packages must pin those dependencies to the framework version their consumers will use.** If your extension depends on `@internal/sql-core` (an internal framework package), publish each version of your extension targeting one specific Prisma 8 minor and pin to it exactly (`"@internal/sql-core": "0.8.0"`, not `"^0.8.0"`). Internal packages do not promise inter-minor compatibility — `0.8.x` and `0.9.x` may have incompatible internals even when the user-visible surface looks similar. The extension's published version range communicates which framework minor it targets.
 - **Internal packages are never published, but they still version in lockstep** so a contributor cloning the repo at any commit sees one consistent answer to "what version is this code?" The `private: true` flag means `pnpm publish` skips them.
 
-If lockstep ever broke — if a private package or example carried a different version — the "one read of root tells you everything" invariant would be silently violated. Every CI gate that checks the root version on publish (today: pre-publish dependency-specifier validation; tomorrow: the upgrade-skill recipe-presence check that fires on root version changes) is built on this assumption.
+If lockstep ever broke — if a private package or example carried a different version — the "one read of root tells you everything" invariant would be silently violated. The pre-publish dependency-specifier and upgrade-coverage checks rely on this invariant.
 
 ## The v8 RC line
 
@@ -39,7 +39,7 @@ The transition onto the RC line is a one-time bump from the last `0.x` stable to
 
 ## Dist-tag convention
 
-The npm registry exposes Prisma Next under these dist-tags:
+The npm registry exposes Prisma 8 under these dist-tags:
 
 - **`latest`** — the most recent release, RC or stable (`8.0.0-rc.N` on the RC line). Default for any bare `npm install`. New `latest` releases happen automatically when a release PR merges (see procedure below).
 - **`dev`** — every push to `main` produces a `<base>-dev.N` tarball under this tag (on the RC line: `8.0.0-rc.X-dev.N`). Release pushes publish theirs after the release itself, so `dev` always tracks a build of the current base and never falls behind `latest`. Use these to pin reproductions, install internal CI runs, or hand someone a "try `@dev` to get the bleeding edge" link. **No stability promise** — they may be yanked freely.
@@ -57,7 +57,7 @@ Publishing requires:
 
 ## Mechanism: how we deliver the contract
 
-The version Prisma Next ships is the **`version` field of the root [`package.json`](../../package.json)**. The publish workflow ([`.github/workflows/publish.yml`](../../.github/workflows/publish.yml)) reads this value at the workflow's git ref and refuses to publish anything else. There is no `workflow_dispatch` input to override the version, no per-package `version` drift, and no separate "release manifest" file. Anyone — human or agent — can answer "what version are we on?" by reading a single file under git.
+The version Prisma 8 ships is the **`version` field of the root [`package.json`](../../package.json)**. The publish workflow ([`.github/workflows/publish.yml`](../../.github/workflows/publish.yml)) reads this value at the workflow's git ref and refuses to publish anything else. There is no `workflow_dispatch` input to override the version, no per-package `version` drift, and no separate "release manifest" file. Anyone — human or agent — can answer "what version are we on?" by reading a single file under git.
 
 This is by design. Two of the three other places a version *could* live cause silent problems:
 
@@ -72,15 +72,15 @@ A growing set of pre-publish gates run as part of the workflow:
 
 - **Dependency-specifier check** ([`pnpm check:publish-deps`](../../scripts/check-publish-deps.mjs)) — fails the publish if any resolved `package.json` would carry an unrewritten `workspace:*` or `catalog:` specifier into the registry.
 - **Release-notes presence check** ([`pnpm check:release-notes`](../../scripts/check-release-notes.mjs)) — fires for `latest` publishes only. The Release body is the committed [`docs/releases/v<version>.md`](../releases/README.md), published via `gh release create --notes-file`; this check fails the publish when that file is missing. There is **no `--generate-notes` fallback**. A PR-mode variant runs in CI ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) and fails a release PR that bumps the root `version` without committing the matching notes file, so the omission is caught in review rather than at publish.
-- More gates will accumulate here as the upgrade-skill machinery lands (recipe-presence check fired on root version changes, etc.). The root-version-as-trigger model is the hook these checks plug into.
+- **Upgrade coverage** ([`pnpm check:upgrade-coverage`](../../scripts/check-upgrade-coverage.mjs)) — feature PRs require their own pending declarations for affected audiences. Releases require assembled app and extension guides and no remaining pending fragments, including late arrivals. Dev/beta builds allow pending work. The check verifies structure and script references; human review checks the synthesized guidance against its originals.
 
 ## Procedure: cut the next release
 
 The release cadence is one PR per release (on the RC line: one PR per `rc.N`). A maintainer:
 
 1. **Runs the `publish-npm-version` skill** (see [`publish-npm-version`](../../skills-contrib/publish-npm-version/SKILL.md)). The skill creates a fresh worktree off `origin/main`, drives `pnpm bump-version`, and opens a PR in the maintainer's name. Using a skill rather than a GitHub workflow ensures the PR carries real maintainer credentials so CI runs on it normally.
-2. **Authors the release notes.** The release PR must include a committed [`docs/releases/v<version>.md`](../releases/README.md); its contents become the GitHub Release body verbatim (`gh release create --notes-file`), so there is no auto-generated PR-title summary to fall back on. The PR-mode release-notes gate fails the PR if the file is missing, making notes authoring part of preparing the release. The `publish-npm-version` skill drafts this file automatically before opening the PR by running the [`draft-release-notes`](../../skills-contrib/draft-release-notes/SKILL.md) skill, which enumerates the release's merged PRs, triages them, and writes the categorized notes (breaking changes first) plus a matching `CHANGELOG.md` entry — the maintainer reviews the result in the PR rather than authoring from scratch.
-3. **Reviews and merges the PR.** This is the point where humans verify there are no in-flight breaking changes that need release-notes attention. The merge itself is the publish trigger: the resulting push to `main` carries the bumped root `version`, the publish workflow detects the change, and publishes `<version>` under dist-tag `latest` plus a matching GitHub Release (marked pre-release on the RC line) whose body is the committed notes file. The same run then publishes `<version>-dev.1` under `dev`. No separate dispatch step is required.
+2. **Assembles upgrade guides and authors the release notes.** The skill first gathers pending fragments, synthesizes and reviews the app/extension guides, and moves original fragments into the repository-only archive following the [upgrade instruction lifecycle](../../upgrade-instructions/README.md). It then drafts notes linking those assembled guides. The release PR must include a committed [`docs/releases/v<version>.md`](../releases/README.md); its contents become the GitHub Release body verbatim (`gh release create --notes-file`), so there is no auto-generated PR-title summary to fall back on. The PR-mode release-notes gate fails the PR if the file is missing, making notes authoring part of preparing the release. The `publish-npm-version` skill drafts this file automatically before opening the PR by running the [`draft-release-notes`](../../skills-contrib/draft-release-notes/SKILL.md) skill, which enumerates the release's merged PRs, triages them, and writes the categorized notes (breaking changes first) plus a matching `CHANGELOG.md` entry — the maintainer reviews the result in the PR rather than authoring from scratch.
+3. **Reviews and merges the PR.** Humans review both the guides and release notes. If new fragments arrive before merge, refresh the guides and archive those inputs first; CI checks completeness on the effective merged release tree, and publication checks it independently. The merge itself is the publish trigger: the resulting push to `main` carries the bumped root `version`, the publish workflow detects the change, and publishes `<version>` under dist-tag `latest` plus a matching GitHub Release (marked pre-release on the RC line) whose body is the committed notes file. The same run then publishes `<version>-dev.1` under `dev`. No separate dispatch step is required.
 
 If the publish needs to be re-run (transient registry failure, etc.), a maintainer can dispatch the [`Publish to npm`](../../.github/workflows/publish.yml) workflow from `main` with `dist-tag=latest` and `dry-run=false`; the workflow re-publishes the version currently committed at HEAD, including the `dev` follow-up — so recovering a failed release also recovers the `dev` dist-tag. This is the same path used to cut a hand-rolled `beta` (`dist-tag=beta`), which carries no dev follow-up.
 

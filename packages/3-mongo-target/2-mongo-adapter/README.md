@@ -1,6 +1,6 @@
 # @internal/adapter-mongo
 
-MongoDB adapter for Prisma Next. Lowers abstract MongoDB commands into wire-protocol documents.
+MongoDB adapter for Prisma 8. Lowers abstract MongoDB commands into wire-protocol documents.
 
 ## Responsibilities
 

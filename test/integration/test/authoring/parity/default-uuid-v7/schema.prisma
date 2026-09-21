@@ -1,5 +1,6 @@
-// use prisma-next
+// use prisma-8
 
 model User {
   id Char(36) @id @default(uuid(7))
+  @@map("user")
 }

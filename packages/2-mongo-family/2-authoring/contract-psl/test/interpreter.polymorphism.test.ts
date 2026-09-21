@@ -8,10 +8,11 @@ function modelsOf(ir: Contract): Record<string, unknown> {
 }
 
 import { buildSymbolTable, type SymbolTable } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, it } from 'vitest';
 import { interpretPslDocumentToMongoContract } from '../src/interpreter';
+import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
   ['String', 'mongo/string@1'],
@@ -55,23 +56,27 @@ function mongoCollectionsOf(ir: { readonly storage: unknown }): Record<string, u
 }
 
 function buildSymbolTableInput(schema: string): {
+  document: DocumentAst;
   symbolTable: SymbolTable;
-  sourceFile: SourceFile;
-  sourceId: string;
+  sources: PslSources;
 } {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'test.prisma');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
-  return { symbolTable: table, sourceFile, sourceId: 'test.prisma' };
+  return { document, symbolTable, sources };
 }
 
 function interpret(schema: string) {
   return interpretPslDocumentToMongoContract({
     ...buildSymbolTableInput(schema),
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
     codecLookup: mongoCodecLookup,
   });
 }
@@ -299,7 +304,40 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       if (result.ok) return;
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ code: 'PSL_DISCRIMINATOR_FIELD_NOT_FOUND' }),
+          expect.objectContaining({
+            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+            message: expect.stringContaining('does not exist'),
+          }),
+        ]),
+      );
+    });
+
+    it('diagnoses non-String discriminator field', () => {
+      const result = interpret(`
+        model Task {
+          id    ObjectId @id @map("_id")
+          title String
+          type  Int
+
+          @@discriminator(type)
+        }
+
+        model Bug {
+          id       ObjectId @id @map("_id")
+          severity String
+
+          @@base(Task, "bug")
+        }
+      `);
+
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
+            message: expect.stringContaining('must be of type String'),
+          }),
         ]),
       );
     });
@@ -346,6 +384,27 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([expect.objectContaining({ code: 'PSL_BASE_TARGET_NOT_FOUND' })]),
       );
+    });
+
+    it('emits one syntax diagnostic for a malformed variant @@map', () => {
+      const result = interpret(`
+        model Task {
+          id   ObjectId @id @map("_id")
+          type String
+
+          @@discriminator(type)
+          @@map("tasks")
+        }
+
+        model Bug {
+          severity String
+
+          @@base(Task, "bug")
+          @@map(42)
+        }
+      `);
+
+      expectInvalidAttributeSyntax(result, /Expected a string literal/);
     });
 
     it('diagnoses variant with @@map to different collection', () => {
@@ -598,7 +657,7 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
       expect(conflict?.span?.end.offset).toBeGreaterThan(conflict?.span?.start.offset ?? 0);
     });
 
-    it('emits PSL_INDEX_FIELD_NOT_FOUND when a variant indexes a base-inherited field', () => {
+    it('rejects a variant indexing a base-inherited field', () => {
       const result = interpret(`
         model Task {
           id    ObjectId @id @map("_id")
@@ -618,13 +677,8 @@ describe('interpretPslDocumentToMongoContract — polymorphism', () => {
         }
       `);
 
-      expect(result.ok).toBe(false);
-      if (result.ok) return;
-      const diag = result.failure.diagnostics.find((d) => d.code === 'PSL_INDEX_FIELD_NOT_FOUND');
-      expect(diag).toBeDefined();
-      expect(diag?.message).toMatch(/title/);
-      expect(diag?.message).toMatch(/Bug/);
-      expect(diag?.span?.start.offset).toBeGreaterThan(0);
+      const diag = expectInvalidAttributeSyntax(result, /Expected one of/);
+      expect(diag.span?.start.offset).toBeGreaterThan(0);
     });
   });
 

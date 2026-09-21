@@ -1,10 +1,144 @@
 # Changelog
 
-The rolling, newest-first index of Prisma Next releases. Each entry mirrors the release's committed notes file under [`docs/releases/`](docs/releases/) (the body of its GitHub Release) under a `## v<version>` header — see [`docs/releases/README.md`](docs/releases/README.md) for the convention and authoring template.
+The rolling, newest-first index of Prisma 8 releases. Each entry mirrors the release's committed notes file under [`docs/releases/`](docs/releases/) (the body of its GitHub Release) under a `## v<version>` header — see [`docs/releases/README.md`](docs/releases/README.md) for the convention and authoring template.
 
 Changelog tracking starts at **v0.12.0**, the first release cut after this convention landed. For **v0.11.0 and earlier**, see the [GitHub Releases](https://github.com/prisma/prisma-next/releases) page — historical notes are not backfilled here.
 
 <!-- New release entries go here, newest first, each mirroring docs/releases/v<version>.md under a `## v<version>` header. -->
+
+## v8.0.0-rc.11
+
+This release moves the toolchain onto `@prisma/cli-engine@0.4.0`, which adds a Markdown output format to every CLI command. Nothing else changed since rc.10.
+
+The upgrade recipes for this hop: the [app recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.11/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.10-to-8.0.0-rc.11/) and the [extension recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.11/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.10-to-8.0.0-rc.11/).
+
+### Breaking changes
+
+- **The engine peer moves to `@prisma/cli-engine@0.4.0`** — `@prisma/orm-toolchain` declares the unified CLI's engine as an exact peer, and this release peers 0.4.0 (up from 0.3.0), so a project that pins the engine itself must change its pin. Under a host CLI running on that engine, every command supports `--format markdown`, which prints the command's output as Markdown; the engine's `Format` type widens from `"human" | "json"` to `"human" | "json" | "markdown"`. No other public API changed. Projects assembled by the `prisma` CLI resolve the engine automatically; a project that pins `@prisma/cli-engine` itself must move the pin to `0.4.0`. ([prisma/prisma-cli#260](https://github.com/prisma/prisma-cli/pull/260))
+
+## v8.0.0-rc.10
+
+This RC finishes the rename from Prisma Next to Prisma 8 in every identifier a project can see (the old schema header keeps working, the old environment variables do not), adds named model and result types to the emitted contract, makes `db sign` set the `db` ref so the first plan after adoption stays incremental, and adds attribute completion to the language server.
+
+### Breaking changes
+
+- **CLI environment variables lose the `NEXT_` infix.** `PRISMA_NEXT_DISABLE_TELEMETRY`, `PRISMA_NEXT_TELEMETRY_ENDPOINT`, `PRISMA_NEXT_DEBUG`, and the rest are now `PRISMA_DISABLE_TELEMETRY`, `PRISMA_TELEMETRY_ENDPOINT`, `PRISMA_DEBUG`, and so on. Only the old `PRISMA_NEXT_DISABLE_TELEMETRY` opt-out is still honoured; rename the others in shell profiles, `.env` files, and CI. The per-user telemetry config moves from `~/.config/prisma-next/` to `~/.config/prisma-8/`, so the one-time telemetry notice prints once more. `orm init` now writes its primer as `prisma-8.md` instead of `prisma-next.md`. See the [app upgrade recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.10/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.9-to-8.0.0-rc.10/). ([#30262](https://github.com/prisma/orm/pull/30262))
+
+- **`contract emit` rejects a relation field whose `?` disagrees with its foreign key.** A required relation field over a nullable foreign key (`author User` with `authorId Int?`), or an optional field over a required key, now fails emission where rc.9 accepted it. Make the two agree. Existing contracts are not affected until you next emit; a `contract.json` from an earlier release still loads unchanged. Extension authors: `ContractNonJunctionRelation`'s `'1:1'` and `'N:1'` members now require a `nullable` boolean, and the emitter refuses a contract space whose `contract.json` lacks it until the space is rebuilt. See the [app upgrade recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.10/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.9-to-8.0.0-rc.10/) and the [extension upgrade recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.10/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.9-to-8.0.0-rc.10/). ([#30231](https://github.com/prisma/orm/pull/30231))
+
+  Before:
+
+  ```prisma
+  authorId Int?
+  author   User @relation(fields: [authorId], references: [id])
+  ```
+
+  After:
+
+  ```prisma
+  authorId Int?
+  author   User? @relation(fields: [authorId], references: [id])
+  ```
+
+### Features
+
+- **The schema header is now `// use prisma-8`, and `// use prisma-next` is deprecated.** `orm init` and `contract infer` write the new header. The old one still works: `contract emit` never reads the header, and the language server still recognises it and rewrites it to the new form when you format the file. Replace it at your convenience; the [app upgrade recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.10/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.9-to-8.0.0-rc.10/) does it for you. ([#30262](https://github.com/prisma/orm/pull/30262))
+
+- **Named model and result types.** `contract.d.ts` exports a `Models` namespace and a `models` constant with one member per model (`Models.public_User`, or `typeof models.public.User`; bare names on SQLite). `Scalars<M>` names the row a default fetch returns, `Shape<M, Spec>` derives a data structure with chosen scalars and nested relations, and `ResultType` now works on ORM queries instead of returning `never`. Both come from `@prisma/orm-postgres/family-contract/types` (or the `@prisma/orm-mongo` equivalent). These replace Prisma 7's `Prisma.User` and `UserGetPayload<...>`. To get them, run `prisma contract emit` once after upgrading: the re-emit also records each to-one relation's nullability in `contract.json` as a `nullable` boolean, which is what the `Models` types are built from. ([#30231](https://github.com/prisma/orm/pull/30231))
+
+  ```ts
+  import type { Models } from './prisma/contract';
+  import type { Scalars, Shape } from '@prisma/orm-postgres/family-contract/types';
+  import type { ResultType } from '@prisma/orm-postgres/components/runtime';
+
+  type UserRow = Scalars<Models.public_User>;
+  type UserResponse = Shape<Models.public_User, { '-': 'passwordHash'; posts: { '+': 'id' | 'title' } }>;
+  const usersWithPosts = db.orm.public.User.include('posts');
+  type UserWithPosts = ResultType<typeof usersWithPosts>;
+  ```
+
+- **Attribute completion in the language server.** Editors now complete field, model, and block attribute names and their named argument keys from the installed target and extensions, and insert required arguments as editable snippets where the editor supports them. ([#30249](https://github.com/prisma/orm/pull/30249))
+
+- **`db sign` can choose or skip the ref it advances.** `--advance-ref <name>` writes another ref than `db`, `--no-advance-ref` signs without writing any ref or snapshot, and `--json` output gains `advancedRef: { name, hash }` (or `null`). ([#30251](https://github.com/prisma/orm/pull/30251))
+
+### Fixes
+
+- After `db sign`, `migration plan` proposes only the change instead of recreating every table. `db sign` now sets the `db` ref to the signed contract, even when the database is named with `--db`, so adopting an existing database no longer needs a baseline plan, a second sign, and a manual `migration ref set`. When no ref is set and no migrations exist, `migration plan` prints a notice that it is planning from an empty database, and `--json` gains `fromDefaulted: true`. ([#30251](https://github.com/prisma/orm/pull/30251))
+- Buffered PostgreSQL queries release their pooled connection before rows are decoded or consumed, so a paused result iterator no longer holds a connection and blocks other queries on a small pool. Cursor streams keep their connection until completion; caller-owned connections and transactions are untouched. ([#30259](https://github.com/prisma/orm/pull/30259))
+- `orm init` installs `prisma@latest` instead of `prisma@next`, a dist-tag that no longer exists, so a fresh `orm init` completes its install step again. The engine fallback is `@prisma/cli-engine@latest`. ([#30248](https://github.com/prisma/orm/pull/30248))
+- The bundled `prisma-8` agent skill matches the rc.9 surface again: a review of every reference file corrected 21 statements that no longer matched the CLI or runtime, and the sample projects are keyed by namespace. ([#30250](https://github.com/prisma/orm/pull/30250))
+
+## v8.0.0-rc.9
+
+This RC tightens schema validation, adds reusable query-filter types, and fixes language-server diagnostics and PostgreSQL migration verification.
+
+### Breaking changes
+
+- **Text-backed enum ordering follows stored values.** PostgreSQL `ORDER BY` and `DISTINCT ON` no longer impose enum declaration order. If semantic ranking matters, use an explicit ranking expression or numeric enum values; native PostgreSQL enums retain their database ordering. Changing existing storage to numeric values requires a data-preserving migration, including defaults and constraints—not rewriting applied migration history. See the [app upgrade recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.9/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.8-to-8.0.0-rc.9/). ([#30223](https://github.com/prisma/orm/pull/30223))
+
+- **MongoDB index arguments use native schema values.** Replace encoded wildcard-index `include`/`exclude` strings with string lists and encoded text-index `weights` strings with records. Weights must be integers from 1 to 99,999; malformed and unsupported arguments now fail validation. The `filter` argument remains quoted JSON. See the [app upgrade recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.9/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.8-to-8.0.0-rc.9/). ([#29833](https://github.com/prisma/orm/pull/29833))
+
+  Before:
+
+  ```prisma
+  @@index([wildcard()], include: "[metadata, nested.path]")
+  @@textIndex([title, body], weights: "{\"title\": 10, \"body\": 5}")
+  ```
+
+  After:
+
+  ```prisma
+  @@index([wildcard()], include: ["metadata", "nested.path"])
+  @@textIndex([title, body], weights: { title: 10, body: 5 })
+  ```
+
+- **MongoDB rejects previously ignored attributes.** Remove unsupported `@default`, `@updatedAt`, and `@db.*` attributes from MongoDB schemas only. They never produced defaults or timestamps in the MongoDB contract; these remain application responsibilities. Unknown model and field attributes now fail emission, and `@id`/`@unique` reject arguments. See the [app upgrade recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.9/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.8-to-8.0.0-rc.9/) for schema migration. ([#30160](https://github.com/prisma/orm/pull/30160))
+
+  Before:
+
+  ```prisma
+  status ProductStatus @default(Active)
+  updatedAt DateTime @updatedAt
+  ```
+
+  After:
+
+  ```prisma
+  status ProductStatus
+  updatedAt DateTime
+  ```
+
+- **Reusable SQL ORM filter types require a namespace.** Update `ShorthandWhereFilter`, `RelationPredicate`, `RelationPredicateInput`, and `RelationFilterAccessor` to use `<Contract, Namespace, Model>`. Existing three-argument shorthand annotations must reorder their model and namespace arguments. See the [app upgrade recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.9/skills/prisma-8/upgrading/app/upgrades/8.0.0-rc.8-to-8.0.0-rc.9/) and [extension upgrade recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.9/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.8-to-8.0.0-rc.9/). ([#30158](https://github.com/prisma/orm/pull/30158))
+
+  Before:
+
+  ```ts
+  ShorthandWhereFilter<Contract, 'User'>
+  ```
+
+  After:
+
+  ```ts
+  ShorthandWhereFilter<Contract, 'public', 'User'>
+  ```
+
+- **SQL ORM upsert and batch-create inputs reject nested relation callbacks.** `upsert({ create })`, `createAll()`, and `createAndCount()` no longer accept callbacks they cannot execute. Use ordinary `create()` when nested creation is intended, or create related records separately when retaining upsert or batch behavior. See the [upgrade recipe](https://github.com/prisma/orm/blob/v8.0.0-rc.9/skills/prisma-8/upgrading/extension/upgrades/8.0.0-rc.8-to-8.0.0-rc.9/). ([#30144](https://github.com/prisma/orm/pull/30144))
+
+- **Language-server support requires the schema directive.** Put `// use prisma-next` before other non-whitespace content in each Prisma 8 schema file to retain diagnostics, completion, formatting, and other language-server features. Unmarked files are excluded from this server's schema composition. ([#30140](https://github.com/prisma/orm/pull/30140))
+
+### Features
+
+- Extract reusable, fully typed SQL-builder predicates with `WhereFilter<Contract, Namespace, Table>`, exported from `@prisma/orm-postgres/builder/types`. ([#30158](https://github.com/prisma/orm/pull/30158))
+- PostgreSQL numeric enums now derive membership CHECK constraints for scalar and array columns. ([#30223](https://github.com/prisma/orm/pull/30223))
+
+### Fixes
+
+- Valid schemas, including those generated by `prisma orm init`, no longer receive false attribute diagnostics when the language server and project interpreter load separate parser copies. Update project ORM packages to receive the fix. ([#30228](https://github.com/prisma/orm/pull/30228))
+- Ordering native PostgreSQL enum columns no longer fails with an `array_position(text[], enum)` error. ([#30191](https://github.com/prisma/orm/pull/30191))
+- PostgreSQL `int8` literal defaults compare correctly during migration verification when introspection returns decimal strings and the contract uses safe-integer numbers. ([#30194](https://github.com/prisma/orm/pull/30194))
+- Codec factories preserve their descriptor receiver, preventing codec-ID crashes from masking useful encoding and decoding errors. ([#30222](https://github.com/prisma/orm/pull/30222))
+- Schema validation errors now list accepted functions, such as `now()` and `uuid()`, instead of repeating “function call.” ([#30224](https://github.com/prisma/orm/pull/30224))
+- CLI help, diagnostics, telemetry notices, and generated project documentation consistently use “Prisma ORM.” ([#30192](https://github.com/prisma/orm/pull/30192))
 
 ## v8.0.0-rc.8
 

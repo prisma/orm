@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { assertReviewStateV1, REVIEW_STATE_VERSION } from './review-artifacts.mjs';
+import { assertReviewStateV2, REVIEW_STATE_VERSION } from './review-artifacts.mjs';
 
 const EXIT_SUCCESS = 0;
 const EXIT_OPERATIONAL = 1;
@@ -60,7 +60,7 @@ async function main() {
 
   const raw = await readFile(args.inPath, 'utf8');
   const parsed = JSON.parse(raw);
-  assertReviewStateV1(parsed);
+  assertReviewStateV2(parsed);
   process.stdout.write(`ok: ${args.inPath}\n`);
 }
 

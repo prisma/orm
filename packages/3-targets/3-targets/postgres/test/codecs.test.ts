@@ -250,7 +250,7 @@ describe('adapter-postgres codecs', () => {
   describe('bytea codec', () => {
     const byteaCodec = codecForScalar('bytea') as {
       encode: (value: Uint8Array, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
-      decode: (wire: Uint8Array, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
+      decode: (wire: Uint8Array | string, ctx: SqlCodecCallContext) => Promise<Uint8Array>;
       encodeJson: (value: Uint8Array) => unknown;
       decodeJson: (json: unknown) => Uint8Array;
     };
@@ -270,12 +270,33 @@ describe('adapter-postgres codecs', () => {
       expect(decoded.byteLength).toBe(0);
     });
 
-    it('normalizes Buffer wire values to a plain Uint8Array view', async () => {
-      const buffer = Buffer.from([0x01, 0x02, 0x03]);
+    it('returns plain Uint8Array wire values by identity', async () => {
+      const input = new Uint8Array([0x01, 0x02, 0x03]);
+      const decoded = await byteaCodec.decode(input, {});
+      expect(decoded).toBe(input);
+    });
+
+    it('normalizes Buffer wire values to a plain Uint8Array view without copying', async () => {
+      const backing = new Uint8Array([0x00, 0x01, 0x02, 0x03, 0x04]);
+      const buffer = Buffer.from(backing.buffer, 1, 3);
       const decoded = await byteaCodec.decode(buffer, {});
       expect(decoded).toBeInstanceOf(Uint8Array);
       expect(decoded.constructor).toBe(Uint8Array);
+      expect(decoded.buffer).toBe(buffer.buffer);
+      expect(decoded.byteOffset).toBe(buffer.byteOffset);
+      expect(decoded.byteLength).toBe(buffer.byteLength);
       expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
+    });
+
+    it('decodes target-parsed list element hex text', async () => {
+      const decoded = await byteaCodec.decode('\\x010203', {});
+      expect(Array.from(decoded)).toEqual([0x01, 0x02, 0x03]);
+    });
+
+    it('rejects non-hex bytea text', async () => {
+      await expect(byteaCodec.decode('not-bytea-hex', {})).rejects.toThrow(
+        'pg/bytea@1 wire value must be a bytea hex string or Uint8Array',
+      );
     });
 
     it('uses base64 for JSON in both directions', () => {

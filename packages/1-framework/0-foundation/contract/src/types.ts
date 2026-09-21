@@ -1,7 +1,7 @@
 /**
  * Unique symbol used as the key for branding types.
  */
-export const $: unique symbol = Symbol('__prisma_next_brand__');
+export const $: unique symbol = Symbol('__prisma_8_brand__');
 
 /**
  * A helper type to brand a given type with a unique identifier.

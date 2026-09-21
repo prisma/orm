@@ -218,7 +218,7 @@ describe('MigrationCLI.run', () => {
     });
 
     expect(exitCode).toBe(1);
-    expect(stderr.text).toMatch(/config|prisma-next/i);
+    expect(stderr.text).toMatch(/config|prisma/i);
   });
 
   it('no-ops silently when the file is being imported (not the entrypoint)', async () => {

@@ -1,0 +1,440 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Parent": {
+            "storage": {
+              "table": "Parent",
+              "namespaceId": "public",
+              "fields": {
+                "a": {
+                  "column": "a"
+                },
+                "b": {
+                  "column": "b"
+                }
+              }
+            },
+            "fields": {
+              "a": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "b": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "mixed": {
+                "to": {
+                  "namespace": "public",
+                  "model": "MixedChild"
+                },
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": ["a", "b"],
+                  "targetFields": ["pa", "pb"]
+                }
+              },
+              "optional": {
+                "to": {
+                  "namespace": "public",
+                  "model": "OptionalChild"
+                },
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": ["a", "b"],
+                  "targetFields": ["pa", "pb"]
+                }
+              }
+            }
+          },
+          "MixedChild": {
+            "storage": {
+              "table": "MixedChild",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "pa": {
+                  "column": "pa"
+                },
+                "pb": {
+                  "column": "pb"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "pa": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": true
+              },
+              "pb": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "parent": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Parent"
+                },
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": ["pa", "pb"],
+                  "targetFields": ["a", "b"]
+                }
+              }
+            }
+          },
+          "OptionalChild": {
+            "storage": {
+              "table": "OptionalChild",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "pa": {
+                  "column": "pa"
+                },
+                "pb": {
+                  "column": "pb"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "pa": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": true
+              },
+              "pb": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": true
+              }
+            },
+            "relations": {
+              "parent": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Parent"
+                },
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": ["pa", "pb"],
+                  "targetFields": ["a", "b"]
+                }
+              }
+            }
+          },
+          "User": {
+            "storage": {
+              "table": "User",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "posts": {
+                "to": {
+                  "namespace": "public",
+                  "model": "Post"
+                },
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": ["id"],
+                  "targetFields": ["authorId"]
+                }
+              }
+            }
+          },
+          "Post": {
+            "storage": {
+              "table": "Post",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "authorId": {
+                  "column": "authorId"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "authorId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "author": {
+                "to": {
+                  "namespace": "public",
+                  "model": "User"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["authorId"],
+                  "targetFields": ["id"]
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Parent": {
+      "namespace": "public",
+      "model": "Parent"
+    },
+    "MixedChild": {
+      "namespace": "public",
+      "model": "MixedChild"
+    },
+    "OptionalChild": {
+      "namespace": "public",
+      "model": "OptionalChild"
+    },
+    "User": {
+      "namespace": "public",
+      "model": "User"
+    },
+    "Post": {
+      "namespace": "public",
+      "model": "Post"
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "e697b30019dd772d1e356e15160b36fb571cbb866ee24636e889620b916f0484",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Parent": {
+              "columns": {
+                "a": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "b": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["a", "b"]
+              }
+            },
+            "MixedChild": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "pa": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": true
+                },
+                "pb": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "MixedChild",
+                    "columns": ["pa", "pb"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Parent",
+                    "columns": ["a", "b"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "OptionalChild": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "pa": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": true
+                },
+                "pb": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": true
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "OptionalChild",
+                    "columns": ["pa", "pb"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "Parent",
+                    "columns": ["a", "b"]
+                  },
+                  "onDelete": "setNull",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "User": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            },
+            "Post": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "authorId": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [
+                {
+                  "source": {
+                    "namespaceId": "public",
+                    "tableName": "Post",
+                    "columns": ["authorId"]
+                  },
+                  "target": {
+                    "namespaceId": "public",
+                    "tableName": "User",
+                    "columns": ["id"]
+                  },
+                  "onDelete": "restrict",
+                  "onUpdate": "cascade"
+                }
+              ],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -9,7 +9,7 @@ describe('printPsl', () => {
     });
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
       "
     `);
@@ -34,7 +34,7 @@ describe('printPsl', () => {
     });
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model User {
@@ -69,7 +69,7 @@ describe('printPsl', () => {
     });
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       // WARNING: This table has no primary key in the database
@@ -106,7 +106,7 @@ describe('printPsl', () => {
     });
     const result = printPslFromSql(schemaIR);
     expect(result).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model OrderItem {

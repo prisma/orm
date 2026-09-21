@@ -1,13 +1,13 @@
 
-# Prisma Next — Supabase
+# Prisma 8 — Supabase
 
 > **Edit your data contract. Prisma handles the rest.**
 
-This skill covers using Prisma Next against a **Supabase** project end-to-end: composing the Supabase extension pack, referencing Supabase-owned tables from your contract, authoring row-level-security (RLS) policies, and running role-bound queries through the `supabase()` runtime.
+This skill covers using Prisma 8 against a **Supabase** project end-to-end: composing the Supabase extension pack, referencing Supabase-owned tables from your contract, authoring row-level-security (RLS) policies, and running role-bound queries through the `supabase()` runtime.
 
 ## When to Use
 
-- User has a Supabase project (or wants one) and is wiring Prisma Next into it.
+- User has a Supabase project (or wants one) and is wiring Prisma 8 into it.
 - User wants RLS policies on their tables (`policy_select`, `@@rls`, `auth.uid()`).
 - User wants per-request role binding (`asUser(jwt)`, `asAnon()`, `asServiceRole()`).
 - User wants a foreign key into `auth.users` (cross-space FK).
@@ -25,40 +25,28 @@ This skill covers using Prisma Next against a **Supabase** project end-to-end: c
 
 - **The pack is an `external` contract space.** `@internal/extension-supabase/pack` ships a complete, introspection-generated contract of everything Supabase owns — the `auth` and `storage` schemas, their native enum types, and the platform roles (`anon`, `authenticated`, `service_role`) — all with control policy `external`. Composed via `extensions`, it means: the migration planner **emits no DDL** for those objects (Supabase manages them), and `db verify` **confirms they exist** in the live database. Your own tables stay `managed` as usual.
 - **Roles come from the pack; you never declare them.** RLS `roles = [authenticated]` identifiers resolve against the composed contract. Pointing the runtime at a non-Supabase Postgres fails verify with a `not-found` issue naming the missing role — the common "wrong database" misconfiguration surfaces before queries run.
-- **The runtime is role-first.** `supabase()` returns a `SupabaseDb` with **no top-level query surface** — there is no `db.sql` / `db.orm` until you bind a role. `await db.asUser(jwt)` / `db.asAnon()` / `db.asServiceRole()` each return a `RoleBoundDb` exposing `.sql`, `.orm`, `.raw`, `.execute(plan)`, and `.transaction(fn)`. This is deliberate: in a Supabase app there is no meaningful "no role" execution context, and defaulting to the connection's login role is a silent-RLS-bypass footgun.
+- **The runtime is role-first.** `supabase()` returns a `SupabaseDb` with **no top-level query surface** — there is no `db.sql` / `db.orm` until you bind a role. `await db.asUser(jwt)` / `db.asAnon()` / `db.asServiceRole()` each return a `RoleBoundDb` exposing `.sql`, `.orm`, `.raw`, `.query(plan)` (rows), `.execute(plan)` (affected count), and `.transaction(fn)`. This is deliberate: in a Supabase app there is no meaningful "no role" execution context, and defaulting to the connection's login role is a silent-RLS-bypass footgun.
 - **Role binding is below middleware and cannot leak.** Each role-bound query runs on a connection that had `set_config('role', …)` and `set_config('request.jwt.claims', …)` applied beneath the user-middleware chain, with `RESET ALL` on release. Postgres-side `auth.uid()` / `auth.jwt()` read those session vars — RLS enforcement is Postgres's job; the runtime's job is binding the context.
-- **RLS is enforced by policies *and* grants.** Policies filter *rows*; `GRANT` controls *table access*. Prisma Next authors and migrates the policies; it does not author grants (see *What Prisma Next doesn't do yet*). A role with policies but no `GRANT` gets a permission error, not filtered rows. On Supabase your `public` tables already carry the platform-role grants via default privileges — the grant that is actually missing out of the box is `service_role`'s on `auth.*` / `storage.*` (see *Workflow — Grants*).
+- **RLS is enforced by policies *and* grants.** Policies filter *rows*; `GRANT` controls *table access*. Prisma 8 authors and migrates the policies; it does not author grants (see *What Prisma 8 doesn't do yet*). A role with policies but no `GRANT` gets a permission error, not filtered rows. On Supabase your `public` tables already carry the platform-role grants via default privileges — the grant that is actually missing out of the box is `service_role`'s on `auth.*` / `storage.*` (see *Workflow — Grants*).
 - **JWT validation is eager and configurable — current Supabase projects need `jwksUrl`.** `asUser(jwt)` verifies the token (via `jose`) *before* any connection is acquired: signature + expiry against `jwksUrl` (asymmetric signing keys — **the default on current Supabase projects**, which sign ES256) **xor** `jwtSecret` (the symmetric HS256 secret — legacy projects only). Both or neither → a structured error with code `SUPABASE.CONFIG_INVALID`. Bad tokens throw a structured error with code `SUPABASE.JWT_INVALID` and a typed `meta.reason` — including a mismatch between the token's algorithm and the configured key source (an ES256 token against a `jwtSecret` client names the problem and tells you to switch to `jwksUrl`). The Postgres role is derived from the token's `role` claim (defaults to `authenticated`). Note: `supabase status` still prints a `JWT_SECRET` even on projects that sign ES256 — its presence does not mean your project uses it.
 - **Admin access to `auth.*` / `storage.*` is a secondary root on `service_role` only — and needs a one-time grant.** `db.asServiceRole().supabase` exposes the pack's own contract (`.sql`, `.orm`, `.nativeEnums`, `.execute`). The root exists only on `service_role` by design, but a real Supabase project grants `service_role` **no table privileges** on `auth.*` / `storage.*` (only schema `USAGE`; only `postgres` holds table grants). Before the admin root can read a Supabase-internal table, run the narrow grant once (see *Workflow — Grants*). `asUser` / `asAnon` have no `.supabase`, and the primary `asServiceRole().sql` / `.orm` stay scoped to *your* contract.
 
 ## Workflow — Wire the pack into the config
 
-The concept: the pack registers the Supabase contract space so your contract can reference it and the planner/verifier know what Supabase owns. The extension has no `/control` subpath yet, so it can't go through the target façade's `defineConfig({ extensions: [...] })` — it wires into the low-level config's `extensions` (see *What Prisma Next doesn't do yet*). The low-level imports below are a **deliberate exception** to the façade-only import rule, forced by that gap; the block mirrors `examples/supabase/prisma.config.ts` verbatim — copy it rather than composing your own:
+The concept: the pack registers the Supabase contract space so your contract can reference it and the planner/verifier know what Supabase owns. Its descriptor is the `pack` export and it goes into the ordinary `extensions` array of the target config, inside the standard envelope (see `references/contract.md` § *Key Concepts*). The block mirrors `examples/supabase/prisma.config.ts`:
 
 ```typescript
 // prisma.config.ts
-import postgresAdapter from '@internal/adapter-postgres/control';
-import { defineConfig } from '@internal/cli/config-types';
-import postgresDriver from '@internal/driver-postgres/control';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import supabasePack from '@internal/extension-supabase/pack';
-import sql from '@internal/family-sql/control';
-import { prismaContract } from '@internal/sql-contract-psl/provider';
-import postgres from '@internal/target-postgres/control';
-import postgresPackRef from '@internal/target-postgres/pack';
-import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { defineConfig as ormConfig } from '@internal/postgres/config';
 
-export default defineConfig({
-  family: sql,
-  target: postgres,
-  adapter: postgresAdapter,
-  driver: postgresDriver,
-  extensions: [supabasePack],
-  contract: prismaContract('./src/contract.prisma', {
-    output: 'src/contract.json',
-    target: postgresPackRef,
-    createNamespace: postgresCreateNamespace,
+export default definePrismaConfig({
+  orm: ormConfig({
+    contract: './src/contract.prisma',
+    extensions: [supabasePack],
+    migrations: { dir: 'migrations' },
   }),
-  migrations: { dir: 'migrations' },
 });
 ```
 
@@ -164,10 +152,10 @@ The concept: Supabase-internal tables are not part of your contract, so they are
 ```typescript
 const admin = db.asServiceRole();
 
-// SQL builder over the pack contract:
-const users = await admin.supabase
-  .execute(admin.supabase.sql.auth.users.select('id', 'email').build())
-  .toArray();
+// SQL builder over the pack contract — rows come from `query`, not `execute`:
+const users = await admin.supabase.query(
+  admin.supabase.sql.auth.users.select('id', 'email').build(),
+);
 
 // ORM over the pack contract:
 const sessions = await admin.supabase.orm.auth.AuthSession.select('id', 'aal').all();
@@ -217,9 +205,8 @@ The concept: the runtime needs a **direct, session-capable** Postgres connection
 9. **Passing both `jwksUrl` and `jwtSecret`** (or neither) — the `supabase()` promise rejects with `SUPABASE.CONFIG_INVALID`. It's an async factory, so the misconfiguration surfaces as a rejection (`await` / `.catch`), not a synchronous throw.
 10. **Treating an RLS-filtered write as an error.** An `UPDATE` against a row the role can't see affects **0 rows** (no exception); only `withCheck` violations raise.
 
-## What Prisma Next doesn't do yet
+## What Prisma 8 doesn't do yet
 
-- **No `/control` subpath on the extension** — it can't register through the target façade's `defineConfig({ extensions: [...] })`; wiring goes through the low-level config's `extensions` as shown above. File interest via `references/feedback.md`.
 - **`GRANT` authoring.** Table privileges are not contract elements; the one grant a Supabase app needs (the `service_role` `auth.*` pair for admin reads) is run once by hand (SQL editor / `psql`). If you want grants managed by the contract, file via `references/feedback.md`.
 - **Transactions spanning the app root and the `.supabase` admin root.** The two roots are separate contract-bound runtimes sharing one pool; a cross-root transaction is not supported.
 - **Triggers / functions as contract elements.** The classic "create a profile row on signup" `auth.users` trigger is authored as raw SQL against your database, not in the contract. `auth.uid()` etc. appear only inside opaque policy predicate strings.
@@ -233,7 +220,7 @@ The concept: the runtime needs a **direct, session-capable** Postgres connection
 
 ## Checklist
 
-- [ ] `extensions: [supabasePack]` in the low-level `defineConfig` (no `/control` subpath exists).
+- [ ] `extensions: [supabasePack]` (the `pack` export) in `ormConfig({...})` inside `definePrismaConfig({ orm: ... })`.
 - [ ] Cross-space FK typed `supabase:auth.AuthUser` with explicit `fields` / `references` (+ `onDelete` if wanted).
 - [ ] Every policy target model carries `@@rls`; predicates quote camelCase columns and cast for `auth.uid()`.
 - [ ] `db.ts` uses `await supabase<Contract>({ contractJson, url, jwksUrl | jwtSecret })` — exactly one JWT key source; `jwksUrl` for current projects, `jwtSecret` only for legacy HS256.

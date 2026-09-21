@@ -12,4 +12,5 @@
 model Test {
   id   String @id @default(cuid(2))
   json Json
+  @@map("test")
 }

@@ -1,6 +1,6 @@
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withMongoPort } from '../../../_harness/mongo';
+import { timeouts, withMongoPort } from '../../../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -27,12 +27,12 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Non-ported — see non-ported ledger:
 //   - optional/required `update` sub-operator (content: { upsert: { update: {...} } } or
-//     content: { update: {...} }) — prisma-next has no partial composite-field update sub-operator
+//     content: { update: {...} }) — Prisma 8 has no partial composite-field update sub-operator
 //   - `update push nested list` / `update set nested list` (same reason)
 //   - `unset` required branch — upstream asserts Prisma-specific "Unknown argument `unset`" throw;
-//     prisma-next has no such validation error
+//     Prisma 8 has no such validation error
 //   - `upsert set` / `upsert update` — `content: { upsert: {...} }` composite-level upsert;
-//     no equivalent operator in prisma-next's ORM
+//     no equivalent operator in Prisma 8's ORM
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
   return withMongoPort<Contract>({ contractJson }, fn);
@@ -97,7 +97,7 @@ describe('ports/prisma/functional/composites/object/update', () => {
     );
 
     // Upstream asserts null on required `content` is BOTH a type error and a runtime throw.
-    // Prisma Next rejects it at the type level (@ts-expect-error holds), and MongoDB
+    // Prisma 8 rejects it at the type level (@ts-expect-error holds), and MongoDB
     // rejects it through the provisioned collection validator.
     it(
       'set null',
@@ -321,7 +321,7 @@ describe('ports/prisma/functional/composites/object/update', () => {
     );
 
     // Upstream: `content: { unset: true }` removes the optional composite and returns
-    // `{ content: null, ... }`. prisma-next's `$unset` removes the field from the
+    // `{ content: null, ... }`. Prisma 8's `$unset` removes the field from the
     // document entirely rather than writing `null`, so the returned document lacks
     // the `content` key — faithful port, it.fails.
     it.fails(

@@ -125,7 +125,7 @@ withTempDir(({ createTempDir }) => {
         writeFileSync(
           join(ctx.testDir, 'contract.prisma'),
           [
-            '// use prisma-next',
+            '// use prisma-8',
             '',
             'model AmountProbe {',
             '  id     Int     @id',

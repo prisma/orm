@@ -35,6 +35,18 @@ export interface StructuredError extends Error {
   readonly docsUrl?: string;
 }
 
+/** A finding: a structured error's fields as data, never thrown; `summary` is its message. */
+export interface Diagnostic {
+  readonly code: `${string}.${string}`;
+  readonly severity: 'error' | 'warn' | 'info';
+  readonly summary: string;
+  readonly why?: string;
+  readonly nextActions: readonly NextAction[];
+  readonly where?: { readonly path?: string; readonly line?: number };
+  readonly meta?: Record<string, unknown>;
+  readonly docsUrl?: string;
+}
+
 export interface StructuredErrorOptions {
   readonly why?: string;
   readonly fix?: string;

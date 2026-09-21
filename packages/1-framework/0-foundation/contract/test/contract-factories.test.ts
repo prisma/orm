@@ -63,6 +63,32 @@ describe('createContract', () => {
   });
 });
 
+describe('createContract with named namespaces', () => {
+  it('places each namespace payload under domain.namespaces as given', () => {
+    const contract = createContract({
+      namespaces: {
+        auth: { models: { User: { fields: {}, relations: {}, storage: {} } } },
+        public: { models: {} },
+      },
+    });
+    expect(Object.keys(contract.domain.namespaces)).toEqual(['auth', 'public']);
+    expect(contract.domain.namespaces['auth']?.models['User']).toBeDefined();
+  });
+});
+
+describe('createSqlContract with per-namespace tables', () => {
+  it('builds one storage namespace per table map', () => {
+    const contract = createSqlContract({
+      tables: { auth: { user: { columns: {} } }, public: { post: { columns: {} } } },
+    });
+    expect(contract.storage.namespaces).toEqual({
+      auth: { id: 'auth', entries: { table: { user: { columns: {} } } } },
+      public: { id: 'public', entries: { table: { post: { columns: {} } } } },
+    });
+    expect(contract.storage.storageHash).not.toEqual(createSqlContract().storage.storageHash);
+  });
+});
+
 describe('createSqlContract', () => {
   it('defaults to postgres/sql', () => {
     const contract = createSqlContract();

@@ -1,6 +1,6 @@
 # ADR 029 — Shadow DB preflight semantics
 
-**Status:** Superseded. The team has decided Prisma Next will never use a shadow database: every migration's bookend contracts are stored as on-disk snapshots, so diffing is fully offline, and no sandbox-execution (`preflight`) verb exists. See [CI Integration § No shadow database](../subsystems/8.%20CI%20Integration.md#no-shadow-database). The content below is preserved as a historical record of the superseded design.
+**Status:** Superseded. The Prisma Next CLI never provisions or replays against a shadow database: every migration's bookend contracts are stored as on-disk snapshots, so diffing is fully offline, and no core sandbox-execution (`preflight`) verb exists. Rehearsing a migration against a fork of a real database is a hook a database extension may provide, and the CLI exposes it only when the configured extension implements one. See [CI Integration § No shadow database](../subsystems/8.%20CI%20Integration.md#no-shadow-database). The content below is preserved as a historical record of the superseded design.
 
 ## Context
 

@@ -1,6 +1,6 @@
 # @prisma/orm-family-sql
 
-The SQL family domain of Prisma Next: the SQL contract surface, schema IR, query lanes, SQL builder, and the SQL runtime shared by every SQL target (Postgres, SQLite).
+The SQL family domain of Prisma 8: the SQL contract surface, schema IR, query lanes, SQL builder, and the SQL runtime shared by every SQL target (Postgres, SQLite).
 
 Applications receive it as an exact-pinned dependency of a SQL facade (`@prisma/orm-postgres`, `@prisma/orm-sqlite`); app developers install the facade. Extension authors and decomposed installs building against the SQL family import it directly.
 

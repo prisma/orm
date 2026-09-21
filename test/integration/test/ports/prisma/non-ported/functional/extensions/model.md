@@ -5,7 +5,7 @@ Source: `packages/client/tests/functional/extensions/model.ts`
 Every test in this file exercises the Prisma Client `$extends({ model: {...} })` / `$allModels`
 model-component extension mechanism (per-model and `$allModels` methods, precedence, overriding
 built-in model methods, `Prisma.getExtensionContext(this)` typing, `$parent`, Prisma type-utility
-usage). prisma-next has no `$extends` client-extension surface (zero hits for `$extends`/
+usage). Prisma 8 has no `$extends` client-extension surface (zero hits for `$extends`/
 `getExtensionContext`/`defineExtension`/`$parent` across `packages/` outside node_modules/dist;
 `packages/3-extensions/` is database extensions, not client extensions). The subject of each test
 IS the model-extension mechanism itself.

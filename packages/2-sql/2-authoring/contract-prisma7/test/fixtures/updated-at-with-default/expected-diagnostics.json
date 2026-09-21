@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Timestamps.updatedAtNow\" combines @updatedAt with @default(now()), which Prisma 8 cannot express yet. Remove @default(now()): @updatedAt still sets the value on create and on update, and Prisma 7's next migration removes the column default."
+  }
+]

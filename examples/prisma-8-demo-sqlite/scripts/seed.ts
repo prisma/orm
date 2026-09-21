@@ -1,7 +1,7 @@
 /**
  * Database Seed Script
  *
- * Populates the demo database with sample data using Prisma Next's SQL builder.
+ * Populates the demo database with sample data using Prisma 8's SQL builder.
  *
  * Run with: pnpm seed
  *

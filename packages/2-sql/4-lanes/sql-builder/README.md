@@ -1,6 +1,6 @@
 # @internal/sql-builder
 
-Type-safe SQL query builder for Prisma Next with runtime execution.
+Type-safe SQL query builder for Prisma 8 with runtime execution.
 
 ## Usage
 

@@ -10,7 +10,7 @@ const cases = readdirSync(fixturesDir, { withFileTypes: true })
   .map((entry) => entry.name)
   .sort();
 
-const authoredCaseCount = 22;
+const authoredCaseCount = 23;
 
 describe('format side-by-side fixture pairs', () => {
   it('discovers at least the authored set of fixture cases', () => {

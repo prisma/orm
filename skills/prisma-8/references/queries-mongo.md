@@ -1,4 +1,4 @@
-# Prisma Next — Queries (Mongo)
+# Prisma 8 — Queries (Mongo)
 
 > Load this guide when `db.ts` imports from `@internal/mongo/runtime`.
 
@@ -9,7 +9,7 @@ Shared concepts (result consumption, script teardown, cross-target pitfalls, cap
 **Mongo** (`mongo<Contract>(...)` from `@internal/mongo/runtime`):
 
 - **`db.orm.<root>`** — ORM, lowercased plural contract root (`db.orm.users`, `db.orm.posts`). Same fluent chaining; `.where({ field: value })` object equality is the idiomatic filter form.
-- **`db.query`** — typed aggregation-pipeline builder. Start with `db.query.from('<root>')`, chain `.match(...)` / `.project(...)` / `.group(...)` / `.lookup(...)`, terminal with `.build()`. Execute via `(await db.runtime()).execute(plan)`.
+- **`db.query`** — typed aggregation-pipeline builder. Start with `db.query.from('<root>')`, chain `.match(...)` / `.project(...)` / `.group(...)` / `.lookup(...)`, terminal with `.build()`. Run via `(await db.runtime()).query(plan)` for anything that returns documents; `execute(plan)` is only for a write you want an affected count from, and it throws `RUNTIME.MONGO_STATISTICS_UNSUPPORTED` on a find or aggregate.
 
 Reach for the ORM first; drop to `db.query` when the ORM can't express the shape. Lane choice is local — one query function picks one lane, not the whole app.
 
@@ -49,7 +49,7 @@ const recent = await db.orm.posts
 
 **`.where(...)`** accepts a plain object whose keys are model field names and values are compared with equality (codec-aware — `ObjectId` fields accept string ids from the contract). Chain multiple `.where({ ... })` calls to AND-compose filters.
 
-For operators the object form doesn't cover (`.in([...])`, range comparisons, nested logic), pass a `MongoFilterExpr` — today that means importing filter helpers from `@internal/mongo-query-ast/execution` (a façade-completeness gap; see *What Prisma Next doesn't do yet* in [`queries.md`](./queries.md)). Prefer the object form whenever equality suffices.
+For operators the object form doesn't cover (`.in([...])`, range comparisons, nested logic), pass a `MongoFilterExpr` — today that means importing filter helpers from `@prisma/orm-mongo/query-ast/execution` (a façade-completeness gap; see *What Prisma 8 doesn't do yet* in [`queries.md`](./queries.md)). Prefer the object form whenever equality suffices.
 
 **Polymorphic roots.** When the contract declares variants on a model, narrow before querying:
 
@@ -123,7 +123,7 @@ await db.orm.users.where({ email: 'alice@example.com' }).upsert({
 The Mongo ORM does not expose `.aggregate(...)` / `.groupBy(...)`. Express aggregations through **`db.query`** — the pipeline builder — with `.group(...)` and accumulator helpers:
 
 ```typescript
-import { acc } from '@internal/mongo-query-builder';
+import { acc } from '@prisma/orm-mongo/query-builder';
 
 const runtime = await db.runtime();
 const plan = db.query
@@ -137,18 +137,18 @@ const plan = db.query
   .sort({ postCount: -1 })
   .build();
 
-const byKind = await runtime.execute(plan);
+const byKind = await runtime.query(plan);
 ```
 
-Import `acc` and expression helpers (`fn`) from `@internal/mongo-query-builder` when building computed pipeline stages.
+Import `acc` and expression helpers (`fn`) from `@prisma/orm-mongo/query-builder` when building computed pipeline stages (as `examples/mongo-demo/src/server.ts` does).
 
 ## Workflow — Query builder (`db.query`)
 
-The concept: `db.query.from('<root>')` starts a typed aggregation-pipeline chain. Terminal methods produce a `MongoQueryPlan`; execute it through the runtime:
+The concept: `db.query.from('<root>')` starts a typed aggregation-pipeline chain. Terminal methods produce a `MongoQueryPlan`; run it through the runtime with `query(plan)` (an `AsyncIterableResult` of documents — `await` it for an array):
 
 ```typescript
 // src/queries/analytics.ts
-import { acc, fn } from '@internal/mongo-query-builder';
+import { acc, fn } from '@prisma/orm-mongo/query-builder';
 import { db } from '../prisma/db';
 
 const runtime = await db.runtime();
@@ -161,7 +161,7 @@ const plan = db.query
   .limit(10)
   .project('title', 'authorId', 'createdAt')
   .build();
-const recent = await runtime.execute(plan);
+const recent = await runtime.query(plan);
 
 // Cross-collection join ($lookup).
 const withAuthor = db.query
@@ -175,26 +175,26 @@ const withAuthor = db.query
       .as('author'),
   )
   .build();
-const rows = await runtime.execute(withAuthor);
+const rows = await runtime.query(withAuthor);
 ```
 
 **Filters — `.match(...)`.** Callback form: `.match((f) => f.status.eq('active'))`. Filters AND-compose across chained `.match(...)` calls. Field accessors support property access (`f.email`), callable dot paths (`f('address.city').eq('NYC')`), and `f.rawPath('path')` for migration/backfill paths outside the current contract.
 
-**Write terminals on the builder.** After `.from('users')` or `.from('users').match(...)`, use insert/update/delete terminals:
+**Write terminals on the builder.** After `.from('users')` or `.from('users').match(...)`, use insert/update/delete terminals. Write plans run through `query(plan)` too (one result row carrying the driver's response — the inserted ids, or the document `findOneAndUpdate` returns); reach for `execute(plan)` only on an `update*` / `delete*` plan when all you want is the affected count (any other command kind throws `RUNTIME.MONGO_STATISTICS_UNSUPPORTED`):
 
 ```typescript
-await runtime.execute(
+const inserted = await runtime.query(
   db.query.from('users').insertOne({ name: 'Alice', email: 'a@e.com', bio: null }),
 );
 
-await runtime.execute(
+const { affectedRows } = await runtime.execute(
   db.query
     .from('users')
     .match((f) => f.name.eq('Alice'))
     .updateMany((f) => [f.bio.set('filled')]),
 );
 
-await runtime.execute(
+const [updated] = await runtime.query(
   db.query
     .from('users')
     .match((f) => f.email.eq('a@e.com'))
@@ -204,7 +204,7 @@ await runtime.execute(
 
 Update callbacks return arrays of field operations (`.set`, `.inc`, `.push`, `.pull`, …). Pipeline-style updates use `f.stage.set(...)` inside an aggregation chain, then `.updateMany()` with no callback.
 
-**Plans vs ORM.** The ORM's `.create` / `.update` / `.all` issue queries directly. Don't pass ORM collections to `runtime.execute` — that entry point is for `db.query` plans (and migration/runtime internals).
+**Plans vs ORM.** The ORM's `.create` / `.update` / `.all` issue queries directly. Don't pass ORM collections to `runtime.query` / `runtime.execute` — those entry points are for `db.query` plans (and migration/runtime internals).
 
 ## Common Pitfalls (Mongo)
 
@@ -213,9 +213,9 @@ Update callbacks return arrays of field operations (`.set`, `.inc`, `.push`, `.p
 3. **Calling `.update()` / `.delete()` without `.where()`.** Mutations other than `.create` / `.createAll` require a filter — the compiler enforces this at the type level where possible.
 4. **Using PascalCase model names on ORM.** Roots are lowercased plurals from the contract (`db.orm.users`, not `db.orm.User`).
 5. **Expecting Postgres-style lambda `.where((u) => u.email.eq(...))` on ORM.** Prefer object equality `.where({ email: '...' })`; richer operators need `MongoFilterExpr` helpers (façade gap today).
-6. **Expecting `db.transaction(...)`.** The Mongo façade does not expose it today. Multi-document atomicity requires MongoDB transactions on a replica set via the driver — not yet wrapped in the Prisma Next façade. Route to *What Prisma Next doesn't do yet* / `references/feedback.md` if the user needs this.
+6. **Expecting `db.transaction(...)`.** The Mongo façade does not expose it today. Multi-document atomicity requires MongoDB transactions on a replica set via the driver — not yet wrapped in the Prisma 8 façade. Route to *What Prisma 8 doesn't do yet* / `references/feedback.md` if the user needs this.
 7. **Trying to use `db.sql`.** There is no `db.sql` on Mongo.
-8. **Trying to `db.execute(plan)` directly.** Execute query-builder plans via `(await db.runtime()).execute(plan)`.
+8. **Trying to `db.execute(plan)` directly, or reading documents with `execute`.** Run query-builder plans via `(await db.runtime()).query(plan)`. `execute(plan)` resolves statistics only and throws `RUNTIME.MONGO_STATISTICS_UNSUPPORTED` for a find or aggregate.
 9. **Expecting ORM `.aggregate(...)` / `.groupBy(...)`.** Use `db.query.from(...).group(...).build()` instead.
 
 ## Reference Files
@@ -230,7 +230,7 @@ Update callbacks return arrays of field operations (`.set`, `.inc`, `.push`, `.p
 - [ ] Used lowercased plural ORM roots (`db.orm.users`, not `db.orm.User`).
 - [ ] Chose the right lane (ORM by default; `db.query` for shapes the ORM doesn't express).
 - [ ] Used `.where({ ... }).first()` for single-row reads — not `.all()`.
-- [ ] Executed query-builder plans via `(await db.runtime()).execute(plan)`.
+- [ ] Ran query-builder plans via `(await db.runtime()).query(plan)`; used `execute(plan)` only for an affected count on a write.
 - [ ] For aggregations, used `db.query.from(...).group(...)` rather than a non-existent ORM `.aggregate(...)`.
-- [ ] Did NOT confabulate `db.transaction`, `db.sql`, or ORM `.aggregate(...)` — routed to *What Prisma Next doesn't do yet* / `references/feedback.md` instead.
+- [ ] Did NOT confabulate `db.transaction`, `db.sql`, or ORM `.aggregate(...)` — routed to *What Prisma 8 doesn't do yet* / `references/feedback.md` instead.
 - [ ] Did NOT use the lower-level builder for something the ORM cleanly expresses.

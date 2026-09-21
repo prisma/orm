@@ -1,6 +1,6 @@
 # @prisma/orm-extension-middleware-cache
 
-Opt-in query caching for Prisma Next runtimes, for both the SQL and Mongo families.
+Opt-in query caching for Prisma 8 runtimes, for both the SQL and Mongo families.
 
 ```bash
 pnpm add @prisma/orm-extension-middleware-cache

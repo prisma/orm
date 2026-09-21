@@ -81,7 +81,7 @@ export function starterSchema(
 
 /**
  * Renders a short authoring-appropriate schema sample for embedding in
- * `prisma-next.md`. Returns a complete fenced markdown code block.
+ * `prisma-8.md`. Returns a complete fenced markdown code block.
  *
  * The sample intentionally shows just one model: it's illustrative, not
  * a substitute for the full scaffolded contract file. The TS samples use
@@ -169,7 +169,7 @@ export const contract = defineContract(
 }
 
 function starterSchemaPslPostgres(): string {
-  return `// use prisma-next
+  return `// use prisma-8
 
 model User {
   id        Int      @id @default(autoincrement())
@@ -194,7 +194,7 @@ model Post {
 }
 
 function starterSchemaPslMongo(): string {
-  return `// use prisma-next
+  return `// use prisma-8
 
 model User {
   id       ObjectId @id @map("_id")

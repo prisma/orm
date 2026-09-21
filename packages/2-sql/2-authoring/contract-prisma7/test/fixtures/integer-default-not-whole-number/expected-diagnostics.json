@@ -1,0 +1,32 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"M.big\": @default holds 1.5, which is not an integer; a BigInt default must be a whole number."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"M.bigs\": @default holds 2.5, which is not an integer; a BigInt default must be a whole number."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"M.int\": @default holds 1.5, which is not an integer; an Int default must be a whole number."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Field \"M.small\": @default holds 2.5, which is not an integer; an Int default must be a whole number."
+  },
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Field \"M.ints\": @default holds 2.5, which is not an integer; an Int default must be a whole number."
+  }
+]

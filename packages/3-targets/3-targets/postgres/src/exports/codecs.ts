@@ -53,6 +53,12 @@ export {
   pgVarcharColumn,
 } from '../core/codecs';
 export {
+  PgTimestamptzDateCodec,
+  PgTimestamptzDateDescriptor,
+  pgTimestamptzDateColumn,
+  pgTimestamptzDateDescriptor,
+} from '../core/date-codecs';
+export {
   postgresCodecDescriptorRegistry,
   postgresCodecRegistry,
 } from '../core/registry';

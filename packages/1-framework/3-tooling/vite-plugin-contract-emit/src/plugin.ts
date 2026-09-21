@@ -21,7 +21,7 @@ const MODULE_GRAPH_EXTENSIONS = new Set([
 ]);
 
 /**
- * Creates a Vite plugin that automatically emits Prisma Next contract artifacts.
+ * Creates a Vite plugin that automatically emits Prisma 8 contract artifacts.
  *
  * The plugin resolves watched files from contract source provider metadata,
  * re-emitting contract artifacts on changes with debounce while serializing
@@ -165,7 +165,7 @@ export function prismaVitePlugin(
         server.ws.send({
           type: 'error',
           err: {
-            message: `[prisma-next] ${errorMessage}`,
+            message: `[prisma] ${errorMessage}`,
             stack: errorStack ?? '',
             plugin: PLUGIN_NAME,
           },
@@ -344,7 +344,7 @@ export function prismaVitePlugin(
             ? `Watching the previous dependency set plus ${absoluteConfigPath}`
             : `Watching only ${absoluteConfigPath}`;
         logWarning(
-          `${watchScope} because Prisma Next config inputs could not be resolved.${reason} Contract watch coverage is partial.`,
+          `${watchScope} because Prisma 8 config inputs could not be resolved.${reason} Contract watch coverage is partial.`,
         );
       }
       if (previousWatchedFiles.size > 0) {
@@ -463,7 +463,7 @@ export function prismaVitePlugin(
         viteServer.ws.send({
           type: 'error',
           err: {
-            message: `[prisma-next] ${errorMessage}`,
+            message: `[prisma] ${errorMessage}`,
             stack: '',
             plugin: PLUGIN_NAME,
           },

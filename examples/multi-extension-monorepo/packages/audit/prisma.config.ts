@@ -1,5 +1,5 @@
 /**
- * Prisma Next config for the internal `audit` contract-space package.
+ * Prisma 8 config for the internal `audit` contract-space package.
  *
  * Each "internal package" subdirectory is treated as a self-contained
  * "project" for the CLI: `prisma contract emit` writes

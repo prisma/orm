@@ -22,8 +22,8 @@ import { migrationCheckCommand } from './migration/check';
 import { migrationGraphCommand } from './migration/graph';
 import { migrationListCommand } from './migration/list';
 import { migrationLogCommand } from './migration/log';
-import { migrationNewCommand } from './migration/new';
-import { migrationPlanCommand } from './migration/plan';
+import { createMigrationNewCommand } from './migration/new';
+import { createMigrationPlanCommand } from './migration/plan';
 import { migrationShowCommand } from './migration/show';
 import { migrationStatusCommand } from './migration/status';
 import { normalizeError } from './normalize-error';
@@ -44,7 +44,7 @@ import { resolveTelemetryHooks } from './telemetry/reporting';
  */
 export const BIN_NAME = 'prisma';
 
-export const TELEMETRY_DOCS_URL = 'https://prisma-next.dev/docs/cli/telemetry';
+export const TELEMETRY_DOCS_URL = 'https://www.prisma.io/docs/cli/telemetry';
 
 /**
  * The engine's consent surface — `telemetry status|enable|disable` and the
@@ -109,8 +109,8 @@ export function createBinCommands(createClient: CreateControlClient): MountedTre
     'migration graph': migrationGraphCommand,
     'migration list': migrationListCommand,
     'migration log': migrationLogCommand,
-    'migration new': migrationNewCommand,
-    'migration plan': migrationPlanCommand,
+    'migration new': createMigrationNewCommand(createClient),
+    'migration plan': createMigrationPlanCommand(createClient),
     'migration ref delete': refDeleteCommand,
     'migration ref list': refListCommand,
     'migration ref set': refSetCommand,

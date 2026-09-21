@@ -2,7 +2,7 @@
 
 ## Summary
 
-Cloudflare D1 is a managed, SQLite-compatible database. Prisma Next should support it as a first-class deployment target so that applications authored against the SQLite target can run on Cloudflare Workers, with migrations driven from the CLI via D1's REST API. This document captures the plan, the trade-offs chosen, and the alternatives considered and rejected.
+Cloudflare D1 is a managed, SQLite-compatible database. Prisma 8 should support it as a first-class deployment target so that applications authored against the SQLite target can run on Cloudflare Workers, with migrations driven from the CLI via D1's REST API. This document captures the plan, the trade-offs chosen, and the alternatives considered and rejected.
 
 The core insight is that D1 speaks the same SQL dialect as SQLite but offers a fundamentally different execution model: no interactive transactions over either REST or the Workers binding. Migrations and runtime queries therefore share the SQLite adapter's SQL generation unchanged but diverge in how they execute, lock, and guarantee atomicity.
 
@@ -13,7 +13,7 @@ The core insight is that D1 speaks the same SQL dialect as SQLite but offers a f
 
 ## Architecture Overview
 
-Prisma Next separates `family → target → adapter → driver`. For D1 we add a single new driver package that binds to the existing `targetId: 'sqlite'` — no new target, no new adapter. This is a first for the repo (every target has had a single driver until now), but the framework's capability aggregation already supports it: `mergeCapabilities` in the control API enrichment pipeline aggregates capability declarations from adapters, drivers, targets, and extensions indiscriminately, so a driver can contribute its own capability flags without any framework change.
+Prisma 8 separates `family → target → adapter → driver`. For D1 we add a single new driver package that binds to the existing `targetId: 'sqlite'` — no new target, no new adapter. This is a first for the repo (every target has had a single driver until now), but the framework's capability aggregation already supports it: `mergeCapabilities` in the control API enrichment pipeline aggregates capability declarations from adapters, drivers, targets, and extensions indiscriminately, so a driver can contribute its own capability flags without any framework change.
 
 ### What we reuse from the SQLite target unchanged
 
@@ -43,7 +43,7 @@ Migrations are driven from the Node-based CLI, which has no Workers runtime. The
 
 **`POST /accounts/:id/d1/database/:db/import`** — asynchronous SQL-file ingestion. The CLI uploads the migration SQL to a pre-signed R2 URL (returned by the D1 `init` call), tells D1 to ingest, and polls for completion. This path executes statements sequentially server-side with a different transaction-framing model than `/query`: in particular, `PRAGMA foreign_keys = OFF` takes effect and applies to subsequent statements in the same import. The import pipeline is atomic-on-failure — per wrangler's own comment, *"if the execution fails to complete, your DB will return to its original state and you can safely retry"* — so the DDL either applies cleanly or not at all.
 
-Wrangler exposes the same split without naming it. `wrangler d1 migrations apply` uses `/query` and silently loses data on recreate-table with CASCADE children. `wrangler d1 execute --file=migration.sql` uses the import API and does not. Prisma Next uses the import API from the start for migration application and avoids the trap.
+Wrangler exposes the same split without naming it. `wrangler d1 migrations apply` uses `/query` and silently loses data on recreate-table with CASCADE children. `wrangler d1 execute --file=migration.sql` uses the import API and does not. Prisma 8 uses the import API from the start for migration application and avoids the trap.
 
 Credentials: the same API token works for both endpoints. R2 upload uses the pre-signed URL D1 returns, so no separate R2 credentials are needed.
 
@@ -226,7 +226,7 @@ Rejected. `wrangler d1 migrations apply` takes this path. Empirical testing agai
 
 ### Follow wrangler's model exactly (no marker, no hash, no verification)
 
-Rejected. Wrangler's migrations are hand-authored SQL with no schema-of-record to verify against — the user is the source of truth. Prisma Next has a contract as the declared schema-of-record; discarding the marker and origin/destination hashes would surrender a meaningful correctness property independent of verification. Wrangler's use of the import API *is* adopted; its lack of marker and hash integrity is not.
+Rejected. Wrangler's migrations are hand-authored SQL with no schema-of-record to verify against — the user is the source of truth. Prisma 8 has a contract as the declared schema-of-record; discarding the marker and origin/destination hashes would surrender a meaningful correctness property independent of verification. Wrangler's use of the import API *is* adopted; its lack of marker and hash integrity is not.
 
 ### Advisory lock via a lease-row pattern
 

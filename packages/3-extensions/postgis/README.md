@@ -1,6 +1,6 @@
 # @internal/extension-postgis
 
-Geospatial data for Prisma Next on PostgreSQL, powered by [PostGIS](https://postgis.net).
+Geospatial data for Prisma 8 on PostgreSQL, powered by [PostGIS](https://postgis.net).
 
 Model points, lines, and polygons as first-class columns, query them with a type-safe DSL (`distance`, `containment`, `intersection`, `bounding-box`), and let the framework handle the wire format, SRID metadata, and `CREATE EXTENSION postgis` for you.
 
@@ -46,7 +46,7 @@ export default defineConfig({
 **2. Declare a geometry column in your schema (PSL):**
 
 ```prisma
-// use prisma-next
+// use prisma-8
 
 types {
   WgsGeometry = postgis.Geometry(4326)
@@ -279,5 +279,5 @@ The end-to-end demo in [`examples/prisma-8-postgis-demo`](../../../examples/pris
 ## References
 
 - [PostGIS documentation](https://postgis.net/docs/)
-- [Prisma Next Architecture Overview](../../../docs/Architecture%20Overview.md)
+- [Prisma 8 Architecture Overview](../../../docs/Architecture%20Overview.md)
 - [Extension Packs Guide](../../../docs/reference/Extension-Packs-Naming-and-Layout.md)

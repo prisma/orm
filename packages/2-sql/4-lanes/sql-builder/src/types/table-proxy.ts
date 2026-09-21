@@ -7,7 +7,7 @@ import type {
   StorageColumnMapAt,
   StorageTable,
 } from '@internal/sql-contract/types';
-import type { Expression, FieldProxy, Functions } from '../expression';
+import type { Expression, ExpressionBuilder, FieldProxy, Functions } from '../expression';
 import type {
   DefaultScope,
   EmptyRow,
@@ -17,7 +17,7 @@ import type {
   Scope,
   StorageTableToScopeTable,
 } from '../scope';
-import type { NamespaceTable, TableProxyContract } from './db';
+import type { NamespaceTable, TableNamesInNamespace, TableProxyContract } from './db';
 import type { DeleteQuery, InsertQuery, InsertValues, UpdateQuery } from './mutation-query';
 import type { ContractColumnRef } from './raw-query';
 import type { WithJoin, WithSelect } from './shared';
@@ -92,6 +92,15 @@ export type ContractToQC<
   readonly resolvedColumnOutputTypes: ResolvedColumnTypes<C, NsId, Name>;
   readonly aggregateTypes: ExtractAggregateTypes<C>;
 };
+
+export type WhereFilter<
+  C extends TableProxyContract,
+  NsId extends keyof C['storage']['namespaces'] & string,
+  Name extends TableNamesInNamespace<C, NsId>,
+> = ExpressionBuilder<
+  DefaultScope<Name, NamespaceTable<C, NsId, Name>>,
+  ContractToQC<C, NsId, Name>
+>;
 
 export interface TableProxy<
   C extends TableProxyContract,

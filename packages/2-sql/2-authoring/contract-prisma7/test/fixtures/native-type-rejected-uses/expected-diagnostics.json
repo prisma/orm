@@ -1,0 +1,50 @@
+[
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 7,
+    "message": "Field \"Account.nickname\": native type \"@db.Citext\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Account.currency\": native type \"@db.Citext\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"Account.balance\": native type \"@db.Money\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too; because the field is required and its column has no default, neither client can then insert rows. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Field \"Account.email\": native type \"@db.Citext\" has no Prisma 8 codec, and its @unique uses the field, so @ignore on the field does not help: Prisma 7 still creates the unique index over the column. Add @@ignore to model \"Account\" to keep the model out of the contract: Prisma 7's next migration is empty, but the model disappears from the Prisma 7 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 7 client as well. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Field \"Account.region\": native type \"@db.Citext\" has no Prisma 8 codec, and @@index on model \"Account\" uses the field, so @ignore on the field does not help: Prisma 7 still creates the index over the column. Add @@ignore to model \"Account\" to keep the model out of the contract: Prisma 7's next migration is empty, but the model disappears from the Prisma 7 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 7 client as well. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 19,
+    "message": "Field \"Post.authorEmail\": native type \"@db.Citext\" has no Prisma 8 codec, and relation field \"Post.author\" uses the field, so @ignore on the field does not help: Prisma 7 still creates the foreign key over the column. Add @@ignore to model \"Post\" to keep the model out of the contract: Prisma 7's next migration is empty, but the model disappears from the Prisma 7 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 7 client as well. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 31,
+    "message": "Field \"Comment.authorHandle\": native type \"@db.Citext\" has no Prisma 8 codec. Add @ignore to the field to keep its column out of the contract: Prisma 7's next migration is empty, and the field disappears from the Prisma 7 client too; because the field is required and its column has no default, neither client can then insert rows. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  },
+  {
+    "code": "PSL.PRISMA7_NATIVE_TYPE_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 43,
+    "message": "Field \"Review.readerHandle\": native type \"@db.Citext\" has no Prisma 8 codec, and relation field \"Review.reader\" uses the field, so @ignore on the field does not help: Prisma 7 still creates the foreign key over the column. Add @@ignore to model \"Review\" to keep the model out of the contract: Prisma 7's next migration is empty, but the model disappears from the Prisma 7 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 7 client as well. Changing the field's type instead changes the column type on Prisma 7's next migration."
+  }
+]

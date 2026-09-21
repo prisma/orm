@@ -4,7 +4,7 @@ import { isParentToSenderPayload, type ParentToSenderPayload } from '../src/payl
 const validPayload: ParentToSenderPayload = {
   installationId: 'install-uuid',
   version: '0.9.0',
-  command: 'prisma-next init',
+  command: 'prisma init',
   flags: ['--target'],
   projectRoot: '/abs/project',
   endpoint: 'https://example.test/events',

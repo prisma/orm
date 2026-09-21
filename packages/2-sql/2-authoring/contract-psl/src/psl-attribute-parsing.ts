@@ -1,14 +1,12 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { PslSpan, ResolvedAttribute } from '@internal/psl-parser';
-import { parseQuotedStringLiteral } from '@internal/psl-parser';
+import {
+  type DiagnosticSource,
+  type PslDiagnosticCollector,
+  parseQuotedStringLiteral,
+} from '@internal/psl-parser';
 import type { ExpressionAst } from '@internal/psl-parser/syntax';
 
 export { parseQuotedStringLiteral };
-
-export function lowerFirst(value: string): string {
-  if (value.length === 0) return value;
-  return value[0]?.toLowerCase() + value.slice(1);
-}
 
 export function getAttribute(
   attributes: readonly ResolvedAttribute[] | undefined,
@@ -68,8 +66,8 @@ export function mapFieldNamesToColumns(input: {
   readonly modelName: string;
   readonly fieldNames: readonly string[];
   readonly mapping: { readonly fieldColumns: Map<string, string> };
-  readonly sourceId: string;
-  readonly diagnostics: ContractSourceDiagnostic[];
+  readonly source: DiagnosticSource;
+  readonly diagnostics: PslDiagnosticCollector;
   readonly span: PslSpan;
   readonly entityLabel: string;
 }): readonly string[] | undefined {
@@ -80,8 +78,7 @@ export function mapFieldNamesToColumns(input: {
       input.diagnostics.push({
         code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
         message: `${input.entityLabel} references unknown field "${input.modelName}.${fieldName}"`,
-        sourceId: input.sourceId,
-        span: input.span,
+        ...input.source.at(input.span),
       });
       return undefined;
     }

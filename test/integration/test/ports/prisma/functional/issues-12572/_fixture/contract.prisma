@@ -8,10 +8,11 @@
 //     updatedAt DateTime @updatedAt
 //   }
 //
-// prisma-next: @updatedAt maps to temporal.updatedAt().
+// Prisma 8: @updatedAt maps to temporal.updatedAt().
 
 model User {
   id        String   @id @default(cuid(2))
   createdAt DateTime @default(now())
   updatedAt temporal.updatedAt()
+  @@map("user")
 }

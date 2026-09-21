@@ -1,0 +1,4 @@
+model User {
+  id     Int @id
+  search Unsupported("tsvector")?
+}

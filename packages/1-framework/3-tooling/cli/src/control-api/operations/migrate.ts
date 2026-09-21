@@ -413,7 +413,7 @@ export function planSpacePath({
     // migration packages at all. Advancing the marker without migrations
     // (the db-init aggregate planner's declared-state strategy, mirrored
     // here) is valid exclusively when every element the space declares is
-    // externally managed — nothing Prisma Next owns exists in such a space
+    // externally managed — nothing Prisma ORM owns exists in such a space
     // (e.g. Supabase's auth/storage), so its declared state needs no
     // migration to be true, and there is no command that could author an
     // edge for it. A space that declares a managed element but ships no

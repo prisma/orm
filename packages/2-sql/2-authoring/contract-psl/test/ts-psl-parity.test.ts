@@ -19,6 +19,7 @@ import {
   temporalCodecPresetMirrors,
   temporalConvenienceMirrors,
   testEnumEntityContributions,
+  testEnumPslBlockDescriptor,
 } from './fixtures';
 
 const sqlFamilyPack = {
@@ -61,6 +62,7 @@ const portablePostgresTargetPack = {
   defaultNamespaceId: 'public',
   authoring: {
     entityTypes: testEnumEntityContributions,
+    pslBlockDescriptors: { enum: testEnumPslBlockDescriptor },
     type: {},
   },
 } as const satisfies TargetPackRef<'sql', 'postgres'>;
@@ -146,30 +148,7 @@ const sqliteTimestampTargetPack = {
           nativeType: 'text',
         },
       },
-      temporal: {
-        createdAt: {
-          kind: 'fieldPreset',
-          output: {
-            codecId: 'sqlite/datetime@1',
-            nativeType: 'text',
-            default: {
-              kind: 'function',
-              expression: 'now()',
-            },
-          },
-        },
-        updatedAt: {
-          kind: 'fieldPreset',
-          output: {
-            codecId: 'sqlite/datetime@1',
-            nativeType: 'text',
-            executionDefaults: {
-              onCreate: { kind: 'generator', id: 'timestampNow' },
-              onUpdate: { kind: 'generator', id: 'timestampNow' },
-            },
-          },
-        },
-      },
+      temporal: temporalConvenienceMirrors.sqlite,
     },
   },
 } as const satisfies TargetPackRef<'sql', 'sqlite'>;
@@ -249,6 +228,7 @@ model User {
   embedding Embedding1536?
   createdAt DateTime @default(now())
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -257,6 +237,7 @@ model Post {
   title String
   author User @relation(fields: [authorId], references: [id], map: "post_author_id_fkey", onDelete: Cascade)
   @@index([authorId], map: "post_author_id_idx")
+  @@map("post")
 }
 `;
 
@@ -349,8 +330,9 @@ describe('TS and PSL authoring parity', () => {
   const timestampParityPslSchema = `model User {
   id Int @id
   email String
-  createdAt DateTime @default(now())
+  createdAt temporal.createdAt()
   updatedAt temporal.updatedAt()
+  @@map("user")
 }`;
 
   function expectTimestampParity(target: {
@@ -405,6 +387,7 @@ describe('TS and PSL authoring parity', () => {
   model User {
     id Int @id
     posts Post[]
+    @@map("user")
   }
 }
 
@@ -412,6 +395,7 @@ model Post {
   id Int @id
   authorId Int
   author User @relation(fields: [authorId], references: [id])
+  @@map("post")
 }
 `,
       sourceId: 'schema.prisma',
@@ -487,6 +471,7 @@ model Post {
   id    Int    @id
   email String
   @@index(expression: "lower(email)", name: "users_email_eq")
+  @@map("user")
 }
 `,
       sourceId: 'schema.prisma',
@@ -551,6 +536,7 @@ model Post {
   id    Int    @id
   email String
   @@index(expression: "eql_v3.eq_term(email)", where: "(deleted_at IS NULL)", unique: true, name: "users_email_eq", type: "bm25", options: {})
+  @@map("user")
 }
 `,
       sourceId: 'schema.prisma',
@@ -625,6 +611,7 @@ model Post {
   id    Int    @id
   email String
   @@index([email], map: "users_email_adopted")
+  @@map("user")
 }
 `,
       sourceId: 'schema.prisma',
@@ -675,6 +662,7 @@ model Post {
   id    Int    @id
   email String
   @@index([email], name: "user_email_lookup")
+  @@map("user")
 }
 `,
       sourceId: 'schema.prisma',
@@ -730,6 +718,7 @@ model Post {
   id Int @id
   email String @map("email")
   @@index([email])
+  @@map("user")
 }
 `,
       sourceId: 'schema.prisma',
@@ -793,6 +782,7 @@ model Post {
         schema: `model User {
   id Int @id
   stamped ${field}
+  @@map("user")
 }`,
         sourceId: 'schema.prisma',
       });

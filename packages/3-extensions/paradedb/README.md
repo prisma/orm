@@ -1,6 +1,6 @@
 # @internal/extension-paradedb
 
-ParadeDB full-text search extension pack for Prisma Next.
+ParadeDB full-text search extension pack for Prisma 8.
 
 ## Overview
 
@@ -83,4 +83,4 @@ See [ADR 212 — Contract spaces](../../../docs/architecture%20docs/adrs/ADR%202
 - [ParadeDB CREATE INDEX](https://docs.paradedb.com/documentation/indexing/create-index)
 - [ADR 210 — Index-type registry](../../../docs/architecture%20docs/adrs/ADR%20210%20-%20Index-type%20registry.md)
 - [ADR 212 — Contract spaces](../../../docs/architecture%20docs/adrs/ADR%20212%20-%20Contract%20spaces.md)
-- [Prisma Next Architecture Overview](../../../docs/Architecture%20Overview.md)
+- [Prisma 8 Architecture Overview](../../../docs/Architecture%20Overview.md)

@@ -1,6 +1,6 @@
 # @prisma/orm-extension-postgis
 
-Geospatial columns, operators, and indexes for Prisma Next on PostgreSQL, powered by [PostGIS](https://postgis.net).
+Geospatial columns, operators, and indexes for Prisma 8 on PostgreSQL, powered by [PostGIS](https://postgis.net).
 
 ```bash
 pnpm add @prisma/orm-extension-postgis

@@ -232,7 +232,7 @@ describe('init scaffold', () => {
                 'src/prisma/contract.prisma',
                 'prisma.config.ts',
                 'src/prisma/db.ts',
-                'prisma-next.md',
+                'prisma-8.md',
               ],
             },
           },
@@ -257,8 +257,8 @@ describe('init scaffold', () => {
 
         expect(envelopeOf(run)).toMatchObject({ ok: true });
         expect(run.exitCode).toBe(0);
-        expect(calls[1]?.args).toEqual(['add', '-D', 'prisma@next']);
-        expect(calls[2]?.args).toEqual(['add', '-D', '@prisma/cli-engine@next']);
+        expect(calls[1]?.args).toEqual(['add', '-D', 'prisma@latest']);
+        expect(calls[2]?.args).toEqual(['add', '-D', '@prisma/cli-engine@latest']);
       },
       timeouts.coldTransformImport,
     );

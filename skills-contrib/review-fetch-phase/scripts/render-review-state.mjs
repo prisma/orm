@@ -5,7 +5,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { assertReviewStateV1 } from './review-artifacts.mjs';
+import { assertReviewStateV2 } from './review-artifacts.mjs';
 
 const EXIT_SUCCESS = 0;
 const EXIT_OPERATIONAL = 1;
@@ -125,7 +125,7 @@ function formatAuthorLogin(author) {
 }
 
 export function renderReviewStateMarkdown(payload, { sourcePath }) {
-  assertReviewStateV1(payload);
+  assertReviewStateV2(payload);
 
   const source = formatCodeSpan(sourcePath || 'review-state.json');
   const lines = [];

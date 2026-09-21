@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { createPostgresBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
   createPostgresDefaultFunctionRegistry,
+  createPostgresDefaultLiteralTagRegistry,
   createPostgresMutationDefaultGeneratorDescriptors,
   postgresAuthoringTypes,
   postgresNativeAuthoringTypes,
@@ -46,6 +47,26 @@ describe('createPostgresDefaultFunctionRegistry', () => {
         'dbgenerated',
       ]),
     );
+  });
+
+  it('retains declaration documentation in the opaque function registry', () => {
+    expect(registry.get('now')?.signature).toMatchObject({
+      documentation: 'Uses the current database timestamp as the default value.',
+    });
+    expect(registry.get('uuid')?.signature).toMatchObject({
+      documentation: 'Generates a UUID when a value is not supplied.',
+      positional: [
+        {
+          key: 'version',
+          documentation: 'The UUID version: `4` or `7`. Defaults to `4`.',
+          type: { kind: 'oneOf', optional: true },
+        },
+      ],
+    });
+  });
+
+  it('registers no named gen_random_uuid function; raw database functions use sql`...`', () => {
+    expect(registry.has('gen_random_uuid')).toBe(false);
   });
 
   it('lowers autoincrement() to a storage default', () => {
@@ -285,12 +306,16 @@ describe('postgresScalarAuthoringTypes', () => {
     ['Bytes', 'pg/bytea@1'],
   ] as const;
 
-  it('pins every base scalar as a zero-arg type constructor with manifest-derived nativeType', () => {
+  it('pins every base scalar as a zero-arg type constructor with its native type', () => {
     expect(Object.keys(namespace).sort()).toEqual(expectedScalars.map(([name]) => name).sort());
     for (const [name, codecId] of expectedScalars) {
       expect(namespace[name]).toEqual({
         kind: 'typeConstructor',
-        output: { codecId, nativeType: codecLookup.targetTypesFor(codecId)?.[0] },
+        documentation: expect.stringMatching(/\S/),
+        output: {
+          codecId,
+          nativeType: codecLookup.targetTypesFor(codecId)?.[0],
+        },
       });
     }
   });
@@ -328,6 +353,7 @@ describe('postgresNativeAuthoringTypes', () => {
       DateString: { codecId: 'pg/date-string@1', nativeType: 'date' },
       TimestampString: { codecId: 'pg/timestamp-string@1', nativeType: 'timestamp' },
       TimestamptzString: { codecId: 'pg/timestamptz-string@1', nativeType: 'timestamptz' },
+      TimestamptzJsDate: { codecId: 'pg/timestamptz-date@1', nativeType: 'timestamptz' },
       TimeString: { codecId: 'pg/time-string@1', nativeType: 'time' },
     });
   });
@@ -375,5 +401,72 @@ describe('postgresNativeAuthoringTypes', () => {
         [-1],
       ),
     ).toThrow('must be >= 0');
+  });
+});
+
+describe('createPostgresDefaultLiteralTagRegistry', () => {
+  const tagRegistry = createPostgresDefaultLiteralTagRegistry();
+
+  it('registers sql and pg.sql, in that order', () => {
+    expect([...tagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+    expect(tagRegistry.get('sql')?.usage).toBe('sql`...`');
+    expect(tagRegistry.get('pg.sql')?.usage).toBe('pg.sql`...`');
+  });
+
+  it('lowers a body verbatim as a function default', () => {
+    const result = tagRegistry.get('pg.sql')!.lower({
+      literal: { tag: 'pg.sql', body: "'{}'::jsonb", span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: { kind: 'storage', defaultValue: { kind: 'function', expression: "'{}'::jsonb" } },
+    });
+  });
+
+  it('is wired as the adapter descriptor tag registry', () => {
+    const registries = postgresAdapterDescriptor.controlMutationDefaults;
+    if (registries === undefined)
+      throw new Error('the adapter descriptor declares mutation defaults');
+    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'pg.sql']);
+  });
+
+  it.each([
+    ['sql', 'now'],
+    ['pg.sql', 'autoincrement'],
+  ])('refuses %s`%s()`, which is a Prisma default function', (tag, name) => {
+    const result = tagRegistry.get(tag)!.lower({
+      literal: { tag, body: `${name}()`, span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toMatchObject({
+      ok: false,
+      diagnostic: {
+        code: 'PSL_INVALID_DEFAULT_SQL',
+        message: `Write @default(${name}()) instead of ${tag}\`${name}()\`; ${name}() is a Prisma default function, not raw SQL.`,
+      },
+    });
+  });
+
+  it('lowers sql`gen_random_uuid()` verbatim', () => {
+    const result = tagRegistry.get('sql')!.lower({
+      literal: { tag: 'sql', body: 'gen_random_uuid()', span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        kind: 'storage',
+        defaultValue: { kind: 'function', expression: 'gen_random_uuid()' },
+      },
+    });
+  });
+
+  it("accepts sql`now() + interval '1 day'`", () => {
+    const result = tagRegistry.get('sql')!.lower({
+      literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
+      context: stubContext,
+    });
+    expect(result).toMatchObject({ ok: true });
   });
 });

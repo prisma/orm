@@ -157,7 +157,7 @@ describe('mongo-demo blog integration', { timeout: timeouts.spinUpMongoMemorySer
         createdAt: new Date('2026-01-15'),
       },
       {
-        title: 'Mongo with Prisma Next',
+        title: 'Mongo with Prisma 8',
         content: 'Using the contract-first approach',
         kind: 'tutorial',
         authorId: bob._id as string,
@@ -179,7 +179,7 @@ describe('mongo-demo blog integration', { timeout: timeouts.spinUpMongoMemorySer
 
     const bobPost = posts.find((p) => String(p.authorId) === String(bob._id));
     expect(bobPost).toMatchObject({
-      title: 'Mongo with Prisma Next',
+      title: 'Mongo with Prisma 8',
       author: { name: 'Bob' },
     });
   });

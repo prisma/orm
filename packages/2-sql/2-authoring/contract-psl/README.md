@@ -1,6 +1,6 @@
 # @internal/sql-contract-psl
 
-PSL-first SQL contract interpretation for Prisma Next.
+PSL-first SQL contract interpretation for Prisma 8.
 
 ## Overview
 
@@ -15,7 +15,7 @@ This keeps core/CLI source-agnostic while giving PSL-first SQL users a one-line 
 
 - Interpret a PSL `SymbolTable` into SQL `Contract`
 - Interpret generic PSL attributes into SQL contract semantics (`@id`, `@unique`, `@default`, `@relation`, `@map`, `@@map`, `@@control`)
-- Interpret SQL timestamp semantics: `DateTime @default(now())` (or the equivalent `temporal.createdAt()` field-preset call) as a storage default, and `temporal.updatedAt()` as an execution mutation default
+- Interpret SQL timestamp semantics: `DateTime @default(now())` as a storage default, and `temporal.createdAt()` / `temporal.updatedAt()` as client-side execution mutation defaults
 - Lower shared constructor expressions in both `types {}` blocks and inline field positions (for example `ShortName = sql.String(length: 35)` and `embedding pgvector.Vector(length: 1536)?`)
 - Lower supported default functions through composed registry inputs
 - Resolve Postgres native storage types from bare names and constructor calls in type position (`Char`, `VarChar`, `Numeric`, `Uuid`, `Inet`, `SmallInt`, `Real`, `Timestamp`, `Timestamptz`, `Date`, `Time`, `Timetz`, `Json`, `Jsonb`, `BigIntNumber`, `UnboundedInt`)
@@ -60,14 +60,16 @@ Unsupported PSL constructs in v1 (strict errors):
 Supported `@default(...)` surface in v1 when composed contributors provide handlers:
 
 - Storage defaults: `autoincrement()`, `now()`, literals, `dbgenerated("...")`
+- Raw SQL defaults as a tagged literal: a tag followed by a string literal, as in `` @default(sql`(now() + interval '7 days')`) `` or, for a body with backticks, `@default(sql"(now() + '00:03:00'::interval)")`. The string may use any quote style, and whitespace, newlines, or comments may sit between the tag and the string. A backtick string may span lines and resolves only `` \` `` and `\\`, so `${` is ordinary text and needs no escape; `"` and `'` strings resolve the usual escapes. A backtick string is only valid after a tag; anywhere else it is `PSL_BACKTICK_STRING_REQUIRES_TAG`. A body that is exactly `now()` or `autoincrement()` (`` sql`now()` ``) is refused: write the named form, `@default(now())`. Any other body, including `NOW()` and `gen_random_uuid()`, is used as written. The body is canonicalized (line endings, a blank first and last line, common indentation) and used verbatim as the default expression. `sql` is registered by every SQL target; `pg.sql` (Postgres) and `sqlite.sql` (SQLite) are target-prefixed spellings of the same tag. An unregistered tag is `PSL_UNKNOWN_DEFAULT_LITERAL_TAG`, reported when the default is lowered.
 - Execution defaults: `uuid()`, `uuid(4)`, `uuid(7)`, `cuid(2)`, `ulid()`, `nanoid()`, `nanoid(<2-255>)`
 - Explicitly unsupported in v1: `cuid()` (diagnostic suggests `cuid(2)`)
 - `dbgenerated("...")` preserves the parsed PSL string-literal contents as-is (escaped sequences are not normalized in v1).
 
 Supported timestamp authoring surface:
 
-- `createdAt DateTime @default(now())` and `createdAt temporal.createdAt()` both lower to the target storage default and do not create an execution mutation default.
-- `updatedAt temporal.updatedAt()` lowers to `timestampNow` on create and on non-empty update mutations. This is application-side because update-time semantics are mutation-aware, not a database trigger.
+- `createdAt DateTime @default(now())` lowers to the target storage default and does not create an execution mutation default.
+- `createdAt temporal.createdAt()` generates a client-side timestamp on create, without a database default.
+- `updatedAt temporal.updatedAt()` uses the same execution generator on create and on non-empty update mutations. Matching representations share one generated value per operation; updates leave `createdAt` unchanged. These semantics are application-side, not database triggers.
 - The Prisma-flavored `@updatedAt` attribute is not supported; references produce `PSL_UNSUPPORTED_FIELD_ATTRIBUTE` with a migration hint pointing at `temporal.updatedAt()`. The hint is suppressed when the field already declares any `temporal.*` preset.
 - `@createdAt` is not supported as a PSL alias.
 

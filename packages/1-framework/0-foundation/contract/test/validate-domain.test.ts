@@ -258,6 +258,7 @@ describe('validateContractDomain()', () => {
               creator: {
                 to: crossRef('User'),
                 cardinality: 'N:1',
+                nullable: false,
                 on: { localFields: ['creatorId'], targetFields: ['_id'] },
               },
             },
@@ -276,6 +277,7 @@ describe('validateContractDomain()', () => {
               creator: {
                 to: crossRef('Ghost'),
                 cardinality: 'N:1',
+                nullable: false,
                 on: { localFields: ['creatorId'], targetFields: ['_id'] },
               },
             },
@@ -285,6 +287,112 @@ describe('validateContractDomain()', () => {
       expect(() => validateContractDomain(contract)).toThrow(
         /relation.*creator.*Item.*target.*Ghost.*not exist/i,
       );
+    });
+  });
+
+  describe('relation nullability flag', () => {
+    function contractWithRelation(relation: Record<string, unknown>) {
+      return makeValidContract({
+        roots: { items: crossRef('Item'), users: crossRef('User') },
+        models: {
+          Item: makeMinimalModel({ relations: { rel: relation } }),
+          User: makeMinimalModel(),
+        },
+      });
+    }
+
+    it.each(['N:1', '1:1'] as const)(
+      'accepts a %s relation without the flag, which hydration fills in from storage',
+      (cardinality) => {
+        const contract = contractWithRelation({
+          to: crossRef('User'),
+          cardinality,
+          on: { localFields: ['userId'], targetFields: ['_id'] },
+        });
+        expect(() => validateContractDomain(contract)).not.toThrow();
+      },
+    );
+
+    it.each([true, false])('accepts a to-one relation with nullable: %s', (nullable) => {
+      const contract = contractWithRelation({
+        to: crossRef('User'),
+        cardinality: 'N:1',
+        nullable,
+        on: { localFields: ['userId'], targetFields: ['_id'] },
+      });
+      expect(() => validateContractDomain(contract)).not.toThrow();
+    });
+
+    it('rejects a non-boolean flag', () => {
+      const contract = contractWithRelation({
+        to: crossRef('User'),
+        cardinality: 'N:1',
+        nullable: 'yes',
+        on: { localFields: ['userId'], targetFields: ['_id'] },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        /Relation "rel" on model ".*Item".*"nullable" must be a boolean/,
+      );
+    });
+
+    it('rejects the flag on a 1:N relation', () => {
+      const contract = contractWithRelation({
+        to: crossRef('User'),
+        cardinality: '1:N',
+        nullable: true,
+        on: { localFields: ['_id'], targetFields: ['itemId'] },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        /Relation "rel" on model ".*Item".*1:N.*must not carry "nullable"/,
+      );
+    });
+
+    it('rejects the flag on an N:M relation', () => {
+      const contract = contractWithRelation({
+        to: crossRef('User'),
+        cardinality: 'N:M',
+        nullable: false,
+        on: { localFields: ['_id'], targetFields: ['_id'] },
+        through: {
+          table: 'item_users',
+          namespaceId: 'public',
+          parentColumns: ['item_id'],
+          childColumns: ['user_id'],
+          targetColumns: ['_id'],
+        },
+      });
+      expect(() => validateContractDomain(contract)).toThrow(/N:M.*must not carry "nullable"/);
+    });
+
+    it('rejects the flag on an embed relation', () => {
+      const contract = contractWithRelation({
+        to: crossRef('User'),
+        cardinality: '1:1',
+        nullable: true,
+      });
+      expect(() => validateContractDomain(contract)).toThrow(
+        /embed relation.*must not carry "nullable"/,
+      );
+    });
+
+    it('accepts embed and to-many relations without the flag', () => {
+      const contract = makeValidContract({
+        roots: { items: crossRef('Item'), users: crossRef('User') },
+        models: {
+          Item: makeMinimalModel({
+            relations: {
+              owner: { to: crossRef('User'), cardinality: '1:1' },
+              users: {
+                to: crossRef('User'),
+                cardinality: '1:N',
+                on: { localFields: ['_id'], targetFields: ['itemId'] },
+              },
+            },
+          }),
+          User: makeMinimalModel(),
+        },
+      });
+      expect(() => validateContractDomain(contract)).not.toThrow();
     });
   });
 
@@ -463,6 +571,7 @@ describe('validateContractDomain()', () => {
               assignee: {
                 to: crossRef('User'),
                 cardinality: 'N:1',
+                nullable: false,
                 on: { localFields: ['assigneeId'], targetFields: ['_id'] },
               },
               comments: {

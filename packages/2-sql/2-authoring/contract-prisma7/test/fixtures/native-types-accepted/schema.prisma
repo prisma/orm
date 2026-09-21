@@ -1,0 +1,28 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model NativeTypes {
+  text            String    @db.Text
+  varChar         String    @db.VarChar(255)
+  char            String    @db.Char(10)
+  uuid            String    @db.Uuid
+  inet            String    @db.Inet
+  boolean         Boolean   @db.Boolean
+  integer         Int       @id @db.Integer
+  smallInt        Int       @db.SmallInt
+  bigInt          BigInt    @db.BigInt
+  real            Float     @db.Real
+  doublePrecision Float     @db.DoublePrecision
+  decimal         Decimal   @db.Decimal(10, 2)
+  timestamp       DateTime  @db.Timestamp(6)
+  timestamptz     DateTime  @db.Timestamptz(6)
+  date            DateTime  @db.Date
+  time            DateTime  @db.Time(6)
+  timetz          DateTime  @db.Timetz(6)
+  json            Json      @db.Json
+  jsonB           Json      @db.JsonB
+  byteA           Bytes     @db.ByteA
+  varCharList     String[]  @db.VarChar(32)
+  timestamptzOpt  DateTime? @db.Timestamptz(3)
+}

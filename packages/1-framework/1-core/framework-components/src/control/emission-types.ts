@@ -12,6 +12,10 @@ export interface GenerateContractTypesOptions {
    */
   readonly aggregateDescriptors?: ReadonlyArray<AggregateDescriptor>;
   readonly codecDescriptors?: ReadonlyArray<AnyCodecDescriptor>;
+  /**
+   * The target's namespace declaration. `false` drops the namespace segment from emitted `Models` member names and from the `models` constant; absent means `true`.
+   */
+  readonly supportsNamespaces?: boolean;
 }
 
 export interface ValidationContext {

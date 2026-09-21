@@ -559,15 +559,9 @@ describe('ControlClient progress emission', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.failure.code).toBe('CONTRACT_SOURCE_INVALID');
-        expect(result.failure.diagnostics).toEqual({
-          summary: 'Contract source provider threw an exception',
-          diagnostics: [
-            {
-              code: 'PROVIDER_THROW',
-              message: 'Source load error',
-            },
-          ],
-        });
+        expect(result.failure.summary).toBe('Failed to resolve contract source');
+        expect(result.failure.why).toBe('Source load error');
+        expect(result.failure).not.toHaveProperty('diagnostics');
       }
 
       // Should emit resolveSource span with error outcome
@@ -609,7 +603,13 @@ describe('ControlClient progress emission', () => {
       if (!result.ok) {
         expect(result.failure.code).toBe('CONTRACT_SOURCE_INVALID');
         expect(result.failure.diagnostics?.summary).toBe('Provider failed');
-        expect(result.failure.diagnostics?.diagnostics).toHaveLength(1);
+        expect(result.failure.diagnostics?.diagnostics).toEqual([
+          {
+            code: 'PSL_INVALID_MODEL',
+            message: 'Model declaration is invalid',
+            sourceId: 'schema.prisma',
+          },
+        ]);
       }
     });
 
@@ -1102,5 +1102,128 @@ describe('ControlClient progress emission', () => {
       },
       timeouts.databaseOperation,
     );
+  });
+
+  describe('renderContractDts()', () => {
+    it(
+      'renders the same declarations emit() produces for the contract',
+      async () => {
+        const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
+        const client = createControlClient({
+          family: mockFamily,
+          target: mockTarget,
+          adapter: mockAdapter,
+        });
+
+        const emitted = await client.emit({
+          contractConfig: { source: createSourceProvider(), output: '/tmp/contract.json' },
+        });
+        const rendered = await client.renderContractDts({
+          contract: emittableContract(),
+          resolveImportSpecifier: (specifier) => specifier,
+        });
+        await client.close();
+
+        expect(emitted.ok).toBe(true);
+        expect(rendered.ok).toBe(true);
+        if (emitted.ok && rendered.ok) {
+          expect(rendered.value.contractDts).toContain('export type Contract');
+          expect(rendered.value.contractDts).toBe(emitted.value.contractDts);
+        }
+      },
+      timeouts.databaseOperation,
+    );
+
+    it(
+      'rewrites the import specifiers through the resolver it is given',
+      async () => {
+        const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
+        const client = createControlClient({
+          family: mockFamily,
+          target: mockTarget,
+          adapter: mockAdapter,
+        });
+
+        const rendered = await client.renderContractDts({
+          contract: emittableContract(),
+          resolveImportSpecifier: (specifier) => specifier.replace(/^@internal\//, '@published/'),
+        });
+        await client.close();
+
+        expect(rendered.ok).toBe(true);
+        if (rendered.ok) {
+          expect(rendered.value.contractDts).toContain("from '@published/contract/types'");
+        }
+      },
+      timeouts.databaseOperation,
+    );
+
+    it("canonicalises with the target's preserve-empty hook before the family re-reads the contract", async () => {
+      const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
+      const target = {
+        ...mockTarget,
+        contractSerializer: {
+          ...mockTarget.contractSerializer,
+          shouldPreserveEmpty: (path: readonly string[]) => path.at(-1) === 'tables',
+        },
+      } as unknown as typeof mockTarget;
+      mockFamilyInstance.deserializeContract = (json: unknown) => {
+        const tables = (json as { storage: { namespaces: { app: { tables?: unknown } } } }).storage
+          .namespaces.app.tables;
+        if (tables === undefined) {
+          throw new Error('storage.namespaces.app.tables must be an object (was missing)');
+        }
+        return json as Contract;
+      };
+      const client = createControlClient({ family: mockFamily, target, adapter: mockAdapter });
+
+      const rendered = await client.renderContractDts({ contract: emittableContract() });
+      await client.close();
+
+      expect(rendered.ok).toBe(true);
+    });
+
+    it('reports a contract the family rejects as CONTRACT_VALIDATION_FAILED', async () => {
+      const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
+      mockFamilyInstance.deserializeContract = () => {
+        throw new Error('storage.storageHash must be a string');
+      };
+      const client = createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+      });
+
+      const rendered = await client.renderContractDts({ contract: { storage: {} } });
+      await client.close();
+
+      expect(rendered.ok).toBe(false);
+      if (!rendered.ok) {
+        expect(rendered.failure).toMatchObject({
+          code: 'CONTRACT_VALIDATION_FAILED',
+          why: 'storage.storageHash must be a string',
+        });
+      }
+    });
+
+    it('reports a contract the emitter refuses as RENDER_FAILED', async () => {
+      const { mockFamily, mockTarget, mockAdapter, mockFamilyInstance } = createMockComponents();
+      mockFamilyInstance.deserializeContract = () =>
+        ({ ...emittableContract(), storage: undefined }) as unknown as Contract;
+      const client = createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+      });
+
+      const rendered = await client.renderContractDts({ contract: emittableContract() });
+      await client.close();
+
+      expect(rendered.ok).toBe(false);
+      if (!rendered.ok) {
+        expect(rendered.failure.code).toBe('RENDER_FAILED');
+        expect(rendered.failure.why).toEqual(expect.any(String));
+      }
+    });
   });
 });

@@ -3,17 +3,20 @@ model Post {
   title      String
   comments   Comment[]
   categories Category[]
+  @@map("post")
 }
 
 model Comment {
   id     Int  @id
   post   Post @relation(fields: [postId], references: [id])
   postId Int
+  @@map("comment")
 }
 
 model Category {
   id    Int    @id
   posts Post[]
+  @@map("category")
 }
 
 model PostCategory {
@@ -23,4 +26,5 @@ model PostCategory {
   category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@id([postId, categoryId])
+  @@map("postCategory")
 }

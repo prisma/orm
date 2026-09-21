@@ -190,13 +190,10 @@ function classifyCall(call: PostgresOpFactoryCall): CallCategory {
       // to preserve the codec-emitted label and precheck/postcheck.
       // Classification falls back to inspecting the underlying op's target
       // details (`objectType: 'type'`).
-      const op = (
-        call as {
-          op?: {
-            target?: { details?: { objectType?: string } };
-          };
-        }
-      ).op;
+      const op = blindCast<
+        { op?: { target?: { details?: { objectType?: string } } } },
+        'RawSqlCall exposes op details used only for sequencing type operations'
+      >(call).op;
       const objectType = op?.target?.details?.objectType;
       if (objectType === 'type') return 'dep';
       return 'alter';
@@ -246,18 +243,21 @@ function locationForCall(call: PostgresOpFactoryCall): SqlPlannerConflict['locat
   // Most Postgres call classes expose `tableName`/`columnName`/`indexName`/
   // `constraintName` as readonly fields. We avoid `toOp()` here because a
   // `DataTransformCall` intentionally throws from `toOp`.
-  const anyCall = call as unknown as {
-    tableName?: string;
-    columnName?: string;
-    indexName?: string;
-    newIndexName?: string;
-    constraintName?: string;
-    newConstraintName?: string;
-    typeName?: string;
-    policyName?: string;
-    newPolicyName?: string;
-    policy?: { readonly name?: string };
-  };
+  const anyCall = blindCast<
+    {
+      tableName?: string;
+      columnName?: string;
+      indexName?: string;
+      newIndexName?: string;
+      constraintName?: string;
+      newConstraintName?: string;
+      typeName?: string;
+      policyName?: string;
+      newPolicyName?: string;
+      policy?: { readonly name?: string };
+    },
+    'Postgres migration call classes expose location-bearing readonly properties without a shared interface'
+  >(call);
   const location: {
     entityKind?: string;
     entityName?: string;
@@ -287,7 +287,12 @@ function locationForCall(call: PostgresOpFactoryCall): SqlPlannerConflict['locat
   if (anyCall.policyName) location.rlsPolicy = anyCall.policyName;
   else if (anyCall.policy?.name) location.rlsPolicy = anyCall.policy.name;
   else if (anyCall.newPolicyName) location.rlsPolicy = anyCall.newPolicyName;
-  return Object.keys(location).length > 0 ? (location as SqlPlannerConflictLocation) : undefined;
+  return Object.keys(location).length > 0
+    ? blindCast<
+        SqlPlannerConflictLocation,
+        'non-empty conflict location has at least one valid discriminating property'
+      >(location)
+    : undefined;
 }
 
 export function conflictForDisallowedCall(
@@ -513,7 +518,7 @@ function nativeEnumMemberChangeRefusal(options: {
   return (
     `Native enum type "${options.ddlSchemaName}"."${options.typeName}" changed beyond appending new values ` +
     `(contract declares [${options.expectedMembers.join(', ')}], database has [${options.actualMembers.join(', ')}]). ` +
-    "Prisma Next does not modify a native enum's existing values (rename, removal, reorder) — " +
+    "Prisma 8 does not modify a native enum's existing values (rename, removal, reorder) — " +
     'see https://pris.ly/d/postgres-native-enums. Author the change manually with `migration new`.'
   );
 }
@@ -696,6 +701,7 @@ function mapColumnDefaultNodeIssue(
   schemaName: string,
   tableName: string,
   columnName: string,
+  codecHooks: ReadonlyMap<string, CodecControlHooks>,
 ): Result<readonly PostgresOpFactoryCall[], SqlPlannerConflict> {
   if (issueOutcome(issue) === 'not-expected') {
     return ok([new DropDefaultCall(schemaName, tableName, columnName)]);
@@ -706,7 +712,7 @@ function mapColumnDefaultNodeIssue(
     SqlColumnDefaultIR,
     'a not-found/not-equal column-default issue always carries the expected default node'
   >(issue.expected);
-  const defaultSql = renderColumnDefaultSql(defaultNode);
+  const defaultSql = renderColumnDefaultSql(defaultNode, codecHooks);
   if (!defaultSql) return ok([]);
   return ok([
     new SetDefaultCall(
@@ -935,7 +941,7 @@ export function mapNodeIssueToCall(
           ),
         );
       }
-      return mapColumnDefaultNodeIssue(issue, schemaName, tableName, columnName);
+      return mapColumnDefaultNodeIssue(issue, schemaName, tableName, columnName, ctx.codecHooks);
     }
     case RelationalSchemaNodeKind.primaryKey:
       return mapPrimaryKeyNodeIssue(issue, schemaName, tableName);

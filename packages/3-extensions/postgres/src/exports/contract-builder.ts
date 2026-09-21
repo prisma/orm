@@ -16,12 +16,15 @@ export type {
   UniqueConstraintNode,
 } from '@internal/sql-contract-ts/contract-builder';
 export {
+  autoincrement,
   buildSqlContractFromDefinition,
   check,
   field,
   member,
   model,
+  now,
   rel,
+  sql,
 } from '@internal/sql-contract-ts/contract-builder';
 export { defineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';

@@ -11,7 +11,7 @@
  *                                                           # known code missing
  *                                                           # from the given file
  *   --root <dir>   repo root to scan (default: this script's parent repo);
- *                  lets the docs-site repo run it against a prisma-next checkout.
+ *                  lets the docs-site repo run it against a checkout of this repository.
  *
  * Codes are string literals whose namespace is on the ADR 239 closed list.
  * Scanned: git-tracked .ts files under each package's src tree (production

@@ -36,6 +36,36 @@ describe('SqlColumnIR', () => {
       ]);
     });
 
+    it('gives the default node the column codec identity, for rendering the default as DDL', () => {
+      const codecRef = { codecId: 'pg/enum@1', typeParams: { typeName: 'order' }, many: true };
+      const column = new SqlColumnIR({
+        name: 'orders',
+        nativeType: 'order',
+        nullable: true,
+        many: true,
+        resolvedNativeType: 'order[]',
+        resolvedDefault: { kind: 'literal', value: ['asc'] },
+        codecRef,
+        codecBaseNativeType: 'order',
+        codecNamedType: true,
+      });
+
+      const defaultNode = column.children()[0] as SqlColumnDefaultIR;
+
+      expect(defaultNode).toBeInstanceOf(SqlColumnDefaultIR);
+      expect({
+        codecRef: defaultNode.codecRef,
+        codecBaseNativeType: defaultNode.codecBaseNativeType,
+        codecNamedType: defaultNode.codecNamedType,
+        enumerableKeys: Object.keys(defaultNode),
+      }).toEqual({
+        codecRef,
+        codecBaseNativeType: 'order',
+        codecNamedType: true,
+        enumerableKeys: ['nodeKind', 'resolved', 'nativeTypeContext'],
+      });
+    });
+
     it('yields a default node from a raw default alone (unparseable or hand-built)', () => {
       const column = new SqlColumnIR({
         name: 'status',

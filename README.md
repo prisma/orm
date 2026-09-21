@@ -1,26 +1,26 @@
 <p align="center">
-  <a href="https://github.com/prisma/prisma">
-    <img src="./images/prisma-next.png" alt="Prisma Next" width="680" />
+  <a href="https://github.com/prisma/orm">
+    <img src="./images/prisma-8.png" alt="Prisma 8" width="680" />
   </a>
 </p>
 
 <p align="center">
-  <a href="https://pris.ly/discord">Discord</a>  |  <a href="https://twitter.com/prisma">X</a>  |  <a href="https://pris.ly/pn-announcement">Blog Post</a>  |  <a href="./ARCHITECTURE.md">Architecture</a>
+  <a href="https://www.prisma.io/docs/orm">Docs</a>  |  <a href="https://pris.ly/discord">Discord</a>  |  <a href="https://twitter.com/prisma">X</a>  |  <a href="https://pris.ly/pn-announcement">Blog Post</a>  |  <a href="./ARCHITECTURE.md">Architecture</a>
 </p>
 
 <p align="center">
   <a href="./LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg" /></a>
-  <a href="https://www.npmjs.com/package/@prisma/cli"><img alt="npm" src="https://img.shields.io/npm/v/%40prisma%2Fcli/next?label=%40prisma%2Fcli" /></a>
-  <a href="https://github.com/prisma/prisma/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/prisma/prisma/actions/workflows/ci.yml/badge.svg" /></a>
+  <a href="https://www.npmjs.com/package/prisma"><img alt="npm" src="https://img.shields.io/npm/v/prisma?label=prisma" /></a>
+  <a href="https://github.com/prisma/orm/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/prisma/orm/actions/workflows/ci.yml/badge.svg" /></a>
 </p>
 
 ---
 
-> **Looking for Prisma ORM 7?** It lives on the [`v7` branch](https://github.com/prisma/prisma/tree/v7) of this repository, and the `prisma` and `@prisma/*` packages on npm continue to be published from there.
+> **Using Prisma 7?** It remains fully supported. Its source lives on the [`v7` branch](https://github.com/prisma/orm/tree/v7) of this repository and its docs at [prisma.io/docs/orm/v7](https://www.prisma.io/docs/orm/v7).
 
-> **Prisma Next is currently in [Early Access](https://pris.ly/pn-ea)** and we're building it in the open with the community. APIs will still evolve as your feedback shapes them, so we don't recommend it for production workloads yet. Come along for the ride: star the repo, follow [@prisma on X](https://pris.ly/x), or read along on the [Prisma blog](https://www.prisma.io/blog).
+> **Prisma 8 is a release candidate.** `8.0.0` final is expected in the next four to eight weeks. Until then a release candidate may include breaking changes, and every release ships with an upgrade recipe that the `prisma-8` skill applies for you. The candidate is a complete implementation we stand behind: we treat bugs in it as urgent, and the risk you take on is a feature that is not built yet rather than churn. The [feature scoreboard](./scorecard.md) names every gap. New projects should start here. Existing Prisma 7 applications can migrate incrementally, and Prisma 7 stays on the [`v7` branch](https://github.com/prisma/orm/tree/v7) with bug fixes and security updates for eighteen months after `8.0.0` final. Star the repo, follow [@prisma on X](https://pris.ly/x), or read along on the [Prisma blog](https://www.prisma.io/blog).
 
-**Prisma Next** is a TypeScript rewrite of Prisma ORM, designed to be **extensible**, **composable**, and **AI-agent friendly** by default. Read the full announcement: [The Next Evolution of Prisma ORM](https://pris.ly/pn-announcement).
+**Prisma 8** is a TypeScript rewrite of Prisma ORM, designed to be **extensible**, **composable**, and **AI-agent friendly** by default. Read the [announcement](https://pris.ly/pn-announcement) or start with the [docs](https://www.prisma.io/docs/orm).
 
 ## Prerequisites
 
@@ -31,32 +31,40 @@
 
 ### 1. Scaffold a new project
 
-The interactive scaffolder picks a JavaScript framework (Next.js, Vite, Hono, and others) and wires Prisma Next in with your chosen database (PostgreSQL or MongoDB):
+The interactive scaffolder picks an app template (Next.js, Hono, Nuxt, Astro, NestJS, SvelteKit, TanStack Start, or Elysia) and wires Prisma 8 in with your chosen database (PostgreSQL or MongoDB):
 
 ```bash
-npm create prisma@next
+npm create prisma
 ```
 
-You finish with a runnable app, a starter contract, and the agent skills already registered.
+You finish with a runnable app, a starter contract, and the agent skills already installed. See the [create-prisma reference](https://www.prisma.io/docs/prisma-orm/create-prisma) for every template and flag, or follow the [PostgreSQL](https://www.prisma.io/docs/prisma-orm/quickstart/postgresql) and [MongoDB](https://www.prisma.io/docs/prisma-orm/quickstart/mongodb) quickstarts.
 
-### 2. Or, add Prisma Next to an existing project
+### 2. Or, add Prisma 8 to an existing project
 
 Run this from your repo root:
 
 ```bash
-npx @prisma/cli@next orm init
+npx prisma orm init
 ```
 
-`prisma orm init` writes `prisma.config.ts`, scaffolds a starter contract and `db.ts` under `src/prisma/`, installs the runtime, emits the contract, and registers the agent skills. It does not touch your framework or build setup.
+`orm init` writes `prisma.config.ts`, scaffolds a starter contract and `db.ts` under `src/prisma/`, installs the runtime, and emits the contract. It does not touch your framework or build setup. Then install the agent skills:
 
-### 3. Use your AI agent for everything Prisma Next
+```bash
+npx prisma skills sync
+```
 
-Both installers leave a top-level **`prisma-next.md`** primer at your project root for any agent to read first. `init` additionally materialises one **`SKILL.md`** per workflow in two places, so different agent runtimes can find them at their expected paths:
+See the [`orm init`](https://www.prisma.io/docs/cli/orm-init) and [`skills`](https://www.prisma.io/docs/cli/skills) CLI references, or the guides for adding Prisma 8 to an existing [PostgreSQL](https://www.prisma.io/docs/prisma-orm/add-to-existing-project/postgresql) or [MongoDB](https://www.prisma.io/docs/prisma-orm/add-to-existing-project/mongodb) app.
 
-- `.claude/skills/<skill-name>/SKILL.md` — picked up by Claude Code
-- `.agents/skills/<skill-name>/SKILL.md` — universal location for Cursor, Copilot Agent, and other runtimes
+### 3. Use your AI agent for everything Prisma 8
 
-A `skills-lock.json` at the project root tracks which skill versions are installed. Your editor's AI assistant auto-loads the right skill when your prompt matches.
+Both installers leave a top-level **`prisma-8.md`** primer at your project root for any agent to read first, and install one **`SKILL.md`** per workflow into the directories agent runtimes read:
+
+- `.claude/skills/<skill-name>/SKILL.md` — Claude Code
+- `.cursor/skills/<skill-name>/SKILL.md` — Cursor
+- `.agents/skills/<skill-name>/SKILL.md` — universal location for Copilot Agent and other runtimes
+- `.devin/skills/<skill-name>/SKILL.md` — Devin
+
+Skills ship inside the Prisma packages your project installs, so they always describe the version in use. Your editor's AI assistant auto-loads the right skill when your prompt matches.
 
 Just describe what you want. For example:
 
@@ -72,26 +80,26 @@ Ask your agent. The `prisma-8` skill's feedback flow drafts a structured GitHub 
 
 ## For extension authors
 
-Prisma Next has a minimal core. Everything around it, including Postgres support itself, is built on the same public SPI that's available to any author. If you've wanted to integrate your tool, your database, or your library with Prisma, this is the way in.
+Prisma 8 has a minimal core. Everything around it, including Postgres support itself, is built on the same public SPI that's available to any author. If you've wanted to integrate your tool, your database, or your library with Prisma, this is the way in.
 
-A few extensions already shipping:
+Extensions already shipping:
 
-- **`@internal/extension-pgvector`**: vector columns and similarity operators for semantic search.
-- **`@internal/extension-paradedb`**: typed BM25 indexes with multiple tokenizers for full-text search.
-- **`@internal/extension-postgis`**: geospatial types and queries.
+- **[`@prisma/orm-extension-pgvector`](https://www.npmjs.com/package/@prisma/orm-extension-pgvector)**: vector columns and similarity search.
+- **[`@prisma/orm-extension-postgis`](https://www.npmjs.com/package/@prisma/orm-extension-postgis)**: geometry columns and geo queries.
+- **[`@prisma/orm-extension-paradedb`](https://www.npmjs.com/package/@prisma/orm-extension-paradedb)**: BM25 full-text search indexes (experimental).
+- **[`@prisma/orm-extension-supabase`](https://www.npmjs.com/package/@prisma/orm-extension-supabase)**: Supabase auth and storage tables, role-bound clients (experimental).
+- **[`@prisma/orm-extension-arktype-json`](https://www.npmjs.com/package/@prisma/orm-extension-arktype-json)**: JSON columns validated by an arktype schema.
 - **[`@cipherstash/prisma-next`](https://pris.ly/cipherstash-p-blog)**: searchable encryption and data-level access control.
 
-Want to ship your own? The **[Authoring Prisma Next Extensions](https://pris.ly/pn-extension-authors)** blog walks through the SPI, the layers your extension can hook into, and how the team features new extensions in the Prisma Next directory.
+See [Using extensions](https://www.prisma.io/docs/orm/extensions/using-extensions) for how to install and register one. Want to ship your own? The **[call for extension authors](https://pris.ly/pn-extension-authors)** walks through the SPI, the layers your extension can hook into, and how the team features new extensions.
 
 ## Supported databases
 
-Prisma 8 carries **PostgreSQL to general availability** — and that is all at this stage:
+- **PostgreSQL** — the primary target, first-class support
+- **MongoDB** — first-class support
+- **SQLite** — planned next, a proof of concept today
 
-- **PostgreSQL** — the primary target; general availability at Prisma 8
-- **MongoDB** — early access; proves the framework works beyond SQL
-- **SQLite** — a proof of concept today
-
-MySQL follows later. See the [roadmap](./ROADMAP.md) for what must happen before the 8.0.0-rc.1 release.
+MySQL follows after SQLite. See the [feature scoreboard](./scorecard.md) for what each database supports today.
 
 ## Contributing
 
@@ -101,9 +109,9 @@ Security issues: follow the Private Vulnerability Reporting flow in [SECURITY.md
 
 ## Community
 
-Built something with Prisma Next? Tag [@prisma](https://pris.ly/x) on X. The best community builds get a shout-out and a link here.
+Built something with Prisma 8? Tag [@prisma](https://pris.ly/x) on X. The best community builds get a shout-out and a link here.
 
-- **Discord**: Talk to us in [Discord](https://pris.ly/discord) in the `prisma-next` channel
+- **Discord**: Talk to us in [Discord](https://pris.ly/discord)
 - **X**: [@prisma](https://pris.ly/x)
 - **Blog**: [prisma.io/blog](https://www.prisma.io/blog)
 

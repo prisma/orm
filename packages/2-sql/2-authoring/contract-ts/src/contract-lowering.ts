@@ -1,3 +1,4 @@
+import { resolveToOneRelationNullable } from '@internal/contract-authoring';
 import {
   type AuthoringEntityTypeNamespace,
   isAuthoringEntityTypeDescriptor,
@@ -49,6 +50,7 @@ import {
   emitTypedNamedTypeFallbackWarnings,
 } from './contract-warnings';
 import { isEnumTypeHandle } from './enum-type';
+import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
 type RuntimeModel = ContractModelBuilder<
   string | undefined,
@@ -390,6 +392,38 @@ function resolveRelationAnchorFields(spec: RuntimeModelSpec): readonly string[] 
   );
 }
 
+function belongsToNullable(
+  relationName: string,
+  declaredNullable: boolean | undefined,
+  spec: RuntimeModelSpec,
+  fieldNames: readonly string[],
+): boolean {
+  const { nullable, contradiction } = resolveToOneRelationNullable({
+    declaredNullable,
+    localFieldNullability: fieldNames.map(
+      (fieldName) => spec.fieldBuilders[fieldName]?.build().nullable === true,
+    ),
+    ownsReference: true,
+  });
+  if (contradiction !== undefined) {
+    throw contractError(
+      'CONTRACT.RELATION_INVALID',
+      toOneNullabilityContradictionMessage(
+        `Relation "${spec.modelName}.${relationName}"`,
+        contradiction,
+      ),
+      {
+        meta: {
+          modelName: spec.modelName,
+          relationName,
+          reason: 'to-one-nullability-mismatch',
+        },
+      },
+    );
+  }
+  return nullable;
+}
+
 function lowerBelongsToRelation(
   relationName: string,
   relation: Extract<RelationState, { kind: 'belongsTo' }>,
@@ -419,7 +453,6 @@ function lowerBelongsToRelation(
       relation.spaceId,
       `Relation "${currentSpec.modelName}.${relationName}"`,
     );
-    const targetTable = relation.tableName ?? targetModelName.toLowerCase();
     const parentColumns = mapFieldNamesToColumnNames(
       currentSpec.modelName,
       fromFields,
@@ -427,19 +460,18 @@ function lowerBelongsToRelation(
     );
     // For cross-space relations, the `to` field names map directly to column
     // names because we have no fieldToColumn map for the remote model.
-    // (The brand carries the table name; field→column resolution on the remote
-    // side is deferred to the planner which has access to the remote contract.)
     return {
       fieldName: relationName,
       toModel: targetModelName,
-      toTable: targetTable,
+      toTable: relation.tableName,
       cardinality: 'N:1',
+      nullable: belongsToNullable(relationName, relation.optional, currentSpec, fromFields),
       spaceId: relation.spaceId,
       ...(relation.namespaceId !== undefined ? { namespaceId: relation.namespaceId } : {}),
       on: {
         parentTable: currentSpec.tableName,
         parentColumns,
-        childTable: targetTable,
+        childTable: relation.tableName,
         childColumns: toFields,
       },
     };
@@ -459,6 +491,7 @@ function lowerBelongsToRelation(
     toModel: targetModelName,
     toTable: targetSpec.tableName,
     cardinality: 'N:1',
+    nullable: belongsToNullable(relationName, relation.optional, currentSpec, fromFields),
     on: {
       parentTable: currentSpec.tableName,
       parentColumns: mapFieldNamesToColumnNames(
@@ -507,7 +540,9 @@ function lowerHasOwnershipRelation(
     fieldName: relationName,
     toModel: targetModelName,
     toTable: targetSpec.tableName,
-    cardinality: relation.kind === 'hasMany' ? '1:N' : '1:1',
+    ...(relation.kind === 'hasMany'
+      ? { cardinality: '1:N' as const }
+      : { cardinality: '1:1' as const, nullable: true }),
     on: {
       parentTable: currentSpec.tableName,
       parentColumns: mapFieldNamesToColumnNames(
@@ -674,11 +709,24 @@ function lowerCrossSpaceForeignKeyNode(
     readonly index?: boolean | undefined;
   },
 ): ForeignKeyNode {
+  if (foreignKey.targetTableName === undefined) {
+    throw contractError(
+      'CONTRACT.FOREIGN_KEY_INVALID',
+      `Foreign key on "${spec.modelName}" references model "${foreignKey.targetModel}" in contract space "${foreignKey.targetSpaceId}" but the target table name is unknown: the handle's .sql() stage is a factory function, so its table cannot be read statically. Declare the target model's .sql() stage with a static object carrying \`table\`.`,
+      {
+        meta: {
+          sourceModel: spec.modelName,
+          targetModel: foreignKey.targetModel,
+          spaceId: foreignKey.targetSpaceId,
+        },
+      },
+    );
+  }
   return {
     columns: mapFieldNamesToColumnNames(spec.modelName, foreignKey.fields, spec.fieldToColumn),
     references: {
       model: foreignKey.targetModel,
-      table: foreignKey.targetTableName ?? foreignKey.targetModel.toLowerCase(),
+      table: foreignKey.targetTableName,
       columns: foreignKey.targetFields,
       ...(foreignKey.targetNamespaceId !== undefined
         ? { namespaceId: foreignKey.targetNamespaceId }
@@ -879,7 +927,15 @@ function resolveModelNode(
   };
 }
 
-function collectRuntimeModelSpecs(definition: ContractInput): RuntimeCollection {
+/**
+ * `ContractInput`'s `Extensions` parameter defaults to `undefined`, but lowering
+ * reads the extension-pack record at runtime, so the input is widened here.
+ */
+type LoweringInput = Omit<ContractInput, 'extensions'> & {
+  readonly extensions?: Record<string, ExtensionPackRef<'sql', string>> | undefined;
+};
+
+function collectRuntimeModelSpecs(definition: LoweringInput): RuntimeCollection {
   const storageTypes = { ...(definition.types ?? {}) } as Record<string, StorageTypeInstance>;
   const models = { ...(definition.models ?? {}) } as Record<string, RuntimeModel>;
 
@@ -995,7 +1051,7 @@ function lowerModels(
  * No entity kind is named anywhere in this walk.
  */
 function lowerPackEntityHandles(
-  definition: ContractInput,
+  definition: LoweringInput,
   modelSpecs: ReadonlyMap<string, RuntimeModelSpec>,
 ): AttachedEntities | undefined {
   const entities = definition.entities;
@@ -1120,7 +1176,7 @@ function lowerPackEntityHandles(
   return pack;
 }
 
-export function buildContractDefinition(definition: ContractInput): ContractDefinition {
+export function buildContractDefinition(definition: LoweringInput): ContractDefinition {
   const collection = collectRuntimeModelSpecs(definition);
   const models = lowerModels(collection, definition.extensions);
   const attachedEntities = lowerPackEntityHandles(definition, collection.modelSpecs);

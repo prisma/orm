@@ -191,7 +191,7 @@ function normalizeIssueComment(comment) {
   };
 }
 
-function normalizeReviewStateV1(input) {
+function normalizeReviewStateV2(input) {
   const normalizedThreads = [];
   const threadCandidates = Array.isArray(input?.reviewThreads) ? input.reviewThreads : [];
   for (const thread of threadCandidates) {
@@ -417,7 +417,7 @@ function validateIssueCommentShape(entry, pointer) {
   }
 }
 
-function assertReviewStateV1(reviewState) {
+function assertReviewStateV2(reviewState) {
   if (typeof reviewState !== 'object' || reviewState === null) {
     throw new TypeError('review-state must be an object');
   }
@@ -508,9 +508,9 @@ function formatCanonicalJson(value) {
 }
 
 export {
-  assertReviewStateV1,
+  assertReviewStateV2,
   formatCanonicalJson,
-  normalizeReviewStateV1,
+  normalizeReviewStateV2,
   REVIEW_STATE_VERSION,
   stripReviewFrameworkMarkers,
 };

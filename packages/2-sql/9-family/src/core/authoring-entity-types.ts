@@ -7,6 +7,7 @@ import {
   type PslExtensionBlock,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
+import { blockAttribute, str } from '@internal/psl-parser';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 
@@ -141,13 +142,27 @@ export const sqlFamilyEntityTypes: AuthoringEntityTypeNamespace = {
   enum: sqlFamilyEnumEntityDescriptor,
 };
 
+const enumTypeBlockAttribute = blockAttribute('type', {
+  documentation: 'Selects the storage codec for this enum.',
+  positional: [
+    {
+      key: 'codecId',
+      type: str(),
+      documentation: 'The fully qualified codec identifier used to store enum values.',
+    },
+  ],
+});
+
 export const sqlFamilyPslBlockDescriptors = {
   enum: {
     kind: 'pslBlock',
     keyword: 'enum',
+    documentation:
+      'Defines an enum with named values and an inferred or explicitly selected storage codec.',
     discriminator: 'enum',
     name: { required: true },
     parameters: {},
     variadicParameters: true,
+    attributes: { type: () => enumTypeBlockAttribute },
   },
 } as const satisfies AuthoringPslBlockDescriptorNamespace;

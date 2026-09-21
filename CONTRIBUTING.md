@@ -1,14 +1,14 @@
-# Contributing to Prisma Next
+# Contributing to Prisma 8
 
-Thanks for your interest in Prisma Next. This document is the entry point for external contributors. Maintainer-onboarding lives elsewhere ([`AGENTS.md`](./AGENTS.md), [`docs/onboarding/`](./docs/onboarding/)) and may be linked as deeper-dive reference, but you do not need it to file a bug report or open a PR.
+Thanks for your interest in Prisma 8. This document is the entry point for external contributors. Maintainer-onboarding lives elsewhere ([`AGENTS.md`](./AGENTS.md), [`docs/onboarding/`](./docs/onboarding/)) and may be linked as deeper-dive reference, but you do not need it to file a bug report or open a PR.
 
 ## Status — please read first
 
-Prisma Next is **pre-1.0**. While we are pre-1.0:
+Prisma 8 ships as a release candidate (`8.0.0-rc.N`), and `8.0.0` final is expected within four to eight weeks. While we are on the release-candidate line:
 
-- **Expect breaking changes between minor versions.** APIs, contract schemas, on-disk formats, and CLI flags can shift without a deprecation cycle.
-- **Only the latest minor receives security fixes.** Older minors are not backported. See [`SECURITY.md`](./SECURITY.md).
-- **Don't build production applications on Prisma Next yet** unless you are prepared to follow upgrades closely. [Prisma 7](https://www.prisma.io/docs/orm) remains the recommended path for production today.
+- **Expect breaking changes between release candidates.** APIs, contract schemas, on-disk formats, and CLI flags can shift without a deprecation cycle. Every release ships an upgrade recipe under [`skills/prisma-8/upgrading/`](./skills/prisma-8/upgrading/) that the `prisma-8` skill applies, and the churn settles as we approach final.
+- **Only the latest Prisma 8 release receives security fixes.** Older Prisma 8 releases are not backported. Prisma 7 is the exception: it receives security updates for eighteen months after `8.0.0` final, on the `v7` branch. See [`SECURITY.md`](./SECURITY.md).
+- **New projects should start on Prisma 8.** The release candidate is a complete implementation; the gap you are most likely to hit is a feature that is not built yet, and the [feature scoreboard](./scorecard.md) names each one. Existing [Prisma 7](https://www.prisma.io/docs/orm) applications should migrate incrementally. Prisma 7 continues on the [`v7` branch](https://github.com/prisma/orm/tree/v7) and receives bug fixes and security updates for eighteen months after `8.0.0` final.
 
 ## Before you start a substantive change
 
@@ -33,8 +33,8 @@ Optional, only needed for specific test suites:
 ## Setup
 
 ```bash
-git clone https://github.com/prisma/prisma.git
-cd prisma
+git clone https://github.com/prisma/orm.git
+cd orm
 
 corepack enable                      # if you haven't already
 pnpm install --frozen-lockfile
@@ -113,7 +113,7 @@ A few conventions that will save review round-trips:
 - **One logical change per PR.** If you find an unrelated bug while working, file a separate issue or open a separate PR.
 - **Conventional commit titles.** PR titles drive the auto-generated GitHub Release notes, so `feat(sql-orm-client): support computed includes` is more useful than `update sql-orm-client`. Common prefixes: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`.
 - **Update tests in the same PR.** A behavioural change without a test usually triggers a review comment asking for one.
-- **No backward-compat shims.** This is a pre-1.0 codebase; if you change an API, update the call sites instead of leaving an alias behind.
+- **No backward-compat shims.** Prisma 8 is still on the release-candidate line; if you change an API, update the call sites instead of leaving an alias behind.
 
 We do not ask whether a PR was AI-assisted. We do verify the result. If you used an LLM-based agent to author the change, see [Working with agents](#working-with-agents) below.
 
@@ -127,7 +127,7 @@ The skill is intentionally a "pit of success", not a gate — there is no enforc
 
 Use the [bug report issue template](./.github/ISSUE_TEMPLATE/bug_report.yml). Please include:
 
-- The published `@internal/*` package and version (or the umbrella `prisma-next` version).
+- The published `@prisma/*` package and version (or the `prisma` CLI version).
 - A minimal reproduction (the smaller the better — we cannot triage "my whole app is broken" reports without isolation).
 - Expected vs actual behaviour.
 - Whether you are on the latest minor; if not, please upgrade and re-verify before filing.

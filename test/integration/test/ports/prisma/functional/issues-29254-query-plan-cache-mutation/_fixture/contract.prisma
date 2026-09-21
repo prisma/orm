@@ -12,4 +12,5 @@
 model Item {
   id    String @id @default(cuid(2))
   price Float?
+  @@map("item")
 }

@@ -52,6 +52,7 @@ type DecodeFixtureModels = {
       readonly user: {
         readonly to: CrossReference & { readonly model: 'User' };
         readonly cardinality: 'N:1';
+        readonly nullable: false;
         readonly on: {
           readonly localFields: ['userId'];
           readonly targetFields: ['_id'];
@@ -177,6 +178,7 @@ export const decodeFixtureContractJson = {
               user: {
                 to: crossRef('User'),
                 cardinality: 'N:1',
+                nullable: false,
                 on: { localFields: ['userId'], targetFields: ['_id'] },
               },
             },

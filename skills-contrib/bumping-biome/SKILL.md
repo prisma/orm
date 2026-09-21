@@ -9,7 +9,7 @@ description: Bumps `biome` package versions (e.g. `@biomejs/biome`) using `pnpm`
 
 1. Run `pnpm up -D -w -r @biomejs/biome@<version>` - replace `<version>` with a specific package version provided in the session, otherwise fallback to `latest`.
 
-2. Rename all `biome.json` files to `biome.jsonc` and replace the old package version number in `$schema` with the newly installed package version number from the previous step.
+2. If any `biome.json` files remain, rename them to `biome.jsonc`. Then replace the old package version number in `$schema` with the newly installed package version number from the previous step, in every `biome.jsonc`.
 
 3. Run `pnpm -w lint:fix`. Report any issues/regressions briefly.
 

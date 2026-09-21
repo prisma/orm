@@ -1,13 +1,13 @@
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withMongoPort } from '../../../_harness/mongo';
+import { timeouts, withMongoPort } from '../../../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/composites/list/upsert-update.ts
 // (mongodb matrix entry). Upstream seeds a row (commentListDataB — three contents), then calls
 // `upsert` so the update branch runs (record already exists). The `create: {}` arg is
-// present but unused (becomes $setOnInsert with no fields in prisma-next).
+// present but unused (becomes $setOnInsert with no fields in Prisma 8).
 //
 // commentListDataB:
 //   contents: [
@@ -31,7 +31,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - upsert set / upsert update — asserts Prisma-specific "Unknown argument `upsert`"
 //   - updateMany / deleteMany — embedded-list sub-operators
 //     (contents: { updateMany: { data, where } } / { deleteMany: { where } }),
-//     which prisma-next's mongo ORM cannot express (no per-element embedded mutation).
+//     which Prisma 8's mongo ORM cannot express (no per-element embedded mutation).
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
   return withMongoPort<Contract>({ contractJson }, fn);
@@ -96,7 +96,7 @@ describe('ports/prisma/functional/composites/list/upsert-update', () => {
   );
 
   // Upstream asserts null on required `contents` is a type error and a runtime throw.
-  // Prisma Next rejects it at the type level, and MongoDB rejects it through the
+  // Prisma 8 rejects it at the type level, and MongoDB rejects it through the
   // provisioned collection validator.
   it(
     'set null',

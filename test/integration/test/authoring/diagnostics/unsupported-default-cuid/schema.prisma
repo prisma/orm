@@ -1,6 +1,7 @@
-// use prisma-next
+// use prisma-8
 
 model User {
   id Int @id
   cuidValue String @default(cuid())
+  @@map("user")
 }

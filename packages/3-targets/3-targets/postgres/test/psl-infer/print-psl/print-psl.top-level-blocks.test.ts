@@ -14,7 +14,6 @@
  */
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { PslPrinterOptions } from '@internal/family-sql/psl-infer';
-import { parseRawDefault } from '@internal/family-sql/psl-infer';
 import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
@@ -43,6 +42,7 @@ import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
 } from '../../../src/core/authoring';
+import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { isPostgresSchema, postgresCreateNamespace } from '../../../src/core/postgres-schema';
 import { buildPslDocumentAst } from '../../../src/core/psl-infer/infer-psl-contract';
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
@@ -105,16 +105,20 @@ function print(ast: PslDocumentAst): string {
  * only on the interpreter would accept printed text that is not valid PSL.
  */
 function parseAndInterpret(source: string) {
-  const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
-  const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+  const {
     document,
-    sourceFile,
+    sources,
+    diagnostics: parseDiagnostics,
+  } = parse(source, 'print-psl.top-level-blocks.test.psl');
+  const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const interpreted = interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target,
     scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
@@ -169,6 +173,7 @@ function enumBlock(name: string, members: Record<string, string>): PslExtensionB
         span: ZERO_SPAN,
       },
     ],
+    attributes: {},
     span: ZERO_SPAN,
   };
 }
@@ -289,7 +294,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
   const printerOptions: PslPrinterOptions = {
     typeMap: createPostgresTypeMap(new Set()),
     defaultMapping: createPostgresDefaultMapping(),
-    parseRawDefault,
+    parseRawDefault: parsePostgresDefault,
   };
 
   const foreignKeyExtras = {

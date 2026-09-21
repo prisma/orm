@@ -1,6 +1,6 @@
 # Journey 05 — Vite plugin happy path
 
-**Skill under test:** `prisma-next-build`.
+**Skill under test:** `prisma-8-build`.
 
 **Acceptance criterion:** The build workflow routes to the Vite plugin path and avoids unsupported package names.
 
@@ -14,7 +14,7 @@ pnpm dlx @prisma/cli orm init
 pnpm add vite @vitejs/plugin-react react react-dom
 ```
 
-The agent runtime has Prisma Next skills registered (project level, as `init` installs them).
+The agent runtime has Prisma 8 skills registered (project level, as `init` installs them).
 
 ## Prompt
 
@@ -22,7 +22,7 @@ The agent runtime has Prisma Next skills registered (project level, as `init` in
 
 ## Expected agent behaviour
 
-- [ ] Skill matcher fires on `prisma-next-build` (description contains "vite plugin", "vite.config.ts", "contract emit on save").
+- [ ] Skill matcher fires on `prisma-8-build` (description contains "vite plugin", "vite.config.ts", "contract emit on save").
 - [ ] Agent installs `@internal/vite-plugin-contract-emit` as a devDependency via the project's package manager.
 - [ ] Agent edits `vite.config.ts` to register `prismaVitePlugin('prisma.config.ts')` (note: the argument is the *config path*, not the schema path).
 - [ ] Agent starts `vite dev` (or instructs the user to) and waits for the initial emit log line.
@@ -36,4 +36,4 @@ The agent runtime has Prisma Next skills registered (project level, as `init` in
 - [ ] Editing the contract source triggers a re-emit log line.
 - [ ] `package.json` contains a `prebuild` script that runs `prisma contract emit`.
 - [ ] Agent did NOT confabulate `@internal/vite` or any other package name that doesn't exist.
-- [ ] Agent did NOT point the plugin at `schema.psl` / `prisma/contract.ts` directly (the argument is the config path).
+- [ ] Agent did NOT point the plugin at `src/prisma/contract.prisma` / `src/prisma/contract.ts` directly (the argument is the config path).

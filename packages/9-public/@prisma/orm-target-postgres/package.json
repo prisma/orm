@@ -1,10 +1,10 @@
 {
   "name": "@prisma/orm-target-postgres",
-  "version": "8.0.0-rc.8",
+  "version": "8.0.0-rc.11",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma Next Postgres target: target descriptor, adapter, driver",
+  "description": "Prisma 8 Postgres target: target descriptor, adapter, driver",
   "files": [
     "dist"
   ],
@@ -15,22 +15,24 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.8",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.8",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.8",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.11",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.11",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.11",
     "@standard-schema/spec": "^1.1.0",
+    "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "arktype": "^2.2.2",
     "pathe": "^2.0.3",
     "pg": "catalog:",
-    "pg-cursor": "^2.21.0"
+    "pg-cursor": "^2.21.0",
+    "postgres-array": "2.0.0"
   },
   "devDependencies": {
-    "@internal/adapter-postgres": "workspace:8.0.0-rc.8",
-    "@internal/driver-postgres": "workspace:8.0.0-rc.8",
-    "@internal/target-postgres": "workspace:8.0.0-rc.8",
-    "@repo/tsconfig": "workspace:8.0.0-rc.8",
-    "@repo/tsdown": "workspace:8.0.0-rc.8",
+    "@internal/adapter-postgres": "workspace:8.0.0-rc.11",
+    "@internal/driver-postgres": "workspace:8.0.0-rc.11",
+    "@internal/target-postgres": "workspace:8.0.0-rc.11",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@repo/tsdown": "workspace:8.0.0-rc.11",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
@@ -80,6 +82,7 @@
     "./target/planner-schema-lookup": "./dist/target__planner-schema-lookup.mjs",
     "./target/planner-sql-checks": "./dist/target__planner-sql-checks.mjs",
     "./target/planner-target-details": "./dist/target__planner-target-details.mjs",
+    "./target/prisma7-binding": "./dist/target__prisma7-binding.mjs",
     "./target/render-ops": "./dist/target__render-ops.mjs",
     "./target/render-typescript": "./dist/target__render-typescript.mjs",
     "./target/rls-canonicalize": "./dist/target__rls-canonicalize.mjs",
@@ -91,7 +94,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/9-public/@prisma/orm-target-postgres"
   }
 }

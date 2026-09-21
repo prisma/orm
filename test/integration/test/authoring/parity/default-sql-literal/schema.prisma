@@ -1,0 +1,12 @@
+// use prisma-8
+
+model T {
+  id        String   @id @default(sql`gen_random_uuid()`)
+  digest    String   @default(sql`md5(random()::text)`)
+  expires   DateTime @default(sql"(now() + '00:03:00'::interval)")
+  createdAt DateTime @default(pg.sql`(now() + interval '1 hour')`)
+  tags      String[] @default(sql`'{}'::text[]`)
+  escaped   String   @default(sql`E'\n'`)
+
+  @@map("t")
+}

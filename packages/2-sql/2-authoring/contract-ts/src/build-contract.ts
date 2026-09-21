@@ -26,6 +26,7 @@ import {
   type CapabilityMatrix,
   type EnumTypeHandle,
   mergeCapabilityMatrices,
+  resolveToOneRelationNullable,
 } from '@internal/contract-authoring';
 import type {
   AuthoringContributions,
@@ -74,10 +75,12 @@ import {
   computeCheckContentHash,
   derivedCheckPrefixes,
 } from '@internal/sql-schema-ir/naming';
+import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type {
+  AuthoredColumnDefault,
   ContractDefinition,
   FieldNode,
   ModelNode,
@@ -85,6 +88,7 @@ import type {
   ValueObjectFieldNode,
 } from './contract-definition';
 import { contractError } from './contract-errors';
+import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
 type DomainFieldRef =
   | { readonly kind: 'scalar'; readonly many?: boolean }
@@ -102,7 +106,7 @@ function encodeViaCodec(value: unknown, codecId: string, codecLookup?: CodecLook
 }
 
 function encodeColumnDefault(
-  defaultInput: ColumnDefault,
+  defaultInput: AuthoredColumnDefault,
   codecId: string,
   codecLookup?: CodecLookup,
   many = false,
@@ -297,7 +301,7 @@ type CheckExpressionRenderer = (input: {
   readonly tableName: string;
   readonly columnName: string;
   readonly many: boolean;
-  readonly memberValues: readonly string[] | undefined;
+  readonly memberValues: readonly (string | number)[] | undefined;
 }) => ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
   readonly columnName: string;
@@ -329,21 +333,27 @@ function resolveCheckExpressionRenderer(
 
 /**
  * The member values a membership check must enforce, encoded exactly as the
- * column stores them. Only string members can be written as a predicate, so a
- * numeric enum fails here rather than emitting a wrong text-shaped check.
+ * column stores them. Membership predicates support strings and finite numbers.
  */
 function checkMemberValues(
   handle: EnumTypeHandle,
   codecLookup: CodecLookup | undefined,
-): readonly string[] {
+): readonly (string | number)[] {
   const encoded = handle.values.map((value) => encodeViaCodec(value, handle.codecId, codecLookup));
-  const values: string[] = [];
+  const values: (string | number)[] = [];
   for (const value of encoded) {
-    if (typeof value !== 'string') {
+    if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) {
       throw contractError(
         'CONTRACT.ENUM_INVALID',
-        `enumType("${handle.enumName}"): has a non-string value; numeric-enum CHECK constraints are not yet supported.`,
-        { meta: { enumName: handle.enumName, reason: 'non-string-member-value' } },
+        `enumType("${handle.enumName}"): CHECK constraint members must encode to strings or finite numbers.`,
+        { meta: { enumName: handle.enumName, reason: 'unsupported-member-value' } },
+      );
+    }
+    if (typeof value !== typeof encoded[0]) {
+      throw contractError(
+        'CONTRACT.ENUM_INVALID',
+        `enumType("${handle.enumName}"): CHECK constraint members must encode to the same primitive type; mixed strings and numbers are not supported.`,
+        { meta: { enumName: handle.enumName, reason: 'mixed-member-types' } },
       );
     }
     values.push(value);
@@ -566,6 +576,47 @@ function resolveModelNamespaceId(
     return model.namespaceId;
   }
   return modelNameToNamespaceId.get(model.modelName) ?? defaultNamespaceId;
+}
+
+function toOneRelationNullable(semanticModel: ModelNode, relation: RelationNode): boolean {
+  const location = `Relation "${semanticModel.modelName}.${relation.fieldName}"`;
+  if (relation.nullable === undefined) {
+    throw contractError(
+      'CONTRACT.RELATION_INVALID',
+      `${location} with cardinality "${relation.cardinality}" must state whether it is nullable`,
+      {
+        meta: {
+          modelName: semanticModel.modelName,
+          relationName: relation.fieldName,
+          reason: 'to-one-nullability-missing',
+        },
+      },
+    );
+  }
+  const localColumns = relation.on.parentColumns;
+  const { contradiction } = resolveToOneRelationNullable({
+    declaredNullable: relation.nullable,
+    localFieldNullability: semanticModel.fields
+      .filter((field) => localColumns.includes(field.columnName))
+      .map((field) => field.nullable),
+    ownsReference: relation.cardinality === 'N:1',
+  });
+  if (contradiction !== undefined) {
+    throw contractError(
+      'CONTRACT.RELATION_INVALID',
+      relation.cardinality === 'N:1'
+        ? toOneNullabilityContradictionMessage(location, contradiction)
+        : `${location} is required but does not own the foreign key, so nothing in storage guarantees the related row exists`,
+      {
+        meta: {
+          modelName: semanticModel.modelName,
+          relationName: relation.fieldName,
+          reason: 'to-one-nullability-mismatch',
+        },
+      },
+    );
+  }
+  return relation.nullable;
 }
 
 function buildThroughDescriptor(
@@ -916,7 +967,7 @@ export function buildSqlContractFromDefinition(
     const domainFields: Record<string, ContractField> = {};
     const domainFieldRefs: Record<string, DomainFieldRef> = {};
     const checksForTable: CheckConstraint[] = [];
-    // Enforcement is derived only for tables Prisma Next owns: the contract
+    // Enforcement is derived only for tables Prisma 8 owns: the contract
     // describes an external schema, it does not prescribe enforcement for it.
     // This reads the policy the source declares; a policy applied by a contract
     // specifier lands after the build and is handled by
@@ -1184,7 +1235,7 @@ export function buildSqlContractFromDefinition(
       );
       // Authored checks are lowered and merged into `checksForTable`
       // unconditionally — outside the `derivesChecks` guard above. A derived
-      // check is a Prisma Next prescription, scoped to tables it manages; an
+      // check is a Prisma 8 prescription, scoped to tables it manages; an
       // authored check is the author's own statement about a constraint they
       // know exists, and is emitted whatever the table's control policy.
       if (semanticModel.checks !== undefined && semanticModel.checks.length > 0) {
@@ -1276,6 +1327,7 @@ export function buildSqlContractFromDefinition(
           to: crossRef(relation.toModel, targetNamespaceId, relation.spaceId),
           // Cross-space belongsTo relations are always N:1 (the FK-owning side).
           cardinality: 'N:1',
+          nullable: toOneRelationNullable(semanticModel, relation),
           on: {
             localFields: relation.on.parentColumns.map((col) => columnToField.get(col) ?? col),
             // For cross-space targets the lowering carries field names directly
@@ -1293,6 +1345,10 @@ export function buildSqlContractFromDefinition(
         relation.toModel,
         relation.toNamespaceId,
         'Relation',
+      );
+      invariant(
+        relation.toTable !== undefined,
+        `Relation "${semanticModel.modelName}.${relation.fieldName}" is local but carries no target table; only cross-space relations may leave it unset.`,
       );
       assertTargetTableMatches(semanticModel.modelName, targetModel, relation.toTable, 'Relation');
 
@@ -1338,8 +1394,15 @@ export function buildSqlContractFromDefinition(
             defaultNamespaceId,
           ),
         };
+      } else if (relation.cardinality === '1:N') {
+        modelRelations[relation.fieldName] = { to, cardinality: '1:N', on };
       } else {
-        modelRelations[relation.fieldName] = { to, cardinality: relation.cardinality, on };
+        modelRelations[relation.fieldName] = {
+          to,
+          cardinality: relation.cardinality,
+          nullable: toOneRelationNullable(semanticModel, relation),
+          on,
+        };
       }
     }
 

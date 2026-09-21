@@ -1,11 +1,11 @@
 
-# Prisma Next — Quickstart (Adoption)
+# Prisma 8 — Quickstart (Adoption)
 
 > **Edit your data contract. Prisma handles the rest.**
 
-This skill takes the user from zero (or near-zero) to a first working query against Prisma Next. Three paths — and they all converge on the same first arc: **connect → write → read**. Schema editing comes *after* the first arc, not before.
+This skill takes the user from zero (or near-zero) to a first working query against Prisma 8. Three paths — and they all converge on the same first arc: **connect → write → read**. Schema editing comes *after* the first arc, not before.
 
-- **First-touch orientation** — the user has arrived at a Prisma Next project for the first time (a scaffold tool like `npx createprisma` dropped them in, they cloned a teammate's repo, or they ran `prisma orm init` themselves and now want to make their first move) and they're asking *"what can I do with Prisma Next?"*, *"where do I start?"*, or *"what's next?"*. The goal is to anchor them on the contract, get them connected to a database, round-trip one row, and let further commands surface organically.
+- **First-touch orientation** — the user has arrived at a Prisma 8 project for the first time (a scaffold tool like `npx createprisma` dropped them in, they cloned a teammate's repo, or they ran `prisma orm init` themselves and now want to make their first move) and they're asking *"what can I do with Prisma 8?"*, *"where do I start?"*, or *"what's next?"*. The goal is to anchor them on the contract, get them connected to a database, round-trip one row, and let further commands surface organically.
 - **Greenfield** — new project, fresh database. User runs `prisma orm init` themselves. `init` seeds a starter contract with a sample model, so the path joins the first-touch orientation arc as soon as the database is initialised.
 - **Brownfield-DB** — existing database, no contract yet. Infer the contract from the database with `contract infer`, sign the marker with `db sign`, then write queries against one of the existing tables.
 
@@ -13,9 +13,9 @@ This skill does **not** cover migrating from another ORM (Drizzle, Prisma 6/7, S
 
 ## When to Use
 
-- User asks *"what can I do with Prisma Next?"*, *"what can I do next with Prisma?"*, *"where do I start?"*, *"what should I do first?"* — and a PN project already exists on disk. **First-touch orientation** path below.
+- User asks *"what can I do with Prisma 8?"*, *"what can I do next with Prisma?"*, *"where do I start?"*, *"what should I do first?"* — and a PN project already exists on disk. **First-touch orientation** path below.
 - User just ran `createprisma` (or equivalent scaffold tool) and is asking what to do next. **First-touch orientation** path.
-- User is starting a new project and wants to use Prisma Next. **Greenfield** path.
+- User is starting a new project and wants to use Prisma 8. **Greenfield** path.
 - User has an existing database (no PN contract) and wants to introduce PN. **Brownfield-DB** path.
 - User typed *"prisma orm init"*, *"get started with PN"*, *"set up PN"*, *"how do I scaffold a project"*. **Greenfield** path.
 - User says *"I have an existing Postgres/Mongo, how do I start using PN?"*. **Brownfield-DB** path.
@@ -25,7 +25,7 @@ This skill does **not** cover migrating from another ORM (Drizzle, Prisma 6/7, S
 - User already has a PN project and wants to add a model → `references/contract.md`.
 - User wants to migrate FROM a specific ORM → install `@internal/migrate-from-<orm>-skill` (separate).
 - User wants to wire `db.ts` in a project that already has a contract → `references/runtime.md`.
-- User wants to integrate Prisma Next with a build tool (Vite plugin, Next.js, …) → `references/build.md`.
+- User wants to integrate Prisma 8 with a build tool (Vite plugin, Next.js, …) → `references/build.md`.
 
 ## Key Concepts
 
@@ -34,11 +34,11 @@ This skill does **not** cover migrating from another ORM (Drizzle, Prisma 6/7, S
 - **Authoring mode**: how you write the contract. `psl` (Prisma Schema Language, default) or `typescript` (programmatic builder, optionally paired with the Vite plugin for auto-emit during `vite dev` — see `references/build.md`).
 - **Façade packages.** The scaffold installs exactly one façade per target — `@internal/postgres` (or `@internal/mongo`). User code imports from façade subpaths (`@internal/postgres/config`, `@internal/postgres/runtime`, `@internal/postgres/contract-builder`). The façade bakes in the family / target / adapter / driver wiring; never reach past it. See `references/contract.md` for the full list.
 - **`db.ts`**: the runtime entry point. Lives next to the contract source at `src/prisma/db.ts`. Imports the contract artefacts and exports a `db` value the rest of the app uses.
-- **Marker**: a `pn_meta_marker` row in your database that records the contract hash. Lets PN detect drift between contract and live DB. Created by `db init` (greenfield / first-touch orientation) or `db sign` (brownfield).
+- **Marker**: a row in the `prisma_contract.marker` table (Postgres) or a document in the `_prisma_migrations` collection (Mongo) that records the contract hash per contract space. Lets PN detect drift between contract and live DB. Created by `db init` (greenfield / first-touch orientation) or `db sign` (brownfield).
 
 ### Canonical on-disk layout
 
-Every application that consumes Prisma Next uses the same shape:
+Every application that consumes Prisma 8 uses the same shape:
 
 ```text
 <app-root>/
@@ -70,7 +70,7 @@ Three things to internalise:
 
 **Contributors building extension packages or aggregate-root monorepo packages use a different layout** — `src/contract.{prisma,ts}` (no `prisma/` subdir) + `migrations/<timestamp>_<slug>/` (no `app/` segment). That distinction is intentional; see `references/contract.md` for which path applies to you.
 
-> **Heads up — `prisma orm init` currently scaffolds the wrong layout.** It writes `prisma/contract.{prisma,ts}` and `prisma/db.ts` at the repo root instead of under `src/prisma/`. Tracked as [TML-2532](https://linear.app/prisma-company/issue/TML-2532). Until the fix lands, either pass `--schema-path src/prisma/contract.prisma` to `init`, or move the scaffolded `prisma/` directory into `src/prisma/` after `init` and update the `contract` path in `prisma.config.ts` to match. The canonical layout above is what the demo example uses and what the rest of the framework expects.
+`prisma orm init` scaffolds this layout by default: the contract at `src/prisma/contract.prisma` (or `.ts`) and `db.ts` beside it. A project scaffolded by an older init may have a top-level `prisma/` directory instead — read the `contract` path in `prisma.config.ts` rather than assuming either.
 
 ## Your first arc — connect, write, read
 
@@ -85,18 +85,20 @@ import { db } from './prisma/db';
 
 // Write a row against the starter model. Adapt the field names to whatever
 // model your contract source actually declares — read it first.
-await db.orm.User.create({ email: 'alice@example.com' });
+await db.orm.public.User.create({ email: 'alice@example.com' });
 
 // Read it back.
-const users = await db.orm.User.select('id', 'email').all();
+const users = await db.orm.public.User.select('id', 'email').all();
 console.log(users);
 ```
 
 If that prints `[{ id: 1, email: 'alice@example.com' }]`, the project is wired end-to-end and the user has crossed from *"I have a project"* to *"I'm building."*
 
-`db.orm.<Model>` is the default ORM lane — model-shaped, fully typed against the contract, lazily connects to the database on first use (it picks up `DATABASE_URL` from `.env` via the runtime's `dotenv/config`-loaded environment). The deeper `references/queries.md` reference covers the rest of the supported surface (filters, joins, transactions, the SQL builder) when the user is ready — and names the gaps (raw SQL and TypedSQL are not currently available).
+`db.orm.<ns>.<Model>` is the default ORM lane — model-shaped, fully typed against the contract, lazily connects to the database on first use (it picks up `DATABASE_URL` from `.env` via the runtime's `dotenv/config`-loaded environment). The deeper `references/queries.md` reference covers the rest of the supported surface (filters, joins, transactions, the SQL builder, raw SQL via `db.raw.sql`, prepared statements) when the user is ready — and names the gaps (TypedSQL is not available).
 
-> **Mongo target:** the snippet above is SQL-target shape. On `@internal/mongo`, `db.orm` is keyed by the collection's storage name (`@@map(...)`, or the lowercased model name if no `@@map`), so the same arc reads `await db.orm.users.create(...)` / `await db.orm.users.select('id', 'email').all()` — not `db.orm.User`. Full rule and rewrite recipe in `references/queries.md` § *MongoDB ORM addressing*.
+> **SQLite target:** `prisma orm init` scaffolds only `postgres` and `mongodb`; a SQLite project is wired by hand with the `@internal/sqlite` façade (`references/runtime.md` § *Switch between Postgres, SQLite, and Mongo*; `examples/prisma-8-demo-sqlite`). SQLite has no schemas, so that façade exposes the unbound namespace directly — write `db.orm.User` rather than `db.orm.public.User`.
+>
+> **Mongo target:** the snippet above is SQL-target shape. On `@internal/mongo`, `db.orm` is keyed by the collection's storage name (`@@map(...)`, or the lowercased model name if no `@@map`), so the same arc reads `await db.orm.users.create(...)` / `await db.orm.users.select('id', 'email').all()` — not `db.orm.public.User`. Full rule and rewrite recipe in `references/queries.md` § *MongoDB ORM addressing*.
 
 **Prerequisites for the arc to work.** All three paths leave these in place by the time you reach the arc:
 
@@ -110,15 +112,15 @@ The three workflows below each describe how their path gets the user to that sta
 
 ## Workflow — First-touch orientation
 
-Triggers: *"what can I do with Prisma Next?"*, *"what can I do next with Prisma?"*, *"where do I start?"*, *"I just ran createprisma"*, *"what's next?"*, or any close variant — paired with a PN project already on disk (scaffolded by `createprisma`, by `prisma orm init`, by a teammate, however).
+Triggers: *"what can I do with Prisma 8?"*, *"what can I do next with Prisma?"*, *"where do I start?"*, *"I just ran createprisma"*, *"what's next?"*, or any close variant — paired with a PN project already on disk (scaffolded by `createprisma`, by `prisma orm init`, by a teammate, however).
 
-The user's high-level intent is *"I want to be running an application against my database, against this thing called Prisma Next."* The job of this workflow is to anchor them on the contract, get one round-trip working, and let further commands surface organically as their next move requires them. **It is orientation, not a tour, not a feature inventory, not a syllabus.**
+The user's high-level intent is *"I want to be running an application against my database, against this thing called Prisma 8."* The job of this workflow is to anchor them on the contract, get one round-trip working, and let further commands surface organically as their next move requires them. **It is orientation, not a tour, not a feature inventory, not a syllabus.**
 
 ### Concept — what to communicate first
 
-Prisma Next is contract-first. Everything the framework does — query types, migrations, runtime types, drift detection — flows from a single source of truth: the **contract**. The contract describes the user's application's data model. The framework reads it; the framework derives the rest. Lead with this.
+Prisma 8 is contract-first. Everything the framework does — query types, migrations, runtime types, drift detection — flows from a single source of truth: the **contract**. The contract describes the user's application's data model. The framework reads it; the framework derives the rest. Lead with this.
 
-The first response to *"what can I do with Prisma Next?"* names the contract path, frames its role in one sentence, and then steers toward getting the user's application running. Don't open with a feature inventory. Don't open with a list of commands. Open with: *"Your contract is at `<path>`. It describes your application — your query types, migrations, and runtime types all flow from it. Let's get you connected to a database so your app can actually run against it."*
+The first response to *"what can I do with Prisma 8?"* names the contract path, frames its role in one sentence, and then steers toward getting the user's application running. Don't open with a feature inventory. Don't open with a list of commands. Open with: *"Your contract is at `<path>`. It describes your application — your query types, migrations, and runtime types all flow from it. Let's get you connected to a database so your app can actually run against it."*
 
 The first **arc** — once oriented — is **connect → write → read**. Not edit-the-contract-first, not plan-a-migration-first. The user's win is *I have application code running against my database*.
 
@@ -127,10 +129,10 @@ The first **arc** — once oriented — is **connect → write → read**. Not e
 Before saying anything specific to the user, read:
 
 - `prisma.config.ts` at the repo root — what target (`postgres` / `mongodb`) is wired, what `contract:` path it declares, what extensions are installed.
-- The contract source the config declares (canonically `src/prisma/contract.prisma` or `src/prisma/contract.ts`; a project that pre-dates [TML-2532](https://linear.app/prisma-company/issue/TML-2532) may have it at `prisma/contract.{prisma,ts}` instead — check the `contract` field of the config) — what starter models, if any, exist.
+- The contract source the config declares (canonically `src/prisma/contract.prisma` or `src/prisma/contract.ts`; a project scaffolded by an older init may have it at `prisma/contract.{prisma,ts}` instead — check the `contract` field of the config) — what starter models, if any, exist.
 - `src/prisma/db.ts` (next to the contract) — the runtime entry point.
 - `.env` / `.env.example` — is `DATABASE_URL` set, or only the example?
-- Optionally `pnpm prisma-cli db verify` — does the live DB match the contract?
+- Optionally `pnpm prisma db verify` — does the live DB match the contract? (Exit `4` with findings means drift or no marker; `2` means it could not run.)
 
 Then **say the contract path back to the user, with its role attached**. Something like: *"Your contract is at `src/prisma/contract.prisma`, and it currently declares a `User` model. The contract describes your app — every query type, migration, and runtime type the framework gives you flows from this file. Let's get your app connected to a database next."* The exact wording is up to the agent; what matters is that the user leaves the first response knowing *where the contract is* and *that it is the source of truth*.
 
@@ -139,9 +141,9 @@ Then **say the contract path back to the user, with its role attached**. Somethi
 The motivation is *"so your app can actually run against your database"*, not *"so the prerequisite checklist passes"*. The mechanics depend on what's already in place from Step 1:
 
 - **Everything already wired.** Go straight to writing and reading a row (see *Your first arc — connect, write, read* above). Adapt the snippet to whatever model the contract declares.
-- **`DATABASE_URL` not set.** Have the user set it in `.env` (not in `prisma.config.ts` — see Pitfall 5). Then `pnpm prisma-cli db init` to apply the current contract to that database and write the marker row. Now the app can connect.
-- **Database is connectable but not yet aware of the contract** (marker row missing; `db verify` reports drift). Run `pnpm prisma-cli db init`. (`db update` is the alternative for quick dev cycles — it's looser, doesn't write a migration history, and is what users reach for when they want to iterate on the schema fast. Mention it if the user asks how to make schema changes flow to the DB; don't pre-explain it.)
-- **Contract is empty** (bootstrap left the source blank). Add **one** model with **two** fields (e.g. `User { id, email }`), `pnpm prisma-cli contract emit`, then `pnpm prisma-cli db init`. Minimal — get the round-trip working, *then* extend.
+- **`DATABASE_URL` not set.** Have the user set it in `.env` (not in `prisma.config.ts` — see Pitfall 5). Then `pnpm prisma db init` to apply the current contract to that database and write the marker row. Now the app can connect.
+- **Database is connectable but not yet aware of the contract** (marker row missing; `db verify` reports drift). Run `pnpm prisma db init`. (`db update` is the alternative for quick dev cycles — it's looser, doesn't write a migration history, and is what users reach for when they want to iterate on the schema fast. Mention it if the user asks how to make schema changes flow to the DB; don't pre-explain it.)
+- **Contract is empty** (bootstrap left the source blank). Add **one** model with **two** fields (e.g. `User { id, email }`), `pnpm prisma contract emit`, then `pnpm prisma db init`. Minimal — get the round-trip working, *then* extend.
 
 The user encounters `db init` (and optionally `db update`, `contract emit`) here because they're the commands their current move *requires*. They learn what those commands are by using them.
 
@@ -175,51 +177,41 @@ The concept: `prisma orm init` is one CLI command that scaffolds config, schema,
 ```bash
 mkdir my-app && cd my-app
 pnpm init                                          # if no package.json yet
-pnpm dlx @prisma/cli@next orm init                          # interactive
+pnpm dlx prisma@latest orm init                          # interactive
 # or non-interactive (CI / agent runs):
-pnpm dlx @prisma/cli@next orm init --yes --target postgres --authoring psl
+pnpm dlx prisma@latest orm init --yes --target postgres --authoring psl
 ```
 
-> **Telemetry is opt-out.** The CLI collects anonymous usage data by default. Every command — including `init` — prints a one-time notice to **stderr** on first use, then sends; there is no interactive consent prompt. Opt out anytime by running `prisma telemetry disable`, or with `DO_NOT_TRACK=1` or `PRISMA_NEXT_DISABLE_TELEMETRY=1`. The command stores `"enableTelemetry": false` in your user config for you (the CLI's per-user config dir, **not** `prisma.config.ts`). Run `prisma telemetry status` to see what's currently in effect. This is relevant for agent-driven runs — the CLI records that an agent invoked it. What's collected, the per-user config path, and how to fully reset are documented in `docs/Telemetry.md`.
+> **Telemetry is opt-out.** The CLI collects anonymous usage data by default. Every command — including `init` — prints a one-time notice to **stderr** on first use, then sends; there is no interactive consent prompt. Opt out anytime by running `prisma telemetry disable`, or with `DO_NOT_TRACK=1` or `PRISMA_DISABLE_TELEMETRY=1`. The command stores `"enableTelemetry": false` in your user config for you (the CLI's per-user config dir, **not** `prisma.config.ts`). Run `prisma telemetry status` to see what's currently in effect. This is relevant for agent-driven runs — the CLI records that an agent invoked it. What's collected, the per-user config path, and how to fully reset are documented in `docs/Telemetry.md`.
 
 The flags `init` accepts (run `prisma orm init --help` for the source of truth):
 
 - `--target <db>` — `postgres` or `mongodb`.
 - `--authoring <style>` — `psl` or `typescript`.
-- `--schema-path <path>` — defaults to `prisma/contract.prisma` (or `prisma/contract.ts`). **Pass `--schema-path src/prisma/contract.prisma` (or `.../contract.ts`)** to scaffold into the canonical `src/prisma/` location directly — `init`'s default is wrong today, see [TML-2532](https://linear.app/prisma-company/issue/TML-2532).
-- `--confirm <directory name>` — grant the reinit consent non-interactively. Re-running init in a scaffolded directory asks you to type the directory name back before it overwrites; non-interactive runs pass the name with this flag instead.
+- `--schema-path <path>` — where to write the starter schema. Defaults to `src/prisma/contract.prisma` (or `src/prisma/contract.ts` with `--authoring typescript`), the canonical layout above. The extension must agree with `--authoring` (`CLI.INIT_AUTHORING_SCHEMA_PATH_MISMATCH` otherwise).
+- `--confirm <directory name>` — grant the reinit consent non-interactively. Re-running init in a scaffolded directory asks you to type the directory name back before it overwrites; non-interactive runs pass the name with this flag instead (`--yes` does not grant it).
 - `--write-env` — also write `.env` (default writes only `.env.example`; `.env` stays under your control).
 - `--probe-db` — connect to `DATABASE_URL` once and check the server version against the target's minimum.
-- `--strict-probe` — fail init if the probe fails (no-op without `--probe-db`).
+- `--strict-probe` — fail init if the probe fails (errors without `--probe-db`).
 - `--skip-install` — skip dependency install + initial contract emit.
-- `--skip-skills` — skip Prisma Next skills installation (air-gapped / restricted environments). The skill cluster is always installed at the project level — never globally — so its version stays locked to the project's Prisma Next version.
+- `--keep-previous-facade` — when re-running init to switch targets, keep the previous target package in `package.json`.
+
+`init` does not install agent skills and has no `--skip-skills` flag: the `prisma-8` skill ships inside the `@prisma/orm-*` package the project installs, and the family-level `prisma init` / `prisma skills sync` commands copy it into the agent harness directories.
 
 `init` writes (when it runs cleanly):
 
-- `prisma.config.ts` at the project root.
-- The contract source at `--schema-path` — `src/prisma/contract.prisma` if you passed the canonical override, `prisma/contract.prisma` if you accepted the (currently-wrong) default.
+- `prisma.config.ts` at the project root (envelope form — see `references/contract.md`).
+- The contract source at `--schema-path` (`src/prisma/contract.prisma` by default).
 - `db.ts` in the same directory as the contract source.
-- `prisma-next.md` — a human quick-reference.
+- `prisma-8.md` — a human quick-reference.
 - `.env.example` (and `.env` if `--write-env`).
-- Updates `package.json` (deps + scripts) and `tsconfig.json` (required compiler options).
-- Installs deps and runs `prisma-cli contract emit` once (the project-local bin `@prisma/cli` installs).
-- Registers Prisma Next skills with the local agent runtime.
-
-**If you took `init`'s default and ended up with a top-level `prisma/` directory** (TML-2532), the cleanup is one move + one config edit:
-
-```bash
-mkdir -p src && mv prisma src/prisma
-# Then update prisma.config.ts so `contract` reads
-# 'src/prisma/contract.prisma' (or .ts) instead of 'prisma/contract.prisma'.
-pnpm prisma-cli contract emit   # re-emits contract.json + contract.d.ts under src/prisma/
-```
-
-Do this before running `db init` — once the marker row is written, restructuring is harder.
+- Updates `package.json` (deps + a `contract:emit` script) and `tsconfig.json` (required compiler options).
+- Installs deps and runs `prisma contract emit` once. If the install or the emit fails, the scaffold is still on disk and init exits `4` (`CLI.INIT_INSTALL_FAILED`) or `5` (`CLI.INIT_EMIT_FAILED`) with the step to re-run.
 
 After init succeeds, the path converges on *Your first arc — connect, write, read* above. `init` has already seeded a starter contract with `User` and `Post` models (with a relation between them) and run `contract emit` once; the only remaining prerequisites are setting `DATABASE_URL` and initialising the database. Two commands:
 
 1. Set `DATABASE_URL` in `.env` (copy from `.env.example`).
-2. Initialise the database: `pnpm prisma-cli db init`. Creates tables, indexes, constraints, and writes the marker row — using the starter contract `init` generated.
+2. Initialise the database: `pnpm prisma db init`. Creates tables, indexes, constraints, and writes the marker row — using the starter contract `init` generated.
 
 Then run the snippet from *Your first arc* above against the `User` model. When the user is ready to extend the contract — add more models, change fields, add relations — chain to `references/contract.md`. For more queries, chain to `references/queries.md`.
 
@@ -227,20 +219,19 @@ Then run the snippet from *Your first arc* above against the `User` model. When 
 
 ## Workflow — Brownfield-DB (existing database, no contract)
 
-The concept: against an existing database with no PN contract, `contract infer` walks the live schema (tables, columns, indexes — including expression and partial ones — constraints, and RLS enablement + policies) and writes a PSL contract that describes it. Where authoring would generate a CHECK constraint the database does not carry (the element-non-null check on a list column), infer emits `@noCheck(elementNotNull)` on that field, so the contract declares exactly what the database enforces. The reverse gap is closed too: a hand-written CHECK constraint the database enforces that authoring would never have generated comes back as `@@check(expression: <reprint>, map: "<name>")`, so it is a declared object from the first pull instead of an invisible extra a later destructive plan could drop. That inferred check warns (`PN_EXACT_NAME_BODY_COMPARISON`) the next time you run `contract emit` — expected, not a defect: the warning fires on any `map:` body regardless of who wrote it, and the comparison stays sound because both sides are Postgres's own reprint. The result is a *starting point*, not the final contract — review and clean it up, then `db sign` to record the current contract hash as the marker (instead of letting `db init` try to recreate the schema from scratch).
+The concept: against an existing database with no PN contract, `contract infer` walks the live schema (tables, columns, indexes — including expression and partial ones — constraints, and RLS enablement + policies) and writes a PSL contract that describes it. Where authoring would generate a CHECK constraint the database does not carry (the element-non-null check on a list column), infer emits `@noCheck(elementNotNull)` on that field, so the contract declares exactly what the database enforces. The reverse gap is closed too: a hand-written CHECK constraint the database enforces that authoring would never have generated comes back as `@@check(expression: <reprint>, map: "<name>")`, so it is a declared object from the first pull instead of an invisible extra a later destructive plan could drop. That inferred check warns (`PN_EXACT_NAME_BODY_COMPARISON`) the next time you run `contract emit` — expected, not a defect: the warning fires on any `map:` body regardless of who wrote it, and the comparison stays sound because both sides are Postgres's own reprint. The result is a *starting point*, not the final contract — review and clean it up, then `db sign` to record the current contract hash as the marker (instead of letting `db init` try to recreate the schema from scratch). By default `db sign` also sets the `db` ref and stores the contract snapshot, so the next `migration plan` chains from the adopted schema — even when the database is named with `--db`. `--advance-ref <name>` writes another ref instead and `--no-advance-ref` writes none; in either case the next plan needs `--from` or a `db` ref you set yourself.
 
 ```bash
 mkdir my-app && cd my-app
 pnpm init
-pnpm dlx @prisma/cli@next orm init --yes --target postgres --authoring psl \
-  --schema-path src/prisma/contract.prisma
-# scaffold lands; you'll overwrite the starter schema below
+pnpm dlx prisma@latest orm init --yes --target postgres --authoring psl
+# scaffold lands at src/prisma/; you'll overwrite the starter schema below
 ```
 
 Then, with `DATABASE_URL` set in `.env`:
 
 ```bash
-pnpm prisma-cli contract infer --db "$DATABASE_URL" --output src/prisma/contract.prisma
+pnpm prisma contract infer --db "$DATABASE_URL" --output src/prisma/contract.prisma
 ```
 
 (Note: the flag is `--output`, not `--out`. Run `prisma contract infer --help` for the full surface.)
@@ -255,16 +246,16 @@ The agent should pause here and read the inferred PSL. Symptoms a re-author pass
 Then re-emit and sign:
 
 ```bash
-pnpm prisma-cli contract emit
-pnpm prisma-cli db sign
-pnpm prisma-cli db verify   # clean immediately after a pull; reports drift if the DB changes later
+pnpm prisma contract emit
+pnpm prisma db sign     # writes the marker and sets the db ref
+pnpm prisma db verify   # exit 0 immediately after a pull; exit 4 with findings if the DB drifts later
 ```
 
 Then run the snippet from *Your first arc — connect, write, read* above, using one of your existing tables in place of the starter model. The arc is the same; only the path that got you there differs.
 
 ## Commands you'll use day-to-day
 
-A reference table — not a script to recite at the user. Commands surface in the workflow above as the user's next move requires them; this table is here for the moment the user asks for a wider view (typically after the first round-trip), and as a one-glance summary anyone newly oriented to Prisma Next can scan. For flag-level detail, run `<command> --help`; the help output is the source of truth.
+A reference table — not a script to recite at the user. Commands surface in the workflow above as the user's next move requires them; this table is here for the moment the user asks for a wider view (typically after the first round-trip), and as a one-glance summary anyone newly oriented to Prisma 8 can scan. For flag-level detail, run `<command> --help`; the help output is the source of truth.
 
 | What you want to do | Command | Deeper skill |
 |---|---|---|
@@ -288,17 +279,17 @@ Switch authoring later by re-running `prisma orm init` in the same directory. Th
 
 ## Common Pitfalls
 
-1. **Running `prisma orm init <project-name>` with a positional argument.** `init` operates on the current working directory; there is no positional project-name argument. `mkdir foo && cd foo && pnpm dlx @prisma/cli@next orm init`.
+1. **Running `prisma orm init <project-name>` with a positional argument.** `init` operates on the current working directory; there is no positional project-name argument. `mkdir foo && cd foo && pnpm dlx prisma@latest orm init`.
 2. **`init` doesn't connect to your database.** It only scaffolds files and installs dependencies (and runs the initial `contract emit`). You connect with `db init` / `db update` / `db migrate`. If `init` succeeds and queries fail, the issue is `DATABASE_URL`, not `init`.
 3. **Treating inferred PSL as the final contract.** `contract infer` produces a starting point. Don't `db sign` against a contract you haven't read.
 4. **Forgetting to emit after editing the contract.** The contract artefacts (`contract.json`, `contract.d.ts`) are stale until you run `contract emit`. If the type-checker says a model "doesn't exist", you skipped emit.
-5. **Setting `DATABASE_URL` in `prisma.config.ts` instead of `.env`.** The config reads `.env` automatically via `dotenv/config`. Hardcoding the URL leaks credentials and bypasses per-environment overrides. See `references/runtime.md`.
+5. **Setting `DATABASE_URL` in `prisma.config.ts` instead of `.env`.** Nothing reads `.env` on its own: the scaffolded `prisma.config.ts` starts with `import 'dotenv/config'`, and that import is what loads `.env` into `process.env` before the config (and the CLI running it) reads `process.env['DATABASE_URL']`. Keep the import; a config without it sees no `.env` values. Hardcoding the URL leaks credentials and bypasses per-environment overrides. See `references/runtime.md`.
 6. **Hand-editing `contract.json` or `contract.d.ts`.** They're emitted artefacts; the next `contract emit` overwrites your changes. Edit the source instead.
 7. **Using `--out` for `contract infer`.** The flag is `--output`.
 
-## What Prisma Next doesn't do yet
+## What Prisma 8 doesn't do yet
 
-- **Migration from another ORM.** Prisma Next doesn't migrate your schema *from* Drizzle / Prisma 6/7 / Sequelize / TypeORM / Kysely / Knex / a raw driver. Workaround: install the matching `@internal/migrate-from-<orm>-skill` if one exists for your source, or treat the source as a brownfield database and `contract infer` from it. If you need a guided migration flow built-in, file a feature request via the `references/feedback.md` skill.
+- **Migration from another ORM.** Prisma 8 doesn't migrate your schema *from* Drizzle / Prisma 6/7 / Sequelize / TypeORM / Kysely / Knex / a raw driver. Workaround: install the matching `@internal/migrate-from-<orm>-skill` if one exists for your source, or treat the source as a brownfield database and `contract infer` from it. If you need a guided migration flow built-in, file a feature request via the `references/feedback.md` skill.
 - **`prisma db push`-style production sync.** `db update` is the quick development path; for production, use migrations (`migration plan` + `db migrate`). PN deliberately does not offer a "push-to-prod-without-a-migration" surface — see `references/migrations.md`.
 - **Studio / GUI database browser.** Use `prisma db schema` for a CLI tree-style summary of the live DB. If you need an interactive UI, file a feature request via the `references/feedback.md` skill.
 
@@ -317,10 +308,10 @@ This skill is intentionally body-only; `prisma orm init --help`, `contract infer
 - [ ] Confirmed the user's target (`postgres` / `mongodb`) and authoring mode (`psl` / `typescript`).
 - [ ] **First-touch orientation:** read `prisma.config.ts`, the contract source, `db.ts`, and `.env` before proposing anything — didn't assume what the scaffold tool / teammate left in place.
 - [ ] **Greenfield path:** ran `prisma orm init` from the project directory — no positional project-name argument.
-- [ ] **All paths:** the project ended up in the canonical `src/prisma/contract.{prisma,ts}` + `src/prisma/db.ts` + `migrations/app/` layout — including moving the scaffolded directory out of a top-level `prisma/` if `init` produced one (TML-2532).
-- [ ] **Brownfield path:** ran `contract infer --db "$DATABASE_URL" --output src/prisma/contract.prisma`, reviewed the result, then `contract emit` + `db sign`.
+- [ ] **All paths (application projects):** the project ended up in the canonical `src/prisma/contract.{prisma,ts}` + `src/prisma/db.ts` + `migrations/app/` layout (what `init` scaffolds by default). An extension or aggregate-root package keeps its own `src/contract.{prisma,ts}` + `migrations/<timestamp>_<slug>/` layout — do not relocate it.
+- [ ] **Brownfield path:** ran `contract infer --db "$DATABASE_URL" --output src/prisma/contract.prisma`, reviewed the result, then `contract emit` + `db sign` (which by default also sets the `db` ref, so the next `migration plan` chains from the adopted schema; not with `--no-advance-ref` or `--advance-ref <name>`).
 - [ ] Set `DATABASE_URL` in `.env` and confirmed the value is reachable.
-- [ ] Initialised the DB (`db init` greenfield / first-touch orientation) or signed the marker (`db sign` brownfield).
+- [ ] Initialised the DB (`db init` greenfield / first-touch orientation) or signed the marker (`db sign` brownfield — by default sets the `db` ref too, with or without `--db`).
 - [ ] Did NOT hand-edit `contract.json` or `contract.d.ts`.
 - [ ] Did NOT set `DATABASE_URL` in `prisma.config.ts`.
 - [ ] Confirmed the user understands what the *next* skill is for their workflow (typically `references/queries.md` for more queries, then `references/contract.md` when they're ready to extend the schema).

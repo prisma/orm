@@ -1,6 +1,6 @@
 # @internal/mongo-emitter
 
-Mongo target-family emitter hook for Prisma Next contract emission.
+Mongo target-family emitter hook for Prisma 8 contract emission.
 
 ## What it does
 

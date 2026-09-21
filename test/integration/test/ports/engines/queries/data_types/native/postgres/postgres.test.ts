@@ -1,6 +1,6 @@
 import type { Bit, Char, VarBit, Varchar } from '@internal/target-postgres/codec-types';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../../../_harness/postgres';
 import type { Contract } from './_fixture/other/generated/contract';
 import contractJson from './_fixture/other/generated/contract.json' with { type: 'json' };
 import type { Contract as StringContract } from './_fixture/string/generated/contract';

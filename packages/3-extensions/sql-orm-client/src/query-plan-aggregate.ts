@@ -69,9 +69,6 @@ function toAggregateProjection(
   return { expr, codec };
 }
 
-// ORM HAVING filters use literal binding (values inlined at plan-build time),
-// not parameterized binding. ParamRef is rejected because the ORM's grouped
-// collection API always produces literal comparisons for having() predicates.
 function validateGroupedComparable(value: AnyExpression): AnyExpression {
   switch (value.kind) {
     case 'param-ref':
@@ -80,6 +77,7 @@ function validateGroupedComparable(value: AnyExpression): AnyExpression {
         'ParamRef is not supported in grouped having expressions',
         { meta: { kind: value.kind } },
       );
+    case 'prepared-param-ref':
     case 'literal':
     case 'column-ref':
     case 'identifier-ref':

@@ -11,8 +11,8 @@ export default defineConfig({
     pool: 'forks',
     maxWorkers: 1,
     isolate: false,
-    testTimeout: timeouts.default,
-    hookTimeout: timeouts.default,
+    testTimeout: timeouts.vitestPackageDefault,
+    hookTimeout: timeouts.vitestPackageDefault,
     // The PGlite (WASM) suites still intermittently abort on the slower CI
     // runners even with --no-memory-protection-keys ("Connection terminated
     // unexpectedly"). The crash is environment-specific and does not reproduce

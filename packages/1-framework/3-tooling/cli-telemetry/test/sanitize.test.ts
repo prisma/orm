@@ -5,7 +5,7 @@ describe('sanitizeCommanderResult', () => {
   it('extracts the command name and user-supplied long flag names, dropping all values and positionals', () => {
     expect(
       sanitizeCommanderResult({
-        commandPath: ['prisma-next', 'migration', 'new'],
+        commandPath: ['prisma', 'migration', 'new'],
         positionalArgs: ['user-feature', '/Users/alice/secret.toml'],
         options: [
           { attributeName: 'name', longName: '--name', source: 'cli' },
@@ -23,7 +23,7 @@ describe('sanitizeCommanderResult', () => {
   it('returns the empty flag list when no options were supplied by the user', () => {
     expect(
       sanitizeCommanderResult({
-        commandPath: ['prisma-next', 'init'],
+        commandPath: ['prisma', 'init'],
         positionalArgs: [],
         options: [
           { attributeName: 'install', longName: '--no-install', source: 'default' },
@@ -39,17 +39,17 @@ describe('sanitizeCommanderResult', () => {
   it('joins multi-segment command paths into a single space-delimited command field', () => {
     expect(
       sanitizeCommanderResult({
-        commandPath: ['prisma-next', 'contract', 'emit'],
+        commandPath: ['prisma', 'contract', 'emit'],
         positionalArgs: [],
         options: [{ attributeName: 'config', longName: '--config', source: 'cli' }],
       }).command,
     ).toBe('contract emit');
   });
 
-  it('strips the root program name (`prisma-next`) so command starts at the first verb', () => {
+  it('strips the root program name (`prisma`) so command starts at the first verb', () => {
     expect(
       sanitizeCommanderResult({
-        commandPath: ['prisma-next', 'help'],
+        commandPath: ['prisma', 'help'],
         positionalArgs: [],
         options: [],
       }).command,
@@ -59,7 +59,7 @@ describe('sanitizeCommanderResult', () => {
   it('preserves Commander option declaration order while filtering non-cli sources', () => {
     expect(
       sanitizeCommanderResult({
-        commandPath: ['prisma-next', 'migrate'],
+        commandPath: ['prisma', 'migrate'],
         positionalArgs: [],
         options: [
           { attributeName: 'to', longName: '--to', source: 'cli' },
@@ -74,7 +74,7 @@ describe('sanitizeCommanderResult', () => {
   it('emits negated option names exactly as users type them', () => {
     expect(
       sanitizeCommanderResult({
-        commandPath: ['prisma-next', 'init'],
+        commandPath: ['prisma', 'init'],
         positionalArgs: [],
         options: [{ attributeName: 'install', longName: '--no-install', source: 'cli' }],
       }).flags,
@@ -84,7 +84,7 @@ describe('sanitizeCommanderResult', () => {
   it('never emits Commander camelCase attribute names', () => {
     expect(
       sanitizeCommanderResult({
-        commandPath: ['prisma-next', 'init'],
+        commandPath: ['prisma', 'init'],
         positionalArgs: [],
         options: [
           { attributeName: 'schemaPath', longName: '--schema-path', source: 'cli' },
@@ -96,7 +96,7 @@ describe('sanitizeCommanderResult', () => {
 
   it('never reads positional args; the positionalArgs input is intentionally accepted but unused', () => {
     const out = sanitizeCommanderResult({
-      commandPath: ['prisma-next', 'init'],
+      commandPath: ['prisma', 'init'],
       positionalArgs: ['SHOULD-NEVER-LEAK', 'NEITHER-SHOULD-THIS'],
       options: [{ attributeName: 'target', longName: '--target', source: 'cli' }],
     });
@@ -107,7 +107,7 @@ describe('sanitizeCommanderResult', () => {
 
   it('never includes flag values in its output', () => {
     const out = sanitizeCommanderResult({
-      commandPath: ['prisma-next', 'migration', 'new'],
+      commandPath: ['prisma', 'migration', 'new'],
       positionalArgs: [],
       options: [{ attributeName: 'name', longName: '--name', source: 'cli' }],
     });
@@ -118,7 +118,7 @@ describe('sanitizeCommanderResult', () => {
   it('drops short-only options because the event contract requires long user-facing names', () => {
     expect(
       sanitizeCommanderResult({
-        commandPath: ['prisma-next', 'custom'],
+        commandPath: ['prisma', 'custom'],
         positionalArgs: [],
         options: [{ attributeName: 'q', longName: null, source: 'cli' }],
       }).flags,

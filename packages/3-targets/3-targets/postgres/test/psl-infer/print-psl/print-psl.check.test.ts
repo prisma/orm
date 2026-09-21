@@ -80,7 +80,7 @@ describe('printPsl — @@check emission', () => {
     });
     const psl = printPslFromFlat(schemaIR);
     expect(psl).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Orders {
@@ -126,7 +126,7 @@ describe('printPsl — @@check emission', () => {
     expect(psl.match(/@@check/g) ?? []).toHaveLength(1);
     expect(psl).not.toContain('@noCheck');
     expect(psl).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Users {

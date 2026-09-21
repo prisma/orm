@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -7,7 +7,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry).
 //
 // Verifies that @default(now()) and @updatedAt produce equal date values on
-// record creation. prisma-next maps @updatedAt to temporal.updatedAt().
+// record creation. Prisma 8 maps @updatedAt to temporal.updatedAt().
 
 describe('ports/prisma/functional/issues-12572', () => {
   it(

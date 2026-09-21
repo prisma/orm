@@ -1,11 +1,11 @@
 /**
  * Governance posture for a storage-plane node or for the contract as a whole.
  *
- * - `managed`  — Prisma Next owns the full lifecycle (DDL, migrations, verification).
- * - `tolerated` — node was found in the database but is not schema-managed; Prisma Next
+ * - `managed`  — Prisma 8 owns the full lifecycle (DDL, migrations, verification).
+ * - `tolerated` — node was found in the database but is not schema-managed; Prisma 8
  *   leaves it untouched while tracking its existence.
- * - `external` — node is owned by an external system; Prisma Next never emits DDL for it.
- * - `observed` — read-only access; Prisma Next does not write to or migrate the node.
+ * - `external` — node is owned by an external system; Prisma 8 never emits DDL for it.
+ * - `observed` — read-only access; Prisma 8 does not write to or migrate the node.
  */
 export type ControlPolicy = 'managed' | 'tolerated' | 'external' | 'observed';
 

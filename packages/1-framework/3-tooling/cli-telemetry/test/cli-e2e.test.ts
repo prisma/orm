@@ -113,23 +113,23 @@ function spawnCli(
  */
 function buildEnv(xdg: string): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  delete env['PRISMA_NEXT_DISABLE_TELEMETRY'];
+  delete env['PRISMA_DISABLE_TELEMETRY'];
   delete env['DO_NOT_TRACK'];
-  delete env['PRISMA_NEXT_DEBUG'];
+  delete env['PRISMA_DEBUG'];
   return {
     ...env,
     CI: 'false',
     XDG_CONFIG_HOME: xdg,
-    PRISMA_NEXT_TELEMETRY_ENDPOINT: harness.endpointBase,
+    PRISMA_TELEMETRY_ENDPOINT: harness.endpointBase,
   };
 }
 
 /**
- * Seed `$XDG_CONFIG_HOME/prisma-next/config.json` with a pre-generated
+ * Seed `$XDG_CONFIG_HOME/prisma-8/config.json` with a pre-generated
  * consent + installation id, so the assertion can pin the exact id.
  */
 function seedConsent(xdg: string, installationId: string): void {
-  const dir = join(xdg, 'prisma-next');
+  const dir = join(xdg, 'prisma-8');
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, 'config.json'),
@@ -145,11 +145,11 @@ const V4_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f
 const SETTLING_COMMAND = ['migration', 'list'] as const;
 
 describe('cli-telemetry e2e — engine bin against the real backend', () => {
-  it('prisma-next --help on a fresh XDG_CONFIG_HOME writes no config.json and emits no event', async () => {
+  it('prisma-8 --help on a fresh XDG_CONFIG_HOME writes no config.json and emits no event', async () => {
     const result = await spawnCli(['--help'], { env: buildEnv(xdgDir), cwd: projectDir });
 
     expect(result.exitCode).toBe(0);
-    expect(existsSync(join(xdgDir, 'prisma-next', 'config.json'))).toBe(false);
+    expect(existsSync(join(xdgDir, 'prisma-8', 'config.json'))).toBe(false);
 
     // `onSettled` never fires for --help (no mounted command settles), so
     // no fork should ever happen. Wait a beat anyway so a regression that

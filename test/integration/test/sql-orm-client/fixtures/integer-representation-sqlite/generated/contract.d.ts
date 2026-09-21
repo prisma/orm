@@ -3,7 +3,11 @@
 // To regenerate, run: prisma contract emit
 import type { CodecTypes as SqliteTypes } from '@internal/adapter-sqlite/codec-types';
 
-import type { ContractWithTypeMaps, TypeMaps as TypeMapsType } from '@internal/sql-contract/types';
+import type {
+  ContractWithTypeMaps,
+  RelationKeys,
+  TypeMaps as TypeMapsType,
+} from '@internal/sql-contract/types';
 import type {
   Contract as ContractType,
   ExecutionHashBase,
@@ -174,6 +178,28 @@ export type StorageColumnInputTypes = {
     };
   };
 };
+
+export namespace Models {
+  export type Meter = {
+    id: CodecTypes['sqlite/integer@1']['output'];
+    peak: CodecTypes['sqlite/bigintnumber@1']['output'];
+    samples: Sample[];
+    readonly [RelationKeys]?: 'samples';
+  };
+  export type Sample = {
+    id: CodecTypes['sqlite/integer@1']['output'];
+    meterId: CodecTypes['sqlite/integer@1']['output'];
+    reading: CodecTypes['sqlite/bigintnumber@1']['output'];
+    meter: Meter;
+    readonly [RelationKeys]?: 'meter';
+  };
+}
+
+export declare const models: {
+  Meter: Models.Meter;
+  Sample: Models.Sample;
+};
+
 export type TypeMaps = TypeMapsType<
   CodecTypes,
   QueryOperationTypes,
@@ -338,6 +364,7 @@ type ContractBase = Omit<
                   readonly model: 'Meter';
                 };
                 readonly cardinality: 'N:1';
+                readonly nullable: false;
                 readonly on: {
                   readonly localFields: readonly ['meterId'];
                   readonly targetFields: readonly ['id'];
@@ -360,10 +387,8 @@ type ContractBase = Omit<
   };
   readonly capabilities: {
     readonly sql: {
-      readonly enums: false;
       readonly foreignKeys: true;
       readonly jsonAgg: true;
-      readonly lateral: false;
       readonly limit: true;
       readonly orderBy: true;
       readonly returning: true;

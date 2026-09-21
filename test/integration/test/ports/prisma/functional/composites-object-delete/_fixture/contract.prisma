@@ -19,7 +19,7 @@
 // The optional-content variant (content: CommentContent?) is also covered by
 // a separate root. MongoDB PSL `type` blocks become value objects in the contract.
 
-// use prisma-next
+// use prisma-8
 
 type CommentContentUpvotes {
   vote   Boolean

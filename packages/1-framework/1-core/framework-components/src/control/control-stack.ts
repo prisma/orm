@@ -9,6 +9,7 @@ import type { Codec } from '../shared/codec';
 import type { AnyCodecDescriptor } from '../shared/codec-descriptor';
 import type { CodecLookup, CodecRef, CodecRegistry } from '../shared/codec-types';
 import type {
+  AuthoringAttributeSpecContributions,
   AuthoringContributions,
   AuthoringEntityTypeNamespace,
   AuthoringFieldNamespace,
@@ -21,10 +22,12 @@ import {
   assertResolvableTypeConstructorTemplates,
   collectContributedDescriptorPaths,
   collectScalarTypeConstructors,
+  mergeAuthoringAttributeSpecs,
   mergeAuthoringNamespaces,
 } from '../shared/framework-authoring';
 import type { ComponentMetadata } from '../shared/framework-components';
 import type {
+  ControlDefaultLiteralTagEntry,
   ControlMutationDefaultEntry,
   ControlMutationDefaults,
   MutationDefaultGeneratorDescriptor,
@@ -50,6 +53,7 @@ export interface AssembledAuthoringContributions {
   readonly entityTypes: AuthoringEntityTypeNamespace;
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
   readonly modelAttributes: AuthoringModelAttributeDescriptorNamespace;
+  readonly attributeSpecs: AuthoringAttributeSpecContributions;
   /** The single {@link AuthoringContributions.valueObjectStorageType} declared across the composed components, validated at assembly against the merged `type` namespace. */
   readonly valueObjectStorageType?: string;
 }
@@ -179,6 +183,11 @@ export function assembleAuthoringContributions(
   const entityTypes = {} as Record<string, unknown>;
   const pslBlockDescriptors: Record<string, unknown> = {};
   const modelAttributes: Record<string, unknown> = {};
+  const attributeSpecs: {
+    readonly model: Record<string, unknown>;
+    readonly field: Record<string, unknown>;
+  } = { model: {}, field: {} };
+  const attributeSpecOwners = new Map<string, string>();
 
   const pathOwners = new Map<string, string>();
   const claimContributedPaths = (
@@ -263,6 +272,14 @@ export function assembleAuthoringContributions(
         'modelAttribute',
       );
     }
+    if (descriptor.authoring?.attributeSpecs) {
+      mergeAuthoringAttributeSpecs(
+        attributeSpecs,
+        descriptor.authoring.attributeSpecs,
+        descriptorId,
+        attributeSpecOwners,
+      );
+    }
   }
 
   const fieldNamespace = field as AuthoringFieldNamespace;
@@ -300,6 +317,7 @@ export function assembleAuthoringContributions(
     entityTypes: entityTypeNamespace,
     pslBlockDescriptors: pslBlockDescriptorNamespace,
     modelAttributes: modelAttributeNamespace,
+    attributeSpecs,
     ...(valueObjectStorageDeclaration !== undefined
       ? { valueObjectStorageType: valueObjectStorageDeclaration.name }
       : {}),
@@ -313,6 +331,8 @@ export function assembleControlMutationDefaults(
 ): ControlMutationDefaults {
   const defaultFunctionRegistry = new Map<string, ControlMutationDefaultEntry>();
   const functionOwners = new Map<string, string>();
+  const defaultLiteralTagRegistry = new Map<string, ControlDefaultLiteralTagEntry>();
+  const tagOwners = new Map<string, string>();
   const generatorMap = new Map<string, MutationDefaultGeneratorDescriptor>();
   const generatorOwners = new Map<string, string>();
 
@@ -344,10 +364,23 @@ export function assembleControlMutationDefaults(
       defaultFunctionRegistry.set(functionName, handler);
       functionOwners.set(functionName, descriptorId);
     }
+
+    for (const [tag, entry] of contributions.defaultLiteralTagRegistry) {
+      const existingOwner = tagOwners.get(tag);
+      if (existingOwner !== undefined) {
+        throw new InternalError(
+          `Duplicate default literal tag "${tag}". ` +
+            `Descriptor "${descriptorId}" conflicts with "${existingOwner}".`,
+        );
+      }
+      defaultLiteralTagRegistry.set(tag, entry);
+      tagOwners.set(tag, descriptorId);
+    }
   }
 
   return {
     defaultFunctionRegistry,
+    defaultLiteralTagRegistry,
     generatorDescriptors: Array.from(generatorMap.values()),
   };
 }

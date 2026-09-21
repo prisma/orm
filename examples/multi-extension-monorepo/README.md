@@ -1,10 +1,10 @@
 # multi-extension-monorepo
 
-Worked example: a Prisma Next application that depends on **two** internal contract-space packages — `audit` and `feature-flags` — plus its own application schema. Exercises the framework's per-space planner / runner / verifier with multiple extensions composed into a single application.
+Worked example: a Prisma 8 application that depends on **two** internal contract-space packages — `audit` and `feature-flags` — plus its own application schema. Exercises the framework's per-space planner / runner / verifier with multiple extensions composed into a single application.
 
 ## What this demonstrates
 
-Prisma Next's contract-space mechanism is symmetric across origin: a contract space contributed by an installed extension package, a published extension on npm, and an internal monorepo package all flow through the same descriptor surface. The framework reads each `extensions` entry's descriptor at authoring time, emits pinned per-space artefacts into the user's repo, and applies migrations from each space in cross-space order (extensions first, app last) inside a single transaction.
+Prisma 8's contract-space mechanism is symmetric across origin: a contract space contributed by an installed extension package, a published extension on npm, and an internal monorepo package all flow through the same descriptor surface. The framework reads each `extensions` entry's descriptor at authoring time, emits pinned per-space artefacts into the user's repo, and applies migrations from each space in cross-space order (extensions first, app last) inside a single transaction.
 
 This example exercises that property end-to-end against PGlite (the embedded Postgres-compatible engine the framework uses for tests). Two trivial "internal extensions" each declare:
 

@@ -2,7 +2,7 @@
 
 A small, self-contained example showing how to use the
 **[`@internal/extension-postgis`](../../packages/3-extensions/postgis)**
-extension pack to model and query geospatial data with Prisma Next on
+extension pack to model and query geospatial data with Prisma 8 on
 PostgreSQL.
 
 The demo tells a story you can verify end-to-end:
@@ -128,7 +128,7 @@ completed before `pnpm dev` will return data.
 ## Schema
 
 ```prisma
-// use prisma-next
+// use prisma-8
 
 types {
   WgsGeometry = postgis.Geometry(4326)

@@ -66,7 +66,7 @@ pnpm emit                        # generate src/prisma/contract.{json,d.ts}
 cp .env.example .env             # gitignored
 ```
 
-`.env` ships preset to the docker-compose URL (`postgres://postgres:postgres@127.0.0.1:5433/prisma_next_cloudflare_worker`). Wrangler reads `WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` to populate the `HYPERDRIVE` binding's local connection string ([Cloudflare docs](https://developers.cloudflare.com/hyperdrive/configuration/local-development)). Note: this goes in **`.env`**, not `.dev.vars` — `.dev.vars` is for runtime worker secrets, not Wrangler configuration. The `WRANGLER_*` prefix is being deprecated in favour of `CLOUDFLARE_*` in newer Wrangler; either works as of `wrangler@4.87`.
+`.env` ships preset to the docker-compose URL (`postgres://postgres:postgres@127.0.0.1:5433/prisma_8_cloudflare_worker`). Wrangler reads `WRANGLER_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE` to populate the `HYPERDRIVE` binding's local connection string ([Cloudflare docs](https://developers.cloudflare.com/hyperdrive/configuration/local-development)). Note: this goes in **`.env`**, not `.dev.vars` — `.dev.vars` is for runtime worker secrets, not Wrangler configuration. The `WRANGLER_*` prefix is being deprecated in favour of `CLOUDFLARE_*` in newer Wrangler; either works as of `wrangler@4.87`.
 
 ### Per-session: bring up Postgres, init schema, seed
 

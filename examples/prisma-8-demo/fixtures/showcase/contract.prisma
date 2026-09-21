@@ -1,4 +1,4 @@
-// use prisma-next
+// use prisma-8
 
 model account {
   id       Char(36)  @id @default(uuid())

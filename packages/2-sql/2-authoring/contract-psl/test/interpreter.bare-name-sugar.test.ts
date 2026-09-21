@@ -86,7 +86,7 @@ describe('bare-name sugar (T ≡ T())', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const columns = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['doc']
+    const columns = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Doc']
       ?.columns;
     expect(columns?.['bare']).toEqual(columns?.['called']);
     expect(columns?.['bare']).toMatchObject({
@@ -110,7 +110,7 @@ describe('bare-name sugar (T ≡ T())', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
-    const columns = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['doc']
+    const columns = unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Doc']
       ?.columns;
     expect(columns?.['bare']).toEqual(columns?.['called']);
     expect(columns?.['bare']).toMatchObject({
