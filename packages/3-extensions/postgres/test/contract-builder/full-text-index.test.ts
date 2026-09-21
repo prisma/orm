@@ -9,10 +9,24 @@ import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import postgresTargetControl from '@internal/target-postgres/control';
-import type { PostgresSchema } from '@internal/target-postgres/types';
+import postgresPack from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
+import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, fullTextIndex, model } from '../../src/exports/contract-builder';
+
+/**
+ * Both surfaces file the index onto the namespace's `message` table; the two
+ * namespace values have different static types, so this reads the one shape
+ * both share.
+ */
+function indexesOfPublicMessage(namespace: unknown): readonly { expression?: string }[] {
+  const table = blindCast<
+    { readonly table?: Record<string, { readonly indexes?: readonly { expression?: string }[] }> },
+    'both the PSL and the TS build produce a Postgres namespace; only its indexes are read here'
+  >(namespace).table;
+  return table?.['message']?.indexes ?? [];
+}
 
 const intColumn = { codecId: 'pg/int4@1', nativeType: 'int4' } as const;
 const textColumn = { codecId: 'pg/text@1', nativeType: 'text' } as const;
@@ -43,16 +57,7 @@ function pslIndexes() {
     sourceFile,
     sourceId: 'schema.prisma',
     capabilities: {},
-    target: {
-      kind: 'target',
-      familyId: 'sql',
-      targetId: 'postgres',
-      id: 'postgres',
-      version: '0.0.1',
-      capabilities: {},
-      defaultNamespaceId: 'public',
-      indexTypes: postgresTargetControl.indexTypes,
-    },
+    target: postgresPack,
     scalarColumnDescriptors: new Map([
       ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
       ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
@@ -63,8 +68,7 @@ function pslIndexes() {
   });
   expect(result.ok).toBe(true);
   if (!result.ok) return [];
-  const namespace = result.value.storage.namespaces['public'] as PostgresSchema;
-  return namespace.table['message']?.indexes ?? [];
+  return indexesOfPublicMessage(result.value.storage.namespaces['public']);
 }
 
 function tsIndexes() {
@@ -81,8 +85,7 @@ function tsIndexes() {
       })),
     },
   });
-  const namespace = contract.storage.namespaces['public'] as PostgresSchema;
-  return namespace.table['message']?.indexes ?? [];
+  return indexesOfPublicMessage(contract.storage.namespaces['public']);
 }
 
 describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
@@ -109,8 +112,7 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
         })),
       },
     });
-    const namespace = contract.storage.namespaces['public'] as PostgresSchema;
-    expect(namespace.table['message']?.indexes[0]).toMatchObject({
+    expect(indexesOfPublicMessage(contract.storage.namespaces['public'])[0]).toMatchObject({
       expression: `to_tsvector('german', "text")`,
     });
   });
