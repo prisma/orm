@@ -182,7 +182,7 @@ declare const userCollectionWithWhere: Collection<
   {
     readonly hasOrderBy: false;
     readonly hasWhere: true;
-    readonly hasUniqueFilter: false;
+    readonly hasUniqueFilter: true;
     readonly variantName: undefined;
     readonly nsId: never;
   }
@@ -302,9 +302,9 @@ describe('Collection.upsert (write-typed)', () => {
 });
 
 describe('Collection.update / .updateAll / .updateAndCount (write-typed)', () => {
-  // Update terminals require the receiver to satisfy the
-  // `State['hasWhere'] extends true` gate, so we use a separately-
-  // declared `userCollectionWithWhere` whose State is post-where.
+  // Update terminals require the receiver to satisfy the `hasWhere` /
+  // `hasUniqueFilter` gates, so we use a separately-declared
+  // `userCollectionWithWhere` whose State is post-unique-where.
   test('update accepts a configurator that applies a write-only annotation', () => {
     userCollectionWithWhere.update({ name: 'Alice' }, (meta) =>
       meta.annotate(auditAnnotation({ actor: 'system' })),

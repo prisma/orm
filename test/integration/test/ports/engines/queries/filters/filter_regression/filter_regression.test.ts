@@ -37,7 +37,7 @@ describe('ports/engines/queries/filters/filter_regression', () => {
             { id: 136, name: '3' },
           ]);
           await db.public.Location.createAll(locations.map((location) => ({ ...location })));
-          await db.public.Location.where((location) => location.id.eq(310)).update({
+          await db.public.Location.where({ id: 310 }).update({
             companyId: 134,
           });
           await db.public.Location.where((location) => location.id.in([312, 313])).updateAll({

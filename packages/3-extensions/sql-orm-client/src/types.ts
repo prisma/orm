@@ -1500,6 +1500,18 @@ export type UniqueConstraintCriterion<
       : never
     : never;
 
+type NonNullableValues<T> = T extends unknown ? { [K in keyof T]: NonNullable<T[K]> } : never;
+
+/**
+ * A shorthand `where` filter that binds every column of the primary key or of one unique constraint to a non-null value, so it matches at most one row. `null` is excluded because the filter compiles it to `IS NULL`, which can match many rows; `undefined` because the filter drops it.
+ */
+export type UniqueWhereFilter<
+  TContract extends Contract<SqlStorage>,
+  NsId extends DomainNamespaceId<TContract>,
+  ModelName extends string,
+> = NonNullableValues<UniqueConstraintCriterion<TContract, ModelName>> &
+  ShorthandWhereFilter<TContract, NsId, ModelName>;
+
 type RelationConnectCriterion<TContract extends Contract<SqlStorage>, ModelName extends string> = [
   UniqueConstraintCriterion<TContract, ModelName>,
 ] extends [never]

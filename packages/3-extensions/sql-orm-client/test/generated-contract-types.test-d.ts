@@ -337,14 +337,18 @@ userCollection.upsert({
   // @ts-expect-error invalid conflict key for upsert()
   conflictOn: { unknown: 'value' },
 });
-const updatableUsers = userCollection.where({ email: 'alice@example.com' });
-updatableUsers.update({ name: 'Alice' });
-updatableUsers.updateAll({ name: 'Alice' });
-updatableUsers.updateAndCount({ name: 'Alice' });
-const deletableUsers = userCollection.where({ email: 'alice@example.com' });
-deletableUsers.delete();
-deletableUsers.deleteAll();
-deletableUsers.deleteAndCount();
+const usersByEmail = userCollection.where({ email: 'alice@example.com' });
+usersByEmail.updateAll({ name: 'Alice' });
+usersByEmail.updateAndCount({ name: 'Alice' });
+usersByEmail.deleteAll();
+usersByEmail.deleteAndCount();
+// @ts-expect-error update() requires a unique where(); email is not unique here
+usersByEmail.update({ name: 'Alice' });
+// @ts-expect-error delete() requires a unique where(); email is not unique here
+usersByEmail.delete();
+const userById = userCollection.where({ id: 'user_001' });
+userById.update({ name: 'Alice' });
+userById.delete();
 // @ts-expect-error cursor() requires orderBy() first
 userCollection.cursor({ id: 'user_001' });
 // @ts-expect-error distinctOn() requires orderBy() first

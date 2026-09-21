@@ -55,38 +55,6 @@ describe('integration/update', () => {
   );
 
   it(
-    'update() affects only one row even when where() matches several',
-    async () => {
-      await withCollectionRuntime(async (runtime) => {
-        const users = createReturningUsersCollection(runtime);
-
-        await seedUsers(runtime, [
-          { id: 1, name: 'Stale', email: 'a@example.com' },
-          { id: 2, name: 'Stale', email: 'b@example.com' },
-          { id: 3, name: 'Fresh', email: 'c@example.com' },
-        ]);
-
-        const returned = await users.where({ name: 'Stale' }).update({ name: 'Updated' });
-
-        expect(returned).not.toBeNull();
-        expect(returned?.name).toBe('Updated');
-        expect([1, 2]).toContain(returned?.id);
-
-        const rows = await runtime.query<{ id: number; name: string }>(
-          'select id, name from users order by id',
-        );
-        const updatedRows = rows.filter((row) => row.name === 'Updated');
-        const staleRows = rows.filter((row) => row.name === 'Stale');
-        expect(updatedRows).toHaveLength(1);
-        expect(staleRows).toHaveLength(1);
-        expect(rows).toContainEqual({ id: 3, name: 'Fresh' });
-        expect(updatedRows[0]?.id).toBe(returned?.id);
-      });
-    },
-    timeouts.spinUpPpgDev,
-  );
-
-  it(
     'updateAll() returns all updated rows',
     async () => {
       await withCollectionRuntime(async (runtime) => {

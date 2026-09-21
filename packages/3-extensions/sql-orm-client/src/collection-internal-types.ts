@@ -34,6 +34,14 @@ export type WithWhereState<State extends CollectionTypeState> = Omit<State, 'has
   readonly hasWhere: true;
 };
 
+export type WithUniqueWhereState<State extends CollectionTypeState> = Omit<
+  State,
+  'hasWhere' | 'hasUniqueFilter'
+> & {
+  readonly hasWhere: true;
+  readonly hasUniqueFilter: true;
+};
+
 export type WithOrderByState<State extends CollectionTypeState> = Omit<State, 'hasOrderBy'> & {
   readonly hasOrderBy: true;
 };

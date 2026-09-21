@@ -64,6 +64,7 @@ import type {
   RowType,
   WhereInput,
   WithOrderByState,
+  WithUniqueWhereState,
   WithVariantState,
   WithWhereState,
 } from './collection-internal-types';
@@ -135,6 +136,7 @@ import {
   type RuntimeQueryable,
   type ShorthandWhereFilter,
   type UniqueConstraintCriterion,
+  type UniqueWhereFilter,
   type VariantAwareIncludeRelationNames,
   type VariantAwareModelAccessor,
   type VariantModelRow,
@@ -316,6 +318,8 @@ class CollectionImpl<
    * `WhereArg` expression, or a shorthand field/value object. Multiple
    * calls are AND-combined.
    *
+   * A shorthand object that binds the primary key or a unique constraint to non-null values marks the collection as matching at most one row, which the single-row `update(...)` and `delete()` terminals require.
+   *
    * ```typescript
    * // Callback form with column-level operators:
    * const matches = await db.orm.User.where((u) => u.email.eq('alice@example.com')).all();
@@ -338,6 +342,9 @@ class CollectionImpl<
       model: VariantAwareModelAccessor<TContract, ModelName, State['variantName'], State['nsId']>,
     ) => WhereArg,
   ): Collection<TContract, ModelName, Row, WithWhereState<State>>;
+  where(
+    filters: UniqueWhereFilter<TContract, State['nsId'], ModelName>,
+  ): Collection<TContract, ModelName, Row, WithUniqueWhereState<State>>;
   where(
     filters: ShorthandWhereFilter<TContract, State['nsId'], ModelName>,
   ): Collection<TContract, ModelName, Row, WithWhereState<State>>;
@@ -1985,10 +1992,9 @@ class CollectionImpl<
   }
 
   /**
-   * Write terminal: update a single matching row — the first one the
-   * filter matches — and return it (or `null` when no row matched).
-   * Requires a prior `.where(...)` — calling `update(...)` on an
-   * unfiltered collection is a type error.
+   * Write terminal: update the one row a unique filter identifies and return it (or `null` when no row matched).
+   *
+   * Requires a prior shorthand `.where({ ... })` that binds the primary key or a unique constraint to non-null values; any other receiver is a type error. To update every row a filter matches, use `updateAll(...)` or `updateAndCount(...)`.
    *
    * Related rows can be created, linked, or unlinked through relation callbacks on any relation:
    * to-one (1:1, N:1), to-many (1:N), and many-to-many (N:M, written through the junction table).
@@ -2023,7 +2029,7 @@ class CollectionImpl<
    * statements nor the read-back query carry them.
    */
   async update(
-    data: State['hasWhere'] extends true
+    data: State['hasUniqueFilter'] extends true
       ? MutationUpdateInput<TContract, ModelName, State['nsId']>
       : never,
     configure?: (meta: MetaBuilder<'write'>) => void,
@@ -2223,10 +2229,9 @@ class CollectionImpl<
   }
 
   /**
-   * Write terminal: delete a single matching row — the first one the
-   * filter matches — and return it (or `null` when no row matched).
-   * Requires a prior `.where(...)` — calling `delete()` on an
-   * unfiltered collection is a type error.
+   * Write terminal: delete the one row a unique filter identifies and return it (or `null` when no row matched).
+   *
+   * Requires a prior shorthand `.where({ ... })` that binds the primary key or a unique constraint to non-null values; any other receiver is a type error. To delete every row a filter matches, use `deleteAll()` or `deleteAndCount()`.
    *
    * ```typescript
    * const deleted = await db.orm.User.where({ id: 1 }).delete();
@@ -2237,7 +2242,9 @@ class CollectionImpl<
    * `MetaBuilder<'write'>` for attaching typed annotations.
    */
   async delete(
-    this: State['hasWhere'] extends true ? Collection<TContract, ModelName, Row, State> : never,
+    this: State['hasUniqueFilter'] extends true
+      ? Collection<TContract, ModelName, Row, State>
+      : never,
     configure?: (meta: MetaBuilder<'write'>) => void,
   ): Promise<Row | null> {
     assertReturningCapability(this.contract, 'delete()');
