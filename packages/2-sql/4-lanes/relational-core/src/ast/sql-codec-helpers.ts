@@ -69,15 +69,15 @@ export const sqlFloatEncodeJson = (value: number): JsonValue => {
 
 /** Also reads the numeral text a `decimal` or whole-number literal default carries; a non-finite value stays refused. */
 export const sqlFloatDecodeJson = (json: JsonValue): number => {
-  if (typeof json === 'string' && isNumeralText(json)) return Number(json);
-  if (typeof json !== 'number' || !Number.isFinite(json)) {
+  const value = typeof json === 'string' && isNumeralText(json) ? Number(json) : json;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
     throw structuredError(
       'RUNTIME.DECODE_FAILED',
       `Expected a finite number for ${SQL_FLOAT_CODEC_ID}, got ${JSON.stringify(json)}`,
       { meta: { codec: SQL_FLOAT_CODEC_ID } },
     );
   }
-  return json;
+  return value;
 };
 
 export const sqlTextEncode = (value: string): string => value;

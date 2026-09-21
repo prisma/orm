@@ -19,6 +19,11 @@ describe('sql/float@1 decodeJson', () => {
     expect(codec.decodeJson(json)).toBe(expected);
   });
 
+  it('refuses numeral text whose magnitude overflows to Infinity', () => {
+    expect(() => codec.decodeJson(`${'9'.repeat(400)}.5`)).toThrow();
+    expect(() => codec.decodeJson(`-${'9'.repeat(400)}`)).toThrow();
+  });
+
   it.each([['NaN'], ['Infinity'], ['-Infinity'], ['nonsense'], ['']])(
     'refuses the text %o',
     (json) => {

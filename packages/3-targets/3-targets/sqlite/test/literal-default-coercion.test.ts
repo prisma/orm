@@ -87,6 +87,11 @@ describe('sqlite/real@1 decodeJson', () => {
     expect(codec.decodeJson(1.5)).toBe(1.5);
   });
 
+  it('refuses numeral text whose magnitude overflows to Infinity', () => {
+    expect(() => codec.decodeJson(`${'9'.repeat(400)}.5`)).toThrow();
+    expect(() => codec.decodeJson(`-${'9'.repeat(400)}`)).toThrow();
+  });
+
   it.each([['NaN'], ['Infinity'], ['-Infinity']])('refuses the non-finite word %s', (json) => {
     expect(() => codec.decodeJson(json)).toThrow();
   });

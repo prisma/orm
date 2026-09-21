@@ -380,7 +380,9 @@ export class SqliteRealCodec extends CodecImpl<
     return finiteReal(value, 'RUNTIME.ENCODE_FAILED');
   }
   decodeJson(json: JsonValue): number {
-    if (typeof json === 'string' && isNumeralText(json)) return Number(json);
+    if (typeof json === 'string' && isNumeralText(json)) {
+      return finiteReal(Number(json), 'RUNTIME.DECODE_FAILED');
+    }
     if (typeof json !== 'number') {
       throw sqliteError(
         'RUNTIME.DECODE_FAILED',
