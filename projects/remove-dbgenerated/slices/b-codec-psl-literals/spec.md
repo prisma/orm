@@ -170,7 +170,7 @@ Every coercion added to `decodeJson` on this branch (int8 and bigint codecs read
 - `docs/reference/error-reference.md`: the renamed code and messages.
 - `packages/2-sql/2-authoring/contract-psl/README.md`: the paragraph on defaults in the ADR's words.
 - `upgrade-instructions/pending/literal-types-column-defaults/`: app instructions gain the contract-form change for `int8number`/`bigintnumber` columns (re-run `contract emit`, then `db sign`); extension instructions are rewritten: declare a data type per codec, name it on the descriptor, casts replace accepted lists, `decodeJson` takes only the canonical form, the authoring entry replaces the tag registry entry, strict assembly.
-- Every "literal type" in code, comments, docs and tests becomes "data type"; `git grep -in "literal type\|literalTypes\|LiteralTypeName\|isCompatible\|integerLiteralTypesUpTo" -- packages docs upgrade-instructions` returns nothing.
+- Every "literal type" this branch introduced in code, comments, docs and tests becomes "data type"; `git grep -n "literalTypes\|LiteralTypeName\|isCompatible\|integerLiteralTypesUpTo\|defaultLiteralTagRegistry\|isDefaultLiteralTagLoweringEntry\|PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE" -- packages docs upgrade-instructions` returns nothing, and `git grep -in "literal type" -- $(git diff --name-only origin/main...HEAD)` returns nothing (pre-existing text elsewhere is out of scope).
 
 ## Tests (written first; each named test must fail before its implementation lands)
 
