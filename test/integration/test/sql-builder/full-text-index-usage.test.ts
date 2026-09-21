@@ -211,6 +211,17 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     expect(indexNames(plan)).toContain('comments_subject_search_2b3d17a7');
   });
 
+  it('stores the varchar index with the cast Postgres adds, and matches it anyway', async () => {
+    const definition = await client().query(
+      `SELECT pg_get_indexdef('comments_subject_search_2b3d17a7'::regclass) AS def`,
+    );
+
+    // Postgres rewrites our `"subject"` to `(subject)::text` inside the stored
+    // expression, because `to_tsvector(regconfig, text)` takes text. The query
+    // gets the same implicit cast, which is why the two still meet.
+    expect(definition.rows[0].def).toContain('(subject)::text');
+  });
+
   describe('negative controls', () => {
     it('does not use the english index for a german query', async () => {
       const lowered = loweredOf(
