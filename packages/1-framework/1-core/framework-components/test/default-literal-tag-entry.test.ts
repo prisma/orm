@@ -28,7 +28,7 @@ describe('jsonDefaultLiteralTagEntry', () => {
   it('names the json literal type', () => {
     expect(jsonDefaultLiteralTagEntry()).toEqual({
       usage: 'json`...`',
-      documentation: "Reads the body as a JSON document and stores it as the column's default.",
+      documentation: 'Reads the body as a JSON document and stores it as the default value.',
       literalType: 'json',
     });
   });

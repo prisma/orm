@@ -7,7 +7,7 @@ import type { ControlDefaultLiteralTagTypeEntry } from './mutation-default-types
 export function jsonDefaultLiteralTagEntry(): ControlDefaultLiteralTagTypeEntry {
   return {
     usage: 'json`...`',
-    documentation: "Reads the body as a JSON document and stores it as the column's default.",
+    documentation: 'Reads the body as a JSON document and stores it as the default value.',
     literalType: 'json',
   };
 }

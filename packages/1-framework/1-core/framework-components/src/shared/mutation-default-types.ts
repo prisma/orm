@@ -96,17 +96,22 @@ interface ControlDefaultLiteralTagDescription {
   readonly documentation: string;
 }
 
-/** A tag whose body the family lowers itself, into a storage default or an execution default. */
+/**
+ * A tag whose body the family lowers itself, into a storage default or an execution default. The
+ * `literalType` slot is closed so an entry cannot claim to be both kinds at once.
+ */
 export interface ControlDefaultLiteralTagLoweringEntry extends ControlDefaultLiteralTagDescription {
   readonly lower: (input: {
     readonly literal: TaggedLiteralValue;
     readonly context: DefaultFunctionLoweringContext;
   }) => LoweredDefaultResult;
+  readonly literalType?: never;
 }
 
-/** A tag whose body is a literal of one type, checked against the column's codec like any other literal. */
+/** A tag whose body is a literal of one type, checked against the field's codec like any other literal. */
 export interface ControlDefaultLiteralTagTypeEntry extends ControlDefaultLiteralTagDescription {
   readonly literalType: LiteralTypeName;
+  readonly lower?: never;
 }
 
 export type ControlDefaultLiteralTagEntry =
