@@ -128,9 +128,9 @@ export function lowerPrisma7Default(
 }
 
 /**
- * The stored value of a literal default: an enum member resolves through the enum's members, and
- * every other literal is classified into a literal type and handed to the column's codec, the same
- * path PSL takes.
+ * The stored value of a written default: an enum member resolves through the enum's members, and
+ * every other value is read by the authoring entry for its syntax, cast into the column's data type
+ * and validated by the column's codec — the same path the current schema language takes.
  */
 function scalarValue(
   expression: ExpressionAst,

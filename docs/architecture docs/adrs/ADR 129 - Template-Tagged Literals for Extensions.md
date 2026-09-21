@@ -71,7 +71,7 @@ The TypeScript `sql` template tag reads its raw template text and runs the same 
 
 ## Who owns a tag
 
-A tag is known only when a pack in the contract's stack registers it. Registration lives beside the default-function registry packs already contribute: `ControlMutationDefaults.defaultLiteralTagRegistry`, a map from tag to an entry with the tag's usage text, its documentation for signature help and completion, and a `lower` function. Stack assembly merges every contributor's map and refuses two contributors that register the same tag.
+A tag is known only when a pack in the contract's stack registers it. Registration lives in the pack's authoring contribution, in the same map as the PSL support for its data types: a tag that names a data type is that type's authoring entry, and a tag that lowers its own body sits under a reserved key with a `lower` function. Stack assembly merges every contributor's map and refuses two contributors that claim the same tag. [ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md) describes both kinds of entry; the earlier `ControlMutationDefaults.defaultLiteralTagRegistry` this ADR named is gone.
 
 Any pack in the stack may register tags: a target, a family, or an extension. The naming rule is about prefixes:
 
