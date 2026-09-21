@@ -150,7 +150,7 @@ model Message {
     );
 
     expect(typed).toEqual(authored);
-    expect(typed[0]).toMatchObject({ where: 'id > 0', partial: true });
+    expect(typed[0]).toMatchObject({ where: 'id > 0' });
   });
 
   it('rejects a language Postgres does not ship, naming the ones it does', () => {

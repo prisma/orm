@@ -735,6 +735,10 @@ const postgresFullTextIndexSpec = modelAttribute('fullTextIndex', {
       type: optional(str()),
       documentation: 'The database index name. Mutually exclusive with `name`.',
     },
+    where: {
+      type: optional(str()),
+      documentation: 'The SQL predicate restricting rows included in a partial index.',
+    },
   },
   refine: (value, ctx, attributeNode) => {
     const diagnostics = [];
@@ -779,6 +783,7 @@ type PostgresFullTextIndexParsed = {
   readonly language?: FullTextSearchLanguage;
   readonly name?: string;
   readonly map?: string;
+  readonly where?: string;
 };
 
 /**
@@ -829,7 +834,7 @@ export const postgresAuthoringModelAttributes = {
           ),
           type: 'gin',
           options: undefined,
-          where: undefined,
+          where: parsed.where,
           unique: undefined,
           name: parsed.name,
           map: parsed.map,

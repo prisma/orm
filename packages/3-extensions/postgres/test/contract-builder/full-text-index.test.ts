@@ -24,9 +24,16 @@ import { defineContract, field, fullTextIndex, model } from '../../src/exports/c
  * namespace values have different static types, so this reads the one shape
  * both share.
  */
-function indexesOfPublicMessage(namespace: unknown): readonly { expression?: string }[] {
+function indexesOfPublicMessage(
+  namespace: unknown,
+): readonly { expression?: string; where?: string }[] {
   const table = blindCast<
-    { readonly table?: Record<string, { readonly indexes?: readonly { expression?: string }[] }> },
+    {
+      readonly table?: Record<
+        string,
+        { readonly indexes?: readonly { expression?: string; where?: string }[] }
+      >;
+    },
     'both the PSL and the TS build produce a Postgres namespace; only its indexes are read here'
   >(namespace).table;
   return table?.['message']?.indexes ?? [];
@@ -109,6 +116,25 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
     expect(tsIndexes()[0]?.expression).toBe(
       renderFullTextIndexExpression(DEFAULT_FULL_TEXT_SEARCH_LANGUAGE, 'body_text'),
     );
+  });
+
+  it('passes a where predicate through to a partial index', () => {
+    const contract = defineContract({
+      models: {
+        Message: model('Message', {
+          fields: { id: field.column(intColumn).id(), text: field.column(textColumn) },
+        }).sql(({ cols }) => ({
+          table: 'message',
+          indexes: [
+            fullTextIndex(cols.text, { where: 'id > 0', name: 'message_text_search_live' }),
+          ],
+        })),
+      },
+    });
+
+    expect(indexesOfPublicMessage(contract.storage.namespaces['public'])[0]).toMatchObject({
+      where: 'id > 0',
+    });
   });
 
   it('renders a non-default language', () => {

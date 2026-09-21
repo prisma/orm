@@ -6,7 +6,11 @@ import {
 } from '@internal/target-postgres/sql-utils';
 import { invariant } from '@internal/utils/assertions';
 
-type FullTextIndexOptions = { readonly language?: FullTextSearchLanguage } & (
+type FullTextIndexOptions = {
+  readonly language?: FullTextSearchLanguage;
+  /** The SQL predicate restricting rows included in a partial index. */
+  readonly where?: string;
+} & (
   | { readonly name: string; readonly map?: never }
   | { readonly map: string; readonly name?: never }
 );
@@ -41,6 +45,7 @@ export function fullTextIndex(
       },
     },
     type: 'gin',
+    ...(options.where !== undefined ? { where: options.where } : {}),
     ...(options.name !== undefined ? { name: options.name } : {}),
     ...(options.map !== undefined ? { map: options.map } : {}),
   };
