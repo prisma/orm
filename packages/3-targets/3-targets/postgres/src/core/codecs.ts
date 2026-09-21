@@ -19,8 +19,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  integerLiteralTypesUpTo,
-  type LiteralTypeDeclaration,
   renderTsLiteral,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
@@ -50,6 +48,7 @@ import { type as arktype } from 'arktype';
 import { definePostgresCodecs, PostgresCodecDescriptor, postgresCodec } from './codec-descriptor';
 import {
   decimalTextBigintLiteral,
+  decimalTextNumberLiteral,
   type PgInterval,
   type PrecisionParams,
   pgBigintEncode,
@@ -374,7 +373,6 @@ export class PgTextCodec extends CodecImpl<
 }
 
 export class PgTextDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_TEXT_NATIVE_TYPE;
   }
@@ -618,8 +616,6 @@ export class PgInt4Codec extends CodecImpl<
 }
 
 export class PgInt4Descriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] =
-    integerLiteralTypesUpTo('i32');
   protected override nativeType(): string {
     return PG_INT4_NATIVE_TYPE;
   }
@@ -670,8 +666,6 @@ export class PgInt2Codec extends CodecImpl<
 }
 
 export class PgInt2Descriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] =
-    integerLiteralTypesUpTo('i16');
   protected override nativeType(): string {
     return PG_INT2_NATIVE_TYPE;
   }
@@ -721,10 +715,10 @@ export class PgInt8Codec extends CodecImpl<
     return pgBigintEncodeJson(PG_INT8_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
-    if (typeof json !== 'string' && typeof json !== 'number') {
+    if (typeof json !== 'string') {
       throw postgresError(
         'RUNTIME.DECODE_FAILED',
-        'pg/int8@1 database JSON value must be a decimal string or a whole number',
+        'pg/int8@1 database JSON value must be a decimal string',
         { meta: { codecId: PG_INT8_CODEC_ID, received: typeof json } },
       );
     }
@@ -733,8 +727,6 @@ export class PgInt8Codec extends CodecImpl<
 }
 
 export class PgInt8Descriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] =
-    integerLiteralTypesUpTo('i64');
   protected override nativeType(): string {
     return PG_INT8_NATIVE_TYPE;
   }
@@ -766,10 +758,9 @@ pgInt8Column satisfies ColumnHelperForStrict<PgInt8Descriptor>;
  * A Postgres `int8` decoded as a JS `number`, for columns whose values stay
  * within the safe integer range ±(2^53 − 1). Both directions guard rather than
  * round: decode (wire and JSON) and encode throw a structured error on
- * out-of-range or non-integral input. The canonical JSON is a JSON number —
- * the deliberate exception to the decimal-text rule for 64-bit integers, and
- * the codec's purpose. The descriptor claims no target type, so `int8` in type
- * position stays `pg/int8@1`.
+ * out-of-range or non-integral input. The canonical JSON is the decimal text
+ * `pg/int8` carries, which every codec of that data type shares. The descriptor
+ * claims no target type, so `int8` in type position stays `pg/int8@1`.
  */
 export class PgInt8NumberCodec extends CodecImpl<
   typeof PG_INT8_NUMBER_CODEC_ID,
@@ -792,13 +783,11 @@ export class PgInt8NumberCodec extends CodecImpl<
 }
 
 export class PgInt8NumberDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] =
-    integerLiteralTypesUpTo('i64');
   protected override nativeType(): string {
     return PG_INT8_NATIVE_TYPE;
   }
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
-    return expression;
+    return decimalTextJsonProjection(expression);
   }
   override readonly dataType = pgInt8.id;
   override readonly codecId = PG_INT8_NUMBER_CODEC_ID;
@@ -806,7 +795,7 @@ export class PgInt8NumberDescriptor extends PostgresCodecDescriptor<void> {
   override readonly targetTypes = [] as const;
   override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
   override renderValueLiteral(value: JsonValue): string | undefined {
-    return renderTsLiteral(value);
+    return decimalTextNumberLiteral(value);
   }
   override factory(): (ctx: CodecInstanceContext) => PgInt8NumberCodec {
     return () => new PgInt8NumberCodec(this);
@@ -842,12 +831,6 @@ export class PgFloat4Codec extends CodecImpl<
 }
 
 export class PgFloat4Descriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
-    ...integerLiteralTypesUpTo('i64'),
-    'bigint',
-    'decimal',
-    'float',
-  ];
   protected override nativeType(): string {
     return PG_FLOAT4_NATIVE_TYPE;
   }
@@ -896,12 +879,6 @@ export class PgFloat8Codec extends CodecImpl<
 }
 
 export class PgFloat8Descriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
-    ...integerLiteralTypesUpTo('i64'),
-    'bigint',
-    'decimal',
-    'float',
-  ];
   protected override nativeType(): string {
     return PG_FLOAT8_NATIVE_TYPE;
   }
@@ -950,7 +927,6 @@ export class PgBoolCodec extends CodecImpl<
 }
 
 export class PgBoolDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['boolean'];
   protected override nativeType(): string {
     return PG_BOOL_NATIVE_TYPE;
   }
@@ -1001,11 +977,10 @@ export class PgNumericCodec extends CodecImpl<
     return value;
   }
   decodeJson(json: JsonValue): string {
-    if (typeof json === 'number') return pgNumericDecode(json);
     if (typeof json !== 'string') {
       throw postgresError(
         'RUNTIME.DECODE_FAILED',
-        'pg/numeric@1 database JSON value must be a decimal string or a number',
+        'pg/numeric@1 database JSON value must be a decimal string',
         { meta: { codecId: PG_NUMERIC_CODEC_ID, received: typeof json } },
       );
     }
@@ -1014,12 +989,6 @@ export class PgNumericCodec extends CodecImpl<
 }
 
 export class PgNumericDescriptor extends PostgresCodecDescriptor<NumericParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
-    ...integerLiteralTypesUpTo('i64'),
-    'bigint',
-    'decimal',
-    'float',
-  ];
   protected override nativeType(): string {
     return PG_NUMERIC_NATIVE_TYPE;
   }
@@ -1069,10 +1038,10 @@ export class PgUnboundedIntCodec extends CodecImpl<
     return pgBigintEncodeJson(PG_UNBOUNDED_INT_CODEC_ID, value);
   }
   decodeJson(json: JsonValue): bigint {
-    if (typeof json !== 'string' && typeof json !== 'number') {
+    if (typeof json !== 'string') {
       throw postgresError(
         'RUNTIME.DECODE_FAILED',
-        'pg/unboundedint@1 database JSON value must be a decimal string or a whole number',
+        'pg/unboundedint@1 database JSON value must be a decimal string',
         { meta: { codecId: PG_UNBOUNDED_INT_CODEC_ID, received: typeof json } },
       );
     }
@@ -1081,10 +1050,6 @@ export class PgUnboundedIntCodec extends CodecImpl<
 }
 
 export class PgUnboundedIntDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
-    ...integerLiteralTypesUpTo('i64'),
-    'bigint',
-  ];
   protected override nativeType(): string {
     return PG_NUMERIC_NATIVE_TYPE;
   }
@@ -1140,7 +1105,6 @@ export class PgTimetzCodec extends CodecImpl<
 }
 
 export class PgTimetzDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_TIMETZ_NATIVE_TYPE;
   }
@@ -1192,7 +1156,6 @@ export class PgBitCodec extends CodecImpl<
 }
 
 export class PgBitDescriptor extends PostgresCodecDescriptor<LengthParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_BIT_NATIVE_TYPE;
   }
@@ -1243,7 +1206,6 @@ export class PgVarbitCodec extends CodecImpl<
 }
 
 export class PgVarbitDescriptor extends PostgresCodecDescriptor<LengthParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_VARBIT_NATIVE_TYPE;
   }
@@ -1292,7 +1254,6 @@ export class PgByteaCodec extends CodecImpl<
 }
 
 export class PgByteaDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_BYTEA_NATIVE_TYPE;
   }
@@ -1340,7 +1301,6 @@ export class PgUuidCodec extends CodecImpl<
 }
 
 export class PgUuidDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_UUID_NATIVE_TYPE;
   }
@@ -1388,7 +1348,6 @@ export class PgInetCodec extends CodecImpl<
 }
 
 export class PgInetDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_INET_NATIVE_TYPE;
   }
@@ -1456,7 +1415,6 @@ export class PgIntervalCodec extends CodecImpl<
 }
 
 export class PgIntervalDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_INTERVAL_NATIVE_TYPE;
   }
@@ -1506,7 +1464,6 @@ export class PgJsonCodec extends CodecImpl<
 }
 
 export class PgJsonDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['json'];
   protected override nativeType(): string {
     return PG_JSON_NATIVE_TYPE;
   }
@@ -1552,7 +1509,6 @@ export class PgJsonbCodec extends CodecImpl<
 }
 
 export class PgJsonbDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['json'];
   protected override nativeType(): string {
     return PG_JSONB_NATIVE_TYPE;
   }
@@ -1602,7 +1558,6 @@ export class PgFloatCodec extends SqlFloatCodec {
 }
 
 export class PgCharDescriptor extends PostgresCodecDescriptor<LengthParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_CHAR_NATIVE_TYPE;
   }
@@ -1633,7 +1588,6 @@ export const pgCharColumn = (params: LengthParams = {}) =>
 pgCharColumn satisfies ColumnHelperFor<PgCharDescriptor>;
 
 export class PgVarcharDescriptor extends PostgresCodecDescriptor<LengthParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_VARCHAR_NATIVE_TYPE;
   }
@@ -1669,8 +1623,6 @@ export const pgVarcharColumn = (params: LengthParams = {}) =>
 pgVarcharColumn satisfies ColumnHelperFor<PgVarcharDescriptor>;
 
 export class PgIntDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] =
-    integerLiteralTypesUpTo('i32');
   protected override nativeType(): string {
     return PG_INT_NATIVE_TYPE;
   }
@@ -1698,11 +1650,6 @@ export const pgIntColumn = () =>
 pgIntColumn satisfies ColumnHelperFor<PgIntDescriptor>;
 
 export class PgFloatDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
-    ...integerLiteralTypesUpTo('i64'),
-    'bigint',
-    'decimal',
-  ];
   protected override nativeType(): string {
     return PG_FLOAT_NATIVE_TYPE;
   }

@@ -109,19 +109,18 @@ describe('pg/int8number@1', () => {
   });
 
   describe('encodeJson / decodeJson', () => {
-    it('uses a JSON number as the canonical form at both safe-range boundaries', () => {
-      expect(codec.encodeJson(9007199254740991)).toBe(9007199254740991);
-      expect(codec.decodeJson(9007199254740991)).toBe(9007199254740991);
-      expect(codec.encodeJson(-9007199254740991)).toBe(-9007199254740991);
-      expect(codec.decodeJson(-9007199254740991)).toBe(-9007199254740991);
+    it('uses decimal text as the canonical form at both safe-range boundaries', () => {
+      expect(codec.encodeJson(9007199254740991)).toBe('9007199254740991');
+      expect(codec.decodeJson('9007199254740991')).toBe(9007199254740991);
+      expect(codec.encodeJson(-9007199254740991)).toBe('-9007199254740991');
+      expect(codec.decodeJson('-9007199254740991')).toBe(-9007199254740991);
     });
 
-    it('reads the digit text of a whole-number literal default', () => {
-      expect(codec.decodeJson('42')).toBe(42);
-    });
-
-    it('rejects digit text past the safe integer range', () => {
+    it('rejects decimal text past the safe integer range', () => {
       expect(() => codec.decodeJson('9007199254740992')).toThrow(
+        'pg/int8number@1 value must be an integer within the safe integer range',
+      );
+      expect(() => codec.decodeJson('-9007199254740992')).toThrow(
         'pg/int8number@1 value must be an integer within the safe integer range',
       );
     });
@@ -132,18 +131,9 @@ describe('pg/int8number@1', () => {
       );
     });
 
-    it('rejects parsed numbers at 2^53 and -(2^53)', () => {
-      expect(() => codec.decodeJson(9007199254740992)).toThrow(
-        'pg/int8number@1 value must be an integer within the safe integer range',
-      );
-      expect(() => codec.decodeJson(-9007199254740992)).toThrow(
-        'pg/int8number@1 value must be an integer within the safe integer range',
-      );
-    });
-
-    it('rejects a non-integral parsed number', () => {
-      expect(() => codec.decodeJson(1.5)).toThrow(
-        'pg/int8number@1 value must be an integer within the safe integer range',
+    it('rejects a JSON number, whose digits a wide value has already lost', () => {
+      expect(() => codec.decodeJson(42)).toThrow(
+        'pg/int8number@1 database JSON value must be decimal text',
       );
     });
 
@@ -157,11 +147,11 @@ describe('pg/int8number@1', () => {
     });
   });
 
-  it('projects the stored int8 unchanged, so the database emits a JSON number', () => {
+  it('projects the stored int8 as text, the canonical form its data type carries', () => {
     const expression = ColumnRef.of('records', 'value');
     expect(
       pgInt8NumberDescriptor.projectJson(expression, { codecId: PG_INT8_NUMBER_CODEC_ID }),
-    ).toBe(expression);
+    ).toEqual(CastExpr.as(expression, 'text'));
   });
 
   it('claims no target type, so int8 stays pg/int8@1 in type position', () => {
@@ -180,7 +170,7 @@ describe('pg/int8number@1', () => {
   });
 
   it('renders a default as a number literal', () => {
-    expect(pgInt8NumberDescriptor.renderValueLiteral?.(42)).toBe('42');
+    expect(pgInt8NumberDescriptor.renderValueLiteral?.('42')).toBe('42');
   });
 
   it('resolves from both registries by codec id', () => {
@@ -322,13 +312,9 @@ describe('pg/unboundedint@1', () => {
       expect(codec.decodeJson('18446744073709551617')).toBe(18446744073709551617n);
     });
 
-    it('reads the JSON number of a whole-number literal default', () => {
-      expect(codec.decodeJson(42)).toBe(42n);
-    });
-
-    it('rejects a JSON number past the safe integer range, which has already lost digits', () => {
-      expect(() => codec.decodeJson(9007199254740992)).toThrow(
-        'pg/unboundedint@1 wire number must be an integer within the safe integer range',
+    it('rejects a JSON number, which has already lost digits', () => {
+      expect(() => codec.decodeJson(42)).toThrow(
+        'pg/unboundedint@1 database JSON value must be a decimal string',
       );
     });
 

@@ -19,9 +19,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  integerLiteralTypesUpTo,
-  isNumeralText,
-  type LiteralTypeDeclaration,
 } from '@internal/framework-components/codec';
 import type { ExtractCodecTypes, ProjectionExpr } from '@internal/sql-relational-core/ast';
 import { CastExpr, FunctionCallExpr } from '@internal/sql-relational-core/ast';
@@ -149,9 +146,7 @@ export class PgVectorCodec extends CodecImpl<
         meta: { codecId: VECTOR_CODEC_ID },
       });
     }
-    const value = json.map((element) =>
-      typeof element === 'string' && isNumeralText(element) ? Number(element) : element,
-    );
+    const value = [...json];
     this.assertVector(value, 'RUNTIME.DECODE_FAILED');
     return value;
   }
@@ -178,9 +173,6 @@ const jsonArrayFromVectorElements = (expression: ProjectionExpr): ProjectionExpr
   ]);
 
 export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = [
-    { list: [...integerLiteralTypesUpTo('i64'), 'bigint', 'decimal'] },
-  ];
   protected override nativeType(): string {
     return PG_VECTOR_NATIVE_TYPE;
   }

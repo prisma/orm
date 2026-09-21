@@ -57,7 +57,7 @@ describe('structured error codes', () => {
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',
-      message: 'sqlite/bigint@1 database JSON value must be a decimal string or a whole number',
+      message: 'sqlite/bigint@1 database JSON value must be a decimal string',
     });
   });
 

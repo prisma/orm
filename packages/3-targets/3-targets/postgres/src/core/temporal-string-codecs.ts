@@ -6,7 +6,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  type LiteralTypeDeclaration,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import { CastExpr, type ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -51,7 +50,6 @@ export class PgDateStringCodec extends CodecImpl<
 }
 
 export class PgDateStringDescriptor extends PostgresCodecDescriptor<void> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_DATE_NATIVE_TYPE;
   }
@@ -100,7 +98,6 @@ export class PgTimestampStringCodec extends CodecImpl<
 }
 
 export class PgTimestampStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_TIMESTAMP_NATIVE_TYPE;
   }
@@ -160,7 +157,6 @@ export class PgTimestamptzStringCodec extends CodecImpl<
 }
 
 export class PgTimestamptzStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_TIMESTAMPTZ_NATIVE_TYPE;
   }
@@ -219,7 +215,6 @@ export class PgTimeStringCodec extends CodecImpl<
 }
 
 export class PgTimeStringDescriptor extends PostgresCodecDescriptor<PrecisionParams> {
-  override readonly literalTypes: readonly LiteralTypeDeclaration[] = ['string'];
   protected override nativeType(): string {
     return PG_TIME_NATIVE_TYPE;
   }

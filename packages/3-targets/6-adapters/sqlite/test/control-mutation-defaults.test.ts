@@ -1,15 +1,10 @@
-import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
-import { jsonDefaultLiteralTagEntry } from '@internal/framework-components/codec';
-import { isDefaultLiteralTagLoweringEntry } from '@internal/framework-components/control';
-import { describe, expect, it } from 'vitest';
-import { createSqliteBuiltinCodecLookup } from '../src/core/codec-lookup';
 import {
-  createSqliteDefaultFunctionRegistry,
-  createSqliteDefaultLiteralTagRegistry,
-  createSqliteMutationDefaultGeneratorDescriptors,
-  sqliteScalarAuthoringTypes,
-} from '../src/core/control-mutation-defaults';
-import runtimeAdapterDescriptor from '../src/core/runtime-adapter';
+  isDataTypeLoweringEntry,
+  loweringEntryKey,
+} from '@internal/framework-components/authoring';
+import { describe, expect, it } from 'vitest';
+import { createSqliteDefaultFunctionRegistry } from '../src/core/control-mutation-defaults';
+import { createSqliteDataTypeEntries } from '../src/core/data-type-authoring';
 import sqliteAdapterDescriptor from '../src/exports/control';
 
 const stubSpan = {
@@ -82,131 +77,74 @@ describe('createSqliteDefaultFunctionRegistry — dbgenerated canonicalization',
   });
 });
 
-describe('createSqliteDefaultLiteralTagRegistry', () => {
-  const tagRegistry = createSqliteDefaultLiteralTagRegistry();
+describe('createSqliteDataTypeEntries', () => {
+  const entries = createSqliteDataTypeEntries();
   const loweringTag = (tag: string) => {
-    const entry = tagRegistry.get(tag);
-    if (entry === undefined || !isDefaultLiteralTagLoweringEntry(entry)) {
-      throw new Error(`the registry does not register "${tag}" as a lowering tag`);
+    const entry = entries[loweringEntryKey(tag)];
+    if (entry === undefined || !isDataTypeLoweringEntry(entry)) {
+      throw new Error(`the entries do not register "${tag}" as a lowering tag`);
     }
     return entry;
   };
 
-  it('registers sql, sqlite.sql and json, in that order', () => {
-    expect([...tagRegistry.keys()]).toEqual(['sql', 'sqlite.sql', 'json']);
-    expect(tagRegistry.get('sqlite.sql')?.usage).toBe('sqlite.sql`...`');
-    expect(tagRegistry.get('json')?.usage).toBe('json`...`');
+  it('registers the json tag and the two lowering tags', () => {
+    expect(
+      Object.values(entries).flatMap((entry) =>
+        entry.written.kind === 'tag' ? [entry.written.tag] : [],
+      ),
+    ).toEqual(['json', 'sql', 'sqlite.sql']);
   });
 
-  it('registers json as a literal of type json, with no prefixed alias', () => {
-    expect(tagRegistry.get('json')).toEqual(jsonDefaultLiteralTagEntry());
-    expect(tagRegistry.get('sqlite.json')).toBeUndefined();
+  it('registers json under its own data type, with no prefixed alias', () => {
+    expect(entries['sqlite.json']).toBeUndefined();
+    expect(loweringTag('sql').written.tag).toBe('sql');
   });
 
-  it('lowers sql`CURRENT_TIMESTAMP` verbatim, with no rewrite to now()', () => {
-    const result = loweringTag('sql').lower({
-      literal: { tag: 'sql', body: 'CURRENT_TIMESTAMP', span: stubSpan },
+  it('lowers a body verbatim as a function default', () => {
+    const result = loweringTag('sqlite.sql').lower({
+      literal: { tag: 'sqlite.sql', body: "'{}'::jsonb", span: stubSpan },
       context: stubContext,
     });
     expect(result).toEqual({
       ok: true,
-      value: {
-        kind: 'storage',
-        defaultValue: { kind: 'function', expression: 'CURRENT_TIMESTAMP' },
-      },
+      value: { kind: 'storage', defaultValue: { kind: 'function', expression: "'{}'::jsonb" } },
     });
   });
 
-  it('is wired as the adapter descriptor tag registry', () => {
-    const registries = sqliteAdapterDescriptor.controlMutationDefaults;
-    if (registries === undefined)
-      throw new Error('the adapter descriptor declares mutation defaults');
-    expect([...registries.defaultLiteralTagRegistry.keys()]).toEqual(['sql', 'sqlite.sql', 'json']);
+  it('is wired as the adapter descriptor authoring entries', () => {
+    expect(Object.keys(sqliteAdapterDescriptor.authoring?.dataTypes ?? {})).toEqual(
+      Object.keys(entries),
+    );
   });
 
   it.each([
     ['sql', 'now'],
     ['sqlite.sql', 'autoincrement'],
-  ])('refuses %s`%s()`, which is a Prisma default function', (tag, name) => {
+  ])('refuses %s`%s()`, which is a Prisma default function', (tag, fn) => {
     const result = loweringTag(tag).lower({
-      literal: { tag, body: `${name}()`, span: stubSpan },
+      literal: { tag, body: `${fn}()`, span: stubSpan },
       context: stubContext,
     });
     expect(result).toMatchObject({
       ok: false,
       diagnostic: {
         code: 'PSL_INVALID_DEFAULT_SQL',
-        message: `Write @default(${name}()) instead of ${tag}\`${name}()\`; ${name}() is a Prisma default function, not raw SQL.`,
+        message: `Write @default(${fn}()) instead of ${tag}\`${fn}()\`; ${fn}() is a Prisma default function, not raw SQL.`,
       },
     });
   });
 
-  it("accepts sql`now() + interval '1 day'`", () => {
+  it('lowers sql`gen_random_uuid()` verbatim', () => {
     const result = loweringTag('sql').lower({
-      literal: { tag: 'sql', body: "now() + interval '1 day'", span: stubSpan },
+      literal: { tag: 'sql', body: 'gen_random_uuid()', span: stubSpan },
       context: stubContext,
     });
-    expect(result).toMatchObject({ ok: true });
-  });
-});
-
-describe('createSqliteMutationDefaultGeneratorDescriptors', () => {
-  const descriptors = createSqliteMutationDefaultGeneratorDescriptors();
-
-  it('includes timestampNow without applicableCodecIds (preset-only generator)', () => {
-    const descriptor = descriptors.find((d) => d.id === 'timestampNow');
-
-    // timestampNow ships only through the temporal.{createdAt,updatedAt}()
-    // preset path; the codec is co-registered there, so the
-    // @default(...) compatibility list is intentionally absent.
-    expect(descriptor).toBeDefined();
-    expect(descriptor?.applicableCodecIds).toBeUndefined();
-  });
-});
-
-describe('sqlite runtime mutation default generators', () => {
-  it('provides timestampNow as a Date generator', () => {
-    const generator = (runtimeAdapterDescriptor.mutationDefaultGenerators?.() ?? []).find(
-      (entry) => entry.id === 'timestampNow',
-    );
-
-    expect(generator?.generate()).toBeInstanceOf(Date);
-  });
-});
-
-describe('sqliteScalarAuthoringTypes', () => {
-  const codecLookup = createSqliteBuiltinCodecLookup();
-  const namespace: AuthoringTypeNamespace = sqliteScalarAuthoringTypes;
-
-  // The legacy scalar-type map channel (name-to-codecId, retired in TML-2985) is gone; the pinned
-  // name → codecId pairs below carry the retired map's claims forward.
-  const expectedScalars = [
-    ['String', 'sqlite/text@1'],
-    ['Int', 'sqlite/integer@1'],
-    ['BigInt', 'sqlite/bigint@1'],
-    ['Float', 'sqlite/real@1'],
-    ['Decimal', 'sqlite/text@1'],
-    ['DateTime', 'sqlite/datetime@1'],
-    ['Json', 'sqlite/json@1'],
-    ['Bytes', 'sqlite/blob@1'],
-  ] as const;
-
-  it('pins every base scalar as a zero-arg type constructor with manifest-derived nativeType', () => {
-    expect(Object.keys(namespace).sort()).toEqual(expectedScalars.map(([name]) => name).sort());
-    for (const [name, codecId] of expectedScalars) {
-      expect(namespace[name]).toEqual({
-        kind: 'typeConstructor',
-        documentation: expect.stringMatching(/\S/),
-        output: { codecId, nativeType: codecLookup.targetTypesFor(codecId)?.[0] },
-      });
-    }
-  });
-
-  it('is wired as the adapter descriptor authoring type contribution', () => {
-    expect(sqliteAdapterDescriptor.authoring?.type).toBe(sqliteScalarAuthoringTypes);
-  });
-
-  it('declares Json as the value-object storage type', () => {
-    expect(sqliteAdapterDescriptor.authoring?.valueObjectStorageType).toBe('Json');
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        kind: 'storage',
+        defaultValue: { kind: 'function', expression: 'gen_random_uuid()' },
+      },
+    });
   });
 });

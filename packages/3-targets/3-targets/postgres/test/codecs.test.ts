@@ -395,13 +395,9 @@ describe('adapter-postgres codecs', () => {
         expect(codec.decodeJson('9007199254740993')).toBe(9007199254740993n);
       });
 
-      it('reads the JSON number of a whole-number literal default', () => {
-        expect(codec.decodeJson(42)).toBe(42n);
-      });
-
-      it('rejects a JSON number past the safe integer range, which has already lost digits', () => {
-        expect(() => codec.decodeJson(9007199254740992)).toThrow(
-          'pg/int8@1 wire number must be an integer within the safe integer range',
+      it('rejects a JSON number, which has already lost digits', () => {
+        expect(() => codec.decodeJson(42)).toThrow(
+          'pg/int8@1 database JSON value must be a decimal string',
         );
       });
 

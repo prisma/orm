@@ -5,7 +5,6 @@ import { assemblePostgresCodecRegistry } from '../core/codec-lookup';
 import { PostgresControlAdapter } from '../core/control-adapter';
 import {
   createPostgresDefaultFunctionRegistry,
-  createPostgresDefaultLiteralTagRegistry,
   createPostgresMutationDefaultGeneratorDescriptors,
   postgresAuthoringTypes,
 } from '../core/control-mutation-defaults';
@@ -21,7 +20,6 @@ const postgresAdapterDescriptor: SqlControlAdapterDescriptor<'postgres'> = {
   },
   controlMutationDefaults: {
     defaultFunctionRegistry: createPostgresDefaultFunctionRegistry(),
-    defaultLiteralTagRegistry: createPostgresDefaultLiteralTagRegistry(),
     generatorDescriptors: createPostgresMutationDefaultGeneratorDescriptors(),
   },
   create(stack): SqlControlAdapter<'postgres'> {

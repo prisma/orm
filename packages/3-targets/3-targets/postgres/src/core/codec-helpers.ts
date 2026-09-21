@@ -9,7 +9,7 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import { isNonFiniteText, isNumeralText, numeralText } from '@internal/framework-components/codec';
+import { isNonFiniteText, numeralText } from '@internal/sql-relational-core/ast';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { type as arktype } from 'arktype';
 import { postgresError } from './errors';
@@ -163,15 +163,12 @@ export const pgFloatEncode = (value: number): string | number =>
 
 export const pgFloatEncodeJson = (value: number): JsonValue => pgFloatEncode(value);
 
-/** Also reads the numeral text a `decimal` or whole-number literal default carries. */
 export const pgFloatDecodeJson = (codecId: string, json: JsonValue): number => {
   if (typeof json === 'number') return json;
-  if (typeof json === 'string' && (isNonFiniteText(json) || isNumeralText(json))) {
-    return Number(json);
-  }
+  if (typeof json === 'string' && isNonFiniteText(json)) return Number(json);
   throw postgresError(
     'RUNTIME.DECODE_FAILED',
-    `${codecId} database JSON value must be a number, decimal text, or the text NaN, Infinity or -Infinity`,
+    `${codecId} database JSON value must be a number or the text NaN, Infinity or -Infinity`,
     { meta: { codecId, received: typeof json } },
   );
 };
@@ -198,12 +195,12 @@ const pgInt8NumberGuard = (
   return value;
 };
 
-export const pgInt8NumberEncodeJson = (value: number): number => {
+export const pgInt8NumberEncode = (value: number): string => {
   requireJsType('pg/int8number@1', 'number', value);
-  return pgInt8NumberGuard('RUNTIME.ENCODE_FAILED', value);
+  return String(pgInt8NumberGuard('RUNTIME.ENCODE_FAILED', value));
 };
 
-export const pgInt8NumberEncode = (value: number): string => String(pgInt8NumberEncodeJson(value));
+export const pgInt8NumberEncodeJson = (value: number): string => pgInt8NumberEncode(value);
 
 /**
  * Reads an `int8` wire value as a `number`, throwing outside ±(2^53 − 1) and on
@@ -223,17 +220,15 @@ export const pgInt8NumberDecode = (wire: string | number | bigint): number => {
   return Number(value);
 };
 
-/** Also reads the digit text an `i64` literal default carries, which is refused past the safe integer range. */
 export const pgInt8NumberDecodeJson = (json: JsonValue): number => {
-  if (typeof json === 'string') return pgInt8NumberDecode(json);
-  if (typeof json !== 'number') {
+  if (typeof json !== 'string') {
     throw postgresError(
       'RUNTIME.DECODE_FAILED',
-      'pg/int8number@1 database JSON value must be a number or decimal text',
+      'pg/int8number@1 database JSON value must be decimal text',
       { meta: { codecId: 'pg/int8number@1', received: typeof json } },
     );
   }
-  return pgInt8NumberGuard('RUNTIME.DECODE_FAILED', json);
+  return pgInt8NumberDecode(json);
 };
 
 /**
@@ -244,6 +239,10 @@ export const pgInt8NumberDecodeJson = (json: JsonValue): number => {
  */
 export const decimalTextBigintLiteral = (value: JsonValue): string | undefined =>
   typeof value === 'string' && DECIMAL_INTEGER.test(value) ? `${value}n` : undefined;
+
+/** Renders the decimal text of `pg/int8number@1`, whose application type is `number`, as a number literal. */
+export const decimalTextNumberLiteral = (value: JsonValue): string | undefined =>
+  typeof value === 'string' && DECIMAL_INTEGER.test(value) ? value : undefined;
 
 export const pgNumericRenderOutputType = (typeParams: {
   readonly precision?: number;

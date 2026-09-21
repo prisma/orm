@@ -45,7 +45,7 @@ function moneyContract(): Contract<SqlStorage> {
                     nativeType: 'int8',
                     codecId: 'pg/int8number@1',
                     nullable: false,
-                    default: { kind: 'literal', value: 0 },
+                    default: { kind: 'literal', value: '0' },
                   },
                   w: {
                     nativeType: 'int4',

@@ -56,6 +56,15 @@ export function numeralText(value: number): string {
   return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
 }
 
+/** A string as a contract source writes it, with the escapes its string reader resolves. */
+export function escapePslString(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
+}
+
 /** Which data type a written number is, and whether that type stores it as a number or as text. */
 export interface NumberClassification {
   readonly type: DataTypeId;
