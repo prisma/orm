@@ -569,7 +569,7 @@ A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown
 
 ### PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE
 
-A `@default` literal has a type the column's codec does not accept: `Field "<Model>.<field>": <codecId> is not compatible with <a literal type> literal; it accepts <types>`. A written literal has a type of its own — a number's comes from its size and precision, so `42` is an `i8` and `100000000000000099` an `i64` — and a codec names the types it takes. Inside a list literal the message names the element: `Field "<Model>.<field>" at element 2: ...`. A codec that names none reads `it accepts no literal defaults`, and takes only a `` sql`...` `` default. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20for%20values%20in%20PSL.md).
+A `@default` literal has a type the column's codec does not accept: `Field "<Model>.<field>": <codecId> is not compatible with <a literal type> literal; it accepts <types>`. A written literal has a type of its own — a number's comes from its size and precision, so `42` is an `i8` and `100000000000000099` an `i64` — and a codec names the types it takes. Inside a list literal the message names the element: `Field "<Model>.<field>" at element 2: ...`. A codec that names none reads `it accepts no literal defaults`, and takes only a `` sql`...` `` default. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
 
 ### PSL_INVALID_DEFAULT_LITERAL
 

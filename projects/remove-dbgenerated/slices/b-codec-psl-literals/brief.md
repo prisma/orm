@@ -47,7 +47,7 @@ Everything listed is committed. Fetch before you start.
 
 **On branch `remove-dbgenerated-adr-253`, which is pull request 30334 and may have merged into `main` by the time you read this. Check `main` first; if the file is not there, fetch the branch:**
 
-- `docs/architecture docs/adrs/ADR 254 - Data types for values in PSL.md`. **The design you are implementing. It is authoritative. Where this brief and ADR 254 disagree, ADR 254 wins, and you tell Will about the disagreement.** If review changed the ADR, follow the changed ADR.
+- `docs/architecture docs/adrs/ADR 254 - Data types and casts.md`. **The design you are implementing. It is authoritative. Where this brief and ADR 254 disagree, ADR 254 wins, and you tell Will about the disagreement.** If review changed the ADR, follow the changed ADR.
 - The same branch amends `projects/remove-dbgenerated/spec.md` decisions D9 and D10 to match ADR 254.
 
 **On branch `remove-dbgenerated-codec-psl-literals`, whose pull request 30324 is closed.** This branch holds an earlier, withdrawn attempt at the same slice, built against a design where codecs gained `encodePsl` and `decodePsl` methods. That design is dead. Five pieces of it are worth reusing and are listed in section 8. Do not merge or rebase this branch; take the pieces by hand.
