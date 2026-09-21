@@ -1068,7 +1068,7 @@ Runner-level failure during apply (`db init`, `db update`, `migrate`): the plan'
 
 ### MIGRATION.DESTRUCTIVE_CHANGES
 
-The planned operations include destructive changes (e.g. DROP) and the command was run without explicit consent. `db update` asks for that consent instead of failing: interactively it asks you to type the name of the database it is about to change, and outside an interactive terminal it is granted by `--confirm <database>` (`--yes` accepts declared prompt defaults and never grants consent; `--confirm` is read only when the run is non-interactive or `--yes` is set, so a script run from a terminal needs `--no-interactive --confirm <database>`). The name is the `database` a driver connection object carries, or the connection URL's first path segment, else its host, falling back to the target id. A run with nobody to ask and no `--confirm` settles as `CLI.CONSENT_REQUIRED` at exit 2; a run whose prompt is cancelled settles as `CLI.PROMPT_CANCELLED` at exit 3. `--dry-run` never asks; it settles as this error instead. Use it to preview the operations first.
+The planned operations include destructive changes (e.g. DROP) and the command was run without explicit consent. `db update` asks for that consent instead of failing: interactively it asks you to type the name of the database it is about to change, and outside an interactive terminal it is granted by `--confirm <database>` (`--yes` accepts declared prompt defaults and never grants consent; `--confirm` is read only when the run is non-interactive or `--yes` is set, so a script run from a terminal needs `--no-interactive --confirm <database>`). The name is the `database` a driver connection object carries, or the connection URL's first path segment, else its host, falling back to the target id. A run with nobody to ask and no `--confirm` settles as `CLI.CONSENT_REQUIRED` at exit 2; a run whose prompt is cancelled settles as `CLI.PROMPT_CANCELLED` at exit 3. `--dry-run` never asks; it settles as this error instead. Use it to preview the operations first. `migration plan` raises the same refusal before writing an auto-baseline package (planned on an empty migrations directory from the `db` ref) whose operations would remove data when applied; there the consent token is the project directory name, so a non-interactive run passes `--no-interactive --confirm <directory>`, and a consented re-run that no longer plans the consented baseline settles as `MIGRATION.CONSENT_PLAN_MISMATCH`. Payload at the `migration plan` site: `destructiveOperations`, `planHash`.
 
 ### MIGRATION.DIR_EXISTS
 
@@ -1104,7 +1104,7 @@ A migration package on disk is corrupt: the `migrationHash` stored in `migration
 
 ### MIGRATION.HASH_NOT_IN_GRAPH
 
-A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `ref set`, and `migration new --from`. The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`, sometimes `graphTipHash`; none at the `migration new` site.
+A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`, sometimes `graphTipHash`; none at the `migration new` sites.
 
 ### MIGRATION.INVALID_DEFAULT_EXPORT
 
@@ -1248,7 +1248,7 @@ The `providedInvariants` stored in `migration.json` disagrees with the canonical
 
 ### MIGRATION.REF_AMBIGUOUS
 
-A contract or migration reference prefix matches more than one candidate (raised by the shared ref-resolution mapper used across CLI commands). Provide a longer prefix or the full hash. Payload: `input`, `candidates`, `grammar`.
+A contract or migration reference prefix matches more than one candidate (raised by the shared ref-resolution mapper used across CLI commands, and by `migration new --from` when the prefix matches several migration target hashes). Provide a longer prefix or the full hash. Payload: `input`, `candidates`, and at the shared-mapper site `grammar`.
 
 ### MIGRATION.REF_INVALID_FORMAT
 
