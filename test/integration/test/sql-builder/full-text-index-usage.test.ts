@@ -222,12 +222,28 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     expect(definition.rows[0].def).toContain('(subject)::text');
   });
 
+  it('uses a partial index for a query carrying the same predicate', async () => {
+    await client().query(
+      `CREATE INDEX comments_body_live ON comments USING gin (to_tsvector('english', "body")) WHERE (post_id = 1)`,
+    );
+    const lowered = loweredOf(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
+        .where((f, fns) => fns.eq(f.postId, 1))
+        .build(),
+    );
+
+    const plan = await explain(lowered.sql, lowered.params);
+    expect(indexNames(plan)).toContain('comments_body_live');
+  });
+
   describe('negative controls', () => {
     it('does not use the english index for a german query', async () => {
       const lowered = loweredOf(
         db()
           .public.comments.select('id')
-          .where((f, fns) => fns.fullTextMatches(f.body, QUERY, 'german'))
+          .where((f, fns) => fns.fullTextMatches(f.body, QUERY, { language: 'german' }))
           .build(),
       );
 

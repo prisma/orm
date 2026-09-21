@@ -80,7 +80,7 @@ describe('postgres target query operations', () => {
 
     it('embeds the language as a literal, defaulting to english', () => {
       const withDefault = buildOpAst(method, TEXT_COLUMN, 'prisma').args[1];
-      const withGerman = buildOpAst(method, TEXT_COLUMN, 'prisma', 'german').args[1];
+      const withGerman = buildOpAst(method, TEXT_COLUMN, 'prisma', { language: 'german' }).args[1];
 
       expect(withDefault?.kind).toBe('literal');
       expect(withDefault).toBeInstanceOf(LiteralExpr);
@@ -89,14 +89,102 @@ describe('postgres target query operations', () => {
     });
 
     it('rejects a language Postgres has no configuration for', () => {
-      expect(() => buildOpAst(method, TEXT_COLUMN, 'prisma', 'klingon')).toThrow(/klingon/);
-      expect(() => buildOpAst(method, TEXT_COLUMN, 'prisma', 'klingon')).toThrow(
+      const klingon = { language: 'klingon' };
+      expect(() => buildOpAst(method, TEXT_COLUMN, 'prisma', klingon)).toThrow(/klingon/);
+      expect(() => buildOpAst(method, TEXT_COLUMN, 'prisma', klingon)).toThrow(
         expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }),
       );
     });
 
     it('dispatches on the textual trait', () => {
       expect(findOperation(method).self).toEqual({ traits: ['textual'] });
+    });
+  });
+
+  describe('fullTextRank options', () => {
+    const rankTemplate = (ast: OperationExpr) => ast.lowering?.template;
+
+    it('renders ts_rank with no normalization argument when none is given', () => {
+      expect(rankTemplate(buildOpAst('fullTextRank', TEXT_COLUMN, 'prisma', {}))).toBe(
+        'ts_rank(to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}}))',
+      );
+    });
+
+    it('embeds normalization as a numeric literal in a third argument', () => {
+      const ast = buildOpAst('fullTextRank', TEXT_COLUMN, 'prisma', { normalization: 32 });
+
+      expect(rankTemplate(ast)).toBe(
+        'ts_rank(to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}}), {{arg2}})',
+      );
+      expect(ast.args[2]).toBeInstanceOf(LiteralExpr);
+      expect((ast.args[2] as LiteralExpr).value).toBe(32);
+    });
+
+    it('renders ts_rank_cd when coverDensity is set', () => {
+      expect(
+        rankTemplate(buildOpAst('fullTextRank', TEXT_COLUMN, 'prisma', { coverDensity: true })),
+      ).toBe(
+        'ts_rank_cd(to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}}))',
+      );
+      expect(
+        rankTemplate(buildOpAst('fullTextRank', TEXT_COLUMN, 'prisma', { coverDensity: false })),
+      ).toBe('ts_rank(to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}}))');
+    });
+
+    it.each([-1, 64, 1.5])('rejects a normalization of %s', (normalization) => {
+      expect(() => buildOpAst('fullTextRank', TEXT_COLUMN, 'prisma', { normalization })).toThrow(
+        expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }),
+      );
+    });
+  });
+
+  describe('fullTextHeadline options', () => {
+    const optionsLiteral = (ast: OperationExpr) => (ast.args[2] as LiteralExpr | undefined)?.value;
+
+    it('omits the options argument when only the language is given', () => {
+      const ast = buildOpAst('fullTextHeadline', TEXT_COLUMN, 'prisma', { language: 'german' });
+
+      expect(ast.lowering?.template).toBe(
+        'ts_headline({{arg1}}, {{self}}, websearch_to_tsquery({{arg1}}, {{arg0}}))',
+      );
+      expect(ast.args).toHaveLength(3);
+    });
+
+    it("renders the options as Postgres's Key=Value list, in one literal", () => {
+      const ast = buildOpAst('fullTextHeadline', TEXT_COLUMN, 'prisma', {
+        startSel: '<mark>',
+        stopSel: '</mark>',
+        maxWords: 20,
+        minWords: 5,
+        highlightAll: false,
+      });
+
+      expect(ast.lowering?.template).toBe(
+        'ts_headline({{arg1}}, {{self}}, websearch_to_tsquery({{arg1}}, {{arg0}}), {{arg2}})',
+      );
+      expect(optionsLiteral(ast)).toBe(
+        'StartSel=<mark>, StopSel=</mark>, MaxWords=20, MinWords=5, HighlightAll=false',
+      );
+    });
+
+    it('rejects a maxWords that is not a positive integer', () => {
+      for (const maxWords of [0, -3, 2.5]) {
+        expect(() => buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', { maxWords })).toThrow(
+          expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }),
+        );
+      }
+    });
+
+    it('rejects a minWords greater than maxWords', () => {
+      expect(() =>
+        buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', { minWords: 10, maxWords: 5 }),
+      ).toThrow(expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }));
+    });
+
+    it.each(['', 'a,b', 'a=b', 'a"b'])('rejects the marker %o', (startSel) => {
+      expect(() => buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', { startSel })).toThrow(
+        expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }),
+      );
     });
   });
 

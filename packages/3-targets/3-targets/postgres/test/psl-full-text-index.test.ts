@@ -139,6 +139,20 @@ model Message {
     ]);
   });
 
+  it('passes a where predicate through to the index, like @@index(expression:, where:)', () => {
+    const typed = indexesOf(
+      model(`  @@fullTextIndex([text], where: "id > 0", name: "message_text_search_live")`),
+    );
+    const authored = indexesOf(
+      model(
+        `  @@index(expression: "to_tsvector('english', \\"text\\")", type: "gin", where: "id > 0", name: "message_text_search_live")`,
+      ),
+    );
+
+    expect(typed).toEqual(authored);
+    expect(typed[0]).toMatchObject({ where: 'id > 0', partial: true });
+  });
+
   it('rejects a language Postgres does not ship, naming the ones it does', () => {
     const [diagnostic] = diagnosticsOf(
       model(`  @@fullTextIndex([text], language: "klingon", name: "x")`),

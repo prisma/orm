@@ -179,8 +179,8 @@ describe('full-text search operations on text fields', () => {
 
   test('the language argument is one of the configurations Postgres ships with', () => {
     const title = null as unknown as PostAccessor['title'];
-    title.fullTextMatches('alice', 'german');
+    title.fullTextMatches('alice', { language: 'german' });
     // @ts-expect-error 'klingon' is not a PostgreSQL text-search configuration
-    title.fullTextMatches('alice', 'klingon');
+    title.fullTextMatches('alice', { language: 'klingon' });
   });
 });

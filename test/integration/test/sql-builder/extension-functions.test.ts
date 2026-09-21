@@ -94,7 +94,7 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
         .where((f, fns) =>
           language === undefined
             ? fns.fullTextMatches(f.body, query)
-            : fns.fullTextMatches(f.body, query, language),
+            : fns.fullTextMatches(f.body, query, { language }),
         )
         .build(),
     );
@@ -126,6 +126,37 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
         .build(),
     );
     expect(rows.map((row) => row.id)[0]).toBe(102);
+  });
+
+  it('fullTextHeadline takes the markers it is given', async () => {
+    const row = await runtime()
+      .query(
+        db()
+          .public.comments.select('id')
+          .select('snippet', (f, fns) =>
+            fns.fullTextHeadline(f.body, 'alice', { startSel: '<mark>', stopSel: '</mark>' }),
+          )
+          .where((f, fns) => fns.eq(f.id, 101))
+          .build(),
+      )
+      .firstOrThrow();
+    expect(row.snippet).toBe('<mark>alice</mark> wrote the report');
+  });
+
+  it('fullTextRank normalizes the score into (0, 1] when asked', async () => {
+    const rows = await runtime().query(
+      db()
+        .public.comments.select('id')
+        .select('rank', (f, fns) => fns.fullTextRank(f.body, 'alice', { normalization: 32 }))
+        .where((f, fns) => fns.fullTextMatches(f.body, 'alice'))
+        .build(),
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.rank).toBeGreaterThan(0);
+      expect(row.rank).toBeLessThanOrEqual(1);
+    }
   });
 
   it('fullTextHeadline marks the matched word up', async () => {

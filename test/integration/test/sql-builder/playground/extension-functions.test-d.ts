@@ -82,10 +82,29 @@ test('fullTextHeadline returns a non-nullable text expression', () => {
 });
 
 test('the language argument is one of the configurations Postgres ships with', () => {
-  db.public.users.select('id').where((f, fns) => fns.fullTextMatches(f.name, 'alice', 'german'));
+  db.public.users
+    .select('id')
+    .where((f, fns) => fns.fullTextMatches(f.name, 'alice', { language: 'german' }));
 
   db.public.users
     .select('id')
     // @ts-expect-error 'klingon' is not a PostgreSQL text-search configuration
-    .where((f, fns) => fns.fullTextMatches(f.name, 'alice', 'klingon'));
+    .where((f, fns) => fns.fullTextMatches(f.name, 'alice', { language: 'klingon' }));
+});
+
+test('rank and headline options are typed', () => {
+  db.public.users
+    .select('id')
+    .select('rank', (f, fns) => fns.fullTextRank(f.name, 'alice', { normalization: 32 }))
+    .select('snippet', (f, fns) => fns.fullTextHeadline(f.name, 'alice', { startSel: '<mark>' }));
+
+  db.public.users
+    .select('id')
+    // @ts-expect-error normalization is a number, not a word
+    .select('rank', (f, fns) => fns.fullTextRank(f.name, 'alice', { normalization: 'high' }));
+
+  db.public.users
+    .select('id')
+    // @ts-expect-error startSel is the marker text, not a number
+    .select('snippet', (f, fns) => fns.fullTextHeadline(f.name, 'alice', { startSel: 1 }));
 });
