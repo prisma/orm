@@ -141,13 +141,13 @@ const snippets = db.sql.public.message
   .build();
 ```
 
-Postgres computes `to_tsvector` per row unless an index covers that exact expression, so declare one in the schema:
+Postgres computes `to_tsvector` per row unless an index covers that exact expression, and it only uses an index whose expression matches the query's byte for byte. `@@fullTextIndex`, contributed by this package, renders that expression from the field and the language, so the index and the predicate cannot drift:
 
 ```prisma
-@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: "message_text_search")
+@@fullTextIndex([text], name: "message_text_search")
 ```
 
-Write the index expression exactly as the operation renders it — `to_tsvector('<language>', "<column>")`, with the same language you pass to the operation — or Postgres will not use the index.
+It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), and `name:` xor `map:` like any expression index; it is repeatable, so a model may index several columns. The column name comes from the resolved storage column, so `@map` is honoured. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
 
 ## Codec descriptor authoring
 

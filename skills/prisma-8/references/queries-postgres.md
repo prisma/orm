@@ -81,10 +81,10 @@ const snippets = db.sql.public.message
   .build();
 ```
 
-Without an index Postgres recomputes `to_tsvector` for every row. Declare one whose expression matches what the operation renders, character for character, including the language:
+Without an index Postgres recomputes `to_tsvector` for every row, and it only uses an index whose expression matches the query's byte for byte. `@@fullTextIndex` renders that expression for you — pass it the field and, if you use one, the same language:
 
 ```prisma
-@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: "message_text_search")
+@@fullTextIndex([text], name: "message_text_search")
 ```
 
 **There is no `.between(a, b)` operator.** Express ranges either as two chained `.where(...)` clauses (the idiomatic form — clauses AND-compose) or with the `and(...)` combinator inside one clause:

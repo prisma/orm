@@ -28,3 +28,16 @@ import type { QueryOperationTypes as PgTargetQueryOps } from '@prisma/orm-postgr
 Run `prisma contract emit` and commit the regenerated `contract.d.ts`. Nothing else in the file changes, `contract.json` does not change, and no contract hash moves. Do not hand-edit the generated file.
 
 Application code that imported `@prisma/orm-postgres/adapter/operation-types` directly imports `@prisma/orm-postgres/target/operation-types` instead. That subpath no longer exists; there is no compatibility re-export.
+
+To use the new operations, index the column with `@@fullTextIndex`, which renders the `to_tsvector` expression the predicate needs:
+
+```prisma
+model Message {
+  id   Int    @id
+  text String
+
+  @@fullTextIndex([text], name: "message_text_search")
+}
+```
+
+Postgres only uses a full-text index when its expression matches the query's byte for byte, so prefer the attribute over writing `@@index(expression: "to_tsvector(…)", type: "gin", …)` by hand.

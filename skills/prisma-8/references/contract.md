@@ -126,6 +126,15 @@ Then run `pnpm prisma contract emit` (or rely on the Vite plugin — see `refere
 
 `name:` declares a wire-named index (physical name `<name>_<8-hex hash>`, renames plan as `ALTER INDEX … RENAME`); `map:` adopts an exact physical name verbatim (for infer-captured objects — combining it with a SQL body warns, because drift detection byte-compares the authored text against Postgres's reprint). An `expression:` requires `name:` or `map:`. The TS builder mirrors this via `constraints.index([cols.x], {...})` / `constraints.index({ expression, ... })` — see `packages/2-sql/2-authoring/contract-ts/README.md`.
 
+**Full-text search indexes (PostgreSQL).** Do not hand-write the `to_tsvector` expression — Postgres only uses the index when it matches the query byte for byte. Declare `@@fullTextIndex`, which renders the same expression `fullTextMatches` / `fullTextRank` / `fullTextHeadline` lower to (see `references/queries-postgres.md`):
+
+```prisma
+@@fullTextIndex([text], name: "message_text_search")
+@@fullTextIndex([summary], language: "german", name: "message_summary_search_de")
+```
+
+It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), and `name:` xor `map:` like any expression index. It is repeatable, so a model may index several columns. It lowers to a GIN index over `to_tsvector('<language>', "<column>")` — the column name resolved through `@map` — so `@@index(expression: …)` remains only for expressions this attribute does not cover.
+
 PSL alias surface for repeated types lives in a top-level `types {}` block:
 
 ```prisma
