@@ -1,6 +1,6 @@
 # Slice B — Literal types for column defaults
 
-**Project:** [Remove `dbgenerated`](../../spec.md). **Design:** [ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Literal%20types%20for%20column%20defaults.md), amended by this slice as B10 records. **Linear:** not yet created. **Branch:** `worktree/literal-types-column-defaults-852235` off `main`. **Shape:** one PR. **Depends on:** slice A, merged. **Input:** [`brief.md`](brief.md), which is unvalidated design input from another agent; every claim in it was verified against the code before this spec was written, and the corrections are listed under "Corrections to the brief".
+**Project:** [Remove `dbgenerated`](../../spec.md). **Design:** [ADR 254](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20for%20values%20in%20PSL.md), amended by this slice as B10 records. **Linear:** not yet created. **Branch:** `worktree/literal-types-column-defaults-852235` off `main`. **Shape:** one PR. **Depends on:** slice A, merged. **Input:** [`brief.md`](brief.md), which is unvalidated design input from another agent; every claim in it was verified against the code before this spec was written, and the corrections are listed under "Corrections to the brief".
 
 ## Outcome
 

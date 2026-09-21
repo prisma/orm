@@ -413,7 +413,7 @@ decodeJson(json: JsonValue): bigint {
 
 Converting between those shapes is the codec's job, not the interpreter's — there is no per-type code and no per-codec branch in any contract source. A codec that names nothing accepts no literal default at all; its columns take only a `` sql`...` `` default. `contract infer` runs the same declaration backwards to choose the literal it prints, and checks that what it wrote reads back through `decodeJson` before printing it.
 
-See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Literal%20types%20for%20column%20defaults.md).
+See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20for%20values%20in%20PSL.md).
 
 ## `satisfies` discipline
 
