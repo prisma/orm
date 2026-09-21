@@ -2,6 +2,8 @@
 
 Status: **Proposed**
 
+Built so far: data types with their casts, a codec naming the type it represents, the PSL entries that read and write a type's values, and strict assembly across packs. A follow-up project owns the rest of this decision: a data type's DDL name and aliases, its parameters and their rendering, deriving `nativeType` rather than storing it, type constructors naming a type and a codec, and function parameters typed by a data type. Examples below show the whole decision, so some of them name fields that do not exist yet.
+
 ## Decision
 
 A **data type** is a database type made first-class: `pg/int8`, `pg/jsonb`, `pg/numeric`, `sqlite/integer`, `postgis/geometry`. Each target and extension registers its own. A data type owns what was always its own: its name in DDL, its parameters, the rendering of its parameterised name, and its **casts**, which say which other types' values it takes and how. A **codec** is one representation of a data type. Every value written in PSL has a data type, every column has one, and a written value is admitted when its type is the column's or the column's type casts from it.

@@ -43,13 +43,15 @@ changes:
         - "dbgenerated("
   - id: number-valued-64-bit-columns-store-their-default-as-digit-text
     summary: |
-      A column whose codec is `pg/int8number@1` or `sqlite/bigintnumber@1` and which carries a
-      literal default changes form in `contract.json`: the default is digit text now, where it was a
-      JSON number. Re-run `prisma contract emit`, then `prisma db sign`.
+      This flags every contract that holds a `pg/int8number@1` or `sqlite/bigintnumber@1` column.
+      Only those columns that carry a literal default change form: the default is digit text now,
+      where it was a JSON number. A column with no default, or with a function default, is
+      unaffected. For an affected contract, re-run `prisma contract emit`, then `prisma db sign`.
     detection:
       glob: "**/contract.json"
-      matches:
-        - '"codecId":"(pg/int8number@1|sqlite/bigintnumber@1)","default":\{"kind":"literal"'
+      contains:
+        - '"codecId": "pg/int8number@1"'
+        - '"codecId": "sqlite/bigintnumber@1"'
 ---
 
 ## `a-json-default-is-a-json-tag`
@@ -143,16 +145,26 @@ This is not a break to fix. The contract is the same; only the schema text diffe
 
 Every codec of one data type now stores and reads that type's one canonical form. `pg/int8` stores digit text, so `pg/int8number@1` — the codec behind `BigIntNumber`, which reads a 64-bit integer as a JavaScript `number` — stores digit text too, where it used to store a JSON number. `sqlite/bigintnumber@1` changed the same way.
 
-A column is affected when both are true: its codec is `pg/int8number@1` or `sqlite/bigintnumber@1`, and it carries a literal default. In `contract.json` that reads:
+The detection flags every contract holding such a column, because a JSON file gives no reliable way to ask for the two facts together. A column is affected only when both are true: its codec is `pg/int8number@1` or `sqlite/bigintnumber@1`, **and** it carries a literal default. A column with no default, or with a function default, is unaffected — read the flagged file and check. In `contract.json` an affected column reads:
 
 ```json
-"viewCount":{"codecId":"pg/int8number@1","default":{"kind":"literal","value":10},"nativeType":"int8","nullable":false}
+"viewCount": {
+  "codecId": "pg/int8number@1",
+  "default": { "kind": "literal", "value": 10 },
+  "nativeType": "int8",
+  "nullable": false
+}
 ```
 
 and becomes:
 
 ```json
-"viewCount":{"codecId":"pg/int8number@1","default":{"kind":"literal","value":"10"},"nativeType":"int8","nullable":false}
+"viewCount": {
+  "codecId": "pg/int8number@1",
+  "default": { "kind": "literal", "value": "10" },
+  "nativeType": "int8",
+  "nullable": false
+}
 ```
 
 Re-run `prisma contract emit` to rewrite `contract.json`, then `prisma db sign` so the signature matches the new contract. Nothing in the schema changes, and nothing in the database changes.
