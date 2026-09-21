@@ -810,9 +810,10 @@ export const postgresAuthoringModelAttributes = {
     repeatable: true,
     lower: (parsed: PostgresFullTextIndexParsed, ctx: AuthoringModelAttributeContext) => {
       const fieldName = parsed.fields[0];
-      // The spec's refine already diagnosed an empty or multi-field list; a
-      // lowering still runs after a refine diagnostic, so it returns quietly.
-      if (fieldName === undefined || parsed.fields.length !== 1) return undefined;
+      invariant(
+        fieldName !== undefined && parsed.fields.length === 1,
+        `@@fullTextIndex on "${ctx.modelName}" lowered with ${parsed.fields.length} fields`,
+      );
       const columnName = ctx.fieldStorageName(fieldName);
       // `fieldRef()` resolves the name against the declaring model while
       // parsing, so an unknown field is already a diagnostic by here.

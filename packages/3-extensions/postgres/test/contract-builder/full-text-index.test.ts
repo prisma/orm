@@ -10,6 +10,10 @@ import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import postgresTargetControl from '@internal/target-postgres/control';
 import postgresPack from '@internal/target-postgres/pack';
+import {
+  DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
+  renderFullTextIndexExpression,
+} from '@internal/target-postgres/sql-utils';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
@@ -99,6 +103,12 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
 
   it('produces the index the PSL attribute produces for the same model', () => {
     expect(tsIndexes()).toEqual(pslIndexes());
+  });
+
+  it('defaults to the language the target declares, not a copy of it', () => {
+    expect(tsIndexes()[0]?.expression).toBe(
+      renderFullTextIndexExpression(DEFAULT_FULL_TEXT_SEARCH_LANGUAGE, 'body_text'),
+    );
   });
 
   it('renders a non-default language', () => {

@@ -152,6 +152,7 @@ model Message {
     expect(diagnosticsOf(model(`  @@fullTextIndex([text, summary], name: "x")`))).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          code: 'PSL_FULL_TEXT_INDEX_ONE_FIELD',
           message: expect.stringContaining('one column'),
         }),
       ]),
@@ -162,6 +163,7 @@ model Message {
     expect(diagnosticsOf(model('  @@fullTextIndex([text])'))).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          code: 'PSL_FULL_TEXT_INDEX_REQUIRES_NAME',
           message: expect.stringContaining('`name` or `map`'),
         }),
       ]),
@@ -172,6 +174,7 @@ model Message {
     expect(diagnosticsOf(model(`  @@fullTextIndex([text], name: "a", map: "b")`))).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          code: 'PSL_FULL_TEXT_INDEX_NAME_XOR_MAP',
           message: expect.stringContaining('at most one of `name` and `map`'),
         }),
       ]),
