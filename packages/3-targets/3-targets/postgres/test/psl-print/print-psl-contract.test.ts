@@ -110,13 +110,13 @@ function table(input: {
 
 function oneModel(columns: Record<string, unknown>, fields: Record<string, { column: string }>) {
   return print({
-    models: { Widget: { table: 'widget', fields } },
-    tables: { widget: table({ columns, primaryKey: { columns: ['id'] } }) },
+    models: { Widget: { table: 'Widget', fields } },
+    tables: { Widget: table({ columns, primaryKey: { columns: ['id'] } }) },
   })[0];
 }
 
 describe('names the PSL source cannot derive', () => {
-  it('maps a model whose table is not the lower-cased model name', () => {
+  it('maps a model whose table is not the model name', () => {
     const [model] = print({
       models: { Widget: { table: 'widgets', fields: { id: { column: 'id' } } } },
       tables: { widgets: table({ columns: { id: INT_COLUMN }, primaryKey: { columns: ['id'] } }) },
@@ -124,10 +124,10 @@ describe('names the PSL source cannot derive', () => {
     expect(model?.attributes.map(attributeText)).toEqual(['@@map("widgets")']);
   });
 
-  it('leaves a model whose table is the lower-cased model name unmapped', () => {
+  it('leaves a model whose table is the model name unmapped', () => {
     const [model] = print({
-      models: { Widget: { table: 'widget', fields: { id: { column: 'id' } } } },
-      tables: { widget: table({ columns: { id: INT_COLUMN }, primaryKey: { columns: ['id'] } }) },
+      models: { Widget: { table: 'Widget', fields: { id: { column: 'id' } } } },
+      tables: { Widget: table({ columns: { id: INT_COLUMN }, primaryKey: { columns: ['id'] } }) },
     });
     expect(model?.attributes).toEqual([]);
   });
@@ -154,10 +154,10 @@ describe('keys and indexes', () => {
 
     const [withIndex] = print({
       models: {
-        Widget: { table: 'widget', fields: { id: { column: 'id' }, email: { column: 'email' } } },
+        Widget: { table: 'Widget', fields: { id: { column: 'id' }, email: { column: 'email' } } },
       },
       tables: {
-        widget: table({
+        Widget: table({
           columns: { id: INT_COLUMN, email: TEXT_COLUMN },
           primaryKey: { columns: ['id'] },
           indexes: [{ name: 'Widget_email_key', unique: true, columns: ['email'] }],
@@ -173,10 +173,10 @@ describe('keys and indexes', () => {
   it('prints a unique constraint as @@unique, under the field names its columns carry', () => {
     const [model] = print({
       models: {
-        Widget: { table: 'widget', fields: { id: { column: 'id' }, email: { column: 'e_mail' } } },
+        Widget: { table: 'Widget', fields: { id: { column: 'id' }, email: { column: 'e_mail' } } },
       },
       tables: {
-        widget: table({
+        Widget: table({
           columns: { id: INT_COLUMN, e_mail: TEXT_COLUMN },
           primaryKey: { columns: ['id'] },
           uniques: [{ columns: ['e_mail'], name: 'widget_email_key' }],
@@ -190,9 +190,9 @@ describe('keys and indexes', () => {
 
   it('prints every check constraint the table carries', () => {
     const [model] = print({
-      models: { Widget: { table: 'widget', fields: { id: { column: 'id' } } } },
+      models: { Widget: { table: 'Widget', fields: { id: { column: 'id' } } } },
       tables: {
-        widget: table({
+        Widget: table({
           columns: { id: INT_COLUMN },
           primaryKey: { columns: ['id'] },
           checks: [
@@ -211,10 +211,10 @@ describe('keys and indexes', () => {
   it('prints a multi-column primary key as a model attribute', () => {
     const [model] = print({
       models: {
-        Widget: { table: 'widget', fields: { a: { column: 'a' }, b: { column: 'b_col' } } },
+        Widget: { table: 'Widget', fields: { a: { column: 'a' }, b: { column: 'b_col' } } },
       },
       tables: {
-        widget: table({
+        Widget: table({
           columns: { a: INT_COLUMN, b_col: TEXT_COLUMN },
           primaryKey: { columns: ['a', 'b_col'] },
         }),
@@ -295,7 +295,7 @@ describe('column defaults', () => {
     }
     expect(thrown).toMatchObject({
       code: 'CONTRACT.CONVERT_UNSUPPORTED',
-      message: expect.stringContaining('"public"."widget"."value"'),
+      message: expect.stringContaining('"public"."Widget"."value"'),
     });
   });
 });
@@ -320,17 +320,17 @@ describe('generated values', () => {
   ): string | undefined {
     const [model] = print({
       models: {
-        Widget: { table: 'widget', fields: { id: { column: 'id' }, value: { column: 'value' } } },
+        Widget: { table: 'Widget', fields: { id: { column: 'id' }, value: { column: 'value' } } },
       },
       tables: {
-        widget: table({
+        Widget: table({
           columns: { id: INT_COLUMN, value: column },
           primaryKey: { columns: ['id'] },
         }),
       },
       execution: {
         mutations: {
-          defaults: [{ ref: { namespace: 'public', table: 'widget', column: 'value' }, ...phases }],
+          defaults: [{ ref: { namespace: 'public', table: 'Widget', column: 'value' }, ...phases }],
         },
       },
     });
@@ -397,7 +397,7 @@ describe('generated values', () => {
       }),
     ).toMatchObject({
       code: 'CONTRACT.CONVERT_UNSUPPORTED',
-      message: expect.stringContaining('"public"."widget"."value"'),
+      message: expect.stringContaining('"public"."Widget"."value"'),
     });
     expect(
       refusal({
@@ -406,7 +406,7 @@ describe('generated values', () => {
       }),
     ).toMatchObject({
       code: 'CONTRACT.CONVERT_UNSUPPORTED',
-      message: expect.stringContaining('"public"."widget"."value"'),
+      message: expect.stringContaining('"public"."Widget"."value"'),
     });
   });
 });
@@ -552,7 +552,7 @@ describe('native enum blocks', () => {
     const domainNamespace: ApplicationDomainNamespace = {
       models: {
         Widget: {
-          storage: { table: 'widget', namespaceId: 'public', fields },
+          storage: { table: 'Widget', namespaceId: 'public', fields },
           fields: Object.fromEntries(Object.keys(fields).map((name) => [name, INT_FIELD])),
           relations: {},
         },
@@ -566,7 +566,7 @@ describe('native enum blocks', () => {
             id: 'public',
             entries: {
               table: {
-                widget: table({
+                Widget: table({
                   columns: input.columns ?? { id: INT_COLUMN },
                   primaryKey: { columns: ['id'] },
                 }),

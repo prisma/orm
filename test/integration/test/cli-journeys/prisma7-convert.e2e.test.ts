@@ -220,7 +220,7 @@ withTempDir(({ createTempDir }) => {
       expect(convert.exitCode, output(convert)).toBe(2);
       const { code, summary } = errorOf(convert);
       expect(code).toBe('CONTRACT.CONVERT_UNSUPPORTED');
-      expect(summary).toContain('"Scalars"."stringList"');
+      expect(summary).toContain('"Defaults"."jsonLiteral"');
       expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
     });
   });

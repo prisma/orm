@@ -377,7 +377,11 @@ type ContractBase = Omit<
               };
               readonly enum2: {
                 readonly nullable: false;
-                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/enum@1' };
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/enum@1';
+                  readonly typeParams: { readonly typeName: 'TestEnum' };
+                };
                 readonly many: true;
               };
               readonly id: {

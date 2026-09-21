@@ -1645,9 +1645,15 @@ function patchModelDomainFields(
         };
       } else if (rf.many && rf.scalarCodecId) {
         needsPatch = true;
+        const builtType = model.fields[rf.field.name]?.type;
+        const typeParams = builtType?.kind === 'scalar' ? builtType.typeParams : undefined;
         patchedFields[rf.field.name] = {
           nullable: rf.field.optional,
-          type: { kind: 'scalar', codecId: rf.scalarCodecId },
+          type: {
+            kind: 'scalar',
+            codecId: rf.scalarCodecId,
+            ...ifDefined('typeParams', typeParams),
+          },
           many: true as const,
         };
       }

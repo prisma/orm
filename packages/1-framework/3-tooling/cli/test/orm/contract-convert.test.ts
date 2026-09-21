@@ -317,16 +317,16 @@ describe('contract convert', () => {
     expect(mocks.close).toHaveBeenCalled();
   });
 
-  it('writes no file at the output path when the target refuses a lossy list column', async () => {
+  it('writes no file at the output path when the target refuses a column', async () => {
     const dir = await projectDir();
     mocks.printPslContract.mockImplementation(() => {
       throw structuredError(
         'CONTRACT.CONVERT_UNSUPPORTED',
-        'contract convert: column "public"."Scalars"."stringList" is a nullable list, which cannot be written in Prisma 8 PSL.',
+        'contract convert: column "public"."Defaults"."jsonLiteral" has a literal default that cannot be written in Prisma 8 PSL.',
         {
-          why: 'A field type is written as a list or as optional, never as both.',
-          fix: 'Make the column not null before converting.',
-          meta: { coordinate: '"public"."Scalars"."stringList"' },
+          why: 'The PSL source would read a quoted default back as a string.',
+          fix: 'Replace the literal default with a database expression default.',
+          meta: { namespaceId: 'public', table: 'Defaults', column: 'jsonLiteral' },
         },
       );
     });
@@ -339,7 +339,7 @@ describe('contract convert', () => {
     expect(run.exitCode).toBe(2);
     expect(erroredEnvelope(run).error).toMatchObject({
       code: 'CONTRACT.CONVERT_UNSUPPORTED',
-      summary: expect.stringContaining('"public"."Scalars"."stringList"'),
+      summary: expect.stringContaining('"public"."Defaults"."jsonLiteral"'),
     });
     expect(await readdir(dir)).not.toContain('contract.prisma');
   });

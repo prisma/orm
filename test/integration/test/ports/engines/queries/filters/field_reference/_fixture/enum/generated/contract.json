@@ -30,7 +30,10 @@
                 "nullable": false,
                 "type": {
                   "codecId": "pg/enum@1",
-                  "kind": "scalar"
+                  "kind": "scalar",
+                  "typeParams": {
+                    "typeName": "TestEnum"
+                  }
                 }
               },
               "id": {

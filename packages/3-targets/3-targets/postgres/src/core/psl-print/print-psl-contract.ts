@@ -1,4 +1,4 @@
-import type { Contract, ContractField, ExecutionMutationDefault } from '@internal/contract/types';
+import type { Contract, ExecutionMutationDefault } from '@internal/contract/types';
 import type {
   PslDocumentAst,
   PslExtensionBlock,
@@ -95,47 +95,6 @@ function scalarFieldAttributes(input: {
   return attributes;
 }
 
-/**
- * Stops the conversion at a list column the printed file cannot carry without
- * changing the contract: the printer package writes `Type[]` or `Type?` but
- * never both, and the PSL source drops a list field's type parameters from the
- * domain field it reads back. A converted file must never read back as a
- * different contract, so both are refused rather than written.
- */
-function refuseLossyListColumn(input: {
-  readonly column: StorageColumn;
-  readonly field: ContractField | undefined;
-  readonly coordinate: string;
-}): void {
-  const { column, field, coordinate } = input;
-  if (column.many !== true) return;
-
-  if (column.nullable) {
-    throw postgresError(
-      'CONTRACT.CONVERT_UNSUPPORTED',
-      `contract convert: column ${coordinate} is a nullable list, which cannot be written in Prisma 8 PSL.`,
-      {
-        why: 'A field type is written as a list or as optional, never as both, so the written column would read back as a list that cannot be null.',
-        fix: 'Make the column not null before converting, or author the Prisma 8 contract by hand for this model.',
-        meta: { coordinate },
-      },
-    );
-  }
-
-  const typeParams = field?.type.kind === 'scalar' ? field.type.typeParams : undefined;
-  if (typeParams !== undefined && Object.keys(typeParams).length > 0) {
-    throw postgresError(
-      'CONTRACT.CONVERT_UNSUPPORTED',
-      `contract convert: column ${coordinate} is a list whose type parameters cannot be written in Prisma 8 PSL.`,
-      {
-        why: "The PSL source keeps a list column's type parameters on the storage column but drops them from the field it reads back, so the written column would read back with a different type.",
-        fix: 'Author the Prisma 8 contract by hand for this model.',
-        meta: { coordinate, typeParams },
-      },
-    );
-  }
-}
-
 function buildScalarFields(input: {
   readonly entry: ModelEntry;
   readonly enums: NativeEnumEmission;
@@ -151,8 +110,6 @@ function buildScalarFields(input: {
     const column = entry.table.columns[columnName];
     if (column === undefined) continue;
     const coordinate = `"${entry.namespaceId}"."${entry.tableName}"."${columnName}"`;
-    refuseLossyListColumn({ column, field: entry.model.fields[fieldName], coordinate });
-
     const columnType = printColumnType({
       column,
       typeMap,

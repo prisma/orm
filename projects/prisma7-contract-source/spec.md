@@ -121,11 +121,10 @@ The converter prints the loaded contract as a Prisma 8 schema and the round-trip
 - A `Json` or `Jsonb` column whose default is an object or array literal. The PSL reader treats `@default("...")` on a Json field as a string, so there is no way to write the parsed value.
 - One model name declared in two namespaces. The PSL reader keys relation targets, junction detection and id columns by model name alone (`contract-psl/src/interpreter.ts`, `fkRelationsByDeclaringModel`, `modelIdColumns`), so the two models read back as one.
 - A generator the Postgres printer has no PSL form for (none of the Prisma 7 generators, which all print).
-- A database-side default on a list column (`@default(dbgenerated("ARRAY[...]::text[]"))`). The PSL reader refuses it with `PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED`, although it is a storage default. Every Prisma 7 list default is one. In `contract-psl/src/psl-field-resolution.ts`. Exists on `main`. Reached only through a list column, which the converter already refuses for the two reader defects below.
-- A nullable list type (`Tag[]?`). The PSL printer writes `[]` or `?`, never both, while every Prisma 7 list column is nullable. In `@internal/psl-printer`. Exists on `main`; the same defect makes `contract infer` print nullable lists as required. The converter refuses the column, naming it, until this is fixed.
-- Type parameters on a list field (`Decimal @db.Numeric(65,30)[]`). The PSL reader keeps precision and scale on the storage column but drops them from the domain field's type. In `contract-psl/src/interpreter.ts`, `patchModelDomainFields`. Exists on `main`. The converter refuses the column, naming it, until this is fixed.
 
-Because every Prisma 7 list column is nullable, a Prisma 7 schema with any list column is refused today. The refusal names the first such column, so the user learns which schema shape blocks the conversion instead of receiving a file that reads back differently.
+Three list-column cases were refused in the first version and now convert: a nullable list type (`Tag[]?`, printed since #30313), a database-side default on a list column (read since #30325), and type parameters on a list field (`Decimal @db.Numeric(65,30)[]`; the PSL reader now keeps them on the domain field, in `contract-psl/src/interpreter.ts`, `patchModelDomainFields`). Every list fixture round-trips.
+
+The Json literal default is covered by slice B of [`projects/remove-dbgenerated`](../remove-dbgenerated/spec.md) (codec-owned PSL literals). Slice C of that project switches `print-column-default.ts` from `dbgenerated("...")` to the `sql` tagged literal along with every other printer.
 
 ### Found outside this project's scope
 

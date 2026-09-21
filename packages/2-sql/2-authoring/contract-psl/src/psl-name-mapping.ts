@@ -1,4 +1,4 @@
-import { lowerFirst } from './psl-attribute-parsing';
+import { defaultTableName } from './default-table-name';
 
 /**
  * The `@@map` name a model must carry for its table to read back as
@@ -6,7 +6,7 @@ import { lowerFirst } from './psl-attribute-parsing';
  * name already matches it.
  */
 export function pslModelMapName(modelName: string, tableName: string): string | undefined {
-  return tableName === lowerFirst(modelName) ? undefined : tableName;
+  return tableName === defaultTableName(modelName) ? undefined : tableName;
 }
 
 /**
