@@ -64,11 +64,13 @@ const pgNumeric = dataType('pg/numeric', {
 - **DDL name and aliases.** The name the migration planner renders and the names introspection may report for the same type: `numeric` and `decimal`, `character varying` and `varchar`. `json` and `jsonb` are two database types and therefore two data types.
 - **Parameters and rendering.** A parameterised type declares its parameter schema and how its DDL name is rendered with them: `numeric(10,2)`, `vector(1536)`, `timestamp(3)`. Parameters do not make a new type; `numeric(10,2)` holds values of `pg/numeric` under a constraint.
 - **Canonical form.** The one JSON shape `contract.json` stores for a value of the type. `pg/int8` stores digit text; `pg/int4` a JSON number; `pg/jsonb` the document. Every codec of the type stores and reads exactly this form.
-- **Casts.** For each other type whose values this type takes, a pure function from that type's canonical form to this one's. A cast may convert (`pg/int2` to `pg/int8` turns a number into digit text; `pg/numeric` to `pg/float8` turns text and the words `NaN`, `Infinity`, `-Infinity` into numbers) or may return the value unchanged (`pg/json` to `pg/jsonb`); either way the declaration is the point: this type takes those values.
+- **Casts.** For each other type whose values this type takes, a pure function from that type's canonical form to this one's. A cast may convert (`pg/int2` to `pg/int8` turns a number into digit text; `pg/numeric` to `pg/float8` turns decimal text into a number and keeps the words `NaN`, `Infinity`, `-Infinity` as the text the floating-point types store) or may return the value unchanged (`pg/json` to `pg/jsonb`); either way the declaration is the point: this type takes those values. A cast may also refuse: the cast into the floating-point types refuses a magnitude no double holds rather than rounding it to `Infinity`, because the database refuses it too and storing `Infinity` would make a written number indistinguishable from a written `Infinity`.
 
 Casts are declared by the type that receives, never by the source, so there is at most one cast for any pair and the owner of a type is the only one who decides what it takes. That ownership rule is the one PostgreSQL uses for its own cast table, and the rule is all we borrow: these casts are between our data types, applied in the framework before a value is stored or sent, and they model nothing about what the database can convert. Nothing central computes convertibility, because only a type's owner knows what its database or extension can take.
 
 There is no list data type. A list literal is several values, each cast on its own; a list column is a column of one type with `many` set, checked element by element. A type whose single value holds several elements, such as a vector, declares a cast whose source is a list of other types, and each element is checked against that set.
+
+Where a database's storage classes are shared by several logical types, the target declares the types it distinguishes rather than one per storage class: on SQLite, `sqlite/integer` and `sqlite/bigint` are distinct although both store as INTEGER, and `sqlite/text`, `sqlite/datetime` and `sqlite/json` are distinct although all store as TEXT.
 
 No type spans targets, and no family registers types. The SQL family exports implementations targets share, such as the digit classifier and the JSON parse and print, and each target declares its own types with them.
 
@@ -101,14 +103,31 @@ The pack that owns a data type contributes PSL support for it, keyed by the type
 authoring: {
   dataTypes: {
     [pgJson.id]: {
-      written: { tag: 'json' },
-      parse: (body) => JSON.parse(body),     // tag body → canonical form; refuses what it cannot read
-      print: (value) => JSON.stringify(value),
-      documentation: 'A JSON document.',
+      // `parse` turns the tag body into the canonical form and refuses what it cannot read.
+      written: { kind: 'tag', tag: 'json', parse: parseJsonBody },
+      print: printJsonBody,
+      documentation: 'Reads the body as a JSON document and stores it as the default value.',
     },
-    [pgText.id]: { written: { plain: 'string' },  parse, print },
-    [pgBool.id]: { written: { plain: 'boolean' }, parse, print },
-    ...postgresNumberEntries,                  // written: { plain: 'number' }, one classifier, several types
+    [pgText.id]: {
+      written: { kind: 'plain', syntax: 'string', parse: (text) => text },
+      print: (value) => String(value),
+      documentation: 'Text.',
+    },
+    [pgBool.id]: {
+      written: { kind: 'plain', syntax: 'boolean', parse: readBoolean },
+      print: (value) => String(value),
+      documentation: 'A boolean, written true or false.',
+    },
+    [pgNumeric.id]: {
+      written: {
+        kind: 'plain',
+        syntax: 'number',
+        types: [pgInt2.id, pgInt4.id, pgInt8.id, pgNumeric.id],
+        classify: classifyPostgresNumber,
+      },
+      print: printNumber,
+      documentation: 'A number, whose type comes from its own size and precision.',
+    },
   },
 }
 ```
@@ -117,9 +136,9 @@ There are two ways a value is written.
 
 **With a tag.** A tag is a qualified name followed by a string in any of PSL's quote styles, whose body is canonicalised as [ADR 129](ADR%20129%20-%20Template-Tagged%20Literals%20for%20Extensions.md) describes. The entry's `parse` turns the body into the type's canonical form and `print` does the reverse. A target may register an unprefixed tag; every other pack prefixes: `json` is registered by each SQL target for its JSON type, `postgis.geometry` by the postgis extension.
 
-**Plainly.** Three pieces of syntax the interpreter reads without a tag: a quoted string, `true`/`false`, and a number. Each target says which of its types they are. A number is the one plain kind that yields several types, so the target's number entry carries a **classifier** that picks the type from the digits. Postgres's rule is PostgreSQL's own rule for literals: a whole number takes the narrowest of `pg/int2`, `pg/int4`, `pg/int8` that holds it; anything else, a larger whole number, a number with a fraction, or `NaN`, `Infinity`, `-Infinity`, is `pg/numeric`. SQLite's rule: a whole number within 64 bits is `sqlite/integer`, a number with a fraction is `sqlite/real`, a larger number has no SQLite type and is refused. Digit text has no leading zeros and no negative zero, and keeps trailing zeros: `007` is `7`, `-007.50` is `-7.50`. A type may be writable both ways; a target that registered an `int2` tag would make `` int2`8` `` and `8` the same value.
+**Plainly.** Three pieces of syntax the interpreter reads without a tag: a quoted string, `true`/`false`, and a number. Each target says which of its types they are. A number is the one plain kind that yields several types, so the target's number entry carries a **classifier** that picks the type from the digits and returns the canonical form with it, in place of `parse`. Beside the classifier the entry lists `types`, every data type the classifier can return; that list is how assembly knows those types can be written, even though each is keyed under no entry of its own. Postgres's rule is PostgreSQL's own rule for literals: a whole number takes the narrowest of `pg/int2`, `pg/int4`, `pg/int8` that holds it; anything else, a larger whole number, a number with a fraction, or `NaN`, `Infinity`, `-Infinity`, is `pg/numeric`. SQLite's rule: a whole number a double holds exactly is `sqlite/integer`, a wider one up to 64 bits is `sqlite/bigint`, a number with a fraction is `sqlite/real`, and anything else — a whole number past 64 bits, or one of the three words — has no SQLite type and is refused. Digit text has no leading zeros and no negative zero, and keeps trailing zeros: `007` is `7`, `-007.50` is `-7.50`. A type may be writable both ways; a target that registered an `int2` tag would make `` int2`8` `` and `8` the same value.
 
-One tag names no data type. `sql` takes an expression in the database's language, which nothing in the framework reads, and stores it in the contract's expression form on any column. It is registered in the same place as the others, as the one **lowering** entry.
+Some tags name no data type. `sql` takes an expression in the database's language, which nothing in the framework reads, and stores it in the contract's expression form on any column. Such a tag is registered in the same map as the others, as a **lowering** entry under a reserved key that no data type id can collide with; Postgres registers `sql` and `pg.sql` this way, SQLite `sql` and `sqlite.sql`.
 
 The language server takes tag completion and documentation from the same entries. So does `contract infer`, and so does the reader for the earlier Prisma schema language, which maps its own syntax onto the same plain kinds and, for quoted JSON on a JSON column, the `json` entry's `parse`.
 
@@ -148,9 +167,9 @@ The TypeScript builder is not a text surface: `.default(value)` hands the codec 
 The control stack assembles every pack's data types, codec descriptors, type constructors and authoring entries into one stack and checks them against each other. It fails with a structured error, naming the contributor and the dangling id, when:
 
 1. a codec or a type constructor names a data type that is not registered;
-2. an authoring entry, or a source in some type's casts, names a data type that is not registered;
-3. two entries claim one tag, or one plain kind;
-4. a type that appears as a source in some cast has no authoring entry, because a cast from a type nobody can write can never be exercised.
+2. an authoring entry, a type in a number entry's `types`, or a source in some type's casts, names a data type that is not registered;
+3. two entries claim one tag, or one plain kind; and, for the same reason, two components register one type id, or two entries sit under one key;
+4. a type that appears as a source in some cast cannot be written, because a cast from a type nobody can write can never be exercised. A type can be written when it has an authoring entry of its own or when a number entry's `types` names it.
 
 The reverse of the last is not required: a type may be reachable only through casts. Assembly is the right level for these checks because they span packs: `pgvector/vector` casting from `pg/numeric` is valid only when the Postgres target that owns `pg/numeric` is in the stack. Within a pack, references are by constant rather than by string, so a misspelt id fails to compile and an unregistered one fails assembly.
 
@@ -171,7 +190,7 @@ model Place {
 
 ## Consequences
 
-- A written value is never rounded before its receiving type sees it.
+- A written value is never rounded before its receiving type sees it, and a value the receiving type cannot hold is refused rather than rounded into one it can.
 - A JSON default is a document, written and printed as one.
 - Defaults and function arguments are admitted by one rule.
 - The facts about a database type live in one declaration. Codecs of one type share its contract form; where they did not, contracts change form once and are re-emitted.
