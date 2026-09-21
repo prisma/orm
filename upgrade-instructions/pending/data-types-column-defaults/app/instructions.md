@@ -1,63 +1,77 @@
 ---
 changes:
-  - id: json-column-default-is-a-json-tag
+  - id: a-json-default-is-a-json-tag
     summary: |
-      A `Json` or `Jsonb` column's literal default is written ``@default(json`{ "a": 1 }`)``.
-      A quoted string is now refused: a JSON column accepts a `json` literal, not a `string` one.
+      A `Json` or `Jsonb` column's default is written ``@default(json`{ "a": 1 }`)``. A quoted
+      string is refused: `pg/jsonb` casts from `pg/json`, not from `pg/text`.
     detection:
       glob: "**/*.prisma"
       matches:
-        - '(Json|Jsonb)(\[\])?\??\s+@default\("'
-  - id: decimal-and-float-defaults-are-numbers
+        - '\b(Jsonb|Json)(\[\])?\??\s+@default\([\s\[]*"'
+  - id: a-decimal-default-is-written-unquoted
     summary: |
-      A `Decimal`, `Numeric` or `Float` column's literal default is written as a number, not as a
-      quoted string: `@default(1.50)`, `@default(NaN)`, `@default(-Infinity)`.
+      A `Decimal` or `Numeric` column's default is written as a number, not as a quoted string:
+      `@default(1.50)`. Trailing zeros are kept.
     detection:
       glob: "**/*.prisma"
       matches:
-        - '(Decimal|Numeric(\([^)]*\))?|Float|Real)(\[\])?\??\s+@default\("'
-  - id: a-quoted-default-needs-a-column-that-takes-text
+        - '\b(Decimal|Numeric)(\([^)]*\))?(\[\])?\??\s+@default\([\s\[]*"'
+  - id: a-float-non-finite-default-is-written-bare
     summary: |
-      Every literal `@default` is now checked against the column's codec by type. A quoted value on
-      a column whose codec does not accept a `string` literal is refused with
-      `PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE`, and a number too large for its column with the same
-      code instead of a decode failure.
+      A `Float` or `Real` column's default is written as a number, and `NaN`, `Infinity` and
+      `-Infinity` are written bare: `@default(NaN)`, not `@default("NaN")`.
     detection:
       glob: "**/*.prisma"
-      contains:
-        - "@default("
-  - id: infer-prints-literals-where-it-printed-dbgenerated
+      matches:
+        - '\b(Float|Real)(\[\])?\??\s+@default\([\s\[]*"'
+  - id: a-json-list-default-is-one-json-literal
     summary: |
-      `prisma contract infer` now prints a temporal, numeric or JSON column default as the literal
-      its codec reads back, where it printed `dbgenerated("...")` or dropped the default before.
-      Re-run infer and review the diff before emitting.
+      A written list on a `Json` or `Jsonb` column that holds one value is refused. A JSON list
+      default is one JSON document: ``@default(json`[1, 2]`)``.
+    detection:
+      glob: "**/*.prisma"
+      matches:
+        - '\b(Jsonb|Json)\??\s+@default\(\s*\['
+  - id: infer-prints-a-literal-where-it-printed-dbgenerated
+    summary: |
+      `prisma contract infer` now prints a default as a literal wherever it can read the literal
+      back as the stored value, including forms it used to print as `dbgenerated("...")`. Re-running
+      infer produces different schema text for the same database. Nothing to fix; review the diff.
     detection:
       glob: "**/*.prisma"
       contains:
         - "dbgenerated("
-  - id: a-number-column-default-authored-as-text-now-stores-the-number
+  - id: number-valued-64-bit-columns-store-their-default-as-digit-text
     summary: |
-      A number-typed column whose default was authored as quoted text — `.default('0')` on a SQLite
-      `integer` column — now renders `DEFAULT 0` rather than `DEFAULT '0'`. Author the number.
+      A column whose codec is `pg/int8number@1` or `sqlite/bigintnumber@1` and which carries a
+      literal default changes form in `contract.json`: the default is digit text now, where it was a
+      JSON number. Re-run `prisma contract emit`, then `prisma db sign`.
     detection:
-      glob: "**/*.{ts,mts,cts}"
+      glob: "**/contract.json"
       matches:
-        - "\\.default\\(['\"]-?\\d+(\\.\\d+)?['\"]\\)"
+        - '"codecId":"(pg/int8number@1|sqlite/bigintnumber@1)","default":\{"kind":"literal"'
 ---
 
-## `json-column-default-is-a-json-tag`
+## `a-json-default-is-a-json-tag`
 
-A column default is now a literal of a type, and the column's codec names the types it accepts. `pg/json@1`, `pg/jsonb@1`, `sqlite/json@1` and `arktype/json@1` accept a `json` literal, which is written as a tagged literal:
+Every value written in PSL now has a data type of its own, decided by what is written rather than by the column. A quoted string is text, and a JSON column's type does not cast from text, so a quoted JSON default is refused with `PSL_DEFAULT_TYPE_INCOMPATIBLE`:
+
+```text
+Field "Account.meta": pg/jsonb has no cast from pg/text; it casts from pg/json
+```
+
+The `json` tag reads its body as a JSON document, which is what `pg/json` holds, and `pg/jsonb` casts from `pg/json`:
 
 | Before | After |
 | --- | --- |
 | `meta Jsonb @default("{}")` | ``meta Jsonb @default(json`{}`)`` |
 | `meta Jsonb @default("{\"plan\":\"free\"}")` | ``meta Jsonb @default(json`{ "plan": "free" }`)`` |
 | `docs Jsonb[] @default(["{}"])` | ``docs Jsonb[] @default([json`{}`])`` |
+| `meta Jsonb? @default("null")` | ``meta Jsonb? @default(json`null`)`` |
 
-The body inside the tag is the JSON document itself, so it needs none of the escaping a PSL string needed. A backtick body resolves `` \` `` and `\\` and nothing else, so `` json`{ "plan": "free" }` `` needs no escaping at all.
+The body inside the tag is the JSON document itself, so it needs none of the escaping a PSL string needed. The backtick fence resolves `` \` `` and `\\` and nothing else, so `` json`{ "plan": "free" }` `` needs no escaping at all.
 
-A backslash has to survive twice — the backtick fence, then JSON — so a JSON string that needs one backslash is written with four:
+A backslash has to survive the fence and then JSON, so a JSON string that holds one backslash is written with four:
 
 | In the schema | After the fence | JSON reads |
 | --- | --- | --- |
@@ -65,56 +79,82 @@ A backslash has to survive twice — the backtick fence, then JSON — so a JSON
 
 Two backslashes are not enough: the fence turns them into one, and `\d` is not a JSON escape, so the body is refused with `PSL_INVALID_JSON_LITERAL` — as is any other body that is not a JSON document.
 
-`` @default(json`null`) `` stores the JSON value null, as `@default("null")` did.
+## `a-decimal-default-is-written-unquoted`
 
-## `decimal-and-float-defaults-are-numbers`
+A written number's data type comes from its own size and precision. Quoted digits are text, and `pg/numeric` does not cast from text:
 
-A number's literal type comes from what is written, so a quoted value is a `string` literal, which no numeric codec accepts:
+```text
+Field "Account.price": pg/numeric has no cast from pg/text; it casts from pg/int2, pg/int4, pg/int8
+```
 
 | Before | After |
 | --- | --- |
 | `price Decimal @default("1.50")` | `price Decimal @default(1.50)` |
+| `price Numeric(10, 2) @default("-1.25")` | `price Numeric(10, 2) @default(-1.25)` |
+| `prices Numeric(65, 30)[] @default(["-1.5", "2"])` | `prices Numeric(65, 30)[] @default([-1.5, 2])` |
+
+The stored value does not change. Trailing zeros are kept (`1.50` stays `1.50`), leading zeros are dropped (`007.50` is `7.50`), and `-0.0` is `0.0` — the values these defaults always had.
+
+## `a-float-non-finite-default-is-written-bare`
+
+`NaN`, `Infinity` and `-Infinity` are number tokens in PSL, not identifiers and not text. A `Float` or `Real` column's type casts from the number types, not from text, so the quoted forms are refused with `PSL_DEFAULT_TYPE_INCOMPATIBLE`.
+
+| Before | After |
+| --- | --- |
 | `ratio Float @default("NaN")` | `ratio Float @default(NaN)` |
 | `ratio Float @default("-Infinity")` | `ratio Float @default(-Infinity)` |
-| `prices Decimal[] @default(["1.50", "2"])` | `prices Decimal[] @default([1.50, 2])` |
+| `ratio Real @default("NaN")` | `ratio Real @default(NaN)` |
+| `ratios Float[] @default(["-1.5", "2"])` | `ratios Float[] @default([-1.5, 2])` |
 
-Trailing zeros are kept (`1.50` stays `1.50`), and leading zeros and the sign of zero are dropped (`007.50` is `7.50`, `-0.0` is `0.0`) — the same values these defaults have had. `NaN`, `Infinity` and `-Infinity` are written bare; they are number tokens in PSL, not identifiers.
+## `a-json-list-default-is-one-json-literal`
 
-`Real` on SQLite and `Float` on a column whose codec refuses non-finite values (`sqlite/real@1`, `sql/float@1`, `pg/float@1`) do not accept `NaN` at all; that is now `PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE` rather than a decode failure at emit.
-
-## `a-quoted-default-needs-a-column-that-takes-text`
-
-Every literal default is classified into a type — `string`, `boolean`, `i8`/`i16`/`i32`/`i64`/`bigint` by the number's size, `decimal`, `float`, `json`, or a list of those — and checked against the column's codec before anything is decoded. Two families of schema that used to emit now fail at `contract emit`:
+A written list is several values, and the column takes it only when the column is a list or when the column's data type declares a list cast. `pg/json` and `pg/jsonb` declare none, so a written list on a column that holds one JSON value is refused:
 
 ```text
-count  Int     @default("1")                  // pg/int4@1 is not compatible with a string literal
-count  Int     @default(100000000000000099)   // ... with an i64 literal; it accepts i8, i16, i32 literals
-count  Int     @default(1.5)                  // ... with a decimal literal
-payload Bytes  @default(1234)                 // pg/bytea@1 ... it accepts string literals
+Field "Account.meta": pg/jsonb has no cast from a list; it casts from pg/json
 ```
 
-The message names the column, the codec, the literal's type and what the codec accepts, so the fix is to write a literal of an accepted type, or to widen the column. A column whose codec accepts no literal default at all — `pg/enum@1` (write the member name), `pg/text-array@1`, every Mongo codec — reads `it accepts no literal defaults`; give it a `` sql`...` `` default instead.
+A JSON list default is one JSON document, written inside the tag:
 
-## `infer-prints-literals-where-it-printed-dbgenerated`
+| Before | After |
+| --- | --- |
+| `meta Jsonb @default([1, 2])` | ``meta Jsonb @default(json`[1, 2]`)`` |
+| `meta Jsonb @default([])` | ``meta Jsonb @default(json`[]`)`` |
 
-`prisma contract infer` chooses the literal from the same declaration, so a default it used to print as a raw expression now prints as a literal:
+A `Jsonb[]` column is unaffected: it is a list of JSON columns, and each element is written as its own `json` tag — ``docs Jsonb[] @default([json`{}`, json`[]`])``.
 
-| Column | Before | After |
+## `infer-prints-a-literal-where-it-printed-dbgenerated`
+
+`prisma contract infer` classifies a stored default with the same rules a written value uses, prints it with the same authoring entry, and reads the text straight back to prove it returns the stored value. A default it can read back is now printed as a literal, including forms it used to print as `dbgenerated("...")` or as a quoted string:
+
+| Column in the database | Before | After |
 | --- | --- | --- |
-| `jsonb DEFAULT '{}'::jsonb` | `@default(dbgenerated("'{}'::jsonb"))` | ``@default(json`{}`)`` |
-| `timestamp(3) DEFAULT '2024-01-01 00:00:00'` | `@default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))` | `@default("2024-01-01 00:00:00")` |
-| `numeric(10,2) DEFAULT 1.50` | `@default("1.50")` | `@default(1.50)` |
+| `jsonb NOT NULL DEFAULT '{}'::jsonb` | `@default(dbgenerated("'{}'::jsonb"))` | ``@default(json`{}`)`` |
+| `jsonb DEFAULT 'null'::jsonb` | `@default(dbgenerated("'null'::jsonb"))` | ``@default(json`null`)`` |
+| `timestamp(3) NOT NULL DEFAULT '2024-01-01 00:00:00'` | `@default(dbgenerated("'2024-01-01 00:00:00'::timestamp without time zone"))` | `@default("2024-01-01 00:00:00")` |
+| `numeric(65,30) DEFAULT -0.5` | `@default("-0.5")` | `@default(-0.5)` |
+| `numeric(10,2) NOT NULL DEFAULT 1.50` | `@default("1.50")` | `@default(1.50)` |
 | `float8 DEFAULT 'NaN'` | `@default("NaN")` | `@default(NaN)` |
+| `timestamp(3)[] DEFAULT ARRAY['2024-01-01 00:00:00'::timestamp(3)]` | `@default(dbgenerated("ARRAY[...]"))` | `@default(["2024-01-01 00:00:00"])` |
 
-The printed schema emits and verifies clean against the same database, so the change is in the text, not in the contract. Re-run `prisma contract infer` and commit the new text; a default whose value the codec cannot read back — `timestamp DEFAULT 'infinity'` — still prints as `dbgenerated(...)`.
+This is not a break to fix. The contract is the same; only the schema text differs. Re-run `prisma contract infer`, read the diff, and commit the new text. A default whose value the codec cannot read back, such as `NULL::character varying`, still prints as `dbgenerated(...)`, so infer never prints a schema that emit cannot read.
 
-## `a-number-column-default-authored-as-text-now-stores-the-number`
+## `number-valued-64-bit-columns-store-their-default-as-digit-text`
 
-A codec now reads the value shape of every literal type it accepts, so `sqlite/integer@1` reads the digit text `'0'` as the number `0`. A contract that authored a number column's default as a quoted string therefore renders `DEFAULT 0` where it rendered `DEFAULT '0'`, and a schema diff over DDL text will show it. Author the number:
+Every codec of one data type now stores and reads that type's one canonical form. `pg/int8` stores digit text, so `pg/int8number@1` — the codec behind `BigIntNumber`, which reads a 64-bit integer as a JavaScript `number` — stores digit text too, where it used to store a JSON number. `sqlite/bigintnumber@1` changed the same way.
 
-```diff
--priority: field.column(integerColumn).default('0'),
-+priority: field.column(integerColumn).default(0),
+A column is affected when both are true: its codec is `pg/int8number@1` or `sqlite/bigintnumber@1`, and it carries a literal default. In `contract.json` that reads:
+
+```json
+"viewCount":{"codecId":"pg/int8number@1","default":{"kind":"literal","value":10},"nativeType":"int8","nullable":false}
 ```
 
-Re-emit and run `prisma db verify --schema-only` against an existing database: if it reports the column's default, apply the change with `prisma db update` or a migration.
+and becomes:
+
+```json
+"viewCount":{"codecId":"pg/int8number@1","default":{"kind":"literal","value":"10"},"nativeType":"int8","nullable":false}
+```
+
+Re-run `prisma contract emit` to rewrite `contract.json`, then `prisma db sign` so the signature matches the new contract. Nothing in the schema changes, and nothing in the database changes.
+
+No example in this repository has such a column, so a project is affected only if its own contract holds one.
