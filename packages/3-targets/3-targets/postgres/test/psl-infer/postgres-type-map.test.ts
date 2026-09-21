@@ -14,11 +14,11 @@ describe('createPostgresTypeMap', () => {
       nativeType: 'numeric',
     });
     expect(typeMap.resolve('timestamptz')).toEqual({
-      pslType: { name: 'Timestamptz' },
+      pslType: { name: 'TimestamptzString' },
       nativeType: 'timestamptz',
     });
     expect(typeMap.resolve('timestamp with time zone')).toEqual({
-      pslType: { name: 'Timestamptz' },
+      pslType: { name: 'TimestamptzString' },
       nativeType: 'timestamp with time zone',
     });
     expect(typeMap.resolve('jsonb')).toEqual({ pslType: { name: 'Jsonb' }, nativeType: 'jsonb' });
@@ -145,31 +145,28 @@ describe('representation-explicit spellings stay out of introspection', () => {
     ['date', 'Date'],
     ['timestamp', 'Timestamp'],
     ['timestamp without time zone', 'Timestamp'],
-    ['timestamptz', 'Timestamptz'],
-    ['timestamp with time zone', 'Timestamptz'],
+    ['timestamptz', 'TimestamptzString'],
+    ['timestamp with time zone', 'TimestamptzString'],
     ['time', 'Time'],
     ['time without time zone', 'Time'],
-  ])('resolves %s to the bare %s, never a *String spelling', (nativeType, pslName) => {
+  ])('resolves %s to %s (timestamptz variants use TimestamptzString)', (nativeType, pslName) => {
     expect(map.resolve(nativeType)).toMatchObject({ pslType: { name: pslName } });
   });
 
   it('keeps precision on the bare spelling', () => {
     expect(map.resolve('timestamptz(6)')).toMatchObject({
-      pslType: { name: 'Timestamptz', args: ['6'] },
+      pslType: { name: 'TimestamptzString', args: ['6'] },
     });
   });
 
-  it('never produces a *String name for any native type it knows', () => {
+  it('never produces a *String name for any native type it knows except timestamptz variants (timestamptz, timestamp with time zone, timestamptz(6))', () => {
     const natives = [
       'date',
       'timestamp',
       'timestamp without time zone',
-      'timestamptz',
-      'timestamp with time zone',
       'time',
       'time without time zone',
       'timetz',
-      'timestamptz(6)',
       'timestamp(3)',
       'time(3)',
     ];
