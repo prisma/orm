@@ -2,7 +2,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import type { PslDiagnostic } from '../../diagnostic';
 import { ObjectLiteralExprAst } from '../../syntax/ast/expressions';
 import type { ArgType, AttributeCtx, RecordArgType } from '../types';
-import { leafDiagnostic } from './diagnostic';
+import { alreadyVoicedElsewhere, leafDiagnostic } from './diagnostic';
 
 export function record<T, Ctx extends AttributeCtx>(of: ArgType<T, Ctx>): RecordArgType<T, Ctx> {
   return {
@@ -17,7 +17,7 @@ export function record<T, Ctx extends AttributeCtx>(of: ArgType<T, Ctx>): Record
       const diagnostics: PslDiagnostic[] = [];
       const entries: [string, T][] = [];
       const keys = new Set<string>();
-      let failed = false;
+      let voicedElsewhere = false;
       for (const field of Array.from(literal.fields())) {
         const key = field.keyName();
         if (key === undefined) {
@@ -31,7 +31,7 @@ export function record<T, Ctx extends AttributeCtx>(of: ArgType<T, Ctx>): Record
         }
         const parsed = of.parse(value, ctx);
         if (!parsed.ok) {
-          failed = true;
+          if (alreadyVoicedElsewhere(parsed.failure)) voicedElsewhere = true;
           diagnostics.push(...parsed.failure);
           continue;
         }
@@ -42,7 +42,7 @@ export function record<T, Ctx extends AttributeCtx>(of: ArgType<T, Ctx>): Record
         keys.add(key);
         entries.push([key, parsed.value]);
       }
-      if (failed || diagnostics.length > 0) return notOk(diagnostics);
+      if (voicedElsewhere || diagnostics.length > 0) return notOk(diagnostics);
       return ok(Object.fromEntries(entries));
     },
   };

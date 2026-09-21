@@ -6,7 +6,7 @@ import { nodePslSpan } from '../resolve';
 import type { FieldAttributeAst, ModelAttributeAst } from '../syntax/ast/attributes';
 import type { AttributeArgAst } from '../syntax/ast/expressions';
 import type { SyntaxNode } from '../syntax/red';
-import { ATTRIBUTE_DIAGNOSTIC_CODE } from './combinators/diagnostic';
+import { ATTRIBUTE_DIAGNOSTIC_CODE, alreadyVoicedElsewhere } from './combinators/diagnostic';
 import type {
   ArgType,
   AttributeCtx,
@@ -38,7 +38,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
   const seen = new Set<string>();
   let positionalSlot = 0;
   let reportedExcess = false;
-  let failed = false;
+  let voicedElsewhere = false;
 
   for (const arg of args) {
     const name = arg.name()?.name();
@@ -95,7 +95,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
     seen.add(key);
     const result = parseArgValue(arg, param, ctx, diagnostics);
     if (result.ok) output[key] = result.value;
-    else failed = true;
+    else if (alreadyVoicedElsewhere(result.failure)) voicedElsewhere = true;
   }
 
   const finalized = new Set<string>();
@@ -130,7 +130,7 @@ export function interpretArgs<Ctx extends AttributeCtx>(
     finalizeAbsentKey(key, undefined, spec.named[key]?.type);
   }
 
-  if (failed || diagnostics.length > 0) {
+  if (voicedElsewhere || diagnostics.length > 0) {
     return notOk<readonly PslDiagnostic[]>(diagnostics);
   }
   return ok(output);

@@ -2,7 +2,7 @@ import { notOk, ok, type Result } from '@internal/utils/result';
 import type { PslDiagnostic } from '../../diagnostic';
 import { ArrayLiteralAst, type ExpressionAst } from '../../syntax/ast/expressions';
 import type { ArgType, AttributeCtx, ListArgType } from '../types';
-import { leafDiagnostic } from './diagnostic';
+import { alreadyVoicedElsewhere, leafDiagnostic } from './diagnostic';
 
 export interface ListOptions {
   readonly allowEmpty?: boolean;
@@ -28,7 +28,7 @@ export function list<T, Ctx extends AttributeCtx>(
       }
       const diagnostics: PslDiagnostic[] = [];
       const parsed: { node: ExpressionAst; value: T }[] = [];
-      let failed = false;
+      let voicedElsewhere = false;
       let count = 0;
       for (const element of literal.elements()) {
         count += 1;
@@ -36,7 +36,7 @@ export function list<T, Ctx extends AttributeCtx>(
         if (result.ok) {
           parsed.push({ node: element, value: result.value });
         } else {
-          failed = true;
+          if (alreadyVoicedElsewhere(result.failure)) voicedElsewhere = true;
           diagnostics.push(...result.failure);
         }
       }
@@ -50,7 +50,7 @@ export function list<T, Ctx extends AttributeCtx>(
           else seen.add(value);
         }
       }
-      if (failed || diagnostics.length > 0) return notOk(diagnostics);
+      if (voicedElsewhere || diagnostics.length > 0) return notOk(diagnostics);
       return ok(parsed.map((entry) => entry.value));
     },
   };
