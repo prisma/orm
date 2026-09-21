@@ -81,6 +81,8 @@ An unqualified reference resolves in exactly this order:
 2. the **top level**;
 3. the **universe scope** — the scalar and type-constructor names built from the injected `typeConstructors` registry.
 
+"Universe" is the standard compiler name for the outermost implicit scope holding a language's predeclared identifiers: Go's specification defines a universe block that encompasses all Go source text, with `int`, `string` and the rest declared in it. PSL's universe scope is that construct for its predeclared type names, which arrive from configuration rather than from the language definition.
+
 **Sibling namespaces are never consulted.** A user declaration shadowing a universe symbol (a `model Uuid` over a built-in `Uuid`) wins **silently** — shadowing is not a diagnostic. A qualified `ns.Name` is looked up in that PSL namespace, then in the type-constructor namespace of the same name (`pgvector.Vector`), and nowhere else.
 
 Qualified references resolve at whole-`QualifiedName` granularity: in `app.Item`, the segments `app` and `Item` do not resolve separately — the one `QualifiedName` node carries the one resolution.
