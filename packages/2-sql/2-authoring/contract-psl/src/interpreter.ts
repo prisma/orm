@@ -2060,6 +2060,22 @@ function stripStorageOnlyDomainFields(
   return { ...model, fields, storage: { ...storage, fields: storageFields } };
 }
 
+function voicedAsUncomposedNamespace(
+  diagnostic: PslDiagnostic,
+  composedExtensions: ReadonlySet<string>,
+  context: {
+    readonly familyId?: string;
+    readonly targetId?: string;
+    readonly authoringContributions?: AuthoringContributions | undefined;
+  },
+): boolean {
+  const data = diagnostic.data;
+  if (data?.['reference'] !== 'type') return false;
+  const name = data['name'];
+  if (typeof name !== 'string') return false;
+  return checkUncomposedNamespace(name, composedExtensions, context) !== undefined;
+}
+
 export function interpretPslDocumentToSqlContract(
   input: InterpretPslDocumentToSqlContractInput,
 ): Result<Contract, ContractSourceDiagnostics> {
@@ -2072,7 +2088,18 @@ export function interpretPslDocumentToSqlContract(
     controlMutationDefaults: input.controlMutationDefaults,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
   });
-  diagnostics.push(...binderDiagnostics);
+  const composedExtensionNames = new Set(input.composedExtensions ?? []);
+  diagnostics.push(
+    ...binderDiagnostics.filter(
+      (diagnostic) =>
+        !voicedAsUncomposedNamespace(diagnostic, composedExtensionNames, {
+          ...(input.target === undefined
+            ? {}
+            : { familyId: 'sql', targetId: input.target.targetId }),
+          authoringContributions: input.authoringContributions,
+        }),
+    ),
+  );
   if (!input.target) {
     diagnostics.pushUnlocated({
       code: 'PSL_TARGET_CONTEXT_REQUIRED',

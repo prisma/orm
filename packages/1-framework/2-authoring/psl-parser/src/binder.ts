@@ -155,7 +155,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
         diagnostics.push({
           code: PSL_UNRESOLVED_REFERENCE,
           message: `Cannot find type "${resolution.name}"`,
-          data: { reference: 'type' },
+          data: { reference: 'type', name: resolution.name },
           ...diagnosticSource(sources, node).at(),
         });
       }

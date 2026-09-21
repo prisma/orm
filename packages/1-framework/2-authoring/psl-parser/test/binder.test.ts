@@ -384,7 +384,7 @@ describe('createBinder — diagnostics', () => {
       {
         code: 'PSL_UNRESOLVED_REFERENCE',
         message: 'Cannot find type "Dog"',
-        data: { reference: 'type' },
+        data: { reference: 'type', name: 'Dog' },
         filename: '1.psl',
         range: { start: { line: 1, character: 6 }, end: { line: 1, character: 9 } },
       },

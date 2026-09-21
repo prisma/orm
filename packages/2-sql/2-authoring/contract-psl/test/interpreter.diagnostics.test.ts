@@ -805,6 +805,24 @@ model User {
     );
   });
 
+  it('leaves an uncomposed namespace to the composition diagnostic alone', () => {
+    const document = symbolTableInputFromParseArgs({
+      schema: 'model Document {\n  id Int @id\n  embedding pgvector.Vector(1536)\n}',
+      sourceId: 'schema.prisma',
+    });
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...document,
+      controlMutationDefaults: builtinControlMutationDefaults,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map(({ code }) => code)).toEqual([
+      'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
+    ]);
+  });
+
   it('rejects @@id referencing an unknown field', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `model Thing {
