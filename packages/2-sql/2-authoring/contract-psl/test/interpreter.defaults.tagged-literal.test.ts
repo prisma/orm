@@ -12,7 +12,25 @@ import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contr
 
 describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
   const builtinControlMutationDefaults = createBuiltinLikeControlMutationDefaults();
-  const interpret = (fieldLine: string) => {
+  /** A tag naming a literal type that is not `json`, to exercise the other bodies a tag can hold. */
+  const withBoolTag = {
+    ...builtinControlMutationDefaults,
+    defaultLiteralTagRegistry: new Map([
+      ...builtinControlMutationDefaults.defaultLiteralTagRegistry,
+      [
+        'bool',
+        {
+          usage: 'bool`...`',
+          documentation: 'Reads the body as a boolean.',
+          literalType: 'boolean' as const,
+        },
+      ],
+    ]),
+  };
+  const interpret = (
+    fieldLine: string,
+    controlMutationDefaults = builtinControlMutationDefaults,
+  ) => {
     const document = symbolTableInputFromParseArgs({
       schema: `model Lit {\n  id Int @id\n  ${fieldLine}\n}\n`,
       sourceId: 'schema.prisma',
@@ -25,18 +43,25 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
       ...document,
-      controlMutationDefaults: builtinControlMutationDefaults,
+      controlMutationDefaults,
     });
   };
-  const columnDefault = (fieldLine: string, column: string) => {
-    const result = interpret(fieldLine);
+  const columnDefault = (
+    fieldLine: string,
+    column: string,
+    controlMutationDefaults = builtinControlMutationDefaults,
+  ) => {
+    const result = interpret(fieldLine, controlMutationDefaults);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.failure.diagnostics));
     return sqlStorageFromSuccessfulSqlInterpretation(result.value).namespaces['public']?.entries
       .table?.['Lit']?.columns[column]?.default;
   };
-  const diagnostics = (fieldLine: string) => {
-    const result = interpret(fieldLine);
+  const diagnostics = (
+    fieldLine: string,
+    controlMutationDefaults = builtinControlMutationDefaults,
+  ) => {
+    const result = interpret(fieldLine, controlMutationDefaults);
     expect(result.ok).toBe(false);
     return result.ok ? [] : result.failure.diagnostics;
   };
@@ -234,5 +259,26 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
         span: lineThreeSpan(33, 11),
       }),
     ]);
+  });
+
+  describe('a tag naming the boolean literal type', () => {
+    it.each([
+      ['true', true],
+      ['false', false],
+    ])('reads the body %s', (body, value) => {
+      expect(columnDefault(`v Boolean @default(bool\`${body}\`)`, 'v', withBoolTag)).toEqual({
+        kind: 'literal',
+        value,
+      });
+    });
+
+    it.each(['TRUE', 'True', 'yes', '1', ''])('refuses the body %o', (body) => {
+      expect(diagnostics(`v Boolean @default(bool\`${body}\`)`, withBoolTag)).toEqual([
+        expect.objectContaining({
+          code: 'PSL_INVALID_DEFAULT_LITERAL',
+          message: expect.stringContaining(`"${body}" is not a boolean literal.`),
+        }),
+      ]);
+    });
   });
 });

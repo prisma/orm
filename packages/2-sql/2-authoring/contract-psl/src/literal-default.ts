@@ -83,18 +83,23 @@ export type ReadLiteralDefaultResult =
   | { readonly ok: true; readonly value: AuthoredColumnDefaultLiteralValue }
   | { readonly ok: false; readonly refusal: LiteralDefaultRefusal };
 
-/** The written literal a tagged literal's body is, given the literal type its tag names. */
+/**
+ * The written literal a tagged literal's body is, given the literal type its tag names, or a
+ * refusal when the body is not a literal of that type. Only `boolean` can refuse here: every other
+ * type reads its own text, and refuses it in {@link readLiteral} if it cannot.
+ */
 export function writtenLiteralForTagBody(
   literalType: LiteralTypeName,
   text: string,
-): WrittenLiteral {
+): WrittenLiteral | { readonly ok: false; readonly message: string } {
   switch (literalType) {
     case 'json':
       return { kind: 'json', text };
     case 'string':
       return { kind: 'string', text };
     case 'boolean':
-      return { kind: 'boolean', value: text === 'true' };
+      if (text === 'true' || text === 'false') return { kind: 'boolean', value: text === 'true' };
+      return { ok: false, message: `"${text}" is not a boolean literal.` };
     case 'i8':
     case 'i16':
     case 'i32':

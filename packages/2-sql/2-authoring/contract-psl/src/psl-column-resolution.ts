@@ -748,10 +748,10 @@ function lowerTaggedLiteral(
     );
   }
   if (!isDefaultLiteralTagLoweringEntry(entry)) {
-    return {
-      ok: true,
-      written: writtenLiteralForTagBody(entry.literalType, canonicalization.body),
-    };
+    const written = writtenLiteralForTagBody(entry.literalType, canonicalization.body);
+    return 'ok' in written
+      ? reject(PSL_INVALID_DEFAULT_LITERAL, written.message)
+      : { ok: true, written };
   }
   const result = entry.lower({
     literal: { tag: literal.tag, body: canonicalization.body, span: literal.span },
