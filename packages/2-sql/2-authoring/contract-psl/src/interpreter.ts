@@ -1171,6 +1171,8 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         modelName: model.name,
         storageName: tableName,
         fieldStorageName: (fieldName) => mapping.fieldColumns.get(fieldName),
+        fieldCodecId: (fieldName) =>
+          resolvedFields.find((resolved) => resolved.field.name === fieldName)?.descriptor.codecId,
         namespaceId: modelNamespaceId ?? input.defaultNamespaceId,
         sourceId: source.sources.sourceFileFor(source.node).filename,
         diagnostics: {

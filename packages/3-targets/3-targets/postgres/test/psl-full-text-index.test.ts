@@ -13,6 +13,7 @@ import {
   postgresAuthoringEntityTypes,
   postgresAuthoringModelAttributes,
   postgresAuthoringPslBlockDescriptors,
+  postgresAuthoringTypes,
 } from '../src/core/authoring';
 import { postgresIndexTypes } from '../src/core/index-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
@@ -23,6 +24,7 @@ const assembled = assembleAuthoringContributions([
       entityTypes: postgresAuthoringEntityTypes,
       pslBlockDescriptors: postgresAuthoringPslBlockDescriptors,
       modelAttributes: postgresAuthoringModelAttributes,
+      type: postgresAuthoringTypes,
     },
   },
 ]);
@@ -41,6 +43,9 @@ const postgresTarget = {
 const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: string }>([
   ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
   ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
+  // The family's varchar codec, to prove the attribute accepts every `textual`
+  // codec rather than `pg/text@1` alone.
+  ['Varchar', { codecId: 'sql/varchar@1', nativeType: 'character varying' }],
 ]);
 
 function interpret(source: string) {
@@ -151,6 +156,55 @@ model Message {
 
     expect(typed).toEqual(authored);
     expect(typed[0]).toMatchObject({ where: 'id > 0' });
+  });
+
+  it('rejects a field that is not textual, naming the field and its type', () => {
+    const diagnostics = diagnosticsOf(model(`  @@fullTextIndex([id], name: "message_id_search")`));
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_FULL_TEXT_INDEX_TEXT_FIELD',
+          message: expect.stringContaining('Message.id'),
+        }),
+      ]),
+    );
+    expect(diagnostics[0]?.message).toContain('pg/int4@1');
+  });
+
+  it('rejects a relation field', () => {
+    expect(
+      diagnosticsOf(`
+model Author {
+  id       Int       @id
+  messages Message[]
+}
+
+model Message {
+  id       Int    @id
+  text     String
+  authorId Int
+  author   Author @relation(fields: [authorId], references: [id])
+  @@fullTextIndex([author], name: "message_author_search")
+}
+`),
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'PSL_FULL_TEXT_INDEX_TEXT_FIELD' })]),
+    );
+  });
+
+  it('accepts a varchar column, mapped', () => {
+    const indexes = indexesOf(`
+model Message {
+  id      Int     @id
+  subject Varchar @map("subject_line")
+  @@fullTextIndex([subject], name: "message_subject_search")
+}
+`);
+
+    expect(indexes[0]).toMatchObject({
+      expression: `to_tsvector('english', "subject_line")`,
+    });
   });
 
   it('rejects a language Postgres does not ship, naming the ones it does', () => {

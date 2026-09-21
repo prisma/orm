@@ -47,6 +47,7 @@ import {
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from './codec-ids';
+import { codecDescriptors } from './codecs';
 import { postgresError } from './errors';
 import { renderFullTextIndexExpression } from './full-text-index-expression';
 import { postgresNowGeneratorIds } from './now-generators';
@@ -80,6 +81,8 @@ const PSL_FULL_TEXT_INDEX_REQUIRES_NAME: ContributedPslDiagnosticCode =
   'PSL_FULL_TEXT_INDEX_REQUIRES_NAME';
 const PSL_FULL_TEXT_INDEX_NAME_XOR_MAP: ContributedPslDiagnosticCode =
   'PSL_FULL_TEXT_INDEX_NAME_XOR_MAP';
+const PSL_FULL_TEXT_INDEX_TEXT_FIELD: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_TEXT_FIELD';
 const PSL_NATIVE_ENUM_BARE_MEMBER: ContributedPslDiagnosticCode = 'PSL_NATIVE_ENUM_BARE_MEMBER';
 const PSL_EXTENSION_INVALID_VALUE: ContributedPslDiagnosticCode = 'PSL_EXTENSION_INVALID_VALUE';
 const PSL_NATIVE_ENUM_DUPLICATE_MEMBER_VALUE: ContributedPslDiagnosticCode =
@@ -709,6 +712,25 @@ const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
 
 const [firstLanguage, ...remainingLanguages] = POSTGRES_TEXT_SEARCH_LANGUAGES;
 
+/**
+ * Read from the codec descriptors themselves rather than a second list of ids, so the attribute
+ * accepts exactly the columns the `textual` operations dispatch on.
+ */
+/** Widens each descriptor's trait tuple, so membership is a plain string test. */
+function traitsOf(descriptor: { readonly traits: readonly string[] }): readonly string[] {
+  return descriptor.traits;
+}
+
+const TEXTUAL_CODEC_IDS: ReadonlySet<string> = new Set(
+  codecDescriptors
+    .filter((descriptor) => traitsOf(descriptor).includes('textual'))
+    .map((descriptor) => descriptor.codecId),
+);
+
+function isTextualCodec(codecId: string): boolean {
+  return TEXTUAL_CODEC_IDS.has(codecId);
+}
+
 const postgresFullTextIndexSpec = modelAttribute('fullTextIndex', {
   documentation:
     'Indexes one text column for full-text search, rendering the expression `fullTextMatches`, `fullTextRank` and `fullTextHeadline` lower to.',
@@ -820,12 +842,17 @@ export const postgresAuthoringModelAttributes = {
         `@@fullTextIndex on "${ctx.modelName}" lowered with ${parsed.fields.length} fields`,
       );
       const columnName = ctx.fieldStorageName(fieldName);
-      // `fieldRef()` resolves the name against the declaring model while
-      // parsing, so an unknown field is already a diagnostic by here.
-      invariant(
-        columnName !== undefined,
-        `@@fullTextIndex on "${ctx.modelName}" resolved no storage name for field "${fieldName}"`,
-      );
+      const codecId = ctx.fieldCodecId(fieldName);
+      // A relation field parses as a field reference but stores no value, so it
+      // reaches here with neither a column nor a codec.
+      if (columnName === undefined || codecId === undefined || !isTextualCodec(codecId)) {
+        ctx.diagnostics?.push({
+          code: PSL_FULL_TEXT_INDEX_TEXT_FIELD,
+          message: `\`@@fullTextIndex\` indexes a text column, but "${ctx.modelName}.${fieldName}" is ${codecId === undefined ? 'not a stored scalar field' : `stored as \`${codecId}\``}.`,
+          sourceId: ctx.sourceId ?? 'unknown',
+        });
+        return undefined;
+      }
       return {
         index: {
           expression: renderFullTextIndexExpression(

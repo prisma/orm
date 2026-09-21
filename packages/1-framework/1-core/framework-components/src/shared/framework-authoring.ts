@@ -481,6 +481,13 @@ export interface AuthoringModelAttributeContext extends AuthoringEntityContext {
    * rather than reusing the authored field name, which `@map` may rename.
    */
   readonly fieldStorageName: (fieldName: string) => string | undefined;
+  /**
+   * The codec a field of the declaring model stores its values through, or
+   * `undefined` when the model declares no such field or the field is not a
+   * stored value at all. A lowering that only makes sense over certain value
+   * kinds checks this rather than guessing from the field's declared type.
+   */
+  readonly fieldCodecId: (fieldName: string) => string | undefined;
 }
 
 /**

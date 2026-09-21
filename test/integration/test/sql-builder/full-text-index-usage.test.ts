@@ -229,7 +229,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
 
   it('stores the varchar index with the cast Postgres adds, and matches it anyway', async () => {
     const definition = await client().query(
-      `SELECT pg_get_indexdef('comments_subject_search_2b3d17a7'::regclass) AS def`,
+      `SELECT pg_get_indexdef('${indexNamed('comments_subject_search')}'::regclass) AS def`,
     );
 
     // Postgres rewrites our `"subject"` to `(subject)::text` inside the stored

@@ -4,6 +4,10 @@
  * Every option here reaches the SQL as an inline literal rather than a bound parameter, because
  * Postgres accepts no parameter in these positions. Each is therefore validated before a statement
  * exists; anything unrecognized throws `RUNTIME.ARGUMENT_INVALID`.
+ *
+ * The headline markers are the only free text among them, and `checkMarker` restricts their
+ * characters precisely so that the literal path never carries a quote or a backslash for
+ * `escapeLiteral` to have to reason about.
  */
 import { LiteralExpr } from '@internal/sql-relational-core/ast';
 import { postgresError } from './errors';
@@ -32,7 +36,7 @@ export interface FullTextHeadlineOptions extends FullTextMatchesOptions {
   readonly stopSel?: string;
   /** Longest headline, in words. */
   readonly maxWords?: number;
-  /** Shortest headline, in words; at most `maxWords` when both are given. */
+  /** Shortest headline, in words; below `maxWords` when both are given. */
   readonly minWords?: number;
   /** Mark up the whole document rather than extracting fragments. */
   readonly highlightAll?: boolean;
@@ -84,14 +88,17 @@ function checkWordCount(method: string, argument: string, value: number): void {
   }
 }
 
+/** Non-empty, and none of `"` `,` `=` `\` or whitespace. */
+const MARKER = /^[^"=,\\\s]+$/;
+
 function checkMarker(method: string, argument: string, value: string): void {
-  if (value.length === 0 || /["=,]/.test(value)) {
+  if (!MARKER.test(value)) {
     throw invalid(
       method,
       argument,
       value,
-      `${argument} must be non-empty and free of " , and =, received ${JSON.stringify(value)}.`,
-      'ts_headline parses its options as a quoted, comma-separated list of Key=Value pairs, so a marker carrying those characters cannot survive it. Use markup such as <mark> or <b>.',
+      `${argument} must be non-empty and free of " , = \\ and whitespace, received ${JSON.stringify(value)}.`,
+      'ts_headline parses its options as a quoted, comma-separated list of Key=Value pairs, and the whole list reaches SQL as one literal, so a marker carrying those characters cannot survive either step. Use markup such as <mark> or <b>.',
     );
   }
 }
@@ -119,18 +126,27 @@ export function headlineOptionsLiteral(
   }
   if (options.minWords !== undefined) {
     checkWordCount(method, 'minWords', options.minWords);
-    if (options.maxWords !== undefined && options.minWords > options.maxWords) {
+    if (options.maxWords !== undefined && options.minWords >= options.maxWords) {
       throw invalid(
         method,
         'minWords',
         options.minWords,
-        `minWords (${options.minWords}) cannot exceed maxWords (${options.maxWords}).`,
-        'Lower minWords, or raise maxWords.',
+        `minWords (${options.minWords}) must be below maxWords (${options.maxWords}).`,
+        'Postgres requires MinWords strictly below MaxWords. Lower minWords, or raise maxWords.',
       );
     }
     pairs.push(`MinWords=${options.minWords}`);
   }
   if (options.highlightAll !== undefined) {
+    if (typeof options.highlightAll !== 'boolean') {
+      throw invalid(
+        method,
+        'highlightAll',
+        options.highlightAll,
+        `highlightAll must be a boolean, received ${JSON.stringify(options.highlightAll)}.`,
+        'Pass true to mark up the whole document, or false to extract fragments.',
+      );
+    }
     pairs.push(`HighlightAll=${options.highlightAll}`);
   }
   return pairs.length === 0 ? undefined : LiteralExpr.of(pairs.join(', '));

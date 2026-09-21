@@ -176,16 +176,34 @@ describe('postgres target query operations', () => {
       }
     });
 
-    it('rejects a minWords greater than maxWords', () => {
+    // Postgres itself requires MinWords strictly below MaxWords.
+    it.each([
+      [10, 5],
+      [10, 10],
+    ])('rejects minWords %i against maxWords %i', (minWords, maxWords) => {
       expect(() =>
-        buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', { minWords: 10, maxWords: 5 }),
+        buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', { minWords, maxWords }),
       ).toThrow(expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }));
     });
 
-    it.each(['', 'a,b', 'a=b', 'a"b'])('rejects the marker %o', (startSel) => {
+    it('accepts minWords below maxWords', () => {
+      expect(() =>
+        buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', { minWords: 5, maxWords: 10 }),
+      ).not.toThrow();
+    });
+
+    it.each(['', 'a,b', 'a=b', 'a"b', 'a b', 'a\\b'])('rejects the marker %o', (startSel) => {
       expect(() => buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', { startSel })).toThrow(
         expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }),
       );
+    });
+
+    it('rejects a highlightAll that is not a boolean', () => {
+      expect(() =>
+        buildOpAst('fullTextHeadline', TEXT_COLUMN, 'p', {
+          highlightAll: 'yes' as unknown as never,
+        }),
+      ).toThrow(expect.objectContaining({ code: 'RUNTIME.ARGUMENT_INVALID' }));
     });
   });
 
