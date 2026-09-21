@@ -51,6 +51,12 @@ Agreed with Will and Serhii on 2026-09-21.
 4. **A cast that returns the value unchanged is a valid declaration.** `pg/jsonb` casts from `pg/json` unchanged; it states that jsonb takes json values.
 5. **Not in this slice** (an independent project implements them): DDL name, aliases, parameters and their rendering moving from codec descriptors onto data types; `nativeType` derived and dropped from the contract; type constructors naming a type and a codec; function parameters typed by a data type through the attribute spec; temporal and bytes tags; the Mongo target's types beyond a name per codec.
 
+## Amendments made during the rework
+
+- **Generic relational codecs are descriptor templates.** `sql/text@1`, `sql/int@1`, `sql/float@1`, `sql/char@1` and `sql/varchar@1` are shared by both targets, so they carry everything a descriptor has except the data type (`CodecDescriptorTemplate`), and `postgresCodec()` / `sqliteCodec()` require `dataType` when they adapt one. (R1.)
+- **Data type ids are lower case** (`mongo/objectid`). `pg/char@1` and `pg/varchar@1` name `pg/char` and `pg/varchar`; SQLite's adapted `sql/char@1`, `sql/varchar@1` name `sqlite/text`, `sql/int@1` names `sqlite/integer`, `sql/float@1` names `sqlite/real`. SQLite binds no `Boolean`, so the boolean halt condition does not apply. (R1.)
+- **`dataTypes` sits at `types.codecTypes.dataTypes`** beside `codecDescriptors`; the assembled authoring contribution's `dataTypes` is required. The four invariants run behind one seam, `enforceDataTypeInvariants`, enabled once any component registers a type; R2 removes the gate. (R1.)
+
 ## Design
 
 ### B1. Data types in the framework
