@@ -26,6 +26,20 @@ export type {
   ColumnTypeDescriptor,
 } from '../shared/column-spec';
 export { column } from '../shared/column-spec';
+export type {
+  Cast,
+  DataType,
+  DataTypeId,
+  DataTypeLookup,
+  DataTypeSpec,
+  ListCast,
+} from '../shared/data-type';
+export {
+  createDataTypeLookup,
+  dataType,
+  dataTypeId,
+  emptyDataTypeLookup,
+} from '../shared/data-type';
 export { jsonDefaultLiteralTagEntry } from '../shared/json-default-literal-tag';
 export type {
   Literal,
