@@ -310,15 +310,19 @@ describe('PostgreSQL adapter codec registry composition', () => {
   });
 
   it('rejects raw, wrong-target, and malformed contributions before lowering on both planes', () => {
-    const raw = genericDescriptor('app/raw@1');
+    // Each carries a data type its contribution registers, so the descriptor-validity check is the
+    // only one that can fire.
+    const raw = { ...genericDescriptor('app/raw@1'), dataType: fixtureTypeId('app/raw@1') };
     const wrongTarget = {
       ...genericDescriptor('app/wrong-target@1'),
+      dataType: fixtureTypeId('app/wrong-target@1'),
       descriptorKind: 'sqlite-codec',
       nativeTypeFor: () => 'text',
       projectJson: (expression: ProjectionExpr) => expression,
     } as const;
     const malformed = {
       ...genericDescriptor('app/malformed@1'),
+      dataType: fixtureTypeId('app/malformed@1'),
       descriptorKind: 'postgres-codec',
       nativeTypeFor: () => 'text',
       projectJson: undefined,
@@ -331,13 +335,11 @@ describe('PostgreSQL adapter codec registry composition', () => {
           extensions: [runtimeExtension('invalid-runtime', [descriptor])],
         }),
       ).toThrow(/not a valid PostgreSQL codec descriptor/);
-      // The control stack checks data types first, so it names the missing one; either way the
-      // contribution is refused before anything is lowered.
       expect(() =>
         createComposedPostgresControlAdapter({
           extensions: [controlExtension('invalid-control', [descriptor])],
         }),
-      ).toThrow(/not a valid PostgreSQL codec descriptor|which no component registers/);
+      ).toThrow(/not a valid PostgreSQL codec descriptor/);
     }
   });
 

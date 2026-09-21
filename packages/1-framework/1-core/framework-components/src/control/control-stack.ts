@@ -431,10 +431,17 @@ export function enforceDataTypeInvariants(input: DataTypeInvariantInput): void {
     }
   }
 
-  for (const { key, contributedBy } of input.authoringEntries) {
+  for (const { key, entry, contributedBy } of input.authoringEntries) {
     if (isLoweringEntryKey(key)) continue;
     if (!input.lookup.has(key)) {
       unregistered(contributedBy, key, 'Authoring entry');
+    }
+    if (entry.written.kind === 'plain' && entry.written.syntax === 'number') {
+      for (const classified of entry.written.types) {
+        if (!input.lookup.has(classified)) {
+          unregistered(contributedBy, classified, `The classifier of authoring entry "${key}"`);
+        }
+      }
     }
   }
 

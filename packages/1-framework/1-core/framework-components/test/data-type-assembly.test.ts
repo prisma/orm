@@ -84,6 +84,20 @@ describe('enforceDataTypeInvariants', () => {
     ).toThrow(/x-pack.*demo\/gone|demo\/gone.*x-pack/s);
   });
 
+  it('refuses a classifier that returns a data type nobody registered', () => {
+    expect(() =>
+      invariants({
+        authoringEntries: [
+          {
+            key: int2.id,
+            entry: numberEntry([int2.id, dataTypeId('demo/gone')]),
+            contributedBy: 'x-pack',
+          },
+        ],
+      }),
+    ).toThrow(/x-pack.*demo\/gone|demo\/gone.*x-pack/s);
+  });
+
   it('refuses a cast from a data type nobody registered', () => {
     const casting = dataType('demo/casting', { casts: { 'demo/gone': (value) => value } });
     expect(() =>

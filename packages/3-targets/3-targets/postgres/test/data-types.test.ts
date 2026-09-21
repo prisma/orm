@@ -135,11 +135,17 @@ describe('what each cast converts', () => {
     expect(type.casts[source]?.(value)).toEqual(converted);
   });
 
-  it('turns a whole number too large for a double into the word its magnitude is', () => {
-    expect(pgFloat8.casts[pgNumeric.id]?.('1'.padEnd(400, '0'))).toBe('Infinity');
+  it.each([
+    ['a whole number too large for a double', '1'.padEnd(400, '0')],
+    ['a negative number too large for a double', `-${'1'.padEnd(400, '0')}`],
+  ])('refuses %s rather than rounding it to a word', (_name, text) => {
+    expect(() => pgFloat8.casts[pgNumeric.id]?.(text)).toThrow(/out of range/);
   });
 
-  it('turns a negative number too large for a double into the negative word', () => {
-    expect(pgFloat8.casts[pgNumeric.id]?.(`-${'1'.padEnd(400, '0')}`)).toBe('-Infinity');
+  it.each([
+    ['pg/int8, whose canonical form is digit text', pgInt8, pgInt2.id],
+    ['pg/numeric, whose canonical form is text', pgNumeric, pgInt4.id],
+  ])('refuses a value %s cannot have been handed', (_name, type, source) => {
+    expect(() => type.casts[source]?.('not a number')).toThrow(/Expected a number/);
   });
 });

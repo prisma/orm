@@ -11,24 +11,46 @@
 import type { JsonValue } from '@internal/contract/types';
 import { type Cast, type DataType, dataType } from '@internal/framework-components/codec';
 import { isNonFiniteText, numeralText } from '@internal/sql-relational-core/ast';
+import { structuredError } from '@internal/utils/structured-error';
 
 /** A cast between two types that store the same shape: the value is already the form this type stores. */
 const unchanged: Cast = (value) => value;
 
-/** A whole number as the digit text `int8` and `numeral` store. */
-const asNumeralText: Cast = (value) => (typeof value === 'number' ? numeralText(value) : value);
+function wrongShape(value: JsonValue, expected: string): never {
+  throw structuredError(
+    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    `Expected ${expected}, got ${JSON.stringify(value)}.`,
+    {
+      why: 'A cast reads the canonical form of the type it takes values of.',
+      fix: 'Report this: a value reached a cast in a shape its source type does not store.',
+    },
+  );
+}
+
+/** A whole number as the digit text `int8` and `numeric` store. */
+const asNumeralText: Cast = (value) =>
+  typeof value === 'number' ? numeralText(value) : wrongShape(value, 'a number');
 
 /**
- * A number as the floating-point types store it: a JSON number, or one of the three words when the
- * magnitude is past what a double holds.
+ * A number as the floating-point types store it: a JSON number, or one of the three words, which
+ * those types keep as text. A magnitude past what a double holds is refused rather than rounded to
+ * a word: the database refuses it too, and storing `Infinity` would make a written number
+ * indistinguishable from a written `Infinity`.
  */
 const asFloat: Cast = (value) => {
   if (typeof value === 'number') return value;
-  if (typeof value !== 'string') return value;
+  if (typeof value !== 'string') return wrongShape(value, 'a number or numeral text');
   if (isNonFiniteText(value)) return value;
   const converted = Number(value);
   if (Number.isFinite(converted)) return converted;
-  return value.startsWith('-') ? '-Infinity' : 'Infinity';
+  throw structuredError(
+    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    `${value} is out of range: no double holds a number that large.`,
+    {
+      why: 'The floating-point types store a double, which holds magnitudes up to about 1.8e308.',
+      fix: 'Write a number a double holds, or store it in a numeric column.',
+    },
+  );
 };
 
 export const pgText: DataType = dataType('pg/text', {});
@@ -108,6 +130,3 @@ export const postgresDataTypes: readonly DataType[] = [
   pgTimestamp,
   pgTimestamptz,
 ];
-
-/** The value a cast may be handed, for readers of the table above. */
-export type PostgresCanonicalValue = JsonValue;

@@ -537,13 +537,6 @@ export interface AuthoringAttributeSpecContributions {
 }
 
 /**
- * How a contract source writes a value of one data type.
- *
- * A tag is a qualified name followed by a body in any of the quote styles. A plain form is one of
- * the three pieces of syntax read without a tag: a quoted string, `true`/`false`, and a number.
- * ADR 254.
- */
-/**
  * How a contract source writes values of one data type, and how it reads the text back.
  *
  * A tag is a qualified name followed by a body in any of the quote styles. A plain form is one of

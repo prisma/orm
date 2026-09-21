@@ -9,14 +9,45 @@
  * ADR 254.
  */
 
+import type { JsonValue } from '@internal/contract/types';
 import { type Cast, type DataType, dataType } from '@internal/framework-components/codec';
 import { numeralText } from '@internal/sql-relational-core/ast';
+import { structuredError } from '@internal/utils/structured-error';
 
 const unchanged: Cast = (value) => value;
 
-const asNumeralText: Cast = (value) => (typeof value === 'number' ? numeralText(value) : value);
+function wrongShape(value: JsonValue, expected: string): never {
+  throw structuredError(
+    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    `Expected ${expected}, got ${JSON.stringify(value)}.`,
+    {
+      why: 'A cast reads the canonical form of the type it takes values of.',
+      fix: 'Report this: a value reached a cast in a shape its source type does not store.',
+    },
+  );
+}
 
-const asReal: Cast = (value) => (typeof value === 'string' ? Number(value) : value);
+const asNumeralText: Cast = (value) =>
+  typeof value === 'number' ? numeralText(value) : wrongShape(value, 'a number');
+
+/**
+ * A number as `real` stores it. A magnitude past what a double holds is refused rather than
+ * rounded, for the reason the target's other numeric casts give.
+ */
+const asReal: Cast = (value) => {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return wrongShape(value, 'a number or digit text');
+  const converted = Number(value);
+  if (Number.isFinite(converted)) return converted;
+  throw structuredError(
+    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    `${value} is out of range: no double holds a number that large.`,
+    {
+      why: 'A real stores a double, which holds magnitudes up to about 1.8e308.',
+      fix: 'Write a number a double holds.',
+    },
+  );
+};
 
 export const sqliteText: DataType = dataType('sqlite/text', {});
 export const sqliteJson: DataType = dataType('sqlite/json', {});
