@@ -36,7 +36,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'b5bc225c3a57bcc7d0700cbbb16d41db99559a617569122f86e21350fa477a1b'>;
+  StorageHashBase<'4e3e7b1a2e6aed06486b55d35bf1fe4b435c2c16ce1a0de8ba7ffc82157b6b64'>;
 export type ExecutionHash =
   ExecutionHashBase<'566d74b60e6b5393dcdbf9f250120fa4e1f12c0ae51e1c0958a131d8ed9667b5'>;
 export type ProfileHash =
@@ -490,6 +490,14 @@ type ContractBase = Omit<
               primaryKey: { readonly columns: readonly ['id'] };
               uniques: readonly [];
               indexes: readonly [
+                {
+                  readonly name: 'comments_body_live_a3f98ae2';
+                  readonly prefix: 'comments_body_live';
+                  readonly expression: 'to_tsvector(\'english\', "body")';
+                  readonly where: 'post_id = 1';
+                  readonly unique: false;
+                  readonly type: 'gin';
+                },
                 {
                   readonly name: 'comments_body_search_7b2cde4d';
                   readonly prefix: 'comments_body_search';

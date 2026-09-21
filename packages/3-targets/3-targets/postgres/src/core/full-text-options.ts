@@ -1,3 +1,10 @@
+/**
+ * Options for the Postgres full-text operations, and the checks each one goes through.
+ *
+ * Every option here reaches the SQL as an inline literal rather than a bound parameter, because
+ * Postgres accepts no parameter in these positions. Each is therefore validated before a statement
+ * exists; anything unrecognized throws `RUNTIME.ARGUMENT_INVALID`.
+ */
 import { LiteralExpr } from '@internal/sql-relational-core/ast';
 import { postgresError } from './errors';
 import {
@@ -5,13 +12,6 @@ import {
   isFullTextSearchLanguage,
   POSTGRES_TEXT_SEARCH_LANGUAGES,
 } from './text-search-languages';
-
-/**
- * Every option below reaches the SQL as an inline literal rather than a bound
- * parameter, because Postgres accepts no parameter in these positions. Each is
- * therefore checked here first; anything unrecognized throws
- * `RUNTIME.ARGUMENT_INVALID` before a statement exists.
- */
 
 export interface FullTextMatchesOptions {
   /** Text-search configuration. Defaults to `english`. */
@@ -97,9 +97,8 @@ function checkMarker(method: string, argument: string, value: string): void {
 }
 
 /**
- * The fourth `ts_headline` argument: one text literal of `Key=Value` pairs.
- * Returns `undefined` when nothing but the language was given, so the common
- * call keeps rendering the three-argument form.
+ * The fourth `ts_headline` argument: one text literal of `Key=Value` pairs. Returns `undefined` when
+ * nothing but the language was given, so the common call keeps rendering the three-argument form.
  */
 export function headlineOptionsLiteral(
   method: string,

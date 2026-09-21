@@ -3,8 +3,9 @@
  * emits, for the SQL our lanes lower? Prisma 7 built such an index and the
  * planner never chose it, so nothing here is assumed:
  *
- *  - the index is created from the DDL our own op factory and adapter render
- *    for the fixture contract's index node, never hand-written;
+ *  - every index a positive case relies on is created from the DDL our own op
+ *    factory and adapter render for the fixture contract's index node, the
+ *    partial one included, never hand-written;
  *  - the queries are the real lowered SQL and bound params of the SQL builder
  *    and the ORM;
  *  - `EXPLAIN (FORMAT JSON)` on exactly that SQL has to name the index;
@@ -60,19 +61,27 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     return namespace.table['comments']!.indexes;
   }
 
-  async function createIndexFromContract(index: Record<string, unknown>) {
-    const call = new CreateIndexCall(
+  function createIndexCallFor(index: Record<string, unknown>): CreateIndexCall {
+    const where = index['where'];
+    return new CreateIndexCall(
       'public',
       'comments',
       String(index['name']),
       { expression: String(index['expression']) },
-      { type: String(index['type']) },
+      { type: String(index['type']), ...(where === undefined ? {} : { where: String(where) }) },
     );
-    const op = await call.toOp(controlAdapter);
+  }
+
+  async function createIndexFromContract(index: Record<string, unknown>) {
+    const op = await createIndexCallFor(index).toOp(controlAdapter);
     for (const step of op.execute) {
       await client().query(step.sql);
     }
-    return op.execute[0]!.sql;
+  }
+
+  /** The physical name the fixture's index carries, wire hash included. */
+  function indexNamed(prefix: string): string {
+    return String(fixtureIndex(prefix)['name']);
   }
 
   /** `lowerSqlPlan` already unwrapped the renderer's slots to bare bound values. */
@@ -106,21 +115,28 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     await client().query('SET enable_seqscan = off');
   }, timeouts.spinUpPpgDev);
 
-  it('creates the index from the DDL our own op factory and adapter render', async () => {
-    const [bodyIndex] = fixtureIndexes();
-    expect(bodyIndex).toBeDefined();
-    if (bodyIndex === undefined) return;
-    const call = new CreateIndexCall(
-      'public',
-      'comments',
-      String(bodyIndex['name']),
-      { expression: String(bodyIndex['expression']) },
-      { type: String(bodyIndex['type']) },
-    );
-    const op = await call.toOp(controlAdapter);
+  /** The index node the fixture's `fullTextIndex(...)` emitted under this prefix. */
+  function fixtureIndex(prefix: string): Record<string, unknown> {
+    const index = fixtureIndexes().find((candidate) => candidate['prefix'] === prefix);
+    if (index === undefined) throw new Error(`fixture index ${prefix} is missing`);
+    return index;
+  }
 
-    expect(op.execute[0]?.sql).toBe(
+  async function renderCreateIndex(prefix: string): Promise<string> {
+    const op = await createIndexCallFor(fixtureIndex(prefix)).toOp(controlAdapter);
+    const [step] = op.execute;
+    return step?.sql ?? '';
+  }
+
+  it('creates the index from the DDL our own op factory and adapter render', async () => {
+    expect(await renderCreateIndex('comments_body_search')).toBe(
       `CREATE INDEX "comments_body_search_7b2cde4d" ON "public"."comments" USING "gin" (to_tsvector('english', "body"))`,
+    );
+  });
+
+  it('renders the WHERE clause for a partial index the attribute emitted', async () => {
+    expect(await renderCreateIndex('comments_body_live')).toBe(
+      `CREATE INDEX "comments_body_live_a3f98ae2" ON "public"."comments" USING "gin" (to_tsvector('english', "body")) WHERE (post_id = 1)`,
     );
   });
 
@@ -149,7 +165,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     );
 
     const plan = await explain(lowered.sql, lowered.params);
-    expect(indexNames(plan)).toContain('comments_body_search_7b2cde4d');
+    expect(indexNames(plan)).toContain(indexNamed('comments_body_search'));
   });
 
   it('uses the index when the same predicate is ordered by rank and limited', async () => {
@@ -163,7 +179,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     );
 
     const plan = await explain(lowered.sql, lowered.params);
-    expect(indexNames(plan)).toContain('comments_body_search_7b2cde4d');
+    expect(indexNames(plan)).toContain(indexNamed('comments_body_search'));
   });
 
   it('uses the index for the ORM predicate ordered by rank', async () => {
@@ -196,7 +212,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     expect(lowered.sql).toContain(`to_tsvector('english', "comments"."body")`);
 
     const explained = await explain(lowered.sql, lowered.params);
-    expect(indexNames(explained)).toContain('comments_body_search_7b2cde4d');
+    expect(indexNames(explained)).toContain(indexNamed('comments_body_search'));
   });
 
   it('matches the index on a varchar column too', async () => {
@@ -208,7 +224,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     );
 
     const plan = await explain(lowered.sql, lowered.params);
-    expect(indexNames(plan)).toContain('comments_subject_search_2b3d17a7');
+    expect(indexNames(plan)).toContain(indexNamed('comments_subject_search'));
   });
 
   it('stores the varchar index with the cast Postgres adds, and matches it anyway', async () => {
@@ -222,10 +238,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     expect(definition.rows[0].def).toContain('(subject)::text');
   });
 
-  it('uses a partial index for a query carrying the same predicate', async () => {
-    await client().query(
-      `CREATE INDEX comments_body_live ON comments USING gin (to_tsvector('english', "body")) WHERE (post_id = 1)`,
-    );
+  it('uses the partial index @@fullTextIndex(where:) emits for a query carrying that predicate', async () => {
     const lowered = loweredOf(
       db()
         .public.comments.select('id')
@@ -235,7 +248,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     );
 
     const plan = await explain(lowered.sql, lowered.params);
-    expect(indexNames(plan)).toContain('comments_body_live');
+    expect(indexNames(plan)).toContain(indexNamed('comments_body_live'));
   });
 
   describe('negative controls', () => {
@@ -248,7 +261,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
       );
 
       const plan = await explain(lowered.sql, lowered.params);
-      expect(indexNames(plan)).not.toContain('comments_body_search_7b2cde4d');
+      expect(indexNames(plan)).not.toContain(indexNamed('comments_body_search'));
       expect(nodeTypes(plan)).toContain('Seq Scan');
     });
 

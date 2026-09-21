@@ -432,6 +432,14 @@
               "indexes": [
                 {
                   "expression": "to_tsvector('english', \"body\")",
+                  "name": "comments_body_live_a3f98ae2",
+                  "prefix": "comments_body_live",
+                  "type": "gin",
+                  "unique": false,
+                  "where": "post_id = 1"
+                },
+                {
+                  "expression": "to_tsvector('english', \"body\")",
                   "name": "comments_body_search_7b2cde4d",
                   "prefix": "comments_body_search",
                   "type": "gin",
@@ -557,7 +565,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "b5bc225c3a57bcc7d0700cbbb16d41db99559a617569122f86e21350fa477a1b"
+    "storageHash": "4e3e7b1a2e6aed06486b55d35bf1fe4b435c2c16ce1a0de8ba7ffc82157b6b64"
   },
   "execution": {
     "executionHash": "566d74b60e6b5393dcdbf9f250120fa4e1f12c0ae51e1c0958a131d8ed9667b5",

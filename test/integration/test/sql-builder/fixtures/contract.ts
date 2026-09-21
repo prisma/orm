@@ -48,6 +48,9 @@ const Comment = model('Comment', {
   indexes: [
     fullTextIndex(cols.body, { name: 'comments_body_search' }),
     fullTextIndex(cols.subject, { name: 'comments_subject_search' }),
+    // Partial: the index-usage test proves Postgres picks this one up for a
+    // query that carries the same predicate.
+    fullTextIndex(cols.body, { where: 'post_id = 1', name: 'comments_body_live' }),
   ],
 }));
 
