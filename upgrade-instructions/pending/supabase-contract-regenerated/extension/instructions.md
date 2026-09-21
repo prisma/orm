@@ -20,6 +20,6 @@ Four things changed in the contract.
 
 **Two list columns carry an element-not-null waiver.** `auth.custom_oauth_providers.acceptable_client_ids` and `auth.custom_oauth_providers.scopes` now carry `"noCheck": ["elementNotNull"]`, matching the two `storage` list columns that already did. `contract infer` writes this for any list column with no live check at the derived name, and the committed contract is the generator's output, so it carries it too. This item moves the storage hash and changes nothing else you can observe: the pack is under `external` control, so a derived check is stripped before emit whether the waiver is written or not, and `db verify` demanded no such constraint before and demands none now.
 
-**78 timestamp columns are spelled `Timestamptz` instead of `DateTime` in the PSL.** Same codec (`pg/timestamptz-temporal@1`) and same emitted column, so this is a text change only.
+**78 timestamp columns are written as `Timestamptz` instead of `DateTime` in the PSL.** Same codec (`pg/timestamptz-temporal@1`) and same emitted column, so this is a text change only.
 
 A contract that composes the Supabase space references it by id, so your own `contract.json` and `contract.d.ts` do not change. What changes is the signature: a database that was signed against the previous Supabase contract no longer matches the new hash, so run `prisma db sign` against it after upgrading. If you re-emit your own contract, do that first so the composed space is the new one.

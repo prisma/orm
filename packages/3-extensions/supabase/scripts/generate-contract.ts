@@ -283,16 +283,16 @@ function rewriteFieldTypeNames(
 }
 
 /**
- * Curated storage-type aliases, keyed by the type spelling `contract infer`
- * produces. Hand-authored in the pack's first contract (commit 7a9426e2,
+ * Curated storage-type aliases, keyed by the type as `contract infer` writes
+ * it. Hand-authored in the pack's first contract (commit 7a9426e2,
  * "using named types for the uuid/timestamptz column types") and preserved
  * here so `contract:generate` reproduces them instead of inlining every
  * column's full type.
  *
- * The alias is chosen by type spelling, never by what the column means: a new
- * Supabase release that adds any `character varying(255)` column will have it
- * named `Parent`, whether or not that reads correctly. Check the names after
- * refreshing the fixture.
+ * The alias is chosen by how the type is written, never by what the column
+ * means: a new Supabase release that adds any `character varying(255)` column
+ * will have it named `Parent`, whether or not that reads correctly. Check the
+ * names after refreshing the fixture.
  */
 const NAMED_TYPE_ALIASES: Readonly<Record<string, string>> = {
   Inet: 'IpAddress',
@@ -307,7 +307,7 @@ const NAMED_TYPE_ALIASES: Readonly<Record<string, string>> = {
 };
 
 /** The type as `printPsl` would write it, e.g. `Uuid` or `VarChar(255)`. */
-function fieldTypeSpelling(field: PslField): string {
+function printedFieldType(field: PslField): string {
   const { typeConstructor } = field;
   if (!typeConstructor) return field.typeName;
   const path = typeConstructor.path.join('.');
@@ -319,7 +319,7 @@ function fieldTypeSpelling(field: PslField): string {
 }
 
 /**
- * Rewrites every scalar field whose type spelling has an alias to reference
+ * Rewrites every scalar field whose printed type has an alias to reference
  * that alias, and records which aliases were used so only those are declared.
  * `modelNames` keeps a relation field out of the lookup: its type name is the
  * target model's name, which could one day collide with an alias name.
@@ -339,7 +339,7 @@ function applyNamedTypeAliases(
       ) {
         return field;
       }
-      const alias = NAMED_TYPE_ALIASES[fieldTypeSpelling(field)];
+      const alias = NAMED_TYPE_ALIASES[printedFieldType(field)];
       if (alias === undefined) return field;
       changed = true;
       used.add(alias);
