@@ -530,7 +530,7 @@ describe('Collection', () => {
           onConflict: 'skip',
           conflictOn: ['email'],
         }),
-      ).toThrow(/insertOnConflictSkip/);
+      ).toThrow(expect.objectContaining({ code: 'ORM.CAPABILITY_MISSING' }));
       expect(runtime.executions).toHaveLength(0);
     });
 
@@ -580,7 +580,12 @@ describe('Collection', () => {
           onConflict: 'skip',
           conflictOn: ['posts' as never],
         }),
-      ).toThrow(/posts/);
+      ).toThrow(
+        expect.objectContaining({
+          code: 'ORM.ARGUMENT_INVALID',
+          message: expect.stringContaining('posts'),
+        }),
+      );
       expect(runtime.executions).toHaveLength(0);
     });
 
@@ -591,7 +596,7 @@ describe('Collection', () => {
         collection.createAll([{ id: 1, name: 'Alice', email: 'alice@example.com' }], {
           onConflict: 'merge' as never,
         }),
-      ).toThrow(/onConflict/);
+      ).toThrow(expect.objectContaining({ code: 'ORM.ARGUMENT_INVALID' }));
       expect(runtime.executions).toHaveLength(0);
     });
 

@@ -420,7 +420,10 @@ describe('Postgres adapter', () => {
       );
 
     expect(() => adapter.lower(ast, { contract, params: [] })).toThrow(
-      /INSERT onConflict requires at least one conflict column/,
+      expect.objectContaining({
+        code: 'RUNTIME.AST_INVALID',
+        message: expect.stringContaining('INSERT onConflict requires at least one conflict column'),
+      }),
     );
   });
 

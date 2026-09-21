@@ -560,7 +560,12 @@ describe('MTI variant mutation guards', () => {
     const narrowed = collection.variant('Feature' as never) as typeof collection;
     expect(() =>
       narrowed.createAll([{ title: 'X', priority: 1 } as never], { onConflict: 'skip' }),
-    ).toThrow(/is not supported for MTI variant/);
+    ).toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message: expect.stringContaining('is not supported for MTI variant'),
+      }),
+    );
   });
 
   it('upsert() throws for MTI variants', async () => {
