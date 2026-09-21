@@ -22,7 +22,7 @@ import { runCommandAction } from '../../utils/next-actions';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { appRefsDirFor, displayPath, migrationsDirFor, projectRootFor } from '../migration/paths';
+import { appRefsDirFor, baseDirFor, displayPath, migrationsDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -302,7 +302,7 @@ export function createDbSignCommand(
           name: refName,
           contractJson: signedSource.json,
           contractJsonPath: signedSource.jsonPath,
-          projectDir: projectRootFor(ctx.config),
+          projectDir: baseDirFor(ctx.config),
           client,
         });
         if (!preflight.ok) {

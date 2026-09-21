@@ -42,6 +42,7 @@
     "src"
   ],
   "exports": {
+    "./config-base-dir": "./dist/config-base-dir.mjs",
     "./config-resolve": "./dist/config-resolve.mjs",
     "./config-types": "./dist/config-types.mjs",
     "./config-validation": "./dist/config-validation.mjs",

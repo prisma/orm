@@ -16,10 +16,10 @@ import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import {
   appMigrationsDirFor,
+  baseDirFor,
   contractPathFor,
   displayPath,
   migrationsDirFor,
-  projectRootFor,
 } from './paths';
 
 function hashRow(label: string, hash: string | null): { label: string; value: Text } {
@@ -256,7 +256,7 @@ export function createMigrationPlanCommand(createClient: CreateControlClient) {
         {
           config: ctx.config,
           cwd: ctx.cwd,
-          projectDir: projectRootFor(ctx.config),
+          projectDir: baseDirFor(ctx.config),
           ...ifDefined('name', args.flags.name),
           ...ifDefined('from', args.flags.from),
           ...ifDefined('to', args.flags.to),

@@ -6,7 +6,8 @@ import type {
   ControlFamilyDescriptor,
   ControlTargetDescriptor,
 } from '@internal/framework-components/control';
-import { normalizeContractConfig, withPathResolver } from './config-resolve';
+import { baseDir } from './config-base-dir';
+import { normalizeContractConfig, resolveConfigPaths } from './config-resolve';
 import type { ContractSourceProvider } from './contract-source-types';
 
 /**
@@ -94,11 +95,12 @@ export interface PrismaNextConfig<
   };
   readonly formatter?: FormatterConfig;
   /**
-   * The directory of the config file that wrote this section, set when the
-   * section's paths are resolved. Every relative path above is resolved
-   * against it; commands that need the project's location start here.
+   * The directory of the config file that wrote this section: the base every
+   * relative path above was resolved against. Set by `defineConfig` while the
+   * file is evaluated by a loader; commands that need the project's location
+   * start here.
    */
-  readonly rootDir?: string;
+  readonly baseDir?: string;
 }
 
 /**
@@ -111,9 +113,10 @@ export interface PrismaNextConfig<
  * - contract.output defaults to a path colocated with DEFAULT_CONTRACT_SOURCE_DIR
  *   when missing (in-memory-only providers)
  *
- * Relative paths stay as written. The section carries a resolver under
- * `CONFIG_RESOLVE` that a loader calls with the directory of the file that
- * wrote the section; see ADR 253.
+ * Relative paths are resolved against the directory of the file being
+ * evaluated, which the loader publishes while the file runs (see
+ * `withBaseDir` and ADR 253). Evaluated outside a loader, the paths stay as
+ * written and no `baseDir` is recorded, which the CLI refuses.
  *
  * @param config - Raw config input from user
  * @returns Normalized config IR with defaults applied
@@ -124,5 +127,6 @@ export function defineConfig<TFamilyId extends string = string, TTargetId extend
   const normalized = config.contract
     ? { ...config, contract: normalizeContractConfig(config.contract) }
     : config;
-  return withPathResolver(normalized);
+  const dir = baseDir();
+  return dir === undefined ? normalized : resolveConfigPaths(normalized, dir);
 }

@@ -8,16 +8,16 @@ import { relative, resolve } from 'pathe';
  * The directory of the config file that wrote the section. The section
  * validator refuses a config without it, so its absence here is a bug.
  */
-export function projectRootFor(config: PrismaNextConfig): string {
-  if (config.rootDir === undefined) {
-    throw new InternalError('the orm config section reached a command without rootDir');
+export function baseDirFor(config: PrismaNextConfig): string {
+  if (config.baseDir === undefined) {
+    throw new InternalError('the orm config section reached a command without baseDir');
   }
-  return config.rootDir;
+  return config.baseDir;
 }
 
 /** Where migrations live for this project; the resolved config carries it absolute. */
 export function migrationsDirFor(config: PrismaNextConfig): string {
-  return config.migrations?.dir ?? resolve(projectRootFor(config), 'migrations');
+  return config.migrations?.dir ?? resolve(baseDirFor(config), 'migrations');
 }
 
 /** The app subspace under {@link migrationsDirFor}. */

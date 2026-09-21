@@ -51,7 +51,7 @@ import { perSpaceBlocks } from './db/migration-blocks';
 import { prepareMigrationRun } from './db/prepare';
 import { defineOrmCommand } from './define-command';
 import { dbFlag } from './flags';
-import { displayPath, migrationsDirFor, projectRootFor } from './migration/paths';
+import { baseDirFor, displayPath, migrationsDirFor } from './migration/paths';
 import { normalizeError } from './normalize-error';
 import { controlProgressReporter } from './progress';
 
@@ -423,7 +423,7 @@ export function createMigrateCommand(createClient: CreateControlClient) {
             name: args.flags.advanceRef,
             contractJson: snapshotContractJson,
             contractJsonPath: snapshotContractPath,
-            projectDir: projectRootFor(ctx.config),
+            projectDir: baseDirFor(ctx.config),
             client,
           });
           if (!preflight.ok) {

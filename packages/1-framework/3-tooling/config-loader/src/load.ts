@@ -2,6 +2,7 @@ import { realpathSync } from 'node:fs';
 import { access } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
+import { withBaseDir } from '@internal/config/config-base-dir';
 import { resolveConfigPaths, withConfigDefaults } from '@internal/config/config-resolve';
 import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { ConfigSection } from '@internal/config/config-validation';
@@ -18,7 +19,6 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
-import { defu } from 'defu';
 import { dirname, join, resolve } from 'pathe';
 
 const CONFIG_FILENAME = 'prisma.config.ts';
@@ -100,40 +100,6 @@ function collectArtifactCollisionDiagnostics(
   return [];
 }
 
-interface ConfigLayer {
-  readonly config?: unknown;
-  /** Absolute, or relative to the requested config's directory for an extended layer. */
-  readonly configFile?: string;
-}
-
-/**
- * Resolves each file's `orm` section against that file, then merges the
- * layers nearest-first. Merging after resolution is what keeps a relative
- * path relative to the file that wrote it (ADR 253).
- */
-function resolveOrmLayers(
-  layers: readonly ConfigLayer[],
-  merged: unknown,
-  rootCwd: string,
-): unknown {
-  const resolved = layers.flatMap((layer) => {
-    const orm = isRecord(layer.config) ? layer.config['orm'] : undefined;
-    if (!isRecord(orm) || typeof layer.configFile !== 'string') {
-      return [];
-    }
-    const configFile = resolve(rootCwd, layer.configFile);
-    const section = blindCast<
-      PrismaNextConfig,
-      'resolution touches only contract and migrations paths and leaves any other value for collectConfigIssues'
-    >(orm);
-    return [resolveConfigPaths(section, dirname(configFile))];
-  });
-  if (resolved.length === 0) {
-    return merged;
-  }
-  return resolved.reduce((nearest, base) => defu(nearest, base));
-}
-
 function buildLoadedConfig(rawConfig: Record<string, unknown>, configDir: string): LoadedConfig {
   const issues = collectConfigIssues(rawConfig);
   const diagnostics = issues.map((issue) =>
@@ -145,9 +111,12 @@ function buildLoadedConfig(rawConfig: Record<string, unknown>, configDir: string
     'Structure was checked by collectConfigIssues; sections carrying diagnostics are guarded by requireConfigSections'
   >(rawConfig);
 
+  // A section built with defineConfig while the loader published the base
+  // directory arrives resolved; one written as a plain object is resolved here
+  // against the same directory. Resolution is idempotent, so both are one call.
   const config = issues.some((issue) => issue.section === 'migrations')
     ? raw
-    : withConfigDefaults({ ...raw, rootDir: raw.rootDir ?? configDir });
+    : withConfigDefaults(resolveConfigPaths(raw, raw.baseDir ?? configDir));
 
   if (config.contract === undefined || issues.some((issue) => issue.section === 'contract')) {
     return { config, diagnostics };
@@ -217,11 +186,15 @@ export async function loadConfig(
   let result: Awaited<ReturnType<typeof import('c12').loadConfig<Record<string, unknown>>>>;
   try {
     const c12 = await importC12();
-    result = await c12.loadConfig<Record<string, unknown>>({
-      name: 'prisma',
-      ...ifDefined('configFile', resolvedConfigPath),
-      cwd: configCwd,
-    });
+    // The file's config helpers read the base directory while the file runs,
+    // so relative paths inside it resolve against the file (ADR 253).
+    result = await withBaseDir(configCwd, () =>
+      c12.loadConfig<Record<string, unknown>>({
+        name: 'prisma',
+        ...ifDefined('configFile', resolvedConfigPath),
+        cwd: configCwd,
+      }),
+    );
   } catch (error) {
     return notOk(toConfigLoadFailure(error, configPath));
   }
@@ -267,8 +240,7 @@ export async function loadConfig(
         ],
       });
     }
-    const resolvedOrm = resolveOrmLayers(result.layers ?? [], orm, configCwd);
-    return ok(buildLoadedConfig(isRecord(resolvedOrm) ? resolvedOrm : {}, loadedConfigDir));
+    return ok(buildLoadedConfig(orm ?? {}, loadedConfigDir));
   }
 
   /* v8 ignore next -- a config that evaluated always carries its resolved path */

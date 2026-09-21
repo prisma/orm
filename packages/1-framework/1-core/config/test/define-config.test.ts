@@ -5,7 +5,7 @@ import type {
 } from '@internal/framework-components/control';
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
-import { CONFIG_RESOLVE, isUnresolvedConfig } from '../src/config-resolve';
+import { withBaseDir } from '../src/config-base-dir';
 import { defineConfig, type PrismaNextConfig } from '../src/config-types';
 
 const mockHook = {
@@ -80,13 +80,10 @@ function createValidConfig(overrides: Record<string, unknown> = {}): PrismaNextC
 }
 
 describe('defineConfig', () => {
-  it('returns the config unchanged apart from the resolver when contract is absent', () => {
+  it('returns the same object when contract is absent', () => {
     const config = createValidConfig();
 
-    const result = defineConfig(config);
-
-    expect(result).toMatchObject(config);
-    expect(result.contract).toBeUndefined();
+    expect(defineConfig(config)).toBe(config);
   });
 
   it('applies default output path when contract output is missing', () => {
@@ -123,38 +120,30 @@ describe('defineConfig', () => {
 });
 
 describe('defineConfig path resolution', () => {
-  it('attaches a resolver and leaves relative paths as written', () => {
-    const config = defineConfig(
-      createValidConfig({
-        contract: {
-          source: createSourceProvider({ inputs: ['./schema.prisma'] }),
-          output: './out/contract.json',
-        },
-        migrations: { dir: './db' },
-      }),
-    );
+  const authored = () =>
+    createValidConfig({
+      contract: {
+        source: createSourceProvider({ inputs: ['./schema.prisma'] }),
+        output: './out/contract.json',
+      },
+      migrations: { dir: './db' },
+    });
 
-    expect(isUnresolvedConfig(config)).toBe(true);
-    expect(config.contract?.source.inputs).toEqual(['./schema.prisma']);
-    expect(config.migrations?.dir).toBe('./db');
-  });
+  it('resolves every relative path against the base directory the loader published', async () => {
+    const config = await withBaseDir('/app', async () => defineConfig(authored()));
 
-  it('resolves every path against the directory the resolver is given', () => {
-    const config = defineConfig(
-      createValidConfig({
-        contract: {
-          source: createSourceProvider({ inputs: ['./schema.prisma'] }),
-          output: './out/contract.json',
-        },
-        migrations: { dir: './db' },
-      }),
-    );
-    if (!isUnresolvedConfig(config)) throw new Error('expected a resolver');
-
-    expect(config[CONFIG_RESOLVE]('/app')).toMatchObject({
-      rootDir: '/app',
+    expect(config).toMatchObject({
+      baseDir: '/app',
       contract: { source: { inputs: ['/app/schema.prisma'] }, output: '/app/out/contract.json' },
       migrations: { dir: '/app/db' },
     });
+  });
+
+  it('evaluated outside a loader, leaves the paths as written and records no baseDir', () => {
+    const config = defineConfig(authored());
+
+    expect(config.baseDir).toBeUndefined();
+    expect(config.contract?.source.inputs).toEqual(['./schema.prisma']);
+    expect(config.migrations?.dir).toBe('./db');
   });
 });

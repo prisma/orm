@@ -28,7 +28,7 @@ import type { MigrationCommandResult } from '../../utils/formatters/migrations';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
-import { projectRootFor } from '../migration/paths';
+import { baseDirFor } from '../migration/paths';
 import { normalizeError } from '../normalize-error';
 import { controlProgressReporter } from '../progress';
 import {
@@ -191,7 +191,7 @@ export function createDbUpdateCommand(createClient: CreateControlClient) {
           name: refName,
           contractJson,
           contractJsonPath: snapshotContractPath,
-          projectDir: projectRootFor(ctx.config),
+          projectDir: baseDirFor(ctx.config),
           client,
         });
         if (!preflight.ok) {

@@ -7,8 +7,9 @@ Discovers, validates, and finalizes `prisma.config.ts`.
 ## Overview
 
 This package owns config _loading_ — the file I/O (`c12`), validation, and path resolution
-that turns a `prisma.config.ts` on disk into a resolved `PrismaNextConfig`. Every relative path
-in the file is resolved against the file that wrote it, layer by layer before layers merge; see
+that turns a `prisma.config.ts` on disk into a resolved `PrismaNextConfig`. While the file is
+evaluated the loader publishes the file's directory as the base every relative path in it resolves
+against; see
 [ADR 253](../../../../docs/architecture%20docs/adrs/ADR%20253%20-%20Config%20paths%20resolve%20against%20the%20file%20that%20wrote%20them.md). It also
 performs the emitter-derived artifact-collision check (`getEmittedArtifactPaths`).
 

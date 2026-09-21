@@ -111,7 +111,7 @@ describe('resolveMigrationPaths', () => {
   describe('a resolved config', () => {
     it('uses the absolute migrations dir the config carries, whatever cwd is', () => {
       const paths = resolveMigrationPaths(
-        { rootDir: '/work/app', migrations: { dir: '/work/app/db' } },
+        { baseDir: '/work/app', migrations: { dir: '/work/app/db' } },
         '/work/scratch',
       );
 
@@ -122,15 +122,15 @@ describe('resolveMigrationPaths', () => {
       });
     });
 
-    it('defaults the migrations dir under rootDir when the config names none', () => {
-      const paths = resolveMigrationPaths({ rootDir: '/work/app' }, '/tmp');
+    it('defaults the migrations dir under baseDir when the config names none', () => {
+      const paths = resolveMigrationPaths({ baseDir: '/work/app' }, '/tmp');
 
       expect(paths.migrationsDir).toBe('/work/app/migrations');
     });
   });
 
   describe('a raw config from a programmatic caller', () => {
-    it('anchors a relative migrations dir on cwd when the config carries no rootDir', () => {
+    it('anchors a relative migrations dir on cwd when the config carries no baseDir', () => {
       const paths = resolveMigrationPaths({ migrations: { dir: 'db' } }, '/work/app');
 
       expect(paths.migrationsDir).toBe('/work/app/db');

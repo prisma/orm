@@ -1,11 +1,8 @@
-export type { ConfigResolver, UnresolvedConfig } from '../config-resolve';
 export {
-  CONFIG_RESOLVE,
-  isUnresolvedConfig,
+  DEFAULT_CONTRACT_SOURCE_DIR,
+  normalizeContractConfig,
   resolveConfigPaths,
-  resolveConfigSection,
   resolveContractConfig,
   resolveMigrationsConfig,
   withConfigDefaults,
-  withPathResolver,
 } from '../config-resolve';

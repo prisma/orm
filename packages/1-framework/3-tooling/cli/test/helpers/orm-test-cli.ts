@@ -9,14 +9,14 @@ type RunArgs = Parameters<TestCli['run']>;
 /**
  * A test CLI seeded with an `orm` section as the engine's loader hands it
  * over for a config discovered in the run's working directory: resolved
- * against that directory, with `rootDir` recorded (ADR 253).
+ * against that directory, with `baseDir` recorded (ADR 253).
  */
 export function createOrmTestCli(spec: Omit<TestCliSpec, 'config'> & { readonly orm: unknown }) {
   const { orm, ...rest } = spec;
   return {
     run: (argv: RunArgs[0], opts?: RunArgs[1]): ReturnType<TestCli['run']> => {
-      const rootDir = opts?.cwd ?? process.cwd();
-      const section = resolveConfigPaths(orm as PrismaNextConfig, rootDir);
+      const baseDir = opts?.cwd ?? process.cwd();
+      const section = resolveConfigPaths(orm as PrismaNextConfig, baseDir);
       return createTestCli({ ...rest, config: { orm: section } }).run(argv, opts);
     },
   };

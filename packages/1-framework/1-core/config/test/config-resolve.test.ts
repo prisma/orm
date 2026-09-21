@@ -1,13 +1,6 @@
 import { ok } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
-import {
-  CONFIG_RESOLVE,
-  isUnresolvedConfig,
-  resolveConfigPaths,
-  resolveConfigSection,
-  withConfigDefaults,
-  withPathResolver,
-} from '../src/config-resolve';
+import { resolveConfigPaths, withConfigDefaults } from '../src/config-resolve';
 import type { PrismaNextConfig } from '../src/config-types';
 
 function createConfig(
@@ -59,8 +52,8 @@ function createSource(inputs?: readonly string[]) {
 }
 
 describe('resolveConfigPaths', () => {
-  it('records the root directory on the section', () => {
-    expect(resolveConfigPaths(createConfig(), '/project').rootDir).toBe('/project');
+  it('records the base directory on the section', () => {
+    expect(resolveConfigPaths(createConfig(), '/project').baseDir).toBe('/project');
   });
 
   it('leaves the contract absent when the config declares none', () => {
@@ -147,61 +140,8 @@ describe('resolveConfigPaths', () => {
 
     expect(resolveConfigPaths(once, '/somewhere/else')).toEqual({
       ...once,
-      rootDir: '/somewhere/else',
+      baseDir: '/somewhere/else',
     });
-  });
-});
-
-describe('withPathResolver', () => {
-  it('attaches a resolver under the shared key and leaves the paths as written', () => {
-    const config = withPathResolver(
-      createConfig({ source: createSource(['./schema.prisma']), output: './contract.json' }),
-    );
-
-    expect(isUnresolvedConfig(config)).toBe(true);
-    expect(config.contract?.source.inputs).toEqual(['./schema.prisma']);
-    expect(config.rootDir).toBeUndefined();
-  });
-
-  it('the resolver resolves against the directory it is given and drops itself', () => {
-    const config = withPathResolver(
-      createConfig({ source: createSource(['./schema.prisma']), output: './contract.json' }),
-    );
-
-    const resolved = config[CONFIG_RESOLVE]('/project');
-
-    expect(isUnresolvedConfig(resolved)).toBe(false);
-    expect(resolved).toMatchObject({
-      rootDir: '/project',
-      contract: {
-        source: { inputs: ['/project/schema.prisma'] },
-        output: '/project/contract.json',
-      },
-    });
-  });
-
-  it('survives an object spread, so a config extended by hand still resolves', () => {
-    const config = { ...withPathResolver(createConfig()), migrations: { dir: 'db' } };
-
-    expect(isUnresolvedConfig(config)).toBe(true);
-  });
-});
-
-describe('resolveConfigSection', () => {
-  it('resolves a section that carries a resolver', () => {
-    const section = withPathResolver(createConfig(undefined, { migrations: { dir: 'db' } }));
-
-    expect(resolveConfigSection(section, '/project')).toMatchObject({
-      rootDir: '/project',
-      migrations: { dir: '/project/db' },
-    });
-  });
-
-  it('returns anything else unchanged', () => {
-    const plain = { migrations: { dir: 'db' } };
-
-    expect(resolveConfigSection(plain, '/project')).toBe(plain);
-    expect(resolveConfigSection(undefined, '/project')).toBeUndefined();
   });
 });
 
@@ -209,7 +149,7 @@ describe('withConfigDefaults', () => {
   it('supplies the migrations dir under the root so no caller re-derives it', () => {
     const config = resolveConfigPaths(createConfig(), '/project');
 
-    expect(withConfigDefaults({ ...config, rootDir: '/project' }).migrations.dir).toBe(
+    expect(withConfigDefaults({ ...config, baseDir: '/project' }).migrations.dir).toBe(
       '/project/migrations',
     );
   });
@@ -217,6 +157,6 @@ describe('withConfigDefaults', () => {
   it('keeps an authored migrations dir', () => {
     const config = resolveConfigPaths(createConfig(undefined, { migrations: { dir: 'db' } }), '/p');
 
-    expect(withConfigDefaults({ ...config, rootDir: '/p' }).migrations.dir).toBe('/p/db');
+    expect(withConfigDefaults({ ...config, baseDir: '/p' }).migrations.dir).toBe('/p/db');
   });
 });

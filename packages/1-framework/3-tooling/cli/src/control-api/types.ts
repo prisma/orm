@@ -788,7 +788,7 @@ export interface ContractEmitOptions {
   /** Directory the caller was invoked from. */
   readonly cwd: string;
   /**
-   * The project's directory, normally the resolved config's `rootDir`. Used to
+   * The project's directory, normally the resolved config's `baseDir`. Used to
    * find the project manifest whose dependencies decide the import specifiers
    * in emitted files. Omit it and the manifest is looked up from the directory
    * the artifacts are written to, which is the package that will import them.

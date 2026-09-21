@@ -456,44 +456,51 @@ describe('loadConfig', () => {
   );
 
   it(
-    'resolves each layer against its own file before merging',
+    'publishes the base directory to the file while it is evaluated',
     async () => {
-      const baseDir = join(tempDir, 'base');
-      mkdirSync(baseDir);
-      writeFileSync(
-        join(baseDir, 'base.config.ts'),
-        `${CONFIG_BODY}\nexport default { orm: { ...config, migrations: { dir: './db' } } };\n`,
-      );
-      writeFileSync(
-        join(tempDir, 'prisma.config.ts'),
-        "export default { $prismaConfig: 1, extends: './base/base.config.ts', orm: { contract: { output: './out/contract.json' } } };\n",
-      );
+      const readsBaseDir = `${CONFIG_BODY}
+const baseDir = globalThis[Symbol.for('prisma.config.baseDir')];
+export default { $prismaConfig: 1, orm: { ...config, migrations: { dir: baseDir + '/from-file' } } };
+`;
+      writeFileSync(join(tempDir, 'prisma.config.ts'), readsBaseDir);
       process.chdir(tempDir);
 
-      const { config, diagnostics } = (await loadConfig()).assertOk();
+      const { config } = (await loadConfig()).assertOk();
 
-      expect(diagnostics).toEqual([]);
-      expect(config).toMatchObject({
-        rootDir: tempDir,
-        contract: {
-          source: { inputs: [join(baseDir, 'schema.prisma')] },
-          output: join(tempDir, 'out', 'contract.json'),
-        },
-        migrations: { dir: join(baseDir, 'db') },
-      });
+      expect(config.migrations?.dir).toBe(join(tempDir, 'from-file'));
     },
     timeouts.typeScriptCompilation,
   );
 
   it(
-    'records the config file directory as rootDir',
+    'publishes the directory of a --config file elsewhere, not the working directory',
+    async () => {
+      const elsewhere = join(tempDir, 'elsewhere');
+      mkdirSync(elsewhere);
+      const readsBaseDir = `${CONFIG_BODY}
+const baseDir = globalThis[Symbol.for('prisma.config.baseDir')];
+export default { $prismaConfig: 1, orm: { ...config, migrations: { dir: baseDir + '/from-file' } } };
+`;
+      writeFileSync(join(elsewhere, 'custom.config.ts'), readsBaseDir);
+      process.chdir(tempDir);
+
+      const { config } = (await loadConfig(join('elsewhere', 'custom.config.ts'))).assertOk();
+
+      expect(config.migrations?.dir).toBe(join(elsewhere, 'from-file'));
+      expect(config.baseDir).toBe(elsewhere);
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'records the config file directory as baseDir',
     async () => {
       writeFileSync(join(tempDir, 'prisma.config.ts'), VALID_CONFIG_SOURCE);
       process.chdir(tempDir);
 
       const { config } = (await loadConfig()).assertOk();
 
-      expect(config.rootDir).toBe(tempDir);
+      expect(config.baseDir).toBe(tempDir);
       expect(config.migrations?.dir).toBe(join(tempDir, 'migrations'));
     },
     timeouts.typeScriptCompilation,

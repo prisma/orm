@@ -1,4 +1,3 @@
-import { CONFIG_RESOLVE } from '@internal/config/config-resolve';
 import { describe, expect, it } from 'vitest';
 import { ormConfigSection } from '../../src/orm/config-section';
 
@@ -26,7 +25,7 @@ function validDescriptor(kind: string) {
 
 function validConfig() {
   return {
-    rootDir: '/project',
+    baseDir: '/project',
     family: validFamily(),
     target: { ...validDescriptor('target'), targetId: 'postgres' },
     adapter: validDescriptor('adapter'),
@@ -58,23 +57,9 @@ describe('ormConfigSection', () => {
     });
   });
 
-  describe('a section whose paths were never resolved', () => {
-    it('refuses a section still carrying its resolver and asks for a newer CLI', () => {
-      const raw = { ...validConfig(), [CONFIG_RESOLVE]: () => validConfig() };
-      const result = ormConfigSection.validate(raw);
-
-      expect(result.ok).toBe(false);
-      expect(result.diagnostics).toMatchObject([
-        {
-          code: 'CONFIG.VALIDATION_FAILED',
-          summary: 'Prisma ORM configuration was loaded without resolving its paths',
-          nextActions: [{ kind: 'user-choice' }],
-        },
-      ]);
-    });
-
-    it('refuses a section that records no rootDir', () => {
-      const { rootDir: _rootDir, ...raw } = validConfig();
+  describe('a section that records no base directory', () => {
+    it('refuses a section that records no baseDir', () => {
+      const { baseDir: _baseDir, ...raw } = validConfig();
       const result = ormConfigSection.validate(raw);
 
       expect(result.ok).toBe(false);
@@ -86,8 +71,8 @@ describe('ormConfigSection', () => {
       ]);
     });
 
-    it('reports structural problems before the missing rootDir', () => {
-      const { rootDir: _rootDir, ...raw } = { ...validConfig(), migrations: { dir: 42 } };
+    it('reports structural problems before the missing baseDir', () => {
+      const { baseDir: _baseDir, ...raw } = { ...validConfig(), migrations: { dir: 42 } };
       const result = ormConfigSection.validate(raw);
 
       expect(result.diagnostics.map((diagnostic) => diagnostic.summary)).toEqual([

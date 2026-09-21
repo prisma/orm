@@ -63,7 +63,7 @@ export interface MigrationPlanOptions {
   readonly config: PrismaNextConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** The project's directory, normally the resolved config's `rootDir`; locates the project manifest. */
+  /** The project's directory, normally the resolved config's `baseDir`; locates the project manifest. */
   readonly projectDir?: string;
   readonly name?: string;
   readonly from?: string;

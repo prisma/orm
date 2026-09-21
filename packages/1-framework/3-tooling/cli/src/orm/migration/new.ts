@@ -12,7 +12,7 @@ import { runCommandAction } from '../../utils/next-actions';
 import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
-import { appMigrationsDirFor, contractPathFor, displayPath, projectRootFor } from './paths';
+import { appMigrationsDirFor, baseDirFor, contractPathFor, displayPath } from './paths';
 
 function newPresentations(inputs: {
   readonly document: MigrationNewResult;
@@ -90,7 +90,7 @@ export function createMigrationNewCommand(createClient: CreateControlClient) {
       const scaffolded = await executeMigrationNewCommand({
         config: ctx.config,
         cwd: ctx.cwd,
-        projectDir: projectRootFor(ctx.config),
+        projectDir: baseDirFor(ctx.config),
         ...ifDefined('name', args.flags.name),
         ...ifDefined('from', args.flags.from),
         client: createClient({
