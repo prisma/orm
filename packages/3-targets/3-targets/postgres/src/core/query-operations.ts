@@ -1,32 +1,22 @@
-import { LiteralExpr } from '@internal/sql-relational-core/ast';
 import { buildOperation, toExpr } from '@internal/sql-relational-core/expression';
 import type { QueryOperationTypes } from '../types/operation-types';
 import { PG_BOOL_CODEC_ID, PG_FLOAT4_CODEC_ID, PG_TEXT_CODEC_ID } from './codec-ids';
-import { postgresError } from './errors';
 import {
-  DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
-  isFullTextSearchLanguage,
-  POSTGRES_TEXT_SEARCH_LANGUAGES,
-} from './text-search-languages';
+  type FullTextHeadlineOptions,
+  type FullTextMatchesOptions,
+  type FullTextRankOptions,
+  headlineOptionsLiteral,
+  languageLiteral,
+  normalizationLiteral,
+} from './full-text-options';
+import { DEFAULT_FULL_TEXT_SEARCH_LANGUAGE } from './text-search-languages';
 
 type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
 
 const TEXT_REF = { codecId: PG_TEXT_CODEC_ID } as const;
 
-function languageLiteral(method: string, language: string): LiteralExpr {
-  if (!isFullTextSearchLanguage(language)) {
-    throw postgresError(
-      'RUNTIME.ARGUMENT_INVALID',
-      `${method}: '${language}' is not a PostgreSQL text-search configuration Prisma recognizes.`,
-      {
-        why: 'The language is written into the SQL as an inline literal, not a bound parameter, so it is checked against the configurations a stock PostgreSQL server ships with.',
-        fix: `Pass one of: ${POSTGRES_TEXT_SEARCH_LANGUAGES.join(', ')}.`,
-        meta: { helper: method, argument: 'language', received: language },
-      },
-    );
-  }
-  return LiteralExpr.of(language);
-}
+const languageOf = (options: FullTextMatchesOptions) =>
+  options.language ?? DEFAULT_FULL_TEXT_SEARCH_LANGUAGE;
 
 export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOperationTypes<CT> {
   return {
@@ -42,13 +32,13 @@ export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOpera
     },
     fullTextMatches: {
       self: { traits: ['textual'] },
-      impl: (self, query, language = DEFAULT_FULL_TEXT_SEARCH_LANGUAGE) =>
+      impl: (self, query, options: FullTextMatchesOptions = {}) =>
         buildOperation({
           method: 'fullTextMatches',
           args: [
             toExpr(self),
             toExpr(query, TEXT_REF),
-            languageLiteral('fullTextMatches', language),
+            languageLiteral('fullTextMatches', languageOf(options)),
           ],
           returns: { codecId: PG_BOOL_CODEC_ID, nullable: false },
           lowering: {
@@ -60,36 +50,52 @@ export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOpera
     },
     fullTextRank: {
       self: { traits: ['textual'] },
-      impl: (self, query, language = DEFAULT_FULL_TEXT_SEARCH_LANGUAGE) =>
-        buildOperation({
+      impl: (self, query, options: FullTextRankOptions = {}) => {
+        const fn = options.coverDensity === true ? 'ts_rank_cd' : 'ts_rank';
+        const normalization =
+          options.normalization === undefined
+            ? undefined
+            : normalizationLiteral('fullTextRank', options.normalization);
+        const vectorAndQuery =
+          'to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}})';
+        return buildOperation({
           method: 'fullTextRank',
-          args: [toExpr(self), toExpr(query, TEXT_REF), languageLiteral('fullTextRank', language)],
+          args: [
+            toExpr(self),
+            toExpr(query, TEXT_REF),
+            languageLiteral('fullTextRank', languageOf(options)),
+            ...(normalization === undefined ? [] : [normalization]),
+          ],
           returns: { codecId: PG_FLOAT4_CODEC_ID, nullable: false },
           lowering: {
             targetFamily: 'sql',
             strategy: 'function',
-            template:
-              'ts_rank(to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}}))',
+            template: `${fn}(${vectorAndQuery}${normalization === undefined ? '' : ', {{arg2}}'})`,
           },
-        }),
+        });
+      },
     },
     fullTextHeadline: {
       self: { traits: ['textual'] },
-      impl: (self, query, language = DEFAULT_FULL_TEXT_SEARCH_LANGUAGE) =>
-        buildOperation({
+      impl: (self, query, options: FullTextHeadlineOptions = {}) => {
+        const headlineOptions = headlineOptionsLiteral('fullTextHeadline', options);
+        const base = 'ts_headline({{arg1}}, {{self}}, websearch_to_tsquery({{arg1}}, {{arg0}})';
+        return buildOperation({
           method: 'fullTextHeadline',
           args: [
             toExpr(self),
             toExpr(query, TEXT_REF),
-            languageLiteral('fullTextHeadline', language),
+            languageLiteral('fullTextHeadline', languageOf(options)),
+            ...(headlineOptions === undefined ? [] : [headlineOptions]),
           ],
           returns: { codecId: PG_TEXT_CODEC_ID, nullable: false },
           lowering: {
             targetFamily: 'sql',
             strategy: 'function',
-            template: 'ts_headline({{arg1}}, {{self}}, websearch_to_tsquery({{arg1}}, {{arg0}}))',
+            template: `${base}${headlineOptions === undefined ? '' : ', {{arg2}}'})`,
           },
-        }),
+        });
+      },
     },
   };
 }

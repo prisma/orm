@@ -147,7 +147,8 @@ describe('postgres target query operations', () => {
       expect(ast.lowering?.template).toBe(
         'ts_headline({{arg1}}, {{self}}, websearch_to_tsquery({{arg1}}, {{arg0}}))',
       );
-      expect(ast.args).toHaveLength(3);
+      // query, language — and no third argument.
+      expect(ast.args).toHaveLength(2);
     });
 
     it("renders the options as Postgres's Key=Value list, in one literal", () => {

@@ -4,7 +4,11 @@ import type {
   Expression,
   TraitExpression,
 } from '@internal/sql-relational-core/expression';
-import type { FullTextSearchLanguage } from '../core/text-search-languages';
+import type {
+  FullTextHeadlineOptions,
+  FullTextMatchesOptions,
+  FullTextRankOptions,
+} from '../core/full-text-options';
 
 type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
 
@@ -29,7 +33,7 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
       readonly impl: (
         self: TextualSelf<CT>,
         query: TextArgument<CT>,
-        language?: FullTextSearchLanguage,
+        options?: FullTextMatchesOptions,
       ) => Expression<{ codecId: 'pg/bool@1'; nullable: false }>;
     };
     readonly fullTextRank: {
@@ -37,7 +41,7 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
       readonly impl: (
         self: TextualSelf<CT>,
         query: TextArgument<CT>,
-        language?: FullTextSearchLanguage,
+        options?: FullTextRankOptions,
       ) => Expression<{ codecId: 'pg/float4@1'; nullable: false }>;
     };
     readonly fullTextHeadline: {
@@ -45,7 +49,7 @@ export type QueryOperationTypes<CT extends CodecTypesBase> = SqlQueryOperationTy
       readonly impl: (
         self: TextualSelf<CT>,
         query: TextArgument<CT>,
-        language?: FullTextSearchLanguage,
+        options?: FullTextHeadlineOptions,
       ) => Expression<{ codecId: 'pg/text@1'; nullable: false }>;
     };
   }
