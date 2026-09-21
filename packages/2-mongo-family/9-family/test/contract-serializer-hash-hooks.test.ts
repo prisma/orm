@@ -3,6 +3,9 @@ import { MongoContractSerializer } from '../src/core/ir/mongo-contract-serialize
 
 describe('MongoContractSerializer hash canonicalization hooks', () => {
   it('publishes no hash recompute hooks: the emit hash input is a storage projection, not the persisted shape', () => {
-    expect(new MongoContractSerializer().hashCanonicalizationHooks).toBeUndefined();
+    const serializer = new MongoContractSerializer() as {
+      readonly hashCanonicalizationHooks?: object;
+    };
+    expect(serializer.hashCanonicalizationHooks).toBeUndefined();
   });
 });
