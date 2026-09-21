@@ -2,7 +2,13 @@ import { int4Column, textColumn } from '@internal/adapter-postgres/column-types'
 import { vector } from '@internal/extension-pgvector/column-types';
 import pgvector from '@internal/extension-pgvector/pack';
 import { uuidv4 } from '@internal/ids';
-import { defineContract, field, model, rel } from '@internal/postgres/contract-builder';
+import {
+  defineContract,
+  field,
+  fullTextIndex,
+  model,
+  rel,
+} from '@internal/postgres/contract-builder';
 
 const UserBase = model('User', {
   fields: {
@@ -33,7 +39,10 @@ const Comment = model('Comment', {
     body: field.column(textColumn),
     postId: field.column(int4Column).column('post_id'),
   },
-}).sql({ table: 'comments' });
+}).sql(({ cols }) => ({
+  table: 'comments',
+  indexes: [fullTextIndex(cols.body, { name: 'comments_body_search' })],
+}));
 
 const Profile = model('Profile', {
   fields: {

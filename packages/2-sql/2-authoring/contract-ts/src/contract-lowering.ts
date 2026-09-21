@@ -869,7 +869,19 @@ function resolveModelNode(
       ...method,
     };
     return index.expression !== undefined
-      ? { ...carried, expression: index.expression }
+      ? {
+          ...carried,
+          expression:
+            typeof index.expression === 'string'
+              ? index.expression
+              : index.expression.render(
+                  mapFieldNamesToColumnNames(
+                    spec.modelName,
+                    index.expression.fields.map((ref) => ref.fieldName),
+                    spec.fieldToColumn,
+                  ),
+                ),
+        }
       : {
           ...carried,
           columns: mapFieldNamesToColumnNames(

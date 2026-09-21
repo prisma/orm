@@ -147,6 +147,14 @@ Postgres computes `to_tsvector` per row unless an index covers that exact expres
 @@fullTextIndex([text], name: "message_text_search")
 ```
 
+The TypeScript contract builder has the same helper, exported from the facade's contract-builder entry:
+
+```typescript
+model('Message', { fields: { id, text } }).sql(({ cols }) => ({
+  indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
+}));
+```
+
 It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), and `name:` xor `map:` like any expression index; it is repeatable, so a model may index several columns. The column name comes from the resolved storage column, so `@map` is honoured. `@@index(expression: "to_tsvector('english', \"text\")", type: "gin", name: …)` still works for anything the attribute does not cover — but then the expression is yours to keep in step.
 
 ## Codec descriptor authoring

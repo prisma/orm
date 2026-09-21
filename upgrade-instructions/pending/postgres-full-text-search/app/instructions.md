@@ -40,4 +40,14 @@ model Message {
 }
 ```
 
-Postgres only uses a full-text index when its expression matches the query's byte for byte, so prefer the attribute over writing `@@index(expression: "to_tsvector(…)", type: "gin", …)` by hand.
+In a TypeScript contract, use the matching helper inside the model's `sql({ indexes: [...] })`:
+
+```ts
+import { fullTextIndex } from '@prisma/orm-postgres/contract-builder';
+
+model('Message', { fields: { id, text } }).sql(({ cols }) => ({
+  indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
+}));
+```
+
+Postgres only uses a full-text index when its expression matches the query's byte for byte, so prefer these over writing `@@index(expression: "to_tsvector(…)", type: "gin", …)` by hand.

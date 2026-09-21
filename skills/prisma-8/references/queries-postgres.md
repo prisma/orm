@@ -87,6 +87,14 @@ Without an index Postgres recomputes `to_tsvector` for every row, and it only us
 @@fullTextIndex([text], name: "message_text_search")
 ```
 
+In a TypeScript contract, the same helper from `@prisma/orm-postgres/contract-builder`:
+
+```typescript
+model('Message', { fields: { id, text } }).sql(({ cols }) => ({
+  indexes: [fullTextIndex(cols.text, { name: 'message_text_search' })],
+}));
+```
+
 **There is no `.between(a, b)` operator.** Express ranges either as two chained `.where(...)` clauses (the idiomatic form — clauses AND-compose) or with the `and(...)` combinator inside one clause:
 
 ```typescript

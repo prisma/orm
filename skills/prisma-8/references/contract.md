@@ -133,7 +133,7 @@ Then run `pnpm prisma contract emit` (or rely on the Vite plugin — see `refere
 @@fullTextIndex([summary], language: "german", name: "message_summary_search_de")
 ```
 
-It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), and `name:` xor `map:` like any expression index. It is repeatable, so a model may index several columns. It lowers to a GIN index over `to_tsvector('<language>', "<column>")` — the column name resolved through `@map` — so `@@index(expression: …)` remains only for expressions this attribute does not cover.
+The TS builder has the same helper: `fullTextIndex(cols.text, { name: 'message_text_search' })`, from `@prisma/orm-postgres/contract-builder`, inside the model's `sql({ indexes: [...] })`. It takes exactly one field, an optional `language` (default `english`, from the same allowlist the operations accept), and `name:` xor `map:` like any expression index. It is repeatable, so a model may index several columns. It lowers to a GIN index over `to_tsvector('<language>', "<column>")` — the column name resolved through `@map` — so `@@index(expression: …)` remains only for expressions this attribute does not cover.
 
 PSL alias surface for repeated types lives in a top-level `types {}` block:
 

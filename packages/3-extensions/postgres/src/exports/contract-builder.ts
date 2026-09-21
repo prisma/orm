@@ -28,6 +28,7 @@ export {
 } from '@internal/sql-contract-ts/contract-builder';
 export { defineContract } from '../contract/define-contract';
 export { enumType } from '../contract/enum-type';
+export { fullTextIndex } from '../contract/full-text-index';
 export { type NativeEnumHandle, nativeEnum, pg } from '../contract/native-enum';
 export {
   policyAll,
