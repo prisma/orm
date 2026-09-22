@@ -62,6 +62,10 @@ function pslConfig(inputPath: string): Record<string, unknown> {
   return ormConfig({ format: 'psl', inputs: [inputPath], load: async () => ({}) });
 }
 
+function pslConfigMulti(inputPaths: readonly string[]): Record<string, unknown> {
+  return ormConfig({ format: 'psl', inputs: [...inputPaths], load: async () => ({}) });
+}
+
 function harness(config: Record<string, unknown>) {
   return createTestCli({
     commands: BIN_COMMANDS,
@@ -93,6 +97,27 @@ describe('format', () => {
       envelope: { ok: true, exitCode: 0, result: { formatted: true } },
     });
     expect(await readFile(join(dir, 'contract.prisma'), 'utf-8')).toBe(FORMATTED_PSL);
+  });
+
+  it('formats every member of a multi-file contract source', async () => {
+    const dir = await projectDir();
+    const first = join(dir, 'first.prisma');
+    const second = join(dir, 'second.prisma');
+    await writeFile(first, MESSY_PSL, 'utf-8');
+    await writeFile(second, MESSY_PSL, 'utf-8');
+
+    const run = await harness(pslConfigMulti([first, second])).run(
+      ['contract', 'format', '--json'],
+      { cwd: dir },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(run.json.at(-1)).toMatchObject({
+      kind: 'result',
+      envelope: { ok: true, exitCode: 0, result: { formatted: true, paths: [first, second] } },
+    });
+    expect(await readFile(first, 'utf-8')).toBe(FORMATTED_PSL);
+    expect(await readFile(second, 'utf-8')).toBe(FORMATTED_PSL);
   });
 
   it('renders one summary block naming the file it formatted', async () => {
@@ -152,7 +177,7 @@ describe('format', () => {
       isTty: { stdout: true },
     });
 
-    expect(run.presented?.data).toEqual({ formatted: false });
+    expect(run.presented?.data).toEqual({ formatted: false, paths: [] });
     expect(run.presented?.presentation.human).toEqual([
       {
         kind: 'summary',
