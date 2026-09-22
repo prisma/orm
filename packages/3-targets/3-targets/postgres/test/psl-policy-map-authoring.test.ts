@@ -234,15 +234,15 @@ namespace public {
 
   it('two reopened spellings sharing one head stay a duplicate-entity diagnostic (head-keyed)', () => {
     const result = interpret(`
+model profile {
+  id       Int @id
+  owner_id Int
+  email    String
+
+  @@rls
+}
+
 namespace public {
-  model profile {
-    id       Int @id
-    owner_id Int
-    email    String
-
-    @@rls
-  }
-
   policy_select p_read {
     target = profile
     roles  = [app_user]
