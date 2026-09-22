@@ -146,18 +146,6 @@ export function okVoid(): Ok<void> {
   return OK_VOID;
 }
 
-/**
- * Conjunction of two results whose failures accumulate: ok only when both are
- * ok, and two failures keep both sides' details in order. Values are dropped —
- * callers that need them collect them as they go and read them back once the
- * accumulated result is ok.
- */
-/**
- * Disjunction of two results: the first ok wins, carrying its value. Two
- * failures combine on the failure lane, where a failure carrying no details is
- * absorbing — it outranks the other side, because a rejection that was already
- * reported elsewhere should not be buried under alternatives' complaints.
- */
 export function or<T, U, E>(
   left: Result<T, readonly E[]>,
   right: Result<U, readonly E[]>,
