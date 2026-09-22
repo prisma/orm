@@ -95,7 +95,7 @@ function encodeEnumValue(value: unknown, codecId: string, codecLookup: CodecLook
 }
 
 export interface InterpretPslDocumentToMongoContractInput {
-  readonly document: DocumentAst;
+  readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;

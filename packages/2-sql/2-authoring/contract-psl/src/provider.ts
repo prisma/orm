@@ -56,7 +56,7 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
       const scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor> =
         collectScalarTypeConstructors(context.authoringContributions.type);
       return interpretPslDocumentToSqlContract({
-        document: input.document,
+        documents: input.documents,
         symbolTable: input.symbolTable,
         sources: input.sources,
         seedDiagnostics: [],
@@ -119,7 +119,7 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
       );
 
       const interpreted = withSeedDiagnostics(
-        this.interpret({ document, sources, symbolTable }, context),
+        this.interpret({ documents: [document], sources, symbolTable }, context),
         seedDiagnostics,
       );
       if (!interpreted.ok) {

@@ -58,7 +58,7 @@ function buildInterpretInput(
     sources,
     pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });
-  return { document, sources, symbolTable };
+  return { documents: [document], sources, symbolTable };
 }
 
 function interpretCapableSource(schemaPath: string) {
@@ -320,7 +320,7 @@ it('attributes multi-document semantic failures to the owning file, not the entr
     pslBlockDescriptors: context.authoringContributions.pslBlockDescriptors,
   });
   const result = interpretCapableSource('provider.prisma').interpret(
-    { document: entry.document, sources, symbolTable },
+    { documents: [entry.document], sources, symbolTable },
     context,
   );
   expect(result.ok).toBe(false);
@@ -378,10 +378,10 @@ it('preserves unlocated and foreign-file contribution diagnostics at the public 
   const entry = parse('', 'entry.prisma');
   const sources = new PslSources([
     [entry.document.syntax, entry.sources.sourceFileFor(entry.document.syntax)],
-    [input.document.syntax, input.sources.sourceFileFor(input.document.syntax)],
+    [input.documents[0]!.syntax, input.sources.sourceFileFor(input.documents[0]!.syntax)],
   ]);
   const result = interpretCapableSource('provider.prisma').interpret(
-    { ...input, document: entry.document, sources },
+    { ...input, documents: [entry.document], sources },
     customContext,
   );
   expect(result.ok).toBe(false);

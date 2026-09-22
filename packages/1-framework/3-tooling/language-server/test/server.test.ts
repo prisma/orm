@@ -3297,7 +3297,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
 
   function fixAwareInterpret(): PslInterpretCapable['interpret'] {
     return (input: PslInterpretInput) =>
-      input.sources.sourceFileFor(input.document.syntax).text.includes('// fixed')
+      input.sources.sourceFileFor(input.documents[0]!.syntax).text.includes('// fixed')
         ? ok({} as never)
         : notOk({ summary: 'Schema has 1 error', diagnostics: [unresolvedDiagnostic] });
   }
@@ -3337,7 +3337,7 @@ describe('language server interpreter diagnostics', { timeout: timeouts.database
   it.each([false, true])('recovers diagnostics after edits for pull=%s', async (pull) => {
     const interpret = fixAwareInterpret();
     const { resolveInputs } = interpretationResolution((input, context) => {
-      if (input.sources.sourceFileFor(input.document.syntax).text.includes('// crash'))
+      if (input.sources.sourceFileFor(input.documents[0]!.syntax).text.includes('// crash'))
         throw new Error('interpreter failed');
       return interpret(input, context);
     });
@@ -3654,11 +3654,11 @@ describe('language server config failure surfacing', {
       }
       await requestPullDiagnostics(harness, schemaUri);
       const current = spy.mock.calls.at(-1)![0];
-      expect(() => current.sources.sourceFileFor(previous.document.syntax)).toThrow(
+      expect(() => current.sources.sourceFileFor(previous.documents[0]!.syntax)).toThrow(
         /No SourceFile/,
       );
-      expect(current.sources.sourceFileFor(current.document.syntax).filename).toBe(schemaUri);
-      expect(current.document).toBe(spy.mock.calls[0]![0].document);
+      expect(current.sources.sourceFileFor(current.documents[0]!.syntax).filename).toBe(schemaUri);
+      expect(current.documents[0]).toBe(spy.mock.calls[0]![0].documents[0]);
     },
   );
 

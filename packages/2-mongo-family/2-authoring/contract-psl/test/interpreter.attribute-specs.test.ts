@@ -18,7 +18,7 @@ function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
     pslBlockDescriptors: {},
   });
   const result = interpretPslDocumentToMongoContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     scalarTypeCodecIds,

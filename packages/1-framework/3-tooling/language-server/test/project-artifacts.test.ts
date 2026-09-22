@@ -647,10 +647,10 @@ describe('interpret slot', () => {
     expect(spy.mock.contexts[0]).toBe(interpretation.source);
     const [input, context] = spy.mock.calls[0] ?? [];
     expect(input).toMatchObject({
-      document: artifacts?.document,
+      documents: [artifacts?.document],
       sources: store.sources,
     });
-    expect(input?.sources.sourceFileFor(input.document.syntax)).toBe(artifacts?.sourceFile);
+    expect(input?.sources.sourceFileFor(input.documents[0]!.syntax)).toBe(artifacts?.sourceFile);
     expect(input?.symbolTable).toBeDefined();
     expect(context).toBe(interpretation.context);
   });

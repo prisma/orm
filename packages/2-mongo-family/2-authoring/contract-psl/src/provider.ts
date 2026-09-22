@@ -30,7 +30,7 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
     inputs: [schemaPath],
     interpret(input, context) {
       return interpretPslDocumentToMongoContract({
-        document: input.document,
+        documents: input.documents,
         symbolTable: input.symbolTable,
         sources: input.sources,
         seedDiagnostics: [],
@@ -81,7 +81,7 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
       );
 
       return withSeedDiagnostics(
-        this.interpret({ document, sources, symbolTable }, context),
+        this.interpret({ documents: [document], sources, symbolTable }, context),
         seedDiagnostics,
       );
     },

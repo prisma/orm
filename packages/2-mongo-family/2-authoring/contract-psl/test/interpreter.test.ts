@@ -28,14 +28,14 @@ import { expectInvalidAttributeSyntax } from './interpreter-test-helpers';
 function buildSymbolTableInput(
   schema: string,
   filename = 'test.prisma',
-): { document: DocumentAst; symbolTable: SymbolTable; sources: PslSources } {
+): { documents: readonly DocumentAst[]; symbolTable: SymbolTable; sources: PslSources } {
   const { document, sources } = parse(schema, filename);
   const { symbolTable } = buildSymbolTable({
     documents: [document],
     sources,
     pslBlockDescriptors: {},
   });
-  return { document, symbolTable, sources };
+  return { documents: [document], symbolTable, sources };
 }
 
 const mongoScalarTypeDescriptors: ReadonlyMap<string, string> = new Map([
@@ -105,7 +105,7 @@ function model(ir: Contract, name: string): MongoModel {
 function interpret(
   schema: string,
   overrides?: Partial<
-    Omit<InterpretPslDocumentToMongoContractInput, 'document' | 'symbolTable' | 'sources'>
+    Omit<InterpretPslDocumentToMongoContractInput, 'documents' | 'symbolTable' | 'sources'>
   >,
 ) {
   return interpretPslDocumentToMongoContract({
@@ -123,7 +123,7 @@ function interpret(
 function interpretOk(
   schema: string,
   overrides?: Partial<
-    Omit<InterpretPslDocumentToMongoContractInput, 'document' | 'symbolTable' | 'sources'>
+    Omit<InterpretPslDocumentToMongoContractInput, 'documents' | 'symbolTable' | 'sources'>
   >,
 ) {
   const result = interpret(schema, overrides);
