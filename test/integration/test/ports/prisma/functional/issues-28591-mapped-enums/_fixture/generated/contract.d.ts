@@ -34,7 +34,7 @@ import type {
 } from '@internal/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'41a650586fb8b2a3824d1e312ceb5f8121b8813d89eca0cca22129431018da35'>;
+  StorageHashBase<'7a706426f8b3a52aab31a0c737d6d6152213188d04afbb4ca086f83aff879557'>;
 export type ExecutionHash = ExecutionHashBase<string>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
@@ -333,8 +333,8 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/enum@1';
                   readonly nullable: false;
                   readonly default: {
-                    readonly kind: 'function';
-                    readonly expression: '\'pending\'::"SuggestionStatus"';
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/enum@1', 'pending'>;
                   };
                   readonly typeParams: { readonly typeName: 'SuggestionStatus' };
                 };

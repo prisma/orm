@@ -418,7 +418,7 @@ export function parsePostgresDefault(
 /**
  * Normalizes a contract-declared default through {@link parsePostgresDefault}
  * — the same parser introspection uses — so a function-shaped default the
- * parser recognizes as a literal (e.g. `dbgenerated("'{}'::jsonb")`)
+ * parser recognizes as a literal (e.g. sql`'{}'::jsonb`)
  * resolves to the same `resolvedDefault` shape a live introspected column
  * would produce. Compensates once, at `SchemaIR` construction of the
  * expected (contract-derived) side (`contractToSchemaIR`'s `resolveDefault`
