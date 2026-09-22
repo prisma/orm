@@ -14,7 +14,12 @@ import type {
   AttributeSpecContext,
   FieldAttributeSpecContext,
 } from '../src/attribute-spec/spec-context';
-import { createBinder, typeReferenceNode } from '../src/binder';
+import {
+  createBinder,
+  type DescribeUnsupportedAttribute,
+  typeReferenceNode,
+  type UnsupportedAttribute,
+} from '../src/binder';
 import { contributedTypeScope } from '../src/contributed-type-scope';
 import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
@@ -152,6 +157,24 @@ function bind(...texts: string[]) {
       typeConstructors: TYPE_CONSTRUCTORS,
       attributeSpecs: ATTRIBUTE_SPECS,
       controlMutationDefaults: NO_CONTROL_DEFAULTS,
+    }),
+  };
+}
+
+function bindWithUnsupportedDescriber(
+  describeUnsupportedAttribute: DescribeUnsupportedAttribute,
+  ...texts: string[]
+) {
+  const { sources, symbolTable } = build(...texts);
+  return {
+    symbolTable,
+    ...createBinder({
+      sources,
+      symbolTable,
+      typeConstructors: TYPE_CONSTRUCTORS,
+      attributeSpecs: ATTRIBUTE_SPECS,
+      controlMutationDefaults: NO_CONTROL_DEFAULTS,
+      describeUnsupportedAttribute,
     }),
   };
 }
@@ -544,6 +567,95 @@ describe('createBinder — attribute names', () => {
     expect(diagnostics).toEqual([]);
     expect(nameNode).toBeDefined();
     expect(nameNode === undefined ? undefined : binder.symbolForNode(nameNode)).toBeUndefined();
+  });
+});
+
+describe('createBinder — describeUnsupportedAttribute', () => {
+  const UNSUPPORTED_SCHEMA = [
+    'model User {',
+    '  id Int @id @bogus',
+    '  @@map("users")',
+    '  @@nope',
+    '}',
+    'type Address {',
+    '  street String @sensitivity("high")',
+    '}',
+  ].join('\n');
+
+  function record(): {
+    readonly seen: UnsupportedAttribute[];
+    readonly describe: DescribeUnsupportedAttribute;
+  } {
+    const seen: UnsupportedAttribute[] = [];
+    return {
+      seen,
+      describe: (unsupported) => {
+        seen.push(unsupported);
+        return undefined;
+      },
+    };
+  }
+
+  it('calls back for names outside the namespace and stays silent for registered ones', () => {
+    const { seen, describe } = record();
+    bindWithUnsupportedDescriber(describe, UNSUPPORTED_SCHEMA);
+
+    expect(
+      seen.map(({ attribute, level, owner, field }) => ({
+        name: attribute.name,
+        level,
+        owner: owner.name,
+        field: field?.name,
+      })),
+    ).toEqual([
+      { name: 'nope', level: 'model', owner: 'User', field: undefined },
+      { name: 'bogus', level: 'field', owner: 'User', field: 'id' },
+      { name: 'sensitivity', level: 'field', owner: 'Address', field: 'street' },
+    ]);
+  });
+
+  it('collects a returned diagnostic into the binder diagnostics', () => {
+    const { diagnostics } = bindWithUnsupportedDescriber(
+      ({ attribute, level, owner, field }) => ({
+        filename: '0.psl',
+        code: 'FIXTURE_UNSUPPORTED_ATTRIBUTE',
+        message: `${level}:${owner.name}${field === undefined ? '' : `.${field.name}`}:${attribute.name}`,
+        range: { start: { line: 1, character: 1 }, end: { line: 1, character: 1 } },
+      }),
+      UNSUPPORTED_SCHEMA,
+    );
+
+    expect(diagnostics.map(({ code, message }) => ({ code, message }))).toEqual([
+      { code: 'FIXTURE_UNSUPPORTED_ATTRIBUTE', message: 'model:User:nope' },
+      { code: 'FIXTURE_UNSUPPORTED_ATTRIBUTE', message: 'field:User.id:bogus' },
+      { code: 'FIXTURE_UNSUPPORTED_ATTRIBUTE', message: 'field:Address.street:sensitivity' },
+    ]);
+  });
+
+  it('stays silent when the callback returns undefined', () => {
+    const { diagnostics } = bindWithUnsupportedDescriber(() => undefined, UNSUPPORTED_SCHEMA);
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('stays silent when no callback is supplied', () => {
+    const { diagnostics } = bind(UNSUPPORTED_SCHEMA);
+    expect(diagnostics).toEqual([]);
+  });
+
+  it('resolves an attribute the callback described to no symbol', () => {
+    const { symbolTable, binder } = bindWithUnsupportedDescriber(
+      () => ({
+        filename: '0.psl',
+        code: 'FIXTURE_UNSUPPORTED_ATTRIBUTE',
+        message: 'unsupported',
+        range: { start: { line: 1, character: 1 }, end: { line: 1, character: 1 } },
+      }),
+      UNSUPPORTED_SCHEMA,
+    );
+    const user = symbolTable.topLevel.models['User']!;
+
+    expect(binder.symbolForNode(attributeNameNode(user.fields['id']!, 'bogus'))).toBeUndefined();
+    expect(binder.symbolForNode(attributeNameNode(user, 'nope'))).toBeUndefined();
   });
 });
 

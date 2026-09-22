@@ -97,8 +97,10 @@ export type {
   BinderResult,
   BoundSpec,
   CreateBinderOptions,
+  DescribeUnsupportedAttribute,
   PslSymbol,
   Resolution,
+  UnsupportedAttribute,
 } from '../binder';
 export {
   createBinder,

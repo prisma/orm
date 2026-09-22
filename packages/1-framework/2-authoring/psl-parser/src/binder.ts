@@ -65,12 +65,24 @@ export interface Binder {
   symbolForNode(node: SyntaxNode): Resolution | undefined;
 }
 
+export interface UnsupportedAttribute {
+  readonly attribute: ResolvedAttribute;
+  readonly level: 'model' | 'field';
+  readonly owner: ModelSymbol | CompositeTypeSymbol;
+  readonly field: FieldSymbol | undefined;
+}
+
+export type DescribeUnsupportedAttribute = (
+  unsupported: UnsupportedAttribute,
+) => ParseDiagnostic | undefined;
+
 export interface CreateBinderOptions {
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
   readonly typeConstructors: AuthoringTypeNamespace;
   readonly attributeSpecs: AttributeSpecNamespace;
   readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
 }
 
 export interface BinderResult {
@@ -109,8 +121,14 @@ interface Owner {
 }
 
 export function createBinder(options: CreateBinderOptions): BinderResult {
-  const { sources, symbolTable, typeConstructors, attributeSpecs, controlMutationDefaults } =
-    options;
+  const {
+    sources,
+    symbolTable,
+    typeConstructors,
+    attributeSpecs,
+    controlMutationDefaults,
+    describeUnsupportedAttribute,
+  } = options;
   const contributedTypes = contributedTypeScope(typeConstructors);
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
   const references = new WeakMap<SyntaxNode, Resolution>();
@@ -159,6 +177,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       diagnostics,
       symbolTable,
       sources,
+      describeUnsupportedAttribute,
     };
     const specContext =
       symbol.kind === 'model'
@@ -167,18 +186,16 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     bindAttributes(
       symbol,
       symbol.attributes,
-      (name) =>
-        specContext === undefined ? undefined : own(attributeSpecs.model, name)?.(specContext),
+      attributeSpecs.model,
+      (factory) => (specContext === undefined ? undefined : factory(specContext)),
       { ...context, field: undefined },
     );
     for (const field of Object.values(symbol.fields)) {
       bindAttributes(
         field,
         field.attributes,
-        (name) =>
-          specContext === undefined
-            ? undefined
-            : own(attributeSpecs.field, name)?.({ ...specContext, field }),
+        attributeSpecs.field,
+        (factory) => (specContext === undefined ? undefined : factory({ ...specContext, field })),
         { ...context, field },
       );
     }
@@ -195,18 +212,32 @@ interface BindContext {
   readonly diagnostics: ParseDiagnostic[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
+  readonly describeUnsupportedAttribute: DescribeUnsupportedAttribute | undefined;
 }
 
-function bindAttributes(
+function bindAttributes<Factory>(
   holder: ModelSymbol | CompositeTypeSymbol | FieldSymbol,
   attributes: readonly ResolvedAttribute[],
-  lookupSpec: (name: string) => BoundSpec | undefined,
+  specs: Readonly<Record<string, Factory>>,
+  instantiate: (factory: Factory) => BoundSpec | undefined,
   ctx: BindContext,
 ): void {
   const declared: Iterable<FieldAttributeAst | ModelAttributeAst> = holder.node.attributes();
   const nodes = Array.from(declared);
+  const level = holder.kind === 'field' ? 'field' : 'model';
   attributes.forEach((attribute, index) => {
-    const spec = lookupSpec(attribute.name);
+    const factory = own(specs, attribute.name);
+    if (factory === undefined) {
+      const diagnostic = ctx.describeUnsupportedAttribute?.({
+        attribute,
+        level,
+        owner: ctx.owner,
+        field: level === 'field' ? ctx.field : undefined,
+      });
+      if (diagnostic !== undefined) ctx.diagnostics.push(diagnostic);
+      return;
+    }
+    const spec = instantiate(factory);
     if (spec === undefined) return;
     const nameNode = nodes[index]?.name()?.syntax;
     if (nameNode !== undefined) {
@@ -215,7 +246,7 @@ function bindAttributes(
         symbol: {
           kind: 'attribute',
           name: attribute.name,
-          level: holder.kind === 'field' ? 'field' : 'model',
+          level,
           spec,
         },
       });
