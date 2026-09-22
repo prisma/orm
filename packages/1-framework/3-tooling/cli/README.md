@@ -347,7 +347,7 @@ prisma db schema -v
 
 ### `prisma contract print`
 
-Load the contract from the source the config names and write the Prisma 8 PSL that reads back as the same contract. The source can be a Prisma 7 schema (`prisma7Schema(...)`), a TypeScript contract, or a PSL schema. The common use is cutover: a project on `prisma7Schema(...)` is ready to stop reading the Prisma 7 file and author in Prisma 8 PSL instead.
+Load the contract from the source the config names and write the Prisma 8 PSL that reads back as the same contract. The source can be a Prisma 7 schema (`prisma7Schema(...)`), a TypeScript contract, or a PSL contract. The common use is cutover: a project on `prisma7Schema(...)` is ready to stop reading the Prisma 7 file and author in Prisma 8 PSL instead.
 
 **Command:**
 ```bash

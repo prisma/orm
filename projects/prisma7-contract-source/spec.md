@@ -116,7 +116,7 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 
 ### What `contract print` cannot write
 
-`contract print` loads the contract the config names, from any source, and writes it as a Prisma 8 schema that reads back as the same contract. The proof is two round-trip tests: one over every Prisma 7 fixture (`contract-prisma7/test/convert-roundtrip.test.ts`) and one over contracts emitted from TypeScript and PSL sources that carry what a Prisma 7 schema cannot (`adapter-postgres/test/psl-print-roundtrip.test.ts`): value objects, polymorphism, named types, domain enums, control policies, and every index argument. The printer writes all of those. Where the PSL language has no form for something the contract holds, the printer refuses it by name with `CONTRACT.PRINT_UNSUPPORTED` and writes no file; it never drops anything silently.
+`contract print` loads the contract the config names, from any source, and writes it as Prisma 8 PSL that reads back as the same contract. The proof is two round-trip tests: one over every Prisma 7 fixture (`contract-prisma7/test/convert-roundtrip.test.ts`) and one over contracts emitted from TypeScript and PSL sources that carry what a Prisma 7 schema cannot (`adapter-postgres/test/psl-print-roundtrip.test.ts`): value objects, polymorphism, named types, domain enums, control policies, and every index argument. The printer writes all of those. Where the PSL language has no form for something the contract holds, the printer refuses it by name with `CONTRACT.PRINT_UNSUPPORTED` and writes no file; it never drops anything silently.
 
 The refusals, and what would lift each:
 

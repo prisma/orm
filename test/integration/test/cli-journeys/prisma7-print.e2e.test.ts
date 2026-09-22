@@ -171,7 +171,7 @@ withTempDir(({ createTempDir }) => {
   });
 
   describe('Journey: contract print refuses what it cannot convert', () => {
-    it('prints a PSL source as the same schema, so the command is not tied to Prisma 7', async () => {
+    it('prints a PSL source as the same contract, so the command is not tied to Prisma 7', async () => {
       const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, {
         copyFrom: join(PRISMA7_FIXTURES, 'implicit-many-to-many-names/schema.prisma'),
       });

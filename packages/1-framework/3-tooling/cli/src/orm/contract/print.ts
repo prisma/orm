@@ -77,7 +77,7 @@ function printHeaderComment(sourcePaths: readonly string[]): string {
 
 /**
  * The contract source input the output path would be written over: the one it
- * names, or the directory of schema files it sits inside. `undefined` when the
+ * names, or the directory of source files it sits inside. `undefined` when the
  * output path touches no input.
  */
 function sourceInputCovering(inputs: {
@@ -100,10 +100,10 @@ export function createContractPrintCommand({
 }: ContractPrintCommandDeps) {
   return defineOrmCommand({
     help: {
-      summary: 'Write the configured contract as a Prisma 8 PSL schema file',
+      summary: 'Write the configured contract as Prisma 8 PSL',
       description:
         'Loads the contract from the source the config names (a Prisma 7\n' +
-        'schema, a TypeScript contract, or a PSL schema) and writes the Prisma 8\n' +
+        'schema, a TypeScript contract, or a PSL contract) and writes the Prisma 8\n' +
         'PSL that reads back as the same contract. Anything the PSL language\n' +
         'cannot carry is refused by name and nothing is written. The command\n' +
         'stops at contract.prisma; switch the config to the written file, then\n' +
