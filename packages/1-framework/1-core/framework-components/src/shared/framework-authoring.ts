@@ -21,7 +21,7 @@ import type {
   TaggedLiteralValue,
 } from './mutation-default-types';
 import type { AuthoringOption } from './option-descriptor';
-import type { PslBlockParam, PslExtensionBlock, PslSpan } from './psl-extension-block';
+import type { ParsedPslExtensionBlock, PslSpan } from './psl-extension-block';
 import { runtimeError } from './runtime-error';
 
 export type EnumInferredMemberType = 'text' | 'int';
@@ -284,36 +284,28 @@ export interface AuthoringEntityContext {
 }
 
 /**
- * Classifies an `enum` block's members (before codec decoding, which needs
- * the codec chosen first) into which default codec an omitted `@@type`
- * should resolve to:
+ * Classifies an `enum` block's interpreted member values (before codec
+ * decoding, which needs the codec chosen first) into which default codec an
+ * omitted `@@type` should resolve to:
  *
- * - every member is `bare`, or a `value` whose raw JSON is a string → `'text'`
- * - every member is a `value` whose raw JSON is an integer → `'int'`
- * - anything else (float, bigint, boolean, mixed, or a `ref`/`option`/`list`
- *   parameter) → `null`, meaning the caller must require an explicit `@@type`.
+ * - every member is bare (`undefined`, the typed envelope's bare-entry
+ *   sentinel) or a string → `'text'`
+ * - every member is an integer number → `'int'`
+ * - anything else (float, boolean, null, structured values, or a mix of
+ *   text and int) → `null`, meaning the caller must require an explicit
+ *   `@@type`.
  */
-export function classifyEnumMemberType(block: PslExtensionBlock): 'text' | 'int' | null {
+export function classifyEnumMemberType(
+  values: Readonly<Record<string, unknown>>,
+): 'text' | 'int' | null {
   let sawText = false;
   let sawInt = false;
 
-  for (const paramValue of Object.values(block.parameters)) {
-    if (paramValue.kind === 'bare') {
+  for (const key of Object.keys(values)) {
+    const value = values[key];
+    if (value === undefined || typeof value === 'string') {
       sawText = true;
-      continue;
-    }
-    if (paramValue.kind !== 'value') {
-      return null;
-    }
-    let jsonValue: unknown;
-    try {
-      jsonValue = JSON.parse(paramValue.raw);
-    } catch {
-      return null;
-    }
-    if (typeof jsonValue === 'string') {
-      sawText = true;
-    } else if (typeof jsonValue === 'number' && Number.isInteger(jsonValue)) {
+    } else if (typeof value === 'number' && Number.isInteger(value)) {
       sawInt = true;
     } else {
       return null;
@@ -335,14 +327,14 @@ export function classifyEnumMemberType(block: PslExtensionBlock): 'text' | 'int'
  * every family's enum factory so inference and the explicit path stay identical.
  */
 export function resolveEnumCodecId(
-  block: PslExtensionBlock,
+  block: ParsedPslExtensionBlock,
   ctx: AuthoringEntityContext,
 ): { readonly codecId: string; readonly codecSpan: PslSpan } | undefined {
   const sourceId = ctx.sourceId ?? 'unknown';
   const typeAttr = block.attributes['type'];
 
   if (typeAttr === undefined) {
-    const inferredKind = classifyEnumMemberType(block);
+    const inferredKind = classifyEnumMemberType(block.values);
     if (inferredKind === null || ctx.enumInferenceCodecs === undefined) {
       ctx.diagnostics?.push({
         code: 'PSL_ENUM_CANNOT_INFER_TYPE',
@@ -421,10 +413,12 @@ export type AuthoringEntityTypeNamespace = {
  *   after the keyword. Currently always `true` — anonymous blocks are
  *   not part of the closed-grammar premise — but the field is explicit
  *   so the type can evolve without a breaking change.
- * - `parameters` maps parameter names to their value-kind descriptors
- *   (`ref` / `value` / `option` / `list`). The generic parser and
- *   validator interpret these; the extension supplies no parser or
- *   printer function.
+ * - `spec` is the block's value-spec factory, erased to `unknown` here
+ *   because the framework core cannot name parser types. The parser owns
+ *   the concrete factory type — `(ctx) => BlockSpec` — and restores it at
+ *   a single boundary, exactly as block-attribute factories already
+ *   transit `attributes` erased. Registration validates that the value is
+ *   callable.
  */
 export interface AuthoringPslBlockDescriptor {
   readonly kind: 'pslBlock';
@@ -432,22 +426,7 @@ export interface AuthoringPslBlockDescriptor {
   readonly keyword: string;
   readonly discriminator: string;
   readonly name: { readonly required: boolean };
-  readonly parameters: Record<string, PslBlockParam>;
-  /**
-   * When `true`, the block body accepts a variadic tail of parameters beyond
-   * the declared set. The block body may contain: fields (model-style),
-   * `key = value` parameters, and `@@` attributes. With `variadicParameters`,
-   * bare identifiers (keys without a `= value`) and undeclared `key = value`
-   * pairs flow into the variadic tail — their semantics belong to the
-   * lowering, not the parser.
-   *
-   * A key that IS declared in `parameters` must still be supplied as
-   * `key = value`; a bare occurrence of a declared key is a diagnostic.
-   *
-   * When `false` (default), the validator emits `PSL_EXTENSION_UNKNOWN_PARAMETER`
-   * for keys absent from `parameters`.
-   */
-  readonly variadicParameters?: boolean;
+  readonly spec: unknown;
   /**
    * Declares that the model named by the block's ref parameter `parameter`
    * must carry the bare `@@` model attribute `attribute`. The family
@@ -854,11 +833,7 @@ function isWellFormedDescriptor(value: unknown, descriptorKind: string): boolean
       const name = value.name;
       if (typeof name !== 'object' || name === null) return false;
       if (!('required' in name) || typeof name.required !== 'boolean') return false;
-      if (!('parameters' in value)) return false;
-      const parameters = value.parameters;
-      if (typeof parameters !== 'object' || parameters === null || Array.isArray(parameters)) {
-        return false;
-      }
+      if (!('spec' in value) || typeof value.spec !== 'function') return false;
       if (!('attributes' in value) || value.attributes === undefined) return true;
       const attributes = value.attributes;
       if (typeof attributes !== 'object' || attributes === null || Array.isArray(attributes)) {

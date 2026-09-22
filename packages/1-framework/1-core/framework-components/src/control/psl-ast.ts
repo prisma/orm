@@ -1,22 +1,13 @@
 export type { AuthoringPslBlockDescriptorNamespace } from '../shared/framework-authoring';
 export type {
   ContributedPslDiagnosticCode,
-  PslBlockParam,
-  PslBlockParamList,
-  PslBlockParamOption,
-  PslBlockParamRef,
-  PslBlockParamValue,
+  ParsedPslExtensionBlock,
   PslDiagnosticCode,
   PslExtensionBlock,
   PslExtensionBlockAttribute,
   PslExtensionBlockAttributeArg,
-  PslExtensionBlockParamBare,
-  PslExtensionBlockParamList,
-  PslExtensionBlockParamOption,
-  PslExtensionBlockParamRef,
-  PslExtensionBlockParamScalarValue,
-  PslExtensionBlockParamValue,
   PslExtensionBlockParsedAttribute,
+  PslExtensionBlockSourceEntry,
   PslPosition,
   PslSpan,
 } from '../shared/psl-extension-block';
@@ -399,12 +390,10 @@ export interface ParsePslDocumentInput {
    */
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
   /**
-   * Codec lookup for validating `value`-kind extension block parameters.
-   * When provided alongside `pslBlockDescriptors`, the generic validator runs
-   * over every parsed extension block after the full AST is assembled,
-   * appending any diagnostics to the parse result. Absent or undefined means
-   * no codec validation runs; `ref` resolution still runs when namespace
-   * context is available (built from the assembled namespaces).
+   * Codec lookup surfaced to family interpreters that decode explicit-codec
+   * values (e.g. enum members) while lowering the parsed document. The
+   * parser itself never decodes; block values are validated through the
+   * parser-owned block specs.
    */
   readonly codecLookup?: CodecLookup;
 }
