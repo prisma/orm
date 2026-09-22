@@ -9,6 +9,7 @@ import type {
   AuthoringEntityTypeNamespace,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
+  ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import {
   checkUncomposedNamespace,
@@ -30,6 +31,7 @@ import {
 } from '@internal/framework-components/control';
 import type {
   Binder,
+  BlockSymbol,
   FieldSymbol,
   ModelSymbol,
   NumLiteral,
@@ -603,6 +605,7 @@ export function lowerDefaultForField(input: {
   readonly fieldName: string;
   readonly field: FieldSymbol;
   readonly model: ModelSymbol;
+  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
   readonly binder: Binder;
@@ -624,6 +627,7 @@ export function lowerDefaultForField(input: {
       symbols: input.symbolTable,
       model: input.model,
       field: input.field,
+      ...(input.parsedBlocks !== undefined ? { parsedBlocks: input.parsedBlocks } : {}),
       controlMutationDefaults: {
         defaultFunctionRegistry: input.defaultFunctionRegistry,
         dataTypeEntries: input.dataTypeSupport.entries,
