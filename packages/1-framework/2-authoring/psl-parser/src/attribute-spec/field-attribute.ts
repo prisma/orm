@@ -34,7 +34,7 @@ export function fieldAttribute<
     name,
     documentation: config.documentation,
     positional: config.positional ?? [],
-    named: config.named ?? {},
+    named: Object.assign(Object.create(null), config.named),
     ...(config.refine !== undefined ? { refine: config.refine } : {}),
   };
 }
