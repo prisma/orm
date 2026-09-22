@@ -89,7 +89,7 @@ function parseAndEmit(source: string) {
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     capabilities: {},

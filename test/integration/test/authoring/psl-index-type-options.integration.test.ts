@@ -21,7 +21,7 @@ function interpret(schema: string) {
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     target: postgresPack,

@@ -72,7 +72,7 @@ function buildPslContract() {
   });
 
   return interpretPslDocumentToSqlContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     target: {

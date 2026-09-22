@@ -218,7 +218,7 @@ function buildContractFromPsl(psl: string, control: ControlPolicy): Contract<Sql
   });
 
   const result = interpretPslDocumentToSqlContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     // Carries the REAL Postgres target pack's authoring contributions

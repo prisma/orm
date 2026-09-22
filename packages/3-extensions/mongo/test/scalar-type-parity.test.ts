@@ -43,7 +43,7 @@ function emit(scalarTypeCodecIds: ReadonlyMap<string, string>) {
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToMongoContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     scalarTypeCodecIds,

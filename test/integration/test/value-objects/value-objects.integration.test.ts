@@ -81,7 +81,7 @@ function interpretMongoPsl(schema: string) {
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToMongoContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
@@ -110,7 +110,7 @@ function interpretSqlPsl(schema: string) {
     pslBlockDescriptors: {},
   });
   return interpretPslDocumentToSqlContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     target: postgresTarget,

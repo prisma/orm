@@ -116,7 +116,7 @@ function parseAndInterpret(source: string) {
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const interpreted = interpretPslDocumentToSqlContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     capabilities: {},

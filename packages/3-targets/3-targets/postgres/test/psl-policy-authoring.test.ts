@@ -231,7 +231,7 @@ namespace public {
     expect(diagnostics).toEqual([]);
 
     const result = interpretPslDocumentToSqlContract({
-      document,
+      documents: [document],
       symbolTable,
       sources,
       target: postgresTarget,

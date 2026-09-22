@@ -41,7 +41,7 @@ function emit(scalarColumnDescriptors: ReadonlyMap<string, ScalarTypeConstructor
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     target: sqlitePackRef,
