@@ -1,4 +1,3 @@
-import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type {
   ArgType,
   AttributeCtx,
@@ -10,7 +9,7 @@ import type {
   Param,
   ResolvedEntityReference,
 } from '@internal/psl-parser';
-import { buildSymbolTable } from '@internal/psl-parser';
+import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
@@ -108,29 +107,35 @@ function contexts(): { model: AttributeSpecContext; field: FieldAttributeSpecCon
 
 describe('mongoAttributeSpecs', () => {
   it('returns the selected forward base declaration instead of a name', () => {
-    const { document, sourceFile } = parse(`model Variant { @@base(Base, "v") }
+    const { document, sources } = parse(
+      `model Variant { @@base(Base, "v") }
 model Other { id Int }
-model Base { id String }`);
-    const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
-    const model = table.topLevel.models['Variant'];
+model Base { id String }`,
+      'test.prisma',
+    );
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      pslBlockDescriptors: {},
+    });
+    const model = symbolTable.topLevel.models['Variant'];
     if (!model) throw new Error('missing variant');
     const node = findModelAttributeNode(model, 'base');
     if (!node) throw new Error('missing base');
-    const diagnostics: ContractSourceDiagnostic[] = [];
+    const diagnostics = createPslDiagnosticCollector(sources);
     const value = interpretModelAttribute({
       node,
-      symbols: table,
+      symbols: symbolTable,
       spec: mongoAttributeSpecs.model.base(),
       model,
-      sourceFile,
-      sourceId: 'test.prisma',
+      sources,
       diagnostics,
     });
     expectTypeOf(value).toEqualTypeOf<
       { base: ResolvedEntityReference<ModelSymbol>; value: string } | undefined
     >();
-    expect(diagnostics).toEqual([]);
-    expect(value?.base.declaration).toBe(table.topLevel.models['Base']);
+    expect(diagnostics.toExternal()).toEqual([]);
+    expect(value?.base.declaration).toBe(symbolTable.topLevel.models['Base']);
     expect(value?.base.namespace).toBeUndefined();
     expect(value?.value).toBe('v');
   });

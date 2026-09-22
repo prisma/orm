@@ -89,7 +89,7 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     ]);
     const controlMutationDefaults = assembleControlMutationDefaults([]);
     const source = 'model Variant {\n @@base(Missing, "v")\n}\nmodel Base { id Int }';
-    const pipeline = runPipeline(source, {
+    const pipeline = runPipeline('schema.prisma', source, {
       scalarTypes: ['Int'],
       pslBlockDescriptors: {},
       authoringContributions,

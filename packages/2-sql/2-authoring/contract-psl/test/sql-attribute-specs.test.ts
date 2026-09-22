@@ -133,17 +133,16 @@ namespace scoped {
     if (!namespace || !model) throw new Error('missing variant');
     const node = findModelAttributeNode(model, 'base');
     if (!node) throw new Error('missing base attribute');
-    const diagnostics: ContractSourceDiagnostic[] = [];
+    const diagnostics = createPslDiagnosticCollector(input.sources);
     const value = interpretModelAttribute({
       node,
       symbols: input.symbolTable,
       spec: sqlAttributeSpecs.model.base(),
       model,
-      sourceFile: input.sourceFile,
-      sourceId: input.sourceId,
+      sources: input.sources,
       diagnostics,
     });
-    expect(diagnostics).toEqual([]);
+    expect(diagnostics.toExternal()).toEqual([]);
     expect(value?.base.declaration).toBe(namespace.models['Base']);
     expect(value?.base.namespace).toBe(namespace);
     expect(value?.value).toBe('variant');

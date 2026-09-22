@@ -374,7 +374,7 @@ function resolvePolymorphism(input: {
   const {
     discriminatorDeclarations,
     baseDeclarations,
-    modelMetadataByName,,
+    modelMetadataByName,
     indexSpans,
     modelIndexesByName,
     indexSources,

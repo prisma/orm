@@ -26,14 +26,14 @@ function fixture(value: string, local = true) {
     'namespace Sibling {\n model Hidden {}\n model Shared {}\n}',
     ...(local ? [] : [`model Owner {\n @@test(${value})\n}`]),
   ];
-  const { document, sourceFile } = parse(declarations.join('\n'));
-  const { table, diagnostics } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(declarations.join('\n'), 'references.prisma');
+  const { symbolTable, diagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
   expect(diagnostics).toEqual([]);
-  const namespace = table.topLevel.namespaces['Local'];
+  const namespace = symbolTable.topLevel.namespaces['Local'];
   if (!namespace) throw new Error('Missing namespace');
   for (const syntax of document.syntax.descendants()) {
     if (!(syntax instanceof SyntaxNode)) continue;
@@ -42,8 +42,9 @@ function fixture(value: string, local = true) {
     if (expression)
       return {
         expression,
-        ctx: { sourceId: 'references.prisma', sourceFile, symbols: table },
-        table,
+        ctx: { sources, symbols: symbolTable },
+        sources,
+        table: symbolTable,
         namespace,
       };
   }
@@ -52,8 +53,9 @@ function fixture(value: string, local = true) {
 
 describe('syntax-scoped entity resolution', () => {
   it('supplies the completed table to existing block attribute rules', () => {
-    const { document, sourceFile } = parse(
+    const { document, sources } = parse(
       'namespace Local {\n permission Reader {\n @@target(Later)\n }\n model Later {}\n}',
+      'references.prisma',
     );
     const target = blockAttribute('target', {
       documentation: 'Names a model.',
@@ -62,8 +64,8 @@ describe('syntax-scoped entity resolution', () => {
       ],
     });
     const result = buildSymbolTable({
-      document,
-      sourceFile,
+      documents: [document],
+      sources,
       pslBlockDescriptors: {
         permission: {
           name: { required: true },
@@ -76,7 +78,7 @@ describe('syntax-scoped entity resolution', () => {
       },
     });
     expect(result.diagnostics).toEqual([]);
-    const namespace = result.table.topLevel.namespaces['Local'];
+    const namespace = result.symbolTable.topLevel.namespaces['Local'];
     expect(namespace?.blocks['Reader']?.block.attributes['target']?.args).toEqual({
       model: { declaration: namespace?.models['Later'], namespace },
     });
@@ -119,16 +121,17 @@ describe('syntax-scoped entity resolution', () => {
   it.each(['Hidden', 'Missing', 'toString', 'constructor', '__proto__'])(
     'rejects unavailable and inherited names: %s',
     (name) => {
-      const { expression, ctx } = fixture(name);
+      const { expression, ctx, sources } = fixture(name);
+      const sourceFile = sources.sourceFileFor(expression.syntax);
       expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toMatchObject({
         ok: false,
         failure: [
           {
             message: `Unknown model reference "${name}"`,
-            sourceId: 'references.prisma',
-            span: {
-              start: { offset: expression.syntax.offset },
-              end: { offset: expression.syntax.endOffset },
+            filename: 'references.prisma',
+            range: {
+              start: sourceFile.positionAt(expression.syntax.offset),
+              end: sourceFile.positionAt(expression.syntax.endOffset),
             },
           },
         ],
@@ -137,24 +140,29 @@ describe('syntax-scoped entity resolution', () => {
   );
 
   it('resolves a declared __proto__ model as an own map entry', () => {
-    const { document, sourceFile } = parse(
+    const { document, sources } = parse(
       'model __proto__ {}\nmodel Owner {\n @@test(__proto__)\n}',
+      'references.prisma',
     );
-    const { table, diagnostics } = buildSymbolTable({
-      document,
-      sourceFile,
+    const { symbolTable, diagnostics } = buildSymbolTable({
+      documents: [document],
+      sources,
       pslBlockDescriptors: {},
     });
     expect(diagnostics).toEqual([]);
-    expect(Object.hasOwn(table.topLevel.models, '__proto__')).toBe(true);
+    expect(Object.hasOwn(symbolTable.topLevel.models, '__proto__')).toBe(true);
+    const declaration = Object.entries(symbolTable.topLevel.models).find(
+      ([name]) => name === '__proto__',
+    )?.[1];
+    expect(declaration).toBeDefined();
     for (const syntax of document.syntax.descendants()) {
       if (!(syntax instanceof SyntaxNode)) continue;
       const attribute = ModelAttributeAst.cast(syntax);
       const expression = attribute?.argList()?.args()[Symbol.iterator]().next().value?.value();
       if (!expression) continue;
-      const ctx = { sourceId: 'references.prisma', sourceFile, symbols: table };
+      const ctx = { sources, symbols: symbolTable };
       expect(entityRef({ kind: 'model' }).parse(expression, ctx)).toEqual(
-        ok({ declaration: table.topLevel.models['__proto__'], namespace: undefined }),
+        ok({ declaration, namespace: undefined }),
       );
       return;
     }
@@ -261,7 +269,7 @@ describe('checked references and unchecked identifiers', () => {
     expect(oneOf(entityRef({ kind: 'model' }), identifier()).parse(expression, ctx)).toMatchObject({
       ok: false,
       failure: [
-        { message: 'Expected one of: model reference | identifier', sourceId: 'references.prisma' },
+        { message: 'Expected one of: model reference | identifier', filename: 'references.prisma' },
       ],
     });
   });

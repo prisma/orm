@@ -89,7 +89,7 @@ export function reconstructExtensionBlock(
 export function interpretBlockAttributes(
   symbol: BlockSymbol,
   descriptor: AuthoringPslBlockDescriptor,
-  sourceFile: SourceFile,
+  sources: PslSources,
   symbols: SymbolTable,
   diagnostics: ParseDiagnostic[],
 ): void {
@@ -99,12 +99,12 @@ export function interpretBlockAttributes(
     const parsed = parseBlockAttribute(
       attribute,
       name,
-      nodePslSpan(attribute.syntax, sourceFile),
+      nodePslSpan(attribute.syntax, sources),
       descriptor,
       seenNames,
       symbol.keyword,
       symbol.name,
-      sourceFile,
+      sources,
       symbols,
     );
     if (parsed.ok) {

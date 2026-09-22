@@ -44,11 +44,17 @@ function fixture(
   const declarations = duplicate ? `${block}\nwidget ${name} {\n@@missing()\n}` : block;
   const source =
     namespace === undefined ? declarations : `namespace ${namespace} {\n${declarations}\n}`;
-  const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
+  const { document, sources, diagnostics: parseDiagnostics } = parse(source, 'widgets.prisma');
   expect(parseDiagnostics).toEqual([]);
-  const result = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: descriptors });
+  const result = buildSymbolTable({
+    documents: [document],
+    sources,
+    pslBlockDescriptors: descriptors,
+  });
   const scope =
-    namespace === undefined ? result.table.topLevel : result.table.topLevel.namespaces[namespace];
+    namespace === undefined
+      ? result.symbolTable.topLevel
+      : result.symbolTable.topLevel.namespaces[namespace];
   return { ...result, scope, block: scope?.blocks[name], factory, interpretedSymbols };
 }
 

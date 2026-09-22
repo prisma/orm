@@ -42,7 +42,7 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
   if (!field) throw new Error('expected field id on model M');
   return {
     sources,
-    symbols: table,
+    symbols: symbolTable,
     selfModel,
     field,
     resolveReferencedModel: () => undefined,
@@ -685,14 +685,18 @@ describe('fieldRef', () => {
 
 describe('entityRef', () => {
   function referenceArg(value: string) {
-    const { document, sourceFile } = parse(`model M {\n id Int @x(${value})\n}`);
-    const { table } = buildSymbolTable({ document, sourceFile, pslBlockDescriptors: {} });
-    const selfModel = table.topLevel.models['M'];
+    const { document, sources } = parse(`model M {\n id Int @x(${value})\n}`, 'schema.prisma');
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
+      pslBlockDescriptors: {},
+    });
+    const selfModel = symbolTable.topLevel.models['M'];
     const field = selfModel?.fields['id'];
     const attribute = field?.node.attributes()[Symbol.iterator]().next().value;
     const expr = attribute?.argList()?.args()[Symbol.iterator]().next().value?.value();
     if (!selfModel || !expr) throw new Error('Missing reference argument');
-    return { expr, ctx: { sourceId: 'schema.prisma', sourceFile, symbols: table, selfModel } };
+    return { expr, ctx: { sources, symbols: symbolTable, selfModel } };
   }
 
   it('parses a bare identifier into its resolved model', () => {

@@ -179,7 +179,8 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
         if (name !== undefined) {
           blocks[name] = buildBlock(
             name,
-            declaration, sources,
+            declaration,
+            sources,
             pslBlockDescriptors,
             diagnostics,
             collectedBlocks,
@@ -205,7 +206,8 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
         extendNamespace(
           namespace,
           declaration,
-          diagnostics, sources,
+          diagnostics,
+          sources,
           pslBlockDescriptors,
           collectedBlocks,
         );
@@ -227,7 +229,7 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   for (const block of collectedBlocks) {
     const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
     if (descriptor !== undefined) {
-      interpretBlockAttributes(block, descriptor, sourceFile, table, diagnostics);
+      interpretBlockAttributes(block, descriptor, sources, symbolTable, diagnostics);
     }
   }
   return { symbolTable, diagnostics };
