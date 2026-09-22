@@ -50,6 +50,7 @@ import {
   pslDefaultValueFormat,
   SYNTHETIC_SPAN,
 } from './psl-literals';
+import type { RecoveredEnumColumn } from './recover-domain-enums';
 
 /**
  * A recovered domain enum, keyed by column name per table: the allocated
@@ -57,12 +58,9 @@ import {
  * member values `computeDerivedCheckNames` re-renders the membership check
  * from.
  */
-export interface RecoveredEnumField {
+export interface RecoveredEnumField extends RecoveredEnumColumn {
   readonly pslName: string;
-  readonly memberValues: readonly string[];
 }
-
-const NO_RECOVERED_ENUMS: ReadonlyMap<string, RecoveredEnumField> = new Map();
 
 export function buildModel(
   table: SqlTableIR,
@@ -73,9 +71,9 @@ export function buildModel(
   rawDefaultParser: PslPrinterOptions['parseRawDefault'],
   relationFields: readonly RelationField[],
   danglingForeignKeys: readonly DanglingForeignKeyInfo[],
-  rlsEnabled = false,
-  policySkipNotes: readonly string[] = [],
-  recoveredEnums: ReadonlyMap<string, RecoveredEnumField> = NO_RECOVERED_ENUMS,
+  rlsEnabled: boolean,
+  policySkipNotes: readonly string[],
+  recoveredEnums: ReadonlyMap<string, RecoveredEnumField> | undefined,
 ): PslModel {
   const { name: modelName, map: mapName } = toModelName(table.name);
   const fieldNameMap = fieldNamesByTable.get(table.name);
@@ -113,7 +111,7 @@ export function buildModel(
         singlePkConstraintName,
         uniqueColumns,
         derivedCheckNames,
-        recoveredEnums.get(column.name),
+        recoveredEnums?.get(column.name),
       ),
     );
   }
@@ -214,7 +212,7 @@ export function buildModel(
  */
 function computeDerivedCheckNames(
   table: SqlTableIR,
-  recoveredEnums: ReadonlyMap<string, RecoveredEnumField>,
+  recoveredEnums: ReadonlyMap<string, RecoveredEnumField> | undefined,
 ): ReadonlySet<string> {
   const liveCheckNames = new Set((table.checks ?? []).map((check) => check.name));
   const derivedCheckNames = new Set<string>();
@@ -223,7 +221,7 @@ function computeDerivedCheckNames(
       tableName: table.name,
       columnName: column.name,
       many: column.many === true,
-      memberValues: recoveredEnums.get(column.name)?.memberValues,
+      memberValues: recoveredEnums?.get(column.name)?.memberValues,
     })) {
       const derivedName = formatWireName(
         composeCheckWirePrefix(table.name, column.name, candidate.kind),

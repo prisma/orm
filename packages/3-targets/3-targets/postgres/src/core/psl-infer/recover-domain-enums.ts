@@ -75,15 +75,22 @@ export function recoverDomainEnumColumns(
 ): ReadonlyMap<string, ReadonlyMap<string, RecoveredEnumColumn>> {
   const recoveredByTable = new Map<string, ReadonlyMap<string, RecoveredEnumColumn>>();
   for (const table of Object.values(tables)) {
-    const recovered = new Map<string, RecoveredEnumColumn>();
+    const wireChecksByPrefix = new Map<string, NonNullable<SqlTableIR['checks']>>();
     for (const check of table.checks ?? []) {
       const wire = parseWireName(check.name);
       if (wire === undefined) continue;
-      for (const column of Object.values(table.columns)) {
-        if (recovered.has(column.name)) continue;
-        if (wire.prefix !== composeCheckWirePrefix(table.name, column.name, 'membership')) {
-          continue;
-        }
+      wireChecksByPrefix.set(wire.prefix, [...(wireChecksByPrefix.get(wire.prefix) ?? []), check]);
+    }
+    if (wireChecksByPrefix.size === 0) continue;
+
+    // Columns drive the outer loop so the recovered map keeps column
+    // declaration order — recovered block names are allocated in it.
+    const recovered = new Map<string, RecoveredEnumColumn>();
+    for (const column of Object.values(table.columns)) {
+      const codecId = recoveredEnumCodecId(column.nativeType);
+      if (codecId === undefined) continue;
+      const prefix = composeCheckWirePrefix(table.name, column.name, 'membership');
+      for (const check of wireChecksByPrefix.get(prefix) ?? []) {
         const memberValues = harvestCheckLiterals(check.expression);
         if (memberValues.length === 0) continue;
         const candidate = postgresRenderCheckExpressions({
@@ -93,15 +100,11 @@ export function recoverDomainEnumColumns(
           memberValues,
         }).find((c) => c.kind === 'membership');
         if (candidate === undefined) continue;
-        const derivedName = formatWireName(
-          wire.prefix,
-          computeCheckContentHash(candidate.expression),
-        );
+        const derivedName = formatWireName(prefix, computeCheckContentHash(candidate.expression));
         if (derivedName !== check.name) continue;
-        const codecId = recoveredEnumCodecId(column.nativeType);
-        if (codecId === undefined) continue;
         if (!defaultIsRepresentable(column, memberValues)) continue;
         recovered.set(column.name, { memberValues, codecId });
+        break;
       }
     }
     if (recovered.size > 0) {

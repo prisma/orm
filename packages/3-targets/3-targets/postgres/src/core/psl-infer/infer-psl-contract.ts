@@ -355,22 +355,18 @@ export function buildPslDocumentAst(
   const recoveredColumnsByTable = recoverDomainEnumColumns(schemaIR.tables);
   const recoveredEnumBlocks: PslExtensionBlock[] = [];
   const recoveredEnumsByTable = new Map<string, ReadonlyMap<string, RecoveredEnumField>>();
-  for (const table of Object.values(schemaIR.tables)) {
-    const recoveredColumns = recoveredColumnsByTable.get(table.name);
-    if (recoveredColumns === undefined) continue;
+  for (const [tableName, recoveredColumns] of recoveredColumnsByTable) {
     const byColumn = new Map<string, RecoveredEnumField>();
-    for (const column of Object.values(table.columns)) {
-      const entry = recoveredColumns.get(column.name);
-      if (entry === undefined) continue;
+    for (const [columnName, entry] of recoveredColumns) {
       const pslName = createUniqueFieldName(
-        toEnumName(`${table.name}_${column.name}`).name,
+        toEnumName(`${tableName}_${columnName}`).name,
         claimedTopLevelNames,
       );
       claimedTopLevelNames.add(pslName);
       recoveredEnumBlocks.push(buildRecoveredEnumBlock(pslName, entry.memberValues, entry.codecId));
-      byColumn.set(column.name, { pslName, memberValues: entry.memberValues });
+      byColumn.set(columnName, { ...entry, pslName });
     }
-    recoveredEnumsByTable.set(table.name, byColumn);
+    recoveredEnumsByTable.set(tableName, byColumn);
   }
   const allTopLevelBlocks = [...topLevelExtensionBlocks, ...recoveredEnumBlocks];
 
