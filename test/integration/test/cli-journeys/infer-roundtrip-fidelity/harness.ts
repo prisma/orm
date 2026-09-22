@@ -18,7 +18,9 @@ export const SEED_SQL = `
     birth_date date,
     tags text[] NOT NULL DEFAULT '{}'::text[],
     labels text[] DEFAULT '{}'::text[],
-    metadata jsonb NOT NULL DEFAULT '{}'::jsonb
+    metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+    fee numeric(10,2) NOT NULL DEFAULT 1.50,
+    joined_at timestamp(3) NOT NULL DEFAULT '2024-01-01 00:00:00'
   );
   CREATE INDEX users_metadata_gin_idx ON users USING gin (metadata);
   CREATE INDEX users_email_lower_idx ON users (lower(email));

@@ -6,6 +6,7 @@ import { collectScalarTypeConstructors } from '@internal/framework-components/au
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   documentScopedTypes,
@@ -61,6 +62,7 @@ const authoringContributions = {
 } satisfies AuthoringContributions;
 
 const baseInput = {
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   target: postgresTarget,
   scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
   authoringContributions,

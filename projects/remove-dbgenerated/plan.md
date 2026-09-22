@@ -7,7 +7,7 @@ Spec: [`spec.md`](spec.md). Deferred items: [`deferred.md`](deferred.md). **Line
 | Slice | Folder | Branch | Depends on | Owner | Linear |
 |---|---|---|---|---|---|
 | A — The `sql` tagged literal for raw SQL defaults | [`slices/a-sql-default-literal/`](slices/a-sql-default-literal/spec.md) | `remove-dbgenerated-sql-literal` | nothing | agent 1 | TBD |
-| B — Codec-owned PSL literals (ADR 184, PSL half) | [`slices/b-codec-psl-literals/`](slices/b-codec-psl-literals/spec.md) | `remove-dbgenerated-codec-psl-literals` | nothing | agent 2 | TBD |
+| B — Literal types that codecs are compatible with (ADR 184, PSL half) | [`slices/b-codec-psl-literals/`](slices/b-codec-psl-literals/spec.md) | `remove-dbgenerated-codec-psl-literals` | A merged | agent 2 | TBD |
 | C — Delete `dbgenerated`, regenerate Supabase, upgrade instruction | [`slices/c-remove-dbgenerated/`](slices/c-remove-dbgenerated/spec.md) | `remove-dbgenerated-delete` | A and B merged | agent 1 | TBD |
 
 Each slice is one PR against `main`. Slice plans (dispatch decomposition) are written at build time at `slices/<slice>/plan.md` by the slice's implementer following the slice spec; the specs are complete enough that the plan is a sequencing document, not a design document.
@@ -15,9 +15,10 @@ Each slice is one PR against `main`. Slice plans (dispatch decomposition) are wr
 ## Sequencing
 
 ```
-main ──┬── A (parallel) ──┐
-       └── B (parallel) ──┴── C
+main ── A ── B ── C
 ```
+
+- *Amended 2026-09-17.* B now builds on slice A's tag registry and tagged-literal node, so B follows A. B's first PR implemented the withdrawn `encodePsl`/`decodePsl` design and is reworked on top of A after A merges.
 
 - A and B start together from the same `main` commit (`f3574a34a7` or later).
 - A and B share one file: `packages/2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts`, function `scalarDefaultArms`. A appends a `taggedLiteral(...)` arm after the function arms. B replaces `str(), numLiteral(), bool()` with `literal()`. Whichever merges second rebases and resolves that one function by hand; the result is `[literal(), ...funcArms, taggedLiteral(tags)]` for scalars and `[list(literal()), ...funcArms, taggedLiteral(tags)]` for lists. Both also touch `DefaultArgValue` in the same file, each adding its own union member.
@@ -29,7 +30,7 @@ main ──┬── A (parallel) ──┐
 
 - Agent 2 (slice B) owns the `Codec` interface change and every codec class. Agent 1 (slice A) does not add or change codec members.
 - Agent 1 (slice A) owns the tokenizer, parser node, tag registry, TypeScript `sql` tag and helpers, `gen_random_uuid()`, and the SQLite verify-side resolver. Agent 2 does not touch those.
-- Interfaces slice C relies on, which A and B must ship exactly as specified: `ControlMutationDefaults.defaultLiteralTagRegistry` (A5), `TaggedLiteralValue` (A4), `Codec.encodePsl` / `Codec.decodePsl` and `PslLiteral` (B1, B2), `mapDefault(columnDefault, { codec })` and `formatPslLiteral` (B6). A change to any of these names or shapes is reported to the orchestrator before it lands.
+- Interfaces slice C relies on, which A and B ship exactly as specified: `TaggedLiteralValue` (A4); data types registered per target with `casts`, `dataType` on every codec descriptor, and the authoring contribution's `dataTypes` entries including the `sql` lowering entries (slice B, ADR 254; `ControlMutationDefaults.defaultLiteralTagRegistry` from A5 no longer exists); the printer's `mapDefault` reading the column's type from the assembled stack (B7). A change to any of these names or shapes is reported to the orchestrator before it lands.
 - Both agents record any question the spec does not answer in their PR body under "Spec gaps" and stop on the halt conditions their spec lists. They do not choose an alternative.
 
 ## Validation gates per slice

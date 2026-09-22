@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   canonicalizeTaggedLiteralBody,
   describeTaggedLiteralFailure,
-  resolveBacktickEscapes,
+  resolvePslBacktickEscapes,
+  resolveTemplateTagEscapes,
   TAGGED_LITERAL_MAX_BYTES,
 } from '../src/shared/tagged-literal';
 
@@ -81,16 +82,31 @@ describe('canonicalizeTaggedLiteralBody', () => {
   });
 });
 
-describe('resolveBacktickEscapes', () => {
+describe('resolvePslBacktickEscapes', () => {
   it.each([
     ['an escaped backtick', 'a\\`b', 'a`b'],
     ['an escaped backslash', 'a\\\\b', 'a\\b'],
     ['a dollar kept as written', '\\$1', '\\$1'],
+    ['a dollar brace kept as written', `\\$${'{x}'}`, `\\$${'{x}'}`],
     ['any other backslash sequence kept as written', "E'\\n'", "E'\\n'"],
     ['a Windows path', "'C:\\users'", "'C:\\users'"],
     ['a trailing backslash', 'a\\', 'a\\'],
   ])('resolves %s', (_name, raw, resolved) => {
-    expect(resolveBacktickEscapes(raw)).toBe(resolved);
+    expect(resolvePslBacktickEscapes(raw)).toBe(resolved);
+  });
+});
+
+describe('resolveTemplateTagEscapes', () => {
+  it.each([
+    ['an escaped backtick', 'a\\`b', 'a`b'],
+    ['an escaped backslash', 'a\\\\b', 'a\\b'],
+    ['an escaped dollar', `\\$${'{x}'}`, `$${'{x}'}`],
+    ['an escaped backslash before a dollar', '\\\\$x', '\\$x'],
+    ['any other backslash sequence kept as written', "E'\\n'", "E'\\n'"],
+    ['a Windows path', "'C:\\users'", "'C:\\users'"],
+    ['a trailing backslash', 'a\\', 'a\\'],
+  ])('resolves %s', (_name, raw, resolved) => {
+    expect(resolveTemplateTagEscapes(raw)).toBe(resolved);
   });
 });
 

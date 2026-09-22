@@ -60,10 +60,14 @@ describe('sql template tag', () => {
     expect(sql`'C:\users'`).toEqual({ kind: 'function', expression: "'C:\\users'" });
   });
 
-  it('resolves exactly the two backtick escapes PSL resolves', () => {
+  it('resolves the three escapes a template tag understands', () => {
     expect(sql`\``).toEqual({ kind: 'function', expression: '`' });
-    expect(sql`\$1`).toEqual({ kind: 'function', expression: '\\$1' });
     expect(sql`a\\b`).toEqual({ kind: 'function', expression: 'a\\b' });
+    expect(sql`'Home | \${user}'`).toEqual({
+      kind: 'function',
+      expression: `'Home | $${'{user}'}'`,
+    });
+    expect(sql`\\$x`).toEqual({ kind: 'function', expression: '\\$x' });
   });
 
   it('refuses sql`now()` with CONTRACT.DEFAULT_INVALID, naming the form to write', () => {

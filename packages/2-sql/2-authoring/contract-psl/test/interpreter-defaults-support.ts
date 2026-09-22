@@ -3,8 +3,10 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresTarget,
   temporalCodecPresetMirrors,
@@ -20,11 +22,12 @@ export const interpretPslDocumentToSqlContract = (
     | 'composedExtensionContracts'
     | 'createNamespace'
     | 'capabilities'
+    | 'dataTypeLookup'
   > &
     Partial<
       Pick<
         InterpretPslDocumentToSqlContractInput,
-        'composedExtensionContracts' | 'scalarColumnDescriptors'
+        'composedExtensionContracts' | 'scalarColumnDescriptors' | 'dataTypeLookup'
       >
     >,
 ) => {
@@ -32,11 +35,21 @@ export const interpretPslDocumentToSqlContract = (
     input;
   return interpretPslDocumentToSqlContractInternal({
     target: postgresTarget,
+    // Literal defaults resolve through the column's codec descriptor, as they do in a real stack.
+    codecLookup: postgresCodecLookup,
     scalarColumnDescriptors,
     composedExtensionContracts: new Map(),
     createNamespace: createTestSqlNamespace,
     capabilities: { sql: { scalarList: true } },
     ...interpreterInput,
+    dataTypeLookup: interpreterInput.dataTypeLookup ?? fixtureDataTypeSupport.lookup,
+    authoringContributions: {
+      ...interpreterInput.authoringContributions,
+      dataTypes: {
+        ...fixtureDataTypeSupport.entries,
+        ...interpreterInput.authoringContributions?.dataTypes,
+      },
+    },
   });
 };
 

@@ -19,11 +19,12 @@ import {
   isAuthoringEntityTypeDescriptor,
   isAuthoringFieldPresetDescriptor,
   isAuthoringTypeConstructorDescriptor,
+  isDataTypeLoweringEntry,
+  loweringEntryKey,
   validateAuthoringHelperArguments,
 } from '@internal/framework-components/authoring';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
 import {
-  type ControlDefaultLiteralTagRegistry,
   type ControlMutationDefaultRegistry,
   type DefaultFunctionLoweringContext,
   describeTaggedLiteralFailure,
@@ -44,17 +45,21 @@ import {
   type PslDiagnosticCollector,
 } from '@internal/psl-parser';
 import type { PslSources } from '@internal/psl-parser/syntax';
-import type {
-  AuthoredColumnDefault,
-  AuthoredColumnDefaultLiteralValue,
-} from '@internal/sql-contract-ts/contract-builder';
+import type { AuthoredColumnDefault } from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
 import { contractError } from './contract-errors';
+import {
+  type DataTypeSupport,
+  entryForTag,
+  knownTags,
+  lowerDataTypeDefault,
+  PSL_INVALID_DEFAULT_LITERAL,
+  type WrittenValue,
+} from './data-type-default';
 import {
   type LoweredPslDefaultResult,
   lowerDefaultFunctionWithRegistry,
 } from './default-function-registry';
-import { numberLiteralDefault } from './number-literal-default';
 
 import { mapPslHelperArgs } from './psl-authoring-arguments';
 import {
@@ -707,12 +712,17 @@ const TAGGED_LITERAL_CANONICALIZATION_CODES = {
   'too-large': 'PSL_TAGGED_LITERAL_TOO_LARGE',
 } as const;
 
+/** A tag naming a data type yields the written value its body is; a lowering tag lowers itself. */
+type TaggedLiteralLowering =
+  | LoweredPslDefaultResult
+  | { readonly ok: true; readonly written: WrittenValue };
+
 function lowerTaggedLiteral(
   literal: ParsedTaggedLiteral,
-  registry: ControlDefaultLiteralTagRegistry,
+  support: DataTypeSupport,
   context: DefaultFunctionLoweringContext,
   source: DiagnosticSource,
-): LoweredPslDefaultResult {
+): TaggedLiteralLowering {
   const reject = (code: string, message: string): LoweredPslDefaultResult => ({
     ok: false,
     kind: 'owned',
@@ -722,11 +732,12 @@ function lowerTaggedLiteral(
       ...source.at(literal.span),
     },
   });
-  const entry = registry.get(literal.tag);
+  const entry =
+    support.entries[loweringEntryKey(literal.tag)] ?? entryForTag(support, literal.tag)?.entry;
   if (entry === undefined) {
     return reject(
       'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
-      `Unknown literal tag "${literal.tag}". Known tags: ${[...registry.keys()].join(', ')}.`,
+      `Unknown literal tag "${literal.tag}". Known tags: ${knownTags(support).join(', ')}.`,
     );
   }
   const { canonicalization } = literal;
@@ -735,6 +746,9 @@ function lowerTaggedLiteral(
       TAGGED_LITERAL_CANONICALIZATION_CODES[canonicalization.reason],
       describeTaggedLiteralFailure(canonicalization.reason),
     );
+  }
+  if (!isDataTypeLoweringEntry(entry)) {
+    return { ok: true, written: { kind: 'tag', tag: literal.tag, body: canonicalization.body } };
   }
   const result = entry.lower({
     literal: { tag: literal.tag, body: canonicalization.body, span: literal.span },
@@ -753,7 +767,7 @@ export function lowerDefaultForField(input: {
   readonly columnDescriptor: ColumnDescriptor;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
+  readonly dataTypeSupport: DataTypeSupport;
   readonly codecLookup: CodecLookup | undefined;
   readonly diagnostics: PslDiagnosticCollector;
 }): {
@@ -770,11 +784,12 @@ export function lowerDefaultForField(input: {
       field: input.field,
       controlMutationDefaults: {
         defaultFunctionRegistry: input.defaultFunctionRegistry,
-        defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+        dataTypeEntries: input.dataTypeSupport.entries,
       },
     }),
   );
   const interpreted = interpretFieldAttribute({
+    symbols: input.symbolTable,
     node,
     spec,
     model: input.model,
@@ -784,20 +799,82 @@ export function lowerDefaultForField(input: {
   });
   if (interpreted === undefined) return {};
   const value = interpreted.value;
-  const literalValue = (
-    literal: string | boolean | NumLiteral,
-  ): AuthoredColumnDefaultLiteralValue =>
-    typeof literal === 'object'
-      ? (numberLiteralDefault(literal.text, input.columnDescriptor.codecId, input.codecLookup) ??
-        Number(literal.text))
-      : literal;
+  const context: DefaultFunctionLoweringContext = {
+    sourceId: input.sources.sourceFileFor(node.syntax).filename,
+    modelName: input.modelName,
+    fieldName: input.fieldName,
+    columnCodecId: input.columnDescriptor.codecId,
+  };
+  const readAsLiteral = (written: WrittenValue) => {
+    const lowered = lowerDataTypeDefault({
+      written,
+      isList: input.field.list,
+      column: input.columnDescriptor,
+      codecLookup: input.codecLookup,
+      support: input.dataTypeSupport,
+      fieldPath: `${input.modelName}.${input.fieldName}`,
+    });
+    if (!lowered.ok) {
+      input.diagnostics.push({
+        code: lowered.code,
+        message: lowered.message,
+        ...source.at(),
+      });
+      return {};
+    }
+    return { defaultValue: { kind: 'literal' as const, value: lowered.value, canonical: true } };
+  };
 
-  if (Array.isArray(value)) {
-    return { defaultValue: { kind: 'literal', value: value.map(literalValue) } };
+  const writtenElement = (
+    element: string | boolean | NumLiteral | ParsedTaggedLiteral,
+  ): WrittenValue | { readonly ok: false } => {
+    if (typeof element === 'string') return { kind: 'string', text: element };
+    if (typeof element === 'boolean') return { kind: 'boolean', value: element };
+    if ('text' in element) return { kind: 'number', text: element.text };
+    const lowered = lowerTaggedLiteral(element, input.dataTypeSupport, context, source);
+    if (!lowered.ok) {
+      if (lowered.kind === 'owned') input.diagnostics.push(lowered.diagnostic);
+      else input.diagnostics.pushExternal(lowered.diagnostic);
+      return { ok: false };
+    }
+    if (!('written' in lowered)) {
+      input.diagnostics.push({
+        code: PSL_INVALID_DEFAULT_LITERAL,
+        message: `Literal tag "${element.tag}" produces a default of its own and cannot be an element of a list literal.`,
+        ...source.at(element.span),
+      });
+      return { ok: false };
+    }
+    return lowered.written;
+  };
+
+  // A column bound to a value set (`pg.enum(Ref)`) takes member names, which are checked against the
+  // value set rather than read as literals; its codec accepts no literal default at all.
+  if (input.columnDescriptor.valueSet !== undefined) {
+    if (typeof value === 'string') return { defaultValue: { kind: 'literal', value } };
+    if (Array.isArray(value)) {
+      const members = value.filter((element): element is string => typeof element === 'string');
+      if (members.length === value.length) {
+        return { defaultValue: { kind: 'literal', value: members } };
+      }
+    }
   }
 
-  if (typeof value === 'object' && 'text' in value) {
-    return { defaultValue: { kind: 'literal', value: literalValue(value) } };
+  if (Array.isArray(value)) {
+    const elements: WrittenValue[] = [];
+    for (const element of value) {
+      const written = writtenElement(element);
+      if ('ok' in written) return {};
+      elements.push(written);
+    }
+    return readAsLiteral({ kind: 'list', elements });
+  }
+
+  if (typeof value === 'string') return readAsLiteral({ kind: 'string', text: value });
+  if (typeof value === 'boolean') return readAsLiteral({ kind: 'boolean', value });
+
+  if ('text' in value) {
+    return readAsLiteral({ kind: 'number', text: value.text });
   }
 
   if (typeof value === 'object') {
@@ -809,7 +886,7 @@ export function lowerDefaultForField(input: {
     };
     const lowered =
       'tag' in value
-        ? lowerTaggedLiteral(value, input.defaultLiteralTagRegistry, context, source)
+        ? lowerTaggedLiteral(value, input.dataTypeSupport, context, source)
         : lowerDefaultFunctionWithRegistry({
             call: value,
             registry: input.defaultFunctionRegistry,
@@ -822,6 +899,8 @@ export function lowerDefaultForField(input: {
       else input.diagnostics.pushExternal(lowered.diagnostic);
       return {};
     }
+
+    if ('written' in lowered) return readAsLiteral(lowered.written);
 
     if (lowered.value.kind === 'storage') {
       return { defaultValue: lowered.value.defaultValue };
@@ -859,7 +938,7 @@ export function lowerDefaultForField(input: {
     return { executionDefaults: { onCreate: lowered.value.generated } };
   }
 
-  return { defaultValue: { kind: 'literal', value } };
+  return {};
 }
 
 export function resolveColumnDescriptor(

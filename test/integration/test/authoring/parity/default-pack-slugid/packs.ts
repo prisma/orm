@@ -27,7 +27,6 @@ const slugidDefaultsPack: SqlControlExtensionDescriptor<'postgres'> = {
 
   controlMutationDefaults: {
     defaultFunctionRegistry: new Map([['slugid', slugidEntry]]),
-    defaultLiteralTagRegistry: new Map(),
     generatorDescriptors: [{ id: 'slugid', applicableCodecIds: ['pg/text@1'] }],
   },
   create() {

@@ -7,6 +7,7 @@ import type {
   ControlFamilyInstance,
   TargetMigrationsCapability,
 } from '@internal/framework-components/control';
+import type { SnapshotContentVerifier } from '@internal/migration-tools/contract-snapshot-store';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk } from '@internal/utils/result';
 import type { DbUpdateResult, OnControlProgress } from '../types';
@@ -48,6 +49,8 @@ export interface ExecuteDbUpdateOptions<TFamilyId extends string, TTargetId exte
   readonly migrationsDir: string;
   readonly targetId: TTargetId;
   readonly extensions?: ReadonlyArray<ControlExtensionDescriptor<TFamilyId, TTargetId>>;
+  /** Content check for contract snapshots the aggregate loader resolves. */
+  readonly verifySnapshotContent?: SnapshotContentVerifier;
   readonly onProgress?: OnControlProgress;
 }
 
@@ -75,6 +78,7 @@ export async function executeDbUpdate<TFamilyId extends string, TTargetId extend
     extensions: options.extensions ?? [],
     policy: DB_UPDATE_POLICY,
     action: 'dbUpdate' as const,
+    ...ifDefined('verifySnapshotContent', options.verifySnapshotContent),
     ...ifDefined('onProgress', options.onProgress),
   };
   if (options.mode === 'apply' && !options.acceptDataLoss && options.consent === undefined) {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { glob, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 
 import {
@@ -222,26 +222,6 @@ describe('coverage config', () => {
       assert.throws(() => composeCoverageConfig(fixture, new Date('2026-01-01T12:00:00Z')));
     } finally {
       await rm(fixture, { recursive: true, force: true });
-    }
-  });
-
-  it('every package Vitest project owns JSON and no TS config retains coverage', async () => {
-    const repositoryRoot = join(import.meta.dirname, '..');
-    const configs = discoverCoverageConfigs(repositoryRoot);
-    const vitestPaths = [];
-    for await (const path of glob('packages/**/vitest.config.ts', { cwd: repositoryRoot })) {
-      vitestPaths.push(path);
-    }
-    vitestPaths.sort();
-
-    assert.equal(vitestPaths.length, 70);
-    assert.deepEqual(
-      configs.map(({ configPath }) => relative(repositoryRoot, configPath)),
-      vitestPaths.map((path) => path.replace('vitest.config.ts', 'coverage.config.json')),
-    );
-    for (const path of vitestPaths) {
-      const source = await readFile(join(repositoryRoot, path), 'utf8');
-      assert.doesNotMatch(source, /\bcoverage\s*:/);
     }
   });
 

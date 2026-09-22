@@ -1,4 +1,5 @@
 import { mongoCodecDescriptors } from '@internal/adapter-mongo/codecs';
+import { mongoDataTypes } from '@internal/adapter-mongo/data-types';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { CodecTypes } from './codec-types';
@@ -15,6 +16,7 @@ const mongoTargetDescriptorMetaBase = {
   capabilities: {},
   defaultNamespaceId: UNBOUND_NAMESPACE_ID,
   supportsNamespaces: true,
+  dataTypes: mongoDataTypes,
   types: {
     codecTypes: {
       codecDescriptors: mongoCodecDescriptors,

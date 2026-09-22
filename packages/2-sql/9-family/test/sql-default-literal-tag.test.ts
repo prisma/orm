@@ -1,6 +1,10 @@
+import {
+  isDataTypeLoweringEntry,
+  loweringEntryKey,
+} from '@internal/framework-components/authoring';
 import { checkSqlDefaultBody } from '@internal/sql-contract/validators';
 import { describe, expect, it } from 'vitest';
-import { createBuiltinLikeControlMutationDefaults } from '../../2-authoring/contract-psl/test/fixtures';
+import { fixtureDataTypeEntries } from '../../2-authoring/contract-psl/test/fixture-data-types';
 import { sqlDefaultLiteralTagEntry } from '../src/core/sql-default-literal-tag';
 
 const span = {
@@ -37,10 +41,12 @@ describe('checkSqlDefaultBody', () => {
 });
 
 describe('sqlDefaultLiteralTagEntry', () => {
-  const entry = sqlDefaultLiteralTagEntry('pg.sql`...`');
+  const registeredEntry = sqlDefaultLiteralTagEntry('pg.sql');
+  if (!isDataTypeLoweringEntry(registeredEntry)) throw new Error('a lowering entry');
+  const entry = registeredEntry;
 
-  it('records its usage and documentation', () => {
-    expect(entry.usage).toBe('pg.sql`...`');
+  it('names the tag it is written with, and what it does', () => {
+    expect(entry.written).toEqual({ kind: 'tag', tag: 'pg.sql' });
     expect(entry.documentation).toBe(
       "Uses the SQL in the string, verbatim, as the column's default expression.",
     );
@@ -116,10 +122,15 @@ describe('sqlDefaultLiteralTagEntry', () => {
   });
 });
 
-describe('the contract-psl fixture registry mirrors the family entry', () => {
-  const fixtureEntry =
-    createBuiltinLikeControlMutationDefaults().defaultLiteralTagRegistry.get('sql');
-  const familyEntry = sqlDefaultLiteralTagEntry('sql`...`');
+describe('the contract-psl fixture entries mirror the family entry', () => {
+  const registered = fixtureDataTypeEntries[loweringEntryKey('sql')];
+  if (registered === undefined || !isDataTypeLoweringEntry(registered)) {
+    throw new Error('the fixture entries do not register `sql` as a lowering tag');
+  }
+  const fixtureEntry = registered;
+  const registeredFamilyEntry = sqlDefaultLiteralTagEntry('sql');
+  if (!isDataTypeLoweringEntry(registeredFamilyEntry)) throw new Error('a lowering entry');
+  const familyEntry = registeredFamilyEntry;
 
   it.each([
     ['x; y'],
@@ -130,7 +141,7 @@ describe('the contract-psl fixture registry mirrors the family entry', () => {
     ["'no select here'"],
     [''],
   ])('lowers %j the same way', (body) => {
-    expect(fixtureEntry?.lower({ literal: { tag: 'sql', body, span }, context })).toEqual(
+    expect(fixtureEntry.lower({ literal: { tag: 'sql', body, span }, context })).toEqual(
       familyEntry.lower({ literal: { tag: 'sql', body, span }, context }),
     );
   });

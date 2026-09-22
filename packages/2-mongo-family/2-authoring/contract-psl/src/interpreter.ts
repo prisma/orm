@@ -222,6 +222,7 @@ function resolveFieldMappings(input: {
     const mapped =
       (mapNode
         ? interpretFieldAttribute({
+            symbols: specContext.symbols,
             node: mapNode,
             spec: mongoAttributeSpecs.field.map({ ...specContext, field }),
             model,
@@ -245,6 +246,7 @@ function resolveCollectionName(input: {
   const mapNode = findModelAttributeNode(model, 'map');
   const name = mapNode
     ? interpretModelAttribute({
+        symbols: specContext.symbols,
         node: mapNode,
         spec: mongoAttributeSpecs.model.map(specContext),
         model,
@@ -270,7 +272,7 @@ type DiscriminatorDeclaration = {
   readonly span: PslSpan;
 };
 type BaseDeclaration = {
-  readonly baseName: string;
+  readonly base: ModelSymbol;
   readonly value: string;
   readonly collectionName: string;
   readonly source: DiagnosticSource;
@@ -288,17 +290,18 @@ function collectPolymorphismDeclarations(
   sources: PslSources,
   diagnostics: PslDiagnosticCollector,
 ): {
-  discriminatorDeclarations: Map<string, DiscriminatorDeclaration>;
-  baseDeclarations: Map<string, BaseDeclaration>;
+  discriminatorDeclarations: Map<ModelSymbol, DiscriminatorDeclaration>;
+  baseDeclarations: Map<ModelSymbol, BaseDeclaration>;
 } {
-  const discriminatorDeclarations = new Map<string, DiscriminatorDeclaration>();
-  const baseDeclarations = new Map<string, BaseDeclaration>();
+  const discriminatorDeclarations = new Map<ModelSymbol, DiscriminatorDeclaration>();
+  const baseDeclarations = new Map<ModelSymbol, BaseDeclaration>();
 
   for (const model of models) {
     const specContext = specContextFor(model);
     const discNode = findModelAttributeNode(model, 'discriminator');
     if (discNode) {
       const parsed = interpretModelAttribute({
+        symbols: specContext.symbols,
         node: discNode,
         spec: mongoAttributeSpecs.model.discriminator(specContext),
         model,
@@ -316,7 +319,7 @@ function collectPolymorphismDeclarations(
             ...diagnosticSource(sources, discNode.syntax).at(nodePslSpan(discNode.syntax, sources)),
           });
         } else {
-          discriminatorDeclarations.set(model.name, {
+          discriminatorDeclarations.set(model, {
             fieldName,
             source: diagnosticSource(sources, discNode.syntax),
             span: nodePslSpan(discNode.syntax, sources),
@@ -327,8 +330,9 @@ function collectPolymorphismDeclarations(
     const baseNode = findModelAttributeNode(model, 'base');
     if (baseNode) {
       const parsed = interpretModelAttribute({
+        symbols: specContext.symbols,
         node: baseNode,
-        spec: mongoAttributeSpecs.model.base(specContext),
+        spec: mongoAttributeSpecs.model.base(),
         model,
         sources,
         diagnostics,
@@ -336,8 +340,8 @@ function collectPolymorphismDeclarations(
       if (parsed) {
         const collectionName =
           modelMetadataByName.get(model.name)?.collectionName ?? defaultCollectionName(model.name);
-        baseDeclarations.set(model.name, {
-          baseName: parsed.base,
+        baseDeclarations.set(model, {
+          base: parsed.base.declaration,
           value: parsed.value,
           collectionName,
           source: diagnosticSource(sources, baseNode.syntax),
@@ -354,10 +358,8 @@ function resolvePolymorphism(input: {
   models: Record<string, MongoModelEntry>;
   roots: Record<string, CrossReference>;
   collections: Record<string, Record<string, unknown>>;
-  allModels: readonly ModelSymbol[];
-  discriminatorDeclarations: Map<string, DiscriminatorDeclaration>;
-  baseDeclarations: Map<string, BaseDeclaration>;
-  modelNames: ReadonlySet<string>;
+  discriminatorDeclarations: Map<ModelSymbol, DiscriminatorDeclaration>;
+  baseDeclarations: Map<ModelSymbol, BaseDeclaration>;
   indexSpans: Map<MongoIndex, PslSpan>;
   modelIndexesByName: Map<string, readonly MongoIndex[]>;
   modelMetadataByName: ReadonlyMap<string, MongoModelMetadata>;
@@ -372,9 +374,7 @@ function resolvePolymorphism(input: {
   const {
     discriminatorDeclarations,
     baseDeclarations,
-    modelNames,
     modelMetadataByName,
-    allModels: allModelViews,
     indexSpans,
     modelIndexesByName,
     indexSources,
@@ -384,8 +384,9 @@ function resolvePolymorphism(input: {
   let collections = input.collections;
   const diagnostics = createPslDiagnosticCollector(input.sources);
 
-  for (const [modelName, decl] of discriminatorDeclarations) {
-    if (baseDeclarations.has(modelName)) {
+  for (const [declaration, decl] of discriminatorDeclarations) {
+    const modelName = declaration.name;
+    if (baseDeclarations.has(declaration)) {
       diagnostics.push({
         code: 'PSL_DISCRIMINATOR_AND_BASE',
         message: `Model "${modelName}" cannot have both @@discriminator and @@base`,
@@ -411,9 +412,9 @@ function resolvePolymorphism(input: {
     }
 
     const variants: Record<string, { readonly value: string }> = {};
-    for (const [variantName, baseDecl] of baseDeclarations) {
-      if (baseDecl.baseName !== modelName) continue;
-      variants[variantName] = { value: baseDecl.value };
+    for (const [variant, baseDecl] of baseDeclarations) {
+      if (baseDecl.base !== declaration) continue;
+      variants[variant.name] = { value: baseDecl.value };
     }
 
     if (Object.keys(variants).length === 0) {
@@ -431,38 +432,29 @@ function resolvePolymorphism(input: {
     };
   }
 
-  for (const [variantName, baseDecl] of baseDeclarations) {
-    if (!modelNames.has(baseDecl.baseName)) {
-      diagnostics.push({
-        code: 'PSL_BASE_TARGET_NOT_FOUND',
-        message: `Model "${variantName}" @@base references non-existent model "${baseDecl.baseName}"`,
-        ...baseDecl.source.at(baseDecl.span),
-      });
-      continue;
-    }
-
-    if (!discriminatorDeclarations.has(baseDecl.baseName)) {
+  for (const [variant, baseDecl] of baseDeclarations) {
+    const variantName = variant.name;
+    const baseName = baseDecl.base.name;
+    if (!discriminatorDeclarations.has(baseDecl.base)) {
       diagnostics.push({
         code: 'PSL_ORPHANED_BASE',
-        message: `Model "${variantName}" declares @@base(${baseDecl.baseName}, ...) but "${baseDecl.baseName}" has no @@discriminator`,
+        message: `Model "${variantName}" declares @@base(${baseName}, ...) but "${baseName}" has no @@discriminator`,
         ...baseDecl.source.at(baseDecl.span),
       });
       continue;
     }
 
-    if (discriminatorDeclarations.has(variantName)) {
+    if (discriminatorDeclarations.has(variant)) {
       continue;
     }
 
-    const baseModel = patched[baseDecl.baseName];
-    const variantModelView = allModelViews.find((m) => m.name === variantName);
-    if (!variantModelView) continue;
-    const hasExplicitMap = getAttribute(variantModelView.attributes, 'map') !== undefined;
+    const baseModel = patched[baseName];
+    const hasExplicitMap = getAttribute(variant.attributes, 'map') !== undefined;
 
     if (hasExplicitMap && baseModel && baseDecl.collectionName !== baseModel.storage.collection) {
       diagnostics.push({
         code: 'PSL_MONGO_VARIANT_SEPARATE_COLLECTION',
-        message: `Mongo variant "${variantName}" cannot use a different collection than its base "${baseDecl.baseName}". Mongo only supports single-collection polymorphism.`,
+        message: `Mongo variant "${variantName}" cannot use a different collection than its base "${baseName}". Mongo only supports single-collection polymorphism.`,
         ...baseDecl.source.at(baseDecl.span),
       });
       continue;
@@ -475,7 +467,7 @@ function resolvePolymorphism(input: {
         ...patched,
         [variantName]: {
           ...variantModel,
-          base: mongoCrossRef(baseDecl.baseName),
+          base: mongoCrossRef(baseName),
           storage: { collection: baseCollection },
         },
       };
@@ -485,7 +477,7 @@ function resolvePolymorphism(input: {
       modelMetadataByName.get(variantName)?.collectionName ?? defaultCollectionName(variantName);
     if (roots[variantCollectionName]?.model === variantName) {
       if (variantCollectionName === baseCollection && baseModel) {
-        roots = { ...roots, [variantCollectionName]: mongoCrossRef(baseDecl.baseName) };
+        roots = { ...roots, [variantCollectionName]: mongoCrossRef(baseName) };
       } else {
         roots = Object.fromEntries(
           Object.entries(roots).filter(([key]) => key !== variantCollectionName),
@@ -496,7 +488,7 @@ function resolvePolymorphism(input: {
     const variantOwnIndexes = modelIndexesByName.get(variantName) ?? [];
     const baseColl = collections[baseCollection];
 
-    const baseModelEntry = patched[baseDecl.baseName];
+    const baseModelEntry = patched[baseName];
     const discriminatorField = baseModelEntry?.discriminator?.field;
     const scopedVariantIndexes: MongoIndex[] = [];
     if (discriminatorField) {
@@ -883,6 +875,7 @@ function collectIndexes(
     const uniqueNode = findFieldAttributeNode(field, 'unique');
     if (!uniqueNode) continue;
     const unique = interpretFieldAttribute({
+      symbols: specContext.symbols,
       node: uniqueNode,
       spec: mongoAttributeSpecs.field.unique({ ...specContext, field }),
       model: pslModel,
@@ -919,6 +912,7 @@ function collectIndexes(
     let index: MongoIndex | undefined;
     if (attr.name === 'textIndex') {
       const parsed = interpretModelAttribute({
+        symbols: specContext.symbols,
         node,
         spec: mongoAttributeSpecs.model.textIndex(specContext),
         model: pslModel,
@@ -939,6 +933,7 @@ function collectIndexes(
     } else {
       const unique = attr.name === 'unique';
       const parsed = interpretModelAttribute({
+        symbols: specContext.symbols,
         node,
         spec: unique
           ? mongoAttributeSpecs.model.unique(specContext)
@@ -1190,6 +1185,7 @@ export function interpretPslDocumentToMongoContract(
         const relationNode = findFieldAttributeNode(field, 'relation');
         const relation = relationNode
           ? interpretFieldAttribute({
+              symbols: specContext.symbols,
               node: relationNode,
               spec: mongoAttributeSpecs.field.relation({ ...specContext, field }),
               model: pslModel,
@@ -1279,6 +1275,7 @@ export function interpretPslDocumentToMongoContract(
         if (!idNode) return false;
         return (
           interpretFieldAttribute({
+            symbols: specContext.symbols,
             node: idNode,
             spec: mongoAttributeSpecs.field.id({ ...specContext, field }),
             model: pslModel,
@@ -1438,10 +1435,8 @@ export function interpretPslDocumentToMongoContract(
     models,
     roots,
     collections,
-    allModels,
     discriminatorDeclarations,
     baseDeclarations,
-    modelNames,
     indexSpans,
     modelIndexesByName,
     modelMetadataByName,

@@ -320,7 +320,7 @@ withTempDir(({ createTempDir }) => {
     );
 
     it(
-      'a jsonb literal default round-trips clean through db verify --schema-only',
+      'a jsonb, numeric and temporal literal default round-trip clean through db verify --schema-only',
       async () => {
         const ctx: JourneyContext = setupJourney({
           connectionString: db.connectionString,
@@ -331,21 +331,23 @@ withTempDir(({ createTempDir }) => {
         const infer = await runContractInfer(ctx);
         expect(infer.exitCode, `contract infer\n${stripAnsi(infer.stderr)}`).toBe(0);
 
+        // Each default prints as the literal its codec reads back: a jsonb
+        // document as a `json` tag, a numeric keeping the trailing zero it was
+        // stored with, and a timestamp as the text its codec parses.
+        const printed = readContractPsl(ctx);
+        expect(printed).toContain('@default(json`{}`)');
+        expect(printed).toContain('@default(1.50)');
+        expect(printed).toContain('@default("2024-01-01 00:00:00")');
+
         // Fix the one remaining unrelated emit-blocker (1:1 back-relation) so
-        // emit succeeds and verify can run. The gin/hash indexes and the tags
-        // list default are left exactly as infer printed them — postgres now
-        // registers those access methods and infer now prints a literal-list
-        // default (TML-3037), so they emit and round-trip clean against the
-        // live gin/hash indexes and the live tags default, proving those
-        // fixes too. Only the jsonb default on Users.metadata is left broken,
-        // which is what this test is for.
-        const reduced = fixOneToOneBackRelation(readContractPsl(ctx));
-        writeContractPsl(ctx, reduced);
+        // emit succeeds and verify can run. Everything else is left exactly as
+        // infer printed it.
+        writeContractPsl(ctx, fixOneToOneBackRelation(printed));
 
         const emit = await runContractEmit(ctx);
         expect(emit.exitCode, `contract emit\n${stripAnsi(emit.stderr)}`).toBe(0);
 
-        await expectVerifiesCleanAfterPull(ctx, 'Users.metadata');
+        await expectVerifiesCleanAfterPull(ctx, 'Users.metadata, Users.fee, Users.joinedAt');
       },
       timeouts.spinUpPpgDev,
     );

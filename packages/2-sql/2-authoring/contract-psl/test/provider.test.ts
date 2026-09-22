@@ -79,6 +79,37 @@ describe('prismaContract provider helper', () => {
     });
   });
 
+  describe('the data types of the stack it is loaded with', () => {
+    it('reads a number default through the cast its column type declares', async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-data-types-'));
+      tempDirs.push(tempDir);
+      const schemaPath = join(tempDir, 'schema.prisma');
+      await writeFile(
+        schemaPath,
+        `model Account {
+  id      Int    @id
+  balance BigInt @default(42)
+}
+`,
+        'utf-8',
+      );
+
+      process.chdir(tempDir);
+      const config = prismaContract('./schema.prisma', baseOptions);
+      const result = await config.source.load(
+        createPostgresTestContext({ resolvedInputs: [schemaPath] }),
+      );
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(
+        unboundTables(sqlStorageFromSuccessfulSqlInterpretation(result.value))['Account']?.columns[
+          'balance'
+        ]?.default,
+      ).toEqual({ kind: 'literal', value: '42' });
+    });
+  });
+
   describe('defaultControlPolicy specifier precedence', () => {
     it('applies the specifier default when the interpreted contract omits one', async () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-policy-'));
@@ -744,7 +775,6 @@ model User {
       const result = await contract.source.load(
         createPostgresTestContext({
           controlMutationDefaults: {
-            defaultLiteralTagRegistry: new Map(),
             defaultFunctionRegistry: new Map(),
             generatorDescriptors: [],
           },
@@ -782,6 +812,7 @@ model User {
       const result = await contract.source.load(
         createPostgresTestContext({
           authoringContributions: {
+            dataTypes: {},
             field: {},
             type: {
               Int: {

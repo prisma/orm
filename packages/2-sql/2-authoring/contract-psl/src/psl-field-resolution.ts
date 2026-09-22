@@ -6,7 +6,6 @@ import type { AuthoringContributions } from '@internal/framework-components/auth
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
-  ControlDefaultLiteralTagRegistry,
   ControlMutationDefaultRegistry,
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
@@ -26,6 +25,7 @@ import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
+import type { DataTypeSupport } from './data-type-default';
 import { defaultTableName } from './default-table-name';
 import { formatDbAttributeMigrationMessage, getAttribute } from './psl-attribute-parsing';
 import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
@@ -58,7 +58,7 @@ function lowerEnumDefaultForField(input: {
   readonly sources: PslSources;
   readonly enumHandle: EnumTypeHandle;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
+  readonly dataTypeSupport: DataTypeSupport;
   readonly diagnostics: PslDiagnosticCollector;
 }): LoweredFieldDefault {
   const { field, model, enumHandle, diagnostics } = input;
@@ -72,13 +72,14 @@ function lowerEnumDefaultForField(input: {
       field,
       controlMutationDefaults: {
         defaultFunctionRegistry: input.defaultFunctionRegistry,
-        defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+        dataTypeEntries: input.dataTypeSupport.entries,
       },
     }),
   );
   const interpreted = interpretFieldAttribute({
     node,
     spec,
+    symbols: input.symbolTable,
     model,
     field,
     sources: input.sources,
@@ -161,7 +162,7 @@ export interface CollectResolvedFieldsInput {
   readonly familyId: string;
   readonly targetId: string;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
+  readonly dataTypeSupport: DataTypeSupport;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
@@ -270,6 +271,7 @@ function validateFieldAttributes(input: {
 }
 
 function extractFieldConstraintNames(input: {
+  readonly symbolTable: SymbolTable;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
@@ -288,6 +290,7 @@ function extractFieldConstraintNames(input: {
       ? undefined
       : interpretFieldAttribute({
           node: idNode,
+          symbols: input.symbolTable,
           spec: sqlAttributeSpecs.field.id(),
           model: input.model,
           field: input.field,
@@ -300,6 +303,7 @@ function extractFieldConstraintNames(input: {
       ? undefined
       : interpretFieldAttribute({
           node: uniqueNode,
+          symbols: input.symbolTable,
           spec: sqlAttributeSpecs.field.unique(),
           model: input.model,
           field: input.field,
@@ -321,6 +325,7 @@ type NoCheckKind = 'membership' | 'elementNotNull';
  * the only form the definition tree carries.
  */
 function lowerNoCheckForField(input: {
+  readonly symbolTable: SymbolTable;
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly sources: PslSources;
@@ -333,6 +338,7 @@ function lowerNoCheckForField(input: {
   const interpreted = interpretFieldAttribute({
     node,
     spec: sqlAttributeSpecs.field.noCheck(),
+    symbols: input.symbolTable,
     model: input.model,
     field: input.field,
     sources: input.sources,
@@ -391,7 +397,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     familyId,
     targetId,
     defaultFunctionRegistry,
-    defaultLiteralTagRegistry,
+    dataTypeSupport,
     generatorDescriptorById,
     diagnostics,
     sources,
@@ -574,7 +580,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             sources: input.sources,
             enumHandle,
             defaultFunctionRegistry,
-            defaultLiteralTagRegistry,
+            dataTypeSupport,
             diagnostics,
           })
         : lowerDefaultForField({
@@ -587,7 +593,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             columnDescriptor: descriptor,
             generatorDescriptorById,
             defaultFunctionRegistry,
-            defaultLiteralTagRegistry,
+            dataTypeSupport,
             codecLookup,
             diagnostics,
           })
@@ -628,6 +634,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     }
     const mappedColumnName = mapping.fieldColumns.get(field.name) ?? field.name;
     const { idAttribute, uniqueAttribute, idName, uniqueName } = extractFieldConstraintNames({
+      symbolTable: input.symbolTable,
       model,
       field,
       sources: input.sources,
@@ -673,6 +680,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     const fieldDefaultValue = presetContributions?.default ?? loweredDefault.defaultValue;
     const noCheckKinds = modelDerivesChecks
       ? lowerNoCheckForField({
+          symbolTable: input.symbolTable,
           model,
           field,
           sources: input.sources,
@@ -707,6 +715,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
 }
 
 export function buildModelMappings(
+  symbols: SymbolTable,
   modelEntries: readonly ModelNamespaceEntry[],
   defaultNamespaceId: string,
   diagnostics: PslDiagnosticCollector,
@@ -720,6 +729,7 @@ export function buildModelMappings(
         ? defaultTableName(model.name)
         : (interpretModelAttribute({
             node: mapNode,
+            symbols,
             spec: sqlAttributeSpecs.model.map(),
             model,
             sources,
@@ -733,6 +743,7 @@ export function buildModelMappings(
           ? field.name
           : (interpretFieldAttribute({
               node: fieldMapNode,
+              symbols,
               spec: sqlAttributeSpecs.field.map(),
               model,
               field,

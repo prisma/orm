@@ -294,6 +294,7 @@ export async function executeContractEmit(
       authoringContributions: stack.authoringContributions,
       codecLookup: stack.codecLookup,
       controlMutationDefaults: stack.controlMutationDefaults,
+      dataTypeLookup: stack.dataTypeLookup,
       resolvedInputs: await unlessAborted(expandContractInputs(contractConfig.source.inputs)),
       capabilities: stack.capabilities,
     };

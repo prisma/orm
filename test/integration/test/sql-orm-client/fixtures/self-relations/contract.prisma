@@ -18,6 +18,7 @@ model Person {
   outgoingLinks PersonConnection[] @relation("connectionSource")
   incomingLinks PersonConnection[] @relation("connectionTarget")
 
+  @@fullTextIndex([name], name: "person_name_search")
   @@map("people")
 }
 

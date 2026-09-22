@@ -67,7 +67,7 @@ describe('raw-query postgres lowering', () => {
       method: 'lower',
       args: [ColumnRef.of('user', 'email')],
       returns: { codecId: 'pg/text@1', nullable: false },
-      lowering: { targetFamily: 'sql', strategy: 'function', template: 'lower({{self}})' },
+      lowering: { targetFamily: 'sql', template: 'lower({{self}})' },
     });
 
     const plan = rawSql`SELECT ${lowerEmail} AS email FROM "user"`

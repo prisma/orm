@@ -246,6 +246,50 @@ describe('integration/create', () => {
   );
 
   it(
+    'createAndCount() returns the count the database reports, not the input length',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        const users = createUsersCollection(runtime);
+
+        try {
+          await runtime.query(`
+            create or replace function skip_flagged_user() returns trigger as $$
+            begin
+              if new.email = 'skipped@example.com' then
+                return null;
+              end if;
+              return new;
+            end;
+            $$ language plpgsql
+          `);
+          await runtime.query(
+            'create trigger users_skip_flagged before insert on users for each row execute function skip_flagged_user()',
+          );
+
+          const count = await users.createAndCount([
+            { id: 40, name: 'Eve', email: 'eve@example.com', invitedById: null },
+            { id: 41, name: 'Skipped', email: 'skipped@example.com', invitedById: null },
+            { id: 42, name: 'Frank', email: 'frank@example.com', invitedById: null },
+          ]);
+          expect(count).toBe(2);
+
+          const rows = await runtime.query<{ id: number; name: string }>(
+            'select id, name from users order by id',
+          );
+          expect(rows).toEqual([
+            { id: 40, name: 'Eve' },
+            { id: 42, name: 'Frank' },
+          ]);
+        } finally {
+          await runtime.query('drop trigger if exists users_skip_flagged on users');
+          await runtime.query('drop function if exists skip_flagged_user()');
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
     'create() and createAll() reject when returning capability is disabled',
     async () => {
       await withCollectionRuntime(async (runtime) => {

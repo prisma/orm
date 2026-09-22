@@ -48,8 +48,8 @@ function emit(scalarTypeCodecIds: ReadonlyMap<string, string>) {
     sources,
     scalarTypeCodecIds,
     controlMutationDefaults: {
+      dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
     },
     codecLookup: stack.codecLookup,
     authoringContributions: stack.authoringContributions,

@@ -7,6 +7,7 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
@@ -37,6 +38,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
+      | 'dataTypeLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -47,6 +49,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       ...input,
     });
 
@@ -69,6 +72,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       composedExtensionContracts: new Map(),
       controlMutationDefaults: builtinControlMutationDefaults,
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -136,6 +140,7 @@ describe('interpretPslDocumentToSqlContract', () => {
       authoringContributions: { entityTypes: testEnumEntityContributions, type: {}, field: {} },
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
     });
 
@@ -162,8 +167,8 @@ describe('interpretPslDocumentToSqlContract', () => {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       capabilities: { sql: { scalarList: true } },
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       controlMutationDefaults: {
-        defaultLiteralTagRegistry: new Map(),
         defaultFunctionRegistry: new Map([
           [
             'slugid',

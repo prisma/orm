@@ -6,6 +6,7 @@ import {
   type ControlPolicy,
   domainModelsAtDefaultNamespace,
 } from '@internal/contract/types';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
@@ -26,6 +27,7 @@ const stubContext: ContractSourceContext = {
   composedExtensions: [],
   composedExtensionContracts: new Map(),
   authoringContributions: {
+    dataTypes: {},
     field: {},
     type: {},
     entityTypes: {},
@@ -33,13 +35,13 @@ const stubContext: ContractSourceContext = {
     modelAttributes: {},
     attributeSpecs: { model: {}, field: {} },
   },
+  dataTypeLookup: createDataTypeLookup([]),
   codecLookup: {
     get: () => undefined,
     targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
   },
   controlMutationDefaults: {
-    defaultLiteralTagRegistry: new Map(),
     defaultFunctionRegistry: new Map(),
     generatorDescriptors: [],
   },

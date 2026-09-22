@@ -33,13 +33,13 @@ const countAny: SqlAggregateDescriptor = {
   emptyResultJson: '0',
 };
 
-/** A tally whose result codec reads a JSON number rather than decimal text. */
+/** A tally whose result codec produces a JavaScript number from the digit text `pg/int8` stores. */
 const headcountAny: SqlAggregateDescriptor = {
   operation: 'headcount',
   input: { kind: 'any' },
   output: { kind: 'codec', codecId: 'pg/int8number@1' },
   nullable: false,
-  emptyResultJson: 0,
+  emptyResultJson: '0',
   lower: ({ expr }) => new AggregateExpr('count', expr),
 };
 

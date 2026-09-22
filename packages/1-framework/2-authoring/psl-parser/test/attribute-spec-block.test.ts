@@ -13,7 +13,12 @@ function blockAttr(source: string): { node: ModelAttributeAst; ctx: AttributeCtx
   if (!node) throw new Error('expected a block attribute');
   return {
     node,
-    ctx: { sources: new PslSources([[root, cursor.sourceFile]]) },
+    ctx: {
+      sources: new PslSources([[root, cursor.sourceFile]]),
+      symbols: {
+        topLevel: { namespaces: {}, models: {}, compositeTypes: {}, namedTypes: {}, blocks: {} },
+      },
+    },
   };
 }
 

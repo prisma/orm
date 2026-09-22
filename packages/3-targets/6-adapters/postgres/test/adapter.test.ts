@@ -335,7 +335,6 @@ describe('Postgres adapter', () => {
       returns: { codecId: 'core/float8', nullable: false },
       lowering: {
         targetFamily: 'sql',
-        strategy: 'function',
         template: 'vector_length({{self}})',
       },
     });
@@ -387,6 +386,43 @@ describe('Postgres adapter', () => {
 
     expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
       'INSERT INTO "user" DEFAULT VALUES ON CONFLICT ("email") DO NOTHING',
+    );
+  });
+
+  it('renders a targetless DO NOTHING conflict clause without a column list', () => {
+    const ast = InsertAst.into(TableSource.named('user'))
+      .withRows([
+        {
+          id: ParamRef.of(1, { name: 'id', codec: { codecId: 'pg/int4@1' } }),
+          email: ParamRef.of('a@example.com', { name: 'email', codec: { codecId: 'pg/text@1' } }),
+        },
+      ])
+      .withOnConflict(InsertOnConflict.doNothing());
+
+    expect(adapter.lower(ast, { contract, params: [] }).sql).toBe(
+      'INSERT INTO "user" ("id", "email") VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    );
+  });
+
+  it('throws when a targetless conflict clause carries DO UPDATE SET', () => {
+    const ast = InsertAst.into(TableSource.named('user'))
+      .withRows([
+        {
+          id: ParamRef.of(1, { name: 'id', codec: { codecId: 'pg/int4@1' } }),
+          email: ParamRef.of('a@example.com', { name: 'email', codec: { codecId: 'pg/text@1' } }),
+        },
+      ])
+      .withOnConflict(
+        InsertOnConflict.doNothing().doUpdateSet({
+          email: ParamRef.of('b@example.com', { name: 'email', codec: { codecId: 'pg/text@1' } }),
+        }),
+      );
+
+    expect(() => adapter.lower(ast, { contract, params: [] })).toThrow(
+      expect.objectContaining({
+        code: 'RUNTIME.AST_INVALID',
+        message: expect.stringContaining('INSERT onConflict requires at least one conflict column'),
+      }),
     );
   });
 

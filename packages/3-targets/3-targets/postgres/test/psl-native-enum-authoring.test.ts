@@ -15,10 +15,12 @@
 
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -26,6 +28,8 @@ import {
 } from '../src/core/authoring';
 import { PostgresNativeEnum } from '../src/core/postgres-native-enum';
 import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const assembled = assembleAuthoringContributions([
   {
@@ -69,6 +73,7 @@ function interpret(source: string) {
   });
   return interpretPslDocumentToSqlContract({
     documents: [document],
+    dataTypeLookup: postgresDataTypeLookup,
     symbolTable,
     sources,
     capabilities: {},
@@ -427,6 +432,7 @@ describe('native_enum coexists with a PSL enum block in the same namespace', () 
     });
     return interpretPslDocumentToSqlContract({
       documents: [document],
+      dataTypeLookup: postgresDataTypeLookup,
       symbolTable,
       sources,
       capabilities: {},

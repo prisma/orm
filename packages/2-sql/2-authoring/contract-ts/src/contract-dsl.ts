@@ -841,7 +841,7 @@ type IndexInput<
 type ExpressionIndexInput<
   Name extends string | undefined,
   IndexTypes extends IndexTypeMap,
-> = IndexInput<Name, IndexTypes> & { readonly expression: string };
+> = IndexInput<Name, IndexTypes> & { readonly expression: IndexExpressionInput };
 
 type ForeignKeyOptions<Name extends string | undefined = string | undefined> =
   ConstraintOptions<Name> & {
@@ -870,6 +870,30 @@ export type UniqueConstraint<FieldNames extends readonly string[] = readonly str
   readonly name?: string;
 };
 
+/**
+ * An index expression rendered at lowering, once the storage column names are
+ * known. `fields` resolve exactly as the field-tuple form's do — a `.column()`
+ * override first, then the contract's column naming convention — and `render`
+ * receives the resolved names in the same order. Authoring code cannot know
+ * either, so an expression over a column has to be written this way rather
+ * than as a string, or it silently stops matching the column it names.
+ */
+/** A field the lowering resolved, as the renderer sees it. */
+export type DeferredIndexColumn = {
+  /** The storage column name, after `.column()` and the naming convention. */
+  readonly name: string;
+  /** The codec the column stores its values through. */
+  readonly codecId: string;
+};
+
+export type DeferredIndexExpression = {
+  readonly fields: readonly ColumnRef[];
+  readonly render: (columns: readonly DeferredIndexColumn[]) => string;
+};
+
+/** Opaque SQL, either written out or rendered at lowering. */
+export type IndexExpressionInput = string | DeferredIndexExpression;
+
 /** An authored index constraint's element structure — field tuple xor expression. */
 export type IndexConstraintElements<FieldNames extends readonly string[] = readonly string[]> =
   | {
@@ -880,7 +904,7 @@ export type IndexConstraintElements<FieldNames extends readonly string[] = reado
   | {
       readonly fields?: never;
       /** Opaque SQL: the entire CREATE INDEX element list — never parsed. */
-      readonly expression: string;
+      readonly expression: IndexExpressionInput;
     };
 
 /** Options only exist as options of a type, so the pair is one union. */
@@ -1066,11 +1090,14 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     };
   }
 
-  function index<FieldNames extends readonly string[], Name extends string | undefined = undefined>(
+  function index<
+    FieldNames extends readonly string[],
+    const Name extends string | undefined = undefined,
+  >(
     fields: { readonly [K in keyof FieldNames]: ColumnRef<FieldNames[K] & string> },
     options?: IndexInput<Name, IndexTypes>,
   ): IndexConstraint<FieldNames, Name>;
-  function index<Name extends string | undefined = undefined>(
+  function index<const Name extends string | undefined = undefined>(
     options: ExpressionIndexInput<Name, IndexTypes>,
   ): IndexConstraint<never, Name>;
   function index(
@@ -1078,7 +1105,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
       | ColumnRef
       | readonly ColumnRef[]
       | {
-          readonly expression: string;
+          readonly expression: IndexExpressionInput;
           readonly name?: string;
           readonly map?: string;
           readonly where?: string;
@@ -1125,7 +1152,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     SourceFieldName extends string,
     TargetModelName extends string,
     TargetFieldName extends string,
-    Name extends string | undefined = undefined,
+    const Name extends string | undefined = undefined,
   >(
     field: ColumnRef<SourceFieldName>,
     target: TargetFieldRef<TargetModelName, TargetFieldName>,
@@ -1140,7 +1167,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     SourceFieldNames extends readonly string[],
     TargetModelName extends string,
     TargetFieldNames extends readonly string[],
-    Name extends string | undefined = undefined,
+    const Name extends string | undefined = undefined,
   >(
     fields: { readonly [K in keyof SourceFieldNames]: ColumnRef<SourceFieldNames[K] & string> },
     target: {
@@ -1233,11 +1260,11 @@ type AttributeContext<Fields extends Record<string, ScalarFieldBuilder>> = {
 };
 
 type PackAwareIndex<IndexTypes extends IndexTypeMap> = {
-  <FieldNames extends readonly string[], Name extends string | undefined = undefined>(
+  <FieldNames extends readonly string[], const Name extends string | undefined = undefined>(
     fields: { readonly [K in keyof FieldNames]: ColumnRef<FieldNames[K] & string> },
     options?: IndexInput<Name, IndexTypes>,
   ): IndexConstraint<FieldNames, Name>;
-  <Name extends string | undefined = undefined>(
+  <const Name extends string | undefined = undefined>(
     options: ExpressionIndexInput<Name, IndexTypes>,
   ): IndexConstraint<never, Name>;
 };

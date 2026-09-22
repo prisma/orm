@@ -4,9 +4,11 @@ import {
 } from '@internal/framework-components/control';
 import {
   buildSymbolTable,
+  entityRef,
   fieldAttribute,
   funcCall,
   identifier,
+  list,
   oneOf,
   optional,
 } from '@internal/psl-parser';
@@ -15,6 +17,9 @@ import { expect, it, vi } from 'vitest';
 import { MarkupKind } from 'vscode-languageserver';
 import { providePslSignatureHelp } from '../src/signature-help';
 
+const referenceRule = entityRef({ kind: 'model' });
+const parseReference = vi.fn(referenceRule.parse);
+const reference = { ...referenceRule, parse: parseReference };
 const ascending = identifier('Asc', { documentation: 'Sort ascending.' });
 const parseIdentifier = vi.fn(ascending.parse);
 const asc = { ...ascending, parse: parseIdentifier };
@@ -25,6 +30,13 @@ const nested = funcCall('sort', {
 });
 
 it.each([
+  { type: identifier(), args: '|', label: '@probe(identifier)' },
+  { type: reference, args: '|', label: '@probe(model reference)' },
+  {
+    type: optional(list(oneOf(reference, identifier()))),
+    args: '|',
+    label: '@probe(((model reference | identifier)[])?)',
+  },
   { type: oneOf(asc, desc), args: '|', label: '@probe(Asc | Desc)' },
   { type: optional(asc), args: '|', label: '@probe(Asc?)' },
   { type: oneOf(asc, nested), args: 'sort(|)', label: 'sort(Desc)' },
@@ -74,5 +86,6 @@ it.each([
         : '**value**\n\nThe declared value.',
     });
     expect(parseIdentifier).not.toHaveBeenCalled();
+    expect(parseReference).not.toHaveBeenCalled();
   },
 );

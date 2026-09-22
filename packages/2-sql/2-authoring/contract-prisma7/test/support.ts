@@ -28,6 +28,7 @@ export function postgresSourceContext(resolvedInputs: readonly string[]): Contra
     composedExtensionContracts: stack.extensionContracts,
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
+    dataTypeLookup: stack.dataTypeLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     resolvedInputs,
     capabilities: stack.capabilities,

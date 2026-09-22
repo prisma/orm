@@ -12,6 +12,7 @@ import type { JsonValue } from '@internal/contract/types';
 import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Codec } from './codec';
 import { type CodecInstanceContext, type CodecTrait, voidParamsSchema } from './codec-types';
+import type { DataTypeId } from './data-type';
 
 /**
  * Unified codec descriptor. Every codec in the framework registers through this shape — non-parameterized codecs use `P = void` and a constant factory that returns the same shared codec instance for every column; parameterized codecs use a non-empty `P` and a curried higher-order factory that returns a per-instance codec.
@@ -24,7 +25,7 @@ import { type CodecInstanceContext, type CodecTrait, voidParamsSchema } from './
  *
  * Codec-registry-unification project § Decision.
  */
-export interface CodecDescriptor<P = void> {
+export interface CodecDescriptorTemplate<P = void> {
   /** The codec ID this descriptor applies to (e.g. `pg/vector@1`, `pg/text@1`). */
   readonly codecId: string;
   /** Semantic traits for operator gating (e.g. equality, order, numeric). */
@@ -55,6 +56,25 @@ export interface CodecDescriptor<P = void> {
 }
 
 /**
+ * A codec descriptor: a {@link CodecDescriptorTemplate} that names the data type it represents.
+ *
+ * Several codecs may represent one type, differing in the value they produce in memory; all of them
+ * read and write that type's canonical form. A descriptor whose data type is not registered in the
+ * assembled stack is an assembly error. ADR 254.
+ */
+export interface CodecDescriptor<P = void> extends CodecDescriptorTemplate<P> {
+  /** The data type this codec is one representation of. */
+  readonly dataType: DataTypeId;
+}
+
+/**
+ * Variance-erased {@link CodecDescriptorTemplate} alias, for the same reason as
+ * {@link AnyCodecDescriptor}.
+ */
+// biome-ignore lint/suspicious/noExplicitAny: variance erasure for heterogeneous descriptor collections
+export type AnyCodecDescriptorTemplate = CodecDescriptorTemplate<any>;
+
+/**
  * Variance-erased {@link CodecDescriptor} alias. `CodecDescriptor<P>` is invariant in `P` (the `factory` and `renderOutputType` slots use `P` contravariantly), so `CodecDescriptor<P>` does not extend `CodecDescriptor<unknown>` for specific `P`. Heterogeneous descriptor collections — e.g. `SqlStaticContributions.codecs:` returning a list that mixes parameterized and non-parameterized descriptors — type against this alias and narrow per codec id at the consumer.
  *
  * Codec-registry-unification spec § Decision: every codec resolves through one descriptor map; reads are non-branching.
@@ -69,7 +89,9 @@ export type AnyCodecDescriptor = CodecDescriptor<any>;
  *
  * Implements the {@link CodecDescriptor} interface so a concrete subclass instance is directly usable wherever the framework expects a `CodecDescriptor<P>`.
  */
-export abstract class CodecDescriptorImpl<TParams = void> implements CodecDescriptor<TParams> {
+export abstract class CodecDescriptorTemplateImpl<TParams = void>
+  implements CodecDescriptorTemplate<TParams>
+{
   abstract readonly codecId: string;
   abstract readonly traits: readonly CodecTrait[];
   abstract readonly targetTypes: readonly string[];
@@ -96,4 +118,19 @@ export abstract class CodecDescriptorImpl<TParams = void> implements CodecDescri
   abstract factory(
     params: TParams,
   ): (ctx: CodecInstanceContext) => Codec<string, readonly CodecTrait[], unknown, unknown>;
+}
+
+/**
+ * Abstract base for a concrete codec descriptor: a {@link CodecDescriptorTemplateImpl} that also
+ * names the data type its codec represents.
+ *
+ * A codec whose data type depends on the target that adopts it extends
+ * {@link CodecDescriptorTemplateImpl} instead, and the target names the type when it adapts the
+ * template.
+ */
+export abstract class CodecDescriptorImpl<TParams = void>
+  extends CodecDescriptorTemplateImpl<TParams>
+  implements CodecDescriptor<TParams>
+{
+  abstract readonly dataType: DataTypeId;
 }

@@ -6,6 +6,8 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  dataType,
+  dataTypeId,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
@@ -51,6 +53,15 @@ import type { SqliteContract } from '../src/core/types';
 import sqliteAdapterControlDescriptor from '../src/exports/control';
 import sqliteRuntimeAdapterDescriptor from '../src/exports/runtime';
 
+/** The data types the fixture codecs of one contribution represent, so assembly finds them. */
+/** A fixture codec's data type: its own id without the version. */
+const fixtureTypeId = (codecId: string) => dataTypeId(codecId.split('@')[0] ?? codecId);
+
+const fixtureDataTypes = (descriptors: readonly { readonly dataType?: string }[]) =>
+  [...new Set(descriptors.map((descriptor) => descriptor.dataType))]
+    .filter((id): id is string => id !== undefined)
+    .map((id) => dataType(id, {}));
+
 class TestCodec extends CodecImpl<string, readonly ['equality'], string, string> {
   constructor(
     descriptor: AnyCodecDescriptor,
@@ -80,6 +91,7 @@ class TestCodec extends CodecImpl<string, readonly ['equality'], string, string>
 }
 
 class TestGenericDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['text'] as const;
   override readonly paramsSchema = voidParamsSchema;
@@ -110,6 +122,7 @@ function sqliteDescriptor(options: {
     options.transform,
   );
   return sqliteCodec(descriptor, {
+    dataType: fixtureTypeId(options.codecId),
     jsonProjection(expression: ProjectionExpr): ProjectionExpr {
       options.onProjection?.();
       return expression;
@@ -127,6 +140,7 @@ function runtimeExtension(
     version: '0.0.1',
     familyId: 'sql',
     targetId: 'sqlite',
+    dataTypes: fixtureDataTypes(descriptors),
     types: { codecTypes: { codecDescriptors: descriptors } },
     create() {
       return { familyId: 'sql', targetId: 'sqlite' };
@@ -144,6 +158,7 @@ function controlExtension(
     version: '0.0.1',
     familyId: 'sql',
     targetId: 'sqlite',
+    dataTypes: fixtureDataTypes(descriptors),
     types: { codecTypes: { codecDescriptors: descriptors } },
     create() {
       return { familyId: 'sql', targetId: 'sqlite' };

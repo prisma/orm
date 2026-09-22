@@ -206,6 +206,7 @@ describe('string literal quote styles', () => {
     ['resolves an escaped backtick', 'sql`a\\`b`', 'a`b'],
     ['resolves a double backslash to one backslash', 'sql`a\\\\b`', 'a\\b'],
     ['keeps a backslash before a dollar sign as written', 'sql`\\$1`', '\\$1'],
+    ['keeps a backslash before a dollar brace as written', `sql\`\\$${'{x}'}\``, `\\$${'{x}'}`],
     ['keeps every other backslash sequence as written', "sql`E'\\n'`", "E'\\n'"],
     ['keeps an escaped double quote as written', 'sql`a\\"b`', 'a\\"b'],
   ])('a backtick string %s', (_name, argument, value) => {

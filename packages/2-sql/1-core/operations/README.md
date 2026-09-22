@@ -17,7 +17,7 @@ This package provides SQL-specific operation types that extend the generic `Oper
 - **SQL Operation Types**: SQL-specific operation entry and descriptor types
   - `SqlOperationEntry`: Extends `OperationEntry` with a `lowering` field (`SqlLoweringSpec`)
   - `SqlOperationDescriptor`: Alias for `SqlOperationEntry` used at registration sites
-  - `SqlOperationDescriptors`: `Readonly<Record<string, SqlOperationDescriptor>>` — the keyed-record shape adapter/extension `queryOperations()` factories return
+  - `SqlOperationDescriptors`: `Readonly<Record<string, SqlOperationDescriptor>>` — the keyed-record shape target/adapter/extension `queryOperations()` factories return
   - `SqlLoweringSpec`: SQL-specific lowering specification (`targetFamily`, `strategy`, `template`)
   - `SqlOperationRegistry`: Typed registry alias (`OperationRegistry<SqlOperationEntry>`)
 

@@ -3,12 +3,13 @@ import type {
   PslExtensionBlock,
   PslExtensionBlockParamValue,
 } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 import {
   buildTopLevelNameMap,
   createUniqueFieldName,
   type TopLevelNameResult,
 } from './infer-names';
-import { escapePslString, SYNTHETIC_SPAN } from './psl-literals';
+import { SYNTHETIC_SPAN } from './psl-literals';
 
 export const PSL_SCALAR_TYPE_NAMES = new Set([
   'String',
