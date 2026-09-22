@@ -139,7 +139,7 @@ A `Jsonb[]` column is unaffected: it is a list of JSON columns, and each element
 | `float8 DEFAULT 'NaN'` | `@default("NaN")` | `@default(NaN)` |
 | `timestamp(3)[] DEFAULT ARRAY['2024-01-01 00:00:00'::timestamp(3)]` | `@default(dbgenerated("ARRAY[...]"))` | `@default(["2024-01-01 00:00:00"])` |
 
-This is not a break to fix. The contract is the same; only the schema text differs. Re-run `prisma contract infer`, read the diff, and commit the new text. A default whose value the codec cannot read back, such as `NULL::character varying`, still prints as `dbgenerated(...)`, so infer never prints a schema that emit cannot read.
+This is not a break to fix. The contract is the same; only the schema text differs. Re-run `prisma contract infer`, read the diff, and commit the new text. A default whose value the codec cannot read back, such as `NULL::character varying`, prints as `` @default(sql`<expression>`) `` (`dbgenerated(...)` is removed in this release; see the `remove-dbgenerated` fragment), so infer never prints a schema that emit cannot read.
 
 ## `number-valued-64-bit-columns-store-their-default-as-digit-text`
 
