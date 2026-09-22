@@ -1,8 +1,8 @@
+import type { JsonValue } from '@internal/contract/types';
 import type {
   AuthoringDiagnosticSink,
   AuthoringEntityContext,
-  PslExtensionBlock,
-  PslExtensionBlockParamValue,
+  ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import { describe, expect, it } from 'vitest';
@@ -13,33 +13,21 @@ const SPAN = {
   end: { offset: 0, line: 1, column: 1 },
 };
 
-function bareMember(): PslExtensionBlockParamValue {
-  return { kind: 'bare', span: SPAN };
-}
-
-function valueMember(raw: string): PslExtensionBlockParamValue {
-  return { kind: 'value', raw, span: SPAN };
-}
-
-function typeAttr(codecId: string) {
-  return {
-    name: 'type',
-    args: [{ kind: 'positional' as const, value: `"${codecId}"`, span: SPAN }],
-    span: SPAN,
-  };
-}
-
+/**
+ * A bare member is a present key with an `undefined` value — the shared
+ * grammar's bare sentinel; an explicit member carries its typed JSON value.
+ */
 function enumBlock(input: {
   readonly name: string;
-  readonly parameters: Record<string, PslExtensionBlockParamValue>;
+  readonly values: Record<string, JsonValue | undefined>;
   readonly typeCodecId?: string;
-}): PslExtensionBlock {
+}): ParsedPslExtensionBlock<Record<string, JsonValue | undefined>> {
   return {
     kind: 'enum',
     keyword: 'enum',
     name: input.name,
-    parameters: input.parameters,
-    blockAttributes: input.typeCodecId !== undefined ? [typeAttr(input.typeCodecId)] : [],
+    values: input.values,
+    parameterSpans: Object.fromEntries(Object.keys(input.values).map((key) => [key, SPAN])),
     attributes:
       input.typeCodecId !== undefined
         ? { type: { args: { codecId: input.typeCodecId }, span: SPAN } }
@@ -48,11 +36,13 @@ function enumBlock(input: {
   };
 }
 
-const PG_TEXT_CODEC_ID = 'pg/text@1';
-const PG_INT_CODEC_ID = 'pg/int@1';
+const TEXT_CODEC_ID = 'pg/text@1';
+const INT_CODEC_ID = 'pg/int@1';
+const JSON_CODEC_ID = 'test/json@1';
+const FOLDING_CODEC_ID = 'test/folding-text@1';
 
-const pgTextCodec: Codec = {
-  id: PG_TEXT_CODEC_ID,
+const textCodec: Codec = {
+  id: TEXT_CODEC_ID,
   encode: async (v: unknown) => v,
   decode: async (w: unknown) => w,
   encodeJson: (value) => value as never,
@@ -62,8 +52,8 @@ const pgTextCodec: Codec = {
   },
 };
 
-const pgIntCodec: Codec = {
-  id: PG_INT_CODEC_ID,
+const intCodec: Codec = {
+  id: INT_CODEC_ID,
   encode: async (v: unknown) => v,
   decode: async (w: unknown) => w,
   encodeJson: (value) => value as never,
@@ -73,15 +63,41 @@ const pgIntCodec: Codec = {
   },
 };
 
+const jsonCodec: Codec = {
+  id: JSON_CODEC_ID,
+  encode: async (v: unknown) => v,
+  decode: async (w: unknown) => w,
+  encodeJson: (value) => value as never,
+  decodeJson(json) {
+    if (json === null) throw new Error('expected a non-null JSON value');
+    return json;
+  },
+};
+
+const foldingCodec: Codec = {
+  id: FOLDING_CODEC_ID,
+  encode: async (v: unknown) => v,
+  decode: async (w: unknown) => w,
+  encodeJson: (value) => value as never,
+  decodeJson(json) {
+    if (typeof json !== 'string') throw new Error(`expected string, got ${typeof json}`);
+    return json.toLowerCase();
+  },
+};
+
 const testCodecLookup: CodecLookup = {
   get(id: string): Codec | undefined {
-    if (id === PG_TEXT_CODEC_ID) return pgTextCodec;
-    if (id === PG_INT_CODEC_ID) return pgIntCodec;
+    if (id === TEXT_CODEC_ID) return textCodec;
+    if (id === INT_CODEC_ID) return intCodec;
+    if (id === JSON_CODEC_ID) return jsonCodec;
+    if (id === FOLDING_CODEC_ID) return foldingCodec;
     return undefined;
   },
   targetTypesFor(id: string): readonly string[] | undefined {
-    if (id === PG_TEXT_CODEC_ID) return ['text'];
-    if (id === PG_INT_CODEC_ID) return ['int'];
+    if (id === TEXT_CODEC_ID) return ['text'];
+    if (id === INT_CODEC_ID) return ['int'];
+    if (id === JSON_CODEC_ID) return ['json'];
+    if (id === FOLDING_CODEC_ID) return ['text'];
     return undefined;
   },
   renderOutputTypeFor: () => undefined,
@@ -97,73 +113,64 @@ function makeContext(diagnostics: unknown[]): AuthoringEntityContext {
     codecLookup: testCodecLookup,
     sourceId: 'schema.prisma',
     diagnostics: sink,
-    enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
+    enumInferenceCodecs: { text: TEXT_CODEC_ID, int: INT_CODEC_ID },
   };
 }
 
 const factory = sqlFamilyEnumEntityDescriptor.output.factory;
 
 describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members', () => {
-  it('bare members infer the text codec', () => {
+  it('bare members infer the text codec and decode from their key', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
-      enumBlock({ name: 'Role', parameters: { admin: bareMember(), user: bareMember() } }),
+      enumBlock({ name: 'Role', values: { admin: undefined, user: undefined } }),
       makeContext(diagnostics),
     );
 
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
-      codecId: PG_TEXT_CODEC_ID,
+      codecId: TEXT_CODEC_ID,
       nativeType: 'text',
       members: { admin: 'admin', user: 'user' },
     });
   });
 
-  it('string-value members infer the text codec', () => {
+  it('string members infer the text codec', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
-      enumBlock({
-        name: 'Role',
-        parameters: { admin: valueMember('"admin"'), user: valueMember('"user"') },
-      }),
+      enumBlock({ name: 'Role', values: { admin: 'admin', user: 'user' } }),
       makeContext(diagnostics),
     );
 
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
-      codecId: PG_TEXT_CODEC_ID,
+      codecId: TEXT_CODEC_ID,
       nativeType: 'text',
       members: { admin: 'admin', user: 'user' },
     });
   });
 
-  it('a mix of bare and string-value members still infers the text codec', () => {
+  it('a mix of bare and string members still infers the text codec', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
-      enumBlock({
-        name: 'Role',
-        parameters: { admin: bareMember(), user: valueMember('"user"') },
-      }),
+      enumBlock({ name: 'Role', values: { admin: undefined, user: 'user' } }),
       makeContext(diagnostics),
     );
 
     expect(diagnostics).toEqual([]);
-    expect(handle).toMatchObject({ codecId: PG_TEXT_CODEC_ID, nativeType: 'text' });
+    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID, nativeType: 'text' });
   });
 
-  it('integer-value members infer the int codec', () => {
+  it('integer members infer the int codec', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
-      enumBlock({
-        name: 'Priority',
-        parameters: { low: valueMember('1'), high: valueMember('2') },
-      }),
+      enumBlock({ name: 'Priority', values: { low: 1, high: 2 } }),
       makeContext(diagnostics),
     );
 
     expect(diagnostics).toEqual([]);
     expect(handle).toMatchObject({
-      codecId: PG_INT_CODEC_ID,
+      codecId: INT_CODEC_ID,
       nativeType: 'int',
       members: { low: 1, high: 2 },
     });
@@ -172,7 +179,7 @@ describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members',
   it('a float member cannot be inferred', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
-      enumBlock({ name: 'Priority', parameters: { low: valueMember('1.5') } }),
+      enumBlock({ name: 'Priority', values: { low: 1.5 } }),
       makeContext(diagnostics),
     );
 
@@ -183,7 +190,18 @@ describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members',
   it('a boolean member cannot be inferred', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
-      enumBlock({ name: 'Flag', parameters: { on: valueMember('true') } }),
+      enumBlock({ name: 'Flag', values: { on: true } }),
+      makeContext(diagnostics),
+    );
+
+    expect(handle).toBeUndefined();
+    expect(diagnostics).toEqual([expect.objectContaining({ code: 'PSL_ENUM_CANNOT_INFER_TYPE' })]);
+  });
+
+  it('an explicit null member cannot be inferred and is not a bare member', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({ name: 'Odd', values: { none: null } }),
       makeContext(diagnostics),
     );
 
@@ -194,10 +212,7 @@ describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members',
   it('a mix of string and integer members cannot be inferred', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
-      enumBlock({
-        name: 'Mixed',
-        parameters: { low: valueMember('"low"'), high: valueMember('2') },
-      }),
+      enumBlock({ name: 'Mixed', values: { low: 'low', high: 2 } }),
       makeContext(diagnostics),
     );
 
@@ -207,10 +222,7 @@ describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members',
 
   it('the diagnostic names the enum and suggests an explicit @@type', () => {
     const diagnostics: { code: string; message: string }[] = [];
-    factory(
-      enumBlock({ name: 'Priority', parameters: { low: valueMember('1.5') } }),
-      makeContext(diagnostics),
-    );
+    factory(enumBlock({ name: 'Priority', values: { low: 1.5 } }), makeContext(diagnostics));
 
     expect(diagnostics).toEqual([
       expect.objectContaining({
@@ -220,22 +232,26 @@ describe('sqlFamilyEnumEntityDescriptor: @@type omitted, inferred from members',
     ]);
     expect(diagnostics[0]?.message).toMatch(/@@type/);
   });
+
+  it('an empty enum cannot be inferred', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(enumBlock({ name: 'Empty', values: {} }), makeContext(diagnostics));
+
+    expect(handle).toBeUndefined();
+    expect(diagnostics).toEqual([expect.objectContaining({ code: 'PSL_ENUM_CANNOT_INFER_TYPE' })]);
+  });
 });
 
-describe('sqlFamilyEnumEntityDescriptor: explicit @@type is unchanged', () => {
+describe('sqlFamilyEnumEntityDescriptor: explicit @@type bypasses inference, never validation', () => {
   it('an explicit @@type is used verbatim, skipping inference entirely', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
-      enumBlock({
-        name: 'Priority',
-        parameters: { low: valueMember('1.5') },
-        typeCodecId: PG_TEXT_CODEC_ID,
-      }),
+      enumBlock({ name: 'Priority', values: { low: 1.5 }, typeCodecId: TEXT_CODEC_ID }),
       makeContext(diagnostics),
     );
 
-    // A float member would fail inference, but an explicit @@type("pg/text@1")
-    // bypasses the classifier and hits the codec's own decodeJson instead.
+    // A float member would fail inference, but an explicit @@type bypasses
+    // the classifier and hits the codec's own decodeJson instead.
     expect(diagnostics).toEqual([expect.objectContaining({ code: 'PSL_EXTENSION_INVALID_VALUE' })]);
     expect(handle).toBeUndefined();
   });
@@ -243,15 +259,105 @@ describe('sqlFamilyEnumEntityDescriptor: explicit @@type is unchanged', () => {
   it('an explicit @@type resolving to text lowers exactly as before', () => {
     const diagnostics: unknown[] = [];
     const handle = factory(
+      enumBlock({ name: 'Role', values: { admin: 'admin' }, typeCodecId: TEXT_CODEC_ID }),
+      makeContext(diagnostics),
+    );
+
+    expect(diagnostics).toEqual([]);
+    expect(handle).toMatchObject({ codecId: TEXT_CODEC_ID, nativeType: 'text' });
+  });
+
+  it('an explicit codec receives structured JSON media through the shared grammar', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
       enumBlock({
-        name: 'Role',
-        parameters: { admin: valueMember('"admin"') },
-        typeCodecId: PG_TEXT_CODEC_ID,
+        name: 'Config',
+        values: { region: { zone: 'a', replicas: [1, 2] }, tags: ['x', 'y'] },
+        typeCodecId: JSON_CODEC_ID,
       }),
       makeContext(diagnostics),
     );
 
     expect(diagnostics).toEqual([]);
-    expect(handle).toMatchObject({ codecId: PG_TEXT_CODEC_ID, nativeType: 'text' });
+    expect(handle).toMatchObject({
+      codecId: JSON_CODEC_ID,
+      members: { region: { zone: 'a', replicas: [1, 2] }, tags: ['x', 'y'] },
+    });
+  });
+
+  it('an explicit null member reaches the codec and its rejection is reported', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({ name: 'Odd', values: { none: null }, typeCodecId: JSON_CODEC_ID }),
+      makeContext(diagnostics),
+    );
+
+    expect(handle).toBeUndefined();
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_EXTENSION_INVALID_VALUE',
+        message: expect.stringContaining('rejected by codec'),
+      }),
+    ]);
+  });
+
+  it('a bare member under a non-string codec is its own diagnostic', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({ name: 'Priority', values: { low: undefined }, typeCodecId: INT_CODEC_ID }),
+      makeContext(diagnostics),
+    );
+
+    expect(handle).toBeUndefined();
+    expect(diagnostics).toEqual([
+      expect.objectContaining({ code: 'PSL_ENUM_BARE_MEMBER_NON_STRING_CODEC' }),
+    ]);
+  });
+
+  it('an unknown codec id is reported', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({ name: 'Role', values: { admin: 'admin' }, typeCodecId: 'nope/missing@1' }),
+      makeContext(diagnostics),
+    );
+
+    expect(handle).toBeUndefined();
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_EXTENSION_INVALID_VALUE',
+        message: expect.stringContaining('unknown codec'),
+      }),
+    ]);
+  });
+
+  it('collides on DECODED values, not raw literals', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({
+        name: 'Folded',
+        values: { first: 'Admin', second: 'admin' },
+        typeCodecId: FOLDING_CODEC_ID,
+      }),
+      makeContext(diagnostics),
+    );
+
+    expect(handle).toBeUndefined();
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_ENUM_DUPLICATE_MEMBER_VALUE',
+        message: expect.stringContaining('"admin"'),
+      }),
+    ]);
+  });
+
+  it('an explicit-codec empty enum is reported as missing members', () => {
+    const diagnostics: unknown[] = [];
+    const handle = factory(
+      enumBlock({ name: 'Empty', values: {}, typeCodecId: TEXT_CODEC_ID }),
+      makeContext(diagnostics),
+    );
+
+    expect(handle).toBeUndefined();
+    expect(diagnostics).toEqual([expect.objectContaining({ code: 'PSL_ENUM_MISSING_TYPE' })]);
   });
 });
