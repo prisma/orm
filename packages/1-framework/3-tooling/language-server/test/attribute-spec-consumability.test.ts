@@ -100,7 +100,10 @@ describe('assembled attribute specs are consumable from a resolved project', () 
     const spec = assembleAttributeSpecs(authoringContributions).model['base']?.({
       symbols: pipeline.symbolTable,
       model,
-      controlMutationDefaults,
+      controlMutationDefaults: {
+        defaultFunctionRegistry: controlMutationDefaults.defaultFunctionRegistry,
+        dataTypeEntries: {},
+      },
     });
     expect(spec).toMatchObject({
       name: 'base',
