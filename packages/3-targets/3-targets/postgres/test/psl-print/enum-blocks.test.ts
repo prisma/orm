@@ -14,7 +14,7 @@ import { type ColumnShape, domainFieldOf, INT_COLUMN, table } from './print-supp
 describe('native enum blocks', () => {
   function blockText(block: PslExtensionBlock): string {
     const members = Object.entries(block.parameters).map(([name, value]) =>
-      value.kind === 'value' ? `${name} = ${value.raw}` : name,
+      value.expression === undefined ? name : `${name} = ${value.expression}`,
     );
     const attributes = block.blockAttributes.map(
       (attribute) => `@@${attribute.name}(${attribute.args.map((arg) => arg.value).join(', ')})`,
