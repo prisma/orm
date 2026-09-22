@@ -11,7 +11,7 @@ Adds red-slot child caching to `syntax/red.ts` (within-snapshot node identity) a
 Normative pseudo-code and API live in the parent spec — `projects/symbol-table-resolve/spec.md` § "At a glance" / "The eager pass". Slice-level specifics:
 
 - **Red-slot caching** (`src/syntax/red.ts`): `SyntaxNode` gains a lazily-filled child-slot array; `childAt` (and everything built on it — `children()`, `firstChild`, `nextSibling`, `tokenAtOffset`, `coveringElement`) returns the cached wrapper on repeat access. Roslyn's `GetRed` design, single-threaded variant. Green layer untouched.
-- **Universe scope** (new module in `psl-parser`): builds `name → UniverseSymbol` once from an injected type-constructor registry; the object is config-derived and shared across snapshots.
+- **Contributed-type scope** (new module in `psl-parser`): builds `name → ContributedTypeSymbol` once from an injected type-constructor registry; the object is config-derived and shared across snapshots.
 - **Binder** (new module in `psl-parser`, interface + factory per repo pattern): two-phase eager pass over the symbol table (phase 1 declarations + type references, phase 2 attribute references reading phase-1 results); side tables are `WeakMap<SyntaxNode, …>`; queries `declaredSymbol(node)` / `symbolForNode(node)`; diagnostics returned beside the binder, `PSL_UNRESOLVED_REFERENCE` code family, cross-space references yield an explicit cross-space result kind with no diagnostic.
 - **Attribute-ctx helper**: `psl-parser` exports a helper that builds the ADR 249 parse-time context from a binder, so each conversion slice wires `resolveReferencedModel` as one map read. Consumers are not modified in this slice — the four existing hand-rolled implementations keep working (parent spec, transitional-shape constraint).
 - **Exports** via `src/exports/index.ts`; tests written before implementation per repo rule.
@@ -23,7 +23,7 @@ One package, one subject: the binder and the node-identity substrate it requires
 
 ## Scope
 
-**In:** `packages/1-framework/2-authoring/psl-parser` — `src/syntax/red.ts`, new binder + universe-scope modules, attribute-ctx helper, the D5 combinator wiring (`src/attribute-spec/` ctx types + reference combinators), `src/exports/index.ts`, package tests; branch originally stacked on `origin/multifiile-psl` (PR #30335), rebased onto `main` after its squash-merge.
+**In:** `packages/1-framework/2-authoring/psl-parser` — `src/syntax/red.ts`, new binder + contributed-type-scope modules, attribute-ctx helper, the D5 combinator wiring (`src/attribute-spec/` ctx types + reference combinators), `src/exports/index.ts`, package tests; branch originally stacked on `origin/multifiile-psl` (PR #30335), rebased onto `main` after its squash-merge.
 
 **Out:** the SQL/Mongo/LSP consumers' hand-rolled type-reference and relation resolution (their conversion slices) — D6 touches only their attribute-context construction sites; `contract-prisma7` (non-goal — if it turns out to construct attribute contexts, halt for operator ruling); laziness or cross-snapshot memo retention; incremental reparse; new LSP features.
 
@@ -36,7 +36,7 @@ One package, one subject: the binder and the node-identity substrate it requires
 | Field with `malformedType` | Skip resolution, no diagnostic | Existing flag exists precisely to prevent cascades |
 | Duplicate declarations | References bind to the first-wins symbol | Symbol table's documented first-wins policy; binder must not re-emit duplicate diagnostics |
 | Reopened namespaces (`namespace X {}` twice) | One merged `NamespaceSymbol`; scope covers members of all blocks | Already merged by the table; binder consumes the merged scope |
-| Model shadowing a universe scalar (`model Uuid`) | User declaration wins, silently | Operator-decreed (spec § Cross-cutting 1) |
+| Model shadowing a contributed scalar (`model Uuid`) | User declaration wins, silently | Operator-decreed (spec § Cross-cutting 1) |
 
 ## Slice-specific done conditions
 

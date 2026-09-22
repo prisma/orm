@@ -12,9 +12,9 @@ Four slices: one foundation slice delivering the eager binder in `psl-parser` (w
 ### Stack (deliver in order)
 
 1. **Slice `binder-core`** — Linear: omitted
-   - **Outcome:** `psl-parser` exports `createBinder(...) → { binder, diagnostics }` per the spec's normative pseudo-code: red-slot caching in `red.ts` gives within-snapshot node identity; the universe scope turns injected type constructors into symbols; the two-phase eager pass resolves type references and attribute references by the decreed chain (declaring namespace → top level → universe, never siblings); `PSL_UNRESOLVED_REFERENCE` diagnostics are born here; cross-space references yield the explicit cross-space result kind. The attribute-spec parse-time context's `resolveReferencedModel` is served by the binder inside `psl-parser`.
+   - **Outcome:** `psl-parser` exports `createBinder(...) → { binder, diagnostics }` per the spec's normative pseudo-code: red-slot caching in `red.ts` gives within-snapshot node identity; the contributed-type scope turns injected type constructors into symbols; the two-phase eager pass resolves type references and attribute references by the decreed chain (declaring namespace → top level → contributed types, never siblings); `PSL_UNRESOLVED_REFERENCE` diagnostics are born here; cross-space references yield the explicit cross-space result kind. The attribute-spec parse-time context's `resolveReferencedModel` is served by the binder inside `psl-parser`.
    - **Builds on:** PR #30335 (`multifiile-psl`) — external, unmerged; this project stacks on it.
-   - **Hands to:** the binder API + red-slot identity + diagnostic codes, stable for every conversion slice; parser tests pinning the scoping rule, universe-scope invalidation (identity across snapshots), and node-identity guarantees.
+   - **Hands to:** the binder API + red-slot identity + diagnostic codes, stable for every conversion slice; parser tests pinning the scoping rule, contributed-type-scope invalidation (identity across snapshots), and node-identity guarantees.
    - **Focus:** everything inside `psl-parser`. No consumer package changes; the four hand-rolled resolvers keep working untouched (spec's transitional-shape constraint: the binder is additive until a conversion slice claims its consumer).
 
 2. _(after both parallel slices below)_ **Slice `lsp-conversion`** — Linear: omitted

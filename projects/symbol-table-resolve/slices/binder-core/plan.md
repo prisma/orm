@@ -11,10 +11,10 @@ Slice spec: `projects/symbol-table-resolve/slices/binder-core/spec.md`. Branch: 
 
 ### Dispatch 2: binder-phase-1
 
-- **Outcome:** `createBinder(...) → { binder, diagnostics }` exists (interface + factory, package-internal): universe scope built from an injected type-constructor registry; phase 1 registers declarations and resolves every field type reference through declaring namespace → top level → universe (never siblings); `declaredSymbol`/`symbolForNode` answer from `WeakMap` tables; unresolved type references emit `PSL_UNRESOLVED_REFERENCE`; `malformedType` fields are skipped silently; `typeContractSpaceId` references yield the explicit cross-space kind; references bind to first-wins symbols; tests pin the scope chain (shadowing schema), universe-scope identity across two builds, and stable repeated-query results.
+- **Outcome:** `createBinder(...) → { binder, diagnostics }` exists (interface + factory, package-internal): contributed-type scope built from an injected type-constructor registry; phase 1 registers declarations and resolves every field type reference through declaring namespace → top level → contributed types (never siblings); `declaredSymbol`/`symbolForNode` answer from `WeakMap` tables; unresolved type references emit `PSL_UNRESOLVED_REFERENCE`; `malformedType` fields are skipped silently; `typeContractSpaceId` references yield the explicit cross-space kind; references bind to first-wins symbols; tests pin the scope chain (shadowing schema), contributed-type-scope identity across two builds, and stable repeated-query results.
 - **Builds on:** dispatch 1's node identity (the `WeakMap` tables).
-- **Hands to:** a working binder for declarations + type references, with the diagnostic channel and universe scope in place — the structure phase 2 extends.
-- **Focus:** new binder + universe-scope modules and tests. Attribute references untouched (phase 2); nothing exported from the package root yet.
+- **Hands to:** a working binder for declarations + type references, with the diagnostic channel and contributed-type scope in place — the structure phase 2 extends.
+- **Focus:** new binder + contributed-type-scope modules and tests. Attribute references untouched (phase 2); nothing exported from the package root yet.
 
 ### Dispatch 3: binder-phase-2-attributes
 

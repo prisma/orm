@@ -14,7 +14,7 @@ Outcome of the design discussion (2026-09-18) that preceded [`spec.md`](./spec.m
 - *Span-keyed memos with the red layer untouched* — workable (rust-analyzer's pointer style) but keeps the allocation churn and leaves span keys valid only within one parse anyway.
 - *Keying caches on green nodes* — wrong, not merely inferior: green nodes erase position, and resolution is a function of position; green subtrees are shareable across snapshots by design, so a green-keyed cache would serve pre-edit resolutions after an edit — stale answers with no error — the moment incremental reparse or hash-consing arrives.
 
-## 2. One scoping rule: declaring namespace → top level → universe; never siblings
+## 2. One scoping rule: declaring namespace → top level → contributed types; never siblings
 
 **Decision.** Operator decree: an unqualified reference resolves against same-namespace declarations first, then top level. Sibling namespaces are never consulted.
 
@@ -38,9 +38,11 @@ Outcome of the design discussion (2026-09-18) that preceded [`spec.md`](./spec.m
 
 **Rejected.** *Salsa-style dependency-tracked invalidation* — revision counters, dependency recording, and memo verification pay off for large multi-file inputs with macros; rust-analyzer's own architecture writing flags the complexity and constant-factor cost. PSL's inputs are small; snapshot discard is strictly simpler and has no protocol to get wrong.
 
-## 5. Scalars become symbols in a config-derived universe scope
+## 5. Scalars become symbols in a config-derived contributed-type scope
 
-**Decision.** Scalars (and type constructors) are exposed as symbols in an outermost universe scope, built once per configuration from the existing type-constructor registry, chained after top level. User declarations shadow universe symbols. Document edits never invalidate this layer.
+> **Renamed (2026-09-22, operator decree):** originally "universe scope" after the compiler term (Go's universe block). The operator ruled the term confusing and the analogy imprecise — the scope holds whatever the configured target and its extensions contribute (composed scalars, type constructors, field presets, extension namespaces), not language built-ins. New vocabulary: `ContributedTypeScope` / `ContributedTypeSymbol` / resolution kind `contributedType`, matching the repo's established "contributed" idiom (ADR 236; `ContributedPslDiagnosticCode`). Historical mentions of "universe" in the review log and dispatch briefs are archive and stand unedited.
+
+**Decision.** Scalars (and type constructors) are exposed as symbols in an outermost contributed-type scope, built once per configuration from the existing type-constructor registry, chained after top level. User declarations shadow contributed-type symbols. Document edits never invalidate this layer.
 
 **Why.** Surveyed compilers treat builtins as ordinary symbols in an outer scope, which deletes the LSP's two duplicated hand-rolled classification cascades. Placement outside the eager table matters because scalar sets are target- and contract-space-specific and change on configuration change, not document edit — welding them into the document table would conflate two invalidation triggers and contaminate a family-neutral structure.
 
@@ -94,4 +96,4 @@ Outcome of the design discussion (2026-09-18) that preceded [`spec.md`](./spec.m
 
 ## 11. Open-question resolutions (2026-09-18)
 
-The spec's four launch questions were answered by the operator: (1) all new LSP features, go-to-definition included, are follow-on work — the LSP slice converts existing surfaces only; (2) the stack on PR #30335 stands, no independent landing path; (3) resolution failures use a new parser-owned `PSL_UNRESOLVED_REFERENCE` code family, adopted by interpreters; (4) user declarations shadow universe symbols silently, with no diagnostic.
+The spec's four launch questions were answered by the operator: (1) all new LSP features, go-to-definition included, are follow-on work — the LSP slice converts existing surfaces only; (2) the stack on PR #30335 stands, no independent landing path; (3) resolution failures use a new parser-owned `PSL_UNRESOLVED_REFERENCE` code family, adopted by interpreters; (4) user declarations shadow contributed-type symbols silently, with no diagnostic.

@@ -25,13 +25,13 @@ diagnostics;                                 // every resolution failure; the bi
 
 The API is node-addressed and minimal — the two questions every surveyed compiler distinguishes (Roslyn: `GetDeclaredSymbol` vs `GetSymbolInfo`), with diagnostics returned beside the binder, extending the `buildSymbolTable` result pattern (`{ symbolTable, diagnostics }`). Symbol-addressed conveniences are added later only if call sites demand them.
 
-Resolution follows a single decreed rule — declaring namespace → top level → universe scope (config-derived scalar/type-constructor symbols) — and sibling namespaces are never consulted. The binder resolves **eagerly at creation** in one two-phase pass; queries are map reads. Invalidation is by abandonment: an edit produces a new snapshot (documents + symbol table + binder), and the old one becomes garbage as a whole. There is no invalidation protocol to maintain or to get wrong.
+Resolution follows a single decreed rule — declaring namespace → top level → contributed-type scope (config-derived scalar/type-constructor symbols) — and sibling namespaces are never consulted. The binder resolves **eagerly at creation** in one two-phase pass; queries are map reads. Invalidation is by abandonment: an edit produces a new snapshot (documents + symbol table + binder), and the old one becomes garbage as a whole. There is no invalidation protocol to maintain or to get wrong.
 
 ### The eager pass (normative pseudo-code)
 
 ```ts
 function createBinder({ sources, symbolTable, typeConstructors, attributeSpecs }) {
-  const universe = universeScope(typeConstructors);   // config scope: type names, shared across snapshots
+  const contributedTypes = contributedTypeScope(typeConstructors);   // config scope: type names, shared across snapshots
   const specs = attributeSpecs;                       // config scope: attribute names (target-contributed, ADR 236)
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();   // decl node -> its symbol
   const references = new WeakMap<SyntaxNode, Resolution>();    // ref node -> what it denotes
@@ -44,7 +44,7 @@ function createBinder({ sources, symbolTable, typeConstructors, attributeSpecs }
       for (const field of owner.fields) {
         declarations.set(field.node.syntax, field);
         references.set(typeNode(field).syntax,
-          resolveTypeRef(field, chain(scope, symbolTable.topLevel, universe)));
+          resolveTypeRef(field, chain(scope, symbolTable.topLevel, contributedTypes)));
       }
     }
 
@@ -96,7 +96,7 @@ Interpreters still run spec interpretation for argument **values**; the binder o
 - **Dependency-tracked (Salsa-style) invalidation.** No revision counters, no memo verification, no dependency recording. Snapshot discard only.
 - **Lazy binding and cross-snapshot memo retention.** The binder resolves eagerly per snapshot. On-demand resolution and early-cutoff memo reuse become worthwhile only alongside incremental reparse; that future project inherits an API already shaped for them.
 - **Bug-for-bug parity for corrected consumers.** The SQL sibling-namespace scan and Mongo's namespace blindness are defects being corrected, not behavior being preserved; each correction is named in its slice.
-- **Restoring scalar name lists into `buildSymbolTable`.** The eager symbol table stays family-blind; scalar knowledge enters only at binder creation, as symbols in the universe scope, sourced from the existing type-constructor registry (commit `72cd71550f`'s unification stands).
+- **Restoring scalar name lists into `buildSymbolTable`.** The eager symbol table stays family-blind; scalar knowledge enters only at binder creation, as symbols in the contributed-type scope, sourced from the existing type-constructor registry (commit `72cd71550f`'s unification stands).
 - **New LSP features.** The LSP slice only converts existing surfaces (completions, signature help, semantic tokens) onto the binder. Every new resolution-backed feature — go-to-definition, hover, references, rename — is follow-on work outside this project, by operator decree.
 
 ## Place in the larger world
@@ -109,11 +109,11 @@ Interpreters still run spec interpretation for argument **values**; the binder o
 
 ## Cross-cutting requirements
 
-1. **One scoping rule everywhere.** Unqualified references resolve declaring namespace → top level → universe scope; sibling namespaces are never consulted. User declarations shadow universe-scope symbols silently — no shadowing diagnostic. Every converted consumer carries a test pinning this rule against a schema where a namespaced declaration shadows a top-level one.
+1. **One scoping rule everywhere.** Unqualified references resolve declaring namespace → top level → contributed-type scope; sibling namespaces are never consulted. User declarations shadow contributed-type symbols silently — no shadowing diagnostic. Every converted consumer carries a test pinning this rule against a schema where a namespaced declaration shadows a top-level one.
 2. **The binder is the sole voice of resolution failures.** It owns unresolved- and ambiguous-reference diagnostics (it holds `PslSources`, so filenames and ranges are at hand), returned beside the binder from `createBinder`. Failure diagnostics use a new parser-owned `PSL_UNRESOLVED_REFERENCE` code family; converted consumers adopt these codes, map them into their channels, and never re-emit their own — the symbol table's duplicate-declaration precedent, extended. Shape failures (arity, argument type, malformed literals) remain the spec combinators' voice; they are not resolution.
 3. **Queries are timing-neutral; diagnostics are a creation-time guarantee.** `declaredSymbol` and `symbolForNode` return snapshot-scoped, stable answers and reveal nothing about when resolution ran. Complete diagnostics are returned by `createBinder` itself — the contract's one eager commitment, accepted knowingly for pipeline symmetry; a future lazy implementation must fill it at creation or change the factory's result shape. Resolution runs eagerly at creation: phase 1 type references, phase 2 attribute references (which read phase-1 results); the diagnostics are that pass's byproduct.
 4. **Within-snapshot node identity.** The red layer caches child wrappers in parent slots (Roslyn's `GetRed` design): two traversals to the same position return the same object, making identity-keyed side tables (`WeakMap`) correct. Memos are keyed by object identity of symbols and red nodes — never by green nodes (position-free and shareable across snapshots) and never by spans as cross-snapshot keys.
-5. **Invalidation by abandonment.** Document-derived state (red tree, symbol table, binder memos) is dropped whole on any document change, per the existing `project-artifacts.ts` drop-on-change discipline. The universe scope is config-derived, shared across snapshots, and invalidated only by configuration change — never by document edits.
+5. **Invalidation by abandonment.** Document-derived state (red tree, symbol table, binder memos) is dropped whole on any document change, per the existing `project-artifacts.ts` drop-on-change discipline. The contributed-type scope is config-derived, shared across snapshots, and invalidated only by configuration change — never by document edits.
 6. **Family knowledge is injected, not imported.** The binder receives the type-constructor registry (scalars included) at its factory, as `pslBlockDescriptors` is injected today; `psl-parser` gains no dependency on target packages.
 7. **Corrections are named, never smuggled.** Each consumer conversion states its behavior changes in its slice spec and PR description.
 
@@ -134,12 +134,12 @@ Interpreters still run spec interpretation for argument **values**; the binder o
 - [ ] The language server's span-scan reverse binding (`modelSymbolForNode`) and both duplicated name-classification cascades (`completion-symbols.ts`, `semantic-tokens.ts`) are replaced by binder queries.
 - [ ] The shadowing schema (same name declared in a namespace and at top level) resolves identically — namespace-local first — in parser tests, both interpreter test suites, and LSP tests.
 - [ ] Unresolved-reference diagnostics are emitted only by the binder; converted consumers contain no unresolved-reference emission of their own.
-- [ ] A test pins that a document edit does not rebuild the universe scope (object identity across snapshots) and that user declarations shadow universe symbols.
+- [ ] A test pins that a document edit does not rebuild the contributed-type scope (object identity across snapshots) and that user declarations shadow contributed-type symbols.
 - [ ] `packages/2-sql/2-authoring/contract-prisma7` is untouched: its diff against the base branch is empty at project close.
 
 ## Open Questions
 
-None. The four questions this spec first shipped with were resolved by the operator on 2026-09-18: all new LSP features (go-to-definition included) are follow-on work; the stack on PR #30335 stands with no independent landing path; the `PSL_UNRESOLVED_REFERENCE` code family is confirmed; silent shadowing of universe symbols is confirmed. The resolutions are folded into Non-goals and Cross-cutting requirements above.
+None. The four questions this spec first shipped with were resolved by the operator on 2026-09-18: all new LSP features (go-to-definition included) are follow-on work; the stack on PR #30335 stands with no independent landing path; the `PSL_UNRESOLVED_REFERENCE` code family is confirmed; silent shadowing of contributed-type symbols is confirmed. The resolutions are folded into Non-goals and Cross-cutting requirements above.
 
 ## References
 
