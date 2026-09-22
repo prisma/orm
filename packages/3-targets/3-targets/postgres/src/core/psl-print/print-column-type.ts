@@ -30,7 +30,8 @@ function nativeTypeText(column: StorageColumn): string {
 /**
  * The PSL type position for a storage column, from the reverse of the type map
  * `contract infer` uses. An enum-typed column takes the `pg.enum(<Block>)`
- * constructor, named after the value set the column points at.
+ * constructor, named after the value set the column points at; a column typed
+ * by a domain enum takes that enum's name.
  */
 export function printColumnType(input: {
   readonly column: StorageColumn;
@@ -53,11 +54,16 @@ export function printColumnType(input: {
     };
   }
 
+  const domainEnumName = column.valueSet?.entityName;
+  if (domainEnumName !== undefined) {
+    return { typeName: domainEnumName };
+  }
+
   const resolution = typeMap.resolve(nativeTypeText(column));
   if ('unsupported' in resolution) {
     throw postgresError(
-      'CONTRACT.CONVERT_UNSUPPORTED',
-      `contract convert: column ${coordinate} has native type "${column.nativeType}", which cannot be written in Prisma 8 PSL.`,
+      'CONTRACT.PRINT_UNSUPPORTED',
+      `contract print: column ${coordinate} has native type "${column.nativeType}", which cannot be written in Prisma 8 PSL.`,
       {
         why: 'The Postgres contract-to-PSL printer maps each native type back to the PSL type that produces it; this one is not in that map.',
         fix: 'Retype the column, or author the Prisma 8 contract by hand.',

@@ -19,6 +19,8 @@ import type { PrinterModel, PrinterNamedType } from './types';
  */
 export type PrintNamespaceSection = {
   readonly name: string;
+  /** Value-object `type` blocks, printed before the models that use them. */
+  readonly compositeTypes: readonly PrinterModel[];
   readonly models: readonly PrinterModel[];
   readonly extensionBlocks: readonly PslExtensionBlock[];
 };

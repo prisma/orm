@@ -37,6 +37,7 @@
     "@internal/cli": "workspace:8.0.0-rc.11",
     "@internal/driver-postgres": "workspace:8.0.0-rc.11",
     "@internal/migration-tools": "workspace:8.0.0-rc.11",
+    "@internal/psl-printer": "workspace:8.0.0-rc.11",
     "@repo/test-utils": "workspace:8.0.0-rc.11",
     "@repo/tsconfig": "workspace:8.0.0-rc.11",
     "@repo/tsdown": "workspace:8.0.0-rc.11",

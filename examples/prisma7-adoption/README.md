@@ -63,7 +63,7 @@ Two rules to know before you start:
 
 ### 4. Transfer migration ownership, then 5. remove Prisma 7
 
-Out of scope here. When the last route has moved, `prisma contract convert` writes the Prisma 8 PSL that produces the same contract this example emits from `prisma/schema.prisma`; point `contract` in `prisma.config.ts` at the written file and run `prisma contract emit` again to confirm the contract is unchanged. Then follow the guide's phase 4 (`prisma migration plan --name baseline`, `prisma db sign`, `prisma migration ref set db <timestamp>_baseline`) and phase 5.
+Out of scope here. When the last route has moved, `prisma contract print` writes the Prisma 8 PSL that produces the same contract this example emits from `prisma/schema.prisma`; point `contract` in `prisma.config.ts` at the written file and run `prisma contract emit` again to confirm the contract is unchanged. Then follow the guide's phase 4 (`prisma migration plan --name baseline`, `prisma db sign`, `prisma migration ref set db <timestamp>_baseline`) and phase 5.
 
 ## What a Prisma 7 user meets along the way
 

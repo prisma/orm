@@ -30,7 +30,7 @@ export default definePrismaConfig({
 At cutover:
 
 ```bash
-prisma contract convert --output src/prisma/contract.prisma
+prisma contract print --output src/prisma/contract.prisma
 ```
 
 writes the same contract as Prisma 8 PSL. The user switches `contract:` to that file and removes Prisma 7.
@@ -85,7 +85,7 @@ Inherits `drive/calibration/dod.md`. Project-specific:
 - For every fixture, `hash(interpret(prisma7)) === hash(interpret(convert(prisma7)))`.
 - A schema using any unsupported construct fails emit with one diagnostic per construct and no partial output.
 - No framework, family, target, or extension package depends on `prisma`, `@prisma/prisma7`, `@prisma/get-dmmf`, or `@prisma/prisma-schema-wasm`. The adoption example app (slice 4) intentionally installs Prisma 7, because showing both side by side is its purpose.
-- CLI README documents `contract convert`, and each facade's config reference documents its reader (`prisma7Schema` for Postgres, `prisma6Schema` for Mongo).
+- CLI README documents `contract print`, and each facade's config reference documents its reader (`prisma7Schema` for Postgres, `prisma6Schema` for Mongo).
 
 ## Plan-time verification items
 
@@ -114,17 +114,21 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 - Partial indexes (`@@index(where: raw(...))` with the `partialIndexes` preview feature). The Prisma 7 source reports a hard error; mapping them is new capability with its own Prisma 7 evidence.
 - Not deferred, assigned to slice 2: the Mongo PSL interpreter silently ignores unknown top-level blocks (`view` included); slice 2 adds the diagnostic.
 
-### What `contract convert` cannot write yet
+### What `contract print` cannot write
 
-The converter prints the loaded contract as a Prisma 8 schema and the round-trip test reads it back through the Prisma 8 PSL source. These are the cases where the Prisma 8 schema language or its reader cannot carry what the Prisma 7 contract holds. Each is a Prisma 8 feature to build, not a converter defect. A converted file must never read back as a different contract, so the converter refuses every one of them with `CONTRACT.CONVERT_UNSUPPORTED` and writes no file.
+`contract print` loads the contract the config names, from any source, and writes it as a Prisma 8 schema that reads back as the same contract. The proof is two round-trip tests: one over every Prisma 7 fixture (`contract-prisma7/test/convert-roundtrip.test.ts`) and one over contracts emitted from TypeScript and PSL sources that carry what a Prisma 7 schema cannot (`adapter-postgres/test/psl-print-roundtrip.test.ts`): value objects, polymorphism, named types, domain enums, control policies, and every index argument. The printer writes all of those. Where the PSL language has no form for something the contract holds, the printer refuses it by name with `CONTRACT.PRINT_UNSUPPORTED` and writes no file; it never drops anything silently.
 
-- A `Json` or `Jsonb` column whose default is an object or array literal. The PSL reader treats `@default("...")` on a Json field as a string, so there is no way to write the parsed value.
-- One model name declared in two namespaces. The PSL reader keys relation targets, junction detection and id columns by model name alone (`contract-psl/src/interpreter.ts`, `fkRelationsByDeclaringModel`, `modelIdColumns`), so the two models read back as one.
+The refusals, and what would lift each:
+
+- A `Json` or `Jsonb` column whose default is an object or array literal. The PSL reader treats `@default("...")` on a Json field as a string. Lifted by slice B of [`projects/remove-dbgenerated`](../remove-dbgenerated/spec.md) (codec-owned PSL literals). Slice C of that project switches `print-column-default.ts` from `dbgenerated("...")` to the `sql` tagged literal along with every other printer.
+- One model name declared in two namespaces. The PSL reader keys relation targets, junction detection and id columns by model name alone (`contract-psl/src/interpreter.ts`, `fkRelationsByDeclaringModel`, `modelIdColumns`), so the two models read back as one. Lifted by re-keying those on (namespace, model).
+- A domain enum outside the default namespace. The PSL reader refuses an `enum` block inside a `namespace` block. Lifted by a reader change.
+- A foreign key no relation travels, and a to-one relation with no foreign key behind it. The PSL reader derives every foreign key from a `@relation`, and every `@relation(fields:, references:)` lowers to one. Lifted by a relation argument that declines the constraint.
+- A field whose type is a union of types, a dictionary field, a column with its own control policy, and a model with an owner. None has PSL syntax.
+- An entity kind an extension contributes (row-level security policies, roles). Its PSL syntax belongs to the extension. Lifted by a per-kind print hook on the extension pack, the mirror of the block descriptors extensions already contribute for reading.
 - A generator the Postgres printer has no PSL form for (none of the Prisma 7 generators, which all print).
 
-Three list-column cases were refused in the first version and now convert: a nullable list type (`Tag[]?`, printed since #30313), a database-side default on a list column (read since #30325), and type parameters on a list field (`Decimal @db.Numeric(65,30)[]`; the PSL reader now keeps them on the domain field, in `contract-psl/src/interpreter.ts`, `patchModelDomainFields`). Every list fixture round-trips.
-
-The Json literal default is covered by slice B of [`projects/remove-dbgenerated`](../remove-dbgenerated/spec.md) (codec-owned PSL literals). Slice C of that project switches `print-column-default.ts` from `dbgenerated("...")` to the `sql` tagged literal along with every other printer.
+Three list-column cases were refused in the first version and now print: a nullable list type (`Tag[]?`, printed since #30313), a database-side default on a list column (read since #30325), and type parameters on a list field (`Decimal @db.Numeric(65,30)[]`; the PSL reader now keeps them on the domain field, in `contract-psl/src/interpreter.ts`, `patchModelDomainFields`). Every list fixture round-trips.
 
 ### Found outside this project's scope
 

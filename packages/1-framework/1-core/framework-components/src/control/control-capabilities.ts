@@ -55,7 +55,7 @@ export function hasPslContractInfer<TFamilyId extends string, TSchemaIR>(
 
 /**
  * Capability declaring that a family can print a contract as a PSL document
- * AST. Consumed by `prisma contract convert`.
+ * AST. Consumed by `prisma contract print`.
  */
 export interface PslContractPrintCapable<TContract = unknown> {
   printPslContract(contract: TContract): PslDocumentAst;

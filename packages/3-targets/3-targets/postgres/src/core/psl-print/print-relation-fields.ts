@@ -147,6 +147,8 @@ export function printRelationField(input: {
   readonly entry: RelationEntry;
   readonly target: ModelEntry;
   readonly name: string | undefined;
+  /** The owner shares its base's table, so the PSL source lowers no foreign key for it. */
+  readonly ownerIsSingleTableVariant: boolean;
 }): PslField {
   const { entry, target, name } = input;
   const { relation } = entry;
@@ -158,12 +160,15 @@ export function printRelationField(input: {
     args.push(namedArg('name', `"${escapePslString(name)}"`));
   }
 
-  if (relation.cardinality === 'N:1') {
+  if (relation.cardinality === 'N:1' && input.ownerIsSingleTableVariant) {
+    args.push(namedArg('fields', `[${relation.on.localFields.join(', ')}]`));
+    args.push(namedArg('references', `[${relation.on.targetFields.join(', ')}]`));
+  } else if (relation.cardinality === 'N:1') {
     const foreignKey = foreignKeyFor(entry, target);
     if (foreignKey === undefined) {
       throw postgresError(
-        'CONTRACT.CONVERT_UNSUPPORTED',
-        `contract convert: relation "${entry.owner.name}.${entry.fieldName}" has no foreign key in storage, which Prisma 8 PSL cannot express.`,
+        'CONTRACT.PRINT_UNSUPPORTED',
+        `contract print: relation "${entry.owner.name}.${entry.fieldName}" has no foreign key in storage, which Prisma 8 PSL cannot express.`,
         {
           why: 'A to-one relation is authored as `@relation(fields:…, references:…)`, which always lowers to a foreign key.',
           fix: 'Author the Prisma 8 contract by hand for this relation.',
@@ -173,10 +178,12 @@ export function printRelationField(input: {
     }
     args.push(namedArg('fields', `[${relation.on.localFields.join(', ')}]`));
     args.push(namedArg('references', `[${relation.on.targetFields.join(', ')}]`));
-    args.push(
-      namedArg('onDelete', PSL_REFERENTIAL_ACTIONS[foreignKey.onDelete ?? 'noAction']),
-      namedArg('onUpdate', PSL_REFERENTIAL_ACTIONS[foreignKey.onUpdate ?? 'noAction']),
-    );
+    if (foreignKey.onDelete !== undefined) {
+      args.push(namedArg('onDelete', PSL_REFERENTIAL_ACTIONS[foreignKey.onDelete]));
+    }
+    if (foreignKey.onUpdate !== undefined) {
+      args.push(namedArg('onUpdate', PSL_REFERENTIAL_ACTIONS[foreignKey.onUpdate]));
+    }
     if (foreignKey.name !== undefined) {
       args.push(namedArg('map', `"${escapePslString(foreignKey.name)}"`));
     }

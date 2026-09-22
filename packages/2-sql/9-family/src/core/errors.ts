@@ -2,7 +2,7 @@ import type { StructuredError, StructuredErrorOptions } from '@internal/utils/st
 import { structuredError } from '@internal/utils/structured-error';
 
 type SqlFamilyErrorCode =
-  | 'CONTRACT.CONVERT_UNSUPPORTED'
+  | 'CONTRACT.PRINT_UNSUPPORTED'
   | 'CONTRACT.FOREIGN_KEY_INVALID'
   | 'CONTRACT.INFER_UNSUPPORTED'
   | 'CONTRACT.MARKER_ROW_CORRUPT'

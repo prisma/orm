@@ -1,4 +1,4 @@
-// The config a project switches to after `prisma contract convert`: the same
+// The config a project switches to after `prisma contract print`: the same
 // database, now read from the Prisma 8 PSL the command wrote.
 import { defineConfig as postgres } from '@internal/postgres/config';
 import { defineConfig } from '@prisma/cli-engine';

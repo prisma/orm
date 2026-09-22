@@ -50,7 +50,7 @@ export function loadFixtureSchema(caseName: string) {
   );
 }
 
-/** Prints a contract as Prisma 8 PSL text, the way `contract convert` does. */
+/** Prints a contract as Prisma 8 PSL text, the way `contract print` does. */
 export function printContractAsPsl(contract: Contract<SqlStorage>): string {
   const ast = postgres.printPslContract?.(contract);
   if (ast === undefined) {
@@ -65,7 +65,7 @@ export function printContractAsPsl(contract: Contract<SqlStorage>): string {
 
 /** Loads printed PSL text back through the Prisma 8 PSL source. */
 export async function loadPrintedPsl(text: string): Promise<Contract<SqlStorage>> {
-  const directory = mkdtempSync(join(tmpdir(), 'prisma7-convert-'));
+  const directory = mkdtempSync(join(tmpdir(), 'prisma7-print-'));
   const printedPath = join(directory, 'contract.prisma');
   writeFileSync(printedPath, text);
   const result = await prismaContract(printedPath, {

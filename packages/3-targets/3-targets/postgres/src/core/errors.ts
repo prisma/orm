@@ -4,7 +4,7 @@ import { structuredError } from '@internal/utils/structured-error';
 
 export type PostgresTargetErrorCode =
   | 'CONTRACT.CODEC_DESCRIPTOR_MISSING'
-  | 'CONTRACT.CONVERT_UNSUPPORTED'
+  | 'CONTRACT.PRINT_UNSUPPORTED'
   | 'CONTRACT.DEFAULT_INVALID'
   | 'CONTRACT.ENTITY_KIND_INVALID'
   | 'CONTRACT.IDENTIFIER_INVALID'

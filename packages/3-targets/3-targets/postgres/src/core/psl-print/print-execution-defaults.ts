@@ -70,8 +70,8 @@ export function printExecutionDefault(input: {
     if (onCreate || onUpdate) {
       if ((onCreateId !== undefined && !onCreate) || (onUpdateId !== undefined && !onUpdate)) {
         throw postgresError(
-          'CONTRACT.CONVERT_UNSUPPORTED',
-          `contract convert: column ${coordinate} takes the wall-clock-now generator in one phase and "${onCreate ? onUpdateId : onCreateId}" in the other, which cannot be written in Prisma 8 PSL.`,
+          'CONTRACT.PRINT_UNSUPPORTED',
+          `contract print: column ${coordinate} takes the wall-clock-now generator in one phase and "${onCreate ? onUpdateId : onCreateId}" in the other, which cannot be written in Prisma 8 PSL.`,
           {
             why: 'The temporal preset a now generator is authored through writes each phase as `now`, so the other generator would be dropped from the written file.',
             fix: 'Author the Prisma 8 contract by hand for this column.',
@@ -86,8 +86,8 @@ export function printExecutionDefault(input: {
   const call = onCreateId === undefined ? undefined : GENERATOR_CALLS.get(onCreateId);
   if (call === undefined || onUpdateId !== undefined) {
     throw postgresError(
-      'CONTRACT.CONVERT_UNSUPPORTED',
-      `contract convert: column ${coordinate} carries generated value "${onCreateId ?? onUpdateId}", which cannot be written in Prisma 8 PSL.`,
+      'CONTRACT.PRINT_UNSUPPORTED',
+      `contract print: column ${coordinate} carries generated value "${onCreateId ?? onUpdateId}", which cannot be written in Prisma 8 PSL.`,
       {
         why: 'The Postgres contract-to-PSL printer knows one way to write each generator; this generator is not among them.',
         fix: 'Author the Prisma 8 contract by hand for this column.',

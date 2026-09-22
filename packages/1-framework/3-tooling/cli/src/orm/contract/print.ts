@@ -17,24 +17,24 @@ import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { inferredContractPathFor } from './paths';
 
-interface ConvertDocument {
+interface PrintDocument {
   readonly ok: true;
   readonly summary: string;
   readonly target: { readonly familyId: string; readonly id: string };
   readonly psl: { readonly path: string };
-  readonly source: string;
+  readonly source: readonly string[];
   readonly timings: { readonly total: number };
 }
 
 /**
- * The routine that carries a converted contract onto the database Prisma 7
- * built: point the config at the written file, emit, plan a baseline, sign,
- * then point the `db` ref at the baseline.
+ * The routine that carries a printed contract onto the database its source
+ * describes: point the config at the written file, emit, plan a baseline,
+ * sign, then point the `db` ref at the baseline.
  */
 function cutoverActions(writtenPath: string): readonly NextAction[] {
   return [
     chooseAction(`Point contract in prisma.config.ts at ${writtenPath}`),
-    runCommandAction('Emit the converted contract', '{bin} contract emit'),
+    runCommandAction('Emit the printed contract', '{bin} contract emit'),
     runCommandAction('Plan the baseline migration', '{bin} migration plan --name baseline'),
     runCommandAction('Sign the database', '{bin} db sign'),
     runCommandAction(
@@ -44,7 +44,7 @@ function cutoverActions(writtenPath: string): readonly NextAction[] {
   ];
 }
 
-function convertPresentations(document: ConvertDocument): Presentations {
+function printPresentations(document: PrintDocument): Presentations {
   return {
     stdout: () => [],
     next: () => cutoverActions(document.psl.path),
@@ -59,19 +59,20 @@ function convertPresentations(document: ConvertDocument): Presentations {
   };
 }
 
-/** What `contract convert` uses of the control client; doubles implement just this. */
-export type ConvertControlClient = Pick<
+/** What `contract print` uses of the control client; doubles implement just this. */
+export type PrintControlClient = Pick<
   ControlClient,
   'printPslContract' | 'getPslBlockDescriptors' | 'close'
 >;
 
-export interface ContractConvertCommandDeps {
-  readonly createControlClient: (options: ControlClientOptions) => ConvertControlClient;
+export interface ContractPrintCommandDeps {
+  readonly createControlClient: (options: ControlClientOptions) => PrintControlClient;
   readonly printPsl: typeof printPslFromAst;
 }
 
-function convertHeaderComment(schemaPath: string): string {
-  return `// use prisma-8\n// Converted from ${schemaPath} by \`prisma contract convert\`.`;
+function printHeaderComment(sourcePaths: readonly string[]): string {
+  const origin = sourcePaths.length === 0 ? '' : ` from ${sourcePaths.join(', ')}`;
+  return `// use prisma-8\n// Printed${origin} by \`prisma contract print\`.`;
 }
 
 /**
@@ -93,29 +94,31 @@ function sourceInputCovering(inputs: {
   });
 }
 
-export function createContractConvertCommand({
+export function createContractPrintCommand({
   createControlClient,
   printPsl,
-}: ContractConvertCommandDeps) {
+}: ContractPrintCommandDeps) {
   return defineOrmCommand({
     help: {
-      summary: 'Convert a Prisma 7 schema into a Prisma 8 PSL contract',
+      summary: 'Write the configured contract as a Prisma 8 PSL schema file',
       description:
-        'Reads the Prisma 7 schema the config names as the contract source and\n' +
-        'writes the Prisma 8 PSL that produces the same contract. The command\n' +
+        'Loads the contract from the source the config names (a Prisma 7\n' +
+        'schema, a TypeScript contract, or a PSL schema) and writes the Prisma 8\n' +
+        'PSL that reads back as the same contract. Anything the PSL language\n' +
+        'cannot carry is refused by name and nothing is written. The command\n' +
         'stops at contract.prisma; switch the config to the written file, then\n' +
-        'run `contract emit` and the rest of the cutover. An existing file at the\n' +
-        'output path is overwritten, with a warning.',
+        'run `contract emit`. An existing file at the output path is\n' +
+        'overwritten, with a warning.',
       examples: [
-        'contract convert',
-        'contract convert --output ./src/prisma/contract.prisma',
-        'contract convert --json',
+        'contract print',
+        'contract print --output ./src/prisma/contract.prisma',
+        'contract print --json',
       ],
     },
     args: {
       flags: {
         output: flag.string({
-          brief: 'Write the converted PSL contract to the specified path',
+          brief: 'Write the printed PSL contract to the specified path',
           placeholder: 'path',
         }),
       },
@@ -128,38 +131,13 @@ export function createContractConvertCommand({
         return notOk(
           normalizeError(
             errorContractConfigMissing({
-              why: 'Config.contract.source is required for contract convert. Define it in your config: contract: prisma7Schema("./schema.prisma")',
+              why: 'Config.contract.source is required for contract print. Define it in your config, for example contract: prisma7Schema("./schema.prisma") or contract: prismaContract("./contract.prisma")',
             }),
           ),
         );
       }
-      if (contractConfig.source.format !== 'prisma7') {
-        return notOk(
-          normalizeError(
-            errorRuntime(
-              'CONTRACT.CONVERT_SOURCE_NOT_PRISMA7',
-              'contract convert applies only to a Prisma 7 source',
-              {
-                why: `The configured contract source has format "${contractConfig.source.format ?? 'unspecified'}", and there is nothing to convert: the contract is already authored the Prisma 8 way.`,
-                fix: 'Point contract at prisma7Schema("./schema.prisma") to convert a Prisma 7 schema.',
-                meta: { format: contractConfig.source.format ?? null },
-              },
-            ),
-          ),
-        );
-      }
-
-      const schemaInput = contractConfig.source.inputs?.[0];
-      if (schemaInput === undefined) {
-        return notOk(
-          normalizeError(
-            errorContractConfigMissing({
-              why: 'The Prisma 7 contract source names no schema file, so there is nothing to convert.',
-            }),
-          ),
-        );
-      }
-      const schemaPath = relative(ctx.cwd, schemaInput);
+      const sourceInputs = contractConfig.source.inputs ?? [];
+      const sourcePaths = sourceInputs.map((input) => relative(ctx.cwd, input));
 
       const outputPath = inferredContractPathFor({
         config: ctx.config,
@@ -168,7 +146,7 @@ export function createContractConvertCommand({
       });
       const displayPath = relative(ctx.cwd, outputPath);
       const sourceInput = sourceInputCovering({
-        inputs: contractConfig.source.inputs ?? [],
+        inputs: sourceInputs,
         cwd: ctx.cwd,
         outputPath,
       });
@@ -176,11 +154,11 @@ export function createContractConvertCommand({
         return notOk(
           normalizeError(
             errorRuntime(
-              'CONTRACT.CONVERT_OUTPUT_IS_SOURCE',
-              'contract convert would write over the schema it reads',
+              'CONTRACT.PRINT_OUTPUT_IS_SOURCE',
+              'contract print would write over the schema it reads',
               {
-                why: `The output path ${displayPath} is the contract source ${relative(ctx.cwd, sourceInput)}, or sits inside it, so converting would destroy the Prisma 7 schema.`,
-                fix: 'Pick another --output path, outside the Prisma 7 schema the config names.',
+                why: `The output path ${displayPath} is the contract source ${relative(ctx.cwd, sourceInput)}, or sits inside it, so printing would destroy the source it reads.`,
+                fix: 'Pick another --output path, outside the source files the config names.',
                 meta: { output: displayPath, source: relative(ctx.cwd, sourceInput) },
               },
             ),
@@ -208,12 +186,12 @@ export function createContractConvertCommand({
           return notOk(
             normalizeError(
               errorRuntime(
-                'CONTRACT.CONVERT_UNSUPPORTED',
-                'contract convert is not supported for this target',
+                'CONTRACT.PRINT_UNSUPPORTED',
+                'contract print is not supported for this target',
                 {
                   why: 'The configured target does not implement the PslContractPrintCapable capability, so the loaded contract cannot be written as Prisma 8 PSL.',
                   // biome-ignore lint/plugin/no-family-vocabulary: names a target on purpose — this is user-facing guidance about which target can convert, not a framework type
-                  fix: 'Use a target that supports contract conversion (Postgres today).',
+                  fix: 'Use a target that can print a contract as PSL (Postgres today).',
                 },
               ),
             ),
@@ -222,7 +200,7 @@ export function createContractConvertCommand({
         pslContent = printPsl(pslContractAst, {
           pslBlockDescriptors: client.getPslBlockDescriptors(),
           codecLookup: stack.codecLookup,
-          headerComment: convertHeaderComment(schemaPath),
+          headerComment: printHeaderComment(sourcePaths),
         });
       } catch (error) {
         return notOk(normalizeError(error));
@@ -244,21 +222,21 @@ export function createContractConvertCommand({
         publicationToken: String(process.hrtime.bigint()),
       });
 
-      const document: ConvertDocument = {
+      const document: PrintDocument = {
         ok: true,
-        summary: 'Contract converted successfully',
+        summary: 'Contract printed successfully',
         target: { familyId: ctx.config.family.familyId, id: ctx.config.target.targetId },
         psl: { path: displayPath },
-        source: schemaPath,
+        source: sourcePaths,
         timings: { total: Date.now() - startedAt },
       };
 
-      return ok(ctx.present({ data: document }, convertPresentations(document)));
+      return ok(ctx.present({ data: document }, printPresentations(document)));
     },
   });
 }
 
-export const contractConvertCommand = createContractConvertCommand({
+export const contractPrintCommand = createContractPrintCommand({
   createControlClient: createDefaultControlClient,
   printPsl: printPslFromAst,
 });

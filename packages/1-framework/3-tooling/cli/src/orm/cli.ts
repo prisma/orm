@@ -5,9 +5,9 @@ import { createCli, telemetryCommandGroup } from '@prisma/cli-engine';
 import { version as CLI_VERSION } from '../../package.json' with { type: 'json' };
 import { createControlClient } from '../control-api/client';
 import type { CreateControlClient } from '../control-api/types';
-import { contractConvertCommand } from './contract/convert';
 import { contractEmitCommand } from './contract/emit';
 import { contractInferCommand } from './contract/infer';
+import { contractPrintCommand } from './contract/print';
 import { createDbInitCommand } from './db/init';
 import { createDbSchemaCommand } from './db/schema';
 import { createDbSignCommand } from './db/sign';
@@ -96,7 +96,7 @@ export const BIN_GROUPS = {
  */
 export function createBinCommands(createClient: CreateControlClient): MountedTree {
   return {
-    'contract convert': contractConvertCommand,
+    'contract print': contractPrintCommand,
     'contract emit': contractEmitCommand,
     'contract format': formatCommand,
     'contract infer': contractInferCommand,

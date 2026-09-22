@@ -1,3 +1,4 @@
+import type { ContractEnum } from '@internal/contract/types';
 import type { PslFieldAttribute } from '@internal/framework-components/psl-ast';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import { postgresError } from '../errors';
@@ -29,6 +30,8 @@ export function printColumnDefault(input: {
   readonly column: StorageColumn;
   readonly pslTypeName: string;
   readonly isEnum: boolean;
+  /** The domain enum the column is typed by, whose member names are the accepted default form. */
+  readonly domainEnum: ContractEnum | undefined;
   readonly namespaceId: string;
   readonly tableName: string;
   readonly columnName: string;
@@ -36,6 +39,29 @@ export function printColumnDefault(input: {
   const columnDefault = input.column.default;
   if (columnDefault === undefined) {
     return undefined;
+  }
+
+  if (input.domainEnum !== undefined && columnDefault.kind === 'literal') {
+    const memberName = input.domainEnum.members.find(
+      (member) => member.value === columnDefault.value,
+    )?.name;
+    if (memberName === undefined) {
+      throw postgresError(
+        'CONTRACT.PRINT_UNSUPPORTED',
+        `contract print: column "${input.namespaceId}"."${input.tableName}"."${input.columnName}" defaults to ${JSON.stringify(columnDefault.value)}, which is not a member of enum ${input.pslTypeName}.`,
+        {
+          why: 'A default on a domain enum column is written as the member name, and no member carries this value.',
+          fix: 'Give the column a default that is one of the enum members, or drop it.',
+          meta: {
+            namespaceId: input.namespaceId,
+            table: input.tableName,
+            column: input.columnName,
+            pslTypeName: input.pslTypeName,
+          },
+        },
+      );
+    }
+    return buildAttribute('field', 'default', [positionalArg(memberName)]);
   }
 
   if (columnDefault.kind === 'function') {
@@ -51,8 +77,8 @@ export function printColumnDefault(input: {
   const literal = Array.isArray(value) ? formatPslListLiteralValue(value, format) : format(value);
   if (literal === undefined) {
     throw postgresError(
-      'CONTRACT.CONVERT_UNSUPPORTED',
-      `contract convert: column "${input.namespaceId}"."${input.tableName}"."${input.columnName}" has a literal default that cannot be written in Prisma 8 PSL: the ${input.pslTypeName} type reads no PSL literal back as ${JSON.stringify(value)}.`,
+      'CONTRACT.PRINT_UNSUPPORTED',
+      `contract print: column "${input.namespaceId}"."${input.tableName}"."${input.columnName}" has a literal default that cannot be written in Prisma 8 PSL: the ${input.pslTypeName} type reads no PSL literal back as ${JSON.stringify(value)}.`,
       {
         why: 'Writing the value as a quoted string would parse, but the PSL source would read it back as a string rather than as the value the column defaults to.',
         fix: 'Replace the literal default with a database expression default, or drop the default before converting.',

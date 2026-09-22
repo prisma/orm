@@ -195,7 +195,7 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
 /**
  * Builds the control stack, asks the configured contract source for the
  * contract, and turns every failure into `CONTRACT.SOURCE_LOAD_FAILED`. Shared
- * by `contract emit` and `contract convert` so both report a bad source the
+ * by `contract emit` and `contract print` so both report a bad source the
  * same way.
  *
  * @throws {CliStructuredError} `CONTRACT.SOURCE_LOAD_FAILED` when the source

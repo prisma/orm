@@ -66,7 +66,7 @@ export interface TypeScriptContractSourceProvider extends ContractSourceProvider
   readonly format: 'typescript';
 }
 
-/** A Prisma 7 `schema.prisma` read as the contract source; `prisma contract convert` writes its Prisma 8 equivalent. */
+/** A Prisma 7 `schema.prisma` read as the contract source; `prisma contract print` writes its Prisma 8 equivalent. */
 export interface Prisma7ContractSourceProvider extends ContractSourceProviderBase {
   readonly format: 'prisma7';
 }

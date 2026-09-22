@@ -1,4 +1,5 @@
 import type {
+  PslCompositeType,
   PslDocumentAst,
   PslModel,
   PslNamedTypeDeclaration,
@@ -68,6 +69,61 @@ describe('printPslFromAst', () => {
       span: span(0),
     };
     expect(printPslFromAst(ast)).toContain('@@map("foo")');
+  });
+
+  it('prints a value-object type block inside its namespace, before the models', () => {
+    const address: PslCompositeType = {
+      kind: 'compositeType',
+      name: 'Address',
+      fields: [
+        {
+          kind: 'field',
+          name: 'street',
+          typeName: 'String',
+          optional: false,
+          list: false,
+          attributes: [],
+          span: span(0),
+        },
+        {
+          kind: 'field',
+          name: 'tags',
+          typeName: 'String',
+          optional: true,
+          list: true,
+          attributes: [],
+          span: span(0),
+        },
+      ],
+      attributes: [],
+      span: span(0),
+    };
+    const shop: PslModel = {
+      kind: 'model',
+      name: 'Shop',
+      fields: [
+        {
+          kind: 'field',
+          name: 'home',
+          typeName: 'Address',
+          optional: true,
+          list: false,
+          attributes: [],
+          span: span(0),
+        },
+      ],
+      attributes: [],
+      span: span(0),
+    };
+    const ast: PslDocumentAst = {
+      kind: 'document',
+      sourceId: 't',
+      namespaces: [makeNs('public', [shop], [address], 0)],
+      span: span(0),
+    };
+    expect(printPslFromAst(ast)).toContain(
+      'namespace public {\n  type Address {\n    street String\n    tags   String[]?\n  }\n\n  model Shop {\n    home Address?\n  }\n}',
+    );
   });
 
   it('prints types block', () => {

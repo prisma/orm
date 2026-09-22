@@ -294,7 +294,7 @@ describe('column defaults', () => {
       thrown = error;
     }
     expect(thrown).toMatchObject({
-      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      code: 'CONTRACT.PRINT_UNSUPPORTED',
       message: expect.stringContaining('"public"."Widget"."value"'),
     });
   });
@@ -396,7 +396,7 @@ describe('generated values', () => {
         onUpdate: { kind: 'generator', id: 'uuidv4' },
       }),
     ).toMatchObject({
-      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      code: 'CONTRACT.PRINT_UNSUPPORTED',
       message: expect.stringContaining('"public"."Widget"."value"'),
     });
     expect(
@@ -405,7 +405,7 @@ describe('generated values', () => {
         onUpdate: { kind: 'generator', id: 'plainDateTimeNow' },
       }),
     ).toMatchObject({
-      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      code: 'CONTRACT.PRINT_UNSUPPORTED',
       message: expect.stringContaining('"public"."Widget"."value"'),
     });
   });
@@ -463,10 +463,10 @@ describe('relations', () => {
     );
   });
 
-  it('writes the foreign key name when the key carries one', () => {
+  it('writes the foreign key name when the key carries one, and no action the key does not', () => {
     const models = postAndUser({ name: 'post_author_fkey' });
     expect(models[1]?.fields.map(fieldText)[2]).toBe(
-      'author User @relation(fields: [authorId], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "post_author_fkey", index: false)',
+      'author User @relation(fields: [authorId], references: [id], map: "post_author_fkey", index: false)',
     );
   });
 
@@ -492,6 +492,12 @@ describe('relations', () => {
               cardinality: 'N:1',
               nullable: false,
               on: { localFields: ['authorId'], targetFields: ['altId'] },
+            },
+            authorById: {
+              to: { namespace: asNamespaceId('public'), model: 'User' },
+              cardinality: 'N:1',
+              nullable: false,
+              on: { localFields: ['authorId'], targetFields: ['id'] },
             },
           },
         },
@@ -525,9 +531,10 @@ describe('relations', () => {
       },
     });
 
-    expect(models[1]?.fields.map(fieldText)[2]).toBe(
-      'author User @relation(fields: [authorId], references: [altId], onDelete: Restrict, onUpdate: Restrict, map: "post_author_altId_fkey", index: false)',
-    );
+    expect(models[1]?.fields.map(fieldText).slice(2)).toEqual([
+      'author User @relation(name: "Post_author", fields: [authorId], references: [altId], onDelete: Restrict, onUpdate: Restrict, map: "post_author_altId_fkey", index: false)',
+      'authorById User @relation(name: "Post_authorById", fields: [authorId], references: [id], onDelete: Cascade, onUpdate: Cascade, map: "post_author_id_fkey", index: false)',
+    ]);
   });
 });
 

@@ -1,9 +1,51 @@
+import type { ContractEnum } from '@internal/contract/types';
 import { toEnumName } from '@internal/family-sql/psl-infer';
-import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
+import type {
+  PslExtensionBlock,
+  PslExtensionBlockParamValue,
+} from '@internal/framework-components/psl-ast';
 import type { StorageColumn } from '@internal/sql-contract/types';
 import type { PostgresNativeEnum } from '../postgres-native-enum';
 import { buildNativeEnumBlock } from '../psl-infer/infer-enum-blocks';
 import { createUniqueFieldName } from '../psl-infer/infer-names';
+import { escapePslString, SYNTHETIC_SPAN } from '../psl-infer/psl-literals';
+
+/** One `enum <name> { … }` block per domain enum, each member written as `Name = <value>` under `@@type`. */
+export function buildDomainEnumBlocks(
+  enums: Readonly<Record<string, ContractEnum>>,
+): readonly PslExtensionBlock[] {
+  return Object.entries(enums).map(([name, domainEnum]): PslExtensionBlock => {
+    const parameters: Record<string, PslExtensionBlockParamValue> = {};
+    for (const member of domainEnum.members) {
+      parameters[member.name] = {
+        kind: 'value',
+        raw: JSON.stringify(member.value),
+        span: SYNTHETIC_SPAN,
+      };
+    }
+    return {
+      kind: 'enum',
+      keyword: 'enum',
+      name,
+      parameters,
+      blockAttributes: [
+        {
+          name: 'type',
+          args: [
+            {
+              kind: 'positional',
+              value: `"${escapePslString(domainEnum.codecId)}"`,
+              span: SYNTHETIC_SPAN,
+            },
+          ],
+          span: SYNTHETIC_SPAN,
+        },
+      ],
+      attributes: { type: { args: { codec: domainEnum.codecId }, span: SYNTHETIC_SPAN } },
+      span: SYNTHETIC_SPAN,
+    };
+  });
+}
 
 export interface NativeEnumEmission {
   readonly blocks: readonly PslExtensionBlock[];

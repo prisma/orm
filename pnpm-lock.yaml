@@ -4162,6 +4162,9 @@ importers:
       '@internal/migration-tools':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../1-framework/3-tooling/migration
+      '@internal/psl-printer':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../../1-framework/2-authoring/psl-printer
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../../test/utils

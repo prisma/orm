@@ -7,7 +7,7 @@ import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
-import { createContractConvertCommand } from '../../src/orm/contract/convert';
+import { createContractPrintCommand } from '../../src/orm/contract/print';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const PSL = 'model User {\n  id Int @id\n}\n';
@@ -26,7 +26,7 @@ const mocks = {
 };
 
 const commands: MountedTree = {
-  'contract convert': createContractConvertCommand({
+  'contract print': createContractPrintCommand({
     createControlClient: () => ({
       printPslContract: mocks.printPslContract,
       getPslBlockDescriptors: mocks.getPslBlockDescriptors,
@@ -99,33 +99,33 @@ function erroredEnvelope(run: { readonly json: readonly StreamEvent[] }): Errore
   return terminal.envelope;
 }
 
-describe('contract convert', () => {
+describe('contract print', () => {
   it('settles as a completed envelope carrying the written path and the schema it read', async () => {
     const dir = await projectDir();
 
-    const run = await harness(ormConfig(dir)).run(['contract', 'convert', '--json'], { cwd: dir });
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
     expect(run.exitCode).toBe(0);
     expect(run.presented?.data).toEqual({
       ok: true,
-      summary: 'Contract converted successfully',
+      summary: 'Contract printed successfully',
       target: { familyId: 'sql', id: 'postgres' },
       psl: { path: 'generated/contract.prisma' },
-      source: 'prisma/schema.prisma',
+      source: ['prisma/schema.prisma'],
       timings: { total: expect.any(Number) },
     });
   });
 
-  it('opens the written file with a header naming the schema it converted', async () => {
+  it('opens the written file with a header naming the source it printed', async () => {
     const dir = await projectDir();
 
-    await harness(ormConfig(dir)).run(['contract', 'convert', '--json'], { cwd: dir });
+    await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
     expect(mocks.printPsl).toHaveBeenCalledWith(
       { kind: 'psl-document' },
       expect.objectContaining({
         headerComment:
-          '// use prisma-8\n// Converted from prisma/schema.prisma by `prisma contract convert`.',
+          '// use prisma-8\n// Printed from prisma/schema.prisma by `prisma contract print`.',
       }),
     );
     expect(await readFile(join(dir, 'generated', 'contract.prisma'), 'utf-8')).toBe(PSL);
@@ -134,7 +134,7 @@ describe('contract convert', () => {
   it('publishes through a staged rename, leaving no temporary file behind', async () => {
     const dir = await projectDir();
 
-    await harness(ormConfig(dir)).run(['contract', 'convert', '--json'], { cwd: dir });
+    await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
     expect(await readdir(join(dir, 'generated'))).toEqual(['contract.prisma']);
   });
@@ -146,7 +146,7 @@ describe('contract convert', () => {
       controller.abort();
     });
 
-    const run = await harness(ormConfig(dir)).run(['contract', 'convert', '--json'], {
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], {
       cwd: dir,
       abort: controller.signal,
     });
@@ -159,7 +159,7 @@ describe('contract convert', () => {
     const dir = await projectDir();
 
     const run = await harness(ormConfig(dir)).run(
-      ['contract', 'convert', '--output', 'schema/live.prisma', '--json'],
+      ['contract', 'print', '--output', 'schema/live.prisma', '--json'],
       { cwd: dir },
     );
 
@@ -170,13 +170,13 @@ describe('contract convert', () => {
   it('overwrites an existing contract with a warning and no prompt', async () => {
     const dir = await projectDir();
     const run1 = await harness(ormConfig(dir)).run(
-      ['contract', 'convert', '--output', 'contract.prisma', '--json'],
+      ['contract', 'print', '--output', 'contract.prisma', '--json'],
       { cwd: dir },
     );
     await writeFile(join(dir, 'contract.prisma'), 'model Stale {}\n', 'utf-8');
 
     const run2 = await harness(ormConfig(dir)).run(
-      ['contract', 'convert', '--output', 'contract.prisma', '--json'],
+      ['contract', 'print', '--output', 'contract.prisma', '--json'],
       { cwd: dir },
     );
 
@@ -193,7 +193,7 @@ describe('contract convert', () => {
   it('ships the written path and the next step as blocks', async () => {
     const dir = await projectDir();
 
-    const run = await harness(ormConfig(dir)).run(['contract', 'convert'], {
+    const run = await harness(ormConfig(dir)).run(['contract', 'print'], {
       cwd: dir,
       isTty: { stdout: true, stderr: true },
     });
@@ -213,7 +213,7 @@ describe('contract convert', () => {
         kind: 'user-choice',
         label: 'Point contract in prisma.config.ts at generated/contract.prisma',
       },
-      { kind: 'run-command', label: 'Emit the converted contract', command: '{bin} contract emit' },
+      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
       {
         kind: 'run-command',
         label: 'Plan the baseline migration',
@@ -238,13 +238,13 @@ describe('contract convert', () => {
     await writeFile(join(dir, 'prisma', 'schema.prisma'), schema, 'utf-8');
 
     const run = await harness(ormConfig(dir)).run(
-      ['contract', 'convert', '--output', 'prisma/schema.prisma', '--json'],
+      ['contract', 'print', '--output', 'prisma/schema.prisma', '--json'],
       { cwd: dir },
     );
 
     expect(run.exitCode).toBe(2);
     expect(erroredEnvelope(run).error).toMatchObject({
-      code: 'CONTRACT.CONVERT_OUTPUT_IS_SOURCE',
+      code: 'CONTRACT.PRINT_OUTPUT_IS_SOURCE',
       meta: { output: 'prisma/schema.prisma', source: 'prisma/schema.prisma' },
     });
     expect(await readFile(join(dir, 'prisma', 'schema.prisma'), 'utf-8')).toBe(schema);
@@ -261,16 +261,16 @@ describe('contract convert', () => {
     });
 
     const run = await harness(config).run(
-      ['contract', 'convert', '--output', 'prisma/nested/contract.prisma', '--json'],
+      ['contract', 'print', '--output', 'prisma/nested/contract.prisma', '--json'],
       { cwd: dir },
     );
 
     expect(run.exitCode).toBe(2);
-    expect(erroredEnvelope(run).error).toMatchObject({ code: 'CONTRACT.CONVERT_OUTPUT_IS_SOURCE' });
+    expect(erroredEnvelope(run).error).toMatchObject({ code: 'CONTRACT.PRINT_OUTPUT_IS_SOURCE' });
     expect(await readdir(dir)).not.toContain('prisma');
   });
 
-  it('refuses a PSL source and writes nothing', async () => {
+  it('prints a PSL source too: the command is not tied to Prisma 7', async () => {
     const dir = await projectDir();
     const config = ormConfig(dir, {
       contract: {
@@ -279,14 +279,18 @@ describe('contract convert', () => {
       },
     });
 
-    const run = await harness(config).run(['contract', 'convert', '--json'], { cwd: dir });
+    const run = await harness(config).run(['contract', 'print', '--json'], { cwd: dir });
 
-    expect(run.exitCode).toBe(2);
-    expect(erroredEnvelope(run).error).toMatchObject({
-      code: 'CONTRACT.CONVERT_SOURCE_NOT_PRISMA7',
-    });
-    expect(mocks.load).not.toHaveBeenCalled();
-    expect(await readdir(dir)).not.toContain('generated');
+    expect(run.exitCode).toBe(0);
+    expect(mocks.load).toHaveBeenCalled();
+    expect(mocks.printPsl).toHaveBeenCalledWith(
+      { kind: 'psl-document' },
+      expect.objectContaining({
+        headerComment:
+          '// use prisma-8\n// Printed from contract.prisma by `prisma contract print`.',
+      }),
+    );
+    expect(await readFile(join(dir, 'generated', 'contract.prisma'), 'utf-8')).toBe(PSL);
   });
 
   it('reports what the source reported when it cannot load the schema', async () => {
@@ -299,7 +303,7 @@ describe('contract convert', () => {
       },
     });
 
-    const run = await harness(ormConfig(dir)).run(['contract', 'convert', '--json'], { cwd: dir });
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
     expect(run.exitCode).toBe(2);
     expect(erroredEnvelope(run).error).toMatchObject({ code: 'CONTRACT.SOURCE_LOAD_FAILED' });
@@ -310,10 +314,10 @@ describe('contract convert', () => {
     const dir = await projectDir();
     mocks.printPslContract.mockReturnValue(undefined);
 
-    const run = await harness(ormConfig(dir)).run(['contract', 'convert', '--json'], { cwd: dir });
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
     expect(run.exitCode).toBe(2);
-    expect(erroredEnvelope(run).error).toMatchObject({ code: 'CONTRACT.CONVERT_UNSUPPORTED' });
+    expect(erroredEnvelope(run).error).toMatchObject({ code: 'CONTRACT.PRINT_UNSUPPORTED' });
     expect(mocks.close).toHaveBeenCalled();
   });
 
@@ -321,8 +325,8 @@ describe('contract convert', () => {
     const dir = await projectDir();
     mocks.printPslContract.mockImplementation(() => {
       throw structuredError(
-        'CONTRACT.CONVERT_UNSUPPORTED',
-        'contract convert: column "public"."Defaults"."jsonLiteral" has a literal default that cannot be written in Prisma 8 PSL.',
+        'CONTRACT.PRINT_UNSUPPORTED',
+        'contract print: column "public"."Defaults"."jsonLiteral" has a literal default that cannot be written in Prisma 8 PSL.',
         {
           why: 'The PSL source would read a quoted default back as a string.',
           fix: 'Replace the literal default with a database expression default.',
@@ -332,13 +336,13 @@ describe('contract convert', () => {
     });
 
     const run = await harness(ormConfig(dir)).run(
-      ['contract', 'convert', '--output', 'contract.prisma', '--json'],
+      ['contract', 'print', '--output', 'contract.prisma', '--json'],
       { cwd: dir },
     );
 
     expect(run.exitCode).toBe(2);
     expect(erroredEnvelope(run).error).toMatchObject({
-      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      code: 'CONTRACT.PRINT_UNSUPPORTED',
       summary: expect.stringContaining('"public"."Defaults"."jsonLiteral"'),
     });
     expect(await readdir(dir)).not.toContain('contract.prisma');
@@ -348,8 +352,8 @@ describe('contract convert', () => {
     const dir = await projectDir();
     mocks.printPslContract.mockImplementation(() => {
       throw structuredError(
-        'CONTRACT.CONVERT_UNSUPPORTED',
-        'contract convert: column "public"."Defaults"."jsonLiteral" has a literal default that cannot be written in Prisma 8 PSL.',
+        'CONTRACT.PRINT_UNSUPPORTED',
+        'contract print: column "public"."Defaults"."jsonLiteral" has a literal default that cannot be written in Prisma 8 PSL.',
         {
           why: 'The PSL source would read the written value back as a string rather than as the value the column defaults to.',
           fix: 'Replace the literal default with a database expression default, or drop the default before converting.',
@@ -358,11 +362,11 @@ describe('contract convert', () => {
       );
     });
 
-    const run = await harness(ormConfig(dir)).run(['contract', 'convert', '--json'], { cwd: dir });
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
     expect(run.exitCode).toBe(2);
     expect(erroredEnvelope(run).error).toMatchObject({
-      code: 'CONTRACT.CONVERT_UNSUPPORTED',
+      code: 'CONTRACT.PRINT_UNSUPPORTED',
       summary: expect.stringContaining('"public"."Defaults"."jsonLiteral"'),
       why: 'The PSL source would read the written value back as a string rather than as the value the column defaults to.',
       nextActions: [
