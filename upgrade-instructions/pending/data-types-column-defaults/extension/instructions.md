@@ -107,11 +107,13 @@ export class PgVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
 
 Several codecs may represent one type. `pg/int8@1` and `pg/int8number@1` both name `pg/int8`; they differ in the in-memory value they produce, and both store the type's one canonical form.
 
+Name the target's type whenever your codec stores what one of the target's columns stores. A codec that keeps a JSON document in a `jsonb` column and validates it against a schema names `pg/jsonb` and registers nothing: `pg/jsonb` already says what the column holds and what it takes, and the schema check is the codec's, at the point the value is read. Register a type of your own only for a database type no pack describes yet, as pgvector does for `vector`.
+
 Assembly checks the ids across packs. A codec naming a type nobody registers fails with `CONTRACT.DATA_TYPE_UNREGISTERED`, naming your component and the id.
 
 ## `a-pack-registers-its-data-types`
 
-Declare each type with `dataType(id, spec)` and list them on the component metadata:
+A pack that introduces a database type of its own declares each type with `dataType(id, spec)` and lists them on the component metadata. A pack whose codecs all represent types the target registers declares none, and has no `dataTypes` at all.
 
 ```ts
 // data-types.ts

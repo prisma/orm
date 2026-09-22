@@ -8,7 +8,6 @@
 
 import type { CodecTypes } from '../types/codec-types';
 import { ARKTYPE_JSON_CODEC_ID } from './arktype-json-codec';
-import { arktypeJsonDataTypes } from './data-types';
 import { arktypeJsonCodecRegistry } from './registry';
 
 const arktypeJsonPackMetaBase = {
@@ -18,7 +17,6 @@ const arktypeJsonPackMetaBase = {
   targetId: 'postgres',
   version: '0.0.1',
   capabilities: {},
-  dataTypes: arktypeJsonDataTypes,
   types: {
     codecTypes: {
       codecDescriptors: Array.from(arktypeJsonCodecRegistry.values()),

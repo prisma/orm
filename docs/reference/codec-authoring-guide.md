@@ -200,7 +200,7 @@ class ArktypeJsonDescriptor extends PostgresCodecDescriptor<ArktypeJsonTypeParam
   protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
     return expression;
   }
-  override readonly dataType = arktypeJson.id;
+  override readonly dataType = pgJsonb.id;
   override readonly codecId = 'arktype/json@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['jsonb'] as const;
@@ -401,6 +401,8 @@ export class PgTextDescriptor extends PostgresCodecDescriptor<void> {
 ```
 
 Several codecs may represent one type. `pg/int8@1` and `pg/int8number@1` both name `pg/int8`; they differ in the value they produce in memory, a `bigint` and a `number`, and both read and write the digit text that type stores. `decodeJson` takes the canonical form and nothing else, and `encodeJson` produces it. A codec has no method for PSL and never sees PSL text.
+
+An extension's codec does the same. `arktype/json@1` stores a `jsonb` column and validates the document against a schema on the way out, so it names `pg/jsonb` and the extension registers no data type at all. Register a new one only for a database type no pack describes yet, as pgvector does for `vector`. Reusing the target's type is what lets a written `` json`{}` `` reach an arktype column: the tag yields `pg/json`, `pg/jsonb` casts from it unchanged, and the codec validates the document.
 
 ### Declaring a data type
 
