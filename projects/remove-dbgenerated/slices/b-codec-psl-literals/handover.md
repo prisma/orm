@@ -16,7 +16,11 @@ Written by the orchestrating agent at the end of its session so a fresh agent in
 - Will (wmadden) has **approved** the PR. Auto-merge is **enabled** (merge queue, squash). All CodeRabbit threads and all three of Will's threads are replied to and resolved.
 - The ruleset needs: one approving code-owner review (done), the required checks green, then the queue merges.
 
-## What is failing right now (both from the same cause)
+## Update after the handover was written
+
+`origin/main` has been merged (merge commit `e4ffcb0d95`, conflict in `descriptor-meta.ts` resolved by dropping the `QueryOperationTypes` import main removed), the four tests from main that lacked `dataTypeLookup` now pass it, and the parity contract is re-emitted with main's two new capability flags. Workspace typecheck and lint are green; CI on the new push is the confirmation. If CI is green the remaining steps are 5 and 6 below.
+
+## What was failing before that (both from the same cause)
 
 CI on `d24c1e43ca` runs against a merge with the current `main`, which has moved by three commits since the branch last merged it (`fc66f544c2` full-text search, `c5a8b5ad52` migration plan changes, `dd867230cd` TML-2566 contract snapshot hashes). Two checks fail:
 
