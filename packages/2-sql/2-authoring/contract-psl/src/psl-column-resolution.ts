@@ -847,6 +847,18 @@ export function lowerDefaultForField(input: {
     return lowered.written;
   };
 
+  // A column bound to a value set (`pg.enum(Ref)`) takes member names, which are checked against the
+  // value set rather than read as literals; its codec accepts no literal default at all.
+  if (input.columnDescriptor.valueSet !== undefined) {
+    if (typeof value === 'string') return { defaultValue: { kind: 'literal', value } };
+    if (Array.isArray(value)) {
+      const members = value.filter((element): element is string => typeof element === 'string');
+      if (members.length === value.length) {
+        return { defaultValue: { kind: 'literal', value: members } };
+      }
+    }
+  }
+
   if (Array.isArray(value)) {
     const elements: WrittenValue[] = [];
     for (const element of value) {
@@ -855,12 +867,6 @@ export function lowerDefaultForField(input: {
       elements.push(written);
     }
     return readAsLiteral({ kind: 'list', elements });
-  }
-
-  // A column bound to a value set (`pg.enum(Ref)`) takes a member name, which is checked against the
-  // value set rather than read as a literal; its codec accepts no literal default at all.
-  if (input.columnDescriptor.valueSet !== undefined && typeof value === 'string') {
-    return { defaultValue: { kind: 'literal', value } };
   }
 
   if (typeof value === 'string') return readAsLiteral({ kind: 'string', text: value });

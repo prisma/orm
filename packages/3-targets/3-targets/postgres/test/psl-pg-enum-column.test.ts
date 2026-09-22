@@ -222,6 +222,57 @@ namespace auth {
     expect(aalsColumn?.many).toBe(true);
   });
 
+  it('stores a list of member names written as a default on a pg.enum(E)[] field', () => {
+    const source = `
+namespace auth {
+  native_enum AalLevel {
+    aal1 = "aal1"
+    aal2 = "aal2"
+    @@map("aal_level")
+  }
+
+  model AuthSession {
+    id   Int @id
+    aals pg.enum(AalLevel)[] @default(["aal1", "aal2"])
+  }
+}
+`;
+    const result = interpret(source, { sql: { scalarList: true } });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
+    expect(ns.table['AuthSession']?.columns['aals']?.default).toEqual({
+      kind: 'literal',
+      value: ['aal1', 'aal2'],
+    });
+  });
+
+  it('refuses a list default holding something other than a member name on a pg.enum(E)[] field', () => {
+    const source = `
+namespace auth {
+  native_enum AalLevel {
+    aal1 = "aal1"
+    aal2 = "aal2"
+    @@map("aal_level")
+  }
+
+  model AuthSession {
+    id   Int @id
+    aals pg.enum(AalLevel)[] @default(["aal1", 3])
+  }
+}
+`;
+    const result = interpret(source, { sql: { scalarList: true } });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+    );
+  });
+
   it('supports a nullable pg.enum(E)? field', () => {
     const source = `
 namespace auth {
