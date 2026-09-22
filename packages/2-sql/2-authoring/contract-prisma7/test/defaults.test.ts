@@ -72,12 +72,14 @@ describe('dbgenerated("<sql>")', () => {
     });
   });
 
-  it('is refused with any argument shape other than one string', async () => {
+  it('is refused unless the argument list is a single positional string with text in it', async () => {
     expect(await diagnosticsOf('dbgenerated-without-expression', 'unread-argument.prisma')).toEqual(
       [
         'Field "T.number": @default function "dbgenerated()" has an argument this contract source does not read.',
         'Field "T.two": @default function "dbgenerated()" has an argument this contract source does not read.',
         'Field "T.named": @default function "dbgenerated()" has an argument this contract source does not read.',
+        'Field "T.blank": @default function "dbgenerated()" has an argument this contract source does not read.',
+        'Field "T.spaces": @default function "dbgenerated()" has an argument this contract source does not read.',
       ],
     );
   });

@@ -60,7 +60,7 @@ Codes are prefixed `PSL.PRISMA7_`:
 | `PSL.PRISMA7_RELATION_NAME_SHARED` | Two or more implicit many-to-many relations in the same schema use the same relation name; Prisma 7 creates one table for all of them, wired to only one. The same name in two schemas is fine: Prisma 7 creates a table in each. |
 | `PSL.PRISMA7_UNKNOWN_ATTRIBUTE` | An attribute Prisma 7 for Postgres does not have, or one this source does not read (`@@fulltext`, `@shardKey`, ...). |
 | `PSL.PRISMA7_TABLE_COLLISION` | Two models map to the same table in the same schema, reported on every model in the group; or a model maps to the table of an implicit many-to-many relation, reported on the model's `@@map` and on the relation field. |
-| `PSL.PRISMA7_UNKNOWN_DEFAULT` | A `@default` value this source cannot read: an unknown function, an enum member on a non-enum field, a non-member, a non-integer `BigInt` literal, a malformed JSON or base64 literal, or a `dbgenerated(...)` argument that is not one string. |
+| `PSL.PRISMA7_UNKNOWN_DEFAULT` | A `@default` value this source cannot read: an unknown function, an enum member on a non-enum field, a non-member, a non-integer `BigInt` literal, a malformed JSON or base64 literal, or a `dbgenerated(...)` argument list that is not a single positional string with text in it. |
 | `PSL.PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED` | A `Json` default of `"null"`, or a `Json[]` default holding it: the JSON value null cannot be told apart from SQL `NULL` in the contract. |
 | `PSL.PRISMA7_OPTIONAL_GENERATED_FIELD_UNSUPPORTED` | An ORM-side generator or `@updatedAt` on an optional field. |
 | `PSL.PRISMA7_UPDATED_AT_WITH_DEFAULT_UNSUPPORTED` | `@updatedAt` combined with `@default`. |

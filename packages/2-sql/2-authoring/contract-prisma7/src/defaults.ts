@@ -391,7 +391,8 @@ function lowerFunction(
 
 /**
  * Prisma 7's `dbgenerated("<sql>")` is a raw SQL default, carried as written; the empty form
- * `dbgenerated()` means the column has no default.
+ * `dbgenerated()` means the column has no default. Prisma 7 refuses a blank string, so this
+ * source does too.
  */
 function lowerDbgenerated(
   callArgs: readonly AttributeArgAst[],
@@ -405,7 +406,7 @@ function lowerDbgenerated(
     callArgs.length === 1 && argument?.name() === undefined && value !== undefined
       ? StringLiteralExprAst.cast(value.syntax)?.value()
       : undefined;
-  if (expression === undefined) {
+  if (expression === undefined || expression.trim() === '') {
     return unknown(
       'function "dbgenerated()" has an argument this contract source does not read.',
       span,
