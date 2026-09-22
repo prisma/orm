@@ -99,6 +99,7 @@ describe('multiple-document symbol tables', () => {
         topLevel: { namespaces: {}, namedTypes: {}, blocks: {}, models: {}, compositeTypes: {} },
       },
       diagnostics: [],
+      parsedBlocks: new Map(),
     });
   });
 
