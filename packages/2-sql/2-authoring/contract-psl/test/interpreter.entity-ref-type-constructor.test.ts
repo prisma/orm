@@ -23,11 +23,16 @@ import type {
   AuthoringEntityTypeNamespace,
   AuthoringPslBlockDescriptorNamespace,
   AuthoringTypeNamespace,
-  PslExtensionBlock,
+  ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
 import { dataTypeId } from '@internal/framework-components/codec';
-import { buildSymbolTable, createPslDiagnosticCollector } from '@internal/psl-parser';
+import {
+  buildSymbolTable,
+  createPslDiagnosticCollector,
+  entriesBlock,
+  jsonValue,
+} from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { describe, expect, it } from 'vitest';
@@ -50,27 +55,33 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'native_enum',
     discriminator: NATIVE_ENUM_DISCRIMINATOR,
     name: { required: true },
-    parameters: {},
-    variadicParameters: true,
+    spec: () =>
+      entriesBlock({
+        value: { type: jsonValue(), documentation: 'The explicit member value.' },
+        allowBare: true,
+      }),
   },
   plain_ref: {
     kind: 'pslBlock',
     keyword: 'plain_ref',
     discriminator: PLAIN_REF_DISCRIMINATOR,
     name: { required: true },
-    parameters: {},
-    variadicParameters: true,
+    spec: () =>
+      entriesBlock({
+        value: { type: jsonValue(), documentation: 'The explicit member value.' },
+        allowBare: true,
+      }),
   },
 };
 
 type TestNativeEnum = { readonly typeName: string; readonly members: readonly string[] };
 type TestPlainRef = { readonly name: string };
 
-function lowerTestNativeEnum(block: PslExtensionBlock): TestNativeEnum {
-  return { typeName: block.name, members: Object.keys(block.parameters) };
+function lowerTestNativeEnum(block: ParsedPslExtensionBlock): TestNativeEnum {
+  return { typeName: block.name, members: Object.keys(block.values) };
 }
 
-function lowerTestPlainRef(block: PslExtensionBlock): TestPlainRef {
+function lowerTestPlainRef(block: ParsedPslExtensionBlock): TestPlainRef {
   return { name: block.name };
 }
 
@@ -85,7 +96,7 @@ const nativeEnumEntityTypeOutput = {
     kind: 'valueSet' as const,
     values: entity.members,
   }),
-} satisfies AuthoringEntityTypeFactoryOutput<PslExtensionBlock, TestNativeEnum> &
+} satisfies AuthoringEntityTypeFactoryOutput<ParsedPslExtensionBlock, TestNativeEnum> &
   SqlValueSetDerivingEntityTypeOutput;
 
 const entityTypes: AuthoringEntityTypeNamespace = {

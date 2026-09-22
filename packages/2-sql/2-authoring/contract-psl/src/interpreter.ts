@@ -23,6 +23,7 @@ import type {
   AuthoringModelAttributeLoweringOutput,
   AuthoringPslBlockDescriptorNamespace,
   AuthoringWarning,
+  ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import {
   instantiateAuthoringEntityType,
@@ -44,12 +45,14 @@ import type {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import {
   type BlockSymbol,
+  blockSpecFactoryOf,
   type CompositeTypeSymbol,
   createPslDiagnosticCollector,
   type DiagnosticSource,
   diagnosticSource,
   type FieldSymbol,
   findBlockDescriptor,
+  interpretExtensionBlock,
   keywordPslSpan,
   type ModelAttributeSpecFactory,
   type ModelSymbol,
@@ -59,10 +62,16 @@ import {
   type PslDiagnostic,
   type PslDiagnosticCollector,
   type ResolvedAttribute,
+  type ResolvedEntityReference,
   type SymbolTable,
 } from '@internal/psl-parser';
 import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
+import {
+  type LoweredPackEntity,
+  providesPslEntityPlacement,
+  type ResolvedPslModelRefs,
+} from '@internal/sql-contract/entity-handle-lowering-hook';
 import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
 import type {
   SqlModelStorage,
@@ -367,42 +376,51 @@ function duplicateModelAttributeDiagnostic(input: {
 }
 
 /**
- * Enforces `AuthoringPslBlockDescriptor.requiresModelAttribute` over one
- * scope (the top level or one namespace): every block whose descriptor
- * declares the requirement must name a model that carries the required
- * bare `@@` attribute. Runs on the parsed symbol table, so it is
- * independent of block/model declaration order and of lowering order. A
- * missing parameter or an unresolvable model is skipped — the
- * missing-required-parameter and unresolved-ref diagnostics own those
- * failure modes.
+ * Narrows one interpreted block value to a checked model reference. The
+ * reference was selected by the parser's shared resolution; consumers here
+ * only project its identity — never a second name lookup.
+ */
+function isResolvedModelReference(value: unknown): value is ResolvedEntityReference<ModelSymbol> {
+  if (typeof value !== 'object' || value === null || !('declaration' in value)) return false;
+  const declaration = value.declaration;
+  return (
+    typeof declaration === 'object' &&
+    declaration !== null &&
+    'kind' in declaration &&
+    declaration.kind === 'model'
+  );
+}
+
+/**
+ * Enforces `AuthoringPslBlockDescriptor.requiresModelAttribute` over every
+ * successfully interpreted block: the selected target declaration —
+ * including a top-level fallback selection — must carry the required bare
+ * `@@` attribute. Invalid blocks have no envelope and are skipped; the
+ * parser's value diagnostics own those failure modes.
  */
 function validateBlockModelAttributeRequirements(input: {
-  readonly scopes: readonly {
-    readonly models: Readonly<Record<string, ModelSymbol>>;
-    readonly blocks: Readonly<Record<string, BlockSymbol>>;
-  }[];
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace;
-  readonly source: DiagnosticSource;
+  readonly sources: PslSources;
   readonly diagnostics: PslDiagnosticCollector;
 }): void {
-  for (const scope of input.scopes) {
-    for (const blockSymbol of Object.values(scope.blocks)) {
-      const descriptor = findBlockDescriptor(input.pslBlockDescriptors, blockSymbol.keyword);
-      const requirement = descriptor?.requiresModelAttribute;
-      if (requirement === undefined) continue;
-      const captured = blockSymbol.block.parameters[requirement.parameter];
-      if (captured?.kind !== 'ref') continue;
-      const model = scope.models[captured.identifier];
-      if (model === undefined) continue;
-      if (model.attributes.some((attribute) => attribute.name === requirement.attribute)) {
-        continue;
-      }
-      input.diagnostics.push({
-        code: 'PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE',
-        message: `\`${blockSymbol.keyword}\` block "${blockSymbol.block.name}" targets model "${captured.identifier}", which does not declare \`@@${requirement.attribute}\`. Add \`@@${requirement.attribute}\` to model "${captured.identifier}".`,
-        ...diagnosticSource(input.source.sources, blockSymbol.node.syntax).at(captured.span),
-      });
+  for (const [blockSymbol, envelope] of input.parsedBlocks) {
+    const descriptor = findBlockDescriptor(input.pslBlockDescriptors, blockSymbol.keyword);
+    const requirement = descriptor?.requiresModelAttribute;
+    if (requirement === undefined) continue;
+    const target = envelope.values[requirement.parameter];
+    if (!isResolvedModelReference(target)) continue;
+    const model = target.declaration;
+    if (model.attributes.some((attribute) => attribute.name === requirement.attribute)) {
+      continue;
     }
+    input.diagnostics.push({
+      code: 'PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE',
+      message: `\`${blockSymbol.keyword}\` block "${envelope.name}" targets model "${model.name}", which does not declare \`@@${requirement.attribute}\`. Add \`@@${requirement.attribute}\` to model "${model.name}".`,
+      ...diagnosticSource(input.sources, blockSymbol.node.syntax).at(
+        envelope.parameterSpans[requirement.parameter] ?? envelope.span,
+      ),
+    });
   }
 }
 
@@ -434,92 +452,74 @@ function buildModelAttributesByName(
 
 /**
  * For a single lexical scope (a named PSL namespace, or the document top
- * level), lowers all extension blocks into IR entities via the registered
- * factory for each block's discriminator. Groups results by discriminator
- * (the entries key — one-string rule: discriminator === entries key).
+ * level), lowers every successfully interpreted extension block into an IR
+ * entity via the registered factory for each block's discriminator, and
+ * returns the lowered rows. Invalid blocks have no envelope in
+ * `parsedBlocks` and are skipped — the parser's diagnostics own their
+ * failures — and unregistered discriminators are skipped silently.
  *
  * This pass is intentionally generic: no discriminator value is named here.
  * The factory (registered by the target pack) owns all block-specific logic.
- * A descriptor's factory output may also opt into value-set derivation via
- * the SQL family's `SqlValueSetDerivingEntityTypeOutput.deriveValueSet` hook
- * (probed by {@link deriveValueSetFromEntity}) — when present, the derived
- * value-set is folded into the namespace's `valueSet` slot (keyed by block
- * name), so a value-set-carrying pack entity (e.g. Postgres `native_enum`)
- * contributes the value-set that drives value-set → codec typing without
- * this pass inspecting a target-specific shape.
+ * After construction, the walk asks the descriptor output where to file the
+ * row: an output carrying the SQL `pslPlacement` hook picks the destination
+ * namespace; every other output keeps the block's lexical owner. A derived
+ * value-set (the `deriveValueSet` hook) files at the same chosen destination
+ * under the block key.
  *
- * The `namespaceId` is attached to the block before the factory call so the
- * factory can record the namespace coordinate without the interpreter
- * containing any target-specific knowledge about how namespace ids are used.
+ * The block's own lexical `namespaceId` stays annotated on the factory input
+ * regardless of placement — factories that validate lexical position (e.g.
+ * role placement) depend on it.
  *
- * Ref conversion is this pass's job, over typed data: each block-descriptor
- * parameter declared `{ kind: 'ref', refKind: 'model' }` (same-namespace
- * scope) is resolved to the referenced model's storage table name and
- * attached to the block as `resolvedModelRefs` ({@link ResolvedPslModelRefs})
- * before the factory runs — the factory consumes a resolved coordinate and
- * never looks a model up itself. A required model ref that is missing or
- * does not resolve is this pass's diagnostic; the factory is skipped.
+ * Reference projection is this pass's job, over typed data: each top-level
+ * envelope value that is a checked model reference is projected onto its
+ * storage coordinate ({@link ResolvedPslModelRefs}) from the selected
+ * declaration's identity through the coordinate-keyed model mappings —
+ * never a bare-name lookup — and attached as `resolvedModelRefs` before the
+ * factory runs.
  */
 function lowerExtensionBlocksForNamespace(
   blocks: Readonly<Record<string, BlockSymbol>>,
-  nsId: string,
+  ownerNamespaceId: string,
   entityTypesByDiscriminator: ReadonlyMap<string, AuthoringEntityTypeDescriptor>,
   entityContext: AuthoringEntityContext,
-  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
-  resolveModelTable: (modelName: string) => string | undefined,
+  parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>,
+  modelCoordinateOf: (
+    model: ModelSymbol,
+  ) => { readonly namespaceId: string; readonly tableName: string } | undefined,
   sources: PslSources,
   diagnostics: PslDiagnosticCollector,
-): Readonly<Record<string, Readonly<Record<string, unknown>>>> {
-  const blockSymbols = Object.values(blocks);
-  if (blockSymbols.length === 0) return {};
+): readonly LoweredPackEntity[] {
+  const rows: LoweredPackEntity[] = [];
 
-  const result: Record<string, Record<string, unknown>> = {};
-
-  for (const blockSymbol of blockSymbols) {
-    const block = blockSymbol.block;
-    const descriptor = entityTypesByDiscriminator.get(block.kind);
+  for (const blockSymbol of Object.values(blocks)) {
+    const envelope = parsedBlocks.get(blockSymbol);
+    if (envelope === undefined) continue;
+    const descriptor = entityTypesByDiscriminator.get(envelope.kind);
     if (descriptor === undefined) continue;
 
-    const blockDescriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
     let unresolvedRef = false;
-    let resolvedModelRefs: Record<string, { readonly tableName: string }> | undefined;
-    for (const [paramName, paramDecl] of Object.entries(blockDescriptor?.parameters ?? {})) {
-      if (
-        paramDecl.kind !== 'ref' ||
-        paramDecl.refKind !== 'model' ||
-        paramDecl.scope !== 'same-namespace'
-      ) {
-        continue;
-      }
-      const captured = block.parameters[paramName];
-      if (captured?.kind !== 'ref') {
-        if (paramDecl.required === true) {
-          diagnostics.push({
-            code: 'PSL_EXTENSION_MODEL_REF_UNRESOLVED',
-            message: `\`${block.keyword}\` block "${block.name}" is missing the required \`${paramName}\` model reference.`,
-            ...diagnosticSource(sources, blockSymbol.node.syntax).at(block.span),
-          });
-          unresolvedRef = true;
-        }
-        continue;
-      }
-      const tableName = resolveModelTable(captured.identifier);
-      if (tableName === undefined) {
+    let resolvedModelRefs: Record<string, ResolvedPslModelRefs[string]> | undefined;
+    for (const [paramName, value] of Object.entries(envelope.values)) {
+      if (!isResolvedModelReference(value)) continue;
+      const coordinate = modelCoordinateOf(value.declaration);
+      if (coordinate === undefined) {
         diagnostics.push({
           code: 'PSL_EXTENSION_MODEL_REF_UNRESOLVED',
-          message: `\`${block.keyword}\` block "${block.name}" references model "${captured.identifier}" in \`${paramName}\`, which is not declared in the same namespace. Declare the model or fix the reference.`,
-          ...diagnosticSource(sources, blockSymbol.node.syntax).at(captured.span),
+          message: `\`${envelope.keyword}\` block "${envelope.name}" references model "${value.declaration.name}" in \`${paramName}\`, which has no storage mapping.`,
+          ...diagnosticSource(sources, blockSymbol.node.syntax).at(
+            envelope.parameterSpans[paramName] ?? envelope.span,
+          ),
         });
         unresolvedRef = true;
         continue;
       }
-      resolvedModelRefs = { ...(resolvedModelRefs ?? {}), [paramName]: { tableName } };
+      resolvedModelRefs = { ...(resolvedModelRefs ?? {}), [paramName]: coordinate };
     }
     if (unresolvedRef) continue;
 
     const annotatedBlock = {
-      ...block,
-      namespaceId: nsId,
+      ...envelope,
+      namespaceId: ownerNamespaceId,
       ...(resolvedModelRefs !== undefined ? { resolvedModelRefs } : {}),
     };
     const entity = instantiateAuthoringEntityType(
@@ -530,24 +530,62 @@ function lowerExtensionBlocksForNamespace(
     );
     if (entity === undefined) continue;
 
-    const entriesKey = descriptor.discriminator;
-    const slot = result[entriesKey] ?? {};
-    result[entriesKey] = slot;
-    slot[block.name] = entity;
+    const namespaceId = providesPslEntityPlacement(descriptor.output)
+      ? descriptor.output.pslPlacement(entity).namespaceId
+      : ownerNamespaceId;
+    rows.push({ namespaceId, entityKind: descriptor.discriminator, key: envelope.name, entity });
 
     const derivedValueSet = deriveValueSetFromEntity(descriptor.output, entity);
     if (derivedValueSet !== undefined) {
-      const valueSetSlot = result['valueSet'] ?? {};
-      result['valueSet'] = valueSetSlot;
-      valueSetSlot[block.name] = derivedValueSet;
+      rows.push({
+        namespaceId,
+        entityKind: 'valueSet',
+        key: envelope.name,
+        entity: derivedValueSet,
+      });
     }
   }
 
-  return result;
+  return rows;
+}
+
+/**
+ * Re-derives the parser's successful typed envelopes from the collected
+ * symbol table. `buildSymbolTable` already reported every block value and
+ * attribute failure — provider paths seed those diagnostics into the
+ * interpretation result — so this derivation keeps only successes, the same
+ * split the early model-mapping resolution uses for its duplicate run.
+ * Spec factories may resolve declarations through the complete table; they
+ * never observe another block's interpreted output.
+ */
+function deriveParsedBlocks(
+  symbolTable: SymbolTable,
+  sources: PslSources,
+  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
+): ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock> {
+  const parsedBlocks = new Map<BlockSymbol, ParsedPslExtensionBlock>();
+  const scopes = [symbolTable.topLevel, ...Object.values(symbolTable.topLevel.namespaces)];
+  for (const scope of scopes) {
+    for (const block of Object.values(scope.blocks)) {
+      const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
+      if (descriptor === undefined) continue;
+      const spec = blockSpecFactoryOf(descriptor)({ symbols: symbolTable, block });
+      const parsed = interpretExtensionBlock({
+        block,
+        descriptor,
+        spec,
+        symbols: symbolTable,
+        sources,
+      });
+      if (parsed.ok) parsedBlocks.set(block, parsed.value);
+    }
+  }
+  return parsedBlocks;
 }
 
 interface ProcessEnumDeclarationsInput {
   readonly enumBlocks: readonly BlockSymbol[];
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly source: DiagnosticSource;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly entityContext: AuthoringEntityContext;
@@ -579,11 +617,12 @@ function processEnumDeclarations(input: ProcessEnumDeclarationsInput): {
   }
 
   for (const symbol of input.enumBlocks) {
-    const decl = symbol.block;
+    const envelope = input.parsedBlocks.get(symbol);
+    if (envelope === undefined) continue;
     const handle = instantiateAuthoringEntityType<EnumTypeHandle | undefined>(
       'enum',
       enumDescriptor,
-      [decl],
+      [envelope],
       {
         ...input.entityContext,
         sourceId: input.source.sources.sourceFileFor(symbol.node.syntax).filename,
@@ -592,8 +631,8 @@ function processEnumDeclarations(input: ProcessEnumDeclarationsInput): {
 
     if (handle === undefined || handle === null) continue;
 
-    enumHandles[decl.name] = handle;
-    enumTypeDescriptors.set(decl.name, {
+    enumHandles[envelope.name] = handle;
+    enumTypeDescriptors.set(envelope.name, {
       codecId: handle.codecId,
       nativeType: handle.nativeType,
     });
@@ -2109,10 +2148,16 @@ export function interpretPslDocumentToSqlContract(
     sources: input.sources,
     diagnostics,
   });
+  const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
+  const parsedBlocks = deriveParsedBlocks(
+    input.symbolTable,
+    input.sources,
+    composedPslBlockDescriptors,
+  );
   validateBlockModelAttributeRequirements({
-    scopes: [topLevel, ...namespaceSymbols],
-    pslBlockDescriptors: input.authoringContributions?.pslBlockDescriptors ?? {},
-    source,
+    parsedBlocks,
+    pslBlockDescriptors: composedPslBlockDescriptors,
+    sources: input.sources,
     diagnostics,
   });
   const models: ModelSymbol[] = [];
@@ -2221,6 +2266,7 @@ export function interpretPslDocumentToSqlContract(
 
   const enumResult = processEnumDeclarations({
     enumBlocks: topLevelEnums,
+    parsedBlocks,
     source,
     authoringContributions: input.authoringContributions,
     entityContext: {
@@ -2282,8 +2328,8 @@ export function interpretPslDocumentToSqlContract(
     warnings: authoringWarnings,
   };
   // Diagnostics-free resolution of every model's declared storage name,
-  // feeding the extension-block pass's model-ref conversion (a block's
-  // declared `refKind: 'model'` params resolve to table names before the
+  // feeding the extension-block pass's reference projection (a checked model
+  // reference projects onto its declaration's storage coordinate before the
   // factory runs). The authoritative resolution (which reports a malformed
   // `@@map`) still runs at its usual point in the pass ordering, via
   // `modelMappingsByCoordinate` further down; this call discards its own
@@ -2295,46 +2341,47 @@ export function interpretPslDocumentToSqlContract(
     createPslDiagnosticCollector(input.sources),
     input.sources,
   );
-  const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
-  const namespaceExtensionEntities = new Map<
-    string,
-    Readonly<Record<string, Readonly<Record<string, unknown>>>>
+  const modelCoordinates = new Map<
+    ModelSymbol,
+    { readonly namespaceId: string; readonly tableName: string }
   >();
-  const mergeNamespaceExtensionEntities = (
-    nsId: string,
-    entities: Readonly<Record<string, Readonly<Record<string, unknown>>>>,
+  for (const entry of modelEntries) {
+    const nsId = entry.namespaceId ?? defaultNamespaceId;
+    const mapping = earlyModelMappingsByCoordinate.get(modelCoordinateKey(nsId, entry.model.name));
+    if (mapping !== undefined) {
+      modelCoordinates.set(entry.model, { namespaceId: nsId, tableName: mapping.tableName });
+    }
+  }
+  const modelCoordinateOf = (model: ModelSymbol) => modelCoordinates.get(model);
+  const namespaceExtensionEntities = new Map<string, Record<string, Record<string, unknown>>>();
+  // Files each lowered row at its destination coordinate. A row relocated by
+  // the placement hook may land in a bucket another lexical namespace owns —
+  // an occupied kind/key there is a genuine authoring collision (last-write-
+  // wins would silently drop one), so flag it rather than merge over it.
+  const fileExtensionEntityRows = (
+    rows: readonly LoweredPackEntity[],
     blocks: Readonly<Record<string, BlockSymbol>>,
   ): void => {
-    if (Object.keys(entities).length === 0) return;
-    const existing = namespaceExtensionEntities.get(nsId);
-    if (existing === undefined) {
-      namespaceExtensionEntities.set(nsId, entities);
-      return;
-    }
-    // A top-level block and a `namespace public { … }` block both land in
-    // the default bucket — merge per entries slot rather than overwrite. Two
-    // reopened namespace spellings declaring the same entity name under the
-    // same entries kind is a genuine authoring collision (last-write-wins
-    // would silently drop one), so flag it rather than merge over it.
-    const merged: Record<string, Readonly<Record<string, unknown>>> = { ...existing };
-    for (const [entriesKey, slot] of Object.entries(entities)) {
-      const existingSlot = existing[entriesKey];
-      if (existingSlot !== undefined) {
-        for (const name of Object.keys(slot)) {
-          if (Object.hasOwn(existingSlot, name)) {
-            const block = Object.values(blocks).find((block) => block.name === name);
-            invariant(block !== undefined, 'Lowered entity has an owning block');
-            diagnostics.pushUnlocated({
-              code: 'PSL_DUPLICATE_EXTENSION_ENTITY',
-              message: `entries slot "${entriesKey}" in namespace "${nsId}": entity "${name}" is declared more than once in the same namespace.`,
-              ...diagnosticSource(input.sources, block.node.syntax).at(),
-            });
-          }
-        }
+    for (const row of rows) {
+      let entities = namespaceExtensionEntities.get(row.namespaceId);
+      if (entities === undefined) {
+        entities = {};
+        namespaceExtensionEntities.set(row.namespaceId, entities);
       }
-      merged[entriesKey] = { ...existingSlot, ...slot };
+      const slot = entities[row.entityKind] ?? {};
+      entities[row.entityKind] = slot;
+      if (Object.hasOwn(slot, row.key)) {
+        const block = Object.values(blocks).find((candidate) => candidate.name === row.key);
+        invariant(block !== undefined, 'Lowered entity has an owning block');
+        diagnostics.pushUnlocated({
+          code: 'PSL_DUPLICATE_EXTENSION_ENTITY',
+          message: `entries slot "${row.entityKind}" in namespace "${row.namespaceId}": entity "${row.key}" is declared more than once in the same namespace.`,
+          ...diagnosticSource(input.sources, block.node.syntax).at(),
+        });
+        continue;
+      }
+      slot[row.key] = row.entity;
     }
-    namespaceExtensionEntities.set(nsId, merged);
   };
   for (const ns of namespaceSymbols) {
     if (ns.name === UNSPECIFIED_PSL_NAMESPACE_NAME) continue;
@@ -2343,16 +2390,14 @@ export function interpretPslDocumentToSqlContract(
       targetId: input.target.targetId,
     });
     if (nsId === undefined) continue;
-    mergeNamespaceExtensionEntities(
-      nsId,
+    fileExtensionEntityRows(
       lowerExtensionBlocksForNamespace(
         ns.blocks,
         nsId,
         entityTypesByDiscriminator,
         extensionEntityContext,
-        composedPslBlockDescriptors,
-        (modelName: string) =>
-          earlyModelMappingsByCoordinate.get(modelCoordinateKey(nsId, modelName))?.tableName,
+        parsedBlocks,
+        modelCoordinateOf,
         input.sources,
         diagnostics,
       ),
@@ -2368,17 +2413,14 @@ export function interpretPslDocumentToSqlContract(
         bucketName: UNSPECIFIED_PSL_NAMESPACE_NAME,
         targetId: input.target.targetId,
       }) ?? defaultNamespaceId;
-    mergeNamespaceExtensionEntities(
-      topLevelNsId,
+    fileExtensionEntityRows(
       lowerExtensionBlocksForNamespace(
         topLevelExtensionBlocks,
         topLevelNsId,
         entityTypesByDiscriminator,
         extensionEntityContext,
-        composedPslBlockDescriptors,
-        (modelName: string) =>
-          earlyModelMappingsByCoordinate.get(modelCoordinateKey(topLevelNsId, modelName))
-            ?.tableName,
+        parsedBlocks,
+        modelCoordinateOf,
         input.sources,
         diagnostics,
       ),

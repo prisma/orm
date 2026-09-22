@@ -354,7 +354,7 @@ model Post {
     );
   });
 
-  it('non-JSON member rawValue emits diagnostic', () => {
+  it('a non-JSON member value is rejected by the shared grammar, not by lowering', () => {
     const result = interpret(`
 enum Priority {
   @@type("pg/text@1")
@@ -367,7 +367,14 @@ model Post {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_EXTENSION_INVALID_VALUE' })]),
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: 'Expected a JSON value, found identifier "notjson"',
+        }),
+      ]),
+    );
+    expect(result.failure.diagnostics.some((d) => d.code === 'PSL_EXTENSION_INVALID_VALUE')).toBe(
+      false,
     );
   });
 
