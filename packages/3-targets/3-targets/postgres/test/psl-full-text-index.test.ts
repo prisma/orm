@@ -5,10 +5,13 @@
  * way to index a text column; `@@index(expression:)` stays available for
  * anything this attribute does not cover.
  */
+
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -18,6 +21,8 @@ import {
 } from '../src/core/authoring';
 import { postgresIndexTypes } from '../src/core/index-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const assembled = assembleAuthoringContributions([
   {
@@ -63,6 +68,7 @@ function interpret(source: string) {
     symbolTable,
     sources,
     target: postgresTarget,
+    dataTypeLookup: postgresDataTypeLookup,
     scalarColumnDescriptors: scalarTypeDescriptors,
     authoringContributions: assembled,
     composedExtensionContracts: new Map(),

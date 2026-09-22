@@ -4,11 +4,13 @@
  * operations lower to, from the resolved storage column, so the two surfaces
  * produce the same index for the same model.
  */
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import postgresTargetControl from '@internal/target-postgres/control';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPack from '@internal/target-postgres/pack';
 import {
   DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
@@ -18,6 +20,8 @@ import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { blindCast } from '@internal/utils/casts';
 import { describe, expect, it } from 'vitest';
 import { defineContract, field, fullTextIndex, model } from '../../src/exports/contract-builder';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 /**
  * Both surfaces file the index onto the namespace's `message` table; the two
@@ -69,6 +73,7 @@ function pslIndexes() {
     sources,
     capabilities: {},
     target: postgresPack,
+    dataTypeLookup: postgresDataTypeLookup,
     scalarColumnDescriptors: new Map([
       ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
       ['String', { codecId: 'pg/text@1', nativeType: 'text' }],
