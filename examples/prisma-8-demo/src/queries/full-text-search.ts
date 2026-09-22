@@ -18,7 +18,7 @@ export async function fullTextSearch(query: string, limit: number, runtime: Runt
     )
     .where((f, fns) => fns.fullTextMatches(f.title, query))
     .orderBy((f, fns) => fns.fullTextRank(f.title, query), { direction: 'desc' })
-    .orderBy((f) => f.title, { direction: 'asc' })
+    .orderBy((f) => f.id, { direction: 'asc' })
     .limit(limit)
     .build();
   return runtime.query(plan);

@@ -15,6 +15,7 @@ export async function ormClientSearchPostsByTitle(query: string, limit: number, 
   return db.Post.select('id', 'title', 'userId')
     .where((p) => p.title.fullTextMatches(query))
     .orderBy((p) => p.title.fullTextRank(query).desc())
+    .orderBy((p) => p.id.asc())
     .limit(limit)
     .all();
 }

@@ -16,9 +16,7 @@
       {
         "description": "ensure index \"post_title_search_724b05e5\" does not exist",
         "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
-        "params": [
-          "\"public\".\"post_title_search_724b05e5\""
-        ]
+        "params": ["\"public\".\"post_title_search_724b05e5\""]
       }
     ],
     "execute": [
@@ -32,9 +30,7 @@
       {
         "description": "verify index \"post_title_search_724b05e5\" exists",
         "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
-        "params": [
-          "\"public\".\"post_title_search_724b05e5\""
-        ]
+        "params": ["\"public\".\"post_title_search_724b05e5\""]
       }
     ]
   }
