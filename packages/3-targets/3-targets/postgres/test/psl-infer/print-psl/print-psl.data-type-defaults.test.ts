@@ -9,6 +9,12 @@ import {
 import { PRINTED_PSL_TYPE_NAMES } from '../../../src/core/psl-infer/postgres-type-map';
 import { printPslFromFlat } from '../fixtures';
 
+/** The backtick fencing a tagged literal, as an escape so no quoted string in this file holds one. */
+const BACKTICK = '\u0060';
+
+/** A tagged literal as the printer writes it: `json` plus its fenced body. */
+const tagged = (tag: string, body: string): string => `${tag}${BACKTICK}${body}${BACKTICK}`;
+
 function introspected(
   name: string,
   nativeType: string,
@@ -82,9 +88,9 @@ describe('printPsl writes each default as the literal the column data type takes
       price: '@default(1.50)',
       ratio: '@default(NaN)',
       active: '@default(true)',
-      meta: '@default(json`{"plan":"free","seats":1}`)',
+      meta: `@default(${tagged('json', '{"plan":"free","seats":1}')})`,
       scores: '@default([1, 2])',
-      docs: '@default([json`{}`, json`[]`])',
+      docs: `@default([${tagged('json', '{}')}, ${tagged('json', '[]')}])`,
     });
   });
 
@@ -117,8 +123,8 @@ describe('printPsl writes each default as the literal the column data type takes
   });
 
   it.each([
-    ['a quoted json null element', `ARRAY['null'::jsonb]`, '@default([json`null`])'],
-    ['a quoted json document element', `ARRAY['{}'::jsonb]`, '@default([json`{}`])'],
+    ['a quoted json null element', `ARRAY['null'::jsonb]`, `@default([${tagged('json', 'null')}])`],
+    ['a quoted json document element', `ARRAY['{}'::jsonb]`, `@default([${tagged('json', '{}')}])`],
   ])('prints %s', (_name, rawDefault, expected) => {
     expect(printedDefaults([introspected('docs', 'jsonb', rawDefault, { many: true })])).toEqual({
       docs: expected,
@@ -132,7 +138,7 @@ describe('printPsl writes each default as the literal the column data type takes
     'falls back to the raw expression for %s, which is not the JSON value null',
     (_name, rawDefault) => {
       const printed = printedDefaults([introspected('docs', 'jsonb', rawDefault, { many: true })]);
-      expect(printed['docs']).not.toContain('json`null`');
+      expect(printed['docs']).not.toContain(tagged('json', 'null'));
     },
   );
 

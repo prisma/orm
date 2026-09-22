@@ -13,6 +13,12 @@ import {
 import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contract-storage';
 import { unboundTables } from './unbound-tables';
 
+/** The backtick fencing a tagged literal, as an escape so no quoted string in this file holds one. */
+const BACKTICK = '\u0060';
+
+/** A tagged literal as it is written in PSL: the tag plus its fenced body. */
+const tagged = (tag: string, body: string): string => `${tag}${BACKTICK}${body}${BACKTICK}`;
+
 function interpret(
   schema: string,
   codecLookup = postgresCodecLookup,
@@ -93,7 +99,7 @@ describe('written defaults a column takes', () => {
     ['leading zeros dropped', 'price Decimal @default(007.50)', 'price', '7.50'],
     ['the sign of zero dropped', 'price Decimal @default(-0.0)', 'price', '0.0'],
     ['Infinity on a float column', 'ratio Float @default(Infinity)', 'ratio', 'Infinity'],
-    ['a json null', 'meta Jsonb @default(json`null`)', 'meta', null],
+    ['a json null', `meta Jsonb @default(${tagged('json', 'null')})`, 'meta', null],
   ])('reads %s', (_name, field, column, expected) => {
     expect(columnDefaults(model(`  ${field}`))[column]).toEqual({
       kind: 'literal',
@@ -140,7 +146,7 @@ describe('written defaults a column refuses', () => {
     ],
     [
       'a JSON document on an int column',
-      'count Int @default(json`1`)',
+      `count Int @default(${tagged('json', '1')})`,
       'N.count": pg/int4 has no cast from pg/json;',
     ],
     [
@@ -165,7 +171,7 @@ describe('written defaults a column refuses', () => {
     ],
     [
       'a single value on a list column',
-      'docs Jsonb[] @default(json`{}`)',
+      `docs Jsonb[] @default(${tagged('json', '{}')})`,
       'N.docs": this column holds a list, so its default is a list literal',
     ],
     [
@@ -202,14 +208,15 @@ describe('written defaults a column refuses', () => {
   });
 
   it('keeps a raw SQL default on a list column', () => {
-    expect(columnDefaults(model('  scores Int[] @default(sql`ARRAY[1, 2]`)'))['scores']).toEqual({
+    const field = `  scores Int[] @default(${tagged('sql', 'ARRAY[1, 2]')})`;
+    expect(columnDefaults(model(field))['scores']).toEqual({
       kind: 'function',
       expression: 'ARRAY[1, 2]',
     });
   });
 
   it('refuses a json body that is not a JSON document', () => {
-    expect(diagnostics(model('  meta Jsonb @default(json`{ plan }`)'))).toEqual([
+    expect(diagnostics(model(`  meta Jsonb @default(${tagged('json', '{ plan }')})`))).toEqual([
       expect.objectContaining({
         code: 'PSL_INVALID_JSON_LITERAL',
         message: expect.stringContaining('N.meta'),
@@ -227,7 +234,7 @@ describe('written defaults a column refuses', () => {
   });
 
   it('refuses a tag no pack registered, listing the tags the stack knows', () => {
-    expect(diagnostics(model('  meta Jsonb @default(sqlite.sql`x`)'))).toEqual([
+    expect(diagnostics(model(`  meta Jsonb @default(${tagged('sqlite.sql', 'x')})`))).toEqual([
       expect.objectContaining({
         code: 'PSL_UNKNOWN_DEFAULT_LITERAL_TAG',
         message: expect.stringContaining('Unknown literal tag "sqlite.sql"'),
