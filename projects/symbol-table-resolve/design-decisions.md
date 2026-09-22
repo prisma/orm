@@ -100,6 +100,14 @@ Outcome of the design discussion (2026-09-18) that preceded [`spec.md`](./spec.m
 
 **Why.** The interface's four justifications collapsed under review: a map holds factories (the owner-aware methods were just currying); the "permissive policy" was a switch every consumer set to off — a diagnostic emitted on no production path is a misfeature, not a policy; the variance trap applies to generic registry typing, not to accepting the existing named namespace type; and injection-by-layering survives with plain wider options. Operator's rule: do not invent a new interface for an already-existing thing. Moving the rich voice into the binder completes sole-voice for the attribute-name question — the last name-shaped question a consumer still answered — and symbols-for-attribute-names give the LSP slice the same uniform handle every other name has.
 
-## 12. Open-question resolutions (2026-09-18)
+## 12. Scopes are one abstraction; lookup is kind-blind; kinds are validated after resolution (operator decrees, PR #30349 review)
+
+**Decision.** The namespace scope, top-level scope, and contributed-type scope implement one shape — `lookup(name) → symbol | undefined` — and resolution is a fold over the chain, first hit wins. Lookup is kind-blind: an enum shadows a model of the same name in an outer scope, uniformly for every reference kind. What kind a reference site requires (`@@base` needs an entity; a field type needs a type-position symbol) is validated *after* resolution, with kind-mismatch diagnostics ("Foo is an enum; a base must be a model or composite type") replacing false not-found complaints.
+
+**Why.** Within one scope a name can denote at most one symbol — the symbol table's flat duplicate-claiming guarantees it — so per-kind lookup cascades encode an ambiguity that cannot exist, and per-reference-kind member sets (entityRef seeing past an enum a type reference would hit) created inconsistent shadowing the operator rejected: one scoping rule means one, kind-blind. The uniform `lookup` also restores the surveyed chained-environment design the binder's hand-indexed cascade had drifted from.
+
+**Named behavior changes** (pins rewritten with them): `@@base` naming a shadowing enum/scalar now reports kind-mismatch instead of unresolved; type-position lookups that reach a wrong-kind symbol report what the symbol is.
+
+## 13. Open-question resolutions (2026-09-18)
 
 The spec's four launch questions were answered by the operator: (1) all new LSP features, go-to-definition included, are follow-on work — the LSP slice converts existing surfaces only; (2) the stack on PR #30335 stands, no independent landing path; (3) resolution failures use a new parser-owned `PSL_UNRESOLVED_REFERENCE` code family, adopted by interpreters; (4) user declarations shadow contributed-type symbols silently, with no diagnostic.
