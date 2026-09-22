@@ -35,7 +35,7 @@ function symbolTableInput(schema: string) {
     sources,
     pslBlockDescriptors: {},
   });
-  return { documents: [document], sources, symbolTable, document };
+  return { documents: [document], sources, symbolTable };
 }
 
 /**
