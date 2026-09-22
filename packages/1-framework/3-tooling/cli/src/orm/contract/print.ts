@@ -102,13 +102,13 @@ export function createContractPrintCommand({
     help: {
       summary: 'Write the configured contract as Prisma 8 PSL',
       description:
-        'Loads the contract from the source the config names (a Prisma 7\n' +
-        'schema, a TypeScript contract, or a PSL contract) and writes the Prisma 8\n' +
-        'PSL that reads back as the same contract. Anything the PSL language\n' +
-        'cannot carry is refused by name and nothing is written. The command\n' +
-        'stops at contract.prisma; switch the config to the written file, then\n' +
-        'run `contract emit`. An existing file at the output path is\n' +
-        'overwritten, with a warning.',
+        'Loads the contract from contract.source in your config, whatever kind\n' +
+        'of source that is, and writes it as a Prisma 8 PSL file. Emitting that\n' +
+        'file produces the same contract: same hashes, same domain. If the\n' +
+        'contract holds something PSL cannot express, the command refuses,\n' +
+        'names it, and writes nothing. The command stops at contract.prisma;\n' +
+        'switch the config to the written file, then run `contract emit`. An\n' +
+        'existing file at the output path is overwritten, with a warning.',
       examples: [
         'contract print',
         'contract print --output ./src/prisma/contract.prisma',
@@ -131,7 +131,7 @@ export function createContractPrintCommand({
         return notOk(
           normalizeError(
             errorContractConfigMissing({
-              why: 'Config.contract.source is required for contract print. Define it in your config, for example contract: prisma7Schema("./schema.prisma") or contract: prismaContract("./contract.prisma")',
+              why: 'Config.contract.source is required for contract print. Define contract in your config so the command has a source to print.',
             }),
           ),
         );

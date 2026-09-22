@@ -1,7 +1,8 @@
 /**
- * The `prisma7` grammar reads two Prisma 7 constructs so the Prisma 7
- * interpreter can walk them with spans: attributes on enum members, and field
- * lines inside `view` blocks. The default grammar reads neither.
+ * The `prisma7` grammar reads one Prisma 7 construct so the Prisma 7
+ * interpreter can walk it with spans: field lines inside `view` blocks. The
+ * default grammar reads a `view` block as plain entries. Attributes on an enum
+ * member are read by every grammar.
  */
 import { describe, expect, it } from 'vitest';
 import { parse } from '../src/parse';
@@ -121,43 +122,19 @@ describe('enum member attributes', () => {
   });
 
   describe('given the default grammar', () => {
-    it('reports an attribute after an enum member as an invalid block entry at the attribute', () => {
+    it('reads an attribute after an enum member, leaving its validity to the interpreter', () => {
       const result = parse('enum Role {\n  USER @map("user")\n}', 'test.psl');
-      expect(result.diagnostics).toEqual([
-        {
-          filename: 'test.psl',
-          code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
-          message: 'Invalid block entry',
-          range: { start: { line: 1, character: 7 }, end: { line: 1, character: 8 } },
-        },
-      ]);
-    });
-
-    it('reports an attribute after an enum member value as an invalid block entry', () => {
-      const result = parse('enum Role {\n  Admin = "admin" @map("ADMIN")\n}', 'test.psl');
-      expect(result.diagnostics).toEqual([
-        {
-          filename: 'test.psl',
-          code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
-          message: 'Invalid block entry',
-          range: { start: { line: 1, character: 18 }, end: { line: 1, character: 19 } },
-        },
-      ]);
-    });
-
-    it('reports an attribute after an enum member inside a namespace block as an invalid block entry', () => {
-      const result = parse(
-        'namespace auth {\n  enum Role {\n    USER @map("user")\n  }\n}',
-        'test.psl',
+      expect(result.diagnostics).toEqual([]);
+      expect(printTree(result.document.syntax.green)).toBe(
+        printTree(
+          parse('enum Role {\n  USER @map("user")\n}', 'test.psl', prisma7).document.syntax.green,
+        ),
       );
-      expect(result.diagnostics).toEqual([
-        {
-          filename: 'test.psl',
-          code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
-          message: 'Invalid block entry',
-          range: { start: { line: 2, character: 9 }, end: { line: 2, character: 10 } },
-        },
-      ]);
+    });
+
+    it('reads an attribute after an enum member value', () => {
+      const result = parse('enum Role {\n  Admin = "admin" @map("ADMIN")\n}', 'test.psl');
+      expect(result.diagnostics).toEqual([]);
     });
   });
 });

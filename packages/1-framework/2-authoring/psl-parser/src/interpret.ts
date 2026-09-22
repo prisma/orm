@@ -3,7 +3,6 @@ import type {
   ContractSourceDiagnostic,
   ContractSourceDiagnostics,
   ContractSourceProvider,
-  PslContractSourceProvider,
 } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { notOk, type Result } from '@internal/utils/result';
@@ -28,6 +27,11 @@ export interface PslInterpretInput {
  * types. `interpret` must not read disk or `context.resolvedInputs` — those
  * are load-path concerns.
  */
+/** A contract source whose inputs are PSL files, which this package reads. */
+export interface PslContractSourceProvider extends ContractSourceProvider {
+  readonly format: 'psl';
+}
+
 export interface PslInterpretCapable extends PslContractSourceProvider {
   interpret(
     input: PslInterpretInput,

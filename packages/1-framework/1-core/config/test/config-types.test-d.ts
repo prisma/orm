@@ -12,12 +12,7 @@ import { expectTypeOf, test } from 'vitest';
 import { defineConfig, type FormatterConfig, type PrismaNextConfig } from '../src/config-types';
 import type {
   ContractSourceDiagnostic,
-  ContractSourceFormat,
   ContractSourceProvider,
-  OpaqueContractSourceProvider,
-  Prisma7ContractSourceProvider,
-  PslContractSourceProvider,
-  TypeScriptContractSourceProvider,
 } from '../src/contract-source-types';
 
 const mockHook = {
@@ -147,40 +142,13 @@ test('source diagnostics require a filename but not a span', () => {
   void missingFilename;
 });
 
-test('contract source providers form a format-keyed union', () => {
-  expectTypeOf<ContractSourceProvider>().toEqualTypeOf<
-    | PslContractSourceProvider
-    | TypeScriptContractSourceProvider
-    | Prisma7ContractSourceProvider
-    | OpaqueContractSourceProvider
-  >();
-  expectTypeOf<PslContractSourceProvider['format']>().toEqualTypeOf<'psl'>();
-  expectTypeOf<TypeScriptContractSourceProvider['format']>().toEqualTypeOf<'typescript'>();
-  expectTypeOf<Prisma7ContractSourceProvider['format']>().toEqualTypeOf<'prisma7'>();
-  expectTypeOf<OpaqueContractSourceProvider['format']>().toEqualTypeOf<string | undefined>();
-  expectTypeOf<PslContractSourceProvider['format']>().toExtend<ContractSourceFormat>();
-  expectTypeOf<TypeScriptContractSourceProvider['format']>().toExtend<ContractSourceFormat>();
-  expectTypeOf<Prisma7ContractSourceProvider['format']>().toExtend<ContractSourceFormat>();
-});
-
-test('provider literals remain assignable to the union without casts', () => {
-  const load: ContractSourceProvider['load'] = async (_context) => ok({} as never);
-
-  const psl: ContractSourceProvider = {
-    format: 'psl',
-    inputs: ['./schema.prisma'],
-    load,
-  };
-  const typescript: ContractSourceProvider = { format: 'typescript', load };
-  const prisma7: ContractSourceProvider = { format: 'prisma7', inputs: ['./schema.prisma'], load };
-  const absent: ContractSourceProvider = { load };
-  const thirdParty: ContractSourceProvider = { format: 'made-up-format', load };
-
-  expectTypeOf(psl).toExtend<ContractSourceProvider>();
-  expectTypeOf(typescript).toExtend<ContractSourceProvider>();
-  expectTypeOf(prisma7).toExtend<ContractSourceProvider>();
-  expectTypeOf(absent).toExtend<ContractSourceProvider>();
-  expectTypeOf(thirdParty).toExtend<ContractSourceProvider>();
+test('a contract source is one open interface: the framework enumerates no formats', () => {
+  expectTypeOf<ContractSourceProvider['format']>().toEqualTypeOf<string | undefined>();
+  const load: ContractSourceProvider['load'] = async () => ok({} as never);
+  const tagged: ContractSourceProvider = { format: 'anything', inputs: ['./x'], load };
+  const untagged: ContractSourceProvider = { inputs: ['./x'], load };
+  expectTypeOf(tagged).toExtend<ContractSourceProvider>();
+  expectTypeOf(untagged).toExtend<ContractSourceProvider>();
 });
 
 test('carries an optional formatter section', () => {

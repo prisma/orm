@@ -127,6 +127,33 @@ function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSql
   });
 }
 
+describe('enum member attributes', () => {
+  it('reports an attribute on an enum member, naming the attribute, because a Prisma 8 enum member carries none', () => {
+    const result = interpret(`
+enum Priority {
+  @@type("pg/text@1")
+  Low  = "low" @map("LOW")
+  High = "high"
+}
+
+model Post {
+  id       Int      @id
+  priority Priority
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_ENUM_MEMBER_ATTRIBUTE_UNSUPPORTED',
+        message:
+          'enum "Priority": member "Low" carries @map, but an enum member takes no attributes',
+        span: expect.objectContaining({ start: expect.objectContaining({ line: 4 }) }),
+      }),
+    ]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // PSL ↔ TS parity: enum emits contract equal to TS enumType authoring
 // ---------------------------------------------------------------------------

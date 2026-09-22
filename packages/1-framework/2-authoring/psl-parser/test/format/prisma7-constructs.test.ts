@@ -13,12 +13,9 @@ describe('format given a Prisma 7 construct in a Prisma 8 document', () => {
     );
   });
 
-  it('refuses an enum member with an attribute', () => {
-    expect(() => format('enum Role {\n  USER  @map("user")\n  ADMIN\n}\n')).toThrow(
-      expect.objectContaining({
-        code: 'PSL.PARSE_FAILED',
-        message: 'Cannot format PSL with parse errors: Invalid block entry',
-      }),
+  it('keeps an attribute on an enum member, leaving its validity to the interpreter', () => {
+    expect(format('enum Role {\n  USER  @map("user")\n  ADMIN\n}\n')).toContain(
+      'USER @map("user")',
     );
   });
 });

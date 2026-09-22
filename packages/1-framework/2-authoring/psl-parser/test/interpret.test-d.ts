@@ -2,13 +2,13 @@ import type {
   ContractSourceContext,
   ContractSourceDiagnostics,
   ContractSourceProvider,
-  PslContractSourceProvider,
 } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { ok, type Result } from '@internal/utils/result';
 import { expectTypeOf, test } from 'vitest';
 import {
   hasPslInterpreter,
+  type PslContractSourceProvider,
   type PslInterpretCapable,
   type PslInterpretInput,
 } from '../src/interpret';

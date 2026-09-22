@@ -278,7 +278,7 @@ export class KeyValuePairAst implements AstNode {
     return undefined;
   }
 
-  /** `@` attributes after the key or value (a Prisma 7 enum member's `@map`). */
+  /** `@` attributes after the key or value, as in `USER @map("user")`. */
   *attributes(): Iterable<FieldAttributeAst> {
     yield* filterChildren(this.syntax, FieldAttributeAst.cast);
   }

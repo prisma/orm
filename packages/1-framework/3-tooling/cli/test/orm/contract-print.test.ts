@@ -80,7 +80,7 @@ function ormConfig(dir: string, overrides: Record<string, unknown> = {}): Record
     adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
     driver: { ...DESCRIPTOR, kind: 'driver', id: 'pg-driver' },
     contract: {
-      source: { format: 'prisma7', inputs: ['./prisma/schema.prisma'], load: mocks.load },
+      source: { format: 'fixture', inputs: ['./prisma/schema.prisma'], load: mocks.load },
       output: join(dir, 'generated', 'contract.json'),
     },
     ...overrides,
@@ -255,7 +255,7 @@ describe('contract print', () => {
     const dir = await projectDir();
     const config = ormConfig(dir, {
       contract: {
-        source: { format: 'prisma7', inputs: ['./prisma'], load: mocks.load },
+        source: { format: 'fixture', inputs: ['./prisma'], load: mocks.load },
         output: join(dir, 'generated', 'contract.json'),
       },
     });
@@ -270,7 +270,7 @@ describe('contract print', () => {
     expect(await readdir(dir)).not.toContain('prisma');
   });
 
-  it('prints a PSL source too: the command is not tied to Prisma 7', async () => {
+  it('prints a PSL source the same way as any other source', async () => {
     const dir = await projectDir();
     const config = ormConfig(dir, {
       contract: {
@@ -299,7 +299,7 @@ describe('contract print', () => {
       ok: false,
       failure: {
         summary: 'Prisma 8 does not support views',
-        diagnostics: [{ code: 'PSL.PRISMA7_VIEW_UNSUPPORTED', message: 'a view is not a model' }],
+        diagnostics: [{ code: 'PSL.FIXTURE_VIEW_UNSUPPORTED', message: 'a view is not a model' }],
       },
     });
 

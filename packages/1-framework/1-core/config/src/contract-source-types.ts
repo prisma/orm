@@ -50,41 +50,16 @@ export interface ContractSourceContext {
   readonly capabilities: CapabilityMatrix;
 }
 
-/** Lets format-aware tooling avoid file-extension sniffing and opaque loader introspection. */
-export type ContractSourceFormat = 'psl' | 'typescript' | 'prisma7';
-
-export interface ContractSourceProviderBase {
+/**
+ * A contract source: the inputs it reads and the `load` that turns them into a
+ * contract. The framework never enumerates sources. `format` is a tag the
+ * owning package gives its source; tooling that acts on one kind of source
+ * checks for the capability that package exports, never for the tag alone.
+ */
+export interface ContractSourceProvider {
   readonly inputs?: readonly string[];
+  readonly format?: string;
   readonly load: (
     context: ContractSourceContext,
   ) => Promise<Result<Contract, ContractSourceDiagnostics>>;
 }
-
-export interface PslContractSourceProvider extends ContractSourceProviderBase {
-  readonly format: 'psl';
-}
-
-export interface TypeScriptContractSourceProvider extends ContractSourceProviderBase {
-  readonly format: 'typescript';
-}
-
-/** A Prisma 7 `schema.prisma` read as the contract source; `prisma contract print` writes its Prisma 8 equivalent. */
-export interface Prisma7ContractSourceProvider extends ContractSourceProviderBase {
-  readonly format: 'prisma7';
-}
-
-/**
- * Third-party or unspecified source formats. Absent (or unrecognized)
- * `format` means format-aware tooling must leave the source untouched.
- * Narrowing to a known format flows only through capability guards owned by
- * the authoring layer.
- */
-export interface OpaqueContractSourceProvider extends ContractSourceProviderBase {
-  readonly format?: string;
-}
-
-export type ContractSourceProvider =
-  | PslContractSourceProvider
-  | TypeScriptContractSourceProvider
-  | Prisma7ContractSourceProvider
-  | OpaqueContractSourceProvider;

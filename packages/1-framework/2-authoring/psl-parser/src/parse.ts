@@ -21,8 +21,8 @@ export type PslGrammar = 'psl' | 'prisma7';
 
 export interface ParseOptions {
   /**
-   * `prisma7` also reads two Prisma 7 constructs: `@` attributes after an `enum` member, and field
-   * lines in a `view` body. Defaults to `psl`, which reads neither.
+   * `prisma7` also reads field lines in a `view` body. Defaults to `psl`, which reads a `view`
+   * block as plain `key = value` entries.
    */
   readonly grammar?: PslGrammar;
 }
@@ -744,13 +744,13 @@ function parseNamedTypeMember(cursor: Cursor): void {
 }
 
 /**
- * With the `prisma7` grammar, a `view` body is read like a model body and an `enum` member may
- * carry `@` attributes (`USER @map("user")`). Every other generic block, and every generic block
- * with the `psl` grammar, reads plain `key = value` entries.
+ * An `enum` member may carry `@` attributes in every grammar (`USER @map("user")`); whether one
+ * is allowed is the interpreter's decision. With the `prisma7` grammar, a `view` body is read like
+ * a model body. Every other generic block reads plain `key = value` entries.
  */
 function genericBlockMemberParser(keyword: string, grammar: PslGrammar): MemberParser {
+  if (keyword === 'enum') return parseEnumMember;
   if (grammar === 'prisma7' && keyword === 'view') return parseModelMember;
-  if (grammar === 'prisma7' && keyword === 'enum') return parseEnumMember;
   return parseKeyValueMember;
 }
 
@@ -819,9 +819,9 @@ export function parseNamedType(cursor: Cursor): GreenNode | undefined {
 
 /**
  * A generic-block entry is either `key = value` or a bare `key` (committing a
- * `KeyValuePair` carrying only the key). With `memberAttributes` (enum blocks parsed with the
- * `prisma7` grammar) any number of `@` attributes may follow, as in `USER @map("user")`. A
- * `key =` with no following expression is flagged.
+ * `KeyValuePair` carrying only the key). With `memberAttributes` (enum blocks) any number of `@`
+ * attributes may follow, as in `USER @map("user")`. A `key =` with no following expression is
+ * flagged.
  */
 export function parseKeyValue(
   cursor: Cursor,
