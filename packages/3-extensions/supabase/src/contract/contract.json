@@ -4878,6 +4878,80 @@
               "uniques": []
             },
             "custom_oauth_providers": {
+              "checks": [
+                {
+                  "expression": "((authorization_url IS NULL) OR (authorization_url ~~ 'https://%'::text))",
+                  "name": "custom_oauth_providers_authorization_url_https"
+                },
+                {
+                  "expression": "((authorization_url IS NULL) OR (char_length(authorization_url) <= 2048))",
+                  "name": "custom_oauth_providers_authorization_url_length"
+                },
+                {
+                  "expression": "((char_length(client_id) >= 1) AND (char_length(client_id) <= 512))",
+                  "name": "custom_oauth_providers_client_id_length"
+                },
+                {
+                  "expression": "((discovery_url IS NULL) OR (char_length(discovery_url) <= 2048))",
+                  "name": "custom_oauth_providers_discovery_url_length"
+                },
+                {
+                  "expression": "(identifier ~ '^[a-z0-9][a-z0-9:-]{0,48}[a-z0-9]$'::text)",
+                  "name": "custom_oauth_providers_identifier_format"
+                },
+                {
+                  "expression": "((issuer IS NULL) OR ((char_length(issuer) >= 1) AND (char_length(issuer) <= 2048)))",
+                  "name": "custom_oauth_providers_issuer_length"
+                },
+                {
+                  "expression": "((jwks_uri IS NULL) OR (jwks_uri ~~ 'https://%'::text))",
+                  "name": "custom_oauth_providers_jwks_uri_https"
+                },
+                {
+                  "expression": "((jwks_uri IS NULL) OR (char_length(jwks_uri) <= 2048))",
+                  "name": "custom_oauth_providers_jwks_uri_length"
+                },
+                {
+                  "expression": "((char_length(name) >= 1) AND (char_length(name) <= 100))",
+                  "name": "custom_oauth_providers_name_length"
+                },
+                {
+                  "expression": "((provider_type <> 'oauth2'::text) OR ((authorization_url IS NOT NULL) AND (token_url IS NOT NULL) AND (userinfo_url IS NOT NULL)))",
+                  "name": "custom_oauth_providers_oauth2_requires_endpoints"
+                },
+                {
+                  "expression": "((provider_type <> 'oidc'::text) OR (discovery_url IS NULL) OR (discovery_url ~~ 'https://%'::text))",
+                  "name": "custom_oauth_providers_oidc_discovery_url_https"
+                },
+                {
+                  "expression": "((provider_type <> 'oidc'::text) OR (issuer IS NULL) OR (issuer ~~ 'https://%'::text))",
+                  "name": "custom_oauth_providers_oidc_issuer_https"
+                },
+                {
+                  "expression": "((provider_type <> 'oidc'::text) OR (issuer IS NOT NULL))",
+                  "name": "custom_oauth_providers_oidc_requires_issuer"
+                },
+                {
+                  "expression": "(provider_type = ANY (ARRAY['oauth2'::text, 'oidc'::text]))",
+                  "name": "custom_oauth_providers_provider_type_check"
+                },
+                {
+                  "expression": "((token_url IS NULL) OR (token_url ~~ 'https://%'::text))",
+                  "name": "custom_oauth_providers_token_url_https"
+                },
+                {
+                  "expression": "((token_url IS NULL) OR (char_length(token_url) <= 2048))",
+                  "name": "custom_oauth_providers_token_url_length"
+                },
+                {
+                  "expression": "((userinfo_url IS NULL) OR (userinfo_url ~~ 'https://%'::text))",
+                  "name": "custom_oauth_providers_userinfo_url_https"
+                },
+                {
+                  "expression": "((userinfo_url IS NULL) OR (char_length(userinfo_url) <= 2048))",
+                  "name": "custom_oauth_providers_userinfo_url_length"
+                }
+              ],
               "columns": {
                 "acceptable_client_ids": {
                   "codecId": "pg/text@1",
@@ -4887,6 +4961,9 @@
                   },
                   "many": true,
                   "nativeType": "text",
+                  "noCheck": [
+                    "elementNotNull"
+                  ],
                   "nullable": false
                 },
                 "attribute_mapping": {
@@ -5016,6 +5093,9 @@
                   },
                   "many": true,
                   "nativeType": "text",
+                  "noCheck": [
+                    "elementNotNull"
+                  ],
                   "nullable": false
                 },
                 "skip_nonce_check": {
@@ -5681,6 +5761,40 @@
               ]
             },
             "oauth_authorizations": {
+              "checks": [
+                {
+                  "expression": "(char_length(authorization_code) <= 255)",
+                  "name": "oauth_authorizations_authorization_code_length"
+                },
+                {
+                  "expression": "(char_length(code_challenge) <= 128)",
+                  "name": "oauth_authorizations_code_challenge_length"
+                },
+                {
+                  "expression": "(expires_at > created_at)",
+                  "name": "oauth_authorizations_expires_at_future"
+                },
+                {
+                  "expression": "(char_length(nonce) <= 255)",
+                  "name": "oauth_authorizations_nonce_length"
+                },
+                {
+                  "expression": "(char_length(redirect_uri) <= 2048)",
+                  "name": "oauth_authorizations_redirect_uri_length"
+                },
+                {
+                  "expression": "(char_length(resource) <= 2048)",
+                  "name": "oauth_authorizations_resource_length"
+                },
+                {
+                  "expression": "(char_length(scope) <= 4096)",
+                  "name": "oauth_authorizations_scope_length"
+                },
+                {
+                  "expression": "(char_length(state) <= 4096)",
+                  "name": "oauth_authorizations_state_length"
+                }
+              ],
               "columns": {
                 "approved_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -5764,8 +5878,8 @@
                 "response_type": {
                   "codecId": "pg/enum@1",
                   "default": {
-                    "expression": "'code'::auth.oauth_response_type",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": "code"
                   },
                   "nativeType": "auth.oauth_response_type",
                   "nullable": false,
@@ -5792,8 +5906,8 @@
                 "status": {
                   "codecId": "pg/enum@1",
                   "default": {
-                    "expression": "'pending'::auth.oauth_authorization_status",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": "pending"
                   },
                   "nativeType": "auth.oauth_authorization_status",
                   "nullable": false,
@@ -5926,6 +6040,24 @@
               "uniques": []
             },
             "oauth_clients": {
+              "checks": [
+                {
+                  "expression": "(char_length(client_name) <= 1024)",
+                  "name": "oauth_clients_client_name_length"
+                },
+                {
+                  "expression": "(char_length(client_uri) <= 2048)",
+                  "name": "oauth_clients_client_uri_length"
+                },
+                {
+                  "expression": "(char_length(logo_uri) <= 2048)",
+                  "name": "oauth_clients_logo_uri_length"
+                },
+                {
+                  "expression": "(token_endpoint_auth_method = ANY (ARRAY['client_secret_basic'::text, 'client_secret_post'::text, 'none'::text]))",
+                  "name": "oauth_clients_token_endpoint_auth_method_check"
+                }
+              ],
               "columns": {
                 "client_name": {
                   "codecId": "pg/text@1",
@@ -5940,8 +6072,8 @@
                 "client_type": {
                   "codecId": "pg/enum@1",
                   "default": {
-                    "expression": "'confidential'::auth.oauth_client_type",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": "confidential"
                   },
                   "nativeType": "auth.oauth_client_type",
                   "nullable": false,
@@ -6043,6 +6175,20 @@
               "uniques": []
             },
             "oauth_consents": {
+              "checks": [
+                {
+                  "expression": "((revoked_at IS NULL) OR (revoked_at >= granted_at))",
+                  "name": "oauth_consents_revoked_after_granted"
+                },
+                {
+                  "expression": "(char_length(scopes) <= 2048)",
+                  "name": "oauth_consents_scopes_length"
+                },
+                {
+                  "expression": "(char_length(TRIM(BOTH FROM scopes)) > 0)",
+                  "name": "oauth_consents_scopes_not_empty"
+                }
+              ],
               "columns": {
                 "client_id": {
                   "codecId": "pg/uuid@1",
@@ -6164,6 +6310,12 @@
               ]
             },
             "one_time_tokens": {
+              "checks": [
+                {
+                  "expression": "(char_length(token_hash) > 0)",
+                  "name": "one_time_tokens_token_hash_check"
+                }
+              ],
               "columns": {
                 "created_at": {
                   "codecId": "pg/timestamp-temporal@1",
@@ -6408,6 +6560,20 @@
               ]
             },
             "saml_providers": {
+              "checks": [
+                {
+                  "expression": "(char_length(entity_id) > 0)",
+                  "name": "entity_id not empty"
+                },
+                {
+                  "expression": "((metadata_url = NULL::text) OR (char_length(metadata_url) > 0))",
+                  "name": "metadata_url not empty"
+                },
+                {
+                  "expression": "(char_length(metadata_xml) > 0)",
+                  "name": "metadata_xml not empty"
+                }
+              ],
               "columns": {
                 "attribute_mapping": {
                   "codecId": "pg/jsonb@1",
@@ -6502,6 +6668,12 @@
               ]
             },
             "saml_relay_states": {
+              "checks": [
+                {
+                  "expression": "(char_length(request_id) > 0)",
+                  "name": "request_id not empty"
+                }
+              ],
               "columns": {
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -6636,6 +6808,12 @@
               "uniques": []
             },
             "sessions": {
+              "checks": [
+                {
+                  "expression": "(char_length(scopes) <= 4096)",
+                  "name": "sessions_scopes_length"
+                }
+              ],
               "columns": {
                 "aal": {
                   "codecId": "pg/enum@1",
@@ -6806,6 +6984,12 @@
               "uniques": []
             },
             "sso_domains": {
+              "checks": [
+                {
+                  "expression": "(char_length(domain) > 0)",
+                  "name": "domain not empty"
+                }
+              ],
               "columns": {
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -6878,6 +7062,12 @@
               "uniques": []
             },
             "sso_providers": {
+              "checks": [
+                {
+                  "expression": "((resource_id = NULL::text) OR (char_length(resource_id) > 0))",
+                  "name": "resource_id not empty"
+                }
+              ],
               "columns": {
                 "created_at": {
                   "codecId": "pg/timestamptz-temporal@1",
@@ -6930,6 +7120,12 @@
               "uniques": []
             },
             "users": {
+              "checks": [
+                {
+                  "expression": "((email_change_confirm_status >= 0) AND (email_change_confirm_status <= 2))",
+                  "name": "users_email_change_confirm_status_check"
+                }
+              ],
               "columns": {
                 "aud": {
                   "codecId": "sql/varchar@1",
@@ -7235,6 +7431,12 @@
               ]
             },
             "webauthn_challenges": {
+              "checks": [
+                {
+                  "expression": "(challenge_type = ANY (ARRAY['signup'::text, 'registration'::text, 'authentication'::text]))",
+                  "name": "webauthn_challenges_challenge_type_check"
+                }
+              ],
               "columns": {
                 "challenge_type": {
                   "codecId": "pg/text@1",
@@ -7694,8 +7896,8 @@
                 "type": {
                   "codecId": "pg/enum@1",
                   "default": {
-                    "expression": "'STANDARD'::storage.buckettype",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": "STANDARD"
                   },
                   "nativeType": "storage.buckettype",
                   "nullable": false,
@@ -7780,8 +7982,8 @@
                 "type": {
                   "codecId": "pg/enum@1",
                   "default": {
-                    "expression": "'ANALYTICS'::storage.buckettype",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": "ANALYTICS"
                   },
                   "nativeType": "storage.buckettype",
                   "nullable": false,
@@ -7843,8 +8045,8 @@
                 "type": {
                   "codecId": "pg/enum@1",
                   "default": {
-                    "expression": "'VECTOR'::storage.buckettype",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": "VECTOR"
                   },
                   "nativeType": "storage.buckettype",
                   "nullable": false,
@@ -8622,7 +8824,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "ede079259d126d9153bcb4fc4aa6781d870a255585524e1e95fae9e5af4eef89",
+    "storageHash": "43f09411473534105017fa715b8932facbdf79feab1bfc75da681beb87f22cbc",
     "types": {
       "CreatedAt": {
         "codecId": "pg/timestamp-temporal@1",

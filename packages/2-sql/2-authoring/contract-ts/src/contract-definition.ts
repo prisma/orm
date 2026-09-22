@@ -154,7 +154,11 @@ export interface ForeignKeyNode {
 export interface RelationNode {
   readonly fieldName: string;
   readonly toModel: string;
-  readonly toTable: string;
+  /**
+   * Physical table of the related model. Undefined only for a cross-space
+   * relation whose handle carries no static table name.
+   */
+  readonly toTable: string | undefined;
   /**
    * Namespace coordinate of the related model. When omitted the assembler
    * resolves the coordinate from the referenced model node's own
@@ -183,7 +187,7 @@ export interface RelationNode {
   readonly on: {
     readonly parentTable: string;
     readonly parentColumns: readonly string[];
-    readonly childTable: string;
+    readonly childTable: string | undefined;
     readonly childColumns: readonly string[];
   };
   readonly through?: {
