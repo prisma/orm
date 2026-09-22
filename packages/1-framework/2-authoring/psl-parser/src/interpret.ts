@@ -24,9 +24,9 @@ export interface PslInterpretInput {
   /**
    * The typed envelopes `buildSymbolTable` published for this table. Callers
    * that hold a `SymbolTableResult` thread it through so interpreters
-   * consume the parser-owned lifecycle directly; an interpreter falls back
-   * to `deriveParsedBlocks` only when a caller predating this field omits
-   * it.
+   * consume the parser-owned lifecycle directly; a direct caller that holds
+   * only a symbol table may omit it, and interpreters then re-derive the
+   * envelopes with `deriveParsedBlocks`.
    */
   readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }
