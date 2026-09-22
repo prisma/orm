@@ -13,8 +13,6 @@ import type {
   AttributeSpec,
   AttributeSpecContext,
   AttributeSpecNamespace,
-  AttributeSpecRegistry,
-  AttributeSpecView,
   Binder,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
@@ -109,48 +107,6 @@ function buildFieldAttributeCtx(input: {
   };
 }
 
-export function sqlBinderAttributeSpecs(input: {
-  readonly symbolTable: SymbolTable;
-  readonly controlMutationDefaults?: ControlDefaultRegistries | undefined;
-}): AttributeSpecRegistry {
-  const model: Readonly<Record<string, AttributeSpecView>> = {
-    map: mapModelSpec,
-    id: idModelSpec,
-    unique: uniqueModelSpec,
-    index: indexModelSpec,
-    check: checkModelSpec,
-    control: controlModelSpec,
-    discriminator: discriminatorModelSpec,
-    base: baseModelSpec,
-  };
-  const field: Readonly<Record<string, AttributeSpecView>> = {
-    map: mapFieldSpec,
-    id: idFieldSpec,
-    unique: uniqueFieldSpec,
-    noCheck: noCheckFieldSpec,
-    relation: relationFieldSpec,
-  };
-  const { controlMutationDefaults } = input;
-  const noReferences: AttributeSpecView = { positional: [], named: {} };
-  return {
-    model: (name) => (Object.hasOwn(model, name) ? model[name] : noReferences),
-    field: (name, owner, declaringField) => {
-      if (Object.hasOwn(field, name)) return field[name];
-      if (name === 'default' && controlMutationDefaults !== undefined && owner.kind === 'model') {
-        return sqlAttributeSpecs.field.default(
-          fieldSpecContext({
-            symbols: input.symbolTable,
-            model: owner,
-            field: declaringField,
-            controlMutationDefaults,
-          }),
-        );
-      }
-      return noReferences;
-    },
-  };
-}
-
 function fieldPresetsAsTypeNames(
   namespace: AuthoringFieldNamespace | undefined,
 ): AuthoringTypeNamespace {
@@ -183,10 +139,11 @@ export function createSqlBinder(input: {
       ...fieldPresetsAsTypeNames(input.authoringContributions?.field),
       ...(input.authoringContributions?.type ?? {}),
     },
-    attributeSpecs: sqlBinderAttributeSpecs({
-      symbolTable: input.symbolTable,
-      controlMutationDefaults: input.controlMutationDefaults,
-    }),
+    attributeSpecs: sqlAttributeSpecs,
+    controlMutationDefaults: input.controlMutationDefaults ?? {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   });
 }
 

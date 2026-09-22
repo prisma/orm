@@ -11,12 +11,10 @@ import type {
   Binder,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
-  FieldAttributeSpecFactory,
   FieldSymbol,
   FuncCallSig,
   InferAttr,
   ModelAttributeCtx,
-  ModelAttributeSpecFactory,
   ModelSymbol,
   PslDiagnostic,
   SymbolTable,
@@ -102,40 +100,12 @@ export function createMongoBinder(input: {
   for (const [name, codecId] of input.scalarTypeCodecIds) {
     scalars[name] = { kind: 'typeConstructor', output: { codecId } };
   }
-  const noReferences = { positional: [], named: {} };
-  const modelSpecFactories: Readonly<Record<string, ModelAttributeSpecFactory>> =
-    mongoAttributeSpecs.model;
-  const fieldSpecFactories: Readonly<Record<string, FieldAttributeSpecFactory>> =
-    mongoAttributeSpecs.field;
   return createBinder({
     sources: input.sources,
     symbolTable: input.symbolTable,
     typeConstructors: { ...scalars, ...(input.authoringContributions?.type ?? {}) },
-    attributeSpecs: {
-      model: (name, owner) => {
-        const factory = Object.hasOwn(modelSpecFactories, name)
-          ? modelSpecFactories[name]
-          : undefined;
-        if (factory === undefined || owner.kind !== 'model') return noReferences;
-        return factory({
-          symbols: input.symbolTable,
-          model: owner,
-          controlMutationDefaults: input.controlMutationDefaults,
-        });
-      },
-      field: (name, owner, declaringField) => {
-        const factory = Object.hasOwn(fieldSpecFactories, name)
-          ? fieldSpecFactories[name]
-          : undefined;
-        if (factory === undefined || owner.kind !== 'model') return noReferences;
-        return factory({
-          symbols: input.symbolTable,
-          model: owner,
-          field: declaringField,
-          controlMutationDefaults: input.controlMutationDefaults,
-        });
-      },
-    },
+    attributeSpecs: mongoAttributeSpecs,
+    controlMutationDefaults: input.controlMutationDefaults,
   });
 }
 
