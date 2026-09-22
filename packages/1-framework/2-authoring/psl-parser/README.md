@@ -79,11 +79,11 @@ An unqualified reference resolves in exactly this order:
 
 1. the **declaring namespace** — the namespace the referring declaration itself sits in;
 2. the **top level**;
-3. the **universe scope** — the scalar and type-constructor names built from the injected `typeConstructors` registry.
+3. the **contributed types** — the type-position names the configured target and its extensions contribute, built from the injected `typeConstructors` registry.
 
-"Universe" is the standard compiler name for the outermost implicit scope holding a language's predeclared identifiers: Go's specification defines a universe block that encompasses all Go source text, with `int`, `string` and the rest declared in it. PSL's universe scope is that construct for its predeclared type names, which arrive from configuration rather than from the language definition.
+That third scope holds names nobody declared in a schema: the scalars, type constructors and field presets a target and its composed extension packs bring, in contrast with the models, composite types and named types the documents themselves declare.
 
-**Sibling namespaces are never consulted.** A user declaration shadowing a universe symbol (a `model Uuid` over a built-in `Uuid`) wins **silently** — shadowing is not a diagnostic. A qualified `ns.Name` is looked up in that PSL namespace, then in the type-constructor namespace of the same name (`pgvector.Vector`), and nowhere else.
+**Sibling namespaces are never consulted.** A schema declaration shadowing a contributed type (a `model Uuid` over a contributed `Uuid`) wins **silently** — shadowing is not a diagnostic. A qualified `ns.Name` is looked up in that PSL namespace, then in the type-constructor namespace of the same name (`pgvector.Vector`), and nowhere else.
 
 Qualified references resolve at whole-`QualifiedName` granularity: in `app.Item`, the segments `app` and `Item` do not resolve separately — the one `QualifiedName` node carries the one resolution.
 
@@ -94,7 +94,7 @@ Qualified references resolve at whole-`QualifiedName` granularity: in `app.Item`
 | Kind | Denotes |
 | --- | --- |
 | `model` / `compositeType` / `namedType` / `block` | a user declaration; `block` covers `enum` and every other descriptor-driven block, which may be a field's type but never an `@@base` target |
-| `universe` | a scalar or type constructor from the injected registry |
+| `contributedType` | a scalar, type constructor or field preset from the injected registry |
 | `field` | a field named by an attribute argument (`@@index([a])`, `@relation(fields:, references:)`) |
 | `attributeSpec` | the spec an attribute's name denotes |
 | `crossSpace` | a reference into another contract space, resolvable only where that space is known — an explicit kind, and deliberately **not** a diagnostic |
@@ -134,7 +134,7 @@ Fields whose type is malformed are the one deliberate absence: the binder does n
 
 The binder is snapshot-scoped: an edit produces a new document, symbol table, and binder, and the old set is dropped whole. There is no invalidation protocol.
 
-The universe scope is the exception — it is configuration-derived, not document-derived, and is shared across snapshots. That sharing is keyed by the **object identity of the `typeConstructors` registry** the caller passes: pass the same registry object and two binders share one universe scope; rebuild the registry on every parse and sharing silently degrades to a per-snapshot scope. Resolution stays correct either way, but the guarantee is gone, so hold the registry alongside the configuration it came from.
+The contributed-type scope is the exception — it is configuration-derived, not document-derived, and is shared across snapshots. That sharing is keyed by the **object identity of the `typeConstructors` registry** the caller passes: pass the same registry object and two binders share one scope; rebuild the registry on every parse and sharing silently degrades to a per-snapshot scope. Resolution stays correct either way, but the guarantee is gone, so hold the registry alongside the configuration it came from.
 
 ### Node identity
 

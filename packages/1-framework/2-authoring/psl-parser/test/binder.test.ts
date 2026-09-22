@@ -10,6 +10,7 @@ import { list } from '../src/attribute-spec/combinators/list';
 import { fieldAttribute } from '../src/attribute-spec/field-attribute';
 import { modelAttribute } from '../src/attribute-spec/model-attribute';
 import { type AttributeSpecRegistry, createBinder, typeReferenceNode } from '../src/binder';
+import { contributedTypeScope } from '../src/contributed-type-scope';
 import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
 import {
@@ -21,7 +22,6 @@ import {
 } from '../src/symbol-table';
 import { ArrayLiteralAst } from '../src/syntax/ast/expressions';
 import type { SyntaxNode } from '../src/syntax/red';
-import { universeScope } from '../src/universe-scope';
 
 const ENUM_DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
   enum: {
@@ -244,18 +244,18 @@ describe('createBinder — the scope chain', () => {
     expect(diagnostics.map(({ code }) => code)).toEqual(['PSL_UNRESOLVED_REFERENCE']);
   });
 
-  it('falls back to the universe scope for a scalar name', () => {
+  it('falls back to the contributedTypes scope for a scalar name', () => {
     const { symbolTable, binder, diagnostics } = bind('model User {\n  name String\n}');
     const resolution = binder.symbolForNode(typeNodeOf(symbolTable, 'User', 'name'));
 
     expect(diagnostics).toEqual([]);
     expect(resolution).toMatchObject({
-      kind: 'universe',
-      symbol: { kind: 'universe', name: 'String', path: ['String'] },
+      kind: 'contributedType',
+      symbol: { kind: 'contributedType', name: 'String', path: ['String'] },
     });
   });
 
-  it('lets a user declaration shadow a universe symbol silently', () => {
+  it('lets a user declaration shadow a contributedTypes symbol silently', () => {
     const { symbolTable, binder, diagnostics } = bind(
       'model Uuid {\n  id Int\n}\nmodel User {\n  key Uuid\n}',
     );
@@ -323,14 +323,14 @@ describe('createBinder — qualified references', () => {
     });
   });
 
-  it('resolves a qualified reference into a universe type namespace', () => {
+  it('resolves a qualified reference into a contributedTypes type namespace', () => {
     const { symbolTable, binder, diagnostics } = bind(
       'model Doc {\n  embedding pgvector.Vector\n}',
     );
 
     expect(diagnostics).toEqual([]);
     expect(binder.symbolForNode(typeNodeOf(symbolTable, 'Doc', 'embedding'))).toMatchObject({
-      kind: 'universe',
+      kind: 'contributedType',
       symbol: { name: 'Vector', path: ['pgvector', 'Vector'] },
     });
   });
@@ -436,13 +436,15 @@ describe('createBinder — multiple documents', () => {
   });
 });
 
-describe('universe scope', () => {
+describe('contributedTypes scope', () => {
   it('returns the same scope object for the same registry', () => {
-    expect(universeScope(TYPE_CONSTRUCTORS)).toBe(universeScope(TYPE_CONSTRUCTORS));
-    expect(universeScope({ ...TYPE_CONSTRUCTORS })).not.toBe(universeScope(TYPE_CONSTRUCTORS));
+    expect(contributedTypeScope(TYPE_CONSTRUCTORS)).toBe(contributedTypeScope(TYPE_CONSTRUCTORS));
+    expect(contributedTypeScope({ ...TYPE_CONSTRUCTORS })).not.toBe(
+      contributedTypeScope(TYPE_CONSTRUCTORS),
+    );
   });
 
-  it('shares universe symbols across two binders built over different documents', () => {
+  it('shares contributedTypes symbols across two binders built over different documents', () => {
     const first = bind('model User {\n  name String\n}');
     const second = bind('model Other {\n  title String\n}');
 
@@ -451,9 +453,9 @@ describe('universe scope', () => {
       typeNodeOf(second.symbolTable, 'Other', 'title'),
     );
 
-    expect(firstSymbol?.kind).toBe('universe');
+    expect(firstSymbol?.kind).toBe('contributedType');
     expect(firstSymbol).not.toBe(secondSymbol);
-    if (firstSymbol?.kind === 'universe' && secondSymbol?.kind === 'universe') {
+    if (firstSymbol?.kind === 'contributedType' && secondSymbol?.kind === 'contributedType') {
       expect(firstSymbol.symbol).toBe(secondSymbol.symbol);
     }
   });
@@ -667,7 +669,7 @@ describe('createBinder — entityRef arguments', () => {
     });
   });
 
-  it('reports a missing entity and refuses a universe symbol as an entity', () => {
+  it('reports a missing entity and refuses a contributedTypes symbol as an entity', () => {
     const { symbolTable, binder, diagnostics } = bind(
       [
         'model Orphan {',
@@ -754,7 +756,7 @@ describe('createBinder — diagnostics completeness', () => {
       symbol: symbolTable.topLevel.models['User'],
     });
     expect(binder.symbolForNode(typeNodeOf(symbolTable, 'User', 'email'))).toMatchObject({
-      kind: 'universe',
+      kind: 'contributedType',
     });
   });
 });

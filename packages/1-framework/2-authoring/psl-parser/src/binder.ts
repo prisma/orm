@@ -1,5 +1,10 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import {
+  type ContributedTypeScope,
+  type ContributedTypeSymbol,
+  contributedTypeScope,
+} from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
 import type { ParseDiagnostic } from './parse';
 import type { ResolvedAttribute } from './resolve';
@@ -18,7 +23,6 @@ import type { FieldAttributeAst, ModelAttributeAst } from './syntax/ast/attribut
 import { ArrayLiteralAst, type ExpressionAst } from './syntax/ast/expressions';
 import { IdentifierAst } from './syntax/ast/identifier';
 import type { SyntaxNode } from './syntax/red';
-import { type UniverseScope, type UniverseSymbol, universeScope } from './universe-scope';
 
 export const PSL_UNRESOLVED_REFERENCE =
   'PSL_UNRESOLVED_REFERENCE' satisfies ContributedPslDiagnosticCode;
@@ -39,7 +43,7 @@ export type Resolution =
   | { readonly kind: 'compositeType'; readonly symbol: CompositeTypeSymbol }
   | { readonly kind: 'namedType'; readonly symbol: NamedTypeSymbol }
   | { readonly kind: 'block'; readonly symbol: BlockSymbol }
-  | { readonly kind: 'universe'; readonly symbol: UniverseSymbol }
+  | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol }
   | { readonly kind: 'field'; readonly symbol: FieldSymbol }
   | { readonly kind: 'attributeSpec'; readonly spec: AttributeSpecView }
   | { readonly kind: 'crossSpace' }
@@ -122,7 +126,7 @@ interface Owner {
 
 export function createBinder(options: CreateBinderOptions): BinderResult {
   const { sources, symbolTable, typeConstructors, attributeSpecs } = options;
-  const universe = universeScope(typeConstructors);
+  const contributedTypes = contributedTypeScope(typeConstructors);
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
   const references = new WeakMap<SyntaxNode, Resolution>();
   const diagnostics: ParseDiagnostic[] = [];
@@ -148,7 +152,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       declarations.set(field.node.syntax, field);
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
-      const resolution = resolveTypeReference(field, scope, symbolTable.topLevel, universe);
+      const resolution = resolveTypeReference(field, scope, symbolTable.topLevel, contributedTypes);
       if (resolution === undefined) continue;
       references.set(node, resolution);
       if (resolution.kind === 'unresolved') {
@@ -360,7 +364,7 @@ function resolveTypeReference(
   field: FieldSymbol,
   scope: NamespaceSymbol | undefined,
   topLevel: TopLevelScope,
-  universe: UniverseScope,
+  contributedTypes: ContributedTypeScope,
 ): Resolution | undefined {
   if (field.malformedType === true) return undefined;
   if (field.typeContractSpaceId !== undefined) return { kind: 'crossSpace' };
@@ -372,8 +376,9 @@ function resolveTypeReference(
     const namespace = own(topLevel.namespaces, namespaceId);
     const declared = namespace === undefined ? undefined : inNamespace(namespace, name);
     if (declared !== undefined) return declared;
-    const universeSymbol = universe.lookup([namespaceId, name]);
-    if (universeSymbol !== undefined) return { kind: 'universe', symbol: universeSymbol };
+    const contributedSymbol = contributedTypes.lookup([namespaceId, name]);
+    if (contributedSymbol !== undefined)
+      return { kind: 'contributedType', symbol: contributedSymbol };
     return { kind: 'unresolved', name: `${namespaceId}.${name}` };
   }
 
@@ -381,8 +386,9 @@ function resolveTypeReference(
   if (local !== undefined) return local;
   const global = inTopLevel(topLevel, name);
   if (global !== undefined) return global;
-  const universeSymbol = universe.lookup([name]);
-  if (universeSymbol !== undefined) return { kind: 'universe', symbol: universeSymbol };
+  const contributedSymbol = contributedTypes.lookup([name]);
+  if (contributedSymbol !== undefined)
+    return { kind: 'contributedType', symbol: contributedSymbol };
   return { kind: 'unresolved', name };
 }
 

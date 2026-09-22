@@ -4,20 +4,22 @@ import type {
 } from '@internal/framework-components/authoring';
 import { isAuthoringTypeConstructorDescriptor } from '@internal/framework-components/authoring';
 
-export interface UniverseSymbol {
-  readonly kind: 'universe';
+export interface ContributedTypeSymbol {
+  readonly kind: 'contributedType';
   readonly name: string;
   readonly path: readonly string[];
   readonly descriptor: AuthoringTypeConstructorDescriptor;
 }
 
-export interface UniverseScope {
-  lookup(path: readonly string[]): UniverseSymbol | undefined;
+export interface ContributedTypeScope {
+  lookup(path: readonly string[]): ContributedTypeSymbol | undefined;
 }
 
-const scopes = new WeakMap<AuthoringTypeNamespace, UniverseScope>();
+const scopes = new WeakMap<AuthoringTypeNamespace, ContributedTypeScope>();
 
-export function universeScope(typeConstructors: AuthoringTypeNamespace): UniverseScope {
+export function contributedTypeScope(
+  typeConstructors: AuthoringTypeNamespace,
+): ContributedTypeScope {
   const existing = scopes.get(typeConstructors);
   if (existing !== undefined) return existing;
   const created = buildScope(typeConstructors);
@@ -25,8 +27,8 @@ export function universeScope(typeConstructors: AuthoringTypeNamespace): Univers
   return created;
 }
 
-function buildScope(typeConstructors: AuthoringTypeNamespace): UniverseScope {
-  const symbols = new Map<string, UniverseSymbol>();
+function buildScope(typeConstructors: AuthoringTypeNamespace): ContributedTypeScope {
+  const symbols = new Map<string, ContributedTypeSymbol>();
   collect(typeConstructors, [], symbols);
   return {
     lookup(path) {
@@ -38,12 +40,12 @@ function buildScope(typeConstructors: AuthoringTypeNamespace): UniverseScope {
 function collect(
   namespace: AuthoringTypeNamespace,
   prefix: readonly string[],
-  symbols: Map<string, UniverseSymbol>,
+  symbols: Map<string, ContributedTypeSymbol>,
 ): void {
   for (const [name, value] of Object.entries(namespace)) {
     const path = [...prefix, name];
     if (isAuthoringTypeConstructorDescriptor(value)) {
-      symbols.set(path.join('.'), { kind: 'universe', name, path, descriptor: value });
+      symbols.set(path.join('.'), { kind: 'contributedType', name, path, descriptor: value });
     } else {
       collect(value, path, symbols);
     }

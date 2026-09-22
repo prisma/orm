@@ -119,6 +119,7 @@ export {
   modelAttributeContext,
   referencedModel,
 } from '../binder-context';
+export type { ContributedTypeScope, ContributedTypeSymbol } from '../contributed-type-scope';
 export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
 export {
   createPslDiagnosticCollector,
@@ -151,4 +152,3 @@ export type {
   TopLevelScope,
 } from '../symbol-table';
 export { buildSymbolTable } from '../symbol-table';
-export type { UniverseScope, UniverseSymbol } from '../universe-scope';
