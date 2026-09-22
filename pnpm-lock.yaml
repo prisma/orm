@@ -1419,8 +1419,8 @@ importers:
         specifier: workspace:8.0.0-rc.11
         version: link:../../../2-sql/5-runtime
       '@prisma/cli-engine':
-        specifier: 0.4.0
-        version: 0.4.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
+        specifier: 0.6.0
+        version: 0.6.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../../test/utils
@@ -1448,6 +1448,9 @@ importers:
       '@internal/config':
         specifier: workspace:8.0.0-rc.11
         version: link:../../1-core/config
+      '@internal/config-loader':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../config-loader
       '@internal/utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../0-foundation/utils
@@ -1528,6 +1531,9 @@ importers:
         specifier: ^2.0.3
         version: 2.0.3
     devDependencies:
+      '@prisma/cli-engine':
+        specifier: 0.6.0
+        version: 0.6.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../../test/utils
@@ -3152,8 +3158,8 @@ importers:
         specifier: workspace:8.0.0-rc.11
         version: link:../../3-targets/3-targets/postgres
       '@prisma/cli-engine':
-        specifier: 0.4.0
-        version: 0.4.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
+        specifier: 0.6.0
+        version: 0.6.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../test/utils
@@ -3240,8 +3246,8 @@ importers:
         specifier: workspace:8.0.0-rc.11
         version: link:../../2-sql/2-authoring/contract-ts
       '@prisma/cli-engine':
-        specifier: 0.4.0
-        version: 0.4.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
+        specifier: 0.6.0
+        version: 0.6.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../test/utils
@@ -3322,8 +3328,8 @@ importers:
         specifier: workspace:8.0.0-rc.11
         version: link:../../2-sql/2-authoring/contract-ts
       '@prisma/cli-engine':
-        specifier: 0.4.0
-        version: 0.4.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
+        specifier: 0.6.0
+        version: 0.6.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../test/utils
@@ -3680,8 +3686,8 @@ importers:
         specifier: workspace:8.0.0-rc.11
         version: link:../../2-sql/2-authoring/contract-psl
       '@prisma/cli-engine':
-        specifier: 0.4.0
-        version: 0.4.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
+        specifier: 0.6.0
+        version: 0.6.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../test/utils
@@ -5188,8 +5194,8 @@ importers:
   packages/9-public/@prisma/orm-toolchain:
     dependencies:
       '@prisma/cli-engine':
-        specifier: 0.4.0
-        version: 0.4.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
+        specifier: 0.6.0
+        version: 0.6.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
       '@prisma/orm-framework':
         specifier: workspace:8.0.0-rc.11
         version: link:../orm-framework
@@ -5524,8 +5530,8 @@ importers:
         specifier: workspace:8.0.0-rc.11
         version: link:../../packages/0-shared/publish-surface
       '@prisma/cli-engine':
-        specifier: 0.4.0
-        version: 0.4.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
+        specifier: 0.6.0
+        version: 0.6.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../utils
@@ -7497,6 +7503,12 @@ packages:
 
   '@prisma/cli-engine@0.4.0':
     resolution: {integrity: sha512-8mrARMPTQDKgAQ4M8NnDZuWqtWisnVaI1WI8+pAs+cBmurKxSjGxgNPsQgFwP7/Y3OhpbOtY4nJE/JqUbjVWLw==}
+    engines: {node: '>=22.12.0'}
+    peerDependencies:
+      '@prisma/management-api-sdk': ^1.55.0
+
+  '@prisma/cli-engine@0.6.0':
+    resolution: {integrity: sha512-YDVdHKUQ+0VS8iYCCWYPm5ath2FNrNS1IGN8i14PidoWm+8G8wOnD6swO9KpdxFHutt/6cIIz1Zv9OnOEHgzyg==}
     engines: {node: '>=22.12.0'}
     peerDependencies:
       '@prisma/management-api-sdk': ^1.55.0
@@ -13345,6 +13357,19 @@ snapshots:
       '@clack/prompts': 1.5.0
       '@prisma/management-api-sdk': 1.61.0
       '@stricli/core': 1.3.0
+      c12: 3.3.4(magicast@0.5.4)
+      colorette: 2.0.20
+      package-manager-detector: 1.8.0
+      string-width: 8.2.2
+    transitivePeerDependencies:
+      - magicast
+
+  '@prisma/cli-engine@0.6.0(@prisma/management-api-sdk@1.61.0)(magicast@0.5.4)':
+    dependencies:
+      '@clack/prompts': 1.5.0
+      '@prisma/management-api-sdk': 1.61.0
+      '@stricli/core': 1.3.0
+      arktype: 2.2.3
       c12: 3.3.4(magicast@0.5.4)
       colorette: 2.0.20
       package-manager-detector: 1.8.0

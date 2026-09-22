@@ -1,9 +1,9 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import { relative } from 'pathe';
 import type { FormatOperationResult } from '../control-api/operations/format';
 import { executeFormat } from '../control-api/operations/format';
-import { ormConfigSection } from './config-section';
 import { defineOrmCommand } from './define-command';
 import { normalizeError } from './normalize-error';
 

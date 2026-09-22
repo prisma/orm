@@ -1,10 +1,10 @@
 import { writeFile } from 'node:fs/promises';
 import { computeStorageHash } from '@internal/contract/hashing';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   createOfflineProject,
   type OfflineProject,
@@ -32,14 +32,12 @@ afterEach(removeOfflineProjects);
 function harness(project: OfflineProject) {
   const config = offlineConfig({ project });
   const target = config['target'] as Record<string, unknown>;
-  return createTestCli({
+  return createOrmTestCli({
     commands: BIN_COMMANDS,
     groups: BIN_GROUPS,
-    config: {
-      orm: {
-        ...config,
-        target: { ...target, contractSerializer: { hashCanonicalizationHooks: {} } },
-      },
+    orm: {
+      ...config,
+      target: { ...target, contractSerializer: { hashCanonicalizationHooks: {} } },
     },
   });
 }

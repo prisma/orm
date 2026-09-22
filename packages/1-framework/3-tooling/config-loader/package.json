@@ -24,6 +24,7 @@
     "pathe": "^2.0.3"
   },
   "devDependencies": {
+    "@prisma/cli-engine": "0.6.0",
     "@repo/test-utils": "workspace:8.0.0-rc.11",
     "@repo/tsconfig": "workspace:8.0.0-rc.11",
     "@repo/tsdown": "workspace:8.0.0-rc.11",
@@ -33,6 +34,7 @@
     "vitest": "catalog:"
   },
   "peerDependencies": {
+    "@prisma/cli-engine": "0.6.0",
     "typescript": ">=5.9"
   },
   "peerDependenciesMeta": {

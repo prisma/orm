@@ -77,7 +77,7 @@ export async function prepareMigrationRun(inputs: {
   readonly createClient: CreateControlClient;
 }): Promise<Result<PreparedMigrationRun, CliStructuredError>> {
   const { config, cwd, commandName } = inputs;
-  const contractPath = contractPathFor(config, cwd);
+  const contractPath = contractPathFor(config);
   if (contractPath === undefined) {
     return notOk(
       normalizeError(
@@ -134,7 +134,7 @@ export async function prepareMigrationRun(inputs: {
     contractDisplayPath: displayPath(contractPath, cwd),
     dbConnection,
     database: typeof dbConnection === 'string' ? maskConnectionUrl(dbConnection) : undefined,
-    migrationsDir: migrationsDirFor(config, cwd),
-    refsDir: appRefsDirFor(config, cwd),
+    migrationsDir: migrationsDirFor(config),
+    refsDir: appRefsDirFor(config),
   });
 }

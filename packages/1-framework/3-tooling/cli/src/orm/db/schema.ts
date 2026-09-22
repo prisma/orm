@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { CoreSchemaView, SchemaTreeNode } from '@internal/framework-components/control';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations, Span, TreeNode } from '@prisma/cli-engine';
@@ -11,7 +12,6 @@ import {
   errorUnexpected,
 } from '../../utils/cli-errors';
 import { closeQuietly, maskConnectionUrl, sanitizeErrorMessage } from '../../utils/command-helpers';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { dbFlag } from '../flags';
 import { normalizeError } from '../normalize-error';

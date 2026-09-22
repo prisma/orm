@@ -2,12 +2,15 @@
 
 > **Internal package.** This package is an implementation detail of Prisma 8 and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
 
-Discovers, validates, and finalizes `prisma.config.ts`.
+Discovers and evaluates `prisma.config.ts`, and declares the `orm` section's schema.
 
 ## Overview
 
-This package owns config _loading_ — the file I/O (`c12`), validation, and finalization
-that turns a `prisma.config.ts` on disk into a resolved `PrismaNextConfig`. It also
+This package owns config _loading_ — the file I/O (`c12`) — and the declaration of the `orm`
+section's shape (`ormConfigSchema`), from which the CLI engine derives validation, diagnostics and
+the resolution of every path against the config file that wrote it. `loadConfig` runs that same
+validation for readers outside a command run and turns a `prisma.config.ts` on disk into a
+resolved `PrismaNextConfig`. It also
 performs the emitter-derived artifact-collision check (`getEmittedArtifactPaths`).
 
 It exposes a single `loadConfig(configPath?)` that maps failures to the CLI's structured

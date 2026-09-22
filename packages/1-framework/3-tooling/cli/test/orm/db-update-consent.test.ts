@@ -1,12 +1,12 @@
 import { rmSync, writeFileSync } from 'node:fs';
 import { notOk, ok } from '@internal/utils/result';
 import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const mocks = {
@@ -154,7 +154,7 @@ function refuseUntilConsented() {
 }
 
 function harness(config: Record<string, unknown> = ormConfig()) {
-  return createTestCli({ commands, groups, config: { orm: config } });
+  return createOrmTestCli({ commands, groups, orm: config });
 }
 
 function envelopeOf(json: readonly StreamEvent[]): unknown {

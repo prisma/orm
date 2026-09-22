@@ -3,8 +3,6 @@ import { access } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { PrismaNextConfig } from '@internal/config/config-types';
-import type { ConfigSection } from '@internal/config/config-validation';
-import { collectConfigIssues } from '@internal/config/config-validation';
 import { getEmittedArtifactPaths } from '@internal/emitter';
 import {
   CliStructuredError,
@@ -17,8 +15,9 @@ import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { isStructuredError } from '@internal/utils/structured-error';
+import type { SectionProvenance } from '@prisma/cli-engine';
 import { dirname, join, resolve } from 'pathe';
-import { finalizeContractConfig, finalizeMigrationsConfig } from './finalize-config';
+import { type ConfigSection, isConfigSection, validateOrmSection } from './orm-section';
 
 const CONFIG_FILENAME = 'prisma.config.ts';
 
@@ -99,30 +98,33 @@ function collectArtifactCollisionDiagnostics(
   return [];
 }
 
-function buildLoadedConfig(rawConfig: Record<string, unknown>, configDir: string): LoadedConfig {
-  const issues = collectConfigIssues(rawConfig);
-  const diagnostics = issues.map((issue) =>
-    errorConfigValidation(issue.field, { why: issue.message, section: issue.section }),
-  );
-
-  const raw = blindCast<
-    PrismaNextConfig,
-    'Structure was checked by collectConfigIssues; sections carrying diagnostics are guarded by requireConfigSections'
-  >(rawConfig);
-
-  // A section that already has a diagnostic is not well-typed enough to
-  // finalize; it is left exactly as authored for the caller to report.
-  const config = issues.some((issue) => issue.section === 'migrations')
-    ? raw
-    : { ...raw, migrations: finalizeMigrationsConfig(raw.migrations, configDir) };
-
-  if (config.contract === undefined || issues.some((issue) => issue.section === 'contract')) {
+function buildLoadedConfig(
+  rawConfig: Record<string, unknown>,
+  provenance: SectionProvenance,
+): LoadedConfig {
+  const validation = validateOrmSection(rawConfig, provenance);
+  if (!validation.ok) {
+    const diagnostics = validation.diagnostics.map((diagnostic) => {
+      const field = typeof diagnostic.meta?.['field'] === 'string' ? diagnostic.meta['field'] : '';
+      const section = field.split('.')[0] ?? '';
+      return errorConfigValidation(field, {
+        why: diagnostic.summary,
+        ...(isConfigSection(section) ? { section } : {}),
+      });
+    });
+    // A section that failed validation is left exactly as authored, for the
+    // commands that read only its valid subsections.
+    const config = blindCast<
+      PrismaNextConfig,
+      'a config with diagnostics is guarded by requireConfigSections before any subsection is read'
+    >(rawConfig);
     return { config, diagnostics };
   }
-
-  const contract = finalizeContractConfig(config.contract, configDir);
-  diagnostics.push(...collectArtifactCollisionDiagnostics(contract));
-  return { config: { ...config, contract }, diagnostics };
+  const config = validation.value;
+  if (config.contract === undefined) {
+    return { config, diagnostics: [] };
+  }
+  return { config, diagnostics: collectArtifactCollisionDiagnostics(config.contract) };
 }
 
 function toConfigLoadFailure(error: unknown, configPath?: string): CliStructuredError {
@@ -174,10 +176,38 @@ async function importC12(): Promise<typeof import('c12')> {
   return await import(pathToFileURL(entry).href);
 }
 
-export async function loadConfig(
+/** One evaluated config file: its path and its top-level sections. */
+export interface ConfigFile {
+  readonly path: string;
+  /** The file's top-level keys minus the ones the file format keeps for itself. */
+  readonly sections: Readonly<Record<string, unknown>>;
+}
+
+/** The evaluated config chain, before any section is validated. */
+export interface ConfigFiles {
+  /** The requested file first, then the files it extends. */
+  readonly files: readonly ConfigFile[];
+  /** c12's merge of every file, nearest file winning. */
+  readonly merged: Readonly<Record<string, unknown>>;
+}
+
+const FILE_FORMAT_KEYS = new Set(['$prismaConfig', 'extends']);
+
+function sectionsOf(exported: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(exported).filter(([key]) => !FILE_FORMAT_KEYS.has(key)));
+}
+
+/**
+ * Evaluates `prisma.config.ts` and hands back each file on the chain with its
+ * sections as written, plus c12's merge. Failures that prevent evaluation are
+ * the Result failure. Nothing is validated or resolved here: the CLI engine
+ * validates each section against its schema with the files' provenance, and
+ * {@link loadConfig} does the same for the `orm` section outside a command run.
+ */
+export async function loadConfigFiles(
   configPath?: string,
   options?: { readonly cwd?: string },
-): Promise<Result<LoadedConfig, CliStructuredError>> {
+): Promise<Result<ConfigFiles, CliStructuredError>> {
   const cwd = options?.cwd ?? process.cwd();
   const resolvedConfigPath = configPath ? resolve(cwd, configPath) : undefined;
   const configCwd = resolvedConfigPath ? dirname(resolvedConfigPath) : cwd;
@@ -204,42 +234,100 @@ export async function loadConfig(
     return notOk(errorConfigFileNotFound(displayPath));
   }
 
-  /* v8 ignore next -- @preserve */
-  const loadedConfigDir = result.configFile ? dirname(result.configFile) : configCwd;
-
   // The marker is read from the raw module export in c12's first layer — the
   // requested config file. (`extends` bases and rc files follow it, and their
   // markers must not vouch for a file that does not carry one itself.)
   /* v8 ignore next -- c12 always returns layers for a config it evaluated */
-  const [requestedLayer] = result.layers ?? [];
-  const layerConfig = requestedLayer?.config;
+  const layers = result.layers ?? [];
+  const layerConfig = layers[0]?.config;
 
   // The engine's shape: definePrismaConfig from @prisma/cli-engine stamps the
   // enumerable `$prismaConfig` key and nests the whole Prisma 8 config as
   // the `orm` section.
   const engineMarker = isRecord(layerConfig) ? layerConfig['$prismaConfig'] : undefined;
-  if (engineMarker !== undefined) {
-    if (engineMarker !== 1) {
-      /* v8 ignore next -- a config that evaluated always carries its resolved path */
-      return notOk(errorConfigVersionMarkerMissing(result.configFile ?? resolvedConfigPath));
-    }
-    const orm = result.config['orm'];
-    if (orm !== undefined && !isRecord(orm)) {
-      const base = buildLoadedConfig({}, loadedConfigDir);
-      return ok({
-        config: base.config,
-        diagnostics: [
-          errorConfigValidation('orm', {
-            why: `The orm section of ${CONFIG_FILENAME} must be an object`,
-          }),
-        ],
-      });
-    }
-    return ok(buildLoadedConfig(orm ?? {}, loadedConfigDir));
+  if (engineMarker === undefined) {
+    /* v8 ignore next -- a config that evaluated always carries its resolved path */
+    return notOk(errorConfigVersionMarkerMissing(result.configFile ?? resolvedConfigPath));
+  }
+  if (engineMarker !== 1) {
+    /* v8 ignore next -- a config that evaluated always carries its resolved path */
+    return notOk(errorConfigVersionMarkerMissing(result.configFile ?? resolvedConfigPath));
   }
 
-  /* v8 ignore next -- a config that evaluated always carries its resolved path */
-  return notOk(errorConfigVersionMarkerMissing(result.configFile ?? resolvedConfigPath));
+  /* v8 ignore next -- @preserve */
+  const requested = result.configFile ?? join(configCwd, CONFIG_FILENAME);
+  // c12 adds rc and package.json layers with empty configs; only files that
+  // wrote something are on the chain.
+  const files = layers.flatMap((layer, index) =>
+    isRecord(layer.config) && Object.keys(layer.config).length > 0
+      ? [
+          {
+            path: index === 0 ? requested : resolve(configCwd, layer.configFile ?? requested),
+            sections: sectionsOf(layer.config),
+          },
+        ]
+      : [],
+  );
+  return ok({
+    files: files.length === 0 ? [{ path: requested, sections: sectionsOf(result.config) }] : files,
+    merged: result.config,
+  });
+}
+
+/** Which file wrote each top-level key of the `orm` section, nearest file first. */
+function ormProvenance(
+  files: readonly ConfigFile[],
+  merged: Record<string, unknown>,
+): SectionProvenance {
+  const contributors = files.filter((file) => isRecord(file.sections['orm']));
+  const paths = contributors.map((file) => file.path);
+  const keys = Object.fromEntries(
+    Object.keys(merged).flatMap((key) => {
+      const file =
+        contributors.find((contributor) => {
+          const orm = contributor.sections['orm'];
+          return isRecord(orm) && Object.hasOwn(orm, key);
+        })?.path ?? paths[0];
+      return file === undefined ? [] : [[key, file]];
+    }),
+  );
+  return { files: paths, keys };
+}
+
+export async function loadConfig(
+  configPath?: string,
+  options?: { readonly cwd?: string },
+): Promise<Result<LoadedConfig, CliStructuredError>> {
+  const loaded = await loadConfigFiles(configPath, options);
+  if (!loaded.ok) {
+    return loaded;
+  }
+  const orm = loaded.value.merged['orm'];
+  if (orm !== undefined && !isRecord(orm)) {
+    const base = buildLoadedConfig({}, { files: [], keys: {} });
+    return ok({
+      config: base.config,
+      diagnostics: [
+        errorConfigValidation('orm', {
+          why: `The orm section of ${CONFIG_FILENAME} must be an object`,
+        }),
+      ],
+    });
+  }
+  const section = orm ?? {};
+  const provenance = ormProvenance(loaded.value.files, section);
+  const requested = loaded.value.files[0]?.path;
+  return ok(
+    buildLoadedConfig(
+      section,
+      provenance.files.length === 0 && requested !== undefined
+        ? {
+            files: [requested],
+            keys: Object.fromEntries(Object.keys(section).map((key) => [key, requested])),
+          }
+        : provenance,
+    ),
+  );
 }
 
 /**

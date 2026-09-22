@@ -8,6 +8,7 @@ import type { ContractEmitResult } from '../../src/control-api/types';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import type { ContractEmitCommandDeps } from '../../src/orm/contract/emit';
 import { createContractEmitCommand } from '../../src/orm/contract/emit';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 
 /**
  * The command is mounted from the factory with the operation injected, so no
@@ -79,7 +80,7 @@ function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unkn
 }
 
 function harness(config: Record<string, unknown> = ormConfig()) {
-  return createTestCli({ commands, groups, config: { orm: config } });
+  return createOrmTestCli({ commands, groups, orm: config });
 }
 
 function erroredEnvelope(run: { readonly json: readonly StreamEvent[] }): ErroredEnvelope {
@@ -101,8 +102,7 @@ function countingLoader(config: Record<string, unknown> = ormConfig()): {
     loadConfig: (configPath) => {
       calls.push(configPath ?? '(none)');
       return Promise.resolve({
-        path: join(PROJECT_DIR, 'prisma.config.ts'),
-        sections: { orm: config },
+        files: [{ path: join(PROJECT_DIR, 'prisma.config.ts'), sections: { orm: config } }],
         diagnostics: [],
       });
     },
@@ -137,6 +137,44 @@ describe('contract emit', () => {
     expect(executeContractEmit).toHaveBeenCalledTimes(1);
     expect(executeContractEmit.mock.calls[0]?.[0]).toMatchObject({
       config,
+      cwd: PROJECT_DIR,
+    });
+  });
+
+  it('resolves relative config paths against the --config file, not the working directory', async () => {
+    const configDir = join(PROJECT_DIR, 'sub');
+    const config = ormConfig({
+      contract: {
+        source: {
+          format: 'psl',
+          inputs: ['./contract.prisma'],
+          load: () => ({ ok: true, value: {} }),
+        },
+        output: './generated/contract.json',
+      },
+    });
+    const loadConfig = (configPath?: string) =>
+      Promise.resolve({
+        files: [
+          { path: join(PROJECT_DIR, configPath ?? 'prisma.config.ts'), sections: { orm: config } },
+        ],
+        diagnostics: [],
+      });
+
+    const run = await createTestCli({ commands, groups, loadConfig }).run(
+      ['contract', 'emit', '--json', '--config', 'sub/prisma.config.ts'],
+      { cwd: PROJECT_DIR },
+    );
+
+    expect(run.exitCode).toBe(0);
+    expect(executeContractEmit.mock.calls[0]?.[0]).toMatchObject({
+      config: {
+        contract: {
+          source: { inputs: [join(configDir, 'contract.prisma')] },
+          output: join(configDir, 'generated', 'contract.json'),
+        },
+        baseDir: configDir,
+      },
       cwd: PROJECT_DIR,
     });
   });

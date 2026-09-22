@@ -2,11 +2,11 @@ import { rm } from 'node:fs/promises';
 import { EMPTY_CONTRACT_HASH } from '@internal/migration-tools/constants';
 import { writeRef } from '@internal/migration-tools/refs';
 import type { Diagnostic } from '@prisma/cli-engine/protocol';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   createOfflineProject,
   invariantOp,
@@ -88,7 +88,7 @@ function driverConfig(
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands: BIN_COMMANDS, groups: BIN_GROUPS, orm: config });
 }
 
 /** A project whose app space carries one migration ∅ → HASH_HEAD. */

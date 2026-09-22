@@ -61,7 +61,6 @@
     "./components/utils": "./dist/components__utils.mjs",
     "./config": "./dist/config.mjs",
     "./config/config-types": "./dist/config__config-types.mjs",
-    "./config/config-validation": "./dist/config__config-validation.mjs",
     "./contract": "./dist/contract.mjs",
     "./contract/apply-specifier-default-control-policy": "./dist/contract__apply-specifier-default-control-policy.mjs",
     "./contract/contract-validation-error": "./dist/contract__contract-validation-error.mjs",
