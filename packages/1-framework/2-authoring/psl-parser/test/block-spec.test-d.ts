@@ -80,6 +80,15 @@ describe('InferBlock', () => {
     >();
   });
 
+  it('pins fixed string literals as literal output types', () => {
+    const spec = fixedBlock({
+      parameters: {
+        mode: { type: str('checked'), documentation: 'The only accepted mode.' },
+      },
+    });
+    expectTypeOf<InferBlock<typeof spec>['mode']>().toEqualTypeOf<'checked'>();
+  });
+
   it('supports nested shared rules', () => {
     const spec = fixedBlock({
       parameters: {
