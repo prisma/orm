@@ -1,7 +1,7 @@
 import { toEnumMemberName, toEnumName } from '@internal/family-sql/psl-infer';
 import type {
   PslExtensionBlock,
-  PslExtensionBlockParamValue,
+  PslExtensionBlockSourceEntry,
 } from '@internal/framework-components/psl-ast';
 import { escapePslString } from '@internal/sql-relational-core/ast';
 import {
@@ -73,11 +73,11 @@ function buildNativeEnumBlock(
   values: readonly string[],
 ): PslExtensionBlock {
   const usedMemberNames = new Set<string>();
-  const parameters: Record<string, PslExtensionBlockParamValue> = {};
+  const parameters: Record<string, PslExtensionBlockSourceEntry> = {};
   for (const value of values) {
     const memberName = createUniqueFieldName(toEnumMemberName(value), usedMemberNames);
     usedMemberNames.add(memberName);
-    parameters[memberName] = { kind: 'value', raw: JSON.stringify(value), span: SYNTHETIC_SPAN };
+    parameters[memberName] = { expression: JSON.stringify(value), span: SYNTHETIC_SPAN };
   }
 
   return {
@@ -101,8 +101,6 @@ function buildNativeEnumBlock(
               span: SYNTHETIC_SPAN,
             },
           ],
-    attributes:
-      name === typeName ? {} : { map: { args: { name: typeName }, span: SYNTHETIC_SPAN } },
     span: SYNTHETIC_SPAN,
   };
 }
