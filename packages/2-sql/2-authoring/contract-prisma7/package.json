@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@internal/adapter-postgres": "workspace:8.0.0-rc.11",
+    "@internal/config-loader": "workspace:8.0.0-rc.11",
     "@internal/driver-postgres": "workspace:8.0.0-rc.11",
     "@internal/family-sql": "workspace:8.0.0-rc.11",
     "@internal/target-postgres": "workspace:8.0.0-rc.11",

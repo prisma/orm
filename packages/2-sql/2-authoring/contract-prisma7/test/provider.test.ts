@@ -1,5 +1,6 @@
 import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { expandContractInputs } from '@internal/config-loader';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-binding';
 import { structuredError } from '@internal/utils/structured-error';
@@ -73,6 +74,34 @@ describe('prisma7Contract', () => {
       'Deep',
       'Nested',
       'Post',
+    ]);
+  });
+
+  it('keeps a directory input intact through the same resolution helper every assembly site uses', async () => {
+    const dir = scratchDir('directory-through-assembly-site');
+    writeFileSync(
+      join(dir, 'datasource.prisma'),
+      'datasource db {\n  provider = "postgresql"\n}\n',
+    );
+    writeFileSync(join(dir, 'a.prisma'), 'model A {\n  id Int\n}\n');
+    writeFileSync(join(dir, 'b.prisma'), 'model B {\n  id Int\n}\n');
+    writeFileSync(join(dir, 'c.prisma'), 'model C {\n  id Int\n}\n');
+
+    // `dir` stands in for the absolute path finalizeConfig would have
+    // produced from a relative schema path resolved against the config
+    // directory — expandContractInputs only ever sees already-absolute
+    // patterns in production.
+    const config = prisma7Contract(dir, postgres);
+    const resolvedInputs = await expandContractInputs(config.source.inputs);
+    expect(resolvedInputs).toEqual([dir]);
+
+    const result = await config.source.load(postgresSourceContext(resolvedInputs));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(Object.keys(result.value.domain.namespaces['public']?.models ?? {}).sort()).toEqual([
+      'A',
+      'B',
+      'C',
     ]);
   });
 

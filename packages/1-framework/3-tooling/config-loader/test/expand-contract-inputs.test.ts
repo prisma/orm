@@ -34,18 +34,36 @@ describe('expandContractInputs', () => {
     expect(await expandContractInputs([join(dir, '*.prisma')])).toEqual([]);
   });
 
-  it('returns an empty list when a literal path does not exist', async () => {
+  it('passes a nonexistent literal path through unchanged, no existence check', async () => {
     const dir = await createFixtureDir();
+    const missing = join(dir, 'schema.prisma');
 
-    expect(await expandContractInputs([join(dir, 'schema.prisma')])).toEqual([]);
+    expect(await expandContractInputs([missing])).toEqual([missing]);
   });
 
-  it('passes a wildcard-free literal path through unchanged', async () => {
+  it('passes an existing wildcard-free literal path through unchanged', async () => {
     const dir = await createFixtureDir();
     const file = join(dir, 'schema.prisma');
     await writeFile(file, 'model User {}\n', 'utf-8');
 
     expect(await expandContractInputs([file])).toEqual([file]);
+  });
+
+  it('passes a directory literal through unchanged, no directory expansion', async () => {
+    const dir = await createFixtureDir();
+    await writeFile(join(dir, 'a.prisma'), 'model A {}\n', 'utf-8');
+    await writeFile(join(dir, 'b.prisma'), 'model B {}\n', 'utf-8');
+
+    expect(await expandContractInputs([dir])).toEqual([dir]);
+  });
+
+  it('expands a glob matching a directory to its files only, never the directory itself', async () => {
+    const dir = await createFixtureDir();
+    await mkdir(join(dir, 'nested'), { recursive: true });
+    const file = join(dir, 'nested', 'schema.prisma');
+    await writeFile(file, 'model User {}\n', 'utf-8');
+
+    expect(await expandContractInputs([join(dir, '**')])).toEqual([file]);
   });
 
   it('dedupes a file matched by two overlapping globs', async () => {

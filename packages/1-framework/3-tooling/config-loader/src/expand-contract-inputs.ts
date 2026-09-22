@@ -1,13 +1,20 @@
 import { resolve } from 'pathe';
-import { glob } from 'tinyglobby';
+import { glob, isDynamicPattern } from 'tinyglobby';
 
 /**
- * Expands a finalized contract source glob list into its member file set:
+ * Expands a finalized contract source input list into its member file set:
  * absolute, deduped by canonical path, sorted. `patterns` must already be
  * absolute (`finalizeConfig` resolves each entry against the config
- * directory but does not expand it); a wildcard-free entry is the degenerate
- * glob and, when it names an existing file, passes through unchanged. A
- * pattern that matches nothing contributes nothing — no diagnostic here.
+ * directory but does not expand it).
+ *
+ * A wildcard-free entry (per tinyglobby's own magic-character check) passes
+ * through verbatim — no globbing, no existence check, no directory
+ * expansion — so a literal file, a nonexistent path (its read error
+ * surfaces downstream), and a directory (`contract-prisma7`'s adoption
+ * surface) all reach the result unchanged. Only entries containing glob
+ * magic run through `tinyglobby`, directories-not-auto-expanded and
+ * files-only; a glob matching nothing contributes nothing — no diagnostic
+ * here.
  */
 export async function expandContractInputs(
   patterns: readonly string[] | undefined,
@@ -15,7 +22,15 @@ export async function expandContractInputs(
   if (patterns === undefined || patterns.length === 0) {
     return [];
   }
-  const matches = await glob(patterns, { absolute: true, onlyFiles: true });
-  const canonical = new Set(matches.map((match) => resolve(match)));
+  const literals: string[] = [];
+  const globPatterns: string[] = [];
+  for (const pattern of patterns) {
+    (isDynamicPattern(pattern) ? globPatterns : literals).push(pattern);
+  }
+  const globMatches =
+    globPatterns.length === 0
+      ? []
+      : await glob(globPatterns, { absolute: true, onlyFiles: true, expandDirectories: false });
+  const canonical = new Set([...literals, ...globMatches].map((entry) => resolve(entry)));
   return Array.from(canonical).sort();
 }

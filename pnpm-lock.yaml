@@ -2501,6 +2501,9 @@ importers:
       '@internal/adapter-postgres':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../3-targets/6-adapters/postgres
+      '@internal/config-loader':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../../1-framework/3-tooling/config-loader
       '@internal/driver-postgres':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../3-targets/7-drivers/postgres

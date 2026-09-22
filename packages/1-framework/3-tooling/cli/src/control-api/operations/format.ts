@@ -40,14 +40,11 @@ export async function executeFormat(
     return ok({ formatted: false });
   }
 
-  const firstDeclaredInput = source.inputs?.[0];
-  if (firstDeclaredInput === undefined) {
+  const resolvedInputs = await expandContractInputs(source.inputs);
+  const inputPath = resolvedInputs[0];
+  if (inputPath === undefined) {
     return ok({ formatted: false });
   }
-  const resolvedInputs = await expandContractInputs(source.inputs);
-  // A declared-but-unmatched input (e.g. a deleted file) still reports the
-  // read failure below rather than silently formatting nothing.
-  const inputPath = resolvedInputs[0] ?? firstDeclaredInput;
 
   let contents: string;
   try {
