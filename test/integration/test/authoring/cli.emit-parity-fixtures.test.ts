@@ -1,5 +1,4 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
 import type { ContractSourceContext, PrismaNextConfig } from '@internal/cli/config-types';
 import { enrichContract } from '@internal/cli/control-api';
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
@@ -8,6 +7,7 @@ import { createControlStack } from '@internal/framework-components/control';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { timeouts } from '@repo/test-utils';
+import { join, relative, sep } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { emit } from '../../utils/emit';
 import { runOnEngine } from '../utils/cli-test-helpers';
