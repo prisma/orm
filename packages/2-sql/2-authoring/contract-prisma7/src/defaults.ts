@@ -318,6 +318,8 @@ function refusalReason(refusal: DefaultRefusal): string {
       return `holds a ${refusal.tag} literal${at}, which this stack does not register.`;
     case 'unwritable':
       return `holds a ${refusal.syntax} value${at}, which this target has no data type for.`;
+    case 'not-a-list':
+      return 'holds a single value on a list column, which takes a list literal.';
     case 'no-cast':
       return `holds a ${refusal.valueType} value${at}, which ${refusal.columnType} has no cast from; ${refusal.casts.length === 0 ? 'it casts from nothing' : `it casts from ${refusal.casts.join(', ')}`}.`;
     case 'undecodable':

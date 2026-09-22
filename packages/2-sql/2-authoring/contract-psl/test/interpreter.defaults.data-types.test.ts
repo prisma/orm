@@ -164,6 +164,11 @@ describe('written defaults a column refuses', () => {
       'N.count": pg/int4 has no cast from pg/numeric; it casts from pg/int2',
     ],
     [
+      'a single value on a list column',
+      'docs Jsonb[] @default(json`{}`)',
+      'N.docs": this column holds a list, so its default is a list literal',
+    ],
+    [
       'a number on a column whose type takes only text',
       'payload Bytes @default(1234)',
       'N.payload": pg/bytea has no cast from pg/int2; it casts from pg/text',
@@ -194,6 +199,13 @@ describe('written defaults a column refuses', () => {
         message: expect.stringContaining('this target has no data type for a boolean value'),
       }),
     ]);
+  });
+
+  it('keeps a raw SQL default on a list column', () => {
+    expect(columnDefaults(model('  scores Int[] @default(sql`ARRAY[1, 2]`)'))['scores']).toEqual({
+      kind: 'function',
+      expression: 'ARRAY[1, 2]',
+    });
   });
 
   it('refuses a json body that is not a JSON document', () => {

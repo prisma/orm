@@ -71,6 +71,7 @@ export type DefaultRefusal = {
   | { readonly kind: 'unreadable'; readonly json: boolean; readonly message: string }
   | { readonly kind: 'unknown-tag'; readonly tag: string; readonly known: readonly string[] }
   | { readonly kind: 'unwritable'; readonly syntax: string }
+  | { readonly kind: 'not-a-list' }
   | {
       readonly kind: 'no-cast';
       readonly columnType: string;
@@ -320,9 +321,7 @@ export function readDataTypeDefault(input: {
 
   if (input.written.kind !== 'list') {
     if (input.isList) {
-      throw new InternalError(
-        `Field "${input.fieldPath}": a list column's default was read as a ${input.written.kind} value rather than a list.`,
-      );
+      return { ok: false, refusal: { kind: 'not-a-list', elementIndex: undefined } };
     }
     return readOne(input.written, undefined);
   }
@@ -453,6 +452,12 @@ export function lowerDataTypeDefault(input: {
         ok: false,
         code: PSL_DEFAULT_TYPE_INCOMPATIBLE,
         message: `${where}: this target has no data type for a ${refusal.syntax} value`,
+      };
+    case 'not-a-list':
+      return {
+        ok: false,
+        code: PSL_DEFAULT_TYPE_INCOMPATIBLE,
+        message: `${where}: this column holds a list, so its default is a list literal, as in [1, 2]`,
       };
     case 'no-cast':
       return {
