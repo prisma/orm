@@ -143,6 +143,18 @@ describe('what each cast converts', () => {
   });
 
   it.each([
+    ['from numeric text', pgNumeric.id, '3.5e38'],
+    ['from a negative numeric text', pgNumeric.id, '-3.5e38'],
+    ['from a whole number', pgInt8.id, '400000000000000000000000000000000000000'],
+  ])('pg/float4 refuses a magnitude past a float32 %s', (_name, source, value) => {
+    expect(() => pgFloat4.casts[source]?.(value)).toThrow(/out of range/);
+  });
+
+  it('pg/float8 takes a magnitude a float32 cannot hold', () => {
+    expect(pgFloat8.casts[pgNumeric.id]?.('3.5e38')).toBe(3.5e38);
+  });
+
+  it.each([
     ['pg/int8, whose canonical form is digit text', pgInt8, pgInt2.id],
     ['pg/numeric, whose canonical form is text', pgNumeric, pgInt4.id],
   ])('refuses a value %s cannot have been handed', (_name, type, source) => {

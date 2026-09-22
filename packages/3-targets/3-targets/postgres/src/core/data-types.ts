@@ -74,15 +74,29 @@ export const pgNumeric: DataType = dataType('pg/numeric', {
   },
 });
 
-const floatCasts: Readonly<Record<string, Cast>> = {
-  [pgInt2.id]: asFloat,
-  [pgInt4.id]: asFloat,
-  [pgInt8.id]: asFloat,
-  [pgNumeric.id]: asFloat,
+/** `float4` stores a single-precision float, so a magnitude past about 3.4e38 does not fit. */
+const asFloat4: Cast = (value) => {
+  const converted = asFloat(value);
+  if (typeof converted !== 'number' || Number.isFinite(Math.fround(converted))) return converted;
+  throw structuredError(
+    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    `${converted} is out of range: no float4 holds a number that large.`,
+    {
+      why: 'float4 stores a single-precision float, which holds magnitudes up to about 3.4e38.',
+      fix: 'Write a number float4 holds, or store it in a float8 or numeric column.',
+    },
+  );
 };
 
-export const pgFloat4: DataType = dataType('pg/float4', { casts: floatCasts });
-export const pgFloat8: DataType = dataType('pg/float8', { casts: floatCasts });
+const floatCastsOf = (cast: Cast): Readonly<Record<string, Cast>> => ({
+  [pgInt2.id]: cast,
+  [pgInt4.id]: cast,
+  [pgInt8.id]: cast,
+  [pgNumeric.id]: cast,
+});
+
+export const pgFloat4: DataType = dataType('pg/float4', { casts: floatCastsOf(asFloat4) });
+export const pgFloat8: DataType = dataType('pg/float8', { casts: floatCastsOf(asFloat) });
 
 export const pgJsonb: DataType = dataType('pg/jsonb', { casts: { [pgJson.id]: unchanged } });
 
