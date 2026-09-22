@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { type } from 'arktype';
 import { dirname, join } from 'pathe';
 import { redactSecrets } from '../commands/init/redact-secrets';
 
@@ -33,7 +34,9 @@ export async function emitScaffoldedContract(
   const binPath = resolveProjectBin(ctx.cwd, overrides);
   const result = await runCaptured(process.execPath, [binPath, 'contract', 'emit'], ctx.cwd);
   if (result.exitCode !== 0) {
-    const output = result.stderr.trim().length > 0 ? result.stderr : result.stdout;
+    const output =
+      envelopeError(result.stdout) ??
+      (result.stderr.trim().length > 0 ? result.stderr : result.stdout);
     const cause =
       result.exitCode === null
         ? `was killed by signal ${result.signal ?? 'unknown'}`
@@ -106,6 +109,32 @@ function runCaptured(
       resolve({ exitCode: code, signal, stdout, stderr });
     });
   });
+}
+
+const FailedResultLine = type({
+  kind: "'result'",
+  envelope: { error: { code: 'string', summary: 'string' } },
+});
+
+/**
+ * With its output captured, the child writes its terminal result envelope on
+ * stdout, so a failed run names its error there — while stderr can hold
+ * nothing but an unrelated notice, such as the agent-skills reminder.
+ */
+function envelopeError(stdout: string): string | undefined {
+  for (const line of stdout.trim().split('\n').reverse()) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const result = FailedResultLine(parsed);
+    if (!(result instanceof type.errors)) {
+      return `${result.envelope.error.code}: ${result.envelope.error.summary}`;
+    }
+  }
+  return undefined;
 }
 
 function tail(text: string): string {
