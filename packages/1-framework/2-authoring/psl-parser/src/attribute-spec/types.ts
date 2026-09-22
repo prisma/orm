@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import type { TaggedLiteralCanonicalization } from '@internal/framework-components/control';
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
@@ -37,6 +38,7 @@ export type ArgTypeKind =
   | 'identifier'
   | 'int'
   | 'json'
+  | 'jsonValue'
   | 'list'
   | 'num'
   | 'oneOf'
@@ -129,6 +131,11 @@ export interface IntArgType<Ctx extends AttributeCtx = AttributeCtx>
 export interface JsonArgType<Ctx extends AttributeCtx = AttributeCtx>
   extends ArgTypeOutput<Record<string, unknown>, Ctx> {
   readonly kind: 'json';
+}
+
+export interface JsonValueArgType<Ctx extends AttributeCtx = AttributeCtx>
+  extends ArgTypeOutput<JsonValue, Ctx> {
+  readonly kind: 'jsonValue';
 }
 
 export interface ListArgType<T = unknown, Ctx extends AttributeCtx = AttributeCtx>
@@ -253,6 +260,7 @@ export type InspectableArgType<Ctx extends AttributeCtx> =
   | IdentifierArgType<string, Ctx>
   | IntArgType<Ctx>
   | JsonArgType<Ctx>
+  | JsonValueArgType<Ctx>
   | ListArgType<unknown, Ctx>
   | FixedNumArgType<number, Ctx>
   | UnrestrictedNumArgType<Ctx>
