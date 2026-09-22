@@ -15,6 +15,7 @@ import {
   NamedTypeDeclarationAst,
   NamespaceDeclarationAst,
 } from '../src/syntax/ast/declarations';
+import { ownEntry } from './support';
 
 function build(source: string, pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {}) {
   const { document, sources } = parse(source, 'test.psl');
@@ -692,6 +693,24 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
 
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_EXTENSION_DUPLICATE_PARAMETER');
     expect(Object.keys(block?.parameters ?? {})).toEqual(['Admin']);
+  });
+
+  it('keeps prototype-named members as own source entries', () => {
+    const result = build(
+      ['enum Role {', '  __proto__ = "evil"', '  constructor', '}'].join('\n'),
+      ENUM_DESCRIPTORS,
+    );
+    const block = result.symbolTable.topLevel.blocks['Role']?.block;
+
+    expect(result.diagnostics).toEqual([]);
+    expect(block).toBeDefined();
+    if (block === undefined) return;
+    expect(Object.getPrototypeOf(block.parameters)).toBeNull();
+    expect(Object.hasOwn(block.parameters, '__proto__')).toBe(true);
+    expect(ownEntry(block.parameters, '__proto__')).toMatchObject({ expression: '"evil"' });
+    expect(Object.hasOwn(block.parameters, 'constructor')).toBe(true);
+    expect(block.parameters['constructor']?.expression).toBeUndefined();
+    expect(Object.keys(block.parameters)).toEqual(['__proto__', 'constructor']);
   });
 
   it('resolves namespace-nested blocks too', () => {

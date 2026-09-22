@@ -16,6 +16,7 @@ import type { BlockSpec, BlockSpecContext } from '../src/block-spec/types';
 import { parse } from '../src/parse';
 import type { BlockSymbol } from '../src/symbol-table';
 import { buildSymbolTable } from '../src/symbol-table';
+import { ownEntry } from './support';
 
 function policySpec() {
   return fixedBlock({
@@ -524,6 +525,108 @@ describe('interpretExtensionBlock — arbitrary-key entries blocks', () => {
     expect(parsed.failure).toEqual([
       expect.objectContaining({ code: 'PSL_EXTENSION_DUPLICATE_PARAMETER' }),
     ]);
+  });
+});
+
+describe('interpretExtensionBlock — prototype-named keys stay own entries', () => {
+  const PROTO_FIXED_DESCRIPTOR = {
+    kind: 'pslBlock',
+    keyword: 'guard',
+    discriminator: 'fixture-guard',
+    name: { required: true },
+    spec: protoFixedSpec,
+  } satisfies PslBlockSpecDescriptor;
+
+  function protoFixedSpec() {
+    return fixedBlock({
+      parameters: {
+        ['__proto__']: { type: str(), documentation: 'A hostile key name.' },
+        constructor: { type: str(), documentation: 'Another hostile key name.' },
+        toString: { type: str(), documentation: 'A shadowing key name.' },
+      },
+    });
+  }
+
+  it('binds fixed __proto__/constructor/toString keys as own values with spans', () => {
+    const result = setup(
+      [
+        'guard Hostile {',
+        '  __proto__   = "evil"',
+        '  constructor = "c"',
+        '  toString    = "t"',
+        '}',
+      ].join('\n'),
+    );
+
+    const parsed = interpret(
+      result,
+      blockNamed(result, 'Hostile'),
+      PROTO_FIXED_DESCRIPTOR,
+      protoFixedSpec(),
+    );
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const values: Record<string, unknown> = parsed.value.values;
+    expect(Object.getPrototypeOf(values)).toBeNull();
+    expect(Object.hasOwn(values, '__proto__')).toBe(true);
+    expect(ownEntry(values, '__proto__')).toBe('evil');
+    expect(values['constructor']).toBe('c');
+    expect(values['toString']).toBe('t');
+    expect(Object.keys(values).sort()).toEqual(['__proto__', 'constructor', 'toString']);
+    expect(Object.getPrototypeOf(parsed.value.parameterSpans)).toBeNull();
+    expect(Object.hasOwn(parsed.value.parameterSpans, '__proto__')).toBe(true);
+    expect(ownEntry(parsed.value.parameterSpans, '__proto__')).toMatchObject({
+      start: { line: 2 },
+    });
+    expect(parsed.value.parameterSpans['toString']?.start.line).toBe(4);
+  });
+
+  it('binds explicit and bare prototype-named entries in an entries block', () => {
+    const result = setup(
+      ['enum Mood {', '  __proto__ = "evil"', '  constructor = "c"', '  toString', '}'].join('\n'),
+    );
+
+    const parsed = interpret(
+      result,
+      blockNamed(result, 'Mood'),
+      FAMILY_ENUM_DESCRIPTOR,
+      entriesBlock({
+        value: { type: jsonValue(), documentation: 'The explicit member value.' },
+        allowBare: true,
+      }),
+    );
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const values: Record<string, unknown> = parsed.value.values;
+    expect(Object.getPrototypeOf(values)).toBeNull();
+    expect(Object.hasOwn(values, '__proto__')).toBe(true);
+    expect(ownEntry(values, '__proto__')).toBe('evil');
+    expect(values['constructor']).toBe('c');
+    expect(Object.hasOwn(values, 'toString')).toBe(true);
+    expect(values['toString']).toBeUndefined();
+    expect(Object.keys(values)).toEqual(['__proto__', 'constructor', 'toString']);
+  });
+
+  it('keeps a bare __proto__ member as the bare sentinel', () => {
+    const result = setup(['enum Mood {', '  __proto__', '}'].join('\n'));
+
+    const parsed = interpret(
+      result,
+      blockNamed(result, 'Mood'),
+      FAMILY_ENUM_DESCRIPTOR,
+      entriesBlock({
+        value: { type: jsonValue(), documentation: 'The explicit member value.' },
+        allowBare: true,
+      }),
+    );
+
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(Object.hasOwn(parsed.value.values, '__proto__')).toBe(true);
+    expect(ownEntry(parsed.value.values, '__proto__')).toBeUndefined();
+    expect(Object.hasOwn(parsed.value.parameterSpans, '__proto__')).toBe(true);
   });
 });
 
