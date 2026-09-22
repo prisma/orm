@@ -59,16 +59,18 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
   ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
 ]);
 
-function interpret(source: string, options?: { readonly withoutModelAttributes?: boolean }) {
+function interpretWithSymbolDiagnostics(
+  source: string,
+  options?: { readonly withoutModelAttributes?: boolean },
+) {
   const { document, sources } = parse(source, 'psl-rls-authoring.test.psl');
   const { symbolTable, diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
-  expect(diagnostics).toEqual([]);
 
-  return interpretPslDocumentToSqlContract({
+  const result = interpretPslDocumentToSqlContract({
     documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
     symbolTable,
@@ -82,6 +84,13 @@ function interpret(source: string, options?: { readonly withoutModelAttributes?:
     createNamespace: postgresCreateNamespace,
     capabilities: { sql: { scalarList: true } },
   });
+  return { result, symbolTableDiagnostics: diagnostics };
+}
+
+function interpret(source: string, options?: { readonly withoutModelAttributes?: boolean }) {
+  const { result, symbolTableDiagnostics } = interpretWithSymbolDiagnostics(source, options);
+  expect(symbolTableDiagnostics).toEqual([]);
+  return result;
 }
 
 const MARKED_MODEL_WITH_POLICY = `
@@ -296,8 +305,8 @@ namespace public {
 });
 
 describe('a policy whose target does not resolve to a declared model', () => {
-  it('emits PSL_EXTENSION_MODEL_REF_UNRESOLVED naming the prefix and the model, without throwing', () => {
-    const result = interpret(`
+  it("is the parser's unknown-reference diagnostic; the invalid block never lowers", () => {
+    const { result, symbolTableDiagnostics } = interpretWithSymbolDiagnostics(`
 namespace public {
   model profile {
     id Int @id
@@ -312,17 +321,13 @@ namespace public {
   }
 }
 `);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    const diagnostic = result.failure.diagnostics.find(
-      (d) => d.code === 'PSL_EXTENSION_MODEL_REF_UNRESOLVED',
-    );
-    expect(diagnostic).toMatchObject({
-      code: 'PSL_EXTENSION_MODEL_REF_UNRESOLVED',
-      message: expect.stringContaining('"p_read"'),
-    });
-    expect(diagnostic?.message).toContain('"porfile"');
-    expect(diagnostic?.message).not.toMatch(/p_read_[0-9a-f]{8}/);
+    expect(symbolTableDiagnostics).toEqual([
+      expect.objectContaining({ message: 'Unknown model reference "porfile"' }),
+    ]);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ns = result.value.storage.namespaces['public'] as PostgresSchema;
+    expect(Object.keys(ns.policy)).toEqual([]);
   });
 });
 
@@ -486,5 +491,124 @@ describe('PostgresRlsEnablement IR class', () => {
       tableName: 'profile',
       namespaceId: 'public',
     });
+  });
+});
+
+describe('typed policy values', () => {
+  it('accepts an omitted supported predicate (SELECT without using)', () => {
+    const result = interpret(`
+namespace public {
+  model profile {
+    id Int @id
+
+    @@rls
+  }
+
+  policy_select p_read {
+    target = profile
+    roles  = [app_user]
+  }
+}
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ns = result.value.storage.namespaces['public'] as PostgresSchema;
+    const policy = Object.values(ns.policy)[0];
+    expect(policy?.using).toBeUndefined();
+    expect(policy?.withCheck).toBeUndefined();
+  });
+
+  it('decodes escaped predicate strings through the shared grammar', () => {
+    const result = interpret(`
+namespace public {
+  model profile {
+    id Int @id
+
+    @@rls
+  }
+
+  policy_select p_read {
+    target = profile
+    using  = "name = 'line\\nbreak \\"quoted\\"'"
+  }
+}
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ns = result.value.storage.namespaces['public'] as PostgresSchema;
+    const policy = Object.values(ns.policy)[0];
+    expect(policy?.using).toBe('name = \'line\nbreak "quoted"\'');
+  });
+
+  it('reads permissive as a typed boolean and defaults roles to []', () => {
+    const result = interpret(`
+namespace public {
+  model profile {
+    id Int @id
+
+    @@rls
+  }
+
+  policy_select p_read {
+    target     = profile
+    using      = "true"
+    permissive = false
+  }
+}
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ns = result.value.storage.namespaces['public'] as PostgresSchema;
+    const policy = Object.values(ns.policy)[0];
+    expect(policy?.permissive).toBe(false);
+    expect(policy?.roles).toEqual([]);
+  });
+
+  it('prefers a declared role reference, keeps external names, and sorts the projection', () => {
+    const result = interpret(`
+namespace unbound {
+  role zz_declared {
+  }
+
+  policy_select p_read {
+    target = profile
+    roles  = [zz_declared, aa_external]
+    using  = "true"
+  }
+}
+
+model profile {
+  id Int @id
+
+  @@rls
+}
+`);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const ns = result.value.storage.namespaces['public'] as PostgresSchema;
+    const policy = Object.values(ns.policy)[0];
+    expect(policy?.roles).toEqual(['aa_external', 'zz_declared']);
+    expect(policy?.tableName).toBe('profile');
+  });
+
+  it('anchors the @@rls requirement diagnostic on the target entry', () => {
+    const { result } = interpretWithSymbolDiagnostics(`
+namespace public {
+  model profile {
+    id Int @id
+  }
+
+  policy_select p_read {
+    target = profile
+    using  = "true"
+  }
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const diagnostic = result.failure.diagnostics.find(
+      (d) => d.code === 'PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE',
+    );
+    expect(diagnostic?.span).toMatchObject({ start: { line: 8, column: 5 } });
   });
 });

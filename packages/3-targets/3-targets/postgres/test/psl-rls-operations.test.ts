@@ -56,15 +56,14 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
   ['Int', { codecId: 'pg/int4@1', nativeType: 'int4' }],
 ]);
 
-function interpret(source: string) {
+function interpretWithSymbolDiagnostics(source: string) {
   const { document, sources } = parse(source, 'psl-rls-operations.test.psl');
   const { symbolTable, diagnostics } = buildSymbolTable({
     documents: [document],
     sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
-  expect(diagnostics).toEqual([]);
-  return interpretPslDocumentToSqlContract({
+  const result = interpretPslDocumentToSqlContract({
     documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
     symbolTable,
@@ -76,6 +75,13 @@ function interpret(source: string) {
     createNamespace: postgresCreateNamespace,
     capabilities: { sql: { scalarList: true } },
   });
+  return { result, symbolTableDiagnostics: diagnostics };
+}
+
+function interpret(source: string) {
+  const { result, symbolTableDiagnostics } = interpretWithSymbolDiagnostics(source);
+  expect(symbolTableDiagnostics).toEqual([]);
+  return result;
 }
 
 function onlyPolicy(source: string): PostgresRlsPolicy {
@@ -252,22 +258,24 @@ ${MODEL}
   });
 });
 
-describe('wrong-predicate-for-operation is a load-time error', () => {
-  // The predicate the operation does not take is rejected in the lowering
-  // (`lowerRlsPolicyFromBlock`), which pushes a diagnostic and produces no
-  // entity — so the interpret result fails rather than silently dropping it.
+describe('wrong-predicate-for-operation is an unknown fixed key', () => {
+  // Each keyword's fixed spec declares exactly its operation's predicate
+  // keys, so a predicate the operation does not take is rejected by the
+  // shared grammar at symbol-table time and the block never lowers.
   function expectWrongPredicate(source: string, predicate: string): void {
-    const result = interpret(source);
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
+    const { result, symbolTableDiagnostics } = interpretWithSymbolDiagnostics(source);
+    expect(symbolTableDiagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          code: 'PSL_RLS_PREDICATE_NOT_FOR_OPERATION',
-          message: expect.stringContaining(`\`${predicate}\``),
+          code: 'PSL_EXTENSION_UNKNOWN_PARAMETER',
+          message: expect.stringContaining(`"${predicate}"`),
         }),
       ]),
     );
+    if (result.ok) {
+      const ns = result.value.storage.namespaces['public'] as PostgresSchema;
+      expect(Object.keys(ns.policy)).toEqual([]);
+    }
   }
 
   it('using on policy_insert is rejected', () => {
@@ -359,4 +367,35 @@ ${UNMARKED}
       );
     });
   }
+});
+
+describe('omitted supported predicates stay accepted', () => {
+  it('policy_update with neither using nor withCheck lowers with both absent', () => {
+    const policy = onlyPolicy(`
+namespace public {
+${MODEL}
+  policy_update p_upd {
+    target = profile
+    roles  = [app_user]
+  }
+}
+`);
+    expect(policy.operation).toBe('update');
+    expect(policy.using).toBeUndefined();
+    expect(policy.withCheck).toBeUndefined();
+  });
+
+  it('policy_select without using lowers with the predicate absent', () => {
+    const policy = onlyPolicy(`
+namespace public {
+${MODEL}
+  policy_select p_read {
+    target = profile
+    roles  = [app_user]
+  }
+}
+`);
+    expect(policy.operation).toBe('select');
+    expect(policy.using).toBeUndefined();
+  });
 });

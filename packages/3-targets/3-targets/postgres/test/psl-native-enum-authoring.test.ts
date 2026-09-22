@@ -13,8 +13,6 @@
  *  3. Negative: a bare (value-less) member is a diagnostic, not accepted.
  */
 
-import sqlFamilyPack from '@internal/family-sql/pack';
-import type { Codec, CodecLookup } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
@@ -269,7 +267,7 @@ namespace auth {
 });
 
 describe('PSL native_enum diagnostics', () => {
-  it('a bare (value-less) member is rejected, not accepted', () => {
+  it('a bare (value-less) member is rejected by the shared grammar, and the block never lowers', () => {
     const source = `
 namespace auth {
   native_enum AalLevel {
@@ -279,13 +277,18 @@ namespace auth {
   }
 }
 `;
-    const result = interpret(source);
+    const { diagnostics } = parsePsl(source);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_EXTENSION_BLOCK_MEMBER',
+        message: expect.stringContaining('"aal1"'),
+      }),
+    ]);
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_NATIVE_ENUM_BARE_MEMBER' })]),
-    );
+    const result = interpret(source);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.storage.namespaces['auth']).toBeUndefined();
   });
 
   it('an empty native_enum (no members) emits PSL_NATIVE_ENUM_MISSING_MEMBERS', () => {
@@ -329,11 +332,12 @@ namespace auth {
   });
 
   it('a duplicate member NAME is a parse-time PSL_EXTENSION_DUPLICATE_PARAMETER (first-wins) — same as the SQL enum block', () => {
-    // Members live in `block.parameters`, a Record keyed by member name, so
-    // the generic parser flags a repeated name at parse time and keeps the
+    // Member keys bind through the shared entries spec, so the block
+    // interpreter flags a repeated name at symbol-table time and keeps the
     // first occurrence. This is the exact behavior the SQL `enum` block has
     // (see interpreter.enum.test.ts); native_enum inherits it for free from
-    // the shared variadic-block parser — no native_enum-specific handling.
+    // the shared grammar — no native_enum-specific handling, and no factory
+    // runs for the invalid block.
     const source = `
 namespace auth {
   native_enum AalLevel {
@@ -370,7 +374,7 @@ namespace auth {
     ]);
   });
 
-  it('a non-string member value emits PSL_EXTENSION_INVALID_VALUE', () => {
+  it('a non-string member value is rejected by the shared grammar', () => {
     const source = `
 namespace auth {
   native_enum AalLevel {
@@ -379,13 +383,13 @@ namespace auth {
   }
 }
 `;
-    const result = interpret(source);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_EXTENSION_INVALID_VALUE' })]),
-    );
+    const { diagnostics } = parsePsl(source);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Expected a string literal',
+      }),
+    ]);
   });
 });
 
