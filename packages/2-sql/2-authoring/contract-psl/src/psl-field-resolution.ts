@@ -2,7 +2,10 @@ import type {
   ColumnDefaultLiteralInputValue,
   ExecutionMutationDefaultPhases,
 } from '@internal/contract/types';
-import type { AuthoringContributions } from '@internal/framework-components/authoring';
+import type {
+  AuthoringContributions,
+  ParsedPslExtensionBlock,
+} from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { CapabilityMatrix } from '@internal/framework-components/components';
 import type {
@@ -10,6 +13,7 @@ import type {
   MutationDefaultGeneratorDescriptor,
 } from '@internal/framework-components/control';
 import type {
+  BlockSymbol,
   FieldSymbol,
   ModelSymbol,
   ResolvedAttribute,
@@ -54,6 +58,7 @@ function lowerEnumDefaultForField(input: {
   readonly fieldName: string;
   readonly field: FieldSymbol;
   readonly model: ModelSymbol;
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
   readonly enumHandle: EnumTypeHandle;
@@ -70,6 +75,7 @@ function lowerEnumDefaultForField(input: {
       symbols: input.symbolTable,
       model,
       field,
+      parsedBlocks: input.parsedBlocks,
       controlMutationDefaults: {
         defaultFunctionRegistry: input.defaultFunctionRegistry,
         dataTypeEntries: input.dataTypeSupport.entries,
@@ -151,6 +157,7 @@ export function modelCoordinateKey(namespaceId: string, modelName: string): stri
 
 export interface CollectResolvedFieldsInput {
   readonly model: ModelSymbol;
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly symbolTable: SymbolTable;
   readonly mapping: ModelNameMapping;
   readonly enumTypeDescriptors: Map<string, ColumnDescriptor>;
@@ -576,6 +583,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             fieldName: field.name,
             field,
             model,
+            parsedBlocks: input.parsedBlocks,
             symbolTable,
             sources: input.sources,
             enumHandle,
@@ -588,6 +596,7 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
             fieldName: field.name,
             field,
             model,
+            parsedBlocks: input.parsedBlocks,
             symbolTable,
             sources: input.sources,
             columnDescriptor: descriptor,

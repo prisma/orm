@@ -23,7 +23,12 @@ import type {
   ControlMutationDefaultEntry,
   ControlMutationDefaults,
 } from '@internal/framework-components/control';
-import type { FuncCallSig, PslBlockSpecDescriptor, SymbolTable } from '@internal/psl-parser';
+import type {
+  BlockSymbol,
+  FuncCallSig,
+  PslBlockSpecDescriptor,
+  SymbolTable,
+} from '@internal/psl-parser';
 import {
   blockAttribute,
   buildSymbolTable,
@@ -440,13 +445,14 @@ export function buildSymbolTableInput(
   sourceFile: SourceFile;
   sourceId: string;
   seedDiagnostics: ContractSourceDiagnostic[];
+  parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   enumInferenceCodecs: { readonly text: string; readonly int: string };
 } {
   const sourceId = options?.sourceId ?? 'schema.prisma';
   const pslBlockDescriptors = options?.pslBlockDescriptors ?? {};
   const { document, sources } = parse(schema, sourceId);
   const sourceFile = sources.sourceFileFor(document.syntax);
-  const { symbolTable, diagnostics } = buildSymbolTable({
+  const { symbolTable, diagnostics, parsedBlocks } = buildSymbolTable({
     documents: [document],
     sources,
     pslBlockDescriptors,
@@ -464,6 +470,7 @@ export function buildSymbolTableInput(
     sourceFile,
     sourceId,
     seedDiagnostics,
+    parsedBlocks,
     enumInferenceCodecs: postgresEnumInferenceCodecs,
   };
 }
@@ -479,6 +486,7 @@ export function symbolTableInputFromParseArgs(args: {
   sourceFile: SourceFile;
   sourceId: string;
   seedDiagnostics: ContractSourceDiagnostic[];
+  parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   enumInferenceCodecs: { readonly text: string; readonly int: string };
 } {
   return buildSymbolTableInput(args.schema, {

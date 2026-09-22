@@ -22,7 +22,11 @@ import {
   sqlAttributeSpecs,
 } from '../src/sql-attribute-specs';
 import { fixtureDataTypeSupport } from './fixture-data-types';
-import { buildSymbolTableInput, createBuiltinLikeControlMutationDefaults } from './fixtures';
+import {
+  buildSymbolTableInput,
+  createBuiltinLikeControlMutationDefaults,
+  testEnumPslBlockDescriptor,
+} from './fixtures';
 
 const controlMutationDefaults = {
   ...createBuiltinLikeControlMutationDefaults(),
@@ -30,7 +34,9 @@ const controlMutationDefaults = {
 };
 
 function project(schema: string, modelName: string) {
-  const input = buildSymbolTableInput(schema);
+  const input = buildSymbolTableInput(schema, {
+    pslBlockDescriptors: { enum: testEnumPslBlockDescriptor },
+  });
   const model = input.symbolTable.topLevel.models[modelName];
   if (model === undefined) throw new Error(`model ${modelName} missing`);
   return { ...input, model };
@@ -102,7 +108,7 @@ function oneOfMetadata<Ctx extends AttributeCtx>(type: ArgType<unknown, Ctx>): O
 }
 
 function interpretDefault(schema: string, fieldName: string) {
-  const { symbolTable, sources, model } = project(schema, 'Post');
+  const { symbolTable, sources, model, parsedBlocks } = project(schema, 'Post');
   const target = field(model, fieldName);
   const node = findFieldAttributeNode(target, 'default');
   if (node === undefined) throw new Error('no @default on field');
@@ -111,7 +117,13 @@ function interpretDefault(schema: string, fieldName: string) {
     symbols: symbolTable,
     node,
     spec: sqlAttributeSpecs.field.default(
-      fieldSpecContext({ symbols: symbolTable, model, field: target, controlMutationDefaults }),
+      fieldSpecContext({
+        symbols: symbolTable,
+        model,
+        field: target,
+        parsedBlocks,
+        controlMutationDefaults,
+      }),
     ),
     model,
     field: target,
@@ -361,6 +373,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       symbols: enumProject.symbolTable,
       model: enumProject.model,
       field: priority,
+      parsedBlocks: enumProject.parsedBlocks,
       controlMutationDefaults,
     });
     const enumDefault = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(enumCtx)));
@@ -378,6 +391,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       symbols: emptyProject.symbolTable,
       model: emptyProject.model,
       field: kind,
+      parsedBlocks: emptyProject.parsedBlocks,
       controlMutationDefaults,
     });
     const emptyDefault = oneOfMetadata(positionalType(sqlAttributeSpecs.field.default(emptyCtx)));
