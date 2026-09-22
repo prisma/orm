@@ -37,7 +37,6 @@ describe('postgres target query operations', () => {
     expect(ast).toBeInstanceOf(OperationExpr);
     expect(ast.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'infix',
       template: '{{self}} ILIKE {{arg0}}',
     });
     expect(ast.returns).toEqual({ codecId: 'pg/bool@1', nullable: false });
@@ -66,7 +65,7 @@ describe('postgres target query operations', () => {
       const ast = buildOpAst(method, TEXT_COLUMN, 'prisma');
 
       expect(ast).toBeInstanceOf(OperationExpr);
-      expect(ast.lowering).toEqual({ targetFamily: 'sql', strategy: 'function', template });
+      expect(ast.lowering).toEqual({ targetFamily: 'sql', template });
       expect(ast.returns).toEqual({ codecId: returnCodecId, nullable: false });
     });
 

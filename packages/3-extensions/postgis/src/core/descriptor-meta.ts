@@ -30,7 +30,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/float8@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_Distance({{self}}, {{arg0}})',
           },
         });
@@ -46,7 +45,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/float8@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_DistanceSphere({{self}}, {{arg0}})',
           },
         });
@@ -66,7 +64,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/bool@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_DWithin({{self}}, {{arg0}}, {{arg1}})',
           },
         });
@@ -82,7 +79,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/bool@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_Contains({{self}}, {{arg0}})',
           },
         });
@@ -98,7 +94,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/bool@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_Within({{self}}, {{arg0}})',
           },
         });
@@ -114,7 +109,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/bool@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'ST_Intersects({{self}}, {{arg0}})',
           },
         });
@@ -130,7 +124,6 @@ export function postgisQueryOperations<CT extends CodecTypesBase>(): QueryOperat
           returns: { codecId: 'pg/bool@1', nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: '({{self}} && {{arg0}})',
           },
         });

@@ -27,7 +27,7 @@ export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           method: 'ilike',
           args: [toExpr(self), toExpr(pattern, TEXT_REF)],
           returns: { codecId: PG_BOOL_CODEC_ID, nullable: false },
-          lowering: { targetFamily: 'sql', strategy: 'infix', template: '{{self}} ILIKE {{arg0}}' },
+          lowering: { targetFamily: 'sql', template: '{{self}} ILIKE {{arg0}}' },
         }),
     },
     fullTextMatches: {
@@ -43,7 +43,6 @@ export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: PG_BOOL_CODEC_ID, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: 'to_tsvector({{arg1}}, {{self}}) @@ websearch_to_tsquery({{arg1}}, {{arg0}})',
           },
         }),
@@ -69,7 +68,6 @@ export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: PG_FLOAT4_CODEC_ID, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: `${fn}(${vectorAndQuery}${normalization === undefined ? '' : ', {{arg2}}'})`,
           },
         });
@@ -91,7 +89,6 @@ export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           returns: { codecId: PG_TEXT_CODEC_ID, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            strategy: 'function',
             template: `${base}${headlineOptions === undefined ? '' : ', {{arg2}}'})`,
           },
         });

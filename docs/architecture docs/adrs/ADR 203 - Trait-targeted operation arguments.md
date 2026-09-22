@@ -34,7 +34,6 @@ Operations contributed by a target, adapter or extension declare their arguments
   returns: { codecId: 'pg/bool@1', nullable: false },
   lowering: {
     targetFamily: 'sql',
-    strategy: 'infix',
     template: '{{self}} ILIKE {{arg0}}',
   },
 }

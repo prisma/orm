@@ -44,7 +44,6 @@ describe('ast/common', () => {
       returns: stringReturn,
       lowering: {
         targetFamily: 'sql',
-        strategy: 'infix',
         template: '{{self}} || {{arg0}}',
       },
     });
@@ -58,7 +57,6 @@ describe('ast/common', () => {
     expect(explicit.baseColumnRef()).toEqual(col('user', 'email'));
     expect(lowered.lowering).toEqual({
       targetFamily: 'sql',
-      strategy: 'function',
       template: 'lower({{self}})',
     });
   });
