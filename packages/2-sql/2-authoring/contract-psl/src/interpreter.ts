@@ -491,7 +491,6 @@ function lowerExtensionBlocksForNamespace(
     model: ModelSymbol,
   ) => { readonly namespaceId: string; readonly tableName: string } | undefined,
   sources: PslSources,
-  diagnostics: PslDiagnosticCollector,
 ): readonly LoweredPackEntity[] {
   const rows: LoweredPackEntity[] = [];
 
@@ -501,25 +500,16 @@ function lowerExtensionBlocksForNamespace(
     const descriptor = entityTypesByDiscriminator.get(envelope.kind);
     if (descriptor === undefined) continue;
 
-    let unresolvedRef = false;
     let resolvedModelRefs: Record<string, ResolvedPslModelRefs[string]> | undefined;
     for (const [paramName, value] of Object.entries(envelope.values)) {
       if (!isResolvedModelReference(value)) continue;
       const coordinate = modelCoordinateOf(value.declaration);
-      if (coordinate === undefined) {
-        diagnostics.push({
-          code: 'PSL_EXTENSION_MODEL_REF_UNRESOLVED',
-          message: `\`${envelope.keyword}\` block "${envelope.name}" references model "${value.declaration.name}" in \`${paramName}\`, which has no storage mapping.`,
-          ...diagnosticSource(sources, blockSymbol.node.syntax).at(
-            envelope.parameterSpans[paramName] ?? envelope.span,
-          ),
-        });
-        unresolvedRef = true;
-        continue;
-      }
+      invariant(
+        coordinate !== undefined,
+        `model mappings cover every collected model; \`${envelope.keyword}\` block "${envelope.name}" selected model "${value.declaration.name}" in \`${paramName}\` without a storage coordinate`,
+      );
       resolvedModelRefs = { ...(resolvedModelRefs ?? {}), [paramName]: coordinate };
     }
-    if (unresolvedRef) continue;
 
     const annotatedBlock = {
       ...envelope,
@@ -2444,7 +2434,6 @@ export function interpretPslDocumentToSqlContract(
         parsedBlocks,
         modelCoordinateOf,
         input.sources,
-        diagnostics,
       ),
       ns.blocks,
     );
@@ -2467,7 +2456,6 @@ export function interpretPslDocumentToSqlContract(
         parsedBlocks,
         modelCoordinateOf,
         input.sources,
-        diagnostics,
       ),
       topLevelExtensionBlocks,
     );
