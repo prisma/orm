@@ -310,6 +310,33 @@ describe('native enum adoption — happy path', () => {
     expect(output).toContain('pg.enum(UserRole)');
   });
 
+  it('a native enum named after a PSL type name is suffixed away from it', () => {
+    // `Uuid` is a Postgres type-map name: an enum block claiming it would
+    // silently retype every `uuid` column, because column resolution consults
+    // enums before scalars. The reserved set (PSL_SCALAR_TYPE_NAMES) makes
+    // the block yield the name. This renames such enums against pre-existing
+    // inferred contracts — deliberately: the old name shadowed the scalar.
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode(
+          'public',
+          {
+            user: table('user', {
+              id: idColumn,
+              kind: { name: 'kind', nativeType: 'uuid', nullable: false },
+            }),
+          },
+          [{ typeName: 'uuid', values: ['v4', 'v7'] }],
+        ),
+      }),
+    );
+
+    expect(output).toContain('native_enum Uuid2 {');
+    expect(output).toContain('@@map("uuid")');
+    expect(output).toContain('pg.enum(Uuid2)');
+    expect(output).not.toContain('pg.enum(Uuid)?');
+  });
+
   it('does not throw the old remediation diagnostic', () => {
     expect(() =>
       inferPostgresPslContract(tree({ public: sessionsNamespace('public') })),
