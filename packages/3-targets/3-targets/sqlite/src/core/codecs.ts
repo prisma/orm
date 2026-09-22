@@ -319,6 +319,13 @@ export class SqliteIntegerCodec extends CodecImpl<
         { meta: { codecId: SQLITE_INTEGER_CODEC_ID, received: typeof json } },
       );
     }
+    if (!Number.isSafeInteger(json)) {
+      throw sqliteError(
+        'RUNTIME.DECODE_FAILED',
+        `sqlite/integer@1 value must be an integer within the safe integer range, got ${String(json)}`,
+        { meta: { codecId: SQLITE_INTEGER_CODEC_ID, received: String(json) } },
+      );
+    }
     return json;
   }
 }

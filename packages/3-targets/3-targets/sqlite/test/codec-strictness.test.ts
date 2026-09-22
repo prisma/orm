@@ -76,6 +76,15 @@ describe('sqlite/integer@1 decodeJson', () => {
       'sqlite/integer@1 database JSON value must be a number',
     );
   });
+
+  it.each([
+    ['a number with a fraction', 1.5],
+    ['a number past the safe integer range', 9007199254740992],
+  ])('refuses %s', (_name, json) => {
+    expect(() => codec.decodeJson(json)).toThrow(
+      'sqlite/integer@1 value must be an integer within the safe integer range',
+    );
+  });
 });
 
 describe('sqlite/real@1 decodeJson', () => {
