@@ -1,3 +1,5 @@
+// use prisma-8
+
 types {
   Decimal65_30 = Numeric(65, 30)
 }

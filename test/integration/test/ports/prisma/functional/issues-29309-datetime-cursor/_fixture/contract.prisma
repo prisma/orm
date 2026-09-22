@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/29309-datetime-cursor
 // (postgres matrix entry; sqlProviders minus sqlite — we port postgres).

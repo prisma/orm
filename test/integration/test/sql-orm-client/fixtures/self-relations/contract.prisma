@@ -1,3 +1,5 @@
+// use prisma-8
+
 model Person {
   id        Int    @id
   name      String

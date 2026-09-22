@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/issues/29254-query-plan-cache-mutation
 // (postgres matrix entry; allProviders — we port postgres).
