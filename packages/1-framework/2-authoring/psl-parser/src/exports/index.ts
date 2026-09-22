@@ -92,20 +92,16 @@ export type {
   TypedFuncCall,
 } from '../attribute-spec/types';
 export type {
-  AttributeArgTypeView,
-  AttributeParamView,
-  AttributePositionalParamView,
-  AttributeSpecRegistry,
-  AttributeSpecView,
+  AttributeSymbol,
   Binder,
   BinderResult,
+  BoundSpec,
   CreateBinderOptions,
   PslSymbol,
   Resolution,
 } from '../binder';
 export {
   createBinder,
-  PSL_UNRESOLVED_ATTRIBUTE,
   PSL_UNRESOLVED_REFERENCE,
   typeReferenceNode,
 } from '../binder';

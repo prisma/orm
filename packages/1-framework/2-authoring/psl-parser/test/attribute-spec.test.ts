@@ -33,7 +33,11 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
     sources: modelSources,
     symbolTable,
     typeConstructors: {},
-    attributeSpecs: { model: () => undefined, field: () => undefined },
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   });
   return { sources, selfModel, field, binder };
 }

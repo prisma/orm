@@ -32,7 +32,11 @@ function build(text: string) {
     sources,
     symbolTable,
     typeConstructors: {},
-    attributeSpecs: { model: () => undefined, field: () => undefined },
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   });
   return { sources, model, binder };
 }

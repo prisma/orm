@@ -1,5 +1,8 @@
 import type { AuthoringTypeNamespace } from '@internal/framework-components/authoring';
+import type { ControlDefaultRegistries } from '@internal/framework-components/control';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import type { AttributeSpecNamespace } from './attribute-spec/spec-context';
+import type { AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './attribute-spec/types';
 import {
   type ContributedTypeScope,
   type ContributedTypeSymbol,
@@ -27,8 +30,16 @@ import type { SyntaxNode } from './syntax/red';
 export const PSL_UNRESOLVED_REFERENCE =
   'PSL_UNRESOLVED_REFERENCE' satisfies ContributedPslDiagnosticCode;
 
-export const PSL_UNRESOLVED_ATTRIBUTE =
-  'PSL_UNRESOLVED_ATTRIBUTE' satisfies ContributedPslDiagnosticCode;
+export type BoundSpec =
+  | AttributeSpec<never, ModelAttributeCtx>
+  | AttributeSpec<never, FieldAttributeCtx>;
+
+export interface AttributeSymbol {
+  readonly kind: 'attribute';
+  readonly name: string;
+  readonly level: 'model' | 'field';
+  readonly spec: BoundSpec;
+}
 
 export type PslSymbol =
   | ModelSymbol
@@ -45,37 +56,9 @@ export type Resolution =
   | { readonly kind: 'block'; readonly symbol: BlockSymbol }
   | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol }
   | { readonly kind: 'field'; readonly symbol: FieldSymbol }
-  | { readonly kind: 'attributeSpec'; readonly spec: AttributeSpecView }
+  | { readonly kind: 'attribute'; readonly symbol: AttributeSymbol }
   | { readonly kind: 'crossSpace' }
   | { readonly kind: 'unresolved'; readonly name: string };
-
-export interface AttributeArgTypeView {
-  readonly kind: string;
-  readonly of?: AttributeArgTypeView;
-  readonly alternatives?: readonly AttributeArgTypeView[];
-}
-
-export interface AttributeParamView {
-  readonly type: AttributeArgTypeView;
-}
-
-export interface AttributePositionalParamView extends AttributeParamView {
-  readonly key: string;
-}
-
-export interface AttributeSpecView {
-  readonly positional: readonly AttributePositionalParamView[];
-  readonly named: Readonly<Record<string, AttributeParamView>>;
-}
-
-export interface AttributeSpecRegistry {
-  model(name: string, owner: ModelSymbol | CompositeTypeSymbol): AttributeSpecView | undefined;
-  field(
-    name: string,
-    owner: ModelSymbol | CompositeTypeSymbol,
-    field: FieldSymbol,
-  ): AttributeSpecView | undefined;
-}
 
 export interface Binder {
   declaredSymbol(node: SyntaxNode): PslSymbol | undefined;
@@ -86,7 +69,8 @@ export interface CreateBinderOptions {
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
   readonly typeConstructors: AuthoringTypeNamespace;
-  readonly attributeSpecs: AttributeSpecRegistry;
+  readonly attributeSpecs: AttributeSpecNamespace;
+  readonly controlMutationDefaults: ControlDefaultRegistries;
 }
 
 export interface BinderResult {
@@ -125,7 +109,8 @@ interface Owner {
 }
 
 export function createBinder(options: CreateBinderOptions): BinderResult {
-  const { sources, symbolTable, typeConstructors, attributeSpecs } = options;
+  const { sources, symbolTable, typeConstructors, attributeSpecs, controlMutationDefaults } =
+    options;
   const contributedTypes = contributedTypeScope(typeConstructors);
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
   const references = new WeakMap<SyntaxNode, Resolution>();
@@ -175,15 +160,27 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       symbolTable,
       sources,
     };
-    bindAttributes(symbol, symbol.attributes, (name) => attributeSpecs.model(name, symbol), {
-      ...context,
-      field: undefined,
-    });
+    const specContext =
+      symbol.kind === 'model'
+        ? { symbols: symbolTable, model: symbol, controlMutationDefaults }
+        : undefined;
+    bindAttributes(
+      symbol,
+      symbol.attributes,
+      (name) =>
+        specContext === undefined ? undefined : own(attributeSpecs.model, name)?.(specContext),
+      { ...context, field: undefined },
+    );
     for (const field of Object.values(symbol.fields)) {
-      bindAttributes(field, field.attributes, (name) => attributeSpecs.field(name, symbol, field), {
-        ...context,
+      bindAttributes(
         field,
-      });
+        field.attributes,
+        (name) =>
+          specContext === undefined
+            ? undefined
+            : own(attributeSpecs.field, name)?.({ ...specContext, field }),
+        { ...context, field },
+      );
     }
   }
 
@@ -203,33 +200,31 @@ interface BindContext {
 function bindAttributes(
   holder: ModelSymbol | CompositeTypeSymbol | FieldSymbol,
   attributes: readonly ResolvedAttribute[],
-  lookupSpec: (name: string) => AttributeSpecView | undefined,
+  lookupSpec: (name: string) => BoundSpec | undefined,
   ctx: BindContext,
 ): void {
-  const marker = holder.kind === 'field' ? '@' : '@@';
   const declared: Iterable<FieldAttributeAst | ModelAttributeAst> = holder.node.attributes();
   const nodes = Array.from(declared);
   attributes.forEach((attribute, index) => {
     const spec = lookupSpec(attribute.name);
+    if (spec === undefined) return;
     const nameNode = nodes[index]?.name()?.syntax;
     if (nameNode !== undefined) {
-      if (spec === undefined) {
-        ctx.references.set(nameNode, { kind: 'unresolved', name: attribute.name });
-        ctx.diagnostics.push({
-          code: PSL_UNRESOLVED_ATTRIBUTE,
-          message: `Cannot find attribute "${marker}${attribute.name}"`,
-          data: { reference: 'attribute' },
-          ...diagnosticSource(ctx.sources, nameNode).at(),
-        });
-      } else {
-        ctx.references.set(nameNode, { kind: 'attributeSpec', spec });
-      }
+      ctx.references.set(nameNode, {
+        kind: 'attribute',
+        symbol: {
+          kind: 'attribute',
+          name: attribute.name,
+          level: holder.kind === 'field' ? 'field' : 'model',
+          spec,
+        },
+      });
     }
-    if (spec !== undefined) bindArguments(attribute, spec, ctx);
+    bindArguments(attribute, spec, ctx);
   });
 }
 
-function bindArguments(attribute: ResolvedAttribute, spec: AttributeSpecView, ctx: BindContext) {
+function bindArguments(attribute: ResolvedAttribute, spec: BoundSpec, ctx: BindContext) {
   let positional = 0;
   for (const arg of attribute.args) {
     const param =
@@ -332,14 +327,18 @@ function report(
 
 type ReferenceKind = 'fieldRef' | 'referencedFieldRef' | 'entityRef';
 
-function referenceKind(type: AttributeArgTypeView): ReferenceKind | undefined {
-  if (type.kind === 'fieldRef' || type.kind === 'referencedFieldRef' || type.kind === 'entityRef') {
-    return type.kind;
+function referenceKind(type: unknown): ReferenceKind | undefined {
+  if (typeof type !== 'object' || type === null) return undefined;
+  if ('kind' in type) {
+    const kind = type.kind;
+    if (kind === 'fieldRef' || kind === 'referencedFieldRef' || kind === 'entityRef') return kind;
   }
-  if (type.of !== undefined) return referenceKind(type.of);
-  for (const alternative of type.alternatives ?? []) {
-    const kind = referenceKind(alternative);
-    if (kind !== undefined) return kind;
+  if ('of' in type) return referenceKind(type.of);
+  if ('alternatives' in type && Array.isArray(type.alternatives)) {
+    for (const alternative of type.alternatives) {
+      const kind = referenceKind(alternative);
+      if (kind !== undefined) return kind;
+    }
   }
   return undefined;
 }

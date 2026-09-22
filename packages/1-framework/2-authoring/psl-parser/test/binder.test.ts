@@ -7,9 +7,14 @@ import { describe, expect, it } from 'vitest';
 import { entityRef } from '../src/attribute-spec/combinators/entity-ref';
 import { fieldRef, referencedFieldRef } from '../src/attribute-spec/combinators/field-ref';
 import { list } from '../src/attribute-spec/combinators/list';
+import { str } from '../src/attribute-spec/combinators/str';
 import { fieldAttribute } from '../src/attribute-spec/field-attribute';
 import { modelAttribute } from '../src/attribute-spec/model-attribute';
-import { type AttributeSpecRegistry, createBinder, typeReferenceNode } from '../src/binder';
+import type {
+  AttributeSpecContext,
+  FieldAttributeSpecContext,
+} from '../src/attribute-spec/spec-context';
+import { createBinder, typeReferenceNode } from '../src/binder';
 import { contributedTypeScope } from '../src/contributed-type-scope';
 import { parse } from '../src/parse';
 import { PslSources } from '../src/source-file';
@@ -45,33 +50,50 @@ const TYPE_CONSTRUCTORS: AuthoringTypeNamespace = {
   pgvector: { Vector: scalar('vector') },
 };
 
-const fieldRefList = { kind: 'list', of: { kind: 'fieldRef' } } as const;
-const referencedFieldRefList = { kind: 'list', of: { kind: 'referencedFieldRef' } } as const;
+const fieldListParam = (key: string) => ({
+  key,
+  type: list(fieldRef()),
+  documentation: 'fixture',
+});
 
-const MODEL_SPECS: Readonly<Record<string, ReturnType<AttributeSpecRegistry['model']>>> = {
-  id: { positional: [{ key: 'fields', type: fieldRefList }], named: {} },
-  index: { positional: [{ key: 'fields', type: fieldRefList }], named: {} },
-  unique: { positional: [{ key: 'fields', type: fieldRefList }], named: {} },
-  base: { positional: [{ key: 'model', type: { kind: 'entityRef' } }], named: {} },
-  map: { positional: [{ key: 'name', type: { kind: 'str' } }], named: {} },
-  borrowed: { positional: [{ key: 'fields', type: referencedFieldRefList }], named: {} },
+const modelSpec = (name: string, positional: ReturnType<typeof fieldListParam>[]) =>
+  modelAttribute(name, { documentation: 'fixture', positional });
+
+const MODEL_SPECS = {
+  id: () => modelSpec('id', [fieldListParam('fields')]),
+  index: () => modelSpec('index', [fieldListParam('fields')]),
+  unique: () => modelSpec('unique', [fieldListParam('fields')]),
+  base: () =>
+    modelAttribute('base', {
+      documentation: 'fixture',
+      positional: [{ key: 'model', type: entityRef(), documentation: 'fixture' }],
+    }),
+  map: () =>
+    modelAttribute('map', {
+      documentation: 'fixture',
+      positional: [{ key: 'name', type: str(), documentation: 'fixture' }],
+    }),
 };
 
-const FIELD_SPECS: Readonly<Record<string, ReturnType<AttributeSpecRegistry['field']>>> = {
-  id: { positional: [], named: {} },
-  relation: {
-    positional: [],
-    named: {
-      fields: { type: fieldRefList },
-      references: { type: referencedFieldRefList },
-      name: { type: { kind: 'str' } },
-    },
-  },
+const FIELD_SPECS = {
+  id: () => fieldAttribute('id', { documentation: 'fixture' }),
+  contextual: () => fieldAttribute('contextual', { documentation: 'fixture' }),
+  relation: () =>
+    fieldAttribute('relation', {
+      documentation: 'fixture',
+      named: {
+        fields: { type: list(fieldRef()), documentation: 'fixture' },
+        references: { type: list(referencedFieldRef()), documentation: 'fixture' },
+        name: { type: str(), documentation: 'fixture' },
+      },
+    }),
 };
 
-const ATTRIBUTE_SPECS: AttributeSpecRegistry = {
-  model: (name) => MODEL_SPECS[name],
-  field: (name) => FIELD_SPECS[name],
+const ATTRIBUTE_SPECS = { model: MODEL_SPECS, field: FIELD_SPECS };
+
+const NO_CONTROL_DEFAULTS = {
+  defaultFunctionRegistry: new Map(),
+  defaultLiteralTagRegistry: new Map(),
 };
 
 function attributeNodes(
@@ -129,6 +151,7 @@ function bind(...texts: string[]) {
       symbolTable,
       typeConstructors: TYPE_CONSTRUCTORS,
       attributeSpecs: ATTRIBUTE_SPECS,
+      controlMutationDefaults: NO_CONTROL_DEFAULTS,
     }),
   };
 }
@@ -474,37 +497,41 @@ const RELATION_SCHEMA = [
 ].join('\n');
 
 describe('createBinder — attribute names', () => {
-  it('resolves an attribute name to its spec', () => {
+  it('resolves an attribute name to an attribute symbol', () => {
     const { symbolTable, binder, diagnostics } = bind(RELATION_SCHEMA);
     const post = symbolTable.topLevel.models['Post']!;
 
     expect(diagnostics).toEqual([]);
-    expect(binder.symbolForNode(attributeNameNode(post.fields['author']!, 'relation'))).toEqual({
-      kind: 'attributeSpec',
-      spec: FIELD_SPECS['relation'],
+    expect(
+      binder.symbolForNode(attributeNameNode(post.fields['author']!, 'relation')),
+    ).toMatchObject({
+      kind: 'attribute',
+      symbol: { kind: 'attribute', name: 'relation', level: 'field' },
     });
-    expect(binder.symbolForNode(attributeNameNode(post.fields['id']!, 'id'))).toEqual({
-      kind: 'attributeSpec',
-      spec: FIELD_SPECS['id'],
+    expect(binder.symbolForNode(attributeNameNode(post.fields['id']!, 'id'))).toMatchObject({
+      kind: 'attribute',
+      symbol: { kind: 'attribute', name: 'id', level: 'field' },
     });
   });
 
-  it('reports an unknown attribute name at model and field level', () => {
+  it('reaches the spec through the attribute symbol', () => {
+    const { symbolTable, binder } = bind(RELATION_SCHEMA);
+    const post = symbolTable.topLevel.models['Post']!;
+    const resolution = binder.symbolForNode(attributeNameNode(post.fields['author']!, 'relation'));
+
+    expect(resolution?.kind).toBe('attribute');
+    if (resolution?.kind === 'attribute') {
+      expect(Object.keys(resolution.symbol.spec.named)).toEqual(['fields', 'references', 'name']);
+    }
+  });
+
+  it('leaves an attribute name outside the namespace to its target', () => {
     const { symbolTable, binder, diagnostics } = bind('model User {\n  id Int @bogus\n  @@nope\n}');
     const user = symbolTable.topLevel.models['User']!;
 
-    expect(binder.symbolForNode(attributeNameNode(user.fields['id']!, 'bogus'))).toEqual({
-      kind: 'unresolved',
-      name: 'bogus',
-    });
-    expect(binder.symbolForNode(attributeNameNode(user, 'nope'))).toEqual({
-      kind: 'unresolved',
-      name: 'nope',
-    });
-    expect(diagnostics.map(({ code, message }) => [code, message])).toEqual([
-      ['PSL_UNRESOLVED_ATTRIBUTE', 'Cannot find attribute "@@nope"'],
-      ['PSL_UNRESOLVED_ATTRIBUTE', 'Cannot find attribute "@bogus"'],
-    ]);
+    expect(binder.symbolForNode(attributeNameNode(user.fields['id']!, 'bogus'))).toBeUndefined();
+    expect(binder.symbolForNode(attributeNameNode(user, 'nope'))).toBeUndefined();
+    expect(diagnostics).toEqual([]);
   });
 
   it('records nothing for a non-reference argument', () => {
@@ -720,7 +747,6 @@ describe('createBinder — diagnostics completeness', () => {
         '  author User @relation(fields: [missingLocal], references: [absent])',
         '  @@index([id, alsoMissing])',
         '  @@base(NoSuchModel)',
-        '  @@mystery',
         '}',
       ].join('\n'),
     );
@@ -736,7 +762,6 @@ describe('createBinder — diagnostics completeness', () => {
       ['PSL_UNRESOLVED_REFERENCE', 'Cannot find type "Phantom"', '0.psl', 6],
       ['PSL_UNRESOLVED_REFERENCE', 'Cannot find field "alsoMissing" on "Post"', '0.psl', 8],
       ['PSL_UNRESOLVED_REFERENCE', 'Cannot find entity "NoSuchModel"', '0.psl', 9],
-      ['PSL_UNRESOLVED_ATTRIBUTE', 'Cannot find attribute "@@mystery"', '0.psl', 10],
       ['PSL_UNRESOLVED_REFERENCE', 'Cannot find field "missingLocal" on "Post"', '0.psl', 7],
       [
         'PSL_UNRESOLVED_REFERENCE',
@@ -778,9 +803,9 @@ describe('attribute-spec registry shape', () => {
         references: { type: list(referencedFieldRef()), documentation: 'fixture' },
       },
     });
-    const registry: AttributeSpecRegistry = {
-      model: (name) => (name === 'index' ? assembled : name === 'base' ? base : undefined),
-      field: (name) => (name === 'relation' ? relation : undefined),
+    const registry = {
+      model: { index: () => assembled, base: () => base },
+      field: { relation: () => relation },
     };
 
     const { sources, symbolTable } = build(
@@ -800,6 +825,7 @@ describe('attribute-spec registry shape', () => {
       symbolTable,
       typeConstructors: TYPE_CONSTRUCTORS,
       attributeSpecs: registry,
+      controlMutationDefaults: NO_CONTROL_DEFAULTS,
     });
     const user = symbolTable.topLevel.models['User']!;
     const post = symbolTable.topLevel.models['Post']!;
@@ -847,21 +873,6 @@ describe('referencedFieldRef on a cross-space list', () => {
 });
 
 describe('createBinder — reference slots the binder stays silent about', () => {
-  it('stays wordless for a referencedFieldRef outside a field attribute', () => {
-    const { symbolTable, binder, diagnostics } = bind(
-      'model User {\n  id Int\n  @@borrowed([id])\n}',
-    );
-    const user = symbolTable.topLevel.models['User']!;
-    const [node] = attributeNodes(user, 'borrowed');
-
-    expect(node).toBeDefined();
-    expect(node === undefined ? undefined : binder.symbolForNode(node)).toEqual({
-      kind: 'unresolved',
-      name: 'id',
-    });
-    expect(diagnostics).toEqual([]);
-  });
-
   it('records nothing for a non-identifier in a reference slot', () => {
     const { symbolTable, binder, diagnostics } = bind(
       ['model User {', '  id Int', '  @@index(["id", 7])', '  @@base("Base")', '}'].join('\n'),
@@ -879,22 +890,24 @@ describe('createBinder — reference slots the binder stays silent about', () =>
   });
 });
 
-describe('owner-aware attribute-spec registry', () => {
-  it('passes the owner and field so a context-dependent spec is visible', () => {
+describe('the binder calls the real spec factories', () => {
+  it('builds each factory its construction context', () => {
     const seen: string[] = [];
     const { sources, symbolTable } = build(
       ['model User {', '  id Int', '  name String @contextual', '  @@index([id])', '}'].join('\n'),
     );
-    const registry: AttributeSpecRegistry = {
-      model: (name, owner) => {
-        seen.push(`model:${name}:${owner.name}`);
-        return name === 'index'
-          ? { positional: [{ key: 'fields', type: fieldRefList }], named: {} }
-          : undefined;
+    const registry = {
+      model: {
+        index: (ctx: AttributeSpecContext) => {
+          seen.push(`model:index:${ctx.model.name}`);
+          return modelSpec('index', [fieldListParam('fields')]);
+        },
       },
-      field: (name, owner, field) => {
-        seen.push(`field:${name}:${owner.name}.${field.name}`);
-        return name === 'contextual' ? { positional: [], named: {} } : undefined;
+      field: {
+        contextual: (ctx: FieldAttributeSpecContext) => {
+          seen.push(`field:contextual:${ctx.model.name}.${ctx.field.name}`);
+          return fieldAttribute('contextual', { documentation: 'fixture' });
+        },
       },
     };
     const { binder, diagnostics } = createBinder({
@@ -902,15 +915,18 @@ describe('owner-aware attribute-spec registry', () => {
       symbolTable,
       typeConstructors: TYPE_CONSTRUCTORS,
       attributeSpecs: registry,
+      controlMutationDefaults: NO_CONTROL_DEFAULTS,
     });
     const user = symbolTable.topLevel.models['User']!;
 
     expect(seen).toContain('model:index:User');
     expect(seen).toContain('field:contextual:User.name');
     expect(diagnostics).toEqual([]);
-    expect(binder.symbolForNode(attributeNameNode(user.fields['name']!, 'contextual'))).toEqual({
-      kind: 'attributeSpec',
-      spec: { positional: [], named: {} },
+    expect(
+      binder.symbolForNode(attributeNameNode(user.fields['name']!, 'contextual')),
+    ).toMatchObject({
+      kind: 'attribute',
+      symbol: { kind: 'attribute', name: 'contextual', level: 'field' },
     });
     expect(binder.symbolForNode(attributeNodes(user, 'index')[0]!)).toEqual({
       kind: 'field',
@@ -920,7 +936,7 @@ describe('owner-aware attribute-spec registry', () => {
 });
 
 describe('binder diagnostics carry their reference class', () => {
-  it('tags type, field, entity and attribute failures distinctly', () => {
+  it('tags type, field and entity failures distinctly', () => {
     const { diagnostics } = bind(
       [
         'model Post {',
@@ -928,7 +944,6 @@ describe('binder diagnostics carry their reference class', () => {
         '  id Int',
         '  @@index([missingField])',
         '  @@base(NoSuchModel)',
-        '  @@mystery',
         '}',
       ].join('\n'),
     );
@@ -937,7 +952,6 @@ describe('binder diagnostics carry their reference class', () => {
       ['PSL_UNRESOLVED_REFERENCE', 'type'],
       ['PSL_UNRESOLVED_REFERENCE', 'field'],
       ['PSL_UNRESOLVED_REFERENCE', 'entity'],
-      ['PSL_UNRESOLVED_ATTRIBUTE', 'attribute'],
     ]);
   });
 });
@@ -962,21 +976,6 @@ describe('the references table records what it examined', () => {
       kind: 'unresolved',
       name: 'missing',
     });
-  });
-
-  it('records an unresolved entry for a referenced field with no declaring field', () => {
-    const { symbolTable, binder, diagnostics } = bind(
-      'model User {\n  id Int\n  @@borrowed([id])\n}',
-    );
-    const user = symbolTable.topLevel.models['User']!;
-    const [node] = attributeNodes(user, 'borrowed');
-
-    expect(node).toBeDefined();
-    expect(node === undefined ? undefined : binder.symbolForNode(node)).toEqual({
-      kind: 'unresolved',
-      name: 'id',
-    });
-    expect(diagnostics).toEqual([]);
   });
 
   it('leaves a malformed type unexamined', () => {

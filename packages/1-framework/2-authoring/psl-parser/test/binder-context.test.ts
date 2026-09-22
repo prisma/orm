@@ -8,7 +8,6 @@ import { list } from '../src/attribute-spec/combinators/list';
 import { str } from '../src/attribute-spec/combinators/str';
 import { fieldAttribute } from '../src/attribute-spec/field-attribute';
 import { optional } from '../src/attribute-spec/optional';
-import type { AttributeSpecRegistry } from '../src/binder';
 import { createBinder } from '../src/binder';
 import {
   fieldAttributeContext,
@@ -51,9 +50,9 @@ const relationSpec = fieldAttribute('relation', {
   },
 });
 
-const ATTRIBUTE_SPECS: AttributeSpecRegistry = {
-  model: () => undefined,
-  field: (name) => (name === 'relation' ? relationSpec : undefined),
+const ATTRIBUTE_SPECS = {
+  model: {},
+  field: { relation: () => relationSpec },
 };
 
 function bind(text: string) {
@@ -72,6 +71,10 @@ function bind(text: string) {
       symbolTable,
       typeConstructors: TYPE_CONSTRUCTORS,
       attributeSpecs: ATTRIBUTE_SPECS,
+      controlMutationDefaults: {
+        defaultFunctionRegistry: new Map(),
+        defaultLiteralTagRegistry: new Map(),
+      },
     }),
   };
 }

@@ -11,7 +11,6 @@ import { fieldAttribute } from '../src/attribute-spec/field-attribute';
 import { interpretAttribute } from '../src/attribute-spec/interpret';
 import { modelAttribute } from '../src/attribute-spec/model-attribute';
 import { optional } from '../src/attribute-spec/optional';
-import type { AttributeSpecRegistry } from '../src/binder';
 import { createBinder } from '../src/binder';
 import { fieldAttributeContext, modelAttributeContext } from '../src/binder-context';
 import { parse } from '../src/parse';
@@ -60,9 +59,9 @@ const indexSpec = modelAttribute('index', {
   positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
 });
 
-const ATTRIBUTE_SPECS: AttributeSpecRegistry = {
-  model: (name) => (name === 'base' ? baseSpec : name === 'index' ? indexSpec : undefined),
-  field: (name) => (name === 'relation' ? relationSpec : undefined),
+const ATTRIBUTE_SPECS = {
+  model: { base: () => baseSpec, index: () => indexSpec },
+  field: { relation: () => relationSpec },
 };
 
 function bind(text: string) {
@@ -78,6 +77,10 @@ function bind(text: string) {
     symbolTable,
     typeConstructors: TYPE_CONSTRUCTORS,
     attributeSpecs: ATTRIBUTE_SPECS,
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   });
   return { sources, symbolTable, binder, binderDiagnostics: diagnostics };
 }

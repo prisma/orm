@@ -45,7 +45,11 @@ function makeCtx(sources: PslSources): FieldAttributeCtx {
     sources: modelSources,
     symbolTable,
     typeConstructors: {},
-    attributeSpecs: { model: () => undefined, field: () => undefined },
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   });
   return { sources, selfModel, field, binder };
 }
@@ -67,17 +71,22 @@ function schemaArg(schema: string, attribute: string, argName?: string) {
     symbolTable,
     typeConstructors: {},
     attributeSpecs: {
-      model: () => undefined,
-      field: (name) =>
-        name === attribute
-          ? {
-              positional: [{ key: 'fields', type: { kind: 'list', of: { kind: 'fieldRef' } } }],
-              named: {
-                fields: { type: { kind: 'list', of: { kind: 'fieldRef' } } },
-                references: { type: { kind: 'list', of: { kind: 'referencedFieldRef' } } },
-              },
-            }
-          : undefined,
+      model: {},
+      field: {
+        [attribute]: () =>
+          fieldAttribute(attribute, {
+            documentation: 'fixture',
+            positional: [{ key: 'fields', type: list(fieldRef()), documentation: 'fixture' }],
+            named: {
+              fields: { type: list(fieldRef()), documentation: 'fixture' },
+              references: { type: list(referencedFieldRef()), documentation: 'fixture' },
+            },
+          }),
+      },
+    },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
     },
   });
   for (const node of field.node.attributes()) {

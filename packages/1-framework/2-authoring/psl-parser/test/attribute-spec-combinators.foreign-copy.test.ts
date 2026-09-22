@@ -48,7 +48,11 @@ function foreignArg(source: string): { arg: ExpressionAst; ctx: ModelAttributeCt
     sources,
     symbolTable,
     typeConstructors: {},
-    attributeSpecs: { model: () => undefined, field: () => undefined },
+    attributeSpecs: { model: {}, field: {} },
+    controlMutationDefaults: {
+      defaultFunctionRegistry: new Map(),
+      defaultLiteralTagRegistry: new Map(),
+    },
   });
   return {
     arg: new ForeignCopyOfAnAstNode(value.syntax) as unknown as ExpressionAst,
