@@ -7,6 +7,7 @@ import { PslSources } from '../src/source-file';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import type { ExpressionAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
+import { ownEntry } from './support';
 
 function argOf(exprSource: string): { expr: ExpressionAst; ctx: AttributeCtx } {
   const cursor = new Cursor('schema.prisma', `@x(${exprSource})`);
@@ -94,6 +95,21 @@ describe('jsonValue', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.failure).toEqual([expect.objectContaining({ message: 'Expected a JSON value' })]);
+  });
+
+  it('keeps a "__proto__" object key as an own entry without prototype mutation', () => {
+    const result = parseJsonValue('{ "__proto__": { polluted: true }, safe: 1 }');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const value = result.value;
+    expect(typeof value === 'object' && value !== null && !Array.isArray(value)).toBe(true);
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return;
+    expect(Object.getPrototypeOf(value)).toBeNull();
+    expect(Object.hasOwn(value, '__proto__')).toBe(true);
+    expect(ownEntry(value, '__proto__')).toEqual({ polluted: true });
+    expect(ownEntry(value, 'safe')).toBe(1);
+    expect(Object.hasOwn(Object.prototype, 'polluted')).toBe(false);
   });
 
   it('rejects duplicate object keys', () => {
