@@ -11,6 +11,7 @@ import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
+import { printPsl } from '@internal/psl-printer';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
@@ -24,6 +25,7 @@ import { PostgresContractSerializer } from '../src/core/postgres-contract-serial
 import { PostgresRlsPolicy } from '../src/core/postgres-rls-policy';
 import type { PostgresContract } from '../src/core/postgres-schema';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
+import { inferPostgresPslContract } from '../src/core/psl-infer/infer-psl-contract';
 import { postgresRenderDefault } from '../src/exports/control';
 
 const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
@@ -243,5 +245,155 @@ model Widget {
     expect(table?.rlsEnabled).toBe(true);
     expect(table?.policies.map((policy) => policy.name)).toEqual(['adopted_write']);
     expect(table?.policies[0]).toMatchObject({ operation: 'update', using: 'id > 0' });
+  });
+});
+
+const PROJECTION_OPTIONS = {
+  annotationNamespace: 'pg',
+  renderDefault: postgresRenderDefault,
+} as const;
+
+function projectPolicyTable(contract: PostgresContract, tableName: string) {
+  const root = contractToPostgresDatabaseSchemaNode(contract, PROJECTION_OPTIONS);
+  const table = root.namespaces['public']?.tables[tableName];
+  if (table === undefined) throw new Error(`expected table "${tableName}" in namespace public`);
+  return table;
+}
+
+function roundTrip(source: string, tableName: string) {
+  const first = interpret(source);
+  expect(first.ok).toBe(true);
+  if (!first.ok) throw new Error('expected the authored schema to interpret');
+  const firstTable = projectPolicyTable(first.value as PostgresContract, tableName);
+
+  const inferred = inferPostgresPslContract(
+    contractToPostgresDatabaseSchemaNode(first.value as PostgresContract, PROJECTION_OPTIONS),
+  );
+  const printed = printPsl(inferred, { pslBlockDescriptors: assembled.pslBlockDescriptors });
+
+  const second = interpret(printed);
+  expect(second.ok).toBe(true);
+  if (!second.ok) throw new Error(`inferred output did not reinterpret:\n${printed}`);
+  const secondTable = projectPolicyTable(second.value as PostgresContract, tableName);
+  return { firstTable, secondTable, printed };
+}
+
+function policyShape(table: ReturnType<typeof projectPolicyTable>) {
+  return table.policies.map((policy) => ({
+    name: policy.name,
+    operation: policy.operation,
+    roles: policy.roles,
+    using: policy.using,
+    withCheck: policy.withCheck,
+    permissive: policy.permissive,
+  }));
+}
+
+describe('inference round-trips through the real typed pipeline', () => {
+  it('round-trips the relocated fallback policy to the same projected physical shape', () => {
+    const { firstTable, secondTable, printed } = roundTrip(FALLBACK_SCHEMA, 'root_widgets');
+
+    expect(printed).toContain('namespace public');
+    expect(printed).toContain('@@map("adopted_write")');
+    expect(printed).not.toContain('withCheck');
+    expect(secondTable.rlsEnabled).toBe(true);
+    expect(policyShape(secondTable)).toEqual(policyShape(firstTable));
+    expect(policyShape(secondTable)).toEqual([
+      expect.objectContaining({
+        name: 'adopted_write',
+        operation: 'update',
+        roles: ['app_user'],
+        using: 'id > 0',
+        withCheck: undefined,
+        permissive: true,
+      }),
+    ]);
+  });
+
+  it('round-trips a no-USING SELECT policy with the predicate still absent', () => {
+    const { firstTable, secondTable, printed } = roundTrip(
+      `
+namespace public {
+  model Profile {
+    id Int @id
+
+    @@map("profiles")
+    @@rls
+  }
+
+  policy_select p_read {
+    target = Profile
+    roles  = [app_user]
+    @@map("read_profiles")
+  }
+}
+`,
+      'profiles',
+    );
+
+    expect(printed).not.toContain('using');
+    expect(policyShape(secondTable)).toEqual(policyShape(firstTable));
+    expect(secondTable.policies[0]).toMatchObject({ operation: 'select' });
+    expect(secondTable.policies[0]?.using).toBeUndefined();
+    expect(secondTable.policies[0]?.withCheck).toBeUndefined();
+  });
+
+  it('round-trips a no-predicate UPDATE policy with both predicates absent', () => {
+    const { firstTable, secondTable, printed } = roundTrip(
+      `
+namespace public {
+  model Profile {
+    id Int @id
+
+    @@map("profiles")
+    @@rls
+  }
+
+  policy_update p_write {
+    target = Profile
+    roles  = [app_user]
+    @@map("write_profiles")
+  }
+}
+`,
+      'profiles',
+    );
+
+    expect(printed).not.toContain('using');
+    expect(printed).not.toContain('withCheck');
+    expect(policyShape(secondTable)).toEqual(policyShape(firstTable));
+    expect(secondTable.policies[0]).toMatchObject({ operation: 'update' });
+    expect(secondTable.policies[0]?.using).toBeUndefined();
+    expect(secondTable.policies[0]?.withCheck).toBeUndefined();
+  });
+
+  it('round-trips a restrictive policy with an escaped predicate byte-identically', () => {
+    const { firstTable, secondTable, printed } = roundTrip(
+      `
+namespace public {
+  model Profile {
+    id Int @id
+
+    @@map("profiles")
+    @@rls
+  }
+
+  policy_select p_read {
+    target     = Profile
+    using      = "name = \\"O'Hara\\"\\nnext"
+    permissive = false
+    @@map("strict_read")
+  }
+}
+`,
+      'profiles',
+    );
+
+    expect(printed).toContain('permissive = false');
+    expect(policyShape(secondTable)).toEqual(policyShape(firstTable));
+    expect(secondTable.policies[0]).toMatchObject({
+      permissive: false,
+      using: 'name = "O\'Hara"\nnext',
+    });
   });
 });
