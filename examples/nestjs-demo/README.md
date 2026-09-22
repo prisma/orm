@@ -11,24 +11,42 @@ This example demonstrates the recommended Dependency Injection (DI) pattern for 
 5. **Callback Transactions**: Transactions are handled via the callback form (`db.transaction(async (tx) => { ... })`).
 6. **Testability**: The DI token can be easily overridden in tests using `.overrideProvider(DB).useValue(fakeDb)`.
 
-## Quickstart
+## **Quickstart**
 
 1. Copy the environment file:
-   cp .env.example .env
+
+   ```bash
+   cp examples/nestjs-demo/.env.example examples/nestjs-demo/.env
+   ```
 
 2. Install dependencies (from the repository root):
+
+   ```bash
    pnpm install
+   ```
 
 3. Initialize the database and emit the contract:
-   pnpm db:init
-   pnpm emit
+
+   ```bash
+   pnpm --filter ./examples/nestjs-demo db:init
+   pnpm --filter ./examples/nestjs-demo emit
+   ```
 
 4. Run the development server:
-   pnpm dev
+
+   ```bash
+   pnpm --filter ./examples/nestjs-demo dev
+   ```
 
 5. Run tests to verify the DI override pattern:
-   pnpm test
+
+   ```bash
+   pnpm --filter ./examples/nestjs-demo test
+   ```
 
 6. Typecheck and lint:
-   pnpm typecheck
-   pnpm lint
+
+   ```bash
+   pnpm --filter ./examples/nestjs-demo typecheck
+   pnpm --filter ./examples/nestjs-demo lint
+   ```
