@@ -224,6 +224,61 @@ namespace blocks {
     );
   });
 
+  it('builds every scope and field record without a prototype', () => {
+    const result = build(`model constructor {
+  toString String
+}
+type valueOf {
+  hasOwnProperty Int
+}
+types {
+  toString = Vector(1536)
+}
+policy hasOwnProperty {}
+namespace propertyIsEnumerable {
+  model toString { id Int }
+}`);
+    const { topLevel } = result.symbolTable;
+    const namespace = topLevel.namespaces['propertyIsEnumerable'];
+
+    expect(
+      [
+        topLevel.models,
+        topLevel.compositeTypes,
+        topLevel.namedTypes,
+        topLevel.blocks,
+        topLevel.namespaces,
+        namespace?.models,
+        namespace?.compositeTypes,
+        namespace?.blocks,
+        topLevel.models['constructor']?.fields,
+        topLevel.compositeTypes['valueOf']?.fields,
+        namespace?.models['toString']?.fields,
+      ].map((record) => Object.getPrototypeOf(record)),
+    ).toEqual(Array(11).fill(null));
+  });
+
+  it('reads an undeclared prototype-named key as undefined at every scope', () => {
+    const result = build(`model constructor {
+  toString String
+}
+namespace valueOf {
+  model toString { id Int }
+}`);
+    const { topLevel } = result.symbolTable;
+
+    expect(topLevel.models['constructor']?.name).toBe('constructor');
+    expect(topLevel.models['toString']).toBeUndefined();
+    expect(topLevel.compositeTypes['constructor']).toBeUndefined();
+    expect(topLevel.namedTypes['toString']).toBeUndefined();
+    expect(topLevel.blocks['valueOf']).toBeUndefined();
+    expect(topLevel.namespaces['constructor']).toBeUndefined();
+    expect(topLevel.models['constructor']?.fields['toString']?.name).toBe('toString');
+    expect(topLevel.models['constructor']?.fields['valueOf']).toBeUndefined();
+    expect(topLevel.namespaces['valueOf']?.models['toString']?.name).toBe('toString');
+    expect(topLevel.namespaces['valueOf']?.models['constructor']).toBeUndefined();
+  });
+
   it('preserves collisions between namespaces and other top-level declarations', () => {
     const result = build(`model First {}
 namespace First {}

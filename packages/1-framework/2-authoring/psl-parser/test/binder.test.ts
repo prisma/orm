@@ -984,6 +984,81 @@ describe('referencedFieldRef on a cross-space list', () => {
   });
 });
 
+describe('createBinder — prototype-named declarations', () => {
+  const PROTOTYPE_SCHEMA = [
+    'model constructor {',
+    '  id Int @id',
+    '  toString String',
+    '}',
+    'model Cart {',
+    '  ownerId Int',
+    '  owner constructor @relation(fields: [ownerId], references: [id])',
+    '  @@index([ownerId])',
+    '}',
+    'namespace valueOf {',
+    '  model toString {',
+    '    id Int @id',
+    '  }',
+    '  model Basket {',
+    '    id Int @id',
+    '    @@base(toString)',
+    '  }',
+    '}',
+  ].join('\n');
+
+  it('resolves a prototype-named type, entity, and field reference', () => {
+    const { symbolTable, binder, diagnostics } = bind(PROTOTYPE_SCHEMA);
+    const cart = symbolTable.topLevel.models['Cart']!;
+    const prototypeNamed = symbolTable.topLevel.models['constructor']!;
+    const namespaced = symbolTable.topLevel.namespaces['valueOf']!;
+
+    expect(diagnostics).toEqual([]);
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'Cart', 'owner'))).toEqual({
+      kind: 'model',
+      symbol: prototypeNamed,
+    });
+    expect(
+      binder.symbolForNode(attributeNodes(cart.fields['owner']!, 'relation', 'references')[0]!),
+    ).toEqual({ kind: 'field', symbol: prototypeNamed.fields['id'] });
+    expect(binder.symbolForNode(attributeNodes(namespaced.models['Basket']!, 'base')[0]!)).toEqual({
+      kind: 'model',
+      symbol: namespaced.models['toString'],
+    });
+  });
+
+  it('leaves an undeclared prototype-named reference unresolved', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      [
+        'model Cart {',
+        '  id Int @id',
+        '  slot valueOf',
+        '  @@index([hasOwnProperty])',
+        '  @@base(propertyIsEnumerable)',
+        '}',
+      ].join('\n'),
+    );
+    const cart = symbolTable.topLevel.models['Cart']!;
+
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'Cart', 'slot'))).toEqual({
+      kind: 'unresolved',
+      name: 'valueOf',
+    });
+    expect(binder.symbolForNode(attributeNodes(cart, 'index')[0]!)).toEqual({
+      kind: 'unresolved',
+      name: 'hasOwnProperty',
+    });
+    expect(binder.symbolForNode(attributeNodes(cart, 'base')[0]!)).toEqual({
+      kind: 'unresolved',
+      name: 'propertyIsEnumerable',
+    });
+    expect(diagnostics.map(({ message }) => message)).toEqual([
+      'Cannot find type "valueOf"',
+      'Cannot find field "hasOwnProperty" on "Cart"',
+      'Cannot find entity "propertyIsEnumerable"',
+    ]);
+  });
+});
+
 describe('createBinder — reference slots the binder stays silent about', () => {
   it('records nothing for a non-identifier in a reference slot', () => {
     const { symbolTable, binder, diagnostics } = bind(
