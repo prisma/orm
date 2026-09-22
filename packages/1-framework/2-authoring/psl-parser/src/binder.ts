@@ -54,6 +54,7 @@ export type Resolution =
   | { readonly kind: 'compositeType'; readonly symbol: CompositeTypeSymbol }
   | { readonly kind: 'namedType'; readonly symbol: NamedTypeSymbol }
   | { readonly kind: 'block'; readonly symbol: BlockSymbol }
+  | { readonly kind: 'namespace'; readonly symbol: NamespaceSymbol }
   | { readonly kind: 'contributedType'; readonly symbol: ContributedTypeSymbol }
   | { readonly kind: 'field'; readonly symbol: FieldSymbol }
   | { readonly kind: 'attribute'; readonly symbol: AttributeSymbol }
@@ -158,11 +159,12 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       const resolution = resolveTypeReference(field, scope, symbolTable.topLevel, contributedTypes);
       if (resolution === undefined) continue;
       references.set(node, resolution);
-      if (resolution.kind === 'unresolved') {
+      const typeFailure = typePositionFailure(resolution, field);
+      if (typeFailure !== undefined) {
         diagnostics.push({
           code: PSL_UNRESOLVED_REFERENCE,
-          message: `Cannot find type "${resolution.name}"`,
-          data: { reference: 'type', name: resolution.name },
+          message: typeFailure.message,
+          data: { reference: 'type', name: typeFailure.name },
           ...diagnosticSource(sources, node).at(),
         });
       }
@@ -177,6 +179,7 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       diagnostics,
       symbolTable,
       sources,
+      contributedTypes,
       describeUnsupportedAttribute,
     };
     const specContext =
@@ -212,6 +215,7 @@ interface BindContext {
   readonly diagnostics: ParseDiagnostic[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
+  readonly contributedTypes: ContributedTypeScope;
   readonly describeUnsupportedAttribute: DescribeUnsupportedAttribute | undefined;
 }
 
@@ -258,8 +262,7 @@ function bindAttributes<Factory>(
 function bindArguments(attribute: ResolvedAttribute, spec: BoundSpec, ctx: BindContext) {
   let positional = 0;
   for (const arg of attribute.args) {
-    const param =
-      arg.name === undefined ? spec.positional[positional++] : own(spec.named, arg.name);
+    const param = arg.name === undefined ? spec.positional[positional++] : spec.named[arg.name];
     if (param === undefined || arg.expression === undefined) continue;
     const kind = referenceKind(param.type);
     if (kind === undefined) continue;
@@ -321,25 +324,23 @@ function targetFields(
 }
 
 function resolveEntity(name: string, node: SyntaxNode, ctx: BindContext): Resolution {
-  const entity = entityNamed(name, ctx);
-  if (entity !== undefined) return entity;
-  report(`Cannot find entity "${name}"`, node, ctx, 'entity');
-  return { kind: 'unresolved', name };
-}
-
-function entityNamed(name: string, ctx: BindContext): Resolution | undefined {
-  const { scope, symbolTable } = ctx;
-  if (scope !== undefined) {
-    const model = scope.models[name];
-    if (model !== undefined) return { kind: 'model', symbol: model };
-    const compositeType = scope.compositeTypes[name];
-    if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
+  const found = lookupIn(
+    unqualifiedChain(ctx.scope, ctx.symbolTable.topLevel, ctx.contributedTypes),
+    name,
+  );
+  if (found === undefined) {
+    report(`Cannot find entity "${name}"`, node, ctx, 'entity');
+    return { kind: 'unresolved', name };
   }
-  const model = symbolTable.topLevel.models[name];
-  if (model !== undefined) return { kind: 'model', symbol: model };
-  const compositeType = symbolTable.topLevel.compositeTypes[name];
-  if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
-  return undefined;
+  if (found.kind !== 'model' && found.kind !== 'compositeType') {
+    report(
+      `"${name}" is ${describeResolution(found)}; an entity reference must name a model or composite type`,
+      node,
+      ctx,
+      'entity',
+    );
+  }
+  return found;
 }
 
 function report(
@@ -390,6 +391,120 @@ function* entities(symbolTable: SymbolTable): Iterable<ScopedEntity> {
   }
 }
 
+interface Scope {
+  lookup(name: string): Resolution | undefined;
+}
+
+function namespaceScope(namespace: NamespaceSymbol): Scope {
+  return {
+    lookup(name) {
+      const model = namespace.models[name];
+      if (model !== undefined) return { kind: 'model', symbol: model };
+      const compositeType = namespace.compositeTypes[name];
+      if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
+      const block = namespace.blocks[name];
+      if (block !== undefined) return { kind: 'block', symbol: block };
+      return undefined;
+    },
+  };
+}
+
+function topLevelScope(topLevel: TopLevelScope): Scope {
+  return {
+    lookup(name) {
+      const model = topLevel.models[name];
+      if (model !== undefined) return { kind: 'model', symbol: model };
+      const compositeType = topLevel.compositeTypes[name];
+      if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
+      const namedType = topLevel.namedTypes[name];
+      if (namedType !== undefined) return { kind: 'namedType', symbol: namedType };
+      const block = topLevel.blocks[name];
+      if (block !== undefined) return { kind: 'block', symbol: block };
+      const namespace = topLevel.namespaces[name];
+      if (namespace !== undefined) return { kind: 'namespace', symbol: namespace };
+      return undefined;
+    },
+  };
+}
+
+function contributedScope(
+  contributedTypes: ContributedTypeScope,
+  prefix: readonly string[],
+): Scope {
+  return {
+    lookup(name) {
+      const symbol = contributedTypes.lookup([...prefix, name]);
+      return symbol === undefined ? undefined : { kind: 'contributedType', symbol };
+    },
+  };
+}
+
+function unqualifiedChain(
+  scope: NamespaceSymbol | undefined,
+  topLevel: TopLevelScope,
+  contributedTypes: ContributedTypeScope,
+): readonly Scope[] {
+  const outer = [topLevelScope(topLevel), contributedScope(contributedTypes, [])];
+  return scope === undefined ? outer : [namespaceScope(scope), ...outer];
+}
+
+function qualifiedChain(
+  namespaceId: string,
+  topLevel: TopLevelScope,
+  contributedTypes: ContributedTypeScope,
+): readonly Scope[] {
+  const namespace = topLevel.namespaces[namespaceId];
+  const contributed = contributedScope(contributedTypes, [namespaceId]);
+  return namespace === undefined ? [contributed] : [namespaceScope(namespace), contributed];
+}
+
+function lookupIn(chain: readonly Scope[], name: string): Resolution | undefined {
+  for (const scope of chain) {
+    const found = scope.lookup(name);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+function describeResolution(resolution: Resolution): string {
+  switch (resolution.kind) {
+    case 'model':
+      return 'a model';
+    case 'compositeType':
+      return 'a composite type';
+    case 'namedType':
+      return 'a named type';
+    case 'block':
+      return resolution.symbol.keyword === 'enum'
+        ? 'an enum'
+        : `a ${resolution.symbol.keyword} block`;
+    case 'namespace':
+      return 'a namespace';
+    case 'contributedType':
+      return 'a scalar type';
+    default:
+      return 'not a declaration';
+  }
+}
+
+function typePositionFailure(
+  resolution: Resolution,
+  field: FieldSymbol,
+): { readonly message: string; readonly name: string } | undefined {
+  if (resolution.kind === 'unresolved') {
+    return { message: `Cannot find type "${resolution.name}"`, name: resolution.name };
+  }
+  if (resolution.kind !== 'namespace') return undefined;
+  const name =
+    field.typeNamespaceId === undefined
+      ? field.typeName
+      : `${field.typeNamespaceId}.${field.typeName}`;
+  return {
+    message: `"${name}" is a namespace; a type reference must name a model, composite type, enum, or named type`,
+    name,
+  };
+}
+
 function resolveTypeReference(
   field: FieldSymbol,
   scope: NamespaceSymbol | undefined,
@@ -402,46 +517,18 @@ function resolveTypeReference(
   if (name === '') return undefined;
 
   const namespaceId = field.typeNamespaceId;
-  if (namespaceId !== undefined) {
-    const namespace = topLevel.namespaces[namespaceId];
-    const declared = namespace === undefined ? undefined : inNamespace(namespace, name);
-    if (declared !== undefined) return declared;
-    const contributedSymbol = contributedTypes.lookup([namespaceId, name]);
-    if (contributedSymbol !== undefined)
-      return { kind: 'contributedType', symbol: contributedSymbol };
-    return { kind: 'unresolved', name: `${namespaceId}.${name}` };
+  const chain =
+    namespaceId === undefined
+      ? unqualifiedChain(scope, topLevel, contributedTypes)
+      : qualifiedChain(namespaceId, topLevel, contributedTypes);
+  const found = lookupIn(chain, name);
+  if (found === undefined) {
+    return {
+      kind: 'unresolved',
+      name: namespaceId === undefined ? name : `${namespaceId}.${name}`,
+    };
   }
-
-  const local = scope === undefined ? undefined : inNamespace(scope, name);
-  if (local !== undefined) return local;
-  const global = inTopLevel(topLevel, name);
-  if (global !== undefined) return global;
-  const contributedSymbol = contributedTypes.lookup([name]);
-  if (contributedSymbol !== undefined)
-    return { kind: 'contributedType', symbol: contributedSymbol };
-  return { kind: 'unresolved', name };
-}
-
-function inNamespace(namespace: NamespaceSymbol, name: string): Resolution | undefined {
-  const model = namespace.models[name];
-  if (model !== undefined) return { kind: 'model', symbol: model };
-  const compositeType = namespace.compositeTypes[name];
-  if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
-  const block = namespace.blocks[name];
-  if (block !== undefined) return { kind: 'block', symbol: block };
-  return undefined;
-}
-
-function inTopLevel(topLevel: TopLevelScope, name: string): Resolution | undefined {
-  const model = topLevel.models[name];
-  if (model !== undefined) return { kind: 'model', symbol: model };
-  const compositeType = topLevel.compositeTypes[name];
-  if (compositeType !== undefined) return { kind: 'compositeType', symbol: compositeType };
-  const namedType = topLevel.namedTypes[name];
-  if (namedType !== undefined) return { kind: 'namedType', symbol: namedType };
-  const block = topLevel.blocks[name];
-  if (block !== undefined) return { kind: 'block', symbol: block };
-  return undefined;
+  return found;
 }
 
 function own<T>(record: Record<string, T>, name: string): T | undefined {

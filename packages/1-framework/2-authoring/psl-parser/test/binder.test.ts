@@ -835,13 +835,100 @@ describe('createBinder — entityRef arguments', () => {
     };
 
     expect(resolvedBase('Orphan')).toEqual({ kind: 'unresolved', name: 'Ghost' });
-    expect(resolvedBase('Scalarish')).toEqual({ kind: 'unresolved', name: 'String' });
-    expect(resolvedBase('Enumish')).toEqual({ kind: 'unresolved', name: 'Role' });
+    expect(resolvedBase('Scalarish')).toMatchObject({ kind: 'contributedType' });
+    expect(resolvedBase('Enumish')).toEqual({
+      kind: 'block',
+      symbol: symbolTable.topLevel.blocks['Role'],
+    });
     expect(diagnostics.map(({ message }) => message)).toEqual([
       'Cannot find entity "Ghost"',
-      'Cannot find entity "String"',
-      'Cannot find entity "Role"',
+      '"String" is a scalar type; an entity reference must name a model or composite type',
+      '"Role" is an enum; an entity reference must name a model or composite type',
     ]);
+  });
+});
+
+describe('createBinder — one kind-blind scope chain', () => {
+  const SHADOWING_SCHEMA = [
+    'model Foo {',
+    '  id Int',
+    '}',
+    'namespace app {',
+    '  enum Foo {',
+    '    A',
+    '  }',
+    '  model Bar {',
+    '    id Int',
+    '    kind Foo',
+    '    @@base(Foo)',
+    '  }',
+    '}',
+  ].join('\n');
+
+  it('lets a namespaced enum shadow a top-level model for an entity reference', () => {
+    const { symbolTable, binder, diagnostics } = bind(SHADOWING_SCHEMA);
+    const app = symbolTable.topLevel.namespaces['app']!;
+    const node = attributeNodes(app.models['Bar']!, 'base')[0]!;
+
+    expect(binder.symbolForNode(node)).toEqual({ kind: 'block', symbol: app.blocks['Foo'] });
+    expect(diagnostics.map(({ code, message }) => [code, message])).toEqual([
+      [
+        'PSL_UNRESOLVED_REFERENCE',
+        '"Foo" is an enum; an entity reference must name a model or composite type',
+      ],
+    ]);
+  });
+
+  it('resolves a type reference through the same shadowing chain', () => {
+    const { symbolTable, binder } = bind(SHADOWING_SCHEMA);
+    const app = symbolTable.topLevel.namespaces['app']!;
+
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'app.Bar', 'kind'))).toEqual({
+      kind: 'block',
+      symbol: app.blocks['Foo'],
+    });
+  });
+
+  it('reports a namespace named in type and entity position as a namespace', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      [
+        'namespace app {',
+        '  model Item {',
+        '    id Int',
+        '  }',
+        '}',
+        'model Cart {',
+        '  id Int',
+        '  slot app',
+        '  @@base(app)',
+        '}',
+      ].join('\n'),
+    );
+    const cart = symbolTable.topLevel.models['Cart']!;
+    const app = symbolTable.topLevel.namespaces['app']!;
+
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'Cart', 'slot'))).toEqual({
+      kind: 'namespace',
+      symbol: app,
+    });
+    expect(binder.symbolForNode(attributeNodes(cart, 'base')[0]!)).toEqual({
+      kind: 'namespace',
+      symbol: app,
+    });
+    expect(diagnostics.map(({ message }) => message)).toEqual([
+      '"app" is a namespace; a type reference must name a model, composite type, enum, or named type',
+      '"app" is a namespace; an entity reference must name a model or composite type',
+    ]);
+  });
+
+  it('still reports a name no scope in the chain declares as not found', () => {
+    const { diagnostics } = bind(
+      ['namespace app {', '  model Bar {', '    id Int', '    @@base(Ghost)', '  }', '}'].join(
+        '\n',
+      ),
+    );
+
+    expect(diagnostics.map(({ message }) => message)).toEqual(['Cannot find entity "Ghost"']);
   });
 });
 
