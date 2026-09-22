@@ -754,16 +754,16 @@ const codecLookup: CodecLookup = {
 };
 
 function parseAndInterpret(source: string) {
-  const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
-  const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources, diagnostics: parseDiagnostics } = parse(source, 'schema.prisma');
+  const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const interpreted = interpretPslDocumentToSqlContract({
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target,
     scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),

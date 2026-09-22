@@ -121,6 +121,7 @@ export function buildRecoveredEnumBlock(
         span: SYNTHETIC_SPAN,
       },
     ],
+    attributes: { type: { args: { codecId }, span: SYNTHETIC_SPAN } },
     span: SYNTHETIC_SPAN,
   };
 }
