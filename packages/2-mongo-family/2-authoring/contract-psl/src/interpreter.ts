@@ -1062,6 +1062,17 @@ function processEnumDeclarations(input: {
   for (const enumSymbol of input.enumSymbols) {
     const sourceFile = input.sources.sourceFileFor(enumSymbol.node.syntax);
     const decl = enumSymbol.block;
+    for (const entry of enumSymbol.node.entries()) {
+      for (const attribute of entry.attributes()) {
+        input.diagnostics.push({
+          code: 'PSL_ENUM_MEMBER_ATTRIBUTE_UNSUPPORTED',
+          message: `enum "${decl.name}": member "${entry.key()?.name() ?? '?'}" carries @${attribute.name()?.path().join('.') ?? '?'}, but an enum member takes no attributes`,
+          ...diagnosticSource(input.sources, enumSymbol.node.syntax).at(
+            nodePslSpan(attribute.syntax, input.sources),
+          ),
+        });
+      }
+    }
     const handle = instantiateAuthoringEntityType<EnumTypeHandle | undefined>(
       'enum',
       enumDescriptor,
