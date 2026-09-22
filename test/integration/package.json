@@ -73,6 +73,7 @@
     "arktype": "catalog:"
   },
   "devDependencies": {
+    "@internal/config": "workspace:8.0.0-rc.11",
     "@internal/framework-components": "workspace:8.0.0-rc.11",
     "@internal/language-server": "workspace:8.0.0-rc.11",
     "@internal/middleware-cache": "workspace:8.0.0-rc.11",

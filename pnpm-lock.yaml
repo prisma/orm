@@ -5559,6 +5559,9 @@ importers:
         specifier: 'catalog:'
         version: 2.2.3
     devDependencies:
+      '@internal/config':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../packages/1-framework/1-core/config
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.11
         version: link:../../packages/1-framework/1-core/framework-components
