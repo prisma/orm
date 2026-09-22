@@ -1,7 +1,12 @@
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
-import type { PslExtensionBlock, PslSpan } from '@internal/framework-components/psl-ast';
+import type {
+  ParsedPslExtensionBlock,
+  PslExtensionBlock,
+  PslSpan,
+} from '@internal/framework-components/psl-ast';
 import { reconstructExtensionBlock } from './block-reconstruction';
-import { interpretExtensionBlockAttributes } from './block-spec/interpret';
+import { blockSpecFactoryOf } from './block-spec/descriptor';
+import { interpretExtensionBlock } from './block-spec/interpret';
 import { findBlockDescriptor } from './extension-block';
 import type { ParseDiagnostic } from './parse';
 import {
@@ -127,6 +132,14 @@ export interface BuildSymbolTableOptions {
 export interface SymbolTableResult {
   readonly symbolTable: SymbolTable;
   readonly diagnostics: readonly ParseDiagnostic[];
+  /**
+   * The typed envelope of every registered block whose value and attribute
+   * interpretation succeeded, keyed by the block's stable symbol. Invalid
+   * blocks have no entry — their symbols keep syntax and source provenance
+   * for recovery and tooling — and unregistered blocks are never
+   * interpreted.
+   */
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }
 
 /**
@@ -183,7 +196,6 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
             declaration,
             sources,
             pslBlockDescriptors,
-            diagnostics,
             collectedBlocks,
           );
         }
@@ -227,16 +239,29 @@ export function buildSymbolTable(options: BuildSymbolTableOptions): SymbolTableR
   const symbolTable: SymbolTable = {
     topLevel: { namespaces, namedTypes, blocks, models, compositeTypes },
   };
+  const parsedBlocks = new Map<BlockSymbol, ParsedPslExtensionBlock>();
+  // Every declaration is collected before this walk, so spec factories may
+  // resolve declarations through the complete table. They must not observe
+  // another block's interpreted output: parsedBlocks is still being filled
+  // while factories run.
   for (const block of collectedBlocks) {
     const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
-    if (descriptor !== undefined) {
-      diagnostics.push(
-        ...interpretExtensionBlockAttributes({ block, descriptor, symbols: symbolTable, sources })
-          .diagnostics,
-      );
+    if (descriptor === undefined) continue;
+    const spec = blockSpecFactoryOf(descriptor)({ symbols: symbolTable, block });
+    const parsed = interpretExtensionBlock({
+      block,
+      descriptor,
+      spec,
+      symbols: symbolTable,
+      sources,
+    });
+    if (parsed.ok) {
+      parsedBlocks.set(block, parsed.value);
+    } else {
+      diagnostics.push(...parsed.failure);
     }
   }
-  return { symbolTable, diagnostics };
+  return { symbolTable, diagnostics, parsedBlocks };
 }
 
 function buildModel(
@@ -276,7 +301,6 @@ function buildBlock(
   node: GenericBlockDeclarationAst,
   sources: PslSources,
   pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
-  diagnostics: ParseDiagnostic[],
   collectedBlocks: BlockSymbol[],
 ): BlockSymbol {
   const keyword = node.keyword()?.text ?? '';
@@ -287,7 +311,7 @@ function buildBlock(
     keyword,
     node,
     span: nodePslSpan(node.syntax, sources),
-    block: reconstructExtensionBlock(node, descriptor, sources, diagnostics),
+    block: reconstructExtensionBlock(node, descriptor, sources),
   };
   collectedBlocks.push(symbol);
   return symbol;
@@ -333,7 +357,6 @@ function extendNamespace(
         member,
         sources,
         pslBlockDescriptors,
-        diagnostics,
         collectedBlocks,
       );
     }

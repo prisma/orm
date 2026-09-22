@@ -48,6 +48,10 @@ export type InferBlock<S> = S extends BlockSpec<infer Out> ? Out : never;
 
 /**
  * The concrete factory type behind `AuthoringPslBlockDescriptor.spec`, which
- * the framework core stores erased as `unknown`.
+ * the framework core stores erased as `unknown`. Every block spec's output is
+ * a record keyed by the block's entry names, so the erased flow can carry
+ * envelopes as `ParsedPslExtensionBlock` without a cast.
  */
-export type BlockSpecFactory = (ctx: BlockSpecContext) => BlockSpec<unknown>;
+export type BlockSpecFactory = (
+  ctx: BlockSpecContext,
+) => BlockSpec<Readonly<Record<string, unknown>>>;
