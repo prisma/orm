@@ -185,8 +185,10 @@ function planNextActions(
 ): readonly NextAction[] {
   if (result.pendingPlaceholders === true) {
     const stubFiles = [
-      ...(result.baselineDir === undefined ? [] : [join(result.baselineDir, 'migration.ts')]),
-      ...(result.dir === undefined ? [] : [join(result.dir, 'migration.ts')]),
+      ...new Set([
+        ...(result.baselineDir === undefined ? [] : [join(result.baselineDir, 'migration.ts')]),
+        ...(result.dir === undefined ? [] : [join(result.dir, 'migration.ts')]),
+      ]),
     ];
     const migrationTs = stubFiles.at(-1) ?? join('<dir>', 'migration.ts');
     return [
