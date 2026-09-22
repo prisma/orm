@@ -19,6 +19,7 @@ import { errorEnumCodecNotInPackStack } from '@internal/errors/control';
 import type {
   AuthoringContributions,
   AuthoringEntityContext,
+  ParsedPslExtensionBlock,
 } from '@internal/framework-components/authoring';
 import {
   instantiateAuthoringEntityType,
@@ -54,6 +55,7 @@ import type {
 import {
   createPslDiagnosticCollector,
   type DiagnosticSource,
+  deriveParsedBlocks,
   diagnosticSource,
   nodePslSpan,
   type PslDiagnostic,
@@ -100,6 +102,12 @@ export interface InterpretPslDocumentToMongoContractInput {
   readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
+  /**
+   * Typed envelopes from the `buildSymbolTable` lifecycle. Provider paths
+   * thread this through; a direct caller that omits it falls back to the
+   * parser's `deriveParsedBlocks`.
+   */
+  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly scalarTypeCodecIds: ReadonlyMap<string, string>;
   readonly controlMutationDefaults: ControlDefaultRegistries;
   readonly codecLookup?: CodecLookup;
@@ -993,6 +1001,7 @@ function resolveNonRelationField(
 
 function processEnumDeclarations(input: {
   readonly enumSymbols: readonly BlockSymbol[];
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly sources: PslSources;
   readonly binder: Binder;
   readonly authoringContributions: AuthoringContributions | undefined;
@@ -1023,17 +1032,18 @@ function processEnumDeclarations(input: {
 
   for (const enumSymbol of input.enumSymbols) {
     const sourceFile = input.sources.sourceFileFor(enumSymbol.node.syntax);
-    const decl = enumSymbol.block;
+    const envelope = input.parsedBlocks.get(enumSymbol);
+    if (envelope === undefined) continue;
     const handle = instantiateAuthoringEntityType<EnumTypeHandle | undefined>(
       'enum',
       enumDescriptor,
-      [decl],
+      [envelope],
       { ...input.entityContext, sourceId: sourceFile.filename },
     );
 
     if (handle === undefined || handle === null) continue;
 
-    builtEnums[decl.name] = {
+    builtEnums[envelope.name] = {
       codecId: handle.codecId,
       members: handle.enumMembers.map((m) => ({
         name: m.name,
@@ -1101,8 +1111,16 @@ export function interpretPslDocumentToMongoContract(
 
   const topLevelEnumSymbols = Object.values(topLevel.blocks).filter((b) => b.keyword === 'enum');
 
+  const parsedBlocks =
+    input.parsedBlocks ??
+    deriveParsedBlocks(
+      symbolTable,
+      sources,
+      input.authoringContributions?.pslBlockDescriptors ?? {},
+    );
   const builtEnums = processEnumDeclarations({
     enumSymbols: topLevelEnumSymbols,
+    parsedBlocks,
     sources,
     binder,
     authoringContributions: input.authoringContributions,
