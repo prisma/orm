@@ -60,7 +60,7 @@ function modelsOf(contract: Contract<SqlStorage>, namespaceId: string): ModelsMa
 }
 
 function metadataCacheKey(namespaceId: string, modelName: string): string {
-  return `${namespaceId}\u0000${modelName}`;
+  return JSON.stringify([namespaceId, modelName]);
 }
 
 export function modelOf(
