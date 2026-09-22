@@ -37,7 +37,7 @@ The distinction between predicate operations (return a boolean, composable insid
 ## Interaction with other subsystems
 
 - **Operation arguments.** [ADR 203](ADR%20203%20-%20Trait-targeted%20operation%20arguments.md) introduced codec-identity and trait-set targeting for argument specs. The primitive survives — the self hint uses the same vocabulary — but it now applies only to the ORM column-helper dispatch. The SQL builder no longer reads argument specs; it calls the authored function directly.
-- **Adapter SPI.** [ADR 016](ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md) described how adapters contribute lowering. The adapter runtime descriptor's `queryOperations` slot now yields a factory rather than a const array. The contract-assembly layer calls the factory with the contract's codec-types map. [ADR 255](ADR%20255%20-%20Target-owned%20built-in%20query%20operations.md) then moved a target's built-in operations off the adapter and onto the target descriptor's identical slot.
+- **Adapter SPI.** [ADR 016](ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md) described how adapters contribute lowering. The adapter runtime descriptor's `queryOperations` slot now yields a factory rather than a const array. The contract-assembly layer calls the factory with the contract's codec-types map. The amendment below then moved a target's built-in operations off the adapter and onto the target descriptor's identical slot.
 - **Codec registry.** [ADR 030](ADR%20030%20-%20Result%20decoding%20%26%20codecs%20registry.md) defines codec metadata including traits. The ORM column helper continues to read traits from the registry to expand trait-targeted self hints. Codec-types flow from the same registry into the contract and onward into each operation factory.
 - **Extension compatibility.** [ADR 017](ADR%20017%20-%20Extension%20Compatibility%20Policy.md) is honoured: old declarative operation records are not retained, so the decision is a breaking change for extensions that ship their own operation contributions. The breakage is local — each extension rewrites its operation contribution at the factory boundary, without changes elsewhere in the authoring surface.
 
@@ -74,6 +74,18 @@ Let authors continue to write the declarative record in most cases, and attach a
 ### Global declaration-merged codec registry
 
 Have `CodecExpression` and `TraitExpression` read the JS-value type from a globally augmented interface, so authors can write signatures without the `CT` type parameter. Rejected. The augmentation collapses a TypeScript project to a single contract. A library that works with two contracts in one program — for example a migration tool inspecting source and target — would see the registries overlap.
+
+## Amendment: a target's built-in operations are contributed by its target pack
+
+A target's own query vocabulary lives in the target pack, not the adapter. [ADR 005](ADR%20005%20-%20Thin%20Core%20Fat%20Targets.md) puts dialect vocabulary in the target; [ADR 016](ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md) leaves the adapter responsible for rendering an AST and binding its parameters. Deciding that Postgres spells case-insensitive matching `ILIKE`, or that full-text search goes through `to_tsvector` and `websearch_to_tsquery`, is the first kind of decision and not the second.
+
+So `@internal/target-postgres` contributes `ilike` — which moved there — along with `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, and `@internal/adapter-postgres` contributes no query operations at all; its `operation-types` export is gone rather than kept as a shim. Nothing in the framework had to change: `SqlStaticContributions.queryOperations` was already optional on every SQL component, `createSqlExecutionStack` already iterates the target, and `extractQueryOperationTypeImports` already reads `types.queryOperationTypes` from every descriptor. An adapter may still contribute a genuinely adapter-specific operation; Postgres simply has none. Extensions are unaffected.
+
+Emitted Postgres `contract.d.ts` files follow, importing `QueryOperationTypes` from `@internal/target-postgres/operation-types` under the alias `PgTargetQueryOps`. `contract.json` does not change and no contract hash moves; an application re-emits its types and keeps working.
+
+The full-text operations take the search string as a bound `pg/text@1` parameter and an options object whose members — the text-search configuration, `ts_rank`'s normalization bitmask, `ts_headline`'s markers and word counts — Postgres will not accept as parameters and which therefore reach the SQL as literals. Each is validated before a statement exists, against an allowlist for the configuration and a range or character rule for the rest, and anything else throws `RUNTIME.ARGUMENT_INVALID`. `websearch_to_tsquery` is the only query parser used: it accepts what a search box collects and raises no syntax error on arbitrary input.
+
+Anchors: [`query-operations.ts`](../../../packages/3-targets/3-targets/postgres/src/core/query-operations.ts) and [`full-text-options.ts`](../../../packages/3-targets/3-targets/postgres/src/core/full-text-options.ts) for the operations and their option checks; [`descriptor-meta.ts`](../../../packages/3-targets/3-targets/postgres/src/core/descriptor-meta.ts) for the import spec the emitter writes.
 
 ## Open questions
 

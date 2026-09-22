@@ -33,6 +33,7 @@ export type {
 export type {
   CheckKind,
   ColumnRef,
+  DeferredIndexColumn,
   DeferredIndexExpression,
   IndexConstraint,
   IndexExpressionInput,

@@ -47,9 +47,11 @@ import {
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from './codec-ids';
-import { codecDescriptors } from './codecs';
 import { postgresError } from './errors';
-import { renderFullTextIndexExpression } from './full-text-index-expression';
+import {
+  isFullTextIndexableCodec,
+  renderFullTextIndexExpression,
+} from './full-text-index-expression';
 import { postgresNowGeneratorIds } from './now-generators';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
@@ -712,25 +714,6 @@ const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
 
 const [firstLanguage, ...remainingLanguages] = POSTGRES_TEXT_SEARCH_LANGUAGES;
 
-/**
- * Read from the codec descriptors themselves rather than a second list of ids, so the attribute
- * accepts exactly the columns the `textual` operations dispatch on.
- */
-/** Widens each descriptor's trait tuple, so membership is a plain string test. */
-function traitsOf(descriptor: { readonly traits: readonly string[] }): readonly string[] {
-  return descriptor.traits;
-}
-
-const TEXTUAL_CODEC_IDS: ReadonlySet<string> = new Set(
-  codecDescriptors
-    .filter((descriptor) => traitsOf(descriptor).includes('textual'))
-    .map((descriptor) => descriptor.codecId),
-);
-
-function isTextualCodec(codecId: string): boolean {
-  return TEXTUAL_CODEC_IDS.has(codecId);
-}
-
 const postgresFullTextIndexSpec = modelAttribute('fullTextIndex', {
   documentation:
     'Indexes one text column for full-text search, rendering the expression `fullTextMatches`, `fullTextRank` and `fullTextHeadline` lower to.',
@@ -845,7 +828,7 @@ export const postgresAuthoringModelAttributes = {
       const codecId = ctx.fieldCodecId(fieldName);
       // A relation field parses as a field reference but stores no value, so it
       // reaches here with neither a column nor a codec.
-      if (columnName === undefined || codecId === undefined || !isTextualCodec(codecId)) {
+      if (columnName === undefined || codecId === undefined || !isFullTextIndexableCodec(codecId)) {
         ctx.diagnostics?.push({
           code: PSL_FULL_TEXT_INDEX_TEXT_FIELD,
           message: `\`@@fullTextIndex\` indexes a text column, but "${ctx.modelName}.${fieldName}" is ${codecId === undefined ? 'not a stored scalar field' : `stored as \`${codecId}\``}.`,

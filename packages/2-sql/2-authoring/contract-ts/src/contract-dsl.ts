@@ -878,9 +878,17 @@ export type UniqueConstraint<FieldNames extends readonly string[] = readonly str
  * either, so an expression over a column has to be written this way rather
  * than as a string, or it silently stops matching the column it names.
  */
+/** A field the lowering resolved, as the renderer sees it. */
+export type DeferredIndexColumn = {
+  /** The storage column name, after `.column()` and the naming convention. */
+  readonly name: string;
+  /** The codec the column stores its values through. */
+  readonly codecId: string;
+};
+
 export type DeferredIndexExpression = {
   readonly fields: readonly ColumnRef[];
-  readonly render: (columnNames: readonly string[]) => string;
+  readonly render: (columns: readonly DeferredIndexColumn[]) => string;
 };
 
 /** Opaque SQL, either written out or rendered at lowering. */

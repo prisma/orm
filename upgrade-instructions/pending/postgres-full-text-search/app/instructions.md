@@ -4,9 +4,12 @@ changes:
     summary: |
       Emitted Postgres `contract.d.ts` files import `QueryOperationTypes` from the target package
       instead of the adapter. Run `prisma contract emit` once; an un-emitted contract names a
-      subpath that no longer exists and stops type-checking.
+      subpath that no longer exists and stops type-checking. Application source that imported that
+      subpath directly changes the same way.
     detection:
-      glob: "**/contract.d.ts"
+      # Covers the emitted `contract.d.ts` and hand-written source alike: both
+      # name the subpath, and both stop compiling until they are changed.
+      glob: "**/*.{ts,tsx,mts}"
       contains:
         - "/adapter/operation-types"
 ---

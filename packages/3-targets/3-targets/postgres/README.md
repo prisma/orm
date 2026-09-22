@@ -150,7 +150,7 @@ const snippets = db.sql.public.message
   .build();
 ```
 
-Postgres computes `to_tsvector` per row unless an index covers the predicate's expression — the same `to_tsvector`, the same configuration literal and the same column, which it compares as parsed expressions rather than as text. `@@fullTextIndex`, contributed by this package, renders that expression from the field and the language, so the index and the predicate cannot drift:
+Postgres computes `to_tsvector` per row unless an index covers the predicate's expression — the same `to_tsvector`, the same configuration literal and the same column, which it compares as parsed expressions rather than as text. `@@fullTextIndex`, contributed by this package, renders that expression from the field and the language, so you never write it by hand:
 
 ```prisma
 @@fullTextIndex([text], name: "message_text_search")

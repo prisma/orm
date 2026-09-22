@@ -9,6 +9,7 @@ import type { FamilyPackRef, TargetPackRef } from '@internal/framework-component
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { type ContractInput, defineContract, field, model } from '../src/contract-builder';
+import type { DeferredIndexColumn } from '../src/contract-dsl';
 import { columnDescriptor } from './helpers/column-descriptor';
 import { unboundTables } from './unbound-tables';
 
@@ -31,7 +32,8 @@ const postgresTargetPack: TargetPackRef<'sql', 'postgres'> = {
   defaultNamespaceId: 'public',
 };
 
-const render = (columnNames: readonly string[]) => `to_tsvector('english', "${columnNames[0]}")`;
+const render = (columns: readonly DeferredIndexColumn[]) =>
+  `to_tsvector('english', "${columns[0]?.name}")`;
 
 function messageIndexes(options: {
   readonly mappedColumn?: string;

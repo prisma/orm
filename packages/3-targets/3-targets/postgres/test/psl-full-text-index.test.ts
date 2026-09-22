@@ -1,6 +1,7 @@
 /**
  * `@@fullTextIndex` renders the same expression the full-text operations
- * lower to, so the index and the predicate cannot drift. It is the documented
+ * lower to, so neither is hand-written. Passing a different language to each
+ * still leaves the index unused; only the rendering is shared. It is the documented
  * way to index a text column; `@@index(expression:)` stays available for
  * anything this attribute does not cover.
  */

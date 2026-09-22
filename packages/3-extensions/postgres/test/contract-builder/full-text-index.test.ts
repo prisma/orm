@@ -137,6 +137,36 @@ describe('fullTextIndex, the TypeScript twin of @@fullTextIndex', () => {
     });
   });
 
+  it('refuses a column that is not stored through a textual codec', () => {
+    expect(() =>
+      defineContract({
+        models: {
+          Message: model('Message', {
+            fields: { id: field.column(intColumn).id(), views: field.column(intColumn) },
+          }).sql(({ cols }) => ({
+            table: 'message',
+            indexes: [fullTextIndex(cols.views, { name: 'message_views_search' })],
+          })),
+        },
+      }),
+    ).toThrow(expect.objectContaining({ code: 'CONTRACT.INDEX_INVALID' }));
+  });
+
+  it('names the field and its codec when it refuses one', () => {
+    expect(() =>
+      defineContract({
+        models: {
+          Message: model('Message', {
+            fields: { id: field.column(intColumn).id(), views: field.column(intColumn) },
+          }).sql(({ cols }) => ({
+            table: 'message',
+            indexes: [fullTextIndex(cols.views, { name: 'message_views_search' })],
+          })),
+        },
+      }),
+    ).toThrow(/views.*pg\/int4@1/);
+  });
+
   it('renders a non-default language', () => {
     const contract = defineContract({
       models: {
