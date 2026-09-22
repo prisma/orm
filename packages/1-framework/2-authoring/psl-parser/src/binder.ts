@@ -115,9 +115,9 @@ class PslBinder implements Binder {
   }
 }
 
-interface Owner {
+interface ScopedEntity {
   readonly scope: NamespaceSymbol | undefined;
-  readonly symbol: ModelSymbol | CompositeTypeSymbol;
+  readonly entity: ModelSymbol | CompositeTypeSymbol;
 }
 
 export function createBinder(options: CreateBinderOptions): BinderResult {
@@ -149,9 +149,9 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   }
 
-  for (const { scope, symbol } of owners(symbolTable)) {
-    declarations.set(symbol.node.syntax, symbol);
-    for (const field of Object.values(symbol.fields)) {
+  for (const { scope, entity } of entities(symbolTable)) {
+    declarations.set(entity.node.syntax, entity);
+    for (const field of Object.values(entity.fields)) {
       declarations.set(field.node.syntax, field);
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
@@ -169,9 +169,9 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   }
 
-  for (const { scope, symbol } of owners(symbolTable)) {
+  for (const { scope, entity } of entities(symbolTable)) {
     const context = {
-      owner: symbol,
+      owner: entity,
       scope,
       references,
       diagnostics,
@@ -180,17 +180,17 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       describeUnsupportedAttribute,
     };
     const specContext =
-      symbol.kind === 'model'
-        ? { symbols: symbolTable, model: symbol, controlMutationDefaults }
+      entity.kind === 'model'
+        ? { symbols: symbolTable, model: entity, controlMutationDefaults }
         : undefined;
     bindAttributes(
-      symbol,
-      symbol.attributes,
+      entity,
+      entity.attributes,
       attributeSpecs.model,
       (factory) => (specContext === undefined ? undefined : factory(specContext)),
       { ...context, field: undefined },
     );
-    for (const field of Object.values(symbol.fields)) {
+    for (const field of Object.values(entity.fields)) {
       bindAttributes(
         field,
         field.attributes,
@@ -380,13 +380,13 @@ function referenceNodes(expression: ExpressionAst): readonly SyntaxNode[] {
   return Array.from(array.elements(), (element) => element.syntax);
 }
 
-function* owners(symbolTable: SymbolTable): Iterable<Owner> {
+function* entities(symbolTable: SymbolTable): Iterable<ScopedEntity> {
   const { topLevel } = symbolTable;
-  for (const symbol of Object.values(topLevel.models)) yield { scope: undefined, symbol };
-  for (const symbol of Object.values(topLevel.compositeTypes)) yield { scope: undefined, symbol };
+  for (const entity of Object.values(topLevel.models)) yield { scope: undefined, entity };
+  for (const entity of Object.values(topLevel.compositeTypes)) yield { scope: undefined, entity };
   for (const scope of Object.values(topLevel.namespaces)) {
-    for (const symbol of Object.values(scope.models)) yield { scope, symbol };
-    for (const symbol of Object.values(scope.compositeTypes)) yield { scope, symbol };
+    for (const entity of Object.values(scope.models)) yield { scope, entity };
+    for (const entity of Object.values(scope.compositeTypes)) yield { scope, entity };
   }
 }
 
