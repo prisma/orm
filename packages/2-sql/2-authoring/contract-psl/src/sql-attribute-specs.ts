@@ -14,6 +14,7 @@ import type {
   AttributeSpecContext,
   AttributeSpecNamespace,
   Binder,
+  DescribeUnsupportedAttribute,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
   FieldSymbol,
@@ -126,6 +127,7 @@ export function createSqlBinder(input: {
   readonly authoringContributions?: AuthoringContributions | undefined;
   readonly controlMutationDefaults?: ControlDefaultRegistries | undefined;
   readonly scalarColumnDescriptors?: ReadonlyMap<string, { readonly codecId: string }> | undefined;
+  readonly describeUnsupportedAttribute?: DescribeUnsupportedAttribute | undefined;
 }): { readonly binder: Binder; readonly diagnostics: readonly PslDiagnostic[] } {
   const scalars: Record<string, AuthoringTypeConstructorDescriptor> = {};
   for (const [name, descriptor] of input.scalarColumnDescriptors ?? []) {
@@ -144,6 +146,7 @@ export function createSqlBinder(input: {
       defaultFunctionRegistry: new Map(),
       defaultLiteralTagRegistry: new Map(),
     },
+    describeUnsupportedAttribute: input.describeUnsupportedAttribute,
   });
 }
 

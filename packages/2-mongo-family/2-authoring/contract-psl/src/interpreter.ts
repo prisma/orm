@@ -130,55 +130,6 @@ function validateNamespaceBlocksForMongoTarget(input: {
   }
 }
 
-const UNLOWERED_FIELD_ATTRIBUTE_HINTS: ReadonlyMap<string, string> = new Map([
-  [
-    'updatedAt',
-    'Mongo lowers no automatic timestamp updates; delete the attribute and set the timestamp in application code.',
-  ],
-]);
-
-function unsupportedFieldAttributeMessage(
-  ownerName: string,
-  fieldName: string,
-  attributeName: string,
-): string {
-  const base = `Field "${ownerName}.${fieldName}" uses unsupported attribute "@${attributeName}"`;
-  const hint = UNLOWERED_FIELD_ATTRIBUTE_HINTS.get(attributeName);
-  return hint === undefined ? base : `${base}. ${hint}`;
-}
-
-function reportUnknownAttributes(input: {
-  readonly models: readonly ModelSymbol[];
-  readonly compositeTypes: readonly CompositeTypeSymbol[];
-  readonly sources: PslSources;
-  readonly binder: Binder;
-  readonly diagnostics: PslDiagnosticCollector;
-}): void {
-  const { sources, diagnostics } = input;
-  for (const model of input.models) {
-    for (const attribute of model.attributes) {
-      if (Object.hasOwn(mongoAttributeSpecs.model, attribute.name)) continue;
-      diagnostics.push({
-        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
-        message: `Model "${model.name}" uses unsupported attribute "@@${attribute.name}"`,
-        ...diagnosticSource(sources, model.node.syntax).at(attribute.span),
-      });
-    }
-  }
-  for (const owner of [...input.models, ...input.compositeTypes]) {
-    for (const field of Object.values(owner.fields)) {
-      for (const attribute of field.attributes) {
-        if (Object.hasOwn(mongoAttributeSpecs.field, attribute.name)) continue;
-        diagnostics.push({
-          code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
-          message: unsupportedFieldAttributeMessage(owner.name, field.name, attribute.name),
-          ...diagnosticSource(sources, field.node.syntax).at(attribute.span),
-        });
-      }
-    }
-  }
-}
-
 interface FieldMappings {
   readonly pslNameToMapped: Map<string, string>;
 }
@@ -1120,13 +1071,6 @@ export function interpretPslDocumentToMongoContract(
   const allCompositeTypes: CompositeTypeSymbol[] = Object.values(topLevel.compositeTypes);
   const modelNames = new Set(allModels.map((m) => m.name));
   const compositeTypeNames = new Set(allCompositeTypes.map((ct) => ct.name));
-  reportUnknownAttributes({
-    models: allModels,
-    compositeTypes: allCompositeTypes,
-    sources,
-    binder,
-    diagnostics,
-  });
   const specContextFor = (model: ModelSymbol): AttributeSpecContext => ({
     symbols: symbolTable,
     model,

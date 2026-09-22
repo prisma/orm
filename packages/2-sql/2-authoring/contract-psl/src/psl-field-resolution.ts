@@ -12,6 +12,7 @@ import type {
 } from '@internal/framework-components/control';
 import type {
   Binder,
+  DescribeUnsupportedAttribute,
   FieldSymbol,
   ModelSymbol,
   ResolvedAttribute,
@@ -33,8 +34,8 @@ import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-re
 import {
   checkUncomposedNamespace,
   lowerDefaultForField,
-  reportUncomposedNamespace,
   resolveFieldTypeDescriptor,
+  uncomposedNamespaceDiagnostic,
 } from './psl-column-resolution';
 import {
   fieldSpecContext,
@@ -218,60 +219,81 @@ const REMOVED_ATTRIBUTE_RULES: ReadonlyMap<string, RemovedAttributeRule> = new M
   }
 }
 
-function validateFieldAttributes(input: {
-  readonly model: ModelSymbol;
-  readonly field: FieldSymbol;
+export function describeUnsupportedSqlAttribute(input: {
   readonly composedExtensions: ReadonlySet<string>;
   readonly authoringContributions: AuthoringContributions | undefined;
-  readonly diagnostics: PslDiagnosticCollector;
   readonly sources: PslSources;
-  readonly binder: Binder;
-  readonly familyId: string;
-  readonly targetId: string;
-}): void {
-  for (const attribute of input.field.attributes) {
-    if (Object.hasOwn(sqlAttributeSpecs.field, attribute.name)) {
-      continue;
+  readonly familyId: string | undefined;
+  readonly targetId: string | undefined;
+  readonly contributedModelAttributeNames: ReadonlySet<string>;
+}): DescribeUnsupportedAttribute {
+  const namespaceContext = {
+    ...ifDefined('familyId', input.familyId),
+    ...ifDefined('targetId', input.targetId),
+    authoringContributions: input.authoringContributions,
+  };
+  return ({ attribute, level, owner, field }) => {
+    if (level === 'model') {
+      if (input.contributedModelAttributeNames.has(attribute.name)) return undefined;
+      const source = diagnosticSource(input.sources, owner.node.syntax);
+      const uncomposedNamespace = checkUncomposedNamespace(
+        attribute.name,
+        input.composedExtensions,
+        namespaceContext,
+      );
+      if (uncomposedNamespace) {
+        return uncomposedNamespaceDiagnostic({
+          subjectLabel: `Attribute "@@${attribute.name}"`,
+          namespace: uncomposedNamespace,
+          source,
+          span: attribute.span,
+        });
+      }
+      return {
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: `Model "${owner.name}" uses unsupported attribute "@@${attribute.name}"`,
+        ...source.at(attribute.span),
+      };
     }
+
+    if (field === undefined) return undefined;
+    const source = diagnosticSource(input.sources, field.node.syntax);
 
     if (attribute.name.startsWith('db.')) {
-      input.diagnostics.push({
+      return {
         code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
         message: formatDbAttributeMigrationMessage(attribute),
-        ...diagnosticSource(input.sources, input.field.node.syntax).at(attribute.span),
-      });
-      continue;
+        ...source.at(attribute.span),
+      };
     }
 
-    const uncomposedNamespace = checkUncomposedNamespace(attribute.name, input.composedExtensions, {
-      familyId: input.familyId,
-      targetId: input.targetId,
-      authoringContributions: input.authoringContributions,
-    });
+    const uncomposedNamespace = checkUncomposedNamespace(
+      attribute.name,
+      input.composedExtensions,
+      namespaceContext,
+    );
     if (uncomposedNamespace) {
-      reportUncomposedNamespace({
+      return uncomposedNamespaceDiagnostic({
         subjectLabel: `Attribute "@${attribute.name}"`,
         namespace: uncomposedNamespace,
-        source: diagnosticSource(input.sources, input.field.node.syntax),
+        source,
         span: attribute.span,
-        diagnostics: input.diagnostics,
       });
-      continue;
     }
 
-    const baseMessage = `Field "${input.model.name}.${input.field.name}" uses unsupported attribute "@${attribute.name}"`;
+    const baseMessage = `Field "${owner.name}.${field.name}" uses unsupported attribute "@${attribute.name}"`;
     const removedRule = REMOVED_ATTRIBUTE_RULES.get(attribute.name);
     const message =
-      removedRule && !removedRule.suppressWhen(input.field)
+      removedRule && !removedRule.suppressWhen(field)
         ? `${baseMessage}. ${removedRule.hint}`
         : baseMessage;
 
-    input.diagnostics.push({
+    return {
       code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
       message,
-      ...diagnosticSource(input.sources, input.field.node.syntax).at(attribute.span),
-    });
-  }
+      ...source.at(attribute.span),
+    };
+  };
 }
 
 function extractFieldConstraintNames(input: {
@@ -439,18 +461,6 @@ export function collectResolvedFields(input: CollectResolvedFieldsInput): Resolv
     if (field.list && isModelField) {
       continue;
     }
-
-    validateFieldAttributes({
-      model,
-      field,
-      composedExtensions,
-      authoringContributions,
-      diagnostics,
-      sources,
-      binder,
-      familyId,
-      targetId,
-    });
 
     const relationAttribute = getAttribute(field.attributes, 'relation');
     if (isModelField && relationAttribute) {

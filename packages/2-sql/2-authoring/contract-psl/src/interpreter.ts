@@ -94,12 +94,12 @@ import type { ColumnDescriptor } from './psl-column-resolution';
 import {
   checkUncomposedNamespace,
   getAuthoringEntity,
-  reportUncomposedNamespace,
   resolveFieldTypeDescriptor,
 } from './psl-column-resolution';
 import {
   buildModelMappings,
   collectResolvedFields,
+  describeUnsupportedSqlAttribute,
   type ModelNameMapping,
   type ModelNamespaceEntry,
   modelCoordinateKey,
@@ -884,30 +884,6 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
       !Object.hasOwn(sqlAttributeSpecs.model, modelAttribute.name) &&
       !input.modelAttributesByName.has(modelAttribute.name)
     ) {
-      const uncomposedNamespace = checkUncomposedNamespace(
-        modelAttribute.name,
-        input.composedExtensions,
-        {
-          familyId: input.familyId,
-          targetId: input.targetId,
-          authoringContributions: input.authoringContributions,
-        },
-      );
-      if (uncomposedNamespace) {
-        reportUncomposedNamespace({
-          subjectLabel: `Attribute "@@${modelAttribute.name}"`,
-          namespace: uncomposedNamespace,
-          source,
-          span: modelAttribute.span,
-          diagnostics,
-        });
-        continue;
-      }
-      diagnostics.push({
-        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
-        message: `Model "${model.name}" uses unsupported attribute "@@${modelAttribute.name}"`,
-        ...source.at(modelAttribute.span),
-      });
       continue;
     }
     if (modelAttribute.name === 'map') {
@@ -2081,14 +2057,23 @@ export function interpretPslDocumentToSqlContract(
 ): Result<Contract, ContractSourceDiagnostics> {
   const source = diagnosticSource(input.sources, input.document.syntax);
   const diagnostics = createPslDiagnosticCollector(input.sources);
+  const composedExtensionNames = new Set(input.composedExtensions ?? []);
+  const modelAttributesByName = buildModelAttributesByName(input.authoringContributions);
   const { binder, diagnostics: binderDiagnostics } = createSqlBinder({
     symbolTable: input.symbolTable,
     sources: input.sources,
     authoringContributions: input.authoringContributions,
     controlMutationDefaults: input.controlMutationDefaults,
     scalarColumnDescriptors: input.scalarColumnDescriptors,
+    describeUnsupportedAttribute: describeUnsupportedSqlAttribute({
+      composedExtensions: composedExtensionNames,
+      authoringContributions: input.authoringContributions,
+      sources: input.sources,
+      familyId: input.target?.familyId,
+      targetId: input.target?.targetId,
+      contributedModelAttributeNames: new Set(modelAttributesByName.keys()),
+    }),
   });
-  const composedExtensionNames = new Set(input.composedExtensions ?? []);
   diagnostics.push(
     ...binderDiagnostics.filter(
       (diagnostic) =>
@@ -2283,7 +2268,6 @@ export function interpretPslDocumentToSqlContract(
   // already-lowered extension entity — see `namespaceExtensionEntities`
   // threaded into `collectResolvedFields` below.
   const entityTypesByDiscriminator = buildEntityTypesByDiscriminator(input.authoringContributions);
-  const modelAttributesByName = buildModelAttributesByName(input.authoringContributions);
   // Warnings pushed by entity factories run ahead of
   // `buildSqlContractFromDefinition`; handed to the build via the definition
   // so its one per-build flush covers the whole build.

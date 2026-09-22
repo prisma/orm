@@ -9,6 +9,7 @@ import type {
   AttributeSpecContext,
   AttributeSpecNamespace,
   Binder,
+  DescribeUnsupportedAttribute,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
   FieldSymbol,
@@ -23,6 +24,7 @@ import type {
 import {
   bool,
   createBinder,
+  diagnosticSource,
   entityRef,
   fieldAttribute,
   fieldRef,
@@ -89,6 +91,33 @@ function buildFieldAttributeCtx(input: {
   };
 }
 
+const UNLOWERED_FIELD_ATTRIBUTE_HINTS: ReadonlyMap<string, string> = new Map([
+  [
+    'updatedAt',
+    'Mongo lowers no automatic timestamp updates; delete the attribute and set the timestamp in application code.',
+  ],
+]);
+
+function describeUnsupportedMongoAttribute(sources: PslSources): DescribeUnsupportedAttribute {
+  return ({ attribute, level, owner, field }) => {
+    if (level === 'model') {
+      return {
+        code: 'PSL_UNSUPPORTED_MODEL_ATTRIBUTE',
+        message: `Model "${owner.name}" uses unsupported attribute "@@${attribute.name}"`,
+        ...diagnosticSource(sources, owner.node.syntax).at(attribute.span),
+      };
+    }
+    if (field === undefined) return undefined;
+    const base = `Field "${owner.name}.${field.name}" uses unsupported attribute "@${attribute.name}"`;
+    const hint = UNLOWERED_FIELD_ATTRIBUTE_HINTS.get(attribute.name);
+    return {
+      code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
+      message: hint === undefined ? base : `${base}. ${hint}`,
+      ...diagnosticSource(sources, field.node.syntax).at(attribute.span),
+    };
+  };
+}
+
 export function createMongoBinder(input: {
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
@@ -106,6 +135,7 @@ export function createMongoBinder(input: {
     typeConstructors: { ...scalars, ...(input.authoringContributions?.type ?? {}) },
     attributeSpecs: mongoAttributeSpecs,
     controlMutationDefaults: input.controlMutationDefaults,
+    describeUnsupportedAttribute: describeUnsupportedMongoAttribute(input.sources),
   });
 }
 
