@@ -46,8 +46,9 @@ export interface ContractSourceContext {
   readonly controlMutationDefaults: ControlMutationDefaults;
   /**
    * The flat, expanded, deduped, sorted member file list — every
-   * `source.inputs` glob resolved to the files it currently matches. Not
-   * positionally matched to `source.inputs`.
+   * `source.inputs` glob resolved to the files it currently matches. A glob
+   * can expand to many files or none, so this list's length and order do
+   * not mirror `source.inputs` entry-for-entry.
    */
   readonly resolvedInputs: readonly string[];
   readonly capabilities: CapabilityMatrix;
