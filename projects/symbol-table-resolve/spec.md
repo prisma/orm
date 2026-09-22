@@ -39,9 +39,9 @@ function createBinder({ sources, symbolTable, typeConstructors, attributeSpecs }
 
   // PHASE 1: declarations + type references
   for (const scope of scopesOf(symbolTable))
-    for (const owner of [...scope.models, ...scope.compositeTypes]) {
-      declarations.set(owner.node.syntax, owner);
-      for (const field of owner.fields) {
+    for (const entity of [...scope.models, ...scope.compositeTypes]) {
+      declarations.set(entity.node.syntax, entity);
+      for (const field of entity.fields) {
         declarations.set(field.node.syntax, field);
         references.set(typeNode(field).syntax,
           resolveTypeRef(field, chain(scope, symbolTable.topLevel, contributedTypes)));
@@ -49,18 +49,18 @@ function createBinder({ sources, symbolTable, typeConstructors, attributeSpecs }
     }
 
   // PHASE 2: attribute references (reads phase-1 results; no cycle — type refs never need attribute refs)
-  for (const [scope, owner] of ownersOf(symbolTable)) {
-    for (const attr of owner.attributes) {            // ResolvedAttribute[] — args already parsed
+  for (const [scope, entity] of entitiesOf(symbolTable)) {
+    for (const attr of entity.attributes) {            // ResolvedAttribute[] — args already parsed
       const spec = specs.model(attr.name);
       references.set(attrNameNode(attr).syntax,
         spec ? { kind: 'attributeSpec', spec } : unknownAttribute(attr, diagnostics));
-      if (spec) bindArgs(attr, spec, { self: owner, scope });
+      if (spec) bindArgs(attr, spec, { self: entity, scope });
     }
-    for (const field of owner.fields)
+    for (const field of entity.fields)
       for (const attr of field.attributes) {
         const spec = specs.field(attr.name);
         const referencedModel = modelOf(references.get(typeNode(field).syntax)); // phase-1 map read
-        if (spec) bindArgs(attr, spec, { self: owner, field, referencedModel, scope });
+        if (spec) bindArgs(attr, spec, { self: entity, field, referencedModel, scope });
       }
   }
 
