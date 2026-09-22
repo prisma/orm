@@ -22,7 +22,7 @@ function build(source: string, pslBlockDescriptors: AuthoringPslBlockDescriptorN
   return buildSymbolTable({ documents: [document], sources, pslBlockDescriptors });
 }
 
-describe('buildSymbolTable() — AC1 fault tolerance', () => {
+describe('buildSymbolTable() — fault tolerance', () => {
   it('returns the symbol table under its explicit name without a table alias', () => {
     const result = build('model User { id Int }');
 

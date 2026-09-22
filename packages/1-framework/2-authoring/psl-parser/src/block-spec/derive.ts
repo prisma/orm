@@ -8,12 +8,13 @@ import { interpretExtensionBlock } from './interpret';
 
 /**
  * Re-derives the successful typed envelopes `buildSymbolTable` publishes,
- * from an already-collected table. A compatibility fallback for interpreter
- * callers that do not thread `SymbolTableResult.parsedBlocks` through
- * `PslInterpretInput` — the derivation keeps only successes, because
- * `buildSymbolTable` already reported every value and attribute failure.
- * Callers holding the lifecycle result must pass it through instead of
- * re-deriving.
+ * from an already-collected table. This is the supported path for direct
+ * interpreter callers that hold only a symbol table and do not thread
+ * `SymbolTableResult.parsedBlocks` through `PslInterpretInput`. It runs the
+ * same spec/interpret pipeline the lifecycle runs and keeps only successes,
+ * because `buildSymbolTable` already reported every value and attribute
+ * failure. Callers holding the lifecycle result must pass it through
+ * instead of re-deriving.
  */
 export function deriveParsedBlocks(
   symbolTable: SymbolTable,
