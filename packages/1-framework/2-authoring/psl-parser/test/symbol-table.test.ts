@@ -26,7 +26,7 @@ describe('buildSymbolTable() — AC1 fault tolerance', () => {
   it('returns the symbol table under its explicit name without a table alias', () => {
     const result = build('model User { id Int }');
 
-    expect(Object.keys(result).sort()).toEqual(['diagnostics', 'symbolTable']);
+    expect(Object.keys(result).sort()).toEqual(['diagnostics', 'parsedBlocks', 'symbolTable']);
     expect(Object.keys(result.symbolTable.topLevel.models)).toEqual(['User']);
   });
 
@@ -724,7 +724,11 @@ describe('buildSymbolTable() — block attributes parsed through the kit', () =>
       keyword: 'widget',
       discriminator: 'widget',
       name: { required: true },
-      spec: () => fixedBlock({ parameters: {} }),
+      spec: () =>
+        entriesBlock({
+          value: { type: jsonValue(), documentation: 'A widget property.' },
+          allowBare: true,
+        }),
       attributes: { map: () => mapSpec },
     },
   };

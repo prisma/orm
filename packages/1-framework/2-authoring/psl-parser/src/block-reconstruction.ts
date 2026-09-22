@@ -4,7 +4,6 @@ import type {
   PslExtensionBlockAttribute,
   PslExtensionBlockSourceEntry,
 } from '@internal/framework-components/psl-ast';
-import type { ParseDiagnostic } from './parse';
 import { nodePslSpan } from './resolve';
 import type { PslSources } from './source-file';
 import type { GenericBlockDeclarationAst } from './syntax/ast/declarations';
@@ -13,17 +12,15 @@ import { printSyntax } from './syntax/ast-helpers';
 /**
  * Reconstructs a block's source/print representation: ordered entries with
  * their expression text and spans, plus printable `@@` attribute lines.
- * Purely provenance — no descriptor-driven classification and no value
- * interpretation; typed values come from the block-spec interpreter.
- * Duplicate member names are first-wins.
+ * Purely provenance — no descriptor-driven classification, no value
+ * interpretation, and no diagnostics; the block-spec interpreter owns
+ * duplicate-entry reporting. Duplicate member names are first-wins.
  */
 export function reconstructExtensionBlock(
   node: GenericBlockDeclarationAst,
   descriptor: AuthoringPslBlockDescriptor | undefined,
   sources: PslSources,
-  diagnostics: ParseDiagnostic[],
 ): PslExtensionBlock {
-  const sourceFile = sources.sourceFileFor(node.syntax);
   const keyword = node.keyword()?.text ?? '';
   const blockName = node.name()?.name() ?? '';
 
@@ -48,18 +45,7 @@ export function reconstructExtensionBlock(
     const key = entry.key()?.name();
     if (key === undefined) continue;
     const span = nodePslSpan(entry.syntax, sources);
-    if (Object.hasOwn(parameters, key)) {
-      diagnostics.push({
-        filename: sourceFile.filename,
-        code: 'PSL_EXTENSION_DUPLICATE_PARAMETER',
-        message: `Duplicate parameter "${key}" in "${keyword}" block "${blockName}"; first occurrence wins`,
-        range: {
-          start: sourceFile.positionAt(entry.syntax.offset),
-          end: sourceFile.positionAt(entry.syntax.offset + entry.syntax.green.textLength),
-        },
-      });
-      continue;
-    }
+    if (Object.hasOwn(parameters, key)) continue;
     const value = entry.value();
     parameters[key] =
       value === undefined ? { span } : { expression: printSyntax(value.syntax).trim(), span };
