@@ -37,6 +37,7 @@ export interface LowerPrisma7DefaultInput {
   readonly field: FieldSymbol;
   readonly modelName: string;
   readonly codecId: string;
+  readonly typeParams: Readonly<Record<string, unknown>> | undefined;
   readonly codecLookup: CodecLookup;
   readonly literalForm: Prisma7LiteralDefaultForm | undefined;
   /** Storage value per member name when the field is typed by a Prisma 7 enum. */
@@ -164,7 +165,7 @@ function scalarValue(
   const read = readDataTypeDefault({
     written,
     isList: input.field.list,
-    column: { codecId: input.codecId },
+    column: { codecId: input.codecId, typeParams: input.typeParams },
     codecLookup: input.codecLookup,
     support: input.dataTypeSupport,
     fieldPath: `${input.modelName}.${input.field.name}`,

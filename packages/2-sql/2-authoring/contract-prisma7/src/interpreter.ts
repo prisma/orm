@@ -1081,6 +1081,7 @@ function readField(args: ReadFieldArgs): void {
           field,
           modelName: model.symbol.name,
           codecId: resolved.descriptor.codecId,
+          typeParams: resolved.descriptor.typeParams,
           codecLookup: input.codecLookup,
           dataTypeSupport: {
             entries: input.authoringContributions?.dataTypes ?? {},
