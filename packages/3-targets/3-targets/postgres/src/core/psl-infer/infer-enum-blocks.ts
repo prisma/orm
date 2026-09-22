@@ -84,6 +84,37 @@ export function buildNativeEnumBlocks(
 }
 
 /**
+ * Member names for a value list: sanitized, deduplicated within the block, in
+ * value order. One derivation serves the block builders and the field-level
+ * `@default(<member>)` emission, so a member's printed name and the name a
+ * default references can never diverge.
+ */
+export function deriveEnumMembers(
+  values: readonly string[],
+): readonly { readonly name: string; readonly value: string }[] {
+  const usedMemberNames = new Set<string>();
+  return values.map((value) => {
+    const name = createUniqueFieldName(toEnumMemberName(value), usedMemberNames);
+    usedMemberNames.add(name);
+    return { name, value };
+  });
+}
+
+function buildEnumMemberParameters(
+  values: readonly string[],
+): Record<string, PslExtensionBlockParamValue> {
+  const parameters: Record<string, PslExtensionBlockParamValue> = {};
+  for (const member of deriveEnumMembers(values)) {
+    parameters[member.name] = {
+      kind: 'value',
+      raw: JSON.stringify(member.value),
+      span: SYNTHETIC_SPAN,
+    };
+  }
+  return parameters;
+}
+
+/**
  * Builds the family `enum` extension-block AST node for a recovered domain
  * enum. Members print as `<sanitizedName> = "<value>"` pairs (names
  * deduplicated within the block, values JSON-encoded verbatim) and the block
@@ -95,19 +126,11 @@ export function buildRecoveredEnumBlock(
   memberValues: readonly string[],
   codecId: string,
 ): PslExtensionBlock {
-  const usedMemberNames = new Set<string>();
-  const parameters: Record<string, PslExtensionBlockParamValue> = {};
-  for (const value of memberValues) {
-    const memberName = createUniqueFieldName(toEnumMemberName(value), usedMemberNames);
-    usedMemberNames.add(memberName);
-    parameters[memberName] = { kind: 'value', raw: JSON.stringify(value), span: SYNTHETIC_SPAN };
-  }
-
   return {
     kind: 'enum',
     keyword: 'enum',
     name,
-    parameters,
+    parameters: buildEnumMemberParameters(memberValues),
     blockAttributes: [
       {
         name: 'type',
@@ -131,19 +154,11 @@ function buildNativeEnumBlock(
   typeName: string,
   values: readonly string[],
 ): PslExtensionBlock {
-  const usedMemberNames = new Set<string>();
-  const parameters: Record<string, PslExtensionBlockParamValue> = {};
-  for (const value of values) {
-    const memberName = createUniqueFieldName(toEnumMemberName(value), usedMemberNames);
-    usedMemberNames.add(memberName);
-    parameters[memberName] = { kind: 'value', raw: JSON.stringify(value), span: SYNTHETIC_SPAN };
-  }
-
   return {
     kind: 'native_enum',
     keyword: 'native_enum',
     name,
-    parameters,
+    parameters: buildEnumMemberParameters(values),
     blockAttributes:
       name === typeName
         ? []

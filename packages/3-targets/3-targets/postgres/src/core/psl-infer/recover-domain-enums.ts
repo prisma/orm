@@ -4,9 +4,10 @@ import {
   formatWireName,
   parseWireName,
 } from '@internal/sql-schema-ir/naming';
-import type { SqlTableIR } from '@internal/sql-schema-ir/types';
+import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { postgresRenderCheckExpressions } from '../check-expressions';
 import { PG_CHAR_CODEC_ID, PG_TEXT_CODEC_ID, PG_VARCHAR_CODEC_ID } from '../codec-ids';
+import { parsePostgresDefault } from '../default-normalizer';
 import { harvestCheckLiterals } from './harvest-check-literals';
 
 /** A column proven to carry a toolchain-derived membership check. */
@@ -37,6 +38,23 @@ function recoveredEnumCodecId(nativeType: string): string | undefined {
   return Object.hasOwn(RECOVERABLE_NATIVE_TYPE_CODECS, nativeType)
     ? RECOVERABLE_NATIVE_TYPE_CODECS[nativeType]
     : undefined;
+}
+
+/**
+ * An enum-typed field's `@default` must be a bare member identifier — the
+ * interpreter rejects a string literal there — so a recovered column's
+ * default must be a literal member value. Any other default blocks recovery
+ * and the column keeps today's proven form: scalar type, `@@check`, and the
+ * default printed as-is.
+ */
+function defaultIsRepresentable(column: SqlColumnIR, memberValues: readonly string[]): boolean {
+  if (column.default === undefined) return true;
+  const parsed = parsePostgresDefault(column.default, column.nativeType);
+  return (
+    parsed?.kind === 'literal' &&
+    typeof parsed.value === 'string' &&
+    memberValues.includes(parsed.value)
+  );
 }
 
 /**
@@ -82,6 +100,7 @@ export function recoverDomainEnumColumns(
         if (derivedName !== check.name) continue;
         const codecId = recoveredEnumCodecId(column.nativeType);
         if (codecId === undefined) continue;
+        if (!defaultIsRepresentable(column, memberValues)) continue;
         recovered.set(column.name, { memberValues, codecId });
       }
     }

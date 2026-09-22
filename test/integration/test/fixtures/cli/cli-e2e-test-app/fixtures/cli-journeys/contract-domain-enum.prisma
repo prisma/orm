@@ -1,7 +1,8 @@
-// use prisma-next
+// use prisma-8
 
 // Member order is deliberately non-alphabetical: the round-trip must return
-// the authored order, not a sorted one.
+// the authored order, not a sorted one. The default must survive the round
+// trip as the bare member identifier.
 enum AccountsRole {
   user  = "user"
   admin = "admin"
@@ -17,7 +18,7 @@ namespace public {
 
   model Accounts {
     id   Int @id
-    role AccountsRole
+    role AccountsRole @default(user)
     aal  pg.enum(AalLevel)?
 
     @@map("accounts")

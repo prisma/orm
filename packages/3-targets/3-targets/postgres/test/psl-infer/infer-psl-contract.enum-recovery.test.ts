@@ -21,6 +21,7 @@ import {
   composeCheckWirePrefix,
   computeCheckContentHash,
   formatWireName,
+  parseNaming,
 } from '@internal/sql-schema-ir/naming';
 import type { SqlCheckConstraintIRInput, SqlColumnIRInput } from '@internal/sql-schema-ir/types';
 import { assert, describe, expect, it } from 'vitest';
@@ -34,6 +35,7 @@ import { inferPostgresPslContract } from '../../src/core/psl-infer/infer-psl-con
 import { PostgresDatabaseSchemaNode } from '../../src/core/schema-ir/postgres-database-schema-node';
 import { PostgresNamespaceSchemaNode } from '../../src/core/schema-ir/postgres-namespace-schema-node';
 import { PostgresNativeEnumSchemaNode } from '../../src/core/schema-ir/postgres-native-enum-schema-node';
+import { PostgresPolicySchemaNode } from '../../src/core/schema-ir/postgres-policy-schema-node';
 import { PostgresTableSchemaNode } from '../../src/core/schema-ir/postgres-table-schema-node';
 
 // ---------------------------------------------------------------------------
@@ -415,6 +417,181 @@ describe('Path A recovery — char scalar', () => {
                 false,
                 ['open', 'closed'],
                 `((status)::text = ANY ((ARRAY['open'::character varying, 'closed'::character varying])::text[]))`,
+              ),
+            ],
+          ),
+        }),
+      }),
+    );
+
+    expect(output).not.toContain('enum ');
+    expect(output).toContain('@@check');
+  });
+});
+
+describe('Path A recovery — alongside an RLS policy', () => {
+  // A policy triggers the same namespace wrap a native enum does, and policy
+  // emission runs after recovery so policies rename around recovered names.
+  // The project done condition: the namespace-wrap conflict is resolved, not
+  // avoided — the recovered enum prints in the flat top-level bucket while
+  // the policy and the `@@rls` model stay inside the named wrap.
+  it('the recovered enum prints top-level while the policy stays inside the namespace wrap', () => {
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode('public', {
+          accounts: new PostgresTableSchemaNode({
+            name: 'accounts',
+            columns: {
+              id: idColumn,
+              role: { name: 'role', nativeType: 'text', nullable: false },
+            },
+            primaryKey: { columns: ['id'] },
+            foreignKeys: [],
+            uniques: [],
+            indexes: [],
+            checks: [
+              membershipCheck(
+                'accounts',
+                'role',
+                false,
+                ['user', 'admin'],
+                `(role = ANY (ARRAY['user'::text, 'admin'::text]))`,
+              ),
+            ],
+            policies: [
+              new PostgresPolicySchemaNode({
+                naming: parseNaming('p_read', undefined),
+                tableName: 'accounts',
+                namespaceId: 'public',
+                operation: 'select',
+                roles: ['app_user'],
+                using: 'true',
+                withCheck: undefined,
+                permissive: true,
+                dependsOn: undefined,
+              }),
+            ],
+            rlsEnabled: true,
+          }),
+        }),
+      }),
+    );
+
+    expect(output).toContain('enum AccountsRole {');
+    expect(output).toMatch(/role\s+AccountsRole\n/);
+    expect(output).not.toContain('@@check');
+    expect(output).toContain('policy_select p_read {');
+    expect(output).toContain('@@rls');
+
+    const namespaceStart = output.indexOf('namespace public {');
+    expect(namespaceStart, 'the policy forces a namespace wrap').toBeGreaterThan(0);
+    expect(
+      output.indexOf('enum AccountsRole {'),
+      'the recovered enum prints in the flat bucket, before the wrap',
+    ).toBeLessThan(namespaceStart);
+    expect(
+      output.indexOf('policy_select p_read {'),
+      'the policy prints inside the wrap',
+    ).toBeGreaterThan(namespaceStart);
+  });
+});
+
+describe('Path A recovery — column defaults', () => {
+  // The PSL interpreter accepts only a bare member identifier as an enum
+  // field's `@default` — `@default("user")` is rejected — so a recovered
+  // column's default must print as the member, and a default that is not a
+  // member value must block recovery entirely.
+  it('a member-valued default prints as the bare member identifier', () => {
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode('public', {
+          accounts: table(
+            'accounts',
+            {
+              id: idColumn,
+              role: {
+                name: 'role',
+                nativeType: 'text',
+                nullable: false,
+                default: `'user'::text`,
+              },
+            },
+            [
+              membershipCheck(
+                'accounts',
+                'role',
+                false,
+                ['user', 'admin'],
+                `(role = ANY (ARRAY['user'::text, 'admin'::text]))`,
+              ),
+            ],
+          ),
+        }),
+      }),
+    );
+
+    expect(output).toContain('enum AccountsRole {');
+    expect(output).toMatch(/role\s+AccountsRole\s+@default\(user\)/);
+    expect(output).not.toContain('@default("user")');
+    expect(output).not.toContain('@@check');
+  });
+
+  it('a default outside the member set blocks recovery; the column keeps its check and default', () => {
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode('public', {
+          accounts: table(
+            'accounts',
+            {
+              id: idColumn,
+              role: {
+                name: 'role',
+                nativeType: 'text',
+                nullable: false,
+                default: `'guest'::text`,
+              },
+            },
+            [
+              membershipCheck(
+                'accounts',
+                'role',
+                false,
+                ['user', 'admin'],
+                `(role = ANY (ARRAY['user'::text, 'admin'::text]))`,
+              ),
+            ],
+          ),
+        }),
+      }),
+    );
+
+    expect(output).not.toContain('enum ');
+    expect(output).toMatch(/role\s+String\s+@default\("guest"\)/);
+    expect(output).toContain('@@check');
+  });
+
+  it('a non-literal default blocks recovery', () => {
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode('public', {
+          accounts: table(
+            'accounts',
+            {
+              id: idColumn,
+              role: {
+                name: 'role',
+                nativeType: 'text',
+                nullable: false,
+                default: `lower('USER'::text)`,
+              },
+            },
+            [
+              membershipCheck(
+                'accounts',
+                'role',
+                false,
+                ['user', 'admin'],
+                `(role = ANY (ARRAY['user'::text, 'admin'::text]))`,
               ),
             ],
           ),
@@ -848,7 +1025,12 @@ describe('recovered output re-parses and re-interprets without diagnostics', () 
             'accounts',
             {
               id: idColumn,
-              role: { name: 'role', nativeType: 'text', nullable: false },
+              role: {
+                name: 'role',
+                nativeType: 'text',
+                nullable: false,
+                default: `'user'::text`,
+              },
             },
             [
               membershipCheck(

@@ -20,8 +20,10 @@ import {
   formatWireName,
 } from '@internal/sql-schema-ir/naming';
 import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
+import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresRenderCheckExpressions } from '../check-expressions';
+import { deriveEnumMembers } from './infer-enum-blocks';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import {
   buildCheckAttribute,
@@ -310,12 +312,17 @@ function buildScalarField(
     attributes.push(buildSimpleConstraintFieldAttribute('id', singlePkConstraintName));
   }
 
-  const defaultAttribute = inferDefaultAttribute(
-    column,
-    enumPslName === undefined ? pslDefaultValueFormat(resolution.pslType.name) : formatPslValue,
-    defaultMapping,
-    rawDefaultParser,
-  );
+  const defaultAttribute =
+    recoveredEnum === undefined
+      ? inferDefaultAttribute(
+          column,
+          enumPslName === undefined
+            ? pslDefaultValueFormat(resolution.pslType.name)
+            : formatPslValue,
+          defaultMapping,
+          rawDefaultParser,
+        )
+      : recoveredEnumDefaultAttribute(column, recoveredEnum.memberValues, rawDefaultParser);
   if (defaultAttribute !== undefined) {
     attributes.push(parseDefaultAttributeString(defaultAttribute));
   }
@@ -406,6 +413,26 @@ function inferDefaultAttribute(
     return literalOrRawAttribute(valueFormat(parsed.value), column, defaultMapping);
   }
   return mappedAttribute(parsed, defaultMapping);
+}
+
+/**
+ * Recovery only fires when the column's default (if any) is a literal member
+ * value, so the lookups below always land; the member name is the identifier
+ * the enum block prints for that value.
+ */
+function recoveredEnumDefaultAttribute(
+  column: SqlColumnIR,
+  memberValues: readonly string[],
+  rawDefaultParser: PslPrinterOptions['parseRawDefault'],
+): string | undefined {
+  if (column.default === undefined) return undefined;
+  const parsed = parseColumnDefault(column.default, column.nativeType, rawDefaultParser);
+  const member =
+    parsed?.kind === 'literal'
+      ? deriveEnumMembers(memberValues).find((m) => m.value === parsed.value)
+      : undefined;
+  assertDefined(member, 'a recovered column default must be a member value');
+  return `@default(${member.name})`;
 }
 
 function literalOrRawAttribute(

@@ -57,7 +57,9 @@ withTempDir(({ createTempDir }) => {
 
         expect(psl, 'the enum comes back under its derived name').toContain('enum AccountsRole {');
         expect(psl).toContain('@@type("pg/text@1")');
-        expect(psl, 'the column is typed by the recovered enum').toMatch(/role\s+AccountsRole\n/);
+        expect(psl, 'the column is typed by the recovered enum and keeps its default').toMatch(
+          /role\s+AccountsRole\s+@default\(user\)/,
+        );
         expect(psl, 'the proven check emits neither @@check nor @noCheck').not.toContain('@@check');
         expect(psl).not.toContain('@noCheck');
         expect(
