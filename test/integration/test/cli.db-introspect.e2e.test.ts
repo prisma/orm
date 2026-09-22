@@ -129,7 +129,7 @@ model User {
   id    Int     @id(map: "user_pkey") @default(autoincrement())
   email String
   name  String?
-  token Uuid    @default(dbgenerated("gen_random_uuid()"))
+  token Uuid    @default(sql\`gen_random_uuid()\`)
 
   @@map("user")
 }

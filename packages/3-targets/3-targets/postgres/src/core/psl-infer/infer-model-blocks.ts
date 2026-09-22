@@ -342,8 +342,7 @@ function buildScalarField(
 
 /**
  * A literal default prints as the PSL literal the column's data type takes. A literal that has no
- * such PSL literal prints as `dbgenerated(...)` with the expression Postgres reported: `contract
- * emit` accepts that on a scalar column and rejects it at the field on a list column.
+ * such PSL literal prints as a `sql` tagged literal holding the expression Postgres reported.
  */
 function inferDefaultAttribute(
   column: SqlColumnIR,
@@ -393,21 +392,19 @@ function literalOrRawAttribute(
 ): string | undefined {
   const result =
     columnDefault.kind === 'literal' && !readsBack(columnDefault.value)
-      ? { comment: '' }
+      ? undefined
       : mapDefault(columnDefault, defaultMapping);
-  if ('attribute' in result) return result.attribute;
+  if (result !== undefined) return result.attribute;
   return typeof column.default === 'string'
     ? mappedAttribute({ kind: 'function', expression: column.default }, defaultMapping)
     : undefined;
 }
 
-/** A default the mapping can only describe in a comment is dropped: a field AST node has no comment. */
 function mappedAttribute(
   columnDefault: ColumnDefault,
   defaultMapping: DefaultMappingOptions | undefined,
 ): string | undefined {
-  const result = mapDefault(columnDefault, defaultMapping);
-  return 'attribute' in result ? result.attribute : undefined;
+  return mapDefault(columnDefault, defaultMapping)?.attribute;
 }
 
 export function buildRelationField(
