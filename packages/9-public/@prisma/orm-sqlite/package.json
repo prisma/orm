@@ -20,7 +20,8 @@
     "@prisma/orm-framework": "workspace:8.0.0-rc.11",
     "@prisma/orm-target-sqlite": "workspace:8.0.0-rc.11",
     "@prisma/orm-toolchain": "workspace:8.0.0-rc.11",
-    "pathe": "^2.0.3"
+    "pathe": "^2.0.3",
+    "tinyglobby": "catalog:"
   },
   "devDependencies": {
     "@internal/sqlite": "workspace:8.0.0-rc.11",

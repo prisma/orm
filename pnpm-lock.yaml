@@ -4831,6 +4831,9 @@ importers:
       pluralize:
         specifier: ^8.0.0
         version: 8.0.0
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
       ts-toolbelt:
         specifier: ^9.6.0
         version: 9.6.0
@@ -4974,6 +4977,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/mongo':
         specifier: workspace:8.0.0-rc.11
@@ -5017,6 +5023,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/postgres':
         specifier: workspace:8.0.0-rc.11
@@ -5057,6 +5066,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/sqlite':
         specifier: workspace:8.0.0-rc.11
