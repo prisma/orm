@@ -245,6 +245,30 @@ A Mongo model's collection attachment is wrong: the model declares `indexes`, `c
 
 A model declares an empty unique constraint (a unique with no fields), raised during SQL contract lowering (meta: `modelName`). Also raised when a CHECK constraint reaches SQLite migration DDL rendering: the SQLite target does not support CHECK constraints, and `sql.checkConstraint` is a Postgres-only capability. A `@@check` is refused earlier, by the PSL capability gate; a `check()` declared through the TypeScript builder is not, because capabilities reach the contract only after it is built, so this is where a SQLite `check()` is refused (meta: `constraintName`, and `tableName` where available).
 
+### CONTRACT.DATA_TYPE_DUPLICATE
+
+Two components in the composed stack register the same data type id, which has exactly one owner. Raised while assembling the stack's data types. Payload: `dataType`, `contributedBy`, `owner`.
+
+### CONTRACT.DATA_TYPE_ENTRY_DUPLICATE
+
+Two components contribute an authoring entry under the same key, so the stack cannot tell which one reads that data type's written form. Raised while merging authoring contributions. Payload: `key`, `contributedBy`, `owner`.
+
+### CONTRACT.DATA_TYPE_ID_INVALID
+
+A string given where a data type id belongs is not `owner/name` in lower case, or carries a version (a versioned id names a codec, not a data type). Raised by `dataTypeId()` while declaring a data type or a cast. Payload: `id`.
+
+### CONTRACT.DATA_TYPE_NOT_WRITABLE
+
+A data type declares a cast from a type no contract source can write, so the cast could never be exercised. Raised while checking the assembled data types. Payload: `dataType`, `source`, `contributedBy`.
+
+### CONTRACT.DATA_TYPE_UNREGISTERED
+
+Something names a data type that no component in the stack registers: a codec's `dataType`, an authoring entry's key, a type its number classifier returns, or a type a cast takes values of. Raised while checking the assembled data types. Payload: `dataType`, `contributedBy`.
+
+### CONTRACT.DATA_TYPE_WRITTEN_FORM_DUPLICATE
+
+Two authoring entries claim the same written form — the same literal tag, or the same plain string, boolean, or number syntax — so a written default would have two readers. Raised while checking the assembled data types. Payload: `claim`, `key`, `contributedBy`, `owner`, `ownerContributedBy`.
+
 ### CONTRACT.DEFAULT_INVALID
 
 A field's default declaration is invalid: `defaultSql` is used on an enum field, a field declares both `default` and `executionDefaults`, or a field is nullable while carrying `executionDefaults`. Raised while authoring/building a SQL contract. Payload: `modelName`, `fieldName`, `reason`. Also raised by the Postgres adapter's DDL renderer when a hand-authored `col(...)` pairs an `autoincrement()` default with a type that isn't `SERIAL`/`BIGSERIAL`/`SMALLSERIAL` (or their `SERIAL4`/`SERIAL8`/`SERIAL2` aliases). Meta in that case: `nativeType`. Also raised by the TypeScript `sql` template tag when the body cannot be canonicalized, with the same message as the PSL diagnostics `PSL_TAGGED_LITERAL_NUL` and `PSL_TAGGED_LITERAL_TOO_LARGE` (meta: `reason`, `offset`) or is exactly `now()` or `autoincrement()` (`` Write .default(now()) instead of sql`now()`; now() is a Prisma default function, not raw SQL. ``; meta: `reason: 'reserved-function'`, `expression`), or fails the SQL body check (`Default SQL must not contain semicolons, SQL comment tokens, dollar-quoting, or subqueries.`; meta: `reason: 'unsafe-sql'`, `expression`), and by both the Postgres and SQLite migration planners when a function default in the contract fails that same check at DDL time (meta: `expression`).
@@ -304,6 +328,14 @@ A Mongo variant model declares an index that conflicts with the discriminator sc
 ### CONTRACT.INTROSPECTION_UNSUPPORTED
 
 Introspection read an unrecognized or malformed database shape: an unknown referential action rule, or a malformed index reloption entry. Raised by the Postgres and SQLite control adapters. Payload: `rule`, `entry`, `indexName`.
+
+### CONTRACT.INVALID_DEFAULT_LITERAL
+
+A written column default is not a value of the column's data type: the text is not a number, boolean, or byte string the type reads, or its magnitude is outside the range the type stores. Raised by a target's or extension's casts and authoring entries while reading a default. Contract sources report it to the author as the PSL diagnostic `PSL_INVALID_DEFAULT_LITERAL`. Payload: `why`, `fix`.
+
+### CONTRACT.INVALID_JSON_LITERAL
+
+The body of a JSON default is not a JSON document, or holds a number outside the range a JSON number holds (`JSON.parse` reads such a numeral as `Infinity`, which `JSON.stringify` writes back as `null`). Raised while canonicalizing a JSON default body. Contract sources report it to the author as the PSL diagnostic `PSL_INVALID_JSON_LITERAL`. Payload: `why`, `fix`.
 
 ### CONTRACT.MARKER_MISMATCH
 
