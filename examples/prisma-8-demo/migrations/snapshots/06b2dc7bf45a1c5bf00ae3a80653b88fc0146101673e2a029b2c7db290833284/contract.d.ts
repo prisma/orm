@@ -1389,7 +1389,6 @@ type ContractBase = Omit<
         readonly aggregateDescriptors: readonly [
           {
             readonly input: { readonly kind: 'trait'; readonly trait: 'numeric' };
-            readonly lower: unknown;
             readonly nullable: true;
             readonly operation: 'stddev';
             readonly output: { readonly codecId: 'pg/numeric@1'; readonly kind: 'codec' };

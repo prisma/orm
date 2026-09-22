@@ -866,6 +866,13 @@
               ],
               "indexes": [
                 {
+                  "expression": "to_tsvector('english', \"title\")",
+                  "name": "post_title_search_724b05e5",
+                  "prefix": "post_title_search",
+                  "type": "gin",
+                  "unique": false
+                },
+                {
                   "columns": [
                     "userId"
                   ],
@@ -1145,7 +1152,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "62d81d607d929760f7d740b45bb97acc1dba361363c4851b19ee5a1cb4fecbe3",
+    "storageHash": "06b2dc7bf45a1c5bf00ae3a80653b88fc0146101673e2a029b2c7db290833284",
     "types": {
       "Embedding1536": {
         "codecId": "pg/vector@1",

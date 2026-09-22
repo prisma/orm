@@ -65,6 +65,7 @@ model Post {
   user User  @relation(fields: [userId], references: [id])
   tags Tag[]
 
+  @@fullTextIndex([title], name: "post_title_search")
   @@map("post")
 }
 
