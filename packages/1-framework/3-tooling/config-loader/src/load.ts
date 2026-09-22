@@ -99,7 +99,15 @@ function collectArtifactCollisionDiagnostics(
   return [];
 }
 
-function buildLoadedConfig(rawConfig: Record<string, unknown>, configDir: string): LoadedConfig {
+/**
+ * Validates a raw `orm` section and resolves its paths against `configDir`, the way a loaded config
+ * file is. A caller that builds the section in memory gets the same diagnostics as one that wrote
+ * it to `prisma.config.ts`.
+ */
+export function buildLoadedConfig(
+  rawConfig: Record<string, unknown>,
+  configDir: string,
+): LoadedConfig {
   const issues = collectConfigIssues(rawConfig);
   const diagnostics = issues.map((issue) =>
     errorConfigValidation(issue.field, { why: issue.message, section: issue.section }),
@@ -154,15 +162,6 @@ function toConfigLoadFailure(error: unknown, configPath?: string): CliStructured
 }
 
 /**
- * Loads and finalizes the Prisma 8 config.
- *
- * Failures that prevent evaluation entirely — missing file, module that does
- * not evaluate (`CONFIG.FILE_NOT_FOUND`, `CONFIG.EVALUATION_FAILED`) — are the
- * `Result` failure. Structural problems inside an evaluated config do not
- * fail the load: they are returned as section-tagged diagnostics so commands
- * fail only on the sections they read (via {@link requireConfigSections}).
- */
-/**
  * c12 is resolved to its real on-disk entry before importing: jiti (inside
  * c12) resolves its own transitive imports from the importing file's location,
  * and a symlinked install (pnpm) would otherwise anchor them somewhere the
@@ -174,15 +173,22 @@ async function importC12(): Promise<typeof import('c12')> {
   return await import(pathToFileURL(entry).href);
 }
 
-export async function loadConfig(
-  configPath?: string,
-  options?: { readonly cwd?: string },
-): Promise<Result<LoadedConfig, CliStructuredError>> {
-  const cwd = options?.cwd ?? process.cwd();
+type C12Result = Awaited<ReturnType<typeof import('c12').loadConfig<Record<string, unknown>>>>;
+
+/**
+ * Runs c12 against one config path. Every throw out of evaluation becomes a
+ * `CONFIG.EVALUATION_FAILED` and a requested path c12 did not resolve to becomes
+ * `CONFIG.FILE_NOT_FOUND`, so both loaders report the same failures for the
+ * same file.
+ */
+async function evaluateWithC12(
+  configPath: string | undefined,
+  cwd: string,
+): Promise<Result<C12Result, CliStructuredError>> {
   const resolvedConfigPath = configPath ? resolve(cwd, configPath) : undefined;
   const configCwd = resolvedConfigPath ? dirname(resolvedConfigPath) : cwd;
 
-  let result: Awaited<ReturnType<typeof import('c12').loadConfig<Record<string, unknown>>>>;
+  let result: C12Result;
   try {
     const c12 = await importC12();
     result = await c12.loadConfig<Record<string, unknown>>({
@@ -197,6 +203,56 @@ export async function loadConfig(
   if (resolvedConfigPath && result.configFile !== resolvedConfigPath) {
     return notOk(errorConfigFileNotFound(resolvedConfigPath));
   }
+  return ok(result);
+}
+
+/**
+ * The raw default export of the module at `configPath`, evaluated exactly as
+ * {@link loadConfig} evaluates it and returned without validation, finalization,
+ * or the version-marker check. The caller decides what the export means — a
+ * default export without the `$prismaConfig` marker is what an earlier Prisma
+ * CLI's config looks like.
+ */
+export async function evaluateConfigModule(
+  configPath: string,
+  options?: { readonly cwd?: string },
+): Promise<Result<unknown, CliStructuredError>> {
+  const cwd = options?.cwd ?? process.cwd();
+  const resolvedConfigPath = resolve(cwd, configPath);
+  if (!(await fileExists(resolvedConfigPath))) {
+    return notOk(errorConfigFileNotFound(resolvedConfigPath));
+  }
+  const evaluated = await evaluateWithC12(resolvedConfigPath, cwd);
+  if (!evaluated.ok) {
+    return evaluated;
+  }
+  /* v8 ignore next -- c12 always returns layers for a config it evaluated */
+  const [requestedLayer] = evaluated.value.layers ?? [];
+  return ok(requestedLayer?.config);
+}
+
+/**
+ * Loads and finalizes the Prisma 8 config.
+ *
+ * Failures that prevent evaluation entirely — missing file, module that does
+ * not evaluate (`CONFIG.FILE_NOT_FOUND`, `CONFIG.EVALUATION_FAILED`) — are the
+ * `Result` failure. Structural problems inside an evaluated config do not
+ * fail the load: they are returned as section-tagged diagnostics so commands
+ * fail only on the sections they read (via {@link requireConfigSections}).
+ */
+export async function loadConfig(
+  configPath?: string,
+  options?: { readonly cwd?: string },
+): Promise<Result<LoadedConfig, CliStructuredError>> {
+  const cwd = options?.cwd ?? process.cwd();
+  const resolvedConfigPath = configPath ? resolve(cwd, configPath) : undefined;
+  const configCwd = resolvedConfigPath ? dirname(resolvedConfigPath) : cwd;
+
+  const evaluated = await evaluateWithC12(configPath, cwd);
+  if (!evaluated.ok) {
+    return evaluated;
+  }
+  const result = evaluated.value;
 
   if (!result.config || Object.keys(result.config).length === 0) {
     /* v8 ignore next -- @preserve */

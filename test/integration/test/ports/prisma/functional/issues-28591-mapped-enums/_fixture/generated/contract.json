@@ -91,8 +91,8 @@
                 "status": {
                   "codecId": "pg/enum@1",
                   "default": {
-                    "expression": "'pending'::\"SuggestionStatus\"",
-                    "kind": "function"
+                    "kind": "literal",
+                    "value": "pending"
                   },
                   "nativeType": "SuggestionStatus",
                   "nullable": false,
@@ -146,7 +146,7 @@
         "kind": "postgres-schema"
       }
     },
-    "storageHash": "41a650586fb8b2a3824d1e312ceb5f8121b8813d89eca0cca22129431018da35"
+    "storageHash": "7a706426f8b3a52aab31a0c737d6d6152213188d04afbb4ca086f83aff879557"
   },
   "capabilities": {
     "postgres": {

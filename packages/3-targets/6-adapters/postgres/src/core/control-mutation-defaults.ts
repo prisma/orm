@@ -10,28 +10,12 @@ import type {
 } from '@internal/framework-components/control';
 import { builtinGeneratorRegistryMetadata } from '@internal/ids';
 import type { FuncCallSig } from '@internal/psl-parser';
-import { int, num, oneOf, optional, str } from '@internal/psl-parser';
+import { int, num, oneOf, optional } from '@internal/psl-parser';
 import { PG_TIMESTAMPTZ_DATE_CODEC_ID } from '@internal/target-postgres/codec-ids';
 import {
   instantNowControlDescriptor,
   plainDateTimeNowControlDescriptor,
 } from '@internal/target-postgres/control';
-
-function invalidArgumentDiagnostic(input: {
-  readonly context: DefaultFunctionLoweringContext;
-  readonly span: TypedDefaultFunctionCall['span'];
-  readonly message: string;
-}): LoweredDefaultResult {
-  return {
-    ok: false,
-    diagnostic: {
-      code: 'PSL_INVALID_DEFAULT_FUNCTION_ARGUMENT',
-      message: input.message,
-      sourceId: input.context.sourceId,
-      span: input.span,
-    },
-  };
-}
 
 function executionGenerator(
   id: ExecutionMutationDefaultValue['id'],
@@ -97,27 +81,6 @@ function lowerNanoid(input: {
     : executionGenerator('nanoid');
 }
 
-function lowerDbgenerated(input: {
-  readonly call: TypedDefaultFunctionCall;
-  readonly context: DefaultFunctionLoweringContext;
-}): LoweredDefaultResult {
-  const expression = input.call.args['expression'];
-  if (typeof expression !== 'string' || expression.trim().length === 0) {
-    return invalidArgumentDiagnostic({
-      context: input.context,
-      span: input.call.span,
-      message: 'Default function "dbgenerated" argument cannot be empty.',
-    });
-  }
-  return {
-    ok: true,
-    value: {
-      kind: 'storage',
-      defaultValue: { kind: 'function', expression },
-    },
-  };
-}
-
 const nowSig: FuncCallSig = {
   documentation: 'Uses the current database timestamp as the default value.',
 };
@@ -152,17 +115,6 @@ const nanoidSig: FuncCallSig = {
     },
   ],
 };
-const dbgeneratedSig: FuncCallSig = {
-  documentation: 'Uses a database SQL expression as the default value.',
-  positional: [
-    {
-      key: 'expression',
-      type: str(),
-      documentation: 'The nonempty SQL expression evaluated by the database.',
-    },
-  ],
-};
-
 const postgresDefaultFunctionRegistryEntries = [
   [
     'autoincrement',
@@ -182,10 +134,6 @@ const postgresDefaultFunctionRegistryEntries = [
   [
     'nanoid',
     { signature: nanoidSig, lower: lowerNanoid, usageSignatures: ['nanoid()', 'nanoid(<2-255>)'] },
-  ],
-  [
-    'dbgenerated',
-    { signature: dbgeneratedSig, lower: lowerDbgenerated, usageSignatures: ['dbgenerated("...")'] },
   ],
 ] satisfies ReadonlyArray<readonly [string, ControlMutationDefaultEntry]>;
 

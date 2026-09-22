@@ -101,6 +101,7 @@ import {
   PG_TEXT_ARRAY_CODEC_ID,
   PG_TEXT_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
+  PG_TSQUERY_CODEC_ID,
   PG_UNBOUNDED_INT_CODEC_ID,
   PG_UUID_CODEC_ID,
   PG_VARBIT_CODEC_ID,
@@ -125,6 +126,7 @@ import {
   pgText,
   pgTextArray,
   pgTimetz,
+  pgTsquery,
   pgUuid,
   pgVarbit,
   pgVarchar,
@@ -1372,6 +1374,63 @@ export const pgInetColumn = () =>
 pgInetColumn satisfies ColumnHelperFor<PgInetDescriptor>;
 pgInetColumn satisfies ColumnHelperForStrict<PgInetDescriptor>;
 
+const PG_TSQUERY_NATIVE_TYPE = 'tsquery';
+
+/**
+ * A `tsquery` value as the application holds it: text that only Postgres produces, when a query
+ * selects one. The brand keeps a bare string from being passed where a full-text query is expected,
+ * while a value read back can be passed straight back. It is not exported, so reading one back from
+ * Postgres is the only way to get one.
+ */
+type TsqueryValue = string & { readonly __tsquery: true };
+
+export class PgTsqueryCodec extends CodecImpl<
+  typeof PG_TSQUERY_CODEC_ID,
+  readonly [],
+  string,
+  TsqueryValue
+> {
+  async encode(value: TsqueryValue, _ctx: CodecCallContext): Promise<string> {
+    return value;
+  }
+  async decode(wire: string, _ctx: CodecCallContext): Promise<TsqueryValue> {
+    return blindCast<TsqueryValue, 'Postgres produced this text as a tsquery value'>(wire);
+  }
+  encodeJson(value: TsqueryValue): JsonValue {
+    return value;
+  }
+  decodeJson(json: JsonValue): TsqueryValue {
+    return blindCast<TsqueryValue, 'tsquery values serialize to JSON as their wire string form'>(
+      json,
+    );
+  }
+}
+
+/**
+ * The type of a full-text query: what the parsers and the tag in `full-text` return, and what a
+ * `tsquery` value read back from a query binds as when passed to `fullTextMatches`, `fullTextRank`
+ * or `fullTextHeadline`. It has no column helper, because a contract cannot author a `tsquery`
+ * column, and no traits, because comparing or ordering queries means nothing to an application.
+ */
+export class PgTsqueryDescriptor extends PostgresCodecDescriptor<void> {
+  protected override nativeType(): string {
+    return PG_TSQUERY_NATIVE_TYPE;
+  }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return expression;
+  }
+  override readonly dataType = pgTsquery.id;
+  override readonly codecId = PG_TSQUERY_CODEC_ID;
+  override readonly traits = [] as const;
+  override readonly targetTypes = ['tsquery'] as const;
+  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override factory(): (ctx: CodecInstanceContext) => PgTsqueryCodec {
+    return () => new PgTsqueryCodec(this);
+  }
+}
+
+export const pgTsqueryDescriptor = new PgTsqueryDescriptor();
+
 /**
  * An application value is a {@link PgInterval} — the three fields PostgreSQL
  * actually stores, `{ months, days, micros }` — and its canonical JSON is the
@@ -1719,4 +1778,5 @@ export const codecDescriptors = definePostgresCodecs([
   pgJsonDescriptor,
   pgJsonbDescriptor,
   pgTextArrayDescriptor,
+  pgTsqueryDescriptor,
 ]);

@@ -30,7 +30,6 @@ const DEFAULT_FUNCTION_ATTRIBUTES: Readonly<Record<string, string>> = {
 
 export interface DefaultMappingOptions {
   readonly functionAttributes?: Readonly<Record<string, string>>;
-  readonly fallbackFunctionAttribute?: ((expression: string) => string | undefined) | undefined;
   /** PSL support for the stack's data types, keyed by data type id. */
   readonly dataTypeEntries?: Readonly<Record<string, AuthoringDataTypeEntry>> | undefined;
   /** The stack's data types, whose casts say which other types' values each one takes. */
@@ -44,29 +43,38 @@ export interface DefaultMappingOptions {
   readonly list?: boolean;
 }
 
-export type DefaultMappingResult = { readonly attribute: string } | { readonly comment: string };
+export type DefaultMappingResult = { readonly attribute: string };
 
+/**
+ * The attribute a stored default prints as: a named function, a literal the column takes, or any
+ * other expression as a raw SQL tagged literal. `undefined` when a literal has no written form.
+ */
 export function mapDefault(
   columnDefault: ColumnDefault,
   options?: DefaultMappingOptions,
-): DefaultMappingResult {
+): DefaultMappingResult | undefined {
   switch (columnDefault.kind) {
     case 'literal': {
       const text = writeDefaultLiteral(columnDefault.value, options);
-      return text === undefined
-        ? { comment: `// Literal default: ${JSON.stringify(columnDefault.value)}` }
-        : { attribute: `@default(${text})` };
+      return text === undefined ? undefined : { attribute: `@default(${text})` };
     }
     case 'function': {
       const attribute =
         options?.functionAttributes?.[columnDefault.expression] ??
         DEFAULT_FUNCTION_ATTRIBUTES[columnDefault.expression] ??
-        options?.fallbackFunctionAttribute?.(columnDefault.expression);
-      return attribute
-        ? { attribute }
-        : { comment: `// Raw default: ${columnDefault.expression.replace(/[\r\n]+/g, ' ')}` };
+        `@default(${sqlLiteralText(columnDefault.expression)})`;
+      return { attribute };
     }
   }
+}
+
+/**
+ * A raw SQL default as a `sql` tagged literal. The backtick fence resolves only `` \` `` and `\\`,
+ * so a body holding a backtick is written inside the double-quote fence with PSL string escaping.
+ */
+function sqlLiteralText(expression: string): string {
+  if (expression.includes('`')) return `sql"${escapePslString(expression)}"`;
+  return `sql\`${expression.replace(/\\/g, '\\\\')}\``;
 }
 
 /** One data type's value in the form its own authoring entry reads and writes. */

@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os';
 import type { PromptSurface } from '@prisma/cli-engine';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { type InitFlagValues, resolveInitInputs } from '../../src/orm/init-inputs';
+import type { InitFlagValues } from '../../src/orm/init-inputs';
+import { resolveInputs } from './init-prisma7-fixtures';
 
 let projectDir: string;
 
@@ -25,6 +26,7 @@ function flags(overrides: Partial<InitFlagValues> = {}): InitFlagValues {
     strictProbe: false,
     skipInstall: true,
     keepPreviousFacade: false,
+    fromPrisma7Schema: undefined,
     ...overrides,
   };
 }
@@ -55,7 +57,7 @@ describe('the schema-path prompt', () => {
   it('passes the default schema path as both placeholder and default', async () => {
     const { prompt, textCalls } = recordingPrompt();
 
-    const inputs = await resolveInitInputs({ cwd: projectDir, flags: flags(), prompt });
+    const inputs = await resolveInputs({ cwd: projectDir, flags: flags(), prompt });
 
     expect(textCalls).toEqual([
       {
@@ -69,7 +71,7 @@ describe('the schema-path prompt', () => {
   it('offers the TypeScript default under typescript authoring', async () => {
     const { prompt, textCalls } = recordingPrompt();
 
-    const inputs = await resolveInitInputs({
+    const inputs = await resolveInputs({
       cwd: projectDir,
       flags: flags({ authoring: 'typescript' }),
       prompt,

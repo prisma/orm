@@ -111,9 +111,13 @@ During `prisma orm init`, `--authoring` and `--schema-path` disagree on file ext
 
 During `prisma orm init`, the `prisma contract emit` step failed after a successful dependency install. Scaffolded files and installed dependencies remain on disk; the user fixes the contract file and re-runs the emit command. `init` completes with this as a finding and exits 5. Payload: `filesWritten`, `cause`.
 
+### CLI.INIT_FLAG_CONFLICT
+
+`prisma orm init --from-prisma7-schema <path>` was combined with `--schema-path` or `--authoring`. The first names an existing Prisma 7 schema as the contract source; the other two describe a starter schema to write, so the pair contradicts itself. Raised before anything is read or written. Maps to init exit code 2 (PRECONDITION). Payload: `flags` (the two kebab-case flag names).
+
 ### CLI.INIT_INSTALL_FAILED
 
-During `prisma orm init`, dependency installation failed and the pnpm-to-npm fallback either did not apply or also failed. Files scaffolded before the install step are already on disk; the next actions carry the install command that was attempted and the emit that was waiting on it. `init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
+During `prisma orm init`, dependency installation failed and the pnpm-to-npm fallback either did not apply or also failed. On a normal run the scaffold is already on disk, and the next actions carry the install command that was attempted and the emit that was waiting on it. On the Prisma 7 path the first install runs before anything is written, to check that the target package can read the schema; when that install fails, `filesWritten` is empty and the next action is to run `init` again once the dependencies install. `init` completes with this as a finding and exits 4. Payload: `filesWritten`, plus `install` (the attempted command, the manager, its exit code and the tail of its stderr).
 
 ### CLI.INIT_INVALID_FLAG_VALUE
 
@@ -133,7 +137,35 @@ A flag passed to `prisma orm init` has a value outside its allowed set (for exam
 
 ### CLI.INIT_MISSING_FLAGS
 
-`prisma orm init` ran non-interactively (e.g. `--yes`, or stdin is not a TTY) but one or more required inputs (`--target`, `--authoring`, `--schema-path`) were not supplied as flags. Every missing flag is listed so scripts and agents can react without parsing English. Maps to init exit code 2 (PRECONDITION). Payload: `missingFlags`.
+`prisma orm init` ran non-interactively (e.g. `--yes`, or stdin is not a TTY) but one or more required inputs (`--target`, `--authoring`, `--schema-path`) were not supplied as flags. Every missing flag is listed so scripts and agents can react without parsing English. When detection found a Prisma 7 project, the message also names `--from-prisma7-schema <path>` as the alternative. Maps to init exit code 2 (PRECONDITION). Payload: `missingFlags`, `prisma7SchemaPath` (`null` when nothing Prisma 7 was found).
+
+### CLI.INIT_PRISMA7_CONFIG_COLLISION
+
+On the Prisma 7 path of `prisma orm init`, `prisma.config.*` evaluated as a Prisma 7 config (no `$prismaConfig` marker) while a `prisma7.config.*` also exists. Init renames the Prisma 7 config to `prisma7.config.*` so Prisma 8 can write its own, and cannot rename onto an existing file. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `prismaConfigPath`, `prisma7ConfigPath`.
+
+### CLI.INIT_PRISMA7_CONFIG_UNREADABLE
+
+On the Prisma 7 path of `prisma orm init`, `prisma.config.*` exists but failed to evaluate (typically a Prisma 7 config importing `prisma/config` in a checkout whose dependencies are not installed). Init cannot tell whether the file is Prisma 7's, to rename, or its own, to replace, so it refuses rather than overwrite it. The fix is to install the project's dependencies so the config evaluates, or rename it to `prisma7.config.<ext>` by hand; when a `prisma7.config.*` already exists, init leaves `prisma.config.*` alone and the fix is to install the dependencies and fix the error in it instead. The normal path is unaffected: without the flag or a yes to the Prisma 7 question, the file is treated as it is today. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `why`, `prisma7ConfigPath` (`null` when none exists).
+
+### CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED
+
+On the Prisma 7 path of `prisma orm init`, the schema's `datasource` block declares a provider Prisma 8 has no target for, or no string provider at all. The supported list is in the payload. When the provider is not a string literal, passing `--target` names the database instead; a string provider with no target is refused whatever `--target` says. Nothing is written or installed. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider` (`null` when not a string literal), `supported`.
+
+### CLI.INIT_PRISMA7_SCHEMA_INVALID
+
+The path `prisma orm init` was asked to use as a Prisma 7 schema (`--from-prisma7-schema`, or the path the interactive question named) does not exist, or neither it nor any `.prisma` file under it has a `datasource` block. Nothing is written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `reason` (`absent` or `no-datasource`).
+
+### CLI.INIT_PRISMA7_SCHEMA_REFUSED
+
+On the Prisma 7 path of `prisma orm init`, the target package's Prisma 7 contract source refused the schema, for example because it contains a `view` block or an `Unsupported(...)` field. Init runs the source after installing the target package and `dotenv` and before any consent question or file change, so the project is unchanged apart from those two packages. The `why` lists each diagnostic as `<sourceId>:<line>:<column> <code> <message>`. The next actions say to edit the schema as each finding says (the target package's README lists every refusal and its fix) or to run init without `--from-prisma7-schema`, and give the command that removes the two packages. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `summary`, `diagnostics`, `packagesAdded` (the packages the project did not declare before the check; the remove command names only these).
+
+### CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE
+
+On the Prisma 7 path of `prisma orm init`, the target package cannot read the Prisma 7 schema. Either it has no `prisma7Schema` export while `--from-prisma7-schema` asked for one (`reason: no-prisma7-source`), or it could not be loaded from the project after init installed it (`reason: not-resolvable`). When the user entered the Prisma 7 path by answering yes to init's question instead of passing the flag, a package without `prisma7Schema` is not an error: init warns and runs as a fresh init. Nothing is written apart from the target package and `dotenv` the check installed, and the next actions give the command that removes them. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `packageName`, `reason`, `packagesAdded` (the packages the project did not declare before the check).
+
+### CLI.INIT_PRISMA7_TARGET_MISMATCH
+
+On the Prisma 7 path of `prisma orm init`, `--target` names a different database than the schema's `datasource` provider, for example `--target mongodb` for a schema that declares `provider = "postgresql"`. With `--from-prisma7-schema` it is refused before anything is asked, installed, or written. Without the flag init does not ask its Prisma 7 question and runs as a fresh init, so this code is not raised. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider`, `target` (as passed).
 
 ### CLI.INIT_PROBE_FAILED
 
@@ -161,7 +193,7 @@ Raised by the commander `init` (deleted in the S5 cutover). On the engine-hosted
 
 ### CLI.INIT_WRITE_FAILED
 
-`prisma orm init` could not write one of the files it scaffolds: a directory sitting where the file goes, permissions, a full disk. Everything that can be read and parsed is checked before the first write, so this is the failure that survives that check; the files written before it are already on disk and are listed so a follow-up run or agent knows the state it is resuming from. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `cause`, `filesWritten`.
+`prisma orm init` could not write one of the files it scaffolds: a directory sitting where the file goes, permissions, a full disk. Everything that can be read and parsed is checked before the first write, so this is the failure that survives that check; the files written before it are already on disk and are listed so a follow-up run or agent knows the state it is resuming from. On the Prisma 7 path the config rename happens before the first write, so a completed rename is listed too (`filesRenamed`, `from` and `to`); it stays in place and a re-run writes the missing files beside it. Maps to init exit code 2 (PRECONDITION). Payload: `path`, `cause`, `filesWritten`, `filesRenamed`.
 
 ### CLI.INVALID_OUTPUT_FORMAT
 
@@ -451,7 +483,7 @@ The TypeScript contract module imports something outside the contract-source imp
 
 ### CONTRACT.SOURCE_DIAGNOSTIC
 
-One finding a contract source reported with a code that is not yet dotted, such as the Prisma 8 PSL interpreter's `PSL_UNSUPPORTED_FIELD_TYPE` or a parser's `PSL_PARSE_ERROR`. This is its only producer case: it exists until those codes convert to dotted ones, and a source code that is already dotted, such as `PSL.PRISMA7_VIEW_UNSUPPORTED`, is reported under its own code instead. Never raised on its own; carried, one per such source diagnostic, in the `diagnostics` list of a `CONTRACT.SOURCE_LOAD_FAILED` error during `contract emit`, printed under it in the terminal and serialized as the envelope's `diagnostics` in JSON. `summary` is `<file>:<line>:<column> <source code>: <message>` (the location is omitted when the source gave none). `where` carries `path` and `line`. Payload: `code` (the source's own diagnostic code). Fix: edit the schema at each location the findings name, then run `prisma contract emit` again.
+One finding a contract source reported with a code that is not yet dotted, such as the Prisma 8 PSL interpreter's `PSL_UNSUPPORTED_FIELD_TYPE` or a parser's `PSL_PARSE_ERROR`. This is its only producer case: it exists until those codes convert to dotted ones, and a source code that is already dotted, such as `PSL.PRISMA7_VIEW_UNSUPPORTED`, is reported under its own code instead. Never raised on its own; carried, one per such source diagnostic, in the `diagnostics` list of a `CONTRACT.SOURCE_LOAD_FAILED` error during `contract emit`, printed under it in the terminal and serialized as the envelope's `diagnostics` in JSON. `summary` is `<file>:<line>:<column> <source code>: <message>` (the location is omitted when the source gave none). `where` carries `path` and `line`. Payload: `code` (the source's own diagnostic code). Fix: edit the schema at each location the findings name, then run `prisma contract emit` again. One such source code is `PSL_UNKNOWN_DEFAULT_FUNCTION`, reported by the Prisma 8 PSL interpreter for a `@default` function the composed stack does not register; its message lists the supported functions, and for the removed `dbgenerated(...)` it is `` Default function "dbgenerated" was removed. Write the SQL as a tagged literal: @default(sql`<expression>`). Supported functions: <list>. ``
 
 ### CONTRACT.SOURCE_LOAD_FAILED
 
@@ -573,7 +605,7 @@ An attribute Prisma 7 for the target does not have, or one the source does not r
 
 ### PSL.PRISMA7_UNKNOWN_DEFAULT
 
-A `@default` value the source cannot read, or one the column's data type or codec refuses. The message is `Field "<Model>.<field>": @default <reason>`. Every reason below carries ` at element <n>` after the value it is about when that value is one element of a list. The reasons that come from reading the value are: `holds text that this contract source does not read: <the reading entry's message>`; `holds a <tag> literal, which this stack does not register.`; `holds a <string|boolean|number> value, which this target has no data type for.`; `holds a <value type> value, which <column type> has no cast from; it casts from <types>.` (or `it casts from nothing`); and `holds a value that <codecId> does not read: <the codec's message>`. The rest do not involve the value's type — an unknown function, an enum member on a non-enum field or a non-member, and `dbgenerated()` with no expression on a required field. Write a value of a type the column's type is or casts from, an enum member, or a supported function. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@default` value the source cannot read, or one the column's data type or codec refuses. The message is `Field "<Model>.<field>": @default <reason>`. Every reason below carries ` at element <n>` after the value it is about when that value is one element of a list. The reasons that come from reading the value are: `holds text that this contract source does not read: <the reading entry's message>`; `holds a <tag> literal, which this stack does not register.`; `holds a <string|boolean|number> value, which this target has no data type for.`; `holds a <value type> value, which <column type> has no cast from; it casts from <types>.` (or `it casts from nothing`); and `holds a value that <codecId> does not read: <the codec's message>`. The rest do not involve the value's type — an unknown function, an enum member on a non-enum field or a non-member, and a `dbgenerated(...)` argument list that is not a single positional string with text in it. Write a value of a type the column's type is or casts from, an enum member, or a supported function. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_UNSUPPORTED_TYPE
 
@@ -773,7 +805,7 @@ A lane terminal (SQL DSL `.build()`, ORM collection terminal) received an annota
 
 ### RUNTIME.ARGUMENT_INVALID
 
-A built-in Postgres query operation received an argument it cannot use. Today the only such argument is the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`: the language is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused. Raised while the query is being built, before any SQL reaches the database. Payload: `helper`, `argument`, `received`.
+A built-in Postgres query operation or full-text helper received an argument it cannot use. One case is the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, of the `tsquery` parsers (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`) and of the `tsquery` template tag: the language is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused. The other case is a literal part of a `tsquery` template with an invalid JavaScript escape, such as `\u`: JavaScript gives the tag no text for that part, so the tag refuses it rather than drop it. Raised while the query is being built, before any SQL reaches the database. Payload: `helper`, `argument`, `received`.
 
 ### RUNTIME.AST_INVALID
 

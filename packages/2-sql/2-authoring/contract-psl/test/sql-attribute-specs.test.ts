@@ -283,7 +283,6 @@ describe('sqlAttributeSpecs.field.default', () => {
       'funcCall',
       'funcCall',
       'funcCall',
-      'funcCall',
       // One tagged-literal arm per distinct tag documentation: the sql tags, then json.
       'taggedLiteral',
       'taggedLiteral',
@@ -337,7 +336,7 @@ describe('sqlAttributeSpecs.field.default', () => {
       value.alternatives
         .filter((alt) => alt.kind === 'funcCall')
         .map((alt) => (alt as FuncCallMetadata<FieldAttributeCtx>).name),
-    ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid', 'dbgenerated']);
+    ).toEqual(['autoincrement', 'now', 'uuid', 'cuid', 'ulid', 'nanoid']);
     expect(value.alternatives.filter((alt) => alt.kind === 'taggedLiteral')).toMatchObject([
       {
         label: 'json`...`',

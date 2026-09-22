@@ -44,18 +44,25 @@ export function installFailedFinding(
     why: failure.why ?? failure.message,
     nextActions: [
       ...failure.nextActions,
-      runCommandAction('Emit the contract once the dependencies are installed', EMIT_COMMAND),
+      filesWritten.length === 0
+        ? chooseAction(RERUN_AFTER_INSTALL)
+        : runCommandAction('Emit the contract once the dependencies are installed', EMIT_COMMAND),
     ],
     meta: { filesWritten, install: failure.meta ?? {} },
   });
 }
+
+/** Init stopped before writing anything, so the install is followed by init itself. */
+export const RERUN_AFTER_INSTALL = 'Run `prisma orm init` again once the dependencies install';
 
 /** The first emit failed against the freshly written scaffold. */
 export function emitFailedFinding(cause: string, filesWritten: readonly string[]): Diagnostic {
   return initFinding('CLI.INIT_EMIT_FAILED', 'Failed to emit contract', {
     why: `\`${EMIT_COMMAND}\` failed: ${cause}`,
     nextActions: [
-      chooseAction('Fix the problem the contract source reports, then emit again'),
+      chooseAction(
+        'Fix what the cause names — when the config imports something its package does not export, update that package to a version that does — then emit again',
+      ),
       runCommandAction('Emit the contract', EMIT_COMMAND),
     ],
     meta: { filesWritten, cause },

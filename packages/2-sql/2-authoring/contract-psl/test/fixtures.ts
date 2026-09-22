@@ -22,8 +22,6 @@ import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-compon
 import type {
   ControlMutationDefaultEntry,
   ControlMutationDefaults,
-  DefaultFunctionLoweringContext,
-  TypedDefaultFunctionCall,
 } from '@internal/framework-components/control';
 import type { FuncCallSig, SymbolTable } from '@internal/psl-parser';
 import {
@@ -192,22 +190,6 @@ export const testEnumEntityContributions = {
     output: { factory: testEnumFactory },
   },
 } as const satisfies AuthoringEntityTypeNamespace;
-
-function invalidArgumentDiagnostic(input: {
-  readonly context: DefaultFunctionLoweringContext;
-  readonly span: TypedDefaultFunctionCall['span'];
-  readonly message: string;
-}) {
-  return {
-    ok: false as const,
-    diagnostic: {
-      code: 'PSL_INVALID_DEFAULT_FUNCTION_ARGUMENT',
-      message: input.message,
-      sourceId: input.context.sourceId,
-      span: input.span,
-    },
-  };
-}
 
 function executionGenerator(id: string, params?: Record<string, unknown>) {
   return {
@@ -605,17 +587,6 @@ const nanoidSig: FuncCallSig = {
     },
   ],
 };
-const dbgeneratedSig: FuncCallSig = {
-  documentation: 'Uses a database SQL expression as the default value.',
-  positional: [
-    {
-      key: 'expression',
-      type: str(),
-      documentation: 'The nonempty SQL expression evaluated by the database.',
-    },
-  ],
-};
-
 export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefaults {
   return {
     defaultFunctionRegistry: new Map<string, ControlMutationDefaultEntry>([
@@ -685,30 +656,6 @@ export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefau
               : executionGenerator('nanoid');
           },
           usageSignatures: ['nanoid()', 'nanoid(<2-255>)'],
-        },
-      ],
-      [
-        'dbgenerated',
-        {
-          signature: dbgeneratedSig,
-          lower: ({ call, context }) => {
-            const expression = call.args['expression'];
-            if (typeof expression !== 'string' || expression.trim().length === 0) {
-              return invalidArgumentDiagnostic({
-                context,
-                span: call.span,
-                message: 'Default function "dbgenerated" argument cannot be empty.',
-              });
-            }
-            return {
-              ok: true as const,
-              value: {
-                kind: 'storage' as const,
-                defaultValue: { kind: 'function' as const, expression },
-              },
-            };
-          },
-          usageSignatures: ['dbgenerated("...")'],
         },
       ],
     ]),

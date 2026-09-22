@@ -62,8 +62,8 @@ describe('SQLite Migration E2E - Widening operations (recreate-table)', () => {
   // Round-trip regression for the canonical `now()` default. SQLite has
   // several spellings for "wall-clock now" (`CURRENT_TIMESTAMP`,
   // `datetime('now')`, the bare `now()` form): `parseSqliteDefault`
-  // canonicalizes the schema side, and `lowerDbgenerated` canonicalizes
-  // the contract side. As long as both sides converge on `now()`, the
+  // reads every spelling as `now()`, on the schema side and, through
+  // `sqliteResolveDefault`, on the contract side. As long as both sides converge on `now()`, the
   // additive apply must verify clean and the column's stored default
   // must be one of the SQLite-native spellings (the runner's
   // post-execute schema verify already proves the canonical

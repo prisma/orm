@@ -1,4 +1,8 @@
+import { postgresRawCodecInferer } from '@internal/adapter-postgres/adapter';
+import { sql } from '@internal/sql-builder/runtime';
+import { toTsquery, tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
 import { describe, expect, it } from 'vitest';
+import { getTestContext } from './helpers';
 import { createPostsCollection, timeouts, withCollectionRuntime } from './integration-helpers';
 import { seedPosts, seedUsers } from './runtime-helpers';
 
@@ -100,7 +104,7 @@ describe('integration/full-text-search operations', () => {
 
         const results = await createPostsCollection(runtime)
           .select('id', 'title')
-          .where((p) => p.title.fullTextMatches('alice'))
+          .where((p) => p.title.fullTextMatches(websearchToTsquery('alice')))
           .orderBy((p) => p.id.asc())
           .all();
 
@@ -119,16 +123,155 @@ describe('integration/full-text-search operations', () => {
       await withCollectionRuntime(async (runtime) => {
         await seedSearchablePosts(runtime);
 
+        const query = websearchToTsquery('alice');
         const results = await createPostsCollection(runtime)
           .select('id', 'title')
-          .where((p) => p.title.fullTextMatches('alice'))
-          .orderBy((p) => p.title.fullTextRank('alice').desc())
+          .where((p) => p.title.fullTextMatches(query))
+          .orderBy((p) => p.title.fullTextRank(query).desc())
           .all();
 
         expect(results).toEqual([
           { id: 2, title: 'alice met alice and alice again' },
           { id: 1, title: 'alice wrote the report' },
         ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'a tsquery read back from a query binds as the query and matches the same rows',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+        const builder = sql({
+          context: getTestContext(),
+          rawCodecInferer: postgresRawCodecInferer,
+        });
+
+        const { query } = await runtime
+          .query(
+            builder.public.posts
+              .select('query', (_f, fns) => fns.websearchToTsquery('Alice reports'))
+              .limit(1)
+              .build(),
+          )
+          .firstOrThrow();
+        const viaParser = await createPostsCollection(runtime)
+          .select('id', 'title')
+          .where((p) => p.title.fullTextMatches(websearchToTsquery('Alice reports')))
+          .orderBy((p) => p.id.asc())
+          .all();
+        const viaReadBack = await createPostsCollection(runtime)
+          .select('id', 'title')
+          .where((p) => p.title.fullTextMatches(query))
+          .orderBy((p) => p.id.asc())
+          .all();
+
+        expect(query).toBe("'alic' & 'report'");
+        expect(viaParser).toEqual([{ id: 1, title: 'alice wrote the report' }]);
+        expect(viaReadBack).toEqual(viaParser);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'toTsquery takes operator syntax and normalizes its words',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+
+        const results = await createPostsCollection(runtime)
+          .select('id', 'title')
+          .where((p) => p.title.fullTextMatches(toTsquery('Alice & !bob')))
+          .orderBy((p) => p.id.asc())
+          .all();
+
+        expect(results).toEqual([
+          { id: 1, title: 'alice wrote the report' },
+          { id: 2, title: 'alice met alice and alice again' },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'the tsquery tag runs typed terms as one normalized prefix term each, without error',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+        const idsMatchingPrefix = async (term: string) =>
+          (
+            await createPostsCollection(runtime)
+              .select('id')
+              .where((p) => p.title.fullTextMatches(tsquery`${term}:*`))
+              .orderBy((p) => p.id.asc())
+              .all()
+          ).map((post) => post.id);
+
+        const results: Record<string, number[]> = {};
+        for (const term of [
+          'Rep',
+          'new y',
+          "zebra's",
+          'a&',
+          're:port',
+          "x' | 'secret",
+          '',
+          'the',
+        ]) {
+          results[term] = await idsMatchingPrefix(term);
+        }
+
+        expect(results).toEqual({
+          Rep: [1, 3],
+          'new y': [],
+          "zebra's": [],
+          'a&': [],
+          're:port': [],
+          "x' | 'secret": [],
+          '': [],
+          the: [],
+        });
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    "the tsquery tag keeps the application's operators when the value carries its own",
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+        const idsFor = async (term: string) =>
+          (
+            await createPostsCollection(runtime)
+              .select('id')
+              .where((p) => p.title.fullTextMatches(tsquery`${term}:* & 'report'`))
+              .all()
+          ).map((post) => post.id);
+
+        expect(await idsFor('bob')).toEqual([3]);
+        expect(await idsFor("bob' | 'alice")).toEqual([]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'toTsquery on malformed text fails at execution with the Postgres error',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+
+        await expect(
+          createPostsCollection(runtime)
+            .select('id')
+            .where((p) => p.title.fullTextMatches(toTsquery('alice &')))
+            .all(),
+        ).rejects.toThrow(/tsquery/);
       });
     },
     timeouts.spinUpPpgDev,

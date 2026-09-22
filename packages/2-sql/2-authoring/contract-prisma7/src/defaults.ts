@@ -6,6 +6,7 @@ import type { FieldSymbol, PslSpan, ResolvedAttribute } from '@internal/psl-pars
 import type { ExpressionAst } from '@internal/psl-parser/syntax';
 import {
   ArrayLiteralAst,
+  type AttributeArgAst,
   BooleanLiteralExprAst,
   FunctionCallAst,
   IdentifierAst,
@@ -68,7 +69,6 @@ const FUNCTION_ARGUMENT_KEYS: Readonly<Record<string, readonly string[]>> = {
   uuid: ['version'],
   cuid: ['version'],
   nanoid: ['size'],
-  dbgenerated: ['expression'],
   now: [],
   autoincrement: [],
   ulid: [],
@@ -336,19 +336,8 @@ function lowerFunction(
   const fn = call.path().join('.');
   const span = input.attribute.span;
   const callArgs = [...call.args()];
-  if (fn === 'dbgenerated' && callArgs.length === 0) {
-    if (input.field.optional || input.field.list) {
-      return { storage: undefined, onCreate: undefined };
-    }
-    input.diagnostics.push(
-      prisma7Diagnostic(
-        'PSL.PRISMA7_UNKNOWN_DEFAULT',
-        `${label}: @default(dbgenerated()) with no expression is not supported yet on a required field, because without a column default Prisma 8 requires the value on create. Either remove the @default, which makes Prisma 7's next migration drop the column default (ALTER COLUMN ... DROP DEFAULT) and both clients require the value on create, or write the column's database default as @default(dbgenerated("<expression>")), which Prisma 7's next migration sets on the column.`,
-        input.sourceId,
-        span,
-      ),
-    );
-    return undefined;
+  if (fn === 'dbgenerated') {
+    return dbgeneratedDefault(callArgs, unknown, span);
   }
   const keys = FUNCTION_ARGUMENT_KEYS[fn];
   const entry = input.controlMutationDefaults.defaultFunctionRegistry.get(fn);
@@ -398,4 +387,30 @@ function lowerFunction(
   return lowered.value.kind === 'storage'
     ? { storage: lowered.value.defaultValue, onCreate: undefined }
     : { storage: undefined, onCreate: lowered.value.generated };
+}
+
+/**
+ * Prisma 7's `dbgenerated("<sql>")` is a raw SQL default, carried as written; the empty form
+ * `dbgenerated()` means the column has no default. Prisma 7 refuses a blank string, so this
+ * source does too.
+ */
+function dbgeneratedDefault(
+  callArgs: readonly AttributeArgAst[],
+  unknown: (reason: string, span: PslSpan) => undefined,
+  span: PslSpan,
+): LoweredPrisma7Default | undefined {
+  if (callArgs.length === 0) return { storage: undefined, onCreate: undefined };
+  const [argument] = callArgs;
+  const value = argument?.value();
+  const expression =
+    callArgs.length === 1 && argument?.name() === undefined && value !== undefined
+      ? StringLiteralExprAst.cast(value.syntax)?.value()
+      : undefined;
+  if (expression === undefined || expression.trim() === '') {
+    return unknown(
+      'function "dbgenerated()" has an argument this contract source does not read.',
+      span,
+    );
+  }
+  return { storage: { kind: 'function', expression }, onCreate: undefined };
 }

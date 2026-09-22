@@ -92,13 +92,16 @@ Two checks apply, in PSL and TypeScript alike:
 
 An empty body passes, and the database reports the error.
 
+A list column takes a `sql` default like any other column: `` tags String[] @default(sql`'{}'::text[]`) `` stores `'{}'::text[]`. Nothing can tell from SQL text, or from a function's name, whether it returns a value of the column's type, for a list column or for any other, so that is the author's responsibility, and the database reports a mismatch when the migration runs. The same holds for `now()`: `DateTime[] @default(now())` lowers. Two defaults are refused on a list column. A client-side generator such as `uuid()` produces one value, not a list (`PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED`). `autoincrement()` is Prisma's marker for a sequence-backed scalar column, not SQL, and the Postgres planner would otherwise render a scalar `SERIAL` column with no error from the database (`PSL_LIST_AUTOINCREMENT_UNSUPPORTED`).
+
 The planners render the authored expression, never a normalised form of it. Planning and verification compare a raw default the way they compare any function default: each target runs its own introspection parser over the authored expression and over the expression the database reports, then compares the two parsed forms. A body the database reprints differently from how it was written therefore neither reports drift nor plans a change.
 
 ## Consequences
 
 - Raw SQL in a schema is visibly raw and visibly owned. A reader sees `sql` and knows Prisma passes the text through.
 - One canonicalization serves both languages, so the choice between PSL and TypeScript never changes a contract.
-- Nothing downstream of authoring changes. The contract shape, the planner, the verifier, and `contract infer` all work on the function-kind default they already handled. `contract infer` prints a default it cannot name as `` @default(sql`...`) ``, so an adopted database round-trips.
+- Nothing downstream of authoring changes. The contract shape, the planner, and the verifier all work on the function-kind default they already handled.
+- `contract infer` prints each default it reads in the first of three forms that fits: a named function (`now()`, `autoincrement()`); a literal the column's data type writes and reads back as the same stored value ([ADR 254](ADR%20254%20-%20Data%20types%20and%20casts.md)); otherwise a `sql` tagged literal holding the expression the database reported, in the double-quote form when that expression contains a backtick. It never prints a comment in place of a default and never stops on one, because its job is to describe the database; a user adopting a database should not have to write defaults back by hand.
 - The tagged literal reuses the parser's qualified name and string literal, so tooling that understands those understands most of a tagged literal. The formatter never re-indents a backtick string's content. Highlighting the content as SQL is the editor's job, keyed by the tag.
 - The 64 KiB limit is a fixed rule, not an option.
 

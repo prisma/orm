@@ -85,6 +85,7 @@ interface ExpectedDiagnosticsFixture {
     readonly code: string;
     readonly sourceId: string;
     readonly startLine: number;
+    readonly message?: string;
   }[];
 }
 
@@ -324,6 +325,7 @@ describe('emit parity fixture diagnostics', () => {
               expect.objectContaining({
                 code: diagnostic.code,
                 sourceId: diagnostic.sourceId,
+                ...(diagnostic.message === undefined ? {} : { message: diagnostic.message }),
                 span: expect.objectContaining({
                   start: expect.objectContaining({
                     line: diagnostic.startLine,

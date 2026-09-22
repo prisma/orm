@@ -22,6 +22,10 @@ Pre-PR-open checklist for the orchestrator:
 
 A PR open against the wrong branch is recoverable but visible; this gate costs nothing and the recovery costs an issue close + a PR re-open.
 
+## Merge queue needs every review thread resolved
+
+The `main` ruleset requires conversation resolution. A PR with auto-merge enabled and every check green still sits at `BLOCKED` while any review thread is unresolved, including CodeRabbit's. Before enabling auto-merge, list unresolved threads: `reviewThreads` takes no `isResolved` filter, so query `reviewThreads(first: 100) { pageInfo { hasNextPage endCursor } nodes { id isResolved } }` through the GraphQL API, page with `after:` while `hasNextPage` is true, and keep the nodes whose `isResolved` is false. Then reply to each with the fix commit or the reason for no change, and resolve them. Seen on #30350 and #30380 (2026-09-22/23).
+
 ## PR title convention
 
 - Conventional-commit prefix: `feat:` / `fix:` / `chore:` / `docs:` / `refactor:` / `test:` / `build:` / `ci:`.

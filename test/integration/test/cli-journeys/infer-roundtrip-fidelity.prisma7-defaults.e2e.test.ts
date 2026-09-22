@@ -134,8 +134,8 @@ CREATE TABLE "raw_list_defaults" (
 `;
 
 /**
- * `db init` renders a `dbgenerated` timestamp default through a codec that needs a global
- * `Temporal`, which the CLI does not install.
+ * `db init` renders a raw timestamp default through a codec that needs a global `Temporal`, which
+ * the CLI does not install.
  */
 const DB_INIT_UNSUPPORTED_FIELDS = ['stamp'] as const;
 
@@ -163,6 +163,12 @@ function withoutFields(psl: string, fields: readonly string[]): string {
 }
 
 async function inferInto(ctx: JourneyContext): Promise<string> {
+  const psl = await inferPsl(ctx);
+  expect(psl).not.toContain('dbgenerated');
+  return psl;
+}
+
+async function inferPsl(ctx: JourneyContext): Promise<string> {
   const infer = await runContractInfer(ctx);
   expect(infer.exitCode, `contract infer\n${output(infer)}`).toBe(0);
   return readContractPsl(ctx);
@@ -180,7 +186,7 @@ withTempDir(({ createTempDir }) => {
       const emptyDb = useDevDatabase();
 
       it(
-        'infer prints each default as the literal its codec accepts, or as dbgenerated when a scalar has none',
+        'infer prints each default as the literal its codec accepts, or as a sql tagged literal when a scalar has none',
         async () => {
           const ctx = setupJourney({
             connectionString: db.connectionString,
@@ -233,7 +239,7 @@ withTempDir(({ createTempDir }) => {
 
             model SqlDefaults {
               id           Int          @id(map: "sql_defaults_pkey")
-              textNull     VarChar(32)? @default(dbgenerated("NULL::character varying"))
+              textNull     VarChar(32)? @default(sql\`NULL::character varying\`)
               floatNaN     Float        @default(NaN)
               floatNegInf  Float        @default(-Infinity)
               realNaN      Real         @default(NaN)

@@ -864,10 +864,13 @@ export type IdConstraint<
   readonly name?: Name;
 };
 
-export type UniqueConstraint<FieldNames extends readonly string[] = readonly string[]> = {
+export type UniqueConstraint<
+  FieldNames extends readonly string[] = readonly string[],
+  Name extends string | undefined = string | undefined,
+> = {
   readonly kind: 'unique';
   readonly fields: FieldNames;
-  readonly name?: string;
+  readonly name?: Name;
 };
 
 /**
@@ -1052,11 +1055,14 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     };
   }
 
-  function id<FieldName extends string, Name extends string | undefined = undefined>(
+  function id<FieldName extends string, const Name extends string | undefined = undefined>(
     field: ColumnRef<FieldName>,
     options?: NamedConstraintSpec<Name>,
   ): IdConstraint<readonly [FieldName], Name>;
-  function id<FieldNames extends readonly string[], Name extends string | undefined = undefined>(
+  function id<
+    FieldNames extends readonly string[],
+    const Name extends string | undefined = undefined,
+  >(
     fields: { readonly [K in keyof FieldNames]: ColumnRef<FieldNames[K] & string> },
     options?: NamedConstraintSpec<Name>,
   ): IdConstraint<FieldNames, Name>;
@@ -1071,14 +1077,17 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
     };
   }
 
-  function unique<FieldName extends string>(
+  function unique<FieldName extends string, const Name extends string | undefined = undefined>(
     field: ColumnRef<FieldName>,
-    options?: ConstraintOptions,
-  ): UniqueConstraint<readonly [FieldName]>;
-  function unique<FieldNames extends readonly string[]>(
+    options?: ConstraintOptions<Name>,
+  ): UniqueConstraint<readonly [FieldName], Name>;
+  function unique<
+    FieldNames extends readonly string[],
+    const Name extends string | undefined = undefined,
+  >(
     fields: { readonly [K in keyof FieldNames]: ColumnRef<FieldNames[K] & string> },
-    options?: ConstraintOptions,
-  ): UniqueConstraint<FieldNames>;
+    options?: ConstraintOptions<Name>,
+  ): UniqueConstraint<FieldNames, Name>;
   function unique(
     fieldOrFields: ColumnRef | readonly ColumnRef[],
     options?: ConstraintOptions,
@@ -1411,52 +1420,115 @@ type ModelIdLiteralName<
   ? InlineIdLiteralName<Fields>
   : AttributeIdLiteralName<AttributesSpec>;
 
-type SqlIndexes<SqlSpec extends SqlStageSpec> = SqlSpec extends {
+type AttributeUniques<AttributesSpec extends ModelAttributesSpec | undefined> =
+  AttributesSpec extends {
+    readonly uniques?: infer Uniques extends readonly unknown[];
+  }
+    ? Uniques
+    : readonly [];
+
+type SqlIndexes<SqlSpec extends SqlStageSpec | undefined> = SqlSpec extends {
   readonly indexes?: infer Indexes extends readonly unknown[];
 }
   ? Indexes
   : readonly [];
 
-type SqlForeignKeys<SqlSpec extends SqlStageSpec> = SqlSpec extends {
+type SqlForeignKeys<SqlSpec extends SqlStageSpec | undefined> = SqlSpec extends {
   readonly foreignKeys?: infer ForeignKeys extends readonly unknown[];
 }
   ? ForeignKeys
   : readonly [];
 
-type SqlNamedObjects<SqlSpec extends SqlStageSpec> = [
-  ...SqlIndexes<SqlSpec>,
-  ...SqlForeignKeys<SqlSpec>,
-];
+type ModelNamedObjects<
+  AttributesSpec extends ModelAttributesSpec | undefined,
+  SqlSpec extends SqlStageSpec | undefined,
+> = [...AttributeUniques<AttributesSpec>, ...SqlIndexes<SqlSpec>, ...SqlForeignKeys<SqlSpec>];
+
+type InlineUniqueLiteralName<Field> =
+  FieldStateOf<Field> extends {
+    readonly unique: { readonly name?: infer Name };
+  }
+    ? StaticLiteralName<Name>
+    : never;
+
+type RelationForeignKeyLiteralName<Relation> =
+  RelationStateOf<Relation> extends {
+    readonly sql?: infer Spec;
+  }
+    ? Spec extends { readonly fk?: { readonly name?: infer Name } }
+      ? StaticLiteralName<Name>
+      : never
+    : never;
+
+type ModelLiteralNamesBySource<
+  Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
+  AttributesSpec extends ModelAttributesSpec | undefined,
+  SqlSpec extends SqlStageSpec | undefined,
+> = {
+  readonly [FieldName in keyof Fields & string as `field:${FieldName}`]: InlineUniqueLiteralName<
+    Fields[FieldName]
+  >;
+} & {
+  readonly [RelationName in keyof Relations &
+    string as `relation:${RelationName}`]: RelationForeignKeyLiteralName<Relations[RelationName]>;
+} & {
+  readonly id: ModelIdLiteralName<Fields, AttributesSpec>;
+  readonly stages: NamedConstraintLiteralName<ModelNamedObjects<AttributesSpec, SqlSpec>[number]>;
+};
+
+type LiteralNamesInMoreThanOneSource<NamesBySource> = {
+  readonly [Source in keyof NamesBySource]: NamesBySource[Source] &
+    NamesBySource[Exclude<keyof NamesBySource, Source>];
+}[keyof NamesBySource];
+
+type HasDuplicateModelNames<
+  Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
+  AttributesSpec extends ModelAttributesSpec | undefined,
+  SqlSpec extends SqlStageSpec | undefined,
+> = [
+  | DuplicateLiteralNames<ModelNamedObjects<AttributesSpec, SqlSpec>>
+  | LiteralNamesInMoreThanOneSource<
+      ModelLiteralNamesBySource<Fields, Relations, AttributesSpec, SqlSpec>
+    >,
+] extends [never]
+  ? false
+  : true;
 
 type ValidateSqlStageSpec<
   Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
   AttributesSpec extends ModelAttributesSpec | undefined,
   SqlSpec extends SqlStageSpec,
-> = [DuplicateLiteralNames<SqlNamedObjects<SqlSpec>>] extends [never]
-  ? [
-      Extract<
-        ModelIdLiteralName<Fields, AttributesSpec>,
-        NamedConstraintLiteralName<SqlNamedObjects<SqlSpec>[number]>
-      >,
-    ] extends [never]
-    ? SqlSpec
-    : never
-  : never;
+> =
+  HasDuplicateModelNames<Fields, Relations, AttributesSpec, SqlSpec> extends true ? never : SqlSpec;
 
 type ValidateAttributesStageSpec<
   Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
   SqlSpec extends SqlStageSpec | undefined,
   AttributesSpec extends ModelAttributesSpec,
-> = SqlSpec extends SqlStageSpec
-  ? [
-      Extract<
-        ModelIdLiteralName<Fields, AttributesSpec>,
-        NamedConstraintLiteralName<SqlNamedObjects<SqlSpec>[number]>
-      >,
-    ] extends [never]
-    ? AttributesSpec
-    : never
-  : AttributesSpec;
+> =
+  HasDuplicateModelNames<Fields, Relations, AttributesSpec, SqlSpec> extends true
+    ? never
+    : AttributesSpec;
+
+type DuplicateModelNamesError =
+  'Error: two ids, uniques, indexes or foreign keys on this model have the same name';
+
+type ModelDuplicateNames<
+  Fields extends Record<string, ScalarFieldBuilder>,
+  Relations extends Record<string, AnyRelationBuilder>,
+  AttributesSpec extends ModelAttributesSpec | undefined,
+  SqlSpec extends SqlStageSpec | undefined,
+> = [AttributesSpec] extends [never]
+  ? DuplicateModelNamesError
+  : [SqlSpec] extends [never]
+    ? DuplicateModelNamesError
+    : HasDuplicateModelNames<Fields, Relations, AttributesSpec, SqlSpec> extends true
+      ? DuplicateModelNamesError
+      : undefined;
 
 function findDuplicateRelationName(
   existingRelations: Record<string, AnyRelationBuilder>,
@@ -1483,6 +1555,12 @@ export class ContractModelBuilder<
   declare readonly __sql: SqlSpec;
   declare readonly __indexTypes: IndexTypes;
   declare readonly __spaceId: TSpaceId;
+  declare readonly __duplicateNames: ModelDuplicateNames<
+    Fields,
+    Relations,
+    AttributesSpec,
+    SqlSpec
+  >;
   readonly refs: ModelName extends string ? ModelTokenRefs<ModelName, Fields, TSpaceId> : never;
 
   constructor(
@@ -1579,31 +1657,35 @@ export class ContractModelBuilder<
   }
 
   attributes<const NextAttributesSpec extends ModelAttributesSpec>(
-    specOrFactory: StageInput<
-      AttributeContext<Fields>,
-      ValidateAttributesStageSpec<Fields, SqlSpec, NextAttributesSpec>
-    >,
-  ): ContractModelBuilder<
-    ModelName,
-    Fields,
-    Relations,
-    NextAttributesSpec,
-    SqlSpec,
-    IndexTypes,
-    TSpaceId
-  > {
-    return new ContractModelBuilder(
-      this.stageOne,
-      specOrFactory,
-      this.sqlFactory,
-      this.spaceId,
-      this.tableName,
+    specOrFactory: StageInput<AttributeContext<Fields>, NextAttributesSpec>,
+  ): [ValidateAttributesStageSpec<Fields, Relations, SqlSpec, NextAttributesSpec>] extends [never]
+    ? ContractModelBuilder<ModelName, Fields, Relations, never, SqlSpec, IndexTypes, TSpaceId>
+    : ContractModelBuilder<
+        ModelName,
+        Fields,
+        Relations,
+        NextAttributesSpec,
+        SqlSpec,
+        IndexTypes,
+        TSpaceId
+      > {
+    return blindCast<
+      never,
+      'conditional return type; runtime value is always a valid ContractModelBuilder'
+    >(
+      new ContractModelBuilder(
+        this.stageOne,
+        specOrFactory,
+        this.sqlFactory,
+        this.spaceId,
+        this.tableName,
+      ),
     );
   }
 
   sql<const NextSqlSpec extends SqlStageSpec>(
     specOrFactory: StageInput<SqlContext<Fields, IndexTypes>, NextSqlSpec>,
-  ): [ValidateSqlStageSpec<Fields, AttributesSpec, NextSqlSpec>] extends [never]
+  ): [ValidateSqlStageSpec<Fields, Relations, AttributesSpec, NextSqlSpec>] extends [never]
     ? ContractModelBuilder<
         ModelName,
         Fields,

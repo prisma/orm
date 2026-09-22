@@ -10,18 +10,16 @@ import {
   printJsonBody,
   signedRange,
 } from '@internal/sql-relational-core/ast';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 import {
   type DefaultMappingOptions,
+  type DefaultMappingResult,
   mapDefault,
 } from '../../src/core/psl-contract-infer/default-mapping';
 
-// Inline dialect-mapping fixture (the Postgres maps now live in the target);
-// these cases exercise the neutral `mapDefault` with an injected mapping.
-const injectedMapping: DefaultMappingOptions = {
-  functionAttributes: { 'gen_random_uuid()': '@default(dbgenerated("gen_random_uuid()"))' },
-  fallbackFunctionAttribute: (expression) => `@default(dbgenerated(${JSON.stringify(expression)}))`,
-};
+/** The backtick fencing a tagged literal, as an escape so no quoted string in this file holds one. */
+const BACKTICK = '\u0060';
+const sqlLiteral = (body: string): string => `@default(sql${BACKTICK}${body}${BACKTICK})`;
 
 const unchanged: Cast = (value) => value;
 const toNumeralText: Cast = (value) => (typeof value === 'number' ? numeralText(value) : value);
@@ -135,30 +133,34 @@ describe('mapDefault function defaults', () => {
     });
   });
 
-  it('maps gen_random_uuid() when Postgres mapping is injected', () => {
-    expect(
-      mapDefault({ kind: 'function', expression: 'gen_random_uuid()' }, injectedMapping),
-    ).toEqual({
-      attribute: '@default(dbgenerated("gen_random_uuid()"))',
+  it('maps a target-named function through the injected table', () => {
+    const named: DefaultMappingOptions = {
+      functionAttributes: { 'my_now()': '@default(myNow())' },
+    };
+    expect(mapDefault({ kind: 'function', expression: 'my_now()' }, named)).toEqual({
+      attribute: '@default(myNow())',
     });
   });
 
-  it('maps unmapped Postgres defaults to dbgenerated when Postgres mapping is injected', () => {
-    expect(mapDefault({ kind: 'function', expression: "'{}'::jsonb" }, injectedMapping)).toEqual({
-      attribute: `@default(dbgenerated(${JSON.stringify("'{}'::jsonb")}))`,
+  it.each([
+    ['a database function', 'gen_random_uuid()'],
+    ['a cast literal the column does not take as a value', "'{}'::jsonb"],
+    ['an expression', "(now() + '00:03:00'::interval)"],
+    ['a body with a backslash, doubled inside the backtick fence', "E'\\n'", "E'\\\\n'"],
+  ])('prints %s as a sql tagged literal', (_name, expression, body = expression) => {
+    expect(mapDefault({ kind: 'function', expression })).toEqual({
+      attribute: sqlLiteral(body),
     });
   });
 
-  it('unrecognized function becomes comment', () => {
-    expect(mapDefault({ kind: 'function', expression: 'custom_func()' })).toEqual({
-      comment: '// Raw default: custom_func()',
+  it('prints a body holding a backtick inside the double-quote fence', () => {
+    expect(mapDefault({ kind: 'function', expression: `"tick${BACKTICK}"::text` })).toEqual({
+      attribute: `@default(sql"\\"tick${BACKTICK}\\"::text")`,
     });
   });
 
-  it('treats Postgres-specific functions as raw defaults without injected mapping', () => {
-    expect(mapDefault({ kind: 'function', expression: 'gen_random_uuid()' })).toEqual({
-      comment: '// Raw default: gen_random_uuid()',
-    });
+  it('never describes a default in a comment', () => {
+    expectTypeOf<DefaultMappingResult>().toEqualTypeOf<{ readonly attribute: string }>();
   });
 });
 
@@ -232,23 +234,19 @@ describe('mapDefault prints a stored value as the literal its column takes', () 
     ['a value on a column type with no authoring entry anywhere', 'AA==', blob],
     ['a whole number too wide for the column type', '100000000000000099', int4],
   ] as [string, JsonValue, DataType][])(
-    'describes %s in a comment, so the caller falls back',
+    'writes nothing for %s, so the caller falls back to the raw expression',
     (_name, value, column) => {
-      expect(mapDefault({ kind: 'literal', value }, forColumn(column))).toEqual({
-        comment: `// Literal default: ${JSON.stringify(value)}`,
-      });
+      expect(mapDefault({ kind: 'literal', value }, forColumn(column))).toBeUndefined();
     },
   );
 
-  it('describes a list element the column type does not take in a comment', () => {
+  it('writes nothing for a list element the column type does not take', () => {
     expect(
       mapDefault({ kind: 'literal', value: [1, 'x'] }, forColumn(int4, { list: true })),
-    ).toEqual({ comment: '// Literal default: [1,"x"]' });
+    ).toBeUndefined();
   });
 
-  it('describes a literal in a comment when no data types are given at all', () => {
-    expect(mapDefault({ kind: 'literal', value: 'hello' })).toEqual({
-      comment: '// Literal default: "hello"',
-    });
+  it('writes nothing for a literal when no data types are given at all', () => {
+    expect(mapDefault({ kind: 'literal', value: 'hello' })).toBeUndefined();
   });
 });

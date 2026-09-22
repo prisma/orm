@@ -116,7 +116,7 @@ Beyond the canonical project DoD items:
 
 ### ADR audit (final-retro item)
 
-Walk `design-decisions.md` for any decision that hasn't migrated to an ADR. If unmigrated decisions exist that are architecturally durable (cross-cutting, hard to reverse, affect future work), block close-out until they have ADRs — closing with un-ADR'd architectural decisions is a known close-out failure mode.
+Walk `design-decisions.md`, and the decisions section or decision log of the project `spec.md` if it has one, for any decision that hasn't migrated to an ADR. If unmigrated decisions exist that are architecturally durable (cross-cutting, hard to reverse, affect future work), block close-out until they have ADRs — closing with un-ADR'd architectural decisions is a known close-out failure mode.
 
 ## Test-dispatch brief overlay
 

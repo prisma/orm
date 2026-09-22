@@ -149,7 +149,7 @@ describe('printPsl writes each default as the literal the column data type takes
     'falls back to the raw expression for the temporal sentinel %s, which its codec refuses',
     (_name, rawDefault) => {
       const printed = printedDefaults([introspected('stamp', 'timestamp', rawDefault)])['stamp'];
-      expect(printed).toMatch(/^@default\(dbgenerated\(/);
+      expect(printed).toBe(`@default(sql${BACKTICK}${rawDefault}${BACKTICK})`);
     },
   );
 
@@ -161,9 +161,31 @@ describe('printPsl writes each default as the literal the column data type takes
     ).toEqual({ stamp: '@default("2024-01-01 00:00:00")' });
   });
 
-  it('prints a database expression as the raw expression', () => {
-    expect(printedDefaults([introspected('token', 'uuid', 'gen_random_uuid()')])).toEqual({
-      token: '@default(dbgenerated("gen_random_uuid()"))',
+  it.each([
+    ['a database function', 'uuid', 'gen_random_uuid()'],
+    ['an expression', 'timestamptz', "(now() + '00:03:00'::interval)"],
+  ])('prints %s as a sql tagged literal', (_name, nativeType, rawDefault) => {
+    expect(printedDefaults([introspected('value', nativeType, rawDefault)])).toEqual({
+      value: `@default(sql${BACKTICK}${rawDefault}${BACKTICK})`,
+    });
+  });
+
+  it('prints an expression holding a backtick inside the double-quote fence', () => {
+    const rawDefault = `concat('${BACKTICK}', 'x')`;
+    expect(printedDefaults([introspected('value', 'text', rawDefault)])).toEqual({
+      value: `@default(sql"${rawDefault}")`,
+    });
+  });
+
+  it('prints a text literal cast to the column type as a string literal', () => {
+    expect(printedDefaults([introspected('label', 'text', "'draft'::text")])).toEqual({
+      label: '@default("draft")',
+    });
+  });
+
+  it('prints a jsonb literal cast to the column type as a json literal', () => {
+    expect(printedDefaults([introspected('meta', 'jsonb', "'{}'::jsonb")])).toEqual({
+      meta: `@default(${tagged('json', '{}')})`,
     });
   });
 

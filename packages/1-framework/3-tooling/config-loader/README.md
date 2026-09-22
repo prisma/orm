@@ -10,10 +10,7 @@ This package owns config _loading_ — the file I/O (`c12`), validation, and fin
 that turns a `prisma.config.ts` on disk into a resolved `PrismaNextConfig`. It also
 performs the emitter-derived artifact-collision check (`getEmittedArtifactPaths`).
 
-It exposes a single `loadConfig(configPath?)` that maps failures to the CLI's structured
-`@internal/errors/control` errors (`CliStructuredError`). Consumers that need to react to
-specific failures (e.g. the language server degrading on a missing/invalid config) branch on
-the structured error's stable `code` (`4001` = config file not found, `4009` = config validation).
+Its main entry is `loadConfig(configPath?)`, which maps failures to the CLI's structured `@internal/errors/control` errors (`CliStructuredError`). Consumers that need to react to specific failures (e.g. the language server degrading on a missing/invalid config) branch on the structured error's stable `code` (`4001` = config file not found, `4009` = config validation). The package also exports the pieces `loadConfig` is built from: `evaluateConfigModule` returns a config file's raw default export, `buildLoadedConfig` validates and finalizes an `orm` section built in memory, and `finalizeConfig` resolves a config's paths.
 
 ## Usage
 

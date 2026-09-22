@@ -68,8 +68,12 @@
  *                              Cosine-distance similarity search via ORM client
  * - repo-search-posts <embedding> <maxDistance> [limit]
  *                              Vector similarity search via ORM client
+ * - repo-search-posts-text <query> [limit]
+ *                              Full-text search over post titles via ORM client
  * - users-paginate [cursor]    Cursor-based pagination
  * - similarity-search <vec>    Vector similarity search (pgvector)
+ * - full-text-search <query> [limit]
+ *                              Full-text search with rank and highlighted headline (SQL DSL)
  * - raw-sql-demo [limit]         `fns.raw` in projection + filter + typed-expression
  *                              interpolation, in one query
  * - raw-query-report [limit]     Whole-query raw read: one template, a row spec mixing
@@ -151,11 +155,13 @@ import { ormClientGetUsersBackwardCursor } from './orm-client/get-users-backward
 import { ormClientGetUsersByIdCursor } from './orm-client/get-users-by-id-cursor';
 import { ormClientGetUsersCached } from './orm-client/get-users-cached';
 import { ormClientSearchPostsByEmbedding } from './orm-client/search-posts-by-embedding';
+import { ormClientSearchPostsByTitle } from './orm-client/search-posts-by-title';
 import { ormClientUpsertUser } from './orm-client/upsert-user';
 import { db } from './prisma/db';
 import { crossAuthorSimilarity } from './queries/cross-author-similarity';
 import { deleteWithoutWhere } from './queries/delete-without-where';
 import { enumDefaultDemo } from './queries/enum-default-demo';
+import { fullTextSearch } from './queries/full-text-search';
 import { getAllPostsUnbounded } from './queries/get-all-posts-unbounded';
 import { getPostsByPriority, getPostsByPriorityMember } from './queries/get-posts-by-priority';
 import { getUserByEmailPrepared } from './queries/get-user-by-email-prepared';
@@ -528,6 +534,16 @@ async function main() {
       );
 
       console.log(JSON.stringify(posts, null, 2));
+    } else if (cmd === 'repo-search-posts-text') {
+      const [query, limitStr] = args;
+      if (!query) {
+        console.error('Usage: pnpm start -- repo-search-posts-text <query> [limit]');
+        process.exit(1);
+      }
+      const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
+      const posts = await ormClientSearchPostsByTitle(query, limit, runtime);
+
+      console.log(JSON.stringify(posts, null, 2));
     } else if (cmd === 'users-paginate') {
       const [cursorStr, limitStr] = args;
       const cursor = cursorStr ?? null;
@@ -602,6 +618,16 @@ async function main() {
       const results = await rawQueryPromoteAndList(titleTerm);
 
       console.log(toJson(results));
+    } else if (cmd === 'full-text-search') {
+      const [query, limitStr] = args;
+      if (!query) {
+        console.error('Usage: pnpm start -- full-text-search <query> [limit]');
+        process.exit(1);
+      }
+      const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
+      const results = await fullTextSearch(query, limit, runtime);
+
+      console.log(JSON.stringify(results, null, 2));
     } else if (cmd === 'cross-author-similarity') {
       const [limitStr] = args;
       const limit = limitStr ? Number.parseInt(limitStr, 10) : 10;
@@ -802,6 +828,7 @@ async function main() {
     } else {
       console.log(
         'Usage: pnpm start -- [users [limit] | user <userId> | posts <userId> | ' +
+          'repo-search-posts-text <query> [limit] | full-text-search <query> [limit] | ' +
           'repo-users [limit] | repo-admins [limit] | ' +
           'repo-user <email> | repo-posts <userId> [limit] | orm-user-profile <id> | ' +
           'repo-dashboard <emailDomain> <postTitleTerm> [limit] [postsPerUser] | ' +

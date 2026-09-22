@@ -660,7 +660,7 @@ model User {
   cuid2 String @default(cuid(2))
   uuidV7 String @default(uuid(7))
   nanoid16 String @default(nanoid(16))
-  dbExpr String @default(dbgenerated("gen_random_uuid()"))
+  dbExpr String @default(sql\`gen_random_uuid()\`)
 }
 `,
         'utf-8',

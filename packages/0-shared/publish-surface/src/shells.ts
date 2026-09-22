@@ -637,6 +637,7 @@ export const publicShells: ReadonlyMap<ShellName, ShellDefinition> = new Map<
           'default-normalizer',
           'diff-database-schema',
           'errors',
+          'full-text',
           'issue-planner',
           'migration',
           'native-type-normalizer',

@@ -29,6 +29,7 @@ import {
   pgNumericDescriptor,
   pgTextDescriptor,
   pgTimetzDescriptor,
+  pgTsqueryDescriptor,
   pgUnboundedIntDescriptor,
   pgUuidDescriptor,
   pgVarbitDescriptor,
@@ -92,6 +93,7 @@ export const codecDescriptorMap = {
   interval: pgIntervalDescriptor,
   json: pgJsonDescriptor,
   jsonb: pgJsonbDescriptor,
+  tsquery: pgTsqueryDescriptor,
 } as const;
 
 export type Resolve<T> = { readonly [K in keyof T]: { readonly [P in keyof T[K]]: T[K][P] } };

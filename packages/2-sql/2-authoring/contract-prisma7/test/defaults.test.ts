@@ -2,7 +2,12 @@ import { prisma7PostgresBinding } from '@internal/target-postgres/prisma7-bindin
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { prisma7Contract } from '../src/provider';
-import { fixturesDir, loadFixtureTable, postgresSourceContext } from './support';
+import {
+  fixturesDir,
+  loadFixtureTable,
+  postgresSourceContext,
+  postgresSourceContextWithout,
+} from './support';
 
 describe('DateTime string defaults', () => {
   it('carry the default Postgres stores for each native type, not the text Prisma 7 writes', async () => {
@@ -53,7 +58,39 @@ describe('Bytes[] and DateTime[] list defaults', () => {
   });
 });
 
+describe('dbgenerated("<sql>")', () => {
+  it('lowers to a raw SQL default without a registry entry for dbgenerated', async () => {
+    const { columns } = await loadFixtureTable(
+      'defaults',
+      'Defaults',
+      'public',
+      postgresSourceContextWithout('dbgenerated'),
+    );
+    expect(columns['generated']?.['default']).toEqual({
+      kind: 'function',
+      expression: 'gen_random_uuid()',
+    });
+  });
+
+  it('is refused unless the argument list is a single positional string with text in it', async () => {
+    expect(await diagnosticsOf('dbgenerated-without-expression', 'unread-argument.prisma')).toEqual(
+      [
+        'Field "T.number": @default function "dbgenerated()" has an argument this contract source does not read.',
+        'Field "T.two": @default function "dbgenerated()" has an argument this contract source does not read.',
+        'Field "T.named": @default function "dbgenerated()" has an argument this contract source does not read.',
+        'Field "T.blank": @default function "dbgenerated()" has an argument this contract source does not read.',
+        'Field "T.spaces": @default function "dbgenerated()" has an argument this contract source does not read.',
+      ],
+    );
+  });
+});
+
 describe('dbgenerated() with no expression', () => {
+  it('describes a required column with no default and reports nothing', async () => {
+    const { columns } = await loadFixtureTable('dbgenerated-without-expression', 'T');
+    expect(columns['a']).toEqual({ nativeType: 'text', codecId: 'pg/text@1', nullable: false });
+  });
+
   it('describes an optional or list column with no default, as Prisma 7 creates it', async () => {
     const { columns } = await loadFixtureTable('dbgenerated-without-expression-optional', 'T');
     expect({ a: columns['a'], list: columns['list'] }).toEqual({

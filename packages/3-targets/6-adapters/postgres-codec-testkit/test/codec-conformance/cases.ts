@@ -326,6 +326,7 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
     value: '123e4567-e89b-12d3-a456-426614174000',
   },
   { codecId: 'pg/inet@1', label: 'ipv4 address', value: '192.168.0.1' },
+  { codecId: 'pg/tsquery@1', label: 'tsquery in its canonical form', value: "'zebra' & !'graze'" },
   { codecId: 'pg/text-array@1', label: 'string array', value: ['a', 'b'] },
   {
     codecId: 'pg/text-array@1',
@@ -416,6 +417,12 @@ export const postgresConformanceCases: readonly PostgresCodecConformanceCase[] =
   },
   {
     codecId: 'pg/inet@1',
+    label: 'null',
+    value: undefined,
+    nullValue: true,
+  },
+  {
+    codecId: 'pg/tsquery@1',
     label: 'null',
     value: undefined,
     nullValue: true,

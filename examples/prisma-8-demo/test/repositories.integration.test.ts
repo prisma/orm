@@ -29,6 +29,7 @@ import { ormClientGetUsersBackwardCursor } from '../src/orm-client/get-users-bac
 import { ormClientGetUsersByIdCursor } from '../src/orm-client/get-users-by-id-cursor';
 import { ormClientGetUsersCached } from '../src/orm-client/get-users-cached';
 import { ormClientSearchPostsByEmbedding } from '../src/orm-client/search-posts-by-embedding';
+import { ormClientSearchPostsByTitle } from '../src/orm-client/search-posts-by-title';
 import { ormClientUpdateUserEmail } from '../src/orm-client/update-user-email';
 import { ormClientUpsertUser } from '../src/orm-client/upsert-user';
 import type { Contract } from '../src/prisma/contract.d';
@@ -1032,6 +1033,38 @@ describe('ORM client integration examples', () => {
             embeddingPostIds.similar1,
             embeddingPostIds.similar2,
           ]);
+        } finally {
+          await runtime.close();
+        }
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'ormClientSearchPostsByTitle finds posts by full-text match on the title',
+    async () => {
+      await withDevDatabase(async ({ connectionString }) => {
+        await initTestDatabase({ connection: connectionString, contract });
+        const runtime = await getRuntime(connectionString);
+
+        try {
+          await seedOrmClientData(runtime);
+
+          const zebra = await ormClientSearchPostsByTitle('zebra', 10, runtime);
+          expect(zebra).toEqual([
+            {
+              id: seededPostIds.adminZebra,
+              title: 'Zebra post note',
+              userId: seededUserIds.adminTwo,
+            },
+          ]);
+
+          const phrase = await ormClientSearchPostsByTitle('"deep dive"', 10, runtime);
+          expect(phrase.map((p) => p.id)).toEqual([seededPostIds.adminDeepDive]);
+
+          const excluded = await ormClientSearchPostsByTitle('note -zebra', 10, runtime);
+          expect(excluded.map((p) => p.id)).toEqual([seededPostIds.memberNote]);
         } finally {
           await runtime.close();
         }
