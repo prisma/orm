@@ -155,6 +155,16 @@ describe('what each cast converts', () => {
   });
 
   it.each([
+    ['a value in a shape the source type does not store', pgInt8, pgInt2.id, 'not a number'],
+    ['a magnitude no double holds', pgFloat8, pgNumeric.id, '1'.padEnd(400, '0')],
+    ['a magnitude no float4 holds', pgFloat4, pgNumeric.id, '3.5e38'],
+  ])('refuses %s with a cast-level code', (_name, type, source, value) => {
+    expect(() => type.casts[source]?.(value)).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.CAST_REFUSED' }),
+    );
+  });
+
+  it.each([
     ['pg/int8, whose canonical form is digit text', pgInt8, pgInt2.id],
     ['pg/numeric, whose canonical form is text', pgNumeric, pgInt4.id],
   ])('refuses a value %s cannot have been handed', (_name, type, source) => {

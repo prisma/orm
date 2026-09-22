@@ -19,11 +19,11 @@ function elementNumber(element: JsonValue): number {
     if (Number.isFinite(converted)) return converted;
   }
   throw structuredError(
-    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    'CONTRACT.CAST_REFUSED',
     `A vector holds finite numbers, and ${JSON.stringify(element)} is not one.`,
     {
       why: 'A vector element is a finite number; NaN and the two infinities have no place in one.',
-      fix: 'Write a finite number for every element.',
+      fix: 'Use a finite number for every element.',
     },
   );
 }

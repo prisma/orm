@@ -18,11 +18,11 @@ const unchanged: Cast = (value) => value;
 
 function wrongShape(value: JsonValue, expected: string): never {
   throw structuredError(
-    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    'CONTRACT.CAST_REFUSED',
     `Expected ${expected}, got ${JSON.stringify(value)}.`,
     {
       why: 'A cast reads the canonical form of the type it takes values of.',
-      fix: 'Report this: a value reached a cast in a shape its source type does not store.',
+      fix: 'Hand the cast a value in the shape its source type stores.',
     },
   );
 }
@@ -40,11 +40,11 @@ const asReal: Cast = (value) => {
   const converted = Number(value);
   if (Number.isFinite(converted)) return converted;
   throw structuredError(
-    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    'CONTRACT.CAST_REFUSED',
     `${value} is out of range: no double holds a number that large.`,
     {
       why: 'A real stores a double, which holds magnitudes up to about 1.8e308.',
-      fix: 'Write a number a double holds.',
+      fix: 'Use a number a double holds.',
     },
   );
 };

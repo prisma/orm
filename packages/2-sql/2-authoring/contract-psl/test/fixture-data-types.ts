@@ -25,7 +25,7 @@ const asNumber: Cast = (value) => {
   if (typeof value === 'string' && NON_FINITE.has(value)) return value;
   const converted = Number(value);
   if (Number.isFinite(converted)) return converted;
-  throw structuredError('CONTRACT.INVALID_DEFAULT_LITERAL', `${String(value)} is out of range.`, {
+  throw structuredError('CONTRACT.CAST_REFUSED', `${String(value)} is out of range.`, {
     why: 'The floating-point types store a double.',
     fix: 'Write a number a double holds.',
   });
@@ -125,7 +125,7 @@ function classifyNumber(
 
 function readBoolean(text: string): JsonValue {
   if (text === 'true' || text === 'false') return text === 'true';
-  throw structuredError('CONTRACT.INVALID_DEFAULT_LITERAL', `"${text}" is not a boolean.`, {
+  throw structuredError('CONTRACT.CAST_REFUSED', `"${text}" is not a boolean.`, {
     why: 'A boolean is written as true or false.',
     fix: 'Write true or false.',
   });

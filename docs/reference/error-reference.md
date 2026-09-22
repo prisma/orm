@@ -225,6 +225,10 @@ The SQL emitter is asked to emit an aggregate result row whose declared result c
 
 The control plane resolves a codec referenced by the contract (a `CodecRef.codecId`) against the contract's pack stack and finds no registered codec descriptor for that id. Hit during control-plane operations (emit, migration tooling) when a contract references a codec no composed pack provides. Payload: `codecId`.
 
+### CONTRACT.CAST_REFUSED
+
+A value handed to a data type's cast, or to an authoring entry that reads written text, is not one that type takes: it is not in the shape the source type stores, its magnitude is outside the range the receiving type holds, or the text is not a boolean. Raised by a target's or extension's casts and authoring entries. A contract source reading a column default reports it to the author as the PSL diagnostic `PSL_INVALID_DEFAULT_LITERAL`. Payload: `why`, `fix`.
+
 ### CONTRACT.CHECK_NAME_RESERVED
 
 An authored `@@check` / `check()`'s `name:` prefix matches the shape a derived enforcement check would use for a column of the same table (`<table>_<column>_check` or `<table>_<column>_elem_not_null`), so it cannot be told apart from a derived check once a non-`managed` table strips those. The message and `collidingColumns` meta name the column(s) whose derived-check shape the prefix matches. Raised while building a SQL contract, once the table's real columns are in hand. The fix is to choose a different `name:`. Payload: `tableName`, `prefix`, `collidingColumns`.
@@ -328,10 +332,6 @@ A Mongo variant model declares an index that conflicts with the discriminator sc
 ### CONTRACT.INTROSPECTION_UNSUPPORTED
 
 Introspection read an unrecognized or malformed database shape: an unknown referential action rule, or a malformed index reloption entry. Raised by the Postgres and SQLite control adapters. Payload: `rule`, `entry`, `indexName`.
-
-### CONTRACT.INVALID_DEFAULT_LITERAL
-
-A written column default is not a value of the column's data type: the text is not a number, boolean, or byte string the type reads, or its magnitude is outside the range the type stores. Raised by a target's or extension's casts and authoring entries while reading a default. Contract sources report it to the author as the PSL diagnostic `PSL_INVALID_DEFAULT_LITERAL`. Payload: `why`, `fix`.
 
 ### CONTRACT.INVALID_JSON_LITERAL
 

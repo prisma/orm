@@ -39,9 +39,9 @@ const classifyPostgresNumber = createNumberClassifier({
 
 function readBoolean(text: string): JsonValue {
   if (text === 'true' || text === 'false') return text === 'true';
-  throw structuredError('CONTRACT.INVALID_DEFAULT_LITERAL', `"${text}" is not a boolean.`, {
-    why: 'A boolean is written as true or false.',
-    fix: 'Write true or false.',
+  throw structuredError('CONTRACT.CAST_REFUSED', `"${text}" is not a boolean.`, {
+    why: 'The only text a boolean reads is true or false.',
+    fix: 'Use true or false.',
   });
 }
 

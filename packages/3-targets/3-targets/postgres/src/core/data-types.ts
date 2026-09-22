@@ -18,11 +18,11 @@ const unchanged: Cast = (value) => value;
 
 function wrongShape(value: JsonValue, expected: string): never {
   throw structuredError(
-    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    'CONTRACT.CAST_REFUSED',
     `Expected ${expected}, got ${JSON.stringify(value)}.`,
     {
       why: 'A cast reads the canonical form of the type it takes values of.',
-      fix: 'Report this: a value reached a cast in a shape its source type does not store.',
+      fix: 'Hand the cast a value in the shape its source type stores.',
     },
   );
 }
@@ -44,11 +44,11 @@ const asFloat: Cast = (value) => {
   const converted = Number(value);
   if (Number.isFinite(converted)) return converted;
   throw structuredError(
-    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    'CONTRACT.CAST_REFUSED',
     `${value} is out of range: no double holds a number that large.`,
     {
       why: 'The floating-point types store a double, which holds magnitudes up to about 1.8e308.',
-      fix: 'Write a number a double holds, or store it in a numeric column.',
+      fix: 'Use a number a double holds, or a numeric column.',
     },
   );
 };
@@ -79,11 +79,11 @@ const asFloat4: Cast = (value) => {
   const converted = asFloat(value);
   if (typeof converted !== 'number' || Number.isFinite(Math.fround(converted))) return converted;
   throw structuredError(
-    'CONTRACT.INVALID_DEFAULT_LITERAL',
+    'CONTRACT.CAST_REFUSED',
     `${converted} is out of range: no float4 holds a number that large.`,
     {
       why: 'float4 stores a single-precision float, which holds magnitudes up to about 3.4e38.',
-      fix: 'Write a number float4 holds, or store it in a float8 or numeric column.',
+      fix: 'Use a number float4 holds, or a float8 or numeric column.',
     },
   );
 };
