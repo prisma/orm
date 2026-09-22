@@ -3,14 +3,8 @@ import type {
   AuthoringPslBlockDescriptorNamespace,
 } from '@internal/framework-components/authoring';
 import { isAuthoringPslBlockDescriptor } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
-import type {
-  PslBlockParam,
-  PslExtensionBlock,
-  PslExtensionBlockParamValue,
-} from '@internal/framework-components/psl-ast';
+import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
 import { UNSPECIFIED_PSL_NAMESPACE_ID } from '@internal/framework-components/psl-ast';
-import { blindCast } from '@internal/utils/casts';
 import { contractError } from './contract-errors';
 import type { PrintDocument, PrintNamespaceSection } from './print-document';
 import type { PrinterField, PrinterNamedType } from './types';
@@ -64,7 +58,6 @@ export function escapePslString(value: string): string {
 
 export interface SerializePrintDocumentOptions {
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
-  readonly codecLookup?: CodecLookup;
 }
 
 export function serializePrintDocument(
@@ -83,11 +76,7 @@ export function serializePrintDocument(
   const blockDispatchMap = buildPslBlockDispatchMap(options.pslBlockDescriptors);
 
   for (const namespace of doc.namespaces) {
-    const namespaceSections = serializeNamespaceContents(
-      namespace,
-      blockDispatchMap,
-      options.codecLookup,
-    );
+    const namespaceSections = serializeNamespaceContents(namespace, blockDispatchMap);
     if (namespaceSections.length === 0) {
       continue;
     }
@@ -107,22 +96,28 @@ export function serializePrintDocument(
 function serializeNamespaceContents(
   namespace: PrintNamespaceSection,
   blockDispatchMap: PslBlockDispatchMap,
-  codecLookup: CodecLookup | undefined,
 ): string[] {
   const sections: string[] = [];
   for (const model of namespace.models) {
     sections.push(serializeModel(model));
   }
   for (const extensionBlock of namespace.extensionBlocks) {
-    sections.push(serializeExtensionBlock(extensionBlock, blockDispatchMap, codecLookup));
+    sections.push(serializeExtensionBlock(extensionBlock, blockDispatchMap));
   }
   return sections;
 }
 
+/**
+ * Renders one extension block from its source provenance: ordered entries
+ * exactly as authored (or as inference synthesized them) and printable `@@`
+ * attribute lines. Provenance rendering only — no value interpretation, no
+ * reference resolution, and no spec factory execution; the registration and
+ * keyword/discriminator consistency checks are the printer's whole use of
+ * the descriptor.
+ */
 function serializeExtensionBlock(
   extensionBlock: PslExtensionBlock,
   blockDispatchMap: PslBlockDispatchMap,
-  codecLookup: CodecLookup | undefined,
 ): string {
   const descriptor = blockDispatchMap.byKeyword.get(extensionBlock.keyword);
   if (!descriptor) {
@@ -147,21 +142,12 @@ function serializeExtensionBlock(
     );
   }
   const lines: string[] = [`${extensionBlock.keyword} ${extensionBlock.name} {`];
-  for (const [paramName, paramDescriptor] of Object.entries(descriptor.parameters)) {
-    const paramValue = extensionBlock.parameters[paramName];
-    if (paramValue === undefined) {
-      continue;
-    }
-    const rendered = renderParamValue(paramValue, paramDescriptor, codecLookup, paramName);
-    lines.push(`${PSL_INDENT_UNIT}${paramName} = ${rendered}`);
-  }
-  if (descriptor.variadicParameters) {
-    for (const [paramName, paramValue] of Object.entries(extensionBlock.parameters)) {
-      if (Object.hasOwn(descriptor.parameters, paramName)) {
-        continue;
-      }
-      lines.push(`${PSL_INDENT_UNIT}${renderVariadicParam(paramName, paramValue)}`);
-    }
+  for (const [entryKey, entry] of Object.entries(extensionBlock.parameters)) {
+    lines.push(
+      entry.expression === undefined
+        ? `${PSL_INDENT_UNIT}${entryKey}`
+        : `${PSL_INDENT_UNIT}${entryKey} = ${entry.expression}`,
+    );
   }
   for (const attr of extensionBlock.blockAttributes ?? []) {
     const args = attr.args.map((arg) => arg.value).join(', ');
@@ -169,121 +155,6 @@ function serializeExtensionBlock(
   }
   lines.push('}');
   return lines.join('\n');
-}
-
-/**
- * Renders one undeclared parameter of a `variadicParameters` block (e.g. a
- * `native_enum` member line). Variadic entries have no per-parameter
- * descriptor, so there is no codec to round-trip a `value` through — the raw
- * PSL literal is emitted verbatim. A `bare` entry is just its key.
- */
-function renderVariadicParam(paramName: string, paramValue: PslExtensionBlockParamValue): string {
-  if (paramValue.kind === 'bare') {
-    return paramName;
-  }
-  return `${paramName} = ${renderVariadicValue(paramValue)}`;
-}
-
-function renderVariadicValue(paramValue: PslExtensionBlockParamValue): string {
-  switch (paramValue.kind) {
-    case 'bare':
-      return '';
-    case 'value':
-      return paramValue.raw;
-    case 'ref':
-      return paramValue.identifier;
-    case 'option':
-      return paramValue.token;
-    case 'list':
-      return `[${paramValue.items.map(renderVariadicValue).join(', ')}]`;
-  }
-}
-
-function renderParamValue(
-  paramValue: PslExtensionBlockParamValue,
-  descriptor: PslBlockParam,
-  codecLookup: CodecLookup | undefined,
-  paramName: string,
-): string {
-  switch (descriptor.kind) {
-    case 'ref': {
-      if (paramValue.kind !== 'ref') {
-        throw paramKindMismatchError(paramName, 'ref', paramValue.kind);
-      }
-      return paramValue.identifier;
-    }
-    case 'value': {
-      if (paramValue.kind !== 'value') {
-        throw paramKindMismatchError(paramName, 'value', paramValue.kind);
-      }
-      return renderValueParam(paramValue.raw, descriptor.codecId, codecLookup, paramName);
-    }
-    case 'option': {
-      if (paramValue.kind !== 'option') {
-        throw paramKindMismatchError(paramName, 'option', paramValue.kind);
-      }
-      return paramValue.token;
-    }
-    case 'list': {
-      if (paramValue.kind !== 'list') {
-        throw paramKindMismatchError(paramName, 'list', paramValue.kind);
-      }
-      const items = paramValue.items.map((item) =>
-        renderParamValue(item, descriptor.of, codecLookup, paramName),
-      );
-      return `[${items.join(', ')}]`;
-    }
-  }
-}
-
-function paramKindMismatchError(
-  paramName: string,
-  descriptorKind: PslBlockParam['kind'],
-  valueKind: PslExtensionBlockParamValue['kind'],
-) {
-  return contractError(
-    'CONTRACT.PACK_CONTRIBUTION_INVALID',
-    `Extension block parameter "${paramName}": descriptor is "${descriptorKind}" but AST node has kind "${valueKind}"`,
-    { meta: { reason: 'param-kind-mismatch', paramName, descriptorKind, valueKind } },
-  );
-}
-
-function renderValueParam(
-  raw: string,
-  codecId: string,
-  codecLookup: CodecLookup | undefined,
-  paramName: string,
-): string {
-  if (!codecLookup) {
-    return raw;
-  }
-  const codec = codecLookup.get(codecId);
-  if (!codec) {
-    throw contractError(
-      'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      `Extension block parameter "${paramName}": no codec registered for id "${codecId}"`,
-      { meta: { reason: 'codec-unregistered', paramName, codecId } },
-    );
-  }
-  let parsedJson: unknown;
-  try {
-    parsedJson = JSON.parse(raw);
-  } catch (e) {
-    throw contractError(
-      'CONTRACT.PACK_CONTRIBUTION_INVALID',
-      `Extension block parameter "${paramName}": codec "${codecId}" — raw literal is not valid JSON: ${String(e)}`,
-      { meta: { reason: 'raw-literal-invalid-json', paramName, codecId }, cause: e },
-    );
-  }
-  return JSON.stringify(
-    codec.encodeJson(
-      codec.decodeJson(
-        blindCast<Parameters<typeof codec.decodeJson>[0], 'JSON.parse output is JsonValue'>(
-          parsedJson,
-        ),
-      ),
-    ),
-  );
 }
 
 function wrapNamespaceBlock(name: string, innerSections: readonly string[]): string {
