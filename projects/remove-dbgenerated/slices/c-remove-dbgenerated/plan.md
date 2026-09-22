@@ -23,7 +23,7 @@ Spec: [`spec.md`](spec.md). Branch `remove-dbgenerated-delete` off `main` at `6f
 
 - The enum-cast print form is a string literal (`@default("STANDARD")`), as `main` already prints it. Do not change it to the member name.
 - The upgrade instruction's enum row therefore says `@default("<member>")` for the rewrite, matching what infer prints.
-- Dispatch 2 must leave the repository green on its own: every PSL input rewritten in the same dispatch as the registry deletion.
+- Dispatch 2 rewrites every PSL input in the same dispatch as the registry deletion. *Amended after dispatch 2:* `pnpm fixtures:check` builds the Supabase contract space, whose `contract.prisma` still carries `dbgenerated` until dispatch 4 regenerates it, so that one gate is red from dispatch 2 until dispatch 4. Only the branch tip must be green; the gate moves to dispatch 4.
 - Comments that only name `dbgenerated` as history (for example in `contract-to-schema-ir.ts`) are rewritten to describe the current behaviour, not deleted with the code around them.
 
 ## Open items
