@@ -6,9 +6,10 @@ import type {
   PslContractSourceProvider,
 } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
+import type { ParsedPslExtensionBlock } from '@internal/framework-components/psl-ast';
 import { notOk, type Result } from '@internal/utils/result';
 import type { PslSources } from './source-file';
-import type { SymbolTable } from './symbol-table';
+import type { BlockSymbol, SymbolTable } from './symbol-table';
 import type { DocumentAst } from './syntax/ast/declarations';
 
 /**
@@ -20,6 +21,14 @@ export interface PslInterpretInput {
   readonly documents: readonly DocumentAst[];
   readonly sources: PslSources;
   readonly symbolTable: SymbolTable;
+  /**
+   * The typed envelopes `buildSymbolTable` published for this table. Callers
+   * that hold a `SymbolTableResult` thread it through so interpreters
+   * consume the parser-owned lifecycle directly; an interpreter falls back
+   * to `deriveParsedBlocks` only when a caller predating this field omits
+   * it.
+   */
+  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }
 
 /**

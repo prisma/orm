@@ -9,6 +9,7 @@ import { oneOf } from '../src/attribute-spec/combinators/one-of';
 import { str } from '../src/attribute-spec/combinators/str';
 import { optional } from '../src/attribute-spec/optional';
 import { entriesBlock, fixedBlock } from '../src/block-spec/binders';
+import { deriveParsedBlocks } from '../src/block-spec/derive';
 import type { PslBlockSpecDescriptor } from '../src/block-spec/descriptor';
 import { parse } from '../src/parse';
 import type { BlockSymbol, ModelSymbol } from '../src/symbol-table';
@@ -369,6 +370,34 @@ describe('buildSymbolTable() — parsedBlocks lifecycle', () => {
       start: { line: 5, character: 11 },
       end: { line: 5, character: 13 },
     });
+  });
+
+  it('deriveParsedBlocks reproduces the lifecycle result for unthreaded callers', () => {
+    const { document, sources } = parse(
+      [
+        'model Post {',
+        '  id Int',
+        '}',
+        'policy_select ReadPosts {',
+        '  target = Post',
+        '  using  = "true"',
+        '}',
+        'mystery Thing {',
+        '}',
+      ].join('\n'),
+      'test.psl',
+    );
+    const result = buildSymbolTable({
+      documents: [document],
+      sources,
+      pslBlockDescriptors: DESCRIPTORS,
+    });
+
+    const derived = deriveParsedBlocks(result.symbolTable, sources, DESCRIPTORS);
+
+    expect([...derived.keys()]).toEqual([...result.parsedBlocks.keys()]);
+    const block = blockNamed({ ...result, diagnostics: [] }, 'ReadPosts');
+    expect(derived.get(block)).toEqual(result.parsedBlocks.get(block));
   });
 
   it('publishes envelopes for prototype-named blocks and members through the map', () => {

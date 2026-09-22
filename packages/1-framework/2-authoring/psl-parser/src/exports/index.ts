@@ -110,6 +110,7 @@ export {
   PSL_UNRESOLVED_REFERENCE,
 } from '../binder';
 export { entriesBlock, fixedBlock } from '../block-spec/binders';
+export { deriveParsedBlocks } from '../block-spec/derive';
 export type { PslBlockSpecDescriptor } from '../block-spec/descriptor';
 export { blockSpecFactoryOf } from '../block-spec/descriptor';
 export type {
