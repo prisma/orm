@@ -86,7 +86,9 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model Account {
+        `// use prisma-8
+
+model Account {
   id      Int    @id
   balance BigInt @default(42)
 }
