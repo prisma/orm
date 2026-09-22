@@ -28,7 +28,7 @@ PostgreSQL and SQLite target descriptors also declare AST-to-AST JSON projection
 
 **A value read back through database-produced JSON is the value that was stored.** Where a query returns JSON — an `.include()`'s nested rows, an aggregated child row set — each column reaches that JSON through its own codec's projection, and `decodeJson` returns the application value the column holds. A `numeric` arrives as its exact decimal text rather than rounded through a double; a `bytea` as base64 rather than a hex escape; a `bigint` as decimal text rather than a JSON number that cannot hold it. Absence is preserved: a `NULL` column reads back as `null`, never as a zero or an empty value.
 
-The guarantee reaches values the query **computes** as well as values it stores. An aggregate has no column codec to be canonical against, so its target declares one — see the [aggregate descriptor guide](./aggregate-descriptor-guide.md) — and the declared codec is what the value enters JSON under and is read back through. A count inside an `.include()` arrives under `pg/int8number@1`, whose canonical JSON is a JSON number and whose post-parse guard refuses a value the safe-integer range cannot hold; a `countBigInt` in the same position arrives under `pg/int8@1` as decimal text. An aggregate no target declares an overload for does not weaken this: the call is a type error on the typed surfaces, and a dynamic invocation is rejected with `ORM.AGGREGATE_UNSUPPORTED` before any SQL is built — no undeclared value ever reaches JSON.
+The guarantee reaches values the query **computes** as well as values it stores. An aggregate has no column codec to be canonical against, so its target declares one — see the [aggregate descriptor guide](./aggregate-descriptor-guide.md) — and the declared codec is what the value enters JSON under and is read back through. A count inside an `.include()` arrives under `pg/int8number@1`, whose canonical JSON is the digit text `pg/int8` stores and whose post-parse guard refuses a value the safe-integer range cannot hold; a `countBigInt` in the same position arrives under `pg/int8@1` as decimal text. An aggregate no target declares an overload for does not weaken this: the call is a type error on the typed surfaces, and a dynamic invocation is rejected with `ORM.AGGREGATE_UNSUPPORTED` before any SQL is built — no undeclared value ever reaches JSON.
 
 The guarantee rests on the codec, not on the database's own JSON conversion, which is why it can be stated at all. It has exactly two limits, and both are real:
 
@@ -285,8 +285,10 @@ Adapt a reusable generic descriptor with `postgresCodec(...)` instead of subclas
 ```ts
 import { sqlIntDescriptor } from '@internal/sql-relational-core/ast';
 import { postgresCodec } from '@internal/target-postgres/codec-descriptor';
+import { pgInt4 } from '@internal/target-postgres/data-types';
 
 const postgresSqlIntDescriptor = postgresCodec(sqlIntDescriptor, {
+  dataType: pgInt4.id,
   nativeType: () => 'integer',
   jsonProjection: (expression) => expression,
 });
@@ -325,8 +327,10 @@ Generic SQL descriptors are adapted explicitly with `sqliteCodec(...)`:
 ```ts
 import { sqlIntDescriptor } from '@internal/sql-relational-core/ast';
 import { sqliteCodec } from '@internal/target-sqlite/codec-descriptor';
+import { sqliteInteger } from '@internal/target-sqlite/data-types';
 
 const sqliteSqlIntDescriptor = sqliteCodec(sqlIntDescriptor, {
+  dataType: sqliteInteger.id,
   jsonProjection: (expression) => expression,
 });
 ```
