@@ -1,7 +1,7 @@
 ---
 changes:
   - id: re-emit-for-the-insert-conflict-skip-capabilities
-    summary: The Postgres and SQLite adapters report two new capability keys, sql.insertOnConflictSkip and sql.insertOnConflictWithoutTarget, which gate the new createAll/createAndCount option { onConflict: 'skip' }; a contract emitted before this release does not carry them and the option is refused against it, so re-emit the contract before using it.
+    summary: "The Postgres and SQLite adapters report two new capability keys, sql.insertOnConflictSkip and sql.insertOnConflictWithoutTarget, which gate the new createAll/createAndCount option { onConflict: 'skip' }; a contract emitted before this release does not carry them and the option is refused against it, so re-emit the contract before using it."
     detection:
       glob: "**/contract.json"
       contains:
@@ -24,7 +24,7 @@ The option is gated on two capability keys that the Postgres and SQLite adapters
 
 Re-emit your contract to pick up the keys:
 
-```
+```console
 prisma contract emit
 ```
 

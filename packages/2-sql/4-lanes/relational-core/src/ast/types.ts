@@ -1913,7 +1913,11 @@ export class InsertOnConflict extends AstNode {
     return new InsertOnConflict(columns, new DoNothingConflictAction());
   }
 
-  /** `ON CONFLICT DO NOTHING` over every unique constraint on the table. */
+  /**
+   * Skip a row that collides with any unique constraint on the table, without
+   * naming one. The renderer chooses the dialect; Postgres and SQLite emit
+   * `ON CONFLICT DO NOTHING`.
+   */
   static doNothing(): InsertOnConflict {
     return new InsertOnConflict([], new DoNothingConflictAction());
   }
