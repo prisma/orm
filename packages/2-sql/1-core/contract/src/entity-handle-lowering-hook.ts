@@ -95,10 +95,39 @@ export function providesEntityHandleLowering(
 
 /**
  * PSL-side twin of {@link ResolvedEntityHandleRef}: the family interpreter
- * resolves an extension block's descriptor-declared model ref parameters
- * (`{ kind: 'ref', refKind: 'model' }`) to storage table names and annotates
- * the block with this map (keyed by parameter name) before invoking the
- * entity factory. An unresolved required ref is the interpreter's
- * diagnostic; a factory never sees one.
+ * projects an extension block's already-selected model references onto
+ * storage coordinates and annotates the block with this map (keyed by
+ * parameter name) before invoking the entity factory. The projection reads
+ * the selected declaration's identity — never a second name lookup — so a
+ * factory consumes the exact namespace/table the reference resolved to.
  */
-export type ResolvedPslModelRefs = Readonly<Record<string, { readonly tableName: string }>>;
+export type ResolvedPslModelRefs = Readonly<
+  Record<string, { readonly namespaceId: string; readonly tableName: string }>
+>;
+
+/**
+ * SQL-family extension to a pack's entity-type factory output: the PSL
+ * extension-block walk may ask the output where to file the built entity's
+ * {@link LoweredPackEntity} row. Outputs without the hook keep the block's
+ * lexical owner namespace. The hook picks only the destination namespace —
+ * `entityKind` and `key` stay fixed by the walk — and is trusted pack
+ * authoring code, like {@link SqlValueSetDerivingEntityTypeOutput}: it never
+ * interprets expressions or validates source.
+ */
+export interface SqlPslEntityPlacementOutput {
+  /**
+   * Method syntax keeps the declaration bivariant, so a pack's concretely
+   * typed implementation stays structurally compatible (the same convention
+   * as `SqlValueSetDerivingEntityTypeOutput.deriveValueSet`).
+   */
+  pslPlacement(entity: unknown): Pick<LoweredPackEntity, 'namespaceId'>;
+}
+
+/** Structural check for {@link SqlPslEntityPlacementOutput}: no casts. */
+export function providesPslEntityPlacement(output: unknown): output is SqlPslEntityPlacementOutput {
+  if (typeof output !== 'object' || output === null || !('pslPlacement' in output)) {
+    return false;
+  }
+  const { pslPlacement } = output;
+  return typeof pslPlacement === 'function';
+}
