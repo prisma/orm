@@ -7,7 +7,7 @@ changes:
     detection:
       glob: "**/*.prisma"
       matches:
-        - '\b(Jsonb|Json)(\[\])?\??\s+@default\([\s\[]*"'
+        - '\b(Jsonb|Json)(\[\])?\??([ \t]+@[\w.]+(\([^)\n]*\))?)*?[ \t]+@default\([\s\[]*"'
   - id: a-decimal-default-is-written-unquoted
     summary: |
       A `Decimal` or `Numeric` column's default is written as a number, not as a quoted string:
@@ -15,7 +15,7 @@ changes:
     detection:
       glob: "**/*.prisma"
       matches:
-        - '\b(Decimal|Numeric)(\([^)]*\))?(\[\])?\??\s+@default\([\s\[]*"'
+        - '\b(Decimal|Numeric)(\([^)]*\))?(\[\])?\??([ \t]+@[\w.]+(\([^)\n]*\))?)*?[ \t]+@default\([\s\[]*"'
   - id: a-float-non-finite-default-is-written-bare
     summary: |
       A `Float` or `Real` column's default is written as a number, and `NaN`, `Infinity` and
@@ -23,7 +23,7 @@ changes:
     detection:
       glob: "**/*.prisma"
       matches:
-        - '\b(Float|Real)(\[\])?\??\s+@default\([\s\[]*"'
+        - '\b(Float|Real)(\[\])?\??([ \t]+@[\w.]+(\([^)\n]*\))?)*?[ \t]+@default\([\s\[]*"'
   - id: a-json-list-default-is-one-json-literal
     summary: |
       A written list on a `Json` or `Jsonb` column that holds one value is refused. A JSON list
@@ -31,7 +31,7 @@ changes:
     detection:
       glob: "**/*.prisma"
       matches:
-        - '\b(Jsonb|Json)\??\s+@default\(\s*\['
+        - '\b(Jsonb|Json)\??([ \t]+@[\w.]+(\([^)\n]*\))?)*?[ \t]+@default\([ \t]*\['
   - id: infer-prints-a-literal-where-it-printed-dbgenerated
     summary: |
       `prisma contract infer` now prints a default as a literal wherever it can read the literal

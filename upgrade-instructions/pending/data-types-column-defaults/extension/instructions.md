@@ -8,7 +8,7 @@ changes:
     detection:
       glob: "**/*.{ts,mts,cts}"
       matches:
-        - '\bCodecDescriptorImpl\b'
+        - '\b(CodecDescriptorImpl|PostgresCodecDescriptor|SqliteCodecDescriptor)\b'
   - id: a-pack-registers-its-data-types
     summary: |
       A pack registers its data types through `dataTypes` on its component metadata — a sibling of
