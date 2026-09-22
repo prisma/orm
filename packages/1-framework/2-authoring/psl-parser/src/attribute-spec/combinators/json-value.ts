@@ -81,7 +81,7 @@ function readJsonValue(
 
   const object = ObjectLiteralExprAst.cast(syntax);
   if (object !== undefined) {
-    const record: Record<string, JsonValue> = {};
+    const record: Record<string, JsonValue> = Object.create(null);
     const diagnostics: PslDiagnostic[] = [];
     const seen = new Set<string>();
     for (const field of object.fields()) {

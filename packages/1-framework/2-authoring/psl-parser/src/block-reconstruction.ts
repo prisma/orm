@@ -43,7 +43,7 @@ export function reconstructExtensionBlock(
     blockAttributes.push({ name, args, span });
   }
 
-  const parameters: Record<string, PslExtensionBlockSourceEntry> = {};
+  const parameters: Record<string, PslExtensionBlockSourceEntry> = Object.create(null);
   for (const entry of node.entries()) {
     const key = entry.key()?.name();
     if (key === undefined) continue;

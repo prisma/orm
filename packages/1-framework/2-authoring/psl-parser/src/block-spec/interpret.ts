@@ -40,8 +40,8 @@ export function interpretExtensionBlock<S extends BlockSpec<unknown>>(
   const { block, descriptor, spec, symbols, sources } = input;
   const ctx: AttributeCtx = { sources, symbols };
   const diagnostics: PslDiagnostic[] = [];
-  const values: Record<string, unknown> = {};
-  const parameterSpans: Record<string, PslSpan> = {};
+  const values: Record<string, unknown> = Object.create(null);
+  const parameterSpans: Record<string, PslSpan> = Object.create(null);
   const seen = new Set<string>();
 
   for (const entry of block.node.entries()) {
@@ -167,7 +167,7 @@ export function interpretExtensionBlockAttributes(input: InterpretExtensionBlock
 } {
   const { block, descriptor, symbols, sources } = input;
   const declared = descriptor.attributes ?? {};
-  const attributes: Record<string, PslExtensionBlockParsedAttribute> = {};
+  const attributes: Record<string, PslExtensionBlockParsedAttribute> = Object.create(null);
   const diagnostics: PslDiagnostic[] = [];
   const seenNames = new Set<string>();
 
