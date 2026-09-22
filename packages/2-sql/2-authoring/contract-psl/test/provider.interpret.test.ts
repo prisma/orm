@@ -62,7 +62,8 @@ describe('prismaContract interpret capability', () => {
   });
 
   it('returns the same failure diagnostics as load when parse and symbol table are clean', async () => {
-    const schema = `model User {
+    const schema = `// use prisma-8
+model User {
   id Int @id
   things Unknown[]
 }
@@ -81,7 +82,10 @@ describe('prismaContract interpret capability', () => {
     if (loadResult.ok) return;
 
     const context = createPostgresTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, context), context);
+    const interpretResult = source.interpret(
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
 
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
@@ -90,9 +94,9 @@ describe('prismaContract interpret capability', () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          sourceId: SOURCE_ID,
+          sourceId: schemaPath,
           span: expect.objectContaining({
-            start: expect.objectContaining({ line: 3 }),
+            start: expect.objectContaining({ line: 4 }),
           }),
         }),
       ]),
@@ -100,7 +104,8 @@ describe('prismaContract interpret capability', () => {
   });
 
   it('returns the same contract load returns for a clean schema', async () => {
-    const schema = `model User {
+    const schema = `// use prisma-8
+model User {
   id Int @id
   email String
 }
@@ -119,7 +124,10 @@ describe('prismaContract interpret capability', () => {
     if (!loadResult.ok) return;
 
     const context = createPostgresTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, context), context);
+    const interpretResult = source.interpret(
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
 
     expect(interpretResult.ok).toBe(true);
     if (!interpretResult.ok) return;
@@ -318,7 +326,8 @@ model Profile {
   });
 
   it('load merges parse and symbol-table seeds ahead of interpreter findings', async () => {
-    const schema = `model Dup {
+    const schema = `// use prisma-8
+model Dup {
   id Int @id
 }
 model Dup {
@@ -343,7 +352,10 @@ model Other {
     if (loadResult.ok) return;
 
     const context = createPostgresTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, context), context);
+    const interpretResult = source.interpret(
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
 

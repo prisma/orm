@@ -90,7 +90,8 @@ describe('mongoContract interpret capability', () => {
   });
 
   it('returns the same failure diagnostics as load when parse and symbol table are clean', async () => {
-    const schema = `model User {
+    const schema = `// use prisma-8
+model User {
   id ObjectId @id @map("_id")
   bad Mystery
 }
@@ -107,7 +108,10 @@ describe('mongoContract interpret capability', () => {
     if (loadResult.ok) return;
 
     const context = createMongoTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, context), context);
+    const interpretResult = source.interpret(
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
 
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
@@ -116,9 +120,9 @@ describe('mongoContract interpret capability', () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-          sourceId: SOURCE_ID,
+          sourceId: schemaPath,
           span: expect.objectContaining({
-            start: expect.objectContaining({ line: 3 }),
+            start: expect.objectContaining({ line: 4 }),
           }),
         }),
       ]),
@@ -126,7 +130,8 @@ describe('mongoContract interpret capability', () => {
   });
 
   it('returns the same contract load returns for a clean schema', async () => {
-    const schema = `model User {
+    const schema = `// use prisma-8
+model User {
   id ObjectId @id @map("_id")
   email String
 }
@@ -143,7 +148,10 @@ describe('mongoContract interpret capability', () => {
     if (!loadResult.ok) return;
 
     const context = createMongoTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, context), context);
+    const interpretResult = source.interpret(
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
 
     expect(interpretResult.ok).toBe(true);
     if (!interpretResult.ok) return;
@@ -267,7 +275,8 @@ model Post {
   });
 
   it('load merges parse and symbol-table seeds ahead of interpreter findings', async () => {
-    const schema = `model Dup {
+    const schema = `// use prisma-8
+model Dup {
   id ObjectId @id @map("_id")
 }
 model Dup {
@@ -290,7 +299,10 @@ model Other {
     if (loadResult.ok) return;
 
     const context = createMongoTestContext();
-    const interpretResult = source.interpret(buildInterpretInput(schema, context), context);
+    const interpretResult = source.interpret(
+      buildInterpretInput(schema, context, schemaPath),
+      context,
+    );
     expect(interpretResult.ok).toBe(false);
     if (interpretResult.ok) return;
 

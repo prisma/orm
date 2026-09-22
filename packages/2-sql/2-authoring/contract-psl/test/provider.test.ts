@@ -71,7 +71,8 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
 }
 `,
@@ -98,7 +99,8 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
 }
 `,
@@ -134,7 +136,8 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   email String
 }
@@ -180,7 +183,8 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(configDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   email String
 }
@@ -218,7 +222,8 @@ describe('prismaContract provider helper', () => {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   posts Post[]
 }
@@ -272,7 +277,8 @@ model Post {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   things Unknown[]
 }
@@ -294,10 +300,10 @@ model Post {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             message: expect.stringContaining('Unknown'),
             span: expect.objectContaining({
-              start: expect.objectContaining({ line: 3 }),
+              start: expect.objectContaining({ line: 4 }),
             }),
           }),
         ]),
@@ -310,7 +316,8 @@ model Post {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   posts Post[] @unique
 }
@@ -338,10 +345,10 @@ model Post {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_UNSUPPORTED_FIELD_ATTRIBUTE',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             message: expect.stringContaining('User.posts'),
             span: expect.objectContaining({
-              start: expect.objectContaining({ line: 3 }),
+              start: expect.objectContaining({ line: 4 }),
             }),
           }),
         ]),
@@ -356,7 +363,8 @@ model Post {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
 `,
         'utf-8',
@@ -374,7 +382,7 @@ model Post {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_UNTERMINATED_BLOCK',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             span: expect.objectContaining({
               start: expect.objectContaining({ line: expect.any(Number) }),
             }),
@@ -389,7 +397,8 @@ model Post {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
 }
 model User {
@@ -411,7 +420,7 @@ model User {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_DUPLICATE_DECLARATION',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
           }),
         ]),
       );
@@ -423,7 +432,8 @@ model User {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model Dup {
+        `// use prisma-8
+model Dup {
   id Int @id
 }
 model Dup {
@@ -458,7 +468,8 @@ model Other {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model Document {
+        `// use prisma-8
+model Document {
   id Int @id
   embedding pgvector.Vector(length: 1536)
 }
@@ -480,9 +491,9 @@ model Other {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             span: expect.objectContaining({
-              start: expect.objectContaining({ line: 3 }),
+              start: expect.objectContaining({ line: 4 }),
             }),
           }),
         ]),
@@ -495,7 +506,8 @@ model Other {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model Document {
+        `// use prisma-8
+model Document {
   id Int @id
   embedding pgvector.Vector(length: 1536)
 }
@@ -545,7 +557,8 @@ model Other {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `types {
+        `// use prisma-8
+types {
   Embedding1536 = Bytes @pgvector.column(length: 1536)
 }
 
@@ -578,7 +591,7 @@ model Document {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_UNSUPPORTED_NAMED_TYPE_ATTRIBUTE',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             message: expect.stringContaining('pgvector.column'),
           }),
         ]),
@@ -593,7 +606,8 @@ model Document {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   cuid2 String @default(cuid(2))
   uuidV7 String @default(uuid(7))
@@ -661,7 +675,8 @@ model Document {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   cuidValue String @default(cuid())
 }
@@ -683,9 +698,9 @@ model Document {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
-            sourceId: './schema.prisma',
+            sourceId: schemaPath,
             span: expect.objectContaining({
-              start: expect.objectContaining({ line: 3 }),
+              start: expect.objectContaining({ line: 4 }),
             }),
           }),
         ]),
@@ -700,7 +715,8 @@ model Document {
       const schemaPath = join(tempDir, 'schema.prisma');
       await writeFile(
         schemaPath,
-        `model User {
+        `// use prisma-8
+model User {
   id Int @id
   externalId String @default(uuid())
 }
@@ -739,7 +755,11 @@ model Document {
       const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-'));
       tempDirs.push(tempDir);
       const schemaPath = join(tempDir, 'schema.prisma');
-      await writeFile(schemaPath, 'model User {\n  id Int @id\n  data Bytes\n}\n', 'utf-8');
+      await writeFile(
+        schemaPath,
+        '// use prisma-8\nmodel User {\n  id Int @id\n  data Bytes\n}\n',
+        'utf-8',
+      );
 
       process.chdir(tempDir);
       const contract = prismaContract('./schema.prisma', baseOptions);
@@ -779,7 +799,11 @@ model Document {
       const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-'));
       tempDirs.push(tempDir);
       const schemaPath = join(tempDir, 'schema.prisma');
-      await writeFile(schemaPath, 'model User {\n  id Int @id\n  name String\n}\n', 'utf-8');
+      await writeFile(
+        schemaPath,
+        '// use prisma-8\nmodel User {\n  id Int @id\n  name String\n}\n',
+        'utf-8',
+      );
 
       process.chdir(tempDir);
       const contract = prismaContract('./schema.prisma', baseOptions);
@@ -807,29 +831,26 @@ model Document {
     it('returns PSL_SCHEMA_READ_FAILED diagnostics when schema file is missing', async () => {
       const tempDir = await mkdtemp(join(tmpdir(), 'psl-provider-'));
       tempDirs.push(tempDir);
+      const missingSchemaPath = join(tempDir, 'missing.prisma');
 
       process.chdir(tempDir);
       const contract = prismaContract('./missing.prisma', baseOptions);
       const result = await contract.source.load(
-        createPostgresTestContext({ resolvedInputs: [join(tempDir, 'missing.prisma')] }),
+        createPostgresTestContext({ resolvedInputs: [missingSchemaPath] }),
       );
 
       expect(result.ok).toBe(false);
       if (result.ok) return;
 
-      expect(result.failure.summary).toBe('Failed to read Prisma schema at "./missing.prisma"');
+      expect(result.failure.summary).toBe('Failed to read Prisma schema files');
       expect(result.failure.diagnostics).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_SCHEMA_READ_FAILED',
-            sourceId: './missing.prisma',
+            sourceId: missingSchemaPath,
           }),
         ]),
       );
-      expect(result.failure.meta).toMatchObject({
-        schemaPath: './missing.prisma',
-        absoluteSchemaPath: expect.stringMatching(/missing\.prisma$/),
-      });
     });
   });
 });

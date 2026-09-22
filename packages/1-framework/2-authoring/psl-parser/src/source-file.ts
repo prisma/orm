@@ -1,5 +1,6 @@
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import { InternalError } from '@internal/utils/internal-error';
+import type { DocumentAst } from './syntax/ast/declarations';
 import type { SyntaxNode } from './syntax/red';
 
 const CARRIAGE_RETURN = 13;
@@ -166,6 +167,21 @@ export class PslSources {
     }
     return sourceFile;
   }
+}
+
+/**
+ * Unites the per-document `PslSources` registries `parse()` returns for each
+ * member of a multi-file schema into the one registry `buildSymbolTable` and
+ * the interpreters expect.
+ */
+export function mergePslSources(
+  parsed: readonly { readonly document: DocumentAst; readonly sources: PslSources }[],
+): PslSources {
+  return new PslSources(
+    parsed.map(
+      ({ document, sources }) => [document.syntax, sources.sourceFileFor(document.syntax)] as const,
+    ),
+  );
 }
 
 function clamp(value: number, min: number, max: number): number {

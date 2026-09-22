@@ -106,6 +106,7 @@ export {
   readResolvedAttributes,
   readResolvedConstructorCall,
 } from '../resolve';
+export { isPrismaNextSchema, renameLegacyDirective } from '../schema-directive';
 export type {
   BlockSymbol,
   BuildSymbolTableOptions,
