@@ -77,7 +77,7 @@ pnpm bundle
 For each of the four Node entries the script writes an unminified
 (`*.bundle.mjs`) and a minified (`*.bundle.min.mjs`) artefact to `dist/` via
 esbuild; only `pg`, `pg-native`, and `mongodb` are marked external,
-everything Prisma Next owns is inlined.
+everything Prisma 8 owns is inlined.
 
 For each of the two cf-worker entries the script runs
 `wrangler deploy --dry-run --metafile [--minify]` which uses esbuild
@@ -111,7 +111,7 @@ because the binary downloader has no matching artefact — this is an upstream
 limitation, not a regression in the example.
 
 The cf-worker entries are bundle-only: there is no miniflare runtime test in
-this example. The Cloudflare Workers + Prisma Next functional coverage lives
+this example. The Cloudflare Workers + Prisma 8 functional coverage lives
 in [`examples/prisma-8-cloudflare-worker`](../prisma-8-cloudflare-worker/)
 which runs against `@cloudflare/vitest-pool-workers`.
 

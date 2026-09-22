@@ -13,7 +13,7 @@ export async function loader() {
   return { rows };
 }
 
-// This example is a validation harness for Prisma Next's Vite plugin auto-emit
+// This example is a validation harness for Prisma 8's Vite plugin auto-emit
 // flow, not a production starter. The action deliberately omits server-side
 // input validation (arktype/zod-style); a real app should validate `email`
 // before persisting it. Browser-side `<input type="email" required />` is not

@@ -1,6 +1,6 @@
 # @internal/sql-runtime
 
-SQL runtime implementation for Prisma Next.
+SQL runtime implementation for Prisma 8.
 
 ## Package Classification
 
@@ -32,12 +32,6 @@ Execute SQL query Plans with deterministic verification, guardrails, and feedbac
 - **Raw-SQL Guardrails**: Heuristic safety checks for raw SQL plans (`guardrails/raw.ts`)
 - **`beforeCompile` Chain**: AST-rewrite middleware chain run pre-lowering (`middleware/before-compile-chain.ts`)
 - **SQL Runtime**: `SqlRuntime` extends `RuntimeCore<SqlQueryPlan, SqlExecutionPlan, SqlMiddleware>` and overrides `lower`, `runDriver`, `runBeforeCompile`, and `close` with SQL-specific behaviour
-
-## Dependencies
-
-- `@internal/framework-components` - Runtime component descriptor types (`./execution`) and the abstract `RuntimeCore` base class plus operation-specific middleware runner helpers (`./runtime`)
-- `@internal/sql-contract` - SQL contract types (via `@internal/sql-contract/types`)
-- `@internal/operations` - Operation registry
 
 ## Usage
 

@@ -2,14 +2,18 @@ import postgresAdapter from '@internal/adapter-postgres/control';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
 import { collectScalarTypeConstructors } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import postgres from '@internal/target-postgres/control';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const stack = createControlStack({
   family: sql,
@@ -19,16 +23,17 @@ const stack = createControlStack({
 });
 
 function emit(schema: string) {
-  const { document, sourceFile } = parse(schema);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'native-type-parity.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: postgresPackRef,
     scalarColumnDescriptors: collectScalarTypeConstructors(stack.authoringContributions.type),
     authoringContributions: stack.authoringContributions,
@@ -102,6 +107,20 @@ const charOut = { codecId: 'sql/char@1', nativeType: 'character' } as const;
 const numericOut = { codecId: 'pg/numeric@1', nativeType: 'numeric' } as const;
 
 const parityCases: readonly ParityCase[] = [
+  ...[undefined, 0, 3, 6].map((precision): ParityCase => {
+    const spelling =
+      precision === undefined ? 'TimestamptzJsDate' : `TimestamptzJsDate(${precision})`;
+    return {
+      title: spelling,
+      bare: spelling,
+      alias: spelling,
+      expected: {
+        codecId: 'pg/timestamptz-date@1',
+        nativeType: 'timestamptz',
+        typeParams: precision === undefined ? {} : { precision },
+      },
+    };
+  }),
   {
     title: 'VarChar(191)',
     bare: 'VarChar(191)',
@@ -328,6 +347,50 @@ describe('native types as bare scalar types — parity with the live bare-type p
       nativeType: expected.nativeType,
       typeRef: 'Named',
     });
+  });
+
+  it('lowers the Date updatedAt shorthand identically to explicit Date clock phases', () => {
+    const shorthand = emit(`model sample {
+      id Int @id
+      at temporal.updatedAtJsDate()
+    }`);
+    const explicit = emit(`model sample {
+      id Int @id
+      at temporal.timestamptzJsDate(onCreate: now, onUpdate: now)
+    }`);
+    expect(shorthand.ok).toBe(true);
+    expect(explicit.ok).toBe(true);
+    if (!shorthand.ok || !explicit.ok) return;
+    expect(shorthand.value).toEqual(explicit.value);
+    expect(
+      storageOf(shorthand.value).namespaces['public']?.entries.table['sample']?.columns['at'],
+    ).toMatchObject({
+      codecId: 'pg/timestamptz-date@1',
+      nativeType: 'timestamptz',
+    });
+  });
+
+  it('lowers the Date createdAt shorthand identically to an explicit create clock phase', () => {
+    const result = emit(`model sample {
+      id Int @id
+      at temporal.createdAtJsDate()
+    }`);
+    const explicit = emit(`model sample {
+      id Int @id
+      at temporal.timestamptzJsDate(onCreate: now)
+    }`);
+    expect(result.ok).toBe(true);
+    expect(explicit.ok).toBe(true);
+    if (!result.ok || !explicit.ok) return;
+    expect(result.value).toEqual(explicit.value);
+    const column = storageOf(result.value).namespaces['public']?.entries.table['sample']?.columns[
+      'at'
+    ];
+    expect(column).toMatchObject({
+      codecId: 'pg/timestamptz-date@1',
+      nativeType: 'timestamptz',
+    });
+    expect(column).not.toHaveProperty('default');
   });
 
   it('rejects VarChar(0) in field position via the declarative minimum', () => {

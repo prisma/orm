@@ -11,6 +11,7 @@ import { ok } from '@internal/utils/result';
 import { expectTypeOf, test } from 'vitest';
 import { defineConfig, type FormatterConfig, type PrismaNextConfig } from '../src/config-types';
 import type {
+  ContractSourceDiagnostic,
   ContractSourceFormat,
   ContractSourceProvider,
   OpaqueContractSourceProvider,
@@ -127,6 +128,22 @@ test('accepts contract source providers with declared inputs', () => {
   expectTypeOf(result.contract!.source.format).toEqualTypeOf<string | undefined>();
   expectTypeOf(result.contract!.source.inputs).toEqualTypeOf<readonly string[] | undefined>();
   expectTypeOf(result.contract!.source.load).toEqualTypeOf<ContractSourceProvider['load']>();
+});
+
+test('source diagnostics require a filename but not a span', () => {
+  const diagnostic: ContractSourceDiagnostic = {
+    code: 'PSL_PARSE_ERROR',
+    message: 'Unexpected token',
+    sourceId: 'schema.prisma',
+  };
+  expectTypeOf(diagnostic.sourceId).toEqualTypeOf<string>();
+
+  // @ts-expect-error every source diagnostic requires a filename
+  const missingFilename: ContractSourceDiagnostic = {
+    code: 'PSL_PARSE_ERROR',
+    message: 'Unexpected token',
+  };
+  void missingFilename;
 });
 
 test('contract source providers form a format-keyed union', () => {

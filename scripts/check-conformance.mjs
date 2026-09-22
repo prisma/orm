@@ -784,7 +784,7 @@ export async function runCheck({ argv = process.argv.slice(2), io = {} } = {}) {
       const bins = declaredBins(toolchain.manifest);
       if (bins.length === 0) {
         // The toolchain stopped publishing a bin when the unified
-        // prisma-cli replaced prisma-next (#30005). The sandbox smoke
+        // prisma-cli replaced the standalone bin (#30005). The sandbox smoke
         // for a bin-less package is importing its published entry points
         // in a fresh node: the anti-vacuity guarantee survives — a
         // package whose entries cannot even import fails here — without

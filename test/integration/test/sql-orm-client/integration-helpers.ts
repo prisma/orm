@@ -45,7 +45,7 @@ afterAll(async () => {
 }, timeouts.spinUpPpgDev);
 
 async function getCollectionDatabase(): Promise<DevDatabase> {
-  collectionDatabase ??= await createDevDatabase({ databaseIdleTimeoutMillis: 30_000 });
+  collectionDatabase ??= await createDevDatabase();
   return collectionDatabase;
 }
 
@@ -55,6 +55,24 @@ export function createUsersCollection(runtime: PgIntegrationRuntime) {
 
 export function createUsersCollectionWithoutReturning(runtime: PgIntegrationRuntime) {
   const contract = { ...getTestContract(), capabilities: {} } as TestContract;
+  const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
+  return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
+}
+
+export function createReturningUsersCollectionWithout(
+  runtime: PgIntegrationRuntime,
+  capabilityKeys: readonly string[],
+) {
+  const base = withReturningCapability(getTestContract());
+  const capabilities: Record<string, Record<string, unknown>> = {};
+  for (const [group, entries] of Object.entries(base.capabilities)) {
+    capabilities[group] = Object.fromEntries(
+      Object.entries(entries as Record<string, unknown>).filter(
+        ([key]) => !capabilityKeys.includes(key),
+      ),
+    );
+  }
+  const contract = { ...base, capabilities } as TestContract;
   const context = { ...getTestContext(), contract } as ExecutionContext<TestContract>;
   return new Collection({ runtime, context }, 'User', { namespaceId: 'public' });
 }
@@ -87,63 +105,60 @@ export async function withPushedContractRuntime(
   contract: Contract<SqlStorage>,
   fn: (runtime: PgIntegrationRuntime) => Promise<void>,
 ): Promise<void> {
-  await withDevDatabase(
-    async ({ connectionString }) => {
-      const driver = await postgresDriverControl.create(connectionString);
-      try {
-        const schema = await controlFamily.introspect({ driver, contract });
-        const planner = postgresTargetControl.createPlanner(controlAdapter);
-        const planResult = planner.plan({
-          contract,
-          schema,
-          policy: INIT_ADDITIVE_POLICY,
-          fromContract: null,
-          frameworkComponents,
-          spaceId: APP_SPACE_ID,
-          snapshotsImportPath: '../../snapshots',
-        });
-        if (planResult.kind !== 'success') {
-          throw new Error(`Contract push planning failed: ${JSON.stringify(planResult)}`);
-        }
-
-        const plan = planResult.plan;
-        const runner = postgresTargetControl.createRunner(controlFamily);
-        const executeResult = await runner.execute({
-          driver,
-          perSpaceOptions: [
-            {
-              space: plan.spaceId ?? APP_SPACE_ID,
-              plan,
-              migrationEdges: [
-                buildFabricatedMigrationEdge({
-                  currentMarkerStorageHash: plan.origin?.storageHash,
-                  destinationStorageHash: plan.destination.storageHash,
-                  operationCount: plan.operations.length,
-                }),
-              ],
-              driver,
-              destinationContract: contract,
-              policy: INIT_ADDITIVE_POLICY,
-              frameworkComponents,
-            },
-          ],
-        });
-        if (!executeResult.ok) {
-          throw new Error(`Contract push apply failed: ${JSON.stringify(executeResult.failure)}`);
-        }
-      } finally {
-        await driver.close();
+  await withDevDatabase(async ({ connectionString }) => {
+    const driver = await postgresDriverControl.create(connectionString);
+    try {
+      const schema = await controlFamily.introspect({ driver, contract });
+      const planner = postgresTargetControl.createPlanner(controlAdapter);
+      const planResult = planner.plan({
+        contract,
+        schema,
+        policy: INIT_ADDITIVE_POLICY,
+        fromContract: null,
+        frameworkComponents,
+        spaceId: APP_SPACE_ID,
+        snapshotsImportPath: '../../snapshots',
+      });
+      if (planResult.kind !== 'success') {
+        throw new Error(`Contract push planning failed: ${JSON.stringify(planResult)}`);
       }
 
-      const runtime = await createPgIntegrationRuntime(connectionString, contract);
-      try {
-        await fn(runtime);
-      } finally {
-        await runtime.close();
+      const plan = planResult.plan;
+      const runner = postgresTargetControl.createRunner(controlFamily);
+      const executeResult = await runner.execute({
+        driver,
+        perSpaceOptions: [
+          {
+            space: plan.spaceId ?? APP_SPACE_ID,
+            plan,
+            migrationEdges: [
+              buildFabricatedMigrationEdge({
+                currentMarkerStorageHash: plan.origin?.storageHash,
+                destinationStorageHash: plan.destination.storageHash,
+                operationCount: plan.operations.length,
+              }),
+            ],
+            driver,
+            destinationContract: contract,
+            policy: INIT_ADDITIVE_POLICY,
+            frameworkComponents,
+          },
+        ],
+      });
+      if (!executeResult.ok) {
+        throw new Error(`Contract push apply failed: ${JSON.stringify(executeResult.failure)}`);
       }
-    },
-    { databaseIdleTimeoutMillis: 30_000 },
-  );
+    } finally {
+      await driver.close();
+    }
+
+    const runtime = await createPgIntegrationRuntime(connectionString, contract);
+    try {
+      await fn(runtime);
+    } finally {
+      await runtime.close();
+    }
+  });
 }
 
 export async function withCollectionRuntime(

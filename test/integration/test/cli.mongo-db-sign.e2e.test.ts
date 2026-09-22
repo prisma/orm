@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { coreHash, crossRef, profileHash } from '@internal/contract/types';
@@ -12,6 +12,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { runOnEngine, setupTestDirectoryFromFixtures, withTempDir } from './utils/cli-test-helpers';
 
 const controlAdapter = new MongoControlAdapterImpl();
+
+const SIGNED_STORAGE_HASH = `a1b2c3d${'0'.repeat(57)}`;
+const UPDATED_STORAGE_HASH = `e5f6a7b${'1'.repeat(57)}`;
 
 const testContract: MongoContract = {
   target: 'mongo',
@@ -49,7 +52,7 @@ const testContract: MongoContract = {
         },
       },
     },
-    storageHash: coreHash('mongo-sign-test'),
+    storageHash: coreHash(SIGNED_STORAGE_HASH),
   },
   capabilities: {},
   extensions: {},
@@ -61,6 +64,13 @@ function writeContractJson(testDir: string, contract: MongoContract): void {
   const outputDir = resolve(testDir, 'output');
   mkdirSync(outputDir, { recursive: true });
   writeFileSync(resolve(outputDir, 'contract.json'), JSON.stringify(contract, null, 2), 'utf-8');
+  writeFileSync(resolve(outputDir, 'contract.d.ts'), 'export type Contract = unknown;\n', 'utf-8');
+}
+
+function dbRefHash(testDir: string): string | undefined {
+  const pointerPath = resolve(testDir, 'migrations', 'app', 'refs', 'db.json');
+  if (!existsSync(pointerPath)) return undefined;
+  return (JSON.parse(readFileSync(pointerPath, 'utf-8')) as { hash: string }).hash;
 }
 
 describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemoryServer }, () => {
@@ -124,6 +134,7 @@ describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemorySer
       const marker = await controlAdapter.readMarker(new MongoControlDriver(db, client), 'app');
       expect(marker).not.toBeNull();
       expect(marker!.storageHash).toBe(testContract.storage.storageHash);
+      expect(dbRefHash(testSetup.testDir)).toBe(testContract.storage.storageHash);
     });
 
     it('re-sign is idempotent', async () => {
@@ -170,7 +181,7 @@ describe('mongo db sign command (e2e)', { timeout: timeouts.spinUpMongoMemorySer
         ...testContract,
         storage: {
           ...testContract.storage,
-          storageHash: coreHash('mongo-sign-test-updated'),
+          storageHash: coreHash(UPDATED_STORAGE_HASH),
         },
         profileHash: profileHash('mongo-sign-test-updated'),
       };

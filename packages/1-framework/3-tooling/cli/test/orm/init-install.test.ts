@@ -117,12 +117,12 @@ describe('init installs', () => {
         },
         {
           file: expect.any(String),
-          args: ['add', '-D', 'prisma@next', '@types/node'],
+          args: ['add', '-D', 'prisma@latest', '@types/node'],
           cwd: projectDir,
         },
         {
           file: expect.any(String),
-          args: ['add', '-D', '@prisma/cli-engine@next'],
+          args: ['add', '-D', '@prisma/cli-engine@latest'],
           cwd: projectDir,
         },
       ]);
@@ -131,7 +131,7 @@ describe('init installs', () => {
         packagesInstalled: {
           status: 'installed',
           deps: ['@prisma/orm-postgres', 'dotenv'],
-          devDeps: ['prisma@next', '@types/node', '@prisma/cli-engine@next'],
+          devDeps: ['prisma@latest', '@types/node', '@prisma/cli-engine@latest'],
         },
         contractEmitted: true,
       });
@@ -239,8 +239,8 @@ describe('init installs', () => {
         expect(calls.map((call) => `${call.file} ${call.args.join(' ')}`)).toEqual([
           'pnpm add @prisma/orm-postgres dotenv',
           'npm add @prisma/orm-postgres dotenv',
-          'npm add -D prisma@next @types/node',
-          'npm add -D @prisma/cli-engine@next',
+          'npm add -D prisma@latest @types/node',
+          'npm add -D @prisma/cli-engine@latest',
         ]);
         expect(run.events).toContainEqual(
           expect.objectContaining({

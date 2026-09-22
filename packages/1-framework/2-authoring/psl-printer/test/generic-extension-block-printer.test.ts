@@ -20,6 +20,7 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  dataTypeId,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import {
@@ -72,6 +73,7 @@ class StubPolicyTextCodec extends CodecImpl<
 }
 
 class StubPolicyTextDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = FIXTURE_POLICY_CODEC_ID as typeof FIXTURE_POLICY_CODEC_ID;
   override readonly traits = ['textual'] as const;
   override readonly targetTypes = ['text'] as const;
@@ -146,6 +148,7 @@ describe('generic extension-block printer (P2)', () => {
           using: valueParam('"auth.uid() = author_id"'),
         },
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -179,6 +182,7 @@ describe('generic extension-block printer (P2)', () => {
           using: valueParam('"true"'),
         },
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -234,6 +238,7 @@ describe('generic extension-block printer (P2)', () => {
     }
 
     class NumericExpressionDescriptor extends CodecDescriptorImpl<void> {
+      override readonly dataType = dataTypeId('demo/fixture');
       override readonly codecId = FIXTURE_POLICY_CODEC_ID as typeof FIXTURE_POLICY_CODEC_ID;
       override readonly traits = ['numeric'] as const;
       override readonly targetTypes = ['numeric'] as const;
@@ -260,6 +265,7 @@ describe('generic extension-block printer (P2)', () => {
           using: valueParam(raw),
         },
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
       const ast = {
@@ -294,6 +300,7 @@ describe('generic extension-block printer (P2)', () => {
         name: 'NumericPolicy',
         parameters: { target: refParam('Post'), using: valueParam('42') },
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
       const ast = {
@@ -329,6 +336,7 @@ describe('generic extension-block printer (P2)', () => {
           target: refParam('Post'),
         },
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
       const ast = {
@@ -362,6 +370,7 @@ describe('generic extension-block printer (P2)', () => {
         name: 'EdgeCase',
         parameters,
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
       return {
@@ -478,6 +487,7 @@ describe('generic extension-block printer (P2)', () => {
             span: STUB_SPAN,
           },
         ],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -502,6 +512,7 @@ describe('generic extension-block printer (P2)', () => {
         name: 'Status',
         parameters: { draft: valueParam('"draft"'), done: valueParam('"done"') },
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -529,6 +540,7 @@ describe('generic extension-block printer (P2)', () => {
           plain: valueParam('"plain"'),
         },
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -562,6 +574,7 @@ describe('generic extension-block printer (P2)', () => {
           },
         },
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -598,6 +611,7 @@ describe('generic extension-block printer (P2)', () => {
           },
           { name: 'something', args: [], span: STUB_SPAN },
         ],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -627,6 +641,7 @@ describe('generic extension-block printer (P2)', () => {
           },
         },
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -662,6 +677,7 @@ describe('generic extension-block printer (P2)', () => {
         name: 'Mix',
         parameters: { label: valueParam('"declared"'), extra: valueParam('"variadic"') },
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -688,6 +704,7 @@ describe('generic extension-block printer (P2)', () => {
         name: 'OrphanBlock',
         parameters: {},
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -735,6 +752,7 @@ describe('generic extension-block printer (P2)', () => {
         name: 'Mismatched',
         parameters: {},
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
 
@@ -776,6 +794,7 @@ describe('generic extension-block printer (P2)', () => {
         name: 'Round',
         parameters: {},
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
       const square: PslExtensionBlock = {
@@ -784,6 +803,7 @@ describe('generic extension-block printer (P2)', () => {
         name: 'Boxy',
         parameters: {},
         blockAttributes: [],
+        attributes: {},
         span: STUB_SPAN,
       };
 

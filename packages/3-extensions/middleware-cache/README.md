@@ -1,6 +1,6 @@
 # @internal/middleware-cache
 
-A family-agnostic, opt-in caching middleware for Prisma Next runtimes.
+A family-agnostic, opt-in caching middleware for Prisma 8 runtimes.
 
 Built on the `interceptQuery` hook on `RuntimeMiddleware`: on a cache hit, the middleware short-circuits the query and returns the cached rows; the driver is never invoked. On a cache miss, the middleware buffers rows from the driver and commits them to the store on successful completion.
 
@@ -14,13 +14,6 @@ The package depends only on `@internal/framework-components/runtime` — no SQL 
 - Buffer driver rows on a miss and commit to the `CacheStore` only on successful completion (`completed: true && source: 'driver'`).
 - Bypass the cache when `RuntimeMiddlewareContext.scope` is `'connection'` or `'transaction'`.
 - Ship a default in-memory LRU-with-TTL `CacheStore` and expose the `CacheStore` interface for pluggable backends (Redis, Memcached, etc.).
-
-## Dependencies
-
-- `@internal/framework-components/runtime` — the only production dependency. Provides `RuntimeMiddleware`, `RuntimeMiddlewareContext` (with `contentHash` and `scope`), `defineAnnotation`, `AfterQueryResult`, and query orchestrator integration via `runQueryWithMiddleware`.
-
-The package does **not** depend on `@internal/sql-runtime`, `@internal/mongo-runtime`, or any target adapter. It does not import `node:crypto` — hashing the canonical execution identity is the family runtime's responsibility (via `@internal/utils/hash-identity` in the SQL and Mongo runtimes today).
-
 
 ## Quick start
 

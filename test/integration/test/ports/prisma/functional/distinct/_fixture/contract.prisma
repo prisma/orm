@@ -13,4 +13,5 @@ model User {
   id        String @id
   firstName String
   lastName  String
+  @@map("user")
 }

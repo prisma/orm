@@ -12,7 +12,7 @@ vi.mock('@internal/emitter', async (importOriginal) => {
 });
 
 // Temp-dir fixtures cannot import @prisma/cli-engine or @internal/config, so
-// they stamp the marker structurally, the way the real defineConfig does: an
+// they stamp the marker structurally, the way the real definePrismaConfig does: an
 // enumerable $prismaConfig key wrapping an `orm` section.
 const NEW_SHAPE_STAMP = `
 export default { $prismaConfig: 1, orm: config };
@@ -439,7 +439,7 @@ describe('loadConfig', () => {
   );
 
   it(
-    'rejects a config without the defineConfig version marker (CONFIG.VERSION_MARKER_MISSING)',
+    'rejects a config without the definePrismaConfig version marker (CONFIG.VERSION_MARKER_MISSING)',
     async () => {
       writeFileSync(join(tempDir, 'prisma.config.ts'), UNMARKED_CONFIG_SOURCE);
       process.chdir(tempDir);

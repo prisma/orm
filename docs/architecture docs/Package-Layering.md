@@ -1,6 +1,6 @@
 # Package Layering & Naming Conventions
 
-This document describes the package layering structure and naming conventions for Prisma Next, as defined in [ADR 140](../adrs/ADR%20140%20-%20Package%20Layering%20&%20Target-Family%20Namespacing.md).
+This document describes the package layering structure and naming conventions for Prisma 8, as defined in [ADR 140](../adrs/ADR%20140%20-%20Package%20Layering%20&%20Target-Family%20Namespacing.md).
 
 ## Overview
 
@@ -162,7 +162,7 @@ The extensions domain (`packages/3-extensions/`) contains ecosystem extensions a
 
 ### Layer Structure
 
-Clean Architecture layers for Prisma Next:
+Clean Architecture layers for Prisma 8:
 
 - **Core** – target-agnostic contracts, plan metadata, shared operations, runtime kernel.
 - **Authoring** – PSL/TS authoring surfaces plus shared descriptor types that produce contracts.

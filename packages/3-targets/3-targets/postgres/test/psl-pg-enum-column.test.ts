@@ -13,10 +13,12 @@
  */
 
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -28,6 +30,8 @@ import { PG_ENUM_CODEC_ID } from '../src/core/codec-ids';
 import { pgEnumDescriptor, postgresQualifyColumnType } from '../src/core/codecs';
 import type { PostgresSchema } from '../src/core/postgres-schema';
 import { postgresCreateNamespace } from '../src/core/postgres-schema';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 // Production always resolves `pg.enum(Ref)` through a real `CodecLookup` (the
 // CLI/config-loading pipeline supplies `stack.codecLookup`), so this test
@@ -91,16 +95,17 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 ]);
 
 function interpret(source: string, capabilities: Record<string, Record<string, boolean>> = {}) {
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(source, 'psl-pg-enum-column.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities,
     target: postgresTarget,
     scalarColumnDescriptors,
@@ -135,7 +140,7 @@ describe('PSL pg.enum(Ref) field resolution', () => {
     if (!result.ok) return;
 
     const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
-    const authTable = ns.table['authSession'];
+    const authTable = ns.table['AuthSession'];
     expect(authTable).toBeDefined();
     const aalColumn = authTable?.columns['aal'];
     expect(aalColumn).toMatchObject({
@@ -162,7 +167,8 @@ describe('PSL pg.enum(Ref) field resolution', () => {
     if (!result.ok) return;
 
     const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
-    const authTable = ns.table['authSession'];
+    const authTable = ns.table['AuthSession'];
+    expect(authTable).toBeDefined();
     expect(authTable?.checks ?? []).toEqual([]);
   });
 
@@ -201,7 +207,7 @@ namespace auth {
     if (!result.ok) return;
 
     const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
-    const aalsColumn = ns.table['authSession']?.columns['aals'];
+    const aalsColumn = ns.table['AuthSession']?.columns['aals'];
     expect(aalsColumn).toMatchObject({
       codecId: 'pg/enum@1',
       nativeType: 'auth.aal_level',
@@ -214,6 +220,57 @@ namespace auth {
       },
     });
     expect(aalsColumn?.many).toBe(true);
+  });
+
+  it('stores a list of member names written as a default on a pg.enum(E)[] field', () => {
+    const source = `
+namespace auth {
+  native_enum AalLevel {
+    aal1 = "aal1"
+    aal2 = "aal2"
+    @@map("aal_level")
+  }
+
+  model AuthSession {
+    id   Int @id
+    aals pg.enum(AalLevel)[] @default(["aal1", "aal2"])
+  }
+}
+`;
+    const result = interpret(source, { sql: { scalarList: true } });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
+    expect(ns.table['AuthSession']?.columns['aals']?.default).toEqual({
+      kind: 'literal',
+      value: ['aal1', 'aal2'],
+    });
+  });
+
+  it('refuses a list default holding something other than a member name on a pg.enum(E)[] field', () => {
+    const source = `
+namespace auth {
+  native_enum AalLevel {
+    aal1 = "aal1"
+    aal2 = "aal2"
+    @@map("aal_level")
+  }
+
+  model AuthSession {
+    id   Int @id
+    aals pg.enum(AalLevel)[] @default(["aal1", 3])
+  }
+}
+`;
+    const result = interpret(source, { sql: { scalarList: true } });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics.map((diagnostic) => diagnostic.code)).toContain(
+      'PSL_DEFAULT_TYPE_INCOMPATIBLE',
+    );
   });
 
   it('supports a nullable pg.enum(E)? field', () => {
@@ -237,7 +294,7 @@ namespace auth {
     if (!result.ok) return;
 
     const ns = result.value.storage.namespaces['auth'] as PostgresSchema;
-    const aalColumn = ns.table['authSession']?.columns['aal'];
+    const aalColumn = ns.table['AuthSession']?.columns['aal'];
     expect(aalColumn?.nullable).toBe(true);
     expect(aalColumn?.valueSet).toEqual({
       plane: 'storage',
@@ -278,7 +335,7 @@ namespace public {
 
     const ns = result.value.storage.namespaces['public'] as PostgresSchema;
     expect(ns.valueSet?.['AalLevel']).toMatchObject({ values: ['aal1', 'aal2'] });
-    const aalColumn = ns.table['authSession']?.columns['aal'];
+    const aalColumn = ns.table['AuthSession']?.columns['aal'];
     expect(aalColumn).toMatchObject({
       codecId: 'pg/enum@1',
       nativeType: 'aal_level',

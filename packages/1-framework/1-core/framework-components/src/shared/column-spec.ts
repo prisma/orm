@@ -7,7 +7,7 @@
  */
 
 import type { ValueSetRef } from '@internal/contract/types';
-import type { CodecDescriptor } from './codec-descriptor';
+import type { CodecDescriptorTemplate } from './codec-descriptor';
 import type { CodecInstanceContext } from './codec-types';
 
 /**
@@ -82,8 +82,8 @@ export function column<R, P extends Record<string, unknown> | undefined>(
  *
  * Use when the codec's `ReturnType<factory>` is unstable (e.g. heavily overloaded factories where extraction widens too much).
  */
-// biome-ignore lint/suspicious/noExplicitAny: variance erasure — `CodecDescriptor<P>` is invariant in P, so concrete subclasses do not extend `CodecDescriptor<unknown>`; matches the existing `AnyCodecDescriptor` pattern
-export type ColumnHelperFor<D extends CodecDescriptor<any>> = (
+// biome-ignore lint/suspicious/noExplicitAny: variance erasure — `CodecDescriptorTemplate<P>` is invariant in P, so concrete subclasses do not extend `CodecDescriptor<unknown>`; matches the existing `AnyCodecDescriptor` pattern
+export type ColumnHelperFor<D extends CodecDescriptorTemplate<any>> = (
   // biome-ignore lint/suspicious/noExplicitAny: helper signature is the verification subject; satisfies clauses can't narrow this without circular inference
   ...args: any[]
 ) => ColumnSpec<unknown, ColumnHelperParams<D>>;
@@ -91,8 +91,8 @@ export type ColumnHelperFor<D extends CodecDescriptor<any>> = (
 /**
  * Strict `satisfies` shape — also checks the helper's codec is at least the *base* codec instance type the descriptor's factory returns. `ReturnType<ReturnType<D['factory']>>` widens method generics to their constraint, so this only sanity-checks the wiring at the base type level. Literal preservation comes from the direct `descriptor.factory(...)` call inside the helper, not from `satisfies`.
  */
-// biome-ignore lint/suspicious/noExplicitAny: variance erasure — `CodecDescriptor<P>` is invariant in P, so concrete subclasses do not extend `CodecDescriptor<unknown>`; matches the existing `AnyCodecDescriptor` pattern
-export type ColumnHelperForStrict<D extends CodecDescriptor<any>> = (
+// biome-ignore lint/suspicious/noExplicitAny: variance erasure — `CodecDescriptorTemplate<P>` is invariant in P, so concrete subclasses do not extend `CodecDescriptor<unknown>`; matches the existing `AnyCodecDescriptor` pattern
+export type ColumnHelperForStrict<D extends CodecDescriptorTemplate<any>> = (
   // biome-ignore lint/suspicious/noExplicitAny: helper signature is the verification subject; satisfies clauses can't narrow this without circular inference
   ...args: any[]
 ) => ColumnSpec<ReturnType<ReturnType<D['factory']>>, ColumnHelperParams<D>>;
@@ -101,7 +101,7 @@ export type ColumnHelperForStrict<D extends CodecDescriptor<any>> = (
  * Coerce a descriptor's `factory` first parameter into the typeParams shape `ColumnSpec` accepts. Non-parameterized descriptors (factory with no params, or `params: void`) collapse to `undefined`; parameterized descriptors keep the params record shape.
  */
 // biome-ignore lint/suspicious/noExplicitAny: variance erasure — see above
-type ColumnHelperParams<D extends CodecDescriptor<any>> =
+type ColumnHelperParams<D extends CodecDescriptorTemplate<any>> =
   Parameters<D['factory']>[0] extends Record<string, unknown>
     ? Parameters<D['factory']>[0]
     : undefined;

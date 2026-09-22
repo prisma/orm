@@ -317,6 +317,9 @@ export class ScalarFieldBuilder<State extends AnyScalarFieldState = AnyScalarFie
     }) as ScalarFieldBuilder<State>;
   }
 
+  /**
+   * @deprecated Write `.default(now())` or `.default(autoincrement())`, or `` .default(sql`...`) `` for any other SQL. Removed in 8.0.0.
+   */
   defaultSql(expression: string): ScalarFieldBuilder<State> {
     return new ScalarFieldBuilder({
       ...this.state,
@@ -621,6 +624,11 @@ type BelongsToRelation<
   readonly to: ToField;
   readonly sql?: SqlSpec;
   /**
+   * Whether the related row may be absent. Defaults to whether any `from`
+   * field is nullable; an explicit value that contradicts them is rejected.
+   */
+  readonly optional?: boolean;
+  /**
    * Contract-space identity of the target model. Populated when
    * `belongsTo` receives a cross-space branded handle. Absent for
    * local (same-space) relations.
@@ -833,7 +841,7 @@ type IndexInput<
 type ExpressionIndexInput<
   Name extends string | undefined,
   IndexTypes extends IndexTypeMap,
-> = IndexInput<Name, IndexTypes> & { readonly expression: string };
+> = IndexInput<Name, IndexTypes> & { readonly expression: IndexExpressionInput };
 
 type ForeignKeyOptions<Name extends string | undefined = string | undefined> =
   ConstraintOptions<Name> & {
@@ -862,6 +870,30 @@ export type UniqueConstraint<FieldNames extends readonly string[] = readonly str
   readonly name?: string;
 };
 
+/**
+ * An index expression rendered at lowering, once the storage column names are
+ * known. `fields` resolve exactly as the field-tuple form's do — a `.column()`
+ * override first, then the contract's column naming convention — and `render`
+ * receives the resolved names in the same order. Authoring code cannot know
+ * either, so an expression over a column has to be written this way rather
+ * than as a string, or it silently stops matching the column it names.
+ */
+/** A field the lowering resolved, as the renderer sees it. */
+export type DeferredIndexColumn = {
+  /** The storage column name, after `.column()` and the naming convention. */
+  readonly name: string;
+  /** The codec the column stores its values through. */
+  readonly codecId: string;
+};
+
+export type DeferredIndexExpression = {
+  readonly fields: readonly ColumnRef[];
+  readonly render: (columns: readonly DeferredIndexColumn[]) => string;
+};
+
+/** Opaque SQL, either written out or rendered at lowering. */
+export type IndexExpressionInput = string | DeferredIndexExpression;
+
 /** An authored index constraint's element structure — field tuple xor expression. */
 export type IndexConstraintElements<FieldNames extends readonly string[] = readonly string[]> =
   | {
@@ -872,7 +904,7 @@ export type IndexConstraintElements<FieldNames extends readonly string[] = reado
   | {
       readonly fields?: never;
       /** Opaque SQL: the entire CREATE INDEX element list — never parsed. */
-      readonly expression: string;
+      readonly expression: IndexExpressionInput;
     };
 
 /** Options only exist as options of a type, so the pair is one union. */
@@ -1070,7 +1102,7 @@ function createConstraintsDsl<IndexTypes extends IndexTypeMap = Record<never, ne
       | ColumnRef
       | readonly ColumnRef[]
       | {
-          readonly expression: string;
+          readonly expression: IndexExpressionInput;
           readonly name?: string;
           readonly map?: string;
           readonly where?: string;
@@ -1946,7 +1978,7 @@ function belongsTo<
   ToField extends RelationFieldSelection<RelationModelFieldNames<Token>>,
 >(
   toModel: Token | LazyNamedModelToken<Token>,
-  options: { readonly from: FromField; readonly to: ToField },
+  options: { readonly from: FromField; readonly to: ToField; readonly optional?: boolean },
 ): RelationBuilder<BelongsToRelation<RelationModelName<Token>, FromField, ToField>>;
 function belongsTo<
   ToModel extends string,
@@ -1954,13 +1986,14 @@ function belongsTo<
   ToField extends string | readonly string[],
 >(
   toModel: ToModel,
-  options: { readonly from: FromField; readonly to: ToField },
+  options: { readonly from: FromField; readonly to: ToField; readonly optional?: boolean },
 ): RelationBuilder<BelongsToRelation<ToModel, FromField, ToField>>;
 function belongsTo(
   toModel: string | AnyNamedModelToken | LazyNamedModelToken,
   options: {
     readonly from: string | readonly string[];
     readonly to: string | readonly string[];
+    readonly optional?: boolean;
   },
 ): RelationBuilder<BelongsToRelation> {
   // F-lazy: when the model is a lazy thunk (() => handle), resolve it before
@@ -1987,6 +2020,7 @@ function belongsTo(
     toModel: normalizeRelationModelSource(toModel),
     from: options.from,
     to: options.to,
+    ...ifDefined('optional', options.optional),
     ...(crossSpaceCoordinate !== undefined ? crossSpaceCoordinate : {}),
   });
 }

@@ -1,7 +1,7 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { describe, expect, it } from 'vitest';
-import type { ArgType, InterpretCtx } from '../src/exports';
+import { diagnosticSource, type PslDiagnostic } from '../src/diagnostic';
+import type { ArgType, AttributeCtx, FieldAttributeCtx } from '../src/exports';
 import {
   fieldAttribute,
   int,
@@ -11,38 +11,41 @@ import {
   optional,
 } from '../src/exports';
 import { Cursor, parse, parseAttribute } from '../src/parse';
-import type { SourceFile } from '../src/source-file';
+import { PslSources } from '../src/source-file';
 import { buildSymbolTable } from '../src/symbol-table';
 import { FieldAttributeAst } from '../src/syntax/ast/attributes';
 import { StringLiteralExprAst } from '../src/syntax/ast/expressions';
 import { createSyntaxTree } from '../src/syntax/red';
 
-function makeCtx(sourceFile: SourceFile): InterpretCtx {
-  const { document, sourceFile: modelSource } = parse('model M {\n  id Int @id\n}\n');
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile: modelSource,
+function makeCtx(sources: PslSources): FieldAttributeCtx {
+  const { document, sources: modelSources } = parse('model M {\n  id Int @id\n}\n', 'test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources: modelSources,
     pslBlockDescriptors: {},
   });
-  const selfModel = table.topLevel.models['M'];
+  const selfModel = symbolTable.topLevel.models['M'];
   if (!selfModel) throw new Error('expected model M in the symbol table');
+  const field = selfModel.fields['id'];
+  if (!field) throw new Error('expected field id on model M');
   return {
-    level: 'field',
-    sourceId: 'schema.prisma',
-    sourceFile,
+    sources,
+    symbols: symbolTable,
     selfModel,
+    field,
     resolveReferencedModel: () => undefined,
   };
 }
 
-function fieldAttr(source: string): { node: FieldAttributeAst; ctx: InterpretCtx } {
-  const cursor = new Cursor(source);
-  const node = FieldAttributeAst.cast(createSyntaxTree(parseAttribute(cursor)));
+function fieldAttr(source: string): { node: FieldAttributeAst; ctx: FieldAttributeCtx } {
+  const cursor = new Cursor('schema.prisma', source);
+  const root = createSyntaxTree(parseAttribute(cursor));
+  const node = FieldAttributeAst.cast(root);
   if (!node) throw new Error('expected a field attribute');
-  return { node, ctx: makeCtx(cursor.sourceFile) };
+  return { node, ctx: makeCtx(new PslSources([[root, cursor.sourceFile]])) };
 }
 
-function str(): ArgType<string> {
+function str(): ArgType<string, AttributeCtx> {
   return {
     kind: 'str',
     label: 'string',
@@ -55,8 +58,7 @@ function str(): ArgType<string> {
         {
           code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
           message: 'expected a quoted string',
-          sourceId: ctx.sourceId,
-          span: nodePslSpan(arg.syntax, ctx.sourceFile),
+          ...diagnosticSource(ctx.sources, arg.syntax).at(nodePslSpan(arg.syntax, ctx.sources)),
         },
       ]);
     },
@@ -66,13 +68,13 @@ function str(): ArgType<string> {
 const FAILING_DIAGNOSTIC: PslDiagnostic = {
   code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
   message: 'this leaf always fails',
-  sourceId: 'schema.prisma',
-  span: { start: { offset: 0, line: 1, column: 1 }, end: { offset: 0, line: 1, column: 1 } },
+  filename: 'schema.prisma',
+  range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
 };
 
-function failing(): ArgType<never> {
+function failing(): ArgType<never, AttributeCtx> {
   return {
-    kind: 'failing',
+    kind: 'rejecting',
     label: 'failing',
     parse: (): Result<never, readonly PslDiagnostic[]> => notOk([FAILING_DIAGNOSTIC]),
   };
@@ -81,7 +83,12 @@ function failing(): ArgType<never> {
 describe('interpretAttribute positional binding', () => {
   it('binds a positional argument into its slot key', () => {
     const { node, ctx } = fieldAttr('@rel("Posts")');
-    const spec = fieldAttribute('rel', { positional: [{ key: 'name', type: str() }] });
+    const spec = fieldAttribute('rel', {
+      documentation: 'Declares a field attribute for argument binding.',
+      positional: [
+        { key: 'name', type: str(), documentation: 'The value bound to this positional slot.' },
+      ],
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -92,7 +99,14 @@ describe('interpretAttribute positional binding', () => {
   it('rejects more positional arguments than declared slots', () => {
     const { node, ctx } = fieldAttr('@rel("a", "b")');
     const spec = fieldAttribute('rel', {
-      positional: [{ key: 'name', type: optional(str()) }],
+      documentation: 'Declares a field attribute for argument binding.',
+      positional: [
+        {
+          key: 'name',
+          type: optional(str()),
+          documentation: 'The value bound to this positional slot.',
+        },
+      ],
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -101,7 +115,11 @@ describe('interpretAttribute positional binding', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).toEqual(nodePslSpan(node.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 });
@@ -110,7 +128,11 @@ describe('interpretAttribute named binding', () => {
   it('binds named arguments by key', () => {
     const { node, ctx } = fieldAttr('@rel(name: "Posts", map: "fk")');
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()), map: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: {
+        name: { type: optional(str()), documentation: 'The relation name.' },
+        map: { type: optional(str()), documentation: 'The mapped constraint name.' },
+      },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -122,7 +144,8 @@ describe('interpretAttribute named binding', () => {
   it('rejects an unknown named argument anchored to the argument span', () => {
     const { node, ctx } = fieldAttr('@rel(foo: "x")');
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -132,7 +155,11 @@ describe('interpretAttribute named binding', () => {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
       expect(result.failure[0]?.message).toContain('foo');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 });
@@ -141,8 +168,15 @@ describe('interpretAttribute positional-or-named duplicate', () => {
   it('rejects a key supplied both positionally and by name even when the values agree, anchored to the duplicate', () => {
     const { node, ctx } = fieldAttr('@rel("Foo", name: "Foo")');
     const spec = fieldAttribute('rel', {
-      positional: [{ key: 'name', type: optional(str()) }],
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      positional: [
+        {
+          key: 'name',
+          type: optional(str()),
+          documentation: 'The value bound to this positional slot.',
+        },
+      ],
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -151,15 +185,26 @@ describe('interpretAttribute positional-or-named duplicate', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 
   it('rejects a key supplied both positionally and by name when the values disagree, anchored to the duplicate', () => {
     const { node, ctx } = fieldAttr('@rel("A", name: "B")');
     const spec = fieldAttribute('rel', {
-      positional: [{ key: 'name', type: optional(str()) }],
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      positional: [
+        {
+          key: 'name',
+          type: optional(str()),
+          documentation: 'The value bound to this positional slot.',
+        },
+      ],
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -168,7 +213,11 @@ describe('interpretAttribute positional-or-named duplicate', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 });
@@ -177,7 +226,8 @@ describe('interpretAttribute duplicate named arguments', () => {
   it('rejects a named key supplied twice with differing values, anchored to the duplicate', () => {
     const { node, ctx } = fieldAttr('@rel(name: "A", name: "B")');
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -186,14 +236,19 @@ describe('interpretAttribute duplicate named arguments', () => {
     if (!result.ok) {
       expect(result.failure).toHaveLength(1);
       expect(result.failure[0]?.code).toBe('PSL_INVALID_ATTRIBUTE_SYNTAX');
-      expect(result.failure[0]?.span).not.toEqual(nodePslSpan(node.syntax, ctx.sourceFile));
+      expect(result.failure[0]?.range).not.toEqual(
+        ctx.sources
+          .sourceFileFor(node.syntax)
+          .pslSpanToRange(nodePslSpan(node.syntax, ctx.sources)),
+      );
     }
   });
 
   it('rejects a named key supplied twice even when the values are equal', () => {
     const { node, ctx } = fieldAttr('@rel(name: "A", name: "A")');
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -210,7 +265,10 @@ describe('interpretAttribute optional and default application', () => {
   it('applies a default for an absent optional argument', () => {
     const { node, ctx } = fieldAttr('@rel()');
     const spec = fieldAttribute('rel', {
-      named: { map: optional(str(), 'default_fk') },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: {
+        map: { type: optional(str(), 'default_fk'), documentation: 'The value supplied by name.' },
+      },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -221,7 +279,10 @@ describe('interpretAttribute optional and default application', () => {
 
   it('omits an absent optional argument with no default', () => {
     const { node, ctx } = fieldAttr('@rel()');
-    const spec = fieldAttribute('rel', { named: { name: optional(str()) } });
+    const spec = fieldAttribute('rel', {
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -232,7 +293,10 @@ describe('interpretAttribute optional and default application', () => {
   it('overrides a default when the argument is present', () => {
     const { node, ctx } = fieldAttr('@rel(map: "explicit")');
     const spec = fieldAttribute('rel', {
-      named: { map: optional(str(), 'default_fk') },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: {
+        map: { type: optional(str(), 'default_fk'), documentation: 'The value supplied by name.' },
+      },
     });
 
     const result = interpretAttribute(node, spec, ctx);
@@ -243,7 +307,10 @@ describe('interpretAttribute optional and default application', () => {
 
   it('reports a missing required argument', () => {
     const { node, ctx } = fieldAttr('@rel()');
-    const spec = fieldAttribute('rel', { named: { name: str() } });
+    const spec = fieldAttribute('rel', {
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: str(), documentation: 'The value supplied by name.' } },
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -257,15 +324,17 @@ describe('interpretAttribute refine', () => {
     const { node, ctx } = fieldAttr('@rel(name: "bad")');
     const seen: string[] = [];
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
       refine: (parsed, refineCtx): readonly PslDiagnostic[] => {
         if (parsed.name !== undefined) seen.push(parsed.name);
         return [
           {
             code: 'PSL_INVALID_RELATION_ATTRIBUTE',
             message: 'refine rejected the value',
-            sourceId: refineCtx.sourceId,
-            span: nodePslSpan(node.syntax, refineCtx.sourceFile),
+            ...diagnosticSource(refineCtx.sources, node.syntax).at(
+              nodePslSpan(node.syntax, refineCtx.sources),
+            ),
           },
         ];
       },
@@ -284,7 +353,8 @@ describe('interpretAttribute refine', () => {
   it('returns ok when refine reports no diagnostics', () => {
     const { node, ctx } = fieldAttr('@rel(name: "ok")');
     const spec = fieldAttribute('rel', {
-      named: { name: optional(str()) },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: optional(str()), documentation: 'The value supplied by name.' } },
       refine: (): readonly PslDiagnostic[] => [],
     });
 
@@ -298,7 +368,8 @@ describe('interpretAttribute refine', () => {
     const { node, ctx } = fieldAttr('@rel(name: "x")');
     let refined = false;
     const spec = fieldAttribute('rel', {
-      named: { name: failing() },
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: failing(), documentation: 'The value supplied by name.' } },
       refine: (): readonly PslDiagnostic[] => {
         refined = true;
         return [];
@@ -315,7 +386,10 @@ describe('interpretAttribute refine', () => {
 describe('interpretAttribute leaf purity', () => {
   it('threads a failing leaf diagnostic through the Result rather than a sink', () => {
     const { node, ctx } = fieldAttr('@rel(name: "x")');
-    const spec = fieldAttribute('rel', { named: { name: failing() } });
+    const spec = fieldAttribute('rel', {
+      documentation: 'Declares a field attribute for argument binding.',
+      named: { name: { type: failing(), documentation: 'The value supplied by name.' } },
+    });
 
     const result = interpretAttribute(node, spec, ctx);
 
@@ -329,13 +403,18 @@ describe('interpretAttribute leaf purity', () => {
 describe('interpretArgs', () => {
   it('binds arguments into a plain record from an argument iterable', () => {
     const { node, ctx } = fieldAttr('@rel(size: 16)');
-    const span = nodePslSpan(node.syntax, ctx.sourceFile);
+    const span = nodePslSpan(node.syntax, ctx.sources);
 
     const result = interpretArgs(
       node.argList()?.args() ?? [],
-      { name: 'rel', positional: [], named: { size: int() } },
+      {
+        name: 'rel',
+        positional: [],
+        named: { size: { type: int(), documentation: 'The value supplied by name.' } },
+      },
       ctx,
       span,
+      node.syntax,
     );
 
     expect(result.ok).toBe(true);
@@ -344,13 +423,18 @@ describe('interpretArgs', () => {
 
   it('anchors a missing-required diagnostic to the provided span', () => {
     const { node, ctx } = fieldAttr('@rel()');
-    const span = nodePslSpan(node.syntax, ctx.sourceFile);
+    const span = nodePslSpan(node.syntax, ctx.sources);
 
     const result = interpretArgs(
       node.argList()?.args() ?? [],
-      { name: 'rel', positional: [], named: { size: int() } },
+      {
+        name: 'rel',
+        positional: [],
+        named: { size: { type: int(), documentation: 'The value supplied by name.' } },
+      },
       ctx,
       span,
+      node.syntax,
     );
 
     expect(result.ok).toBe(false);
@@ -359,7 +443,9 @@ describe('interpretArgs', () => {
       expect(result.failure[0]?.message).toBe(
         'Attribute "rel" is missing required argument "size"',
       );
-      expect(result.failure[0]?.span).toEqual(span);
+      expect(result.failure[0]?.range).toEqual(
+        ctx.sources.sourceFileFor(node.syntax).pslSpanToRange(span),
+      );
     }
   });
 });

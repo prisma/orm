@@ -95,11 +95,11 @@ describe('generateContractDts domain namespace handling', () => {
     const emailCount = (dts.match(/emailAddress/g) ?? []).length;
     const roleLabelCount = (dts.match(/roleLabel/g) ?? []).length;
     // emailAddress appears per-namespace only: (1) the auth domain block,
-    // (2) FieldOutputTypes[auth], (3) FieldInputTypes[auth].
-    expect(emailCount).toBe(3);
+    // (2) FieldOutputTypes[auth], (3) FieldInputTypes[auth], (4) Models.auth_User.
+    expect(emailCount).toBe(4);
     // roleLabel appears per-namespace only: (1) the public domain block,
-    // (2) FieldOutputTypes[public], (3) FieldInputTypes[public].
-    expect(roleLabelCount).toBe(3);
+    // (2) FieldOutputTypes[public], (3) FieldInputTypes[public], (4) Models.public_User.
+    expect(roleLabelCount).toBe(4);
   });
 
   it('throws CONTRACT.NAMESPACE_INVALID when the domain has no namespaces', () => {

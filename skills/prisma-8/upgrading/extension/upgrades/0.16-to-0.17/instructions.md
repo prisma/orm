@@ -523,7 +523,7 @@ changes:
       devDependencies to compile against those declarations — that workaround is now the
       hazard. `pg` ships no types of its own, so a second `@types/pg` copy at a different
       version gives `pg.Client` / `pg.Pool` two identities, and handing your own client or
-      pool to a Prisma Next API stops compiling with `Argument of type 'Client' is not
+      pool to a Prisma 8 API stops compiling with `Argument of type 'Client' is not
       assignable to parameter of type 'Client'` (`Type 'Client' is missing the following
       properties from type 'Client': connection, setTypeParser, getTypeParser`). Drop
       `@types/pg` from your extension and take it transitively, or pin it to the version
@@ -687,7 +687,7 @@ After the migration, run the extension package's typecheck, lint, and tests. Ver
 
 `@internal/postgres`, `@internal/extension-supabase`, and `@internal/driver-postgres` re-export `pg` types from their published `.d.mts` files, so each declares `@types/pg` under `dependencies` from 0.17. Compiling against those declarations no longer requires your extension to supply `@types/pg` itself.
 
-If your extension's `package.json` declares `@types/pg`, act on it. `pg` carries no types of its own, so two `@types/pg` copies in the tree give `pg.Client` and `pg.Pool` two distinct identities. Any call that hands your own client or pool to a Prisma Next API — `new PostgresControlDriver(client)`, a driver `connect: { pool }` — then fails:
+If your extension's `package.json` declares `@types/pg`, act on it. `pg` carries no types of its own, so two `@types/pg` copies in the tree give `pg.Client` and `pg.Pool` two distinct identities. Any call that hands your own client or pool to a Prisma 8 API — `new PostgresControlDriver(client)`, a driver `connect: { pool }` — then fails:
 
 ```text
 Argument of type 'Client' is not assignable to parameter of type 'Client'.
@@ -696,11 +696,11 @@ Argument of type 'Client' is not assignable to parameter of type 'Client'.
 
 The error names the same type on both sides; the two paths under `node_modules/.pnpm/@types+pg@<version>/` in the full message are what identify it.
 
-Prefer dropping `@types/pg` from your extension's `devDependencies` and taking it transitively, so its version tracks Prisma Next's. If you keep the entry — because your own code imports `pg` directly and you want the dependency explicit — pin it to the version `@internal/postgres` depends on rather than a range that can resolve elsewhere.
+Prefer dropping `@types/pg` from your extension's `devDependencies` and taking it transitively, so its version tracks Prisma 8's. If you keep the entry — because your own code imports `pg` directly and you want the dependency explicit — pin it to the version `@internal/postgres` depends on rather than a range that can resolve elsewhere.
 
 ## Incidental lint-config bumps
 
-Biome `$schema` version alignment in `packages/3-extensions/` (dependabot `dev-deps` group, PR #1058) requires no Prisma Next-specific upgrade action by extension authors.
+Biome `$schema` version alignment in `packages/3-extensions/` (dependabot `dev-deps` group, PR #1058) requires no Prisma 8-specific upgrade action by extension authors.
 
 ## `codec-json-projections-must-agree-with-encode-json`
 

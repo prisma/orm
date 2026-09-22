@@ -1,12 +1,21 @@
 #!/usr/bin/env node
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 
+/** Returns package directories that contain a source directory. */
 function listSrcParents() {
-  const out = execSync("find packages -type d -name src | sed 's|/src$||'", { encoding: 'utf8' });
+  let out;
+  try {
+    out = execFileSync('find', ['packages', '-type', 'd', '-name', 'src'], { encoding: 'utf8' });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`Failed to list package source directories: ${message}\n`);
+    process.exit(1);
+  }
   return out
     .split(/\r?\n/)
     .filter(Boolean)
+    .map((p) => p.replace(/\/src$/, ''))
     .filter((p) => !/coverage|\.turbo|node_modules/.test(p));
 }
 
@@ -24,8 +33,6 @@ for (const dir of dirs) {
   if (!/^#\s+/m.test(txt)) warnings.push(`${dir}: README missing top-level title`);
   if (!/^##\s+Responsibilities/m.test(txt))
     warnings.push(`${dir}: README missing 'Responsibilities' section`);
-  if (!/^##\s+Dependencies/m.test(txt))
-    warnings.push(`${dir}: README missing 'Dependencies' section`);
 }
 
 if (errors.length) {

@@ -1,11 +1,4 @@
 import type { CodecControlHooks, ExpandNativeTypeInput } from '@internal/family-sql/control';
-import {
-  buildOperation,
-  type CodecExpression,
-  type Expression,
-  type TraitExpression,
-  toExpr,
-} from '@internal/sql-relational-core/expression';
 import { postgresAggregateDescriptors } from '@internal/target-postgres/aggregates';
 import {
   PG_BIT_CODEC_ID,
@@ -31,6 +24,7 @@ import {
   PG_TIME_TEMPORAL_CODEC_ID,
   PG_TIMESTAMP_STRING_CODEC_ID,
   PG_TIMESTAMP_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMPTZ_DATE_CODEC_ID,
   PG_TIMESTAMPTZ_STRING_CODEC_ID,
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
@@ -44,7 +38,7 @@ import {
   SQL_VARCHAR_CODEC_ID,
 } from '@internal/target-postgres/codec-ids';
 import { postgresCodecRegistry } from '@internal/target-postgres/codecs';
-import type { QueryOperationTypes } from '../types/operation-types';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { adapterError } from './adapter-errors';
 
 // ============================================================================ Helper functions for reducing boilerplate ============================================================================
@@ -148,27 +142,6 @@ const identityHooks: CodecControlHooks = { expandNativeType: ({ nativeType }) =>
 
 // ============================================================================ Descriptor metadata ============================================================================
 
-type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
-
-export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOperationTypes<CT> {
-  return {
-    ilike: {
-      self: { traits: ['textual'] },
-      impl: (
-        self: TraitExpression<readonly ['textual'], false, CT>,
-        pattern: CodecExpression<'pg/text@1', false, CT>,
-      ): Expression<{ codecId: 'pg/bool@1'; nullable: false }> => {
-        return buildOperation({
-          method: 'ilike',
-          args: [toExpr(self), toExpr(pattern, { codecId: PG_TEXT_CODEC_ID })],
-          returns: { codecId: PG_BOOL_CODEC_ID, nullable: false },
-          lowering: { targetFamily: 'sql', strategy: 'infix', template: '{{self}} ILIKE {{arg0}}' },
-        });
-      },
-    },
-  };
-}
-
 export const postgresAdapterDescriptorMeta = {
   kind: 'adapter',
   familyId: 'sql',
@@ -191,8 +164,11 @@ export const postgresAdapterDescriptorMeta = {
       lateral: true,
       scalarList: true,
       checkConstraint: true,
+      insertOnConflictSkip: true,
+      insertOnConflictWithoutTarget: true,
     },
   },
+  dataTypes: postgresDataTypes,
   types: {
     aggregateDescriptors: postgresAggregateDescriptors,
     codecTypes: {
@@ -235,6 +211,7 @@ export const postgresAdapterDescriptorMeta = {
         [PG_TIME_TEMPORAL_CODEC_ID]: precisionHooks,
         [PG_TIMESTAMP_STRING_CODEC_ID]: precisionHooks,
         [PG_TIMESTAMPTZ_STRING_CODEC_ID]: precisionHooks,
+        [PG_TIMESTAMPTZ_DATE_CODEC_ID]: precisionHooks,
         [PG_TIME_STRING_CODEC_ID]: precisionHooks,
         [PG_TIMETZ_CODEC_ID]: precisionHooks,
         [PG_INTERVAL_CODEC_ID]: precisionHooks,
@@ -309,6 +286,12 @@ export const postgresAdapterDescriptorMeta = {
         nativeType: 'timestamp',
       },
       {
+        typeId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
+        familyId: 'sql',
+        targetId: 'postgres',
+        nativeType: 'timestamptz',
+      },
+      {
         typeId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
         familyId: 'sql',
         targetId: 'postgres',
@@ -341,12 +324,5 @@ export const postgresAdapterDescriptorMeta = {
       { typeId: PG_UUID_CODEC_ID, familyId: 'sql', targetId: 'postgres', nativeType: 'uuid' },
       { typeId: PG_INET_CODEC_ID, familyId: 'sql', targetId: 'postgres', nativeType: 'inet' },
     ],
-    queryOperationTypes: {
-      import: {
-        package: '@internal/adapter-postgres/operation-types',
-        named: 'QueryOperationTypes',
-        alias: 'PgAdapterQueryOps',
-      },
-    },
   },
 } as const;

@@ -1,0 +1,289 @@
+{
+  "target": "postgres",
+  "targetFamily": "sql",
+  "domain": {
+    "namespaces": {
+      "public": {
+        "models": {
+          "Generated": {
+            "storage": {
+              "table": "Generated",
+              "namespaceId": "public",
+              "fields": {
+                "id": {
+                  "column": "id"
+                },
+                "uuid4": {
+                  "column": "uuid4"
+                },
+                "uuid4Again": {
+                  "column": "uuid4Again"
+                },
+                "uuid7": {
+                  "column": "uuid7"
+                },
+                "cuid1": {
+                  "column": "cuid1"
+                },
+                "cuid2": {
+                  "column": "cuid2"
+                },
+                "ulid": {
+                  "column": "ulid"
+                },
+                "nanoid": {
+                  "column": "nanoid"
+                },
+                "nanoidSized": {
+                  "column": "nanoidSized"
+                }
+              }
+            },
+            "fields": {
+              "id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/int4@1"
+                },
+                "nullable": false
+              },
+              "uuid4": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "uuid4Again": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "uuid7": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "cuid1": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "cuid2": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "ulid": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "nanoid": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              },
+              "nanoidSized": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "pg/text@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {}
+          }
+        }
+      }
+    }
+  },
+  "roots": {
+    "Generated": {
+      "namespace": "public",
+      "model": "Generated"
+    }
+  },
+  "execution": {
+    "mutations": {
+      "defaults": [
+        {
+          "ref": {
+            "namespace": "public",
+            "table": "Generated",
+            "column": "cuid1"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "cuid2"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "table": "Generated",
+            "column": "cuid2"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "cuid2"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "table": "Generated",
+            "column": "nanoid"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "nanoid"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "table": "Generated",
+            "column": "nanoidSized"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "nanoid",
+            "params": {
+              "size": 10
+            }
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "table": "Generated",
+            "column": "ulid"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "ulid"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "table": "Generated",
+            "column": "uuid4"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "uuidv4"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "table": "Generated",
+            "column": "uuid4Again"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "uuidv4"
+          }
+        },
+        {
+          "ref": {
+            "namespace": "public",
+            "table": "Generated",
+            "column": "uuid7"
+          },
+          "onCreate": {
+            "kind": "generator",
+            "id": "uuidv7"
+          }
+        }
+      ]
+    },
+    "executionHash": "2001ed03c4da8fef0b365a21c6cafc98e25b2735cbc3e7acd62df9258434aa5d"
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2",
+  "meta": {},
+  "storage": {
+    "storageHash": "005fc4e896f41ec468af4dc3ad9fcbf26ce17867b87b4b5107b6a57895ce0048",
+    "namespaces": {
+      "public": {
+        "id": "public",
+        "kind": "postgres-schema",
+        "entries": {
+          "table": {
+            "Generated": {
+              "columns": {
+                "id": {
+                  "nativeType": "int4",
+                  "codecId": "pg/int4@1",
+                  "nullable": false
+                },
+                "uuid4": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "uuid4Again": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "uuid7": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "cuid1": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "cuid2": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "ulid": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "nanoid": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                },
+                "nanoidSized": {
+                  "nativeType": "text",
+                  "codecId": "pg/text@1",
+                  "nullable": false
+                }
+              },
+              "uniques": [],
+              "indexes": [],
+              "foreignKeys": [],
+              "primaryKey": {
+                "columns": ["id"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,8 +1,9 @@
 import type { PslExtensionBlock } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 import { parseWireName } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
 import type { PostgresPolicySchemaNode } from '../schema-ir/postgres-policy-schema-node';
-import { escapePslString, SYNTHETIC_SPAN } from './psl-literals';
+import { SYNTHETIC_SPAN } from './psl-literals';
 
 const POLICY_OPERATION_KEYWORD = {
   select: 'policy_select',
@@ -80,7 +81,7 @@ export function buildPolicyBlocks(
     if (badRole !== undefined) {
       const notes = skipNotesByTable.get(tableName) ?? [];
       notes.push(
-        `// prisma-next: skipped policy "${policy.name}": role "${badRole}" is not a valid PSL identifier and role references cannot be escaped`,
+        `// prisma: skipped policy "${policy.name}": role "${badRole}" is not a valid PSL identifier and role references cannot be escaped`,
       );
       skipNotesByTable.set(tableName, notes);
       continue;
@@ -138,6 +139,7 @@ export function buildPolicyBlocks(
           span: SYNTHETIC_SPAN,
         },
       ],
+      attributes: { map: { args: { name: policy.name }, span: SYNTHETIC_SPAN } },
       span: SYNTHETIC_SPAN,
     });
   }

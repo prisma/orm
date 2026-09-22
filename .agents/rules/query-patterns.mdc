@@ -1,5 +1,5 @@
 ---
-description: Standard patterns for working with Prisma Next queries
+description: Standard patterns for working with Prisma 8 queries
 globs: ["packages/2-sql/**", "packages/sql/**", "examples/**", "test/**"]
 alwaysApply: false
 ---

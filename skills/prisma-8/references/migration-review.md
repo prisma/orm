@@ -1,5 +1,5 @@
 
-# Prisma Next — Migration Review (Deployment + Concurrency)
+# Prisma 8 — Migration Review (Deployment + Concurrency)
 
 > **Edit your data contract. Prisma handles the rest.**
 
@@ -35,7 +35,7 @@ A live DB is therefore the authoritative source of origin. The "recorded marker"
 
 The **destination** is the contract hash you want the database to be at. Two ways to name a destination:
 
-- **A `--to <name>`** — a named pointer to a hash, stored under `migrations/app/refs/<name>`. Refs are named after environments by convention (`staging`, `production`) to communicate *"this is where production is expected to be"*. The ref itself is just a hash + an optional set of required invariants; it has nothing to do with which database you connect to.
+- **A `--to <name>`** — a named pointer to a hash, stored under `migrations/app/refs/<name>.json`. Refs are named after environments by convention (`staging`, `production`) to communicate *"this is where production is expected to be"*. The ref itself is just a hash + an optional set of required invariants; it has nothing to do with which database you connect to.
 - **The current contract head** — implicit when no `--to` is passed. This is the hash of the current `contract.json` on disk.
 
 `--to staging` does **not** mean "connect to the staging database." It means "navigate the database I connected to (via `--db` or config) toward whatever hash this ref points at." Database selection is orthogonal: pass `--db $STAGING_DATABASE_URL` to actually point at staging.
@@ -43,6 +43,8 @@ The **destination** is the contract hash you want the database to be at. Two way
 ### The migration graph
 
 The on-disk migrations form a directed graph: **nodes are contract hashes; edges are migrations.** Each migration declares a `from` hash and a `to` hash. A migration applies only when the database's current marker matches its `from` hash; running it advances the marker to its `to` hash.
+
+The graph is a static, committed artifact. Several branch tips may coexist, rollback edges may form cycles, and no node is privileged — "where is my database" is answered by the marker and refs, never by the graph itself. `references/migration-model.md` carries the full model, including how `migration plan` chooses its origin.
 
 `migration status` queries the graph for the path from origin to destination and reports per-edge status:
 
@@ -52,18 +54,15 @@ The on-disk migrations form a directed graph: **nodes are contract hashes; edges
 
 ### Diagnostic codes
 
-`migration status` emits structured diagnostics on the result envelope (`diagnostics[].code`) so the agent can branch on the code rather than parsing the prose summary. Each diagnostic also carries `severity` (`warn` or `info`), a human `message`, and `hints` — the same hints the CLI prints under the summary line.
+`migration status` answers with a document (`--json`): `spaces[]`, each with `currentContract` (the marker hash, or `null` when the database has no marker for that space), `targetContract`, and `migrations[]` carrying the `applied` / `pending` / `unreachable` status above; a `summary` line; and `diagnostics[]`. The ordinary states — up to date, N pending, no marker yet, marker on another branch, no path to the target — are read from `spaces[]` and the summary, not from diagnostic codes. The three diagnostics it can attach are all `warn`, and each carries a `message` and `hints` — the same hints the CLI prints under the summary line:
 
-| Code | Severity | Meaning in the navigation model | Next move |
-|---|---|---|---|
-| `MIGRATION.UP_TO_DATE` | info | Marker = destination; no edges to walk. | Nothing to do. |
-| `MIGRATION.DATABASE_BEHIND` | info | Marker is an ancestor of the destination; N pending edges in between. | `db migrate --to <name> --db $URL`. |
-| `MIGRATION.MISSING_INVARIANTS` | info | Marker reached destination structurally but missing required invariants the ref declares. | `db migrate --to <name> --db $URL` to take a path that covers them. |
-| `MIGRATION.NO_MARKER` | warn | Online, but the database has no marker row — never initialised. | `db migrate --db $URL` (first apply writes the marker). |
-| `MIGRATION.MARKER_NOT_IN_HISTORY` | warn | Online; marker hash is not a node in the graph. The database was changed outside the migration system. | Decide which side is truth: `db sign` (accept DB as truth), `db update` (push contract to DB), `contract infer` (re-derive contract from DB), or `db verify` (inspect first). **Not** the same as `MIGRATION.MARKER_MISMATCH`: `MARKER_NOT_IN_HISTORY` is emitted during the runner's graph walk when the live marker is off the path being traversed; `MARKER_MISMATCH` fires earlier, at the CLI pre-DDL gate, when the marker hash is not a graph node at all. |
-| `MIGRATION.DIVERGED` | warn | Multiple valid leaves; the destination is ambiguous. | Pass `--to <name>`, or `migration ref set <name> <hash>` to create one. |
-| `CONTRACT.AHEAD` | warn | Contract head is not in the graph — the contract was edited without re-planning. | `migration plan` to extend the graph. |
-| `CONTRACT.UNREADABLE` | warn | `contract.json` couldn't be read. | `contract emit` to regenerate it. |
+| Code | Meaning in the navigation model | Next move |
+|---|---|---|
+| `MIGRATION.MARKER_NOT_IN_HISTORY` | Online; marker hash is not a node in the graph. The database was changed outside the migration system. | Decide which side is truth: `db sign` (accept DB as truth), `db update` (push contract to DB), `contract infer` (re-derive contract from DB), or `db verify` (inspect first). **Not** the same as `MIGRATION.MARKER_MISMATCH`, which `db migrate` raises as an error before any DDL when the marker hash is not a graph node. |
+| `MIGRATION.MISSING_INVARIANTS` | Marker reached the destination structurally but lacks invariants the target ref declares. | `db migrate --to <name> --db $URL` to take a path that covers them. |
+| `CONTRACT.UNREADABLE` | `contract.json` couldn't be read. | `contract emit` to regenerate it. |
+
+Conditions that make the run *refuse* instead (exit `2`) arrive as ordinary errors: `MIGRATION.NO_INVARIANT_PATH` (no path covers the missing invariants), `MIGRATION.UNKNOWN_INVARIANT` (the ref names an invariant no edge provides), and the ref-resolution errors for a bad `--to` / `--from`.
 
 ### Graph-tree output
 
@@ -76,7 +75,7 @@ Both flags are also available on `migration list` and `migration graph`. `migrat
 
 ### Plan- and apply-time diagnostics
 
-These codes surface on `migration plan`, `migration ref set`, and `db migrate` — not on `migration status`. See [Migration System § Recovery affordances](../../docs/architecture%20docs/subsystems/7.%20Migration%20System.md#recovery-affordances) and [ADR 218](../../docs/architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md).
+These codes surface on `migration plan`, `migration ref set`, and `db migrate` — not on `migration status`. See [Migration System § Recovery affordances](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/subsystems/7.%20Migration%20System.md#recovery-affordances) and [ADR 218](https://github.com/prisma/orm/blob/main/docs/architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md).
 
 | Code | When | Meaning | Next move |
 |---|---|---|---|
@@ -141,7 +140,9 @@ pnpm prisma migration ref list | grep production
 pnpm prisma migration ref delete production
 ```
 
-`migration ref set` writes a file at `migrations/app/refs/<name>` carrying the hash and any required invariants. Refs are commit-friendly artifacts — keep them in git; the team agrees on what `production` points at the same way they agree on what `main` is.
+`migration ref set` writes a file at `migrations/app/refs/<name>.json` carrying the hash and any required invariants. Refs are commit-friendly artifacts — keep them in git; the team agrees on what `production` points at the same way they agree on what `main` is. The hash being set must be the `to` of an on-disk migration, or the command refuses — see `references/migration-model.md` for the refusal codes.
+
+Two ref roles, one mechanism: environment refs like `production` are the contract CD will migrate that environment to (a forward promise), while the `db` ref is a checkpoint of where the project's dev database was last brought to — written by `db init` / `db update` on the default URL and by `db sign` by default (`--advance-ref <name>` targets another ref, `--no-advance-ref` skips the write), consumed by `migration plan` as its default origin. `references/migration-model.md` covers the `db` ref, advancement rules, and plan-origin resolution.
 
 ## Workflow — apply a migration against an environment
 
@@ -178,9 +179,25 @@ For a human-readable ordered preview of the migration path before applying, use 
       --to staging --db "$STAGING_DATABASE_URL" --json > status.json
     node -e '
       const s = JSON.parse(require("fs").readFileSync("status.json", "utf8"));
-      const warns = (s.diagnostics ?? []).filter(d => d.severity === "warn");
-      if (warns.length) {
-        console.error("Blocking diagnostics:", warns);
+      const problems = [];
+      for (const d of s.diagnostics ?? []) {
+        if (d.severity === "warn") problems.push(`${d.code}: ${d.message}`);
+      }
+      for (const space of s.spaces ?? []) {
+        if (space.currentContract === null) problems.push(`${space.space}: database has no marker`);
+        const unreachable = space.migrations.filter(m => m.status === "unreachable");
+        if (unreachable.length) problems.push(`${space.space}: ${unreachable.length} unreachable migration(s)`);
+      }
+      // Pending migrations are the normal case before Apply; block on them
+      // only if this job is a verify-only gate (set EXPECT_UP_TO_DATE=1).
+      if (process.env.EXPECT_UP_TO_DATE === "1") {
+        for (const space of s.spaces ?? []) {
+          const pending = space.migrations.filter(m => m.status === "pending");
+          if (pending.length) problems.push(`${space.space}: ${pending.length} pending migration(s)`);
+        }
+      }
+      if (problems.length) {
+        console.error("Blocking:\n" + problems.join("\n"));
         process.exit(1);
       }
     '
@@ -188,7 +205,7 @@ For a human-readable ordered preview of the migration path before applying, use 
   run: pnpm prisma db migrate --to staging --db "$STAGING_DATABASE_URL"
 ```
 
-`migration status` exits non-zero only on hard errors (unreadable migrations directory, unsatisfiable invariants, unreconstructable history). Diagnostics like `MIGRATION.MARKER_NOT_IN_HISTORY`, `MIGRATION.DIVERGED`, `CONTRACT.AHEAD`, and `MIGRATION.NO_MARKER` are reported on the result envelope with `severity: 'warn'` but the process exits `0` — the agent (or a CI gate) must inspect `diagnostics[]` and fail the build itself. Use `--json` so the gate parses a structured shape rather than the human summary.
+`migration status` exits non-zero only on hard errors (unreadable migrations directory, unsatisfiable invariants, unreconstructable history). Pending migrations, a missing marker (`currentContract: null`), and the `warn` diagnostics (`MIGRATION.MARKER_NOT_IN_HISTORY`, `MIGRATION.MISSING_INVARIANTS`, `CONTRACT.UNREADABLE`) all leave the exit code at `0` — the agent (or a CI gate) must inspect `spaces[]` and `diagnostics[]` and fail the build itself. Use `--json` so the gate parses a structured shape rather than the human summary.
 
 `db migrate` is interactive-free and has no destructive-op confirmation prompt — the safety rails that prompt for destructive changes live on `db update` (see the `references/migrations.md` skill). Whatever the planner put in the migration graph is what `db migrate` runs; review happens at `migration plan` and at `migration status` time, before the apply step.
 
@@ -200,7 +217,7 @@ For a human-readable ordered preview of the migration path before applying, use 
 4. **Treating diamond convergence as a special procedure.** It's not. It's the normal *edit → plan → apply* loop applied to the post-rebase state. The only extra step is *"port any data-transform logic from your old `migration.ts` over."*
 5. **Running `migration ref set` to silence a CI mismatch without understanding the cause.** That can mask out-of-band changes or rollback drift. Investigate first.
 
-## What Prisma Next doesn't do yet
+## What Prisma 8 doesn't do yet
 
 - **Per-environment migration ordering beyond the default chain.** If you need staging to skip a migration that production requires (or vice versa), the supported path is to author the per-env divergence as separate migrations and gate them in your deploy script. If you want first-class per-env routing, file a feature request via the `references/feedback.md` skill.
 - **A built-in side-by-side "branch diff" view.** There is a full-graph render (`migration graph`) that shows branches, but no `git diff`-style comparison between two branches' migration sets. Workaround: run `migration status` on each branch and `diff` the output. If you want a built-in branch-comparison view, file a feature request via the `references/feedback.md` skill.

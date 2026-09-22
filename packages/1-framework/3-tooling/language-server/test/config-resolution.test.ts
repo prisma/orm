@@ -61,6 +61,7 @@ function stubStackWithContext(): ControlStack {
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
+      attributeSpecs: { model: {}, field: {} },
     },
     codecLookup: { get: () => undefined },
     controlMutationDefaults: {
@@ -129,7 +130,7 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
     expect(result.controlStack).toEqual({ scalarTypes: [], pslBlockDescriptors: {} });
   });
 
-  it('rejects a config that was not created by defineConfig', async () => {
+  it('rejects a config that was not created by definePrismaConfig', async () => {
     const root = await mkdtemp(join(tmpdir(), 'pn-lsp-unmarked-'));
     const configPath = join(root, 'prisma.config.ts');
     await writeFile(configPath, 'export default { family: {} };\n');
@@ -198,7 +199,11 @@ describe('resolveConfigInputs', { timeout: timeouts.coldTransformImport }, () =>
 
     const result = await resolveConfigInputs('/abs/prisma.config.ts');
 
-    expect(result.controlStack).toEqual({ scalarTypes: ['Int'], pslBlockDescriptors: {} });
+    expect(result.controlStack).toEqual({
+      scalarTypes: ['Int'],
+      pslBlockDescriptors: {},
+      authoringContributions: { pslBlockDescriptors: {} },
+    });
     expect(result.inputs.includes(pathToFileURL('/abs/schema.psl').toString())).toBe(true);
   });
 });
@@ -237,7 +242,11 @@ describe('control-stack input derivation', () => {
 
     const result = await resolveConfigInputs('/abs/prisma.config.ts');
 
-    expect(result.controlStack).toEqual({ scalarTypes: ['Int', 'String'], pslBlockDescriptors });
+    expect(result.controlStack).toEqual({
+      scalarTypes: ['Int', 'String'],
+      pslBlockDescriptors,
+      authoringContributions: { pslBlockDescriptors },
+    });
   });
 
   it('propagates createControlStack failures for a psl source', async () => {

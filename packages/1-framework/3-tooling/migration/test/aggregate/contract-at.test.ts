@@ -103,7 +103,6 @@ describe('AggregateContractSpace.contractAt', () => {
 
     expect(result.hash).toBe(HASH_A);
     expect(result.provenance).toBe('ref');
-    expect(result.contractDts).toBe(sampleContractDts('ref'));
     expect((result.contractJson as { storage: { storageHash: string } }).storage.storageHash).toBe(
       HASH_A,
     );
@@ -133,7 +132,6 @@ describe('AggregateContractSpace.contractAt', () => {
     expect(result.hash).toBe(HASH_B);
     expect(result.provenance).toBe('graph-node');
     if (result.provenance !== 'graph-node') throw new Error('expected graph-node provenance');
-    expect(result.contractDts).toBe(sampleContractDts('bundle'));
     expect((result.contractJson as { storage: { storageHash: string } }).storage.storageHash).toBe(
       HASH_B,
     );
@@ -147,8 +145,6 @@ describe('AggregateContractSpace.contractAt', () => {
     const result = await space.contractAt(HASH_B, { refName: 'staging' });
 
     expect(result.provenance).toBe('graph-node');
-    if (result.provenance !== 'graph-node') throw new Error('expected graph-node provenance');
-    expect(result.contractDts).toBe(sampleContractDts('bundle'));
   });
 
   it('throws when the hash is a graph node but no bundle ends at that hash', async () => {
@@ -257,6 +253,6 @@ describe('AggregateContractSpace.contractAt', () => {
     expect(fromRef).not.toBe(fromBundle);
     expect(fromRef.provenance).toBe('ref');
     expect(fromBundle.provenance).toBe('graph-node');
-    expect(fromRef.contractDts).toBe(fromBundle.contractDts);
+    expect(fromRef.contractJson).toEqual(fromBundle.contractJson);
   });
 });

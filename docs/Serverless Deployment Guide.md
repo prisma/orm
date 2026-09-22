@@ -1,6 +1,6 @@
 # Serverless Deployment Guide
 
-How to deploy Prisma Next to per-request runtimes — Cloudflare Workers + Hyperdrive as the primary worked path, with pointers for AWS Lambda (Node), Vercel Edge / Vercel Serverless, Deno Deploy, and Bun edge.
+How to deploy Prisma 8 to per-request runtimes — Cloudflare Workers + Hyperdrive as the primary worked path, with pointers for AWS Lambda (Node), Vercel Edge / Vercel Serverless, Deno Deploy, and Bun edge.
 
 This guide covers the per-request facade `@internal/postgres/serverless`. If you are deploying to a long-lived Node process (a server, a container, a non-edge Vercel function with bundling that keeps the process warm), use the existing `@internal/postgres/runtime` facade — the long-lived shape is unchanged and not in scope here.
 
@@ -287,6 +287,6 @@ The example is intentionally minimal — minimum schema, minimum routes — so y
 
 - [ADR 207 — Per-environment facade asymmetry](./architecture%20docs/adrs/ADR%20207%20-%20Per-environment%20facade%20asymmetry.md) — the architectural rationale for the two-facade design.
 - [ADR 159 — Runtime Driver Lifecycle](./architecture%20docs/adrs/ADR%20159%20-%20Driver%20Terminology%20and%20Lifecycle.md) — how the underlying driver lifecycle works (both facades inherit it unchanged).
-- [Architecture Overview](./Architecture%20Overview.md) — Prisma Next's broader plane / target / adapter / driver model.
+- [Architecture Overview](./Architecture%20Overview.md) — Prisma 8's broader plane / target / adapter / driver model.
 - [Cloudflare Hyperdrive docs](https://developers.cloudflare.com/hyperdrive/) — Hyperdrive setup, configuration, and observability.
 - The example: `examples/prisma-8-cloudflare-worker/` (in this repo).

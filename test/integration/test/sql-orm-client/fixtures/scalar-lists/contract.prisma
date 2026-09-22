@@ -12,4 +12,5 @@ model Item {
   id     Int      @id
   tags   String[]
   scores Int[]
+  @@map("item")
 }

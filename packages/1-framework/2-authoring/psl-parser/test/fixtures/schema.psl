@@ -1,4 +1,4 @@
-// use prisma-next
+// use prisma-8
 
 types {
   Email = String

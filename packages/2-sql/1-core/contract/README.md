@@ -1,6 +1,6 @@
 # @internal/sql-contract
 
-SQL contract types, validators, and IR factories for Prisma Next.
+SQL contract types, validators, and IR factories for Prisma 8.
 
 ## Overview
 
@@ -208,18 +208,6 @@ flowchart TD
     FACTORIES --> AUTHORING
     FACTORIES --> EMITTER
 ```
-
-## Dependencies
-
-- **`@internal/contract`**: Framework-level contract types (`ContractBase`)
-- **`arktype`**: Runtime validation library
-
-**Dependents:**
-- **`@internal/sql-contract-ts`**: Uses SQL contract types and validators for authoring
-- **`@internal/sql-contract-emitter`**: Uses SQL contract types for emission
-- **`@internal/sql-query`**: Uses SQL contract types for query building
-- **`@internal/sql-runtime`**: Uses SQL contract types for runtime execution
-- **`@internal/sql-lane`**: Uses SQL contract types for lane operations
 
 ## Related Packages
 

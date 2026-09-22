@@ -1,0 +1,67 @@
+{
+  "name": "@internal/sql-contract-prisma7",
+  "private": true,
+  "version": "8.0.0-rc.11",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "description": "Prisma 7 schema.prisma to SQL ContractIR interpreter for Prisma 8",
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --project tsconfig.json --noEmit && tsc --project tsconfig.test.json --noEmit",
+    "lint": "biome check . --error-on-warnings",
+    "lint:fix": "biome check --write .",
+    "lint:fix:unsafe": "biome check --write --unsafe .",
+    "clean": "rm -rf dist dist-tsc dist-tsc-prod coverage .tmp-output"
+  },
+  "dependencies": {
+    "@internal/config": "workspace:8.0.0-rc.11",
+    "@internal/contract": "workspace:8.0.0-rc.11",
+    "@internal/framework-components": "workspace:8.0.0-rc.11",
+    "@internal/psl-parser": "workspace:8.0.0-rc.11",
+    "@internal/sql-contract": "workspace:8.0.0-rc.11",
+    "@internal/sql-contract-psl": "workspace:8.0.0-rc.11",
+    "@internal/sql-contract-ts": "workspace:8.0.0-rc.11",
+    "@internal/utils": "workspace:8.0.0-rc.11",
+    "pathe": "^2.0.3"
+  },
+  "devDependencies": {
+    "@internal/adapter-postgres": "workspace:8.0.0-rc.11",
+    "@internal/driver-postgres": "workspace:8.0.0-rc.11",
+    "@internal/family-sql": "workspace:8.0.0-rc.11",
+    "@internal/target-postgres": "workspace:8.0.0-rc.11",
+    "@repo/test-utils": "workspace:8.0.0-rc.11",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@repo/tsdown": "workspace:8.0.0-rc.11",
+    "@types/node": "catalog:",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.9"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
+  },
+  "exports": {
+    "./provider": "./dist/provider.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/provider.d.mts",
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prisma/orm.git",
+    "directory": "packages/2-sql/2-authoring/contract-prisma7"
+  }
+}

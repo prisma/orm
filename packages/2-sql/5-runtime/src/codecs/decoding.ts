@@ -1,3 +1,4 @@
+import type { JsonValue } from '@internal/contract/types';
 import {
   checkAborted,
   raceAgainstAbort,
@@ -11,9 +12,28 @@ import type {
   RawQueryAst,
   SqlCodecCallContext,
 } from '@internal/sql-relational-core/ast';
+import { blindCast } from '@internal/utils/casts';
 import { isStructuredError } from '@internal/utils/structured-error';
 
 type ColumnRef = { table: string; column: string };
+
+export type ListDecoder = (
+  wireValue: unknown,
+  decodeElement: (value: unknown) => Promise<unknown>,
+) => Promise<readonly unknown[]> | readonly unknown[];
+
+export const sqlNativeArrayListDecoder: ListDecoder = async (wireValue, decodeElement) => {
+  if (!Array.isArray(wireValue)) {
+    throw new TypeError(
+      `expected an array from the driver for many-typed column, got ${typeof wireValue}`,
+    );
+  }
+  const decoded: unknown[] = [];
+  for (const elem of wireValue) {
+    decoded.push(await decodeElement(elem));
+  }
+  return decoded;
+};
 
 export interface DecodeContext {
   readonly aliases: ReadonlyArray<string> | undefined;
@@ -190,7 +210,9 @@ function wrapIncludeAggregateFailure(error: unknown, alias: string, wireValue: u
   throw wrapped;
 }
 
-function decodeIncludeAggregate(alias: string, wireValue: unknown): unknown {
+type IncludeAggregateValue = JsonValue | readonly unknown[];
+
+function decodeIncludeAggregate(alias: string, wireValue: unknown): IncludeAggregateValue {
   if (wireValue === null || wireValue === undefined) {
     return [];
   }
@@ -205,7 +227,9 @@ function decodeIncludeAggregate(alias: string, wireValue: unknown): unknown {
       // both row include arrays (`json_agg`) and scalar / combine
       // include envelopes (`json_build_object`) flow through this path,
       // each with their own downstream shape decoder.
-      return wireValue;
+      return blindCast<IncludeAggregateValue, 'JSON aggregates are already parsed by the driver'>(
+        wireValue,
+      );
     }
     return JSON.parse(String(wireValue));
   } catch (error) {
@@ -220,13 +244,14 @@ function decodeIncludeAggregate(alias: string, wireValue: unknown): unknown {
  * The row-level `rowCtx` is repackaged into a per-cell `SqlCodecCallContext` whose `column = { table, name }` is a structural projection of the per-cell `ColumnRef = { table, column }` resolved from the AST-backed `DecodeContext` (the same resolution `wrapDecodeFailure` uses for envelope construction — one resolution per cell, two consumers). Cells the runtime cannot resolve to a single underlying column (aggregate
  * aliases, computed projections without a simple ref) get `column: undefined`, matching the spec contract that the runtime never silently defaults this field.
  *
- * For `many`-flagged aliases the driver has already parsed the wire form into a JS array; this function maps the element codec over that array element-by-element, passing `null` elements through unchanged. Element-level failures surface through the existing `RUNTIME.DECODE_FAILED` envelope with the column/codec context from the parent cell.
+ * For `many`-flagged aliases this function delegates frame traversal to the selected `ListDecoder`, passing `null` elements through unchanged and mapping the same element codec over every non-null element. SQL runtimes without a target-owned contribution select `sqlNativeArrayListDecoder` explicitly before row decoding. Element-level failures surface through the existing `RUNTIME.DECODE_FAILED` envelope with the column/codec context from the parent cell.
  */
 async function decodeField(
   alias: string,
   wireValue: unknown,
   decodeCtx: DecodeContext,
   rowCtx: SqlCodecCallContext,
+  listDecoder: ListDecoder,
 ): Promise<unknown> {
   if (wireValue === null) {
     return null;
@@ -247,32 +272,26 @@ async function decodeField(
     cellCtx = rowCtxWithoutColumn;
   }
 
+  const decodeElement = async (elem: unknown): Promise<unknown> => {
+    if (elem === null || elem === undefined) {
+      return null;
+    }
+
+    try {
+      return await codec.decode(elem, cellCtx);
+    } catch (error) {
+      if (isStructuredError(error)) throw error;
+      wrapDecodeFailure(error, alias, ref, codec, elem);
+    }
+  };
+
   if (decodeCtx.manyAliases.has(alias)) {
-    if (!Array.isArray(wireValue)) {
-      wrapDecodeFailure(
-        new TypeError(
-          `expected an array from the driver for many-typed column, got ${typeof wireValue}`,
-        ),
-        alias,
-        ref,
-        codec,
-        wireValue,
-      );
+    try {
+      return await listDecoder(wireValue, decodeElement);
+    } catch (error) {
+      if (isStructuredError(error)) throw error;
+      wrapDecodeFailure(error, alias, ref, codec, wireValue);
     }
-    const decoded: unknown[] = [];
-    for (const elem of wireValue) {
-      if (elem === null || elem === undefined) {
-        decoded.push(null);
-        continue;
-      }
-      try {
-        decoded.push(await codec.decode(elem, cellCtx));
-      } catch (error) {
-        if (isStructuredError(error)) throw error;
-        wrapDecodeFailure(error, alias, ref, codec, elem);
-      }
-    }
-    return decoded;
   }
 
   try {
@@ -304,6 +323,7 @@ export async function decodeRow(
   row: Record<string, unknown>,
   decodeCtx: DecodeContext,
   rowCtx: SqlCodecCallContext,
+  listDecoder: ListDecoder,
 ): Promise<Record<string, unknown>> {
   checkAborted(rowCtx, 'decode');
   const signal = rowCtx.signal;
@@ -336,7 +356,7 @@ export async function decodeRow(
   const includeIndices: { index: number; alias: string; value: unknown }[] = [];
 
   for (let i = 0; i < aliases.length; i++) {
-    const alias = aliases[i] as string;
+    const alias = blindCast<string, 'decodeRow aliases are index-aligned'>(aliases[i]);
     const wireValue = row[alias];
 
     if (decodeCtx.includeAliases.has(alias)) {
@@ -345,7 +365,7 @@ export async function decodeRow(
       continue;
     }
 
-    tasks.push(decodeField(alias, wireValue, decodeCtx, rowCtx));
+    tasks.push(decodeField(alias, wireValue, decodeCtx, rowCtx, listDecoder));
   }
 
   const settled = await raceAgainstAbort(Promise.all(tasks), signal, 'decode');
@@ -356,7 +376,8 @@ export async function decodeRow(
 
   const decoded: Record<string, unknown> = {};
   for (let i = 0; i < aliases.length; i++) {
-    decoded[aliases[i] as string] = settled[i];
+    const alias = blindCast<string, 'decodeRow aliases are index-aligned'>(aliases[i]);
+    decoded[alias] = settled[i];
   }
   return decoded;
 }

@@ -5,13 +5,17 @@ import {
   collectScalarTypeConstructors,
   type ScalarTypeConstructorOutput,
 } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import sqlite, { sqliteCreateNamespace } from '@internal/target-sqlite/control';
+import { sqliteDataTypes } from '@internal/target-sqlite/data-types';
 import sqlitePackRef from '@internal/target-sqlite/pack';
 import { describe, expect, it } from 'vitest';
+
+const sqliteDataTypeLookup = createDataTypeLookup(sqliteDataTypes);
 
 const stack = createControlStack({
   family: sql,
@@ -34,16 +38,17 @@ const REPRESENTATIVE_SCHEMA = `model sample {
 `;
 
 function emit(scalarColumnDescriptors: ReadonlyMap<string, ScalarTypeConstructorOutput>) {
-  const { document, sourceFile } = parse(REPRESENTATIVE_SCHEMA);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(REPRESENTATIVE_SCHEMA, 'scalar-type-parity.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: sqliteDataTypeLookup,
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: sqlitePackRef,
     scalarColumnDescriptors,
     authoringContributions: stack.authoringContributions,

@@ -1,5 +1,5 @@
 import { ifDefined } from '@internal/utils/defined';
-import type { NextAction, StructuredError } from '@internal/utils/structured-error';
+import type { Diagnostic, NextAction, StructuredError } from '@internal/utils/structured-error';
 import { docsUrlFor } from '@internal/utils/structured-error';
 
 /**
@@ -22,6 +22,7 @@ export interface CliErrorEnvelope {
   readonly why?: string;
   readonly fix?: string;
   readonly nextActions: readonly NextAction[];
+  readonly diagnostics?: readonly Diagnostic[];
   readonly where?: { readonly path?: string; readonly line?: number };
   readonly meta?: Record<string, unknown>;
   readonly docsUrl?: string;
@@ -53,6 +54,7 @@ export class CliStructuredError extends Error implements StructuredError {
   declare readonly why?: string;
   declare readonly fix?: string;
   declare readonly nextActions?: readonly NextAction[];
+  declare readonly diagnostics?: readonly Diagnostic[];
   declare readonly where?: { readonly path?: string; readonly line?: number };
   declare readonly meta?: Record<string, unknown>;
   declare readonly docsUrl?: string;
@@ -65,6 +67,7 @@ export class CliStructuredError extends Error implements StructuredError {
       readonly why?: string;
       readonly fix?: string;
       readonly nextActions?: readonly NextAction[];
+      readonly diagnostics?: readonly Diagnostic[];
       readonly where?: { readonly path?: string; readonly line?: number };
       readonly meta?: Record<string, unknown>;
       readonly docsUrl?: string;
@@ -83,6 +86,7 @@ export class CliStructuredError extends Error implements StructuredError {
       ...ifDefined('why', options?.why),
       ...ifDefined('fix', fix),
       ...ifDefined('nextActions', options?.nextActions),
+      ...ifDefined('diagnostics', options?.diagnostics),
       ...ifDefined('where', where),
       ...ifDefined('meta', options?.meta),
       ...ifDefined('docsUrl', options?.docsUrl),
@@ -104,6 +108,7 @@ export class CliStructuredError extends Error implements StructuredError {
       ...ifDefined('why', this.why),
       ...ifDefined('fix', this.fix),
       nextActions: this.nextActions ?? [],
+      ...ifDefined('diagnostics', this.diagnostics),
       ...ifDefined('where', this.where),
       ...ifDefined('meta', this.meta),
       ...ifDefined('docsUrl', this.docsUrl),
@@ -171,17 +176,17 @@ export function errorConfigEvaluationFailed(
 }
 
 /**
- * Config module evaluated, but its export does not carry the defineConfig
+ * Config module evaluated, but its export does not carry the definePrismaConfig
  * version marker (plain object export, or a config produced by a different
  * defineConfig such as classic Prisma's).
  */
 export function errorConfigVersionMarkerMissing(configPath?: string): CliStructuredError {
   return new CliStructuredError(
     'CONFIG.VERSION_MARKER_MISSING',
-    'Config is not a defineConfig result',
+    'Config is not a definePrismaConfig result',
     {
-      why: 'The config module evaluated, but its default export was not created by a current defineConfig',
-      fix: "Create the config with defineConfig from '@prisma/cli-engine', nest your settings under its `orm` section, and export its return value directly",
+      why: 'The config module evaluated, but its default export was not created by a current definePrismaConfig',
+      fix: "Create the config with definePrismaConfig from '@prisma/cli-engine', nest your settings under its `orm` section, and export its return value directly",
       docsUrl: docsUrlFor('CONFIG.VERSION_MARKER_MISSING'),
       ...(configPath ? { where: { path: configPath } } : {}),
     },

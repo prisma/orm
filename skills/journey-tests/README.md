@@ -7,10 +7,10 @@ Cross-runtime automation against a moving model surface is its own research proj
 ## How to run a journey test
 
 1. Check out the example app named at the top of the journey file.
-2. Install the user-facing skill cluster at the project level. The URL points at the `skills/` subpath of the Prisma Next repository, which is the same source `prisma orm init` uses. Contributor skills (which live under `skills-contrib/`) are *not* on upstream's priority-discovery allowlist and never reach end-users through this URL. `--all` installs every skill in the user-facing cluster to every detected agent without prompting (the cluster is meant to be installed as a unit):
+2. Install the user-facing skill cluster at the project level. The URL points at the `skills/` subpath of the Prisma 8 repository, which is the same source `prisma orm init` uses. Contributor skills (which live under `skills-contrib/`) are *not* on upstream's priority-discovery allowlist and never reach end-users through this URL. `--all` installs every skill in the user-facing cluster to every detected agent without prompting (the cluster is meant to be installed as a unit):
 
    ```bash
-   pnpm dlx skills add prisma/prisma/skills#v<prisma-next-version> --all
+   pnpm dlx skills add prisma/prisma/skills#v<prisma-8-version> --all
    ```
 
    To test against an in-flight branch or commit instead of a tagged release:
@@ -22,11 +22,11 @@ Cross-runtime automation against a moving model surface is its own research proj
    To test a local checkout, point the CLI at the `skills/` directory directly:
 
    ```bash
-   pnpm dlx skills add /absolute/path/to/prisma-next/skills --all
+   pnpm dlx skills add /absolute/path/to/orm/skills --all
    ```
 
 3. Open the project in your agent's IDE (or attach the agent via its CLI).
-4. Paste the prompt verbatim. Do not paste any additional context, do not paste Prisma Next documentation.
+4. Paste the prompt verbatim. Do not paste any additional context, do not paste Prisma 8 documentation.
 5. Observe each step the agent takes. Tick each checklist item as the agent completes it. Note any deviations.
 6. At the end, verify the success criteria. If any step is missed or any criterion fails, the journey **fails** — the skill needs refinement.
 
@@ -43,6 +43,7 @@ Cross-runtime automation against a moving model surface is its own research proj
 | [`02f-merge-preview.md`](02f-merge-preview.md) | migration-review | AC5f |
 | [`02g-diamond-convergence.md`](02g-diamond-convergence.md) | migration-review, migrations | AC5g |
 | [`02h-query-interface.md`](02h-query-interface.md) | queries | AC5h |
+| [`02i-greenfield-trap.md`](02i-greenfield-trap.md) | migration-model, migrations | — |
 | [`03-capability-gaps.md`](03-capability-gaps.md) | contract, migrations, queries, build, debug, feedback | AC6 |
 | [`05-build-vite.md`](05-build-vite.md) | build | AC8b |
 | [`05b-build-nextjs-gap.md`](05b-build-nextjs-gap.md) | build, feedback | AC8b (Next.js path) |

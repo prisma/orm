@@ -1,6 +1,6 @@
 # @internal/sql-errors
 
-SQL-normalized driver error types for Prisma Next.
+SQL-normalized driver error types for Prisma 8.
 
 ## Package Classification
 

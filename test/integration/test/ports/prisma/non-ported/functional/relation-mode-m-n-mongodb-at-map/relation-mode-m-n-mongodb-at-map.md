@@ -7,7 +7,7 @@ creates pass upstream.
 
 **Whole-suite gap — same as the non-@map MongoDB suite.** These tests port the same upstream
 *two-way embedded implicit many-to-many* schema (`categoryIDs String[]` + `categories CategoryManyToMany[] @relation(fields: [categoryIDs], references: [id])`
-on both sides, here with `@map`/`@@map` physical-name overrides). prisma-next's mongo authoring
+on both sides, here with `@map`/`@@map` physical-name overrides). Prisma 8's mongo authoring
 rejects the shape at emit (`PSL_ORPHANED_BACKRELATION` — "use an explicit join model for
 many-to-many"; the only supported m:n is an explicit junction, a different schema shape) and
 requires `id ObjectId @id @map("_id")` rather than the suite's `String @id @map("_id")` with

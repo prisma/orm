@@ -104,7 +104,8 @@ withTempDir(({ createTempDir }) => {
                 CREATE TABLE IF NOT EXISTS "user" (
                   id SERIAL PRIMARY KEY,
                   email TEXT NOT NULL,
-                  name TEXT
+                  name TEXT,
+                  token UUID NOT NULL DEFAULT gen_random_uuid()
                 )
               `);
             });
@@ -121,13 +122,14 @@ withTempDir(({ createTempDir }) => {
 
             const pslPath = join(testSetup.testDir, 'output/contract.prisma');
             expect(existsSync(pslPath)).toBe(true);
-            expect(readFileSync(pslPath, 'utf-8')).toBe(`// use prisma-next
+            expect(readFileSync(pslPath, 'utf-8')).toBe(`// use prisma-8
 // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
 model User {
   id    Int     @id(map: "user_pkey") @default(autoincrement())
   email String
   name  String?
+  token Uuid    @default(dbgenerated("gen_random_uuid()"))
 
   @@map("user")
 }

@@ -5,14 +5,18 @@ import {
   collectScalarTypeConstructors,
   type ScalarTypeConstructorOutput,
 } from '@internal/framework-components/authoring';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { createControlStack } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import postgres from '@internal/target-postgres/control';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import postgresPackRef from '@internal/target-postgres/pack';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const stack = createControlStack({
   family: sql,
@@ -38,16 +42,17 @@ const REPRESENTATIVE_SCHEMA = `model sample {
 `;
 
 function emit(scalarColumnDescriptors: ReadonlyMap<string, ScalarTypeConstructorOutput>) {
-  const { document, sourceFile } = parse(REPRESENTATIVE_SCHEMA);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(REPRESENTATIVE_SCHEMA, 'scalar-type-parity.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: postgresPackRef,
     scalarColumnDescriptors,
     authoringContributions: stack.authoringContributions,
@@ -91,6 +96,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       DateString: { codecId: 'pg/date-string@1', nativeType: 'date' },
       TimestampString: { codecId: 'pg/timestamp-string@1', nativeType: 'timestamp' },
       TimestamptzString: { codecId: 'pg/timestamptz-string@1', nativeType: 'timestamptz' },
+      TimestamptzJsDate: { codecId: 'pg/timestamptz-date@1', nativeType: 'timestamptz' },
       TimeString: { codecId: 'pg/time-string@1', nativeType: 'time' },
     });
   });
@@ -120,6 +126,7 @@ describe('postgres scalar types derived from the unified namespace', () => {
       'Timestamp',
       'TimestampString',
       'Timestamptz',
+      'TimestamptzJsDate',
       'TimestamptzString',
       'Timetz',
       'UnboundedInt',

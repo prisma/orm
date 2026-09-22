@@ -1,6 +1,6 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
-import { voidParamsSchema } from '@internal/framework-components/codec';
+import type { AnyCodecDescriptorTemplate } from '@internal/framework-components/codec';
+import { dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
 import type { RuntimeExtensionDescriptor } from '@internal/framework-components/execution';
 import {
   BinaryExpr,
@@ -28,7 +28,7 @@ import { defineTestCodec } from './test-codec';
 
 const emptyRegistry = buildPostgresCodecDescriptorRegistry([]);
 
-function genericDescriptor(codecId: string): AnyCodecDescriptor {
+function genericDescriptor(codecId: string): AnyCodecDescriptorTemplate {
   const codec = defineTestCodec({
     typeId: codecId,
     encode: (value: JsonValue): JsonValue => value,
@@ -46,6 +46,7 @@ function genericDescriptor(codecId: string): AnyCodecDescriptor {
 
 function descriptorFor(codecId: string, nativeType: string): AnyPostgresCodecDescriptor {
   return postgresCodec(genericDescriptor(codecId), {
+    dataType: dataTypeId('demo/fixture'),
     nativeType: () => nativeType,
     jsonProjection: (expression: ProjectionExpr) => expression,
   });

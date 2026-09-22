@@ -1,26 +1,41 @@
-import type { PslDiagnostic } from '@internal/framework-components/psl-ast';
 import { notOk, ok, type Result } from '@internal/utils/result';
+import type { PslDiagnostic } from '../../diagnostic';
 import { NumberLiteralExprAst } from '../../syntax/ast/expressions';
-import type { ArgType } from '../types';
+import type { AttributeCtx, FixedNumArgType, UnrestrictedNumArgType } from '../types';
 import { leafDiagnostic } from './diagnostic';
 
-// A general number literal — any number, including floats — reduced to its numeric value.
-// Passing `value` pins the combinator to that single literal (`num(4)` matches only `4`),
-// mirroring how `identifier(name)` pins a bare identifier. Use `int()` when only integer
-// literals are allowed.
-export function num(): ArgType<number>;
-export function num(value: number): ArgType<number>;
-export function num(value?: number): ArgType<number> {
+/** The pinned form retains its value as the output literal type. */
+export function num(): UnrestrictedNumArgType<AttributeCtx>;
+export function num<const T extends number>(value: T): FixedNumArgType<T, AttributeCtx>;
+export function num<const T extends number>(
+  value?: T,
+): UnrestrictedNumArgType<AttributeCtx> | FixedNumArgType<T, AttributeCtx> {
+  if (value === undefined) {
+    return {
+      kind: 'num',
+      label: 'number',
+      value: undefined,
+      parse: (arg, ctx): Result<number, readonly PslDiagnostic[]> => {
+        const literal = NumberLiteralExprAst.cast(arg.syntax);
+        if (literal !== undefined) {
+          const parsed = literal.value();
+          if (parsed !== undefined) return ok(parsed);
+        }
+        return notOk([leafDiagnostic(ctx, arg, 'Expected a number literal')]);
+      },
+    };
+  }
   return {
     kind: 'num',
-    label: value === undefined ? 'number' : String(value),
-    parse: (arg, ctx): Result<number, readonly PslDiagnostic[]> => {
-      if (arg instanceof NumberLiteralExprAst) {
-        const parsed = arg.value();
-        if (parsed !== undefined && (value === undefined || parsed === value)) return ok(parsed);
+    label: String(value),
+    value,
+    parse: (arg, ctx): Result<T, readonly PslDiagnostic[]> => {
+      const literal = NumberLiteralExprAst.cast(arg.syntax);
+      if (literal !== undefined) {
+        const parsed = literal.value();
+        if (parsed === value) return ok(value);
       }
-      const message = value === undefined ? 'Expected a number literal' : `Expected ${value}`;
-      return notOk([leafDiagnostic(ctx, arg, message)]);
+      return notOk([leafDiagnostic(ctx, arg, `Expected ${value}`)]);
     },
   };
 }

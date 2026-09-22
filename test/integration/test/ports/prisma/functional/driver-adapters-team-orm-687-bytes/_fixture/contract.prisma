@@ -1,6 +1,6 @@
 // PostgreSQL translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/driver-adapters/team-orm-687-bytes/prisma/_schema.ts.
-// Upstream declares `id String @id @default(cuid())`. Prisma Next's supported
+// Upstream declares `id String @id @default(cuid())`. Prisma 8's supported
 // `@default(cuid(2))` brands the field as Char<24>, which rejects the source
 // suite's explicit one-character String ids, so this fixture omits that default.
 

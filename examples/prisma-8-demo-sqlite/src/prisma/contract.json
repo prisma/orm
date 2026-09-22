@@ -107,6 +107,7 @@
               },
               "user": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": [
                     "userId"
@@ -608,6 +609,8 @@
   "capabilities": {
     "sql": {
       "foreignKeys": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
       "jsonAgg": true,
       "limit": true,
       "orderBy": true,

@@ -295,7 +295,7 @@ describe('planMigration', () => {
 
   it('rejects with extensionPathUnreachable when an empty-graph space declares a managed element', async () => {
     // Advancing a marker without migrations (declared-state) is valid only
-    // for an all-external space: nothing Prisma Next owns exists there. An
+    // for an all-external space: nothing Prisma 8 owns exists there. An
     // extension that declares a managed element but ships no migrations is
     // an authoring bug and must fail loudly, not silently advance.
     const managedContract = createSqlContract({

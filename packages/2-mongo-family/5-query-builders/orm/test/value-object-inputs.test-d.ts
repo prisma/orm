@@ -348,6 +348,7 @@ type ExtContract = MongoContractWithTypeMaps<
                 readonly assignee: {
                   readonly to: CrossRefFor<'User'>;
                   readonly cardinality: 'N:1';
+                  readonly nullable: false;
                   readonly on: {
                     readonly localFields: readonly ['assigneeId'];
                     readonly targetFields: readonly ['_id'];
@@ -452,7 +453,7 @@ test('InferFullRow resolves to primitives with embedded relations when FieldOutp
 test('IncludedRow resolves included reference relations when FieldOutputTypes is present', () => {
   type TaskIncluded = IncludedRow<ExtContract, 'Task', { assignee: true }>;
   expectTypeOf<TaskIncluded['_id']>().toEqualTypeOf<string>();
-  expectTypeOf<TaskIncluded['assignee']>().toEqualTypeOf<{ _id: string; name: string } | null>();
+  expectTypeOf<TaskIncluded['assignee']>().toEqualTypeOf<{ _id: string; name: string }>();
 });
 
 test('VariantCreateInput resolves when FieldInputTypes is present', () => {

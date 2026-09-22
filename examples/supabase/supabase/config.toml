@@ -3,4 +3,4 @@
 # `supabase init` would. Used by the CI acceptance job (ci.yml
 # supabase-acceptance) and for running test/real-supabase.acceptance.test.ts
 # locally; see README.md.
-project_id = "prisma-next-supabase-example"
+project_id = "prisma-8-supabase-example"

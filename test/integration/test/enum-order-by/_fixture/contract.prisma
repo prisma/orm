@@ -1,0 +1,11 @@
+native_enum TicketStatus {
+  OPEN   = "open"
+  CLOSED = "closed"
+}
+
+model Ticket {
+  id     Int    @id
+  status pg.enum(TicketStatus)
+
+  @@map("tickets")
+}

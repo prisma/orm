@@ -21,11 +21,10 @@ import {
   type Range,
   RegistrationRequest,
   type SemanticTokens,
+  type SignatureHelp,
   TextDocumentSyncKind,
-  TextDocuments,
   type TextEdit,
 } from 'vscode-languageserver';
-import { TextDocument } from 'vscode-languageserver-textdocument';
 import { classifyPslCompletionContext } from './completion-context';
 import { providePslCompletionItems } from './completion-provider';
 import {
@@ -33,7 +32,12 @@ import {
   type ProjectInterpretation,
   resolveConfigInputs,
 } from './config-resolution';
-import { type LspDiagnostic, ParseDiagnosticSeverity } from './diagnostic-mapping';
+import {
+  type LspDiagnostic,
+  mapParseDiagnostics,
+  ParseDiagnosticSeverity,
+} from './diagnostic-mapping';
+import { DocumentStore } from './document-store';
 import { computeFoldingRanges } from './folding-ranges';
 import { guardedConnection } from './guarded-connection';
 import type { PipelineInputs } from './pipeline';
@@ -42,8 +46,10 @@ import {
   type DocumentArtifacts,
   type ProjectArtifacts,
 } from './project-artifacts';
-import type { SchemaInputSet } from './schema-inputs';
+import { isPrismaNextSchema, renameLegacyDirective } from './schema-directive';
+import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
 import { buildSemanticTokens, semanticTokensLegend } from './semantic-tokens';
+import { providePslSignatureHelp } from './signature-help';
 
 export interface LanguageServer {
   dispose(): void;
@@ -93,7 +99,7 @@ function lastGoodProject(entry: ManagedProject | undefined): ProjectState | unde
   return entry.status === 'loaded' ? entry.project : entry.lastGood;
 }
 
-export const CONFIG_LOAD_FAILED_CODE = 'PRISMA_NEXT_CONFIG_LOAD_FAILED';
+export const CONFIG_LOAD_FAILED_CODE = 'PRISMA_CONFIG_LOAD_FAILED';
 
 const semanticTokenSourceLimit = 100_000;
 
@@ -105,7 +111,8 @@ export function createServer(connection: Connection): LanguageServer {
 }
 
 function createServerOn(connection: Connection): LanguageServer {
-  const documents = new TextDocuments(TextDocument);
+  const documents = new DocumentStore();
+  const { getDocument } = documents;
   const managedProjects = new Map<string, ManagedProject>();
   const documentConfigPaths = new Map<string, string>();
   let rootPath = process.cwd();
@@ -125,23 +132,36 @@ function createServerOn(connection: Connection): LanguageServer {
     if (project === undefined) {
       return;
     }
-    const document = documents.get(uri);
+    const document = getDocument(uri);
     if (document === undefined) {
-      documentConfigPaths.delete(uri);
+      documentConfigPaths.delete(canonicalFileIdentity(uri));
       return;
     }
     const artifacts = project.artifacts.document(uri);
     if (artifacts === undefined) {
-      sendDiagnostics({ uri, diagnostics: [] });
+      sendDiagnostics({ uri: document.uri, diagnostics: [] });
       return;
     }
-    sendDiagnostics({ uri, diagnostics: combinedDiagnostics(artifacts) });
+    sendDiagnostics({
+      uri: document.uri,
+      diagnostics: combinedDiagnostics(project.artifacts, artifacts),
+    });
   }
 
   // The single diagnostics assembly — push and pull must serve the same
   // combined response, and interpretation runs only from here.
-  function combinedDiagnostics(artifacts: DocumentArtifacts): Diagnostic[] {
-    return toDiagnostics([...artifacts.diagnostics, ...artifacts.interpretDiagnostics()]);
+  function combinedDiagnostics(
+    project: ProjectArtifacts,
+    artifacts: DocumentArtifacts,
+  ): Diagnostic[] {
+    const symbolDiagnostics = project
+      .symbolDiagnostics()
+      .filter((diagnostic) => diagnostic.filename === artifacts.sourceFile.filename);
+    return toDiagnostics([
+      ...artifacts.diagnostics,
+      ...mapParseDiagnostics(symbolDiagnostics),
+      ...artifacts.interpretDiagnostics(),
+    ]);
   }
 
   /**
@@ -155,7 +175,7 @@ function createServerOn(connection: Connection): LanguageServer {
     const artifacts = project.artifacts.document(uri);
     return {
       kind: DocumentDiagnosticReportKind.Full,
-      items: artifacts === undefined ? [] : combinedDiagnostics(artifacts),
+      items: artifacts === undefined ? [] : combinedDiagnostics(project.artifacts, artifacts),
     };
   }
 
@@ -167,13 +187,13 @@ function createServerOn(connection: Connection): LanguageServer {
     // Only the config's declared inputs are managed: a stray document beside
     // a config keeps no association, so reads and events never reach it — and
     // a project it alone caused to load is dropped again.
-    documentConfigPaths.delete(uri);
+    documentConfigPaths.delete(canonicalFileIdentity(uri));
     dropProjectWithoutManagedDocuments(project.configPath);
     return undefined;
   }
 
   async function projectForNearestConfig(uri: string): Promise<ProjectState | undefined> {
-    const knownConfigPath = documentConfigPaths.get(uri);
+    const knownConfigPath = documentConfigPaths.get(canonicalFileIdentity(uri));
     if (knownConfigPath !== undefined) {
       return resolveProjectIfLoadable(knownConfigPath);
     }
@@ -194,7 +214,7 @@ function createServerOn(connection: Connection): LanguageServer {
       return undefined;
     }
 
-    documentConfigPaths.set(uri, configPath);
+    documentConfigPaths.set(canonicalFileIdentity(uri), configPath);
     return resolveProjectIfLoadable(configPath);
   }
 
@@ -284,7 +304,7 @@ function createServerOn(connection: Connection): LanguageServer {
           message: configFailureMessage(error),
           code: CONFIG_LOAD_FAILED_CODE,
           severity: DiagnosticSeverity.Error,
-          source: 'prisma-next',
+          source: 'prisma',
         },
       ],
     });
@@ -314,7 +334,11 @@ function createServerOn(connection: Connection): LanguageServer {
     const artifacts = createProjectArtifacts({
       inputs: resolution.inputs,
       controlStack: resolution.controlStack,
-      getText: (uri) => documents.get(uri)?.getText(),
+      getDocument,
+      onInterpretationError: (uri, error) => {
+        const detail = error instanceof Error ? (error.stack ?? error.message) : String(error);
+        connection.console.error(`PSL interpretation failed for ${uri}: ${detail}`);
+      },
       ...(resolution.interpretation === undefined
         ? {}
         : { interpretation: resolution.interpretation }),
@@ -336,15 +360,15 @@ function createServerOn(connection: Connection): LanguageServer {
   // association and re-resolve (and retry the load) on their next read.
   function unmanageDocuments(configPath: string): void {
     for (const document of documents.all()) {
-      if (documentConfigPaths.get(document.uri) === configPath) {
-        documentConfigPaths.delete(document.uri);
+      if (documentConfigPaths.get(canonicalFileIdentity(document.uri)) === configPath) {
+        documentConfigPaths.delete(canonicalFileIdentity(document.uri));
       }
     }
   }
 
   async function republishOpenDocumentsForConfig(configPath: string): Promise<void> {
     for (const document of documents.all()) {
-      const knownConfigPath = documentConfigPaths.get(document.uri);
+      const knownConfigPath = documentConfigPaths.get(canonicalFileIdentity(document.uri));
       if (knownConfigPath === configPath) {
         if ((await resolveProjectForDocument(document.uri)) === undefined) {
           // The reload dropped a previously managed document; clear its markers.
@@ -361,7 +385,7 @@ function createServerOn(connection: Connection): LanguageServer {
       }
       const nearestConfigPath = await findNearestConfigPathForFile(filePath);
       if (nearestConfigPath === configPath) {
-        documentConfigPaths.set(document.uri, configPath);
+        documentConfigPaths.set(canonicalFileIdentity(document.uri), configPath);
         await publish(document.uri);
       }
     }
@@ -374,8 +398,13 @@ function createServerOn(connection: Connection): LanguageServer {
   }
 
   async function formatDocument(uri: string): Promise<TextEdit[]> {
-    const document = documents.get(uri);
+    const document = getDocument(uri);
     if (document === undefined) {
+      return [];
+    }
+
+    const source = document.getText();
+    if (!isPrismaNextSchema(source)) {
       return [];
     }
 
@@ -384,10 +413,9 @@ function createServerOn(connection: Connection): LanguageServer {
       return [];
     }
 
-    const source = document.getText();
     let formatted: string;
     try {
-      formatted = format(source, project.formatter);
+      formatted = renameLegacyDirective(format(source, project.formatter));
     } catch {
       return [];
     }
@@ -405,7 +433,7 @@ function createServerOn(connection: Connection): LanguageServer {
   }
 
   async function semanticTokensForDocument(uri: string, range?: Range): Promise<SemanticTokens> {
-    const document = documents.get(uri);
+    const document = getDocument(uri);
     if (document === undefined) {
       return emptySemanticTokens();
     }
@@ -434,7 +462,7 @@ function createServerOn(connection: Connection): LanguageServer {
   }
 
   async function completeDocument(uri: string, position: Position): Promise<CompletionItem[]> {
-    const document = documents.get(uri);
+    const document = getDocument(uri);
     if (document === undefined) {
       return [];
     }
@@ -463,12 +491,53 @@ function createServerOn(connection: Connection): LanguageServer {
             scalarTypes: project.controlStack.scalarTypes,
             pslBlockDescriptors: project.controlStack.pslBlockDescriptors,
             symbolTable: project.artifacts.symbolTable(),
+            ...(project.controlStack.authoringContributions === undefined
+              ? {}
+              : { authoringContributions: project.controlStack.authoringContributions }),
+            ...(project.controlStack.controlMutationDefaults === undefined
+              ? {}
+              : { controlMutationDefaults: project.controlStack.controlMutationDefaults }),
           },
           clientSupportsSnippets: clientCapabilities.completionSnippets,
+          clientSupportsTriggerSuggestCommand: clientCapabilities.completionTriggerSuggestCommand,
+          clientSupportsTriggerParameterHintsCommand:
+            clientCapabilities.completionTriggerParameterHintsCommand,
         }),
       ];
     } catch {
       return [];
+    }
+  }
+
+  async function signatureHelpForDocument(
+    uri: string,
+    position: Position,
+  ): Promise<SignatureHelp | null> {
+    if (getDocument(uri) === undefined) return null;
+    const project = await resolveProjectForDocument(uri);
+    if (project === undefined) return null;
+    const artifacts = project.artifacts.document(uri);
+    if (artifacts === undefined) return null;
+
+    try {
+      return providePslSignatureHelp({
+        clientSupportsLabelOffsets: clientCapabilities.signatureLabelOffsets,
+        document: artifacts.document,
+        sourceFile: artifacts.sourceFile,
+        position,
+        candidates: {
+          pslBlockDescriptors: project.controlStack.pslBlockDescriptors,
+          symbolTable: project.artifacts.symbolTable(),
+          ...(project.controlStack.authoringContributions === undefined
+            ? {}
+            : { authoringContributions: project.controlStack.authoringContributions }),
+          ...(project.controlStack.controlMutationDefaults === undefined
+            ? {}
+            : { controlMutationDefaults: project.controlStack.controlMutationDefaults }),
+        },
+      });
+    } catch {
+      return null;
     }
   }
 
@@ -479,7 +548,7 @@ function createServerOn(connection: Connection): LanguageServer {
 
     return {
       capabilities: {
-        textDocumentSync: TextDocumentSyncKind.Incremental,
+        textDocumentSync: { openClose: true, change: TextDocumentSyncKind.Incremental },
         documentFormattingProvider: true,
         foldingRangeProvider: true,
         semanticTokensProvider: {
@@ -487,7 +556,8 @@ function createServerOn(connection: Connection): LanguageServer {
           full: true,
           range: true,
         },
-        completionProvider: { triggerCharacters: ['.'] },
+        completionProvider: { triggerCharacters: ['.', '@', '[', '(', '{', ':', ','] },
+        signatureHelpProvider: { triggerCharacters: ['(', ','] },
         // Both flags reflect the current single-input implementation scope —
         // not a property of PSL. Once the project symbol table merges multiple
         // inputs, an edit in one file can change diagnostics in another and
@@ -517,7 +587,7 @@ function createServerOn(connection: Connection): LanguageServer {
       });
     } else {
       logWarn(
-        'Client does not support dynamic file-watcher registration; Prisma Next config changes will not be picked up without a restart.',
+        'Client does not support dynamic file-watcher registration; Prisma 8 config changes will not be picked up without a restart.',
       );
     }
   });
@@ -554,6 +624,9 @@ function createServerOn(connection: Connection): LanguageServer {
 
   connection.onDocumentFormatting((params) => formatDocument(params.textDocument.uri));
   connection.onCompletion((params) => completeDocument(params.textDocument.uri, params.position));
+  connection.onSignatureHelp((params) =>
+    signatureHelpForDocument(params.textDocument.uri, params.position),
+  );
 
   connection.languages.semanticTokens.on((params) =>
     semanticTokensForDocument(params.textDocument.uri),
@@ -579,28 +652,39 @@ function createServerOn(connection: Connection): LanguageServer {
     if (artifacts === undefined) {
       return [];
     }
-    return computeFoldingRanges(artifacts.document, artifacts.sourceFile);
+    return computeFoldingRanges(artifacts.document, project.artifacts.sources);
   });
 
-  documents.onDidOpen((event) => {
-    artifactsForDocument(event.document.uri)?.documentChanged(event.document.uri);
-    if (clientCapabilities.pullDiagnostics) {
-      return;
+  function documentChanged(uri: string): void {
+    artifactsForDocument(uri)?.documentChanged(uri);
+    if (!clientCapabilities.pullDiagnostics) {
+      publishSafely(uri);
     }
-    publishSafely(event.document.uri);
-  });
-  documents.onDidChangeContent((event) => {
-    artifactsForDocument(event.document.uri)?.documentChanged(event.document.uri);
-    if (clientCapabilities.pullDiagnostics) {
-      return;
+  }
+
+  connection.onDidOpenTextDocument((event) => {
+    const previous = getDocument(event.textDocument.uri);
+    const document = documents.open(event.textDocument);
+    if (
+      previous !== undefined &&
+      previous.uri !== document.uri &&
+      !clientCapabilities.pullDiagnostics
+    ) {
+      sendDiagnostics({ uri: previous.uri, diagnostics: [] });
     }
-    publishSafely(event.document.uri);
+    documentChanged(document.uri);
   });
-  documents.onDidClose((event) => {
-    const uri = event.document.uri;
-    const configPath = documentConfigPaths.get(uri);
+  connection.onDidChangeTextDocument((event) => {
+    const document = documents.change(event.textDocument, event.contentChanges);
+    if (document !== undefined) documentChanged(document.uri);
+  });
+  connection.onDidCloseTextDocument((event) => {
+    const document = documents.close(event.textDocument.uri);
+    if (document === undefined) return;
+    const uri = document.uri;
+    const configPath = documentConfigPaths.get(canonicalFileIdentity(uri));
     artifactsForDocument(uri)?.documentClosed(uri);
-    documentConfigPaths.delete(uri);
+    documentConfigPaths.delete(canonicalFileIdentity(uri));
     // A live project always has at least one open input; when the last one
     // closes the project is dropped, and a reopen re-resolves and reloads the
     // config from scratch.
@@ -612,16 +696,18 @@ function createServerOn(connection: Connection): LanguageServer {
     }
   });
 
-  documents.listen(connection);
   connection.listen();
 
   function artifactsForDocument(uri: string): ProjectArtifacts | undefined {
-    const configPath = documentConfigPaths.get(uri);
+    const configPath = documentConfigPaths.get(canonicalFileIdentity(uri));
     if (configPath === undefined) {
       return undefined;
     }
     const entry = managedProjects.get(configPath);
-    return entry?.status === 'loaded' ? entry.project.artifacts : undefined;
+    if (entry?.status === 'loaded') {
+      return entry.project.artifacts;
+    }
+    return entry?.status === 'loading' ? entry.lastGood?.artifacts : undefined;
   }
 
   function hasManagedDocuments(configPath: string): boolean {
@@ -652,7 +738,13 @@ function createServerOn(connection: Connection): LanguageServer {
     getDocumentAst: (uri) => artifactsForDocument(uri)?.document(uri),
     // `| undefined` only because the uri may be unmanaged (closed, non-input,
     // or projectless); a managed document's project always yields a symbolTable.
-    getProjectSymbolTable: (uri) => artifactsForDocument(uri)?.symbolTable(),
+    getProjectSymbolTable: (uri) => {
+      const artifacts = artifactsForDocument(uri);
+      if (artifacts?.document(uri) === undefined) {
+        return undefined;
+      }
+      return artifacts.symbolTable();
+    },
   };
 }
 
@@ -666,7 +758,7 @@ function toDiagnostics(computed: readonly LspDiagnostic[]): Diagnostic[] {
     message: diagnostic.message,
     code: diagnostic.code,
     severity: toLspSeverity(diagnostic.severity),
-    source: 'prisma-next',
+    source: 'prisma',
   }));
 }
 
@@ -686,6 +778,9 @@ function toLspSeverity(severity: number): DiagnosticSeverity {
 interface ResolvedClientCapabilities {
   readonly watchedFilesRegistration: boolean;
   readonly completionSnippets: boolean;
+  readonly signatureLabelOffsets: boolean;
+  readonly completionTriggerSuggestCommand: boolean;
+  readonly completionTriggerParameterHintsCommand: boolean;
   readonly pullDiagnostics: boolean;
   readonly diagnosticsRefresh: boolean;
 }
@@ -693,6 +788,9 @@ interface ResolvedClientCapabilities {
 const noClientCapabilities: ResolvedClientCapabilities = {
   watchedFilesRegistration: false,
   completionSnippets: false,
+  signatureLabelOffsets: false,
+  completionTriggerSuggestCommand: false,
+  completionTriggerParameterHintsCommand: false,
   pullDiagnostics: false,
   diagnosticsRefresh: false,
 };
@@ -703,9 +801,31 @@ function resolveClientCapabilities(params: InitializeParams): ResolvedClientCapa
       params.capabilities.workspace?.didChangeWatchedFiles?.dynamicRegistration === true,
     completionSnippets:
       params.capabilities.textDocument?.completion?.completionItem?.snippetSupport === true,
+    signatureLabelOffsets:
+      params.capabilities.textDocument?.signatureHelp?.signatureInformation?.parameterInformation
+        ?.labelOffsetSupport === true,
+    completionTriggerSuggestCommand: supportsCompletionCommand(
+      params.initializationOptions,
+      'supportsTriggerSuggestCommand',
+    ),
+    completionTriggerParameterHintsCommand: supportsCompletionCommand(
+      params.initializationOptions,
+      'supportsTriggerParameterHintsCommand',
+    ),
     pullDiagnostics: params.capabilities.textDocument?.diagnostic !== undefined,
     diagnosticsRefresh: params.capabilities.workspace?.diagnostics?.refreshSupport === true,
   };
+}
+
+function supportsCompletionCommand(options: unknown, capability: string): boolean {
+  if (typeof options !== 'object' || options === null || !('completion' in options)) return false;
+  const completion = options.completion;
+  return (
+    typeof completion === 'object' &&
+    completion !== null &&
+    capability in completion &&
+    Reflect.get(completion, capability) === true
+  );
 }
 
 function resolveRootPath(params: InitializeParams): string {

@@ -1,6 +1,6 @@
 # Migration domain
 
-The conceptual reference for Prisma Next's migration system: the ubiquitous language, the entities and operations that make it up, the mental-model anchor (Git), and the CLI surface that follows from the model. This is the upstream source for user-facing documentation, and it is the doc to read first if you are designing, reviewing, or extending the migration system.
+The conceptual reference for Prisma 8's migration system: the ubiquitous language, the entities and operations that make it up, the mental-model anchor (Git), and the CLI surface that follows from the model. This is the upstream source for user-facing documentation, and it is the doc to read first if you are designing, reviewing, or extending the migration system.
 
 For the vocabulary in use — the workflows real users walk through, sequenced verb-by-verb — see the companion [user journeys](./user-journeys.md). For the implementation (planner, runner, emitter, on-disk file shapes, ADR cross-references), see [`docs/architecture docs/subsystems/7. Migration System.md`](../../../architecture%20docs/subsystems/7.%20Migration%20System.md). For the canonical user-facing definitions of individual terms, see [`docs/glossary.md`](../../../glossary.md) (the "Migration & Database Lifecycle" section). This doc, the journeys doc, and the glossary are kept in sync; the glossary wins on wording for individual entries, this doc wins on how the entries fit together.
 
@@ -73,7 +73,7 @@ Dev iteration on a tweaked migration uses `db update --to <hash>`, which is off-
 
 There is **one** operation that walks the migration graph against a live database: `migrate --to <ref>`. It is the same verb in dev, staging, and production. **What changes between environments is the database URL**, not the verb name and not the verb's behavior.
 
-We explicitly **reject the dev/deploy verb split** that other systems (notably Prisma current) introduce. The safety properties Prisma current bundles into `migrate dev` (shadow-DB drift checks, sandbox replay, etc.) are answered by *separate, explicit verification verbs* in our model (`db verify`, `migration check`) — you ask for them by name, you don't get them as a hidden side effect of a god-command. And none of them needs a shadow database: diffing is fully offline against on-disk contract snapshots, and no shadow database will ever exist.
+We explicitly **reject the dev/deploy verb split** that other systems (notably Prisma current) introduce. The safety properties Prisma current bundles into `migrate dev` (shadow-DB drift checks, sandbox replay, etc.) are answered by *separate, explicit verification verbs* in our model (`db verify`, `migration check`) — you ask for them by name, you don't get them as a hidden side effect of a god-command. And none of them needs a shadow database: diffing is fully offline against on-disk contract snapshots, and the CLI never provisions one. Rehearsing a migration against a fork of a real database is a preflight hook a database extension may provide, surfaced only when the configured extension implements it.
 
 ### Off-graph reconciliation is not migration
 
@@ -146,14 +146,14 @@ The load-bearing semantics of a ref is **"the contract CD will `migrate --to` in
 Consequences:
 - Refs are **environment-named** (`production`, `staging`, ...). The Git-generic `head` ref has been dropped — it carried no information the emitted `contract.json` doesn't already imply.
 - A ref is a *promise* the repo makes about the next CD run. The PR is the moment that promise is staked.
-- The `db` ref differs in meaning, not mechanics: it records the contract the project's dev database has been brought to (advanced implicitly by `db init`/`db update` on the default URL) and serves as `migration plan`'s default origin. A default name, not a magic one — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md).
+- The `db` ref differs in meaning, not mechanics. It has two roles: it is the default origin of `migration plan`, and it is the checkpoint of the contract the project's dev database was last brought to — written by `db init` / `db update` when run against the default URL, and by `db sign` regardless of `--db` (unless `--no-advance-ref`). A signature that must not replace the default origin passes `--advance-ref <name>` to checkpoint another ref instead. A default name, not a magic one — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md).
 
 ### Initialization vs adoption-by-signing
 
 Two distinct entry points for bringing a database under contract control:
 
 - **`db init`** — bootstrap. The DB is empty (greenfield) or being adopted by *executing* an initial migration (brownfield-incremental). Lays down structure. Live, may mutate.
-- **`db sign`** — declare that an existing live database satisfies a contract. Verifies live schema satisfies the contract, then writes the contract hash into the marker. **Refuses if it doesn't satisfy.** No structural changes. The adoption path when the DB already happens to match.
+- **`db sign`** — declare that an existing live database satisfies a contract. Verifies live schema satisfies the contract, then writes the contract hash into the marker and advances the `db` ref to it (`--advance-ref <name>` overrides; `--db` does not suppress it; `--no-advance-ref` skips it). **Refuses if it doesn't satisfy.** No structural changes. The adoption path when the DB already happens to match.
 
 `db sign` is a sibling of `db verify` (both verify the live DB against a contract), not a sibling of `migrate` (no structural mutation).
 
@@ -253,7 +253,7 @@ Grouped by sub-area so the relationships are visible. Some terms appear in more 
 - **Adoption** — bringing an existing database under contract control. Three paths: **greenfield**, **brownfield-conservative**, **brownfield-incremental**.
 - **Introspection** — read-only schema discovery of a live database.
 - **Initialization** — `db init`. Bootstraps an empty database (greenfield) or applies initial migrations to an existing one. Lays down structure.
-- **Signing** — `db sign`. Verifies a live DB satisfies a contract, then writes the contract hash into the marker. The adoption path for an already-matching database. No structural changes.
+- **Signing** — `db sign`. Verifies a live DB satisfies a contract, then writes the contract hash into the marker and advances the `db` ref to it (`--advance-ref <name>` overrides; `--db` does not suppress it; `--no-advance-ref` skips it). The adoption path for an already-matching database. No structural changes.
 - **Reconciliation** — `db update`. Live-introspect, diff against a target contract, execute the difference. Off-graph; dev-only first-class workflow.
 - **Squash** — collapsing a range of migrations into a single equivalent migration.
 - **Promotion** — moving a ref forward (typically: advancing `production` to match a freshly-merged change).
@@ -278,7 +278,7 @@ Grouped by intent.
 - **`migrate --to <contract>`** — *the* migration verb. Walks the graph from the marker's current contract to the target. Forward-only. Same verb everywhere (dev, staging, production); only the DB URL changes.
 - **`db init`** — bootstrap an empty database, or adopt an existing one by executing initial migrations from `∅`. Lays down structure. Live, may mutate.
 - **`db update`** — off-graph reconciliation. `db update` reconciles to the current contract; `db update --to <hash>` reconciles to any contract we can name on disk. **Dev-only.** Does not produce a migration and does not consult the graph; on the default dev URL it implicitly advances the `db` ref (`--advance-ref <name>` overrides, `--db <non-default-url>` opts out — see [ADR 218](../../../architecture%20docs/adrs/ADR%20218%20-%20Refs%20with%20paired%20contract%20snapshots%20and%20universal%20graph-node%20invariant.md)).
-- **`db sign [<contract>]`** *(explicit form: `db sign --contract <contract>`)* — verify the live DB satisfies a contract, then write the contract hash into the marker. **Refuses if it doesn't satisfy.** No structural mutation. The adoption path for an already-matching DB. Without an argument, defaults to the current `contract.json`. The argument names *the thing being signed* — distinct from `--to` (movement) used by `migrate` and `db update`.
+- **`db sign [<contract>]`** *(explicit form: `db sign --contract <contract>`)* — verify the live DB satisfies a contract, then write the contract hash into the marker and advance the `db` ref to the signed hash (`--advance-ref <name>` overrides; unlike `db init` / `db update`, `--db` does not suppress it; `--no-advance-ref` skips it). **Refuses if it doesn't satisfy.** No structural mutation. The adoption path for an already-matching DB. Without an argument, defaults to the current `contract.json`. The argument names *the thing being signed* — distinct from `--to` (movement) used by `migrate` and `db update`.
 
 ### Verification
 
@@ -287,7 +287,7 @@ Two verbs along two axes — *what's being verified* (live DB / migration artifa
 - **`db verify`** — *"does the live DB currently satisfy its contract?"* Compares marker + live schema against the contract; reports drift kinds. Live, read-only.
 - **`migration check [<m>]`** — *"are these migration artifacts internally consistent?"* With a migration argument: recomputes that migration's hashes, validates its `ops.json`/manifest match, confirms its on-disk shape is complete. With no argument: a holistic check over the whole graph — every migration self-consistent; every edge's recorded `from` and `to` hashes line up with neighbouring contracts; no orphan nodes; no dangling refs. Offline, read-only. A hash-level artifact check: whether applying a migration physically produces the recorded schema is enforced at apply time, not here.
 
-There is deliberately no sandbox-execution verb. An earlier draft proposed `migration preflight <m>` — executing a migration against a shadow database to preview its behaviour — and it was rejected: diffing is fully offline against on-disk contract snapshots, and no shadow database will ever exist. The behavioural guarantee lives at apply time, where the runner enforces each operation's pre/post invariants and the destination hash.
+There is deliberately no core sandbox-execution verb. An earlier draft proposed `migration preflight <m>` — executing a migration against a shadow database to preview its behaviour — and it was rejected as a core verb: diffing is fully offline against on-disk contract snapshots, and the CLI never provisions a shadow database. Preflight is instead a hook a database extension may provide (Prisma Postgres will), and the CLI exposes it only when one is configured. The core's behavioural guarantee lives at apply time, where the runner enforces each operation's pre/post invariants and the destination hash.
 
 ### Reading — live (touches the DB)
 
@@ -386,7 +386,7 @@ The choices below are the load-bearing ones — the ones that, if reversed, woul
 - **Two verification verbs, two distinct names.** Calling them both `verify` would force users to read the qualifier every time; "what kind of verification?" is the wrong question to make the user resolve at the call site.
   - **`db verify`** — live DB satisfies its contract (marker + introspection vs. the contract). Live, read-only.
   - **`migration check [<m>]`** — artifact / graph integrity. With `<m>`: that migration's hashes recompute and its on-disk artifacts are complete. Without: graph-wide consistency (every migration self-consistent; every edge's `from` and `to` line up with neighbouring contracts; no orphan nodes; no dangling refs). Offline, read-only. Verb borrowed from `cargo check` and Atlas's "pre-migration checks" — naturally scopes from a single artifact to a holistic sweep.
-- **`migration preflight` rejected.** An earlier draft included a third verification verb: sandbox execution of a migration against a shadow database. Rejected — diffing is fully offline against on-disk contract snapshots, and no shadow database will ever exist. Behavioural enforcement happens during the real apply (pre/post invariants, destination-hash check).
+- **`migration preflight` rejected as a core verb.** An earlier draft included a third verification verb: sandbox execution of a migration against a shadow database. Rejected from the core — diffing is fully offline against on-disk contract snapshots, and the CLI never provisions a shadow database. Preflight is a database-extension hook instead. Core behavioural enforcement happens during the real apply (pre/post invariants, destination-hash check).
 - **`db init` and `prisma orm init` both kept.** The namespace disambiguates: `prisma orm init` is project scaffolding; `prisma db init` lays down DB structure. No rename needed.
 - **`contract emit` and `migration plan + compile` are asymmetric on purpose — the asymmetry is structural, not stylistic.** The two operations have fundamentally different shapes:
 

@@ -1,8 +1,8 @@
 {
   "$id": "https://prisma.dev/schemas/data-contract-sql-v1.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Prisma Next Data Contract SQL v1",
-  "description": "Schema for Prisma Next contract.json files for the SQL family (postgres, mysql, sqlite, etc.). Generated from the arktype schemas in @internal/sql-contract — do not edit by hand; run `pnpm schemas:generate` in @internal/sql-contract-ts.",
+  "title": "Prisma 8 Data Contract SQL v1",
+  "description": "Schema for Prisma 8 contract.json files for the SQL family (postgres, mysql, sqlite, etc.). Generated from the arktype schemas in @internal/sql-contract — do not edit by hand; run `pnpm schemas:generate` in @internal/sql-contract-ts.",
   "type": "object",
   "properties": {
     "domain": {
@@ -117,7 +117,81 @@
                             "type": "object",
                             "properties": {
                               "cardinality": {
-                                "enum": ["1:1", "1:N", "N:1"]
+                                "enum": ["1:1", "1:N"]
+                              },
+                              "to": {
+                                "type": "object",
+                                "properties": {
+                                  "model": {
+                                    "type": "string"
+                                  },
+                                  "namespace": {
+                                    "type": "string"
+                                  },
+                                  "space": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["model", "namespace"],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": ["cardinality", "to"],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "cardinality": {
+                                "enum": ["1:1", "N:1"]
+                              },
+                              "on": {
+                                "type": "object",
+                                "properties": {
+                                  "localFields": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  },
+                                  "targetFields": {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "string"
+                                    }
+                                  }
+                                },
+                                "required": ["localFields", "targetFields"],
+                                "additionalProperties": false
+                              },
+                              "to": {
+                                "type": "object",
+                                "properties": {
+                                  "model": {
+                                    "type": "string"
+                                  },
+                                  "namespace": {
+                                    "type": "string"
+                                  },
+                                  "space": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": ["model", "namespace"],
+                                "additionalProperties": false
+                              },
+                              "nullable": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": ["cardinality", "on", "to"],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "cardinality": {
+                                "const": "1:N"
                               },
                               "on": {
                                 "type": "object",
@@ -156,32 +230,6 @@
                               }
                             },
                             "required": ["cardinality", "on", "to"],
-                            "additionalProperties": false
-                          },
-                          {
-                            "type": "object",
-                            "properties": {
-                              "cardinality": {
-                                "enum": ["1:1", "1:N"]
-                              },
-                              "to": {
-                                "type": "object",
-                                "properties": {
-                                  "model": {
-                                    "type": "string"
-                                  },
-                                  "namespace": {
-                                    "type": "string"
-                                  },
-                                  "space": {
-                                    "type": "string"
-                                  }
-                                },
-                                "required": ["model", "namespace"],
-                                "additionalProperties": false
-                              }
-                            },
-                            "required": ["cardinality", "to"],
                             "additionalProperties": false
                           },
                           {

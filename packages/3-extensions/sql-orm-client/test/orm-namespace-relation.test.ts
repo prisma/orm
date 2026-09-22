@@ -34,6 +34,7 @@ const profileModel = {
     user: {
       to: { model: 'User', namespace: 'auth' },
       cardinality: 'N:1',
+      nullable: false,
       on: { localFields: ['userId'], targetFields: ['id'] },
     },
   },

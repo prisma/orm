@@ -3,6 +3,7 @@ import type {
   SerializeContract,
   StorageSort,
 } from '@internal/contract/hashing';
+import type { Contract } from '@internal/contract/types';
 import type { AnyCodecDescriptor, CodecLookup } from '@internal/framework-components/codec';
 import type { AggregateDescriptor } from '@internal/framework-components/components';
 import type {
@@ -53,6 +54,17 @@ export interface EmitOptions {
    * while its own code still imports workspace names.
    */
   readonly resolveImportSpecifier?: ImportSpecifierResolver;
+  /**
+   * Threaded from `descriptor.supportsNamespaces`. `false` drops the namespace segment from emitted `Models` member names and the `models` constant.
+   */
+  readonly supportsNamespaces?: boolean;
+  /**
+   * Hydrates the canonical JSON object back into a contract. The declarations
+   * are always generated from that round-trip, never from the contract as
+   * authored, so `contract.d.ts` orders every collection the way
+   * `contract.json` does and a render from the JSON reproduces it exactly.
+   */
+  readonly deserializeContract: (json: Record<string, unknown>) => Contract;
 }
 
 export interface EmitResult {

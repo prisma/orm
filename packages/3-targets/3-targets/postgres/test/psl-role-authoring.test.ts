@@ -14,12 +14,14 @@
  */
 
 import type { Contract } from '@internal/contract/types';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -29,6 +31,8 @@ import {
 import { PostgresContractSerializer } from '../src/core/postgres-contract-serializer';
 import { PostgresRole } from '../src/core/postgres-role';
 import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const assembled = assembleAuthoringContributions([
   {
@@ -56,18 +60,19 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
 ]);
 
 function interpret(source: string) {
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable, diagnostics } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(source, 'psl-role-authoring.test.psl');
+  const { symbolTable, diagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   expect(diagnostics).toEqual([]);
 
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     target: postgresTarget,
     scalarColumnDescriptors: scalarTypeDescriptors,
     authoringContributions: assembled,

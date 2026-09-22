@@ -65,11 +65,10 @@
 // separator run or a hump between their two words, so `native-type`,
 // `NATIVE_TYPE`, and `getNativeType` all match.
 //
-// The two `not` guards reproduce the previous script's `allow` list:
-// `SymbolTable` (PSL parser) and `MigrationLogTable` (CLI renderer) are
-// framework-neutral compounds, so a `table` sitting inside one does not count.
-// A bare `table` elsewhere on the same line still does, because it is its own
-// leaf node.
+// The `not` guards allow framework-neutral compounds: `SymbolTable`,
+// `MigrationLogTable`, and formatter alignment/type/attribute columns.
+// Bare `table` and `column` tokens remain forbidden, even in the same file
+// or on the same line as an allowed compound.
 //
 // `$filename` is biome's built-in current-file path; the two file-exclusion
 // regexes mirror no-bare-cast.grit and biome's test-file override includes.
@@ -108,5 +107,8 @@ or {
   },
   not $tok <: r"(?s).*(?i:symbol)[^A-Za-z0-9]*(?i:table).*",
   not $tok <: r"(?s).*(?i:migration)[^A-Za-z0-9]*(?i:log)[^A-Za-z0-9]*(?i:table).*",
+  not $tok <: r"(?s).*(?i:alignment)[^A-Za-z0-9]*(?i:columns).*",
+  not $tok <: r"(?s).*(?i:type)[^A-Za-z0-9]*(?i:column).*",
+  not $tok <: r"(?s).*(?i:attribute)[^A-Za-z0-9]*(?i:column).*",
   register_diagnostic(span=$tok, message="no-family-vocabulary: family/target vocabulary in the family-blind framework domain; move the concept into the owning family layer, or suppress with `// biome-ignore lint/plugin/no-family-vocabulary: <why this is family-blind>`", severity="info")
 }

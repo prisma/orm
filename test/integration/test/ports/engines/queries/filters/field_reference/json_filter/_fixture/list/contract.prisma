@@ -3,4 +3,5 @@ model TestModel {
   json       Jsonb?
   json_list  Jsonb[]
   json_list2 Jsonb[]
+  @@map("testModel")
 }

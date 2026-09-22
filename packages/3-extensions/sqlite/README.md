@@ -1,6 +1,6 @@
 # @internal/sqlite
 
-One-package SQLite setup for Prisma Next. Install this single package to get config, runtime, contract authoring, control-plane access, and migration helpers — no reach-ins to internal packages required.
+One-package SQLite setup for Prisma 8. Install this single package to get config, runtime, contract authoring, control-plane access, and migration helpers — no reach-ins to internal packages required.
 
 ## Package Classification
 
@@ -82,15 +82,23 @@ Re-exports all migration operation helpers from `@internal/target-sqlite/migrati
 
 Composes the SQLite execution stack and returns typed query roots (`db.sql`, `db.orm`, `db.context`, `db.stack`).
 
-## Dependencies
+### Prepared SQL and ORM rows
 
-This package bundles all the transitive dependencies needed for a SQLite Prisma Next project:
+Use `db.prepare(declaration, params => ...)` to prepare SQL queries, ORM row reads or ORM aggregates once and execute them with different parameter values.
 
-- `@internal/target-sqlite` (target descriptor + migration surface)
-- `@internal/adapter-sqlite` (adapter descriptor)
-- `@internal/driver-sqlite` (driver descriptor)
-- `@internal/sql-contract-ts` (TypeScript contract authoring)
-- `@internal/sql-contract` (contract type definitions)
+```ts
+const byId = await db.prepare({ id: 'sqlite/integer@1' }, (params) =>
+  db.sql.users.select('id').where((f, fns) => fns.eq(f.id, params.id)).build(),
+);
+const all = await db.prepare({}, () => db.orm.User.select('id').prepared.all());
+const first = await db.prepare({}, () => db.orm.User.select('id').prepared.first());
+
+for await (const row of all.query(db.runtime(), {})) console.log(row.id);
+const rowOrNull = await first.query(db.runtime(), {});
+const sqlRows = await byId.query(db.runtime(), { id: 1 });
+```
+
+Pass a compatible runtime, connection or transaction explicitly to `query(target, params, options?)`. ORM `all` returns a thenable async row stream; `first` returns a row-or-null promise. For descriptions built with `.prepared.aggregate(selector, configure?)`, `query` returns an aggregate object promise on ungrouped collections (`Promise<AggregateResult<Spec>>`), or an array promise after `groupBy(...)` (`Promise<Array<GroupKeys & AggregateResult<Spec>>>`). See the [ORM composition reference](../sql-orm-client/README.md#prepared-row-descriptions) for aggregate examples, HAVING, supported predicates, includes and pagination. Native SQLite database `prepare(sql)` is a separate API.
 
 ## Related Docs
 

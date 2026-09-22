@@ -113,7 +113,7 @@ function hashContent(content: string): string {
  * Fast probe to detect whether a recording's CLI output has changed.
  */
 function probeCliOutput(command: string, cwd: string): string {
-  const args = command.replace(/^prisma-next\s+/, '');
+  const args = command.replace(/^prisma\s+/, '');
   try {
     return execFileSync(process.execPath, [CLI_BIN, ...args.split(/\s+/).filter(Boolean)], {
       cwd,
@@ -194,7 +194,7 @@ function validatePrerequisites(): void {
 // --- Shell environment setup ---
 
 /**
- * Creates a `prisma-next` executable wrapper in BIN_DIR.
+ * Creates a `prisma` executable wrapper in BIN_DIR.
  * If `cwd` is provided, the wrapper cd's there before running the CLI
  * (so the config file is found automatically).
  * Returns the wrapper directory path.
@@ -202,7 +202,7 @@ function validatePrerequisites(): void {
 function createCliBinWrapper(name: string, cwd?: string): string {
   const wrapperDir = join(BIN_DIR, name);
   mkdirSync(wrapperDir, { recursive: true });
-  const wrapperPath = join(wrapperDir, 'prisma-next');
+  const wrapperPath = join(wrapperDir, 'prisma');
   const lines = ['#!/usr/bin/env bash'];
   if (cwd) {
     lines.push(`cd ${cwd}`);
@@ -700,9 +700,9 @@ async function recordJourneyStep(ctx: JourneyContext, step: JourneyStep): Promis
   }
 
   console.log('         Recording...');
-  // Non-prisma-next commands (e.g. cat) need an explicit cd to the workspace
-  // because only the prisma-next wrapper auto-cds there.
-  const needsCwd = !step.command.startsWith('prisma-next');
+  // Non-prisma commands (e.g. cat) need an explicit cd to the workspace
+  // because only the prisma wrapper auto-cds there.
+  const needsCwd = !step.command.startsWith('prisma');
   const tapeContent = generateTape({
     sharedTapePath: relative(CLI_ROOT, sharedTapePath),
     vhsPath,
@@ -775,7 +775,7 @@ function cleanupWorkspaces(slugs: string[]): void {
 // --- Main ---
 
 async function main(): Promise<void> {
-  console.log('prisma-next record');
+  console.log('prisma record');
   console.log('==================\n');
 
   validatePrerequisites();

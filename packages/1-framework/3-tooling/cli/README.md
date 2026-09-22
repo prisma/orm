@@ -2,7 +2,7 @@
 
 > **For the CLI command, install [`@prisma/cli`](https://www.npmjs.com/package/@prisma/cli) (`@next` dist-tag).**
 > The unified `prisma` binary mounts this package's `orm` command family;
-> the standalone `prisma-next` npm package is no longer published. Inside this
+> the standalone npm package is no longer published. Inside this
 > workspace a local `prisma` bin still exists for examples and development — it
 > is the same engine entry (`dist/bin.mjs`), just workspace-local.
 >
@@ -19,7 +19,7 @@
 > Command examples below use the workspace-local `prisma` bin; end users
 > run the same commands through the published `@prisma/cli` binary.
 
-Command-line interface for Prisma Next contract emission and management.
+Command-line interface for Prisma 8 contract emission and management.
 
 ## Overview
 
@@ -1270,16 +1270,6 @@ export default defineConfig({
   extensions: [exampleExtension],
 });
 ```
-
-## Dependencies
-
-- **`@prisma/cli-engine`**: Command tree, argument parsing, help, settlement, telemetry hooks
-- **`clipanion`**: Flag parsing for the per-migration `MigrationCLI.run` entrypoint only
-- **`esbuild`**: Bundling TypeScript contract files with import allowlisting
-- **`@internal/emitter`**: Contract emission engine (returns strings)
-- **`@internal/migration-tools`**: On-disk migration I/O, hash verification, and history reconstruction
-- **`@internal/framework-components`**: Control plane types, migration operation types, control stack (via `./control`)
-- **`@internal/errors`**: Error types and factories (via `./control`)
 
 ## Design Decisions
 

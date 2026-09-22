@@ -1,8 +1,7 @@
 import type { DefaultMappingOptions } from '@internal/family-sql/psl-infer';
-
-const POSTGRES_FUNCTION_ATTRIBUTES: Readonly<Record<string, string>> = {
-  'gen_random_uuid()': '@default(dbgenerated("gen_random_uuid()"))',
-};
+import { createDataTypeLookup } from '@internal/framework-components/codec';
+import { postgresDataTypeEntries } from '../data-type-entries';
+import { postgresDataTypes } from '../data-types';
 
 function formatDbGeneratedAttribute(expression: string): string {
   return `@default(dbgenerated(${JSON.stringify(expression)}))`;
@@ -10,7 +9,8 @@ function formatDbGeneratedAttribute(expression: string): string {
 
 export function createPostgresDefaultMapping(): DefaultMappingOptions {
   return {
-    functionAttributes: POSTGRES_FUNCTION_ATTRIBUTES,
     fallbackFunctionAttribute: formatDbGeneratedAttribute,
+    dataTypeEntries: postgresDataTypeEntries(),
+    dataTypes: createDataTypeLookup(postgresDataTypes),
   };
 }

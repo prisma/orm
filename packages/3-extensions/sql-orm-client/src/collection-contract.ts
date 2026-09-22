@@ -178,9 +178,6 @@ export interface VariantColumnRef {
  * base-table field map. Base fields are intentionally absent so callers can
  * gate variant qualification strictly to variant-owned fields.
  *
- * `baseModelName` is a default-namespace model name, consistent with the rest
- * of this module; namespace context is bound downstream at table resolution.
- *
  * Uncached on purpose: `resolvePolymorphismInfo` already memoizes the variant
  * lookup, and the remaining work is one pass over the variant's field→column
  * map, so a second cache layer would buy nothing.
@@ -254,8 +251,7 @@ export function getColumnToFieldMap(
 const completeColumnToFieldCache = new WeakMap<object, Map<string, Record<string, string>>>();
 
 /**
- * Like getColumnToFieldMap but includes identity-mapped fields (where field name equals column
- * name). getColumnToFieldMap only returns explicit remaps; this returns ALL column→field entries.
+ * Like getColumnToFieldMap, but a field without a storage `column` maps under its own name.
  */
 export function getCompleteColumnToFieldMap(
   contract: Contract<SqlStorage>,
@@ -586,6 +582,52 @@ export function assertReturningCapability(contract: Contract<SqlStorage>, action
 
   throw ormError('ORM.CAPABILITY_MISSING', `${action} requires contract capability "returning"`, {
     meta: { capability: 'returning', action },
+  });
+}
+
+export function assertInsertConflictSkipCapability(
+  contract: Contract<SqlStorage>,
+  action: string,
+  targeted: boolean,
+): void {
+  requireCapability(contract, action, 'insertOnConflictSkip');
+  if (!targeted) {
+    requireCapability(contract, action, 'insertOnConflictWithoutTarget');
+  }
+}
+
+function requireCapability(
+  contract: Contract<SqlStorage>,
+  action: string,
+  capability: string,
+): void {
+  if (hasContractCapability(contract, capability)) return;
+
+  throw ormError(
+    'ORM.CAPABILITY_MISSING',
+    `${action} requires contract capability "${capability}". Re-emit the contract against an adapter that reports it.`,
+    { meta: { capability, action } },
+  );
+}
+
+export function resolveInsertConflictColumns(
+  contract: Contract<SqlStorage>,
+  namespaceId: string,
+  modelName: string,
+  conflictOn: readonly string[],
+  action: string,
+): string[] {
+  const fieldToColumn = getFieldToColumnMap(contract, namespaceId, modelName);
+  return conflictOn.map((fieldName) => {
+    const column = fieldToColumn[fieldName];
+    if (column === undefined) {
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `${action} conflictOn field "${fieldName}" is not a scalar field of model "${modelName}"`,
+        { meta: { action, model: modelName, field: fieldName } },
+      );
+    }
+    return column;
   });
 }
 

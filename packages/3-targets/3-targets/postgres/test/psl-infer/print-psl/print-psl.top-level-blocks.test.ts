@@ -14,12 +14,12 @@
  */
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { PslPrinterOptions } from '@internal/family-sql/psl-infer';
-import { parseRawDefault } from '@internal/family-sql/psl-infer';
 import {
   type AuthoringTypeNamespace,
   collectScalarTypeConstructors,
 } from '@internal/framework-components/authoring';
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import type {
   PslDocumentAst,
@@ -38,16 +38,20 @@ import { parse } from '@internal/psl-parser/syntax';
 import { printPsl } from '@internal/psl-printer';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
 import { SqlSchemaIR } from '@internal/sql-schema-ir/types';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { assert, describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
   postgresAuthoringPslBlockDescriptors,
 } from '../../../src/core/authoring';
+import { parsePostgresDefault } from '../../../src/core/default-normalizer';
 import { isPostgresSchema, postgresCreateNamespace } from '../../../src/core/postgres-schema';
 import { buildPslDocumentAst } from '../../../src/core/psl-infer/infer-psl-contract';
 import { createPostgresDefaultMapping } from '../../../src/core/psl-infer/postgres-default-mapping';
 import { createPostgresTypeMap } from '../../../src/core/psl-infer/postgres-type-map';
 import { inferPslAstFromFlat } from '../fixtures';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const authoringTypes = {
   Int: { kind: 'typeConstructor', output: { codecId: 'pg/int4@1', nativeType: 'int4' } },
@@ -105,16 +109,21 @@ function print(ast: PslDocumentAst): string {
  * only on the interpreter would accept printed text that is not valid PSL.
  */
 function parseAndInterpret(source: string) {
-  const { document, sourceFile, diagnostics: parseDiagnostics } = parse(source);
-  const { table: symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+  const {
     document,
-    sourceFile,
+    sources,
+    diagnostics: parseDiagnostics,
+  } = parse(source, 'print-psl.top-level-blocks.test.psl');
+  const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const interpreted = interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target,
     scalarColumnDescriptors: collectScalarTypeConstructors(authoringTypes),
@@ -169,6 +178,7 @@ function enumBlock(name: string, members: Record<string, string>): PslExtensionB
         span: ZERO_SPAN,
       },
     ],
+    attributes: {},
     span: ZERO_SPAN,
   };
 }
@@ -289,7 +299,7 @@ describe('buildPslDocumentAst and the top-level bucket', () => {
   const printerOptions: PslPrinterOptions = {
     typeMap: createPostgresTypeMap(new Set()),
     defaultMapping: createPostgresDefaultMapping(),
-    parseRawDefault,
+    parseRawDefault: parsePostgresDefault,
   };
 
   const foreignKeyExtras = {

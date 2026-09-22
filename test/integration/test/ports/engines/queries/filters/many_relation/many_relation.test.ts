@@ -1,6 +1,6 @@
 import { and } from '@internal/sql-orm-client';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
 import type { Contract as Contract25103 } from './_fixture/25103/generated/contract';
 import contract25103Json from './_fixture/25103/generated/contract.json' with { type: 'json' };
 import type { Contract as L2ToOneContract } from './_fixture/l2-to-one/generated/contract';

@@ -1,5 +1,5 @@
 /**
- * Prisma Next config for the internal `audit` contract-space package.
+ * Prisma 8 config for the internal `audit` contract-space package.
  *
  * Each "internal package" subdirectory is treated as a self-contained
  * "project" for the CLI: `prisma contract emit` writes
@@ -12,10 +12,10 @@
  * @see docs/architecture docs/adrs/ADR 212 - Contract spaces.md
  */
 
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     contract: './src/contract.prisma',
     migrations: { dir: 'migrations' },

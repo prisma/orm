@@ -1,15 +1,19 @@
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { TargetPackRef } from '@internal/framework-components/components';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlStorage } from '@internal/sql-contract/types';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import {
   PostgresSchema,
   PostgresUnboundSchema,
   postgresCreateNamespace,
 } from '@internal/target-postgres/types';
 import { describe, expect, it } from 'vitest';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const postgresTargetPackRef: TargetPackRef<'sql', 'postgres'> = {
   kind: 'target',
@@ -25,13 +29,13 @@ const postgresScalarTypeDescriptors = new Map([
 ] as const);
 
 function symbolTableInput(schema: string) {
-  const { document, sourceFile } = parse(schema);
-  const { table } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, 'psl-namespace-qualifier-routing.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
-  return { symbolTable: table, sourceFile, sourceId: 'schema.prisma' };
+  return { document, sources, symbolTable };
 }
 
 /**
@@ -64,6 +68,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
 `);
 
     const result = interpretPslDocumentToSqlContract({
+      dataTypeLookup: postgresDataTypeLookup,
       ...document,
       target: postgresTargetPackRef,
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
@@ -76,7 +81,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
       return;
     }
     const storage = result.value.storage as SqlStorage;
-    expect(storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries.table?.['tenant']).toBeDefined();
+    expect(storage.namespaces[UNBOUND_NAMESPACE_ID]!.entries.table?.['Tenant']).toBeDefined();
 
     // The storage map carries the Postgres target concretion (not the
     // SQL family placeholder) at the unbound slot.
@@ -89,7 +94,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
     if (!(namespace instanceof PostgresSchema)) {
       throw new Error('expected PostgresSchema concretion');
     }
-    expect(namespace.qualifyTable('tenant')).toBe('"tenant"');
+    expect(namespace.qualifyTable('Tenant')).toBe('"Tenant"');
   });
 
   it('`namespace auth { … }` lowers to PostgresSchema("auth"), whose qualifyTable emits `"auth"."<table>"`', () => {
@@ -101,6 +106,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
 `);
 
     const result = interpretPslDocumentToSqlContract({
+      dataTypeLookup: postgresDataTypeLookup,
       ...document,
       target: postgresTargetPackRef,
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
@@ -113,7 +119,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
       return;
     }
     const storage = result.value.storage as SqlStorage;
-    expect(storage.namespaces['auth']!.entries.table?.['user']).toBeDefined();
+    expect(storage.namespaces['auth']!.entries.table?.['User']).toBeDefined();
 
     const namespace = storage.namespaces['auth'];
     expect(namespace).toBeInstanceOf(PostgresSchema);
@@ -121,7 +127,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
     if (!(namespace instanceof PostgresSchema)) {
       throw new Error('expected PostgresSchema concretion');
     }
-    expect(namespace.qualifyTable('user')).toBe('"auth"."user"');
+    expect(namespace.qualifyTable('User')).toBe('"auth"."User"');
   });
 
   it('top-level (implicit) models lower to the public namespace with schema-qualified DDL', () => {
@@ -131,6 +137,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
 `);
 
     const result = interpretPslDocumentToSqlContract({
+      dataTypeLookup: postgresDataTypeLookup,
       ...document,
       target: postgresTargetPackRef,
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
@@ -143,7 +150,7 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
       return;
     }
     const storage = result.value.storage as SqlStorage;
-    expect(storage.namespaces['public']!.entries.table?.['post']).toBeDefined();
+    expect(storage.namespaces['public']!.entries.table?.['Post']).toBeDefined();
 
     const namespace = storage.namespaces['public'];
     expect(namespace).toBeInstanceOf(PostgresSchema);
@@ -151,6 +158,6 @@ describe('PSL → SqlStorage.namespaces qualifier routing (FR15 slice 3 + FR16a 
     if (!(namespace instanceof PostgresSchema)) {
       throw new Error('expected PostgresSchema concretion');
     }
-    expect(namespace.qualifyTable('post')).toBe('"public"."post"');
+    expect(namespace.qualifyTable('Post')).toBe('"public"."Post"');
   });
 });

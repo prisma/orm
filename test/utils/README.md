@@ -1,6 +1,6 @@
 # @repo/test-utils
 
-Shared test utilities for Prisma Next test suites.
+Shared test utilities for Prisma 8 test suites.
 
 ## Location
 
@@ -8,7 +8,7 @@ This package is located at `test/utils/` (not in `packages/`) as it is a test ut
 
 ## Overview
 
-The test-utils package provides shared generic test helpers used across multiple test suites in Prisma Next. It centralizes common testing patterns to reduce duplication and ensure consistency.
+The test-utils package provides shared generic test helpers used across multiple test suites in Prisma 8. It centralizes common testing patterns to reduce duplication and ensure consistency.
 
 ## Purpose
 
@@ -255,14 +255,6 @@ Use this pattern for any utility that:
 - Would create a circular dependency if included in the main export
 
 Utilities that don't import `vitest` (e.g., `timeouts`, database helpers) can safely be included in the main export.
-
-## Dependencies
-
-**Zero dependencies on other `@internal/*` packages** - This allows test-utils to be used by all packages without circular dependencies.
-
-**External dependencies (devDependencies only):**
-- `@prisma/dev`: Dev database server (one connection at a time; attempts to open a second connection while the first is active will fail, and ports are auto-assigned per server)
-- `pg`: PostgreSQL client
 
 ## Usage
 

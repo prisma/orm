@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -14,7 +14,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   → `db.public.User.where((u) => u.date.eq(Temporal.Instant.from('…'))).all()`
 //
 // Upstream asserts a Prisma-specific error snapshot (P2009 / "Invalid value for
-// argument `date`"). prisma-next does not emit Prisma error codes; the faithful
+// argument `date`"). Prisma 8 does not emit Prisma error codes; the faithful
 // assertion is that unparseable input is rejected rather than reaching the database.
 //
 // A `timestamptz` column carries `Temporal.Instant`, which has no invalid state — the

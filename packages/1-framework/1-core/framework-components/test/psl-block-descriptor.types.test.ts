@@ -11,6 +11,8 @@ import type {
   PslBlockParamOption,
   PslBlockParamRef,
   PslBlockParamValue,
+  PslExtensionBlock,
+  PslExtensionBlockParsedAttribute,
 } from '../src/shared/psl-extension-block';
 
 describe('PslBlockParam discriminated union', () => {
@@ -155,5 +157,32 @@ describe('isAuthoringPslBlockDescriptor', () => {
     if (isAuthoringPslBlockDescriptor(node)) {
       expectTypeOf(node).toEqualTypeOf<AuthoringPslBlockDescriptor>();
     }
+  });
+});
+
+describe('block attributes', () => {
+  it('a descriptor declares its block attributes as erased factories, sibling of parameters', () => {
+    const descriptor = {
+      kind: 'pslBlock',
+      keyword: 'native_enum',
+      discriminator: 'native_enum',
+      name: { required: true },
+      parameters: {},
+      attributes: { map: () => ({ level: 'block', name: 'map' }) },
+    } as const;
+    expectTypeOf(descriptor).toMatchTypeOf<AuthoringPslBlockDescriptor>();
+    expectTypeOf<AuthoringPslBlockDescriptor['attributes']>().toEqualTypeOf<
+      Readonly<Record<string, unknown>> | undefined
+    >();
+  });
+
+  it('a block node carries its parsed attributes as plain data keyed by attribute name', () => {
+    expectTypeOf<PslExtensionBlock['attributes']>().toEqualTypeOf<
+      Readonly<Record<string, PslExtensionBlockParsedAttribute>>
+    >();
+    expectTypeOf<PslExtensionBlockParsedAttribute['args']>().toEqualTypeOf<
+      Readonly<Record<string, unknown>>
+    >();
+    expectTypeOf<Omit<PslExtensionBlock, 'attributes'>>().not.toMatchTypeOf<PslExtensionBlock>();
   });
 });

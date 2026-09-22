@@ -168,6 +168,7 @@ describe('validateContractDomain()', () => {
               owner: {
                 to: crossRef('User'),
                 cardinality: 'N:1',
+                nullable: false,
                 on: { localFields: ['ownerId'], targetFields: ['_id'] },
               },
             },
@@ -186,6 +187,7 @@ describe('validateContractDomain()', () => {
               owner: {
                 to: crossRef('Ghost'),
                 cardinality: 'N:1',
+                nullable: false,
                 on: { localFields: ['ownerId'], targetFields: ['_id'] },
               },
             },
@@ -327,6 +329,7 @@ describe('validateContractDomain()', () => {
               assignee: {
                 to: crossRef('User'),
                 cardinality: 'N:1',
+                nullable: false,
                 on: { localFields: ['assigneeId'], targetFields: ['_id'] },
               },
               comments: {

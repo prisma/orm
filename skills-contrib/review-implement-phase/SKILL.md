@@ -31,9 +31,10 @@ If output directory is omitted, derive:
 
 System dependencies required on PATH:
 
+- `node` (Node.js)
 - `gh` (GitHub CLI)
 
-If `gh` is missing, halt immediately and ask the user to install it. The implement-phase scripts no longer depend on `jq`.
+If either is missing, halt immediately and ask the user to install it. The implement-phase scripts require only `node` and `gh`.
 
 GitHub admin capability must be available before starting implementation:
 
@@ -62,11 +63,15 @@ If missing, instruct user to run:
      - thread replies via `addPullRequestReviewThreadReply` (or wrapper script)
      - issue comments via `addComment` (or wrapper script)
    - Before starting implementation:
-     - **Detect pending reviews authored by the acting user** on this PR.
-     - If any exist, **halt** and clean them up (submit or dismiss) before continuing.
+     - **Detect pending reviews authored by the acting user** on this PR:
+       `gh api graphql -f query='query($owner:String!,$repo:String!,$pr:Int!,$before:String){viewer{login} repository(owner:$owner,name:$repo){pullRequest(number:$pr){reviews(last:100,states:PENDING,before:$before){pageInfo{hasPreviousPage startCursor} nodes{id author{login}}}}}}' -F owner=<owner> -F repo=<repo> -F pr=<number> --jq '.data as $d | $d.repository.pullRequest.reviews | {mine: [.nodes[] | select(.author.login == $d.viewer.login)], pageInfo}'`
+     - The `author.login` filter matters: another user's pending review is not yours to submit or dismiss, and must not block this workflow. `--jq` is `gh`'s built-in filter and needs no `jq` binary.
+     - The filter keeps `pageInfo` beside the matches, because an empty `mine` alone cannot tell "no pending review" from "the match is on an earlier page". Read both: while `mine` is empty and `pageInfo.hasPreviousPage` is true, re-run the query with `-f before=<pageInfo.startCursor>`. Conclude there is no pending review only when `mine` is empty and `hasPreviousPage` is false.
+     - GitHub allows one pending review per user per PR, so `mine` holds at most one node across all pages.
+     - If one exists, **halt** and clean it up (submit or dismiss) before continuing.
    - After posting any "On it" / "Done" comment:
-     - **Re-check for pending reviews authored by the acting user**.
-     - If any exist, the workflow is **blocked** until they are cleaned up.
+     - **Re-check for a pending review authored by the acting user**, with the same filtered query and the same paging rule: keep reading `pageInfo` until `mine` is non-empty or `hasPreviousPage` is false.
+     - If one exists, the workflow is **blocked** until it is cleaned up.
    - Implementation requirement:
      - For `review_thread` targets, always reply using **thread replies** (never inline PR review comments).
        - If you only have the thread node id, first fetch the thread’s primary comment node id, then call `addPullRequestReviewThreadReply`.

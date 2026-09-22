@@ -114,6 +114,7 @@ describe.each(facades)('%s', (facade) => {
 
   it('carries the whole skill tree in its tarball, stamped with what shipped it', () => {
     const packedRoot = packAndUnpack(facade);
+    expect(existsSync(join(packedRoot, 'upgrade-instructions'))).toBe(false);
     const packedSkillDir = join(packedRoot, 'skills', SKILL_NAME);
 
     expect(

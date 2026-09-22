@@ -1,0 +1,4 @@
+model Note {
+  id   Int   @id
+  user User?
+}

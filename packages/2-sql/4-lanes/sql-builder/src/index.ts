@@ -5,4 +5,4 @@ export type { Db } from './types/db';
 export type { GroupedQuery } from './types/grouped-query';
 export type { DeleteQuery, InsertQuery, UpdateQuery } from './types/mutation-query';
 export type { SelectQuery } from './types/select-query';
-export type { TableProxy } from './types/table-proxy';
+export type { TableProxy, WhereFilter } from './types/table-proxy';

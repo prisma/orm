@@ -1,13 +1,16 @@
 import { domainModelsAtDefaultNamespace } from '@internal/contract/types';
 import { AsyncIterableResult } from '@internal/framework-components/runtime';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as collectionContract from '../src/collection-contract';
 import {
   POLYMORPHIC_DISCRIMINATOR_ALIAS,
   resolvePolymorphismInfo,
 } from '../src/collection-contract';
 import {
   acquireRuntimeScope,
+  createPolymorphicRowMapper,
   createRowEnvelope,
+  createStorageRowMapper,
   mapModelDataToStorageRow,
   mapPolymorphicRow,
   mapResultRows,
@@ -30,6 +33,19 @@ describe('collection-runtime', () => {
     expect(mapStorageRowToModelFields(contract, 'public', 'UnknownModel', { id: 1 })).toEqual({
       id: 1,
     });
+  });
+
+  it('prepared row mappers preserve changing keys, aliases, nulls and source ownership', () => {
+    const mapRow = createStorageRowMapper(contract, 'public', 'Post');
+    const first = Object.freeze({ user_id: 1, title: null });
+    const second = Object.freeze({ views: 2, custom: true });
+    expect(mapRow(first)).toEqual({ userId: 1, title: null });
+    expect(mapRow(second)).toEqual({ views: 2, custom: true });
+    expect(mapRow(first)).not.toBe(first);
+    expect(first).toEqual({ user_id: 1, title: null });
+    const fallback = createStorageRowMapper(contract, 'public', 'UnknownModel');
+    expect(fallback(first)).toEqual({ user_id: 1, title: null });
+    expect(fallback(first)).not.toBe(first);
   });
 
   it('mapModelDataToStorageRow() maps fields and skips undefined values', () => {
@@ -151,6 +167,45 @@ describe('collection-runtime', () => {
 });
 
 describe('mapPolymorphicRow()', () => {
+  it('precomputes STI, MTI, pinned and fallback maps without looking up metadata per row', () => {
+    const contract = buildMixedPolyContract();
+    const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;
+    const lookup = vi.spyOn(collectionContract, 'getCompleteColumnToFieldMap');
+    const map = createPolymorphicRowMapper(contract, 'public', 'Task', polyInfo);
+    const pinned = createPolymorphicRowMapper(contract, 'public', 'Task', polyInfo, 'Feature');
+    expect(lookup).toHaveBeenCalledWith(contract, 'public', 'Task');
+    const calls = lookup.mock.calls.length;
+    for (let invocation = 0; invocation < 2; invocation++) {
+      expect(
+        map({
+          title: 'Bug',
+          [POLYMORPHIC_DISCRIMINATOR_ALIAS]: 'bug',
+          severity: 'high',
+          features__priority: null,
+          custom: true,
+        }),
+      ).toEqual({ title: 'Bug', severity: 'high' });
+      expect(
+        map({
+          title: 'Feature',
+          [POLYMORPHIC_DISCRIMINATOR_ALIAS]: 'feature',
+          severity: null,
+          features__priority: 2,
+        }),
+      ).toEqual({ title: 'Feature', priority: 2 });
+      expect(map({ title: 'Unknown', type: 'unknown', severity: 'high', custom: true })).toEqual({
+        title: 'Unknown',
+        type: 'unknown',
+      });
+      expect(pinned({ title: 'Pinned', features__priority: 3 })).toEqual({
+        title: 'Pinned',
+        priority: 3,
+      });
+    }
+    expect(lookup).toHaveBeenCalledTimes(calls);
+    lookup.mockRestore();
+  });
+
   it('maps STI Bug row: includes base + Bug fields, excludes Feature fields', () => {
     const contract = buildMixedPolyContract();
     const polyInfo = resolvePolymorphismInfo(contract, 'public', 'Task')!;

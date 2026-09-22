@@ -33,10 +33,11 @@ interface TokenDetails {
 }
 
 function parseSemanticTokenSource(source: string): ParsedSemanticTokenSource {
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(source, 'language-server-test.psl');
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: {},
   });
   return { document, sourceFile, symbolTable, scalarTypes };
@@ -340,7 +341,7 @@ describe('semantic token substrate', () => {
   });
 
   it('encodes ordered LSP five-integer token data', () => {
-    const sourceFile = new SourceFile('aaa bbb\ncc');
+    const sourceFile = new SourceFile('language-server-test.psl', 'aaa bbb\ncc');
     const tokens: readonly PendingSemanticToken[] = [
       pendingToken(0, 3, 'keyword'),
       pendingToken(4, 7, 'class', semanticTokenModifierBits.declaration),
@@ -353,7 +354,7 @@ describe('semantic token substrate', () => {
   });
 
   it('splits multiline text token events before encoding', () => {
-    const sourceFile = new SourceFile('aa\nbbb\ncc');
+    const sourceFile = new SourceFile('language-server-test.psl', 'aa\nbbb\ncc');
     const tokens: readonly PendingSemanticToken[] = [
       pendingToken(0, sourceFile.length, 'string', 0, true),
     ];
@@ -364,7 +365,7 @@ describe('semantic token substrate', () => {
   });
 
   it('filters split multiline text token segments to the requested range', () => {
-    const sourceFile = new SourceFile('aa\nbbb\ncc');
+    const sourceFile = new SourceFile('language-server-test.psl', 'aa\nbbb\ncc');
     const tokens: readonly PendingSemanticToken[] = [
       pendingToken(0, sourceFile.length, 'string', 0, true),
     ];
@@ -378,14 +379,14 @@ describe('semantic token substrate', () => {
   });
 
   it('does not split multiline structural token events before encoding', () => {
-    const sourceFile = new SourceFile('aa\nbbb\ncc');
+    const sourceFile = new SourceFile('language-server-test.psl', 'aa\nbbb\ncc');
     const tokens: readonly PendingSemanticToken[] = [pendingToken(0, sourceFile.length, 'class')];
 
     expect(encodeWithBuilder(sourceFile, tokens)).toEqual({ data: [0, 0, 9, 2, 0] });
   });
 
   it('combines modifier bitsets deterministically', () => {
-    const sourceFile = new SourceFile('Scalar');
+    const sourceFile = new SourceFile('language-server-test.psl', 'Scalar');
     const tokens: readonly PendingSemanticToken[] = [
       pendingToken(
         0,

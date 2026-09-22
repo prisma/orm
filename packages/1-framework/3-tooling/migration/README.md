@@ -1,8 +1,8 @@
 # @internal/migration-tools
 
-> **Internal package.** This package is an implementation detail of Prisma Next and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
+> **Internal package.** This package is an implementation detail of Prisma 8 and is published only to support its runtime. Its API is unstable and may change without notice. Do not depend on this package directly; install `@prisma/cli` and a database facade (e.g. `@prisma/orm-postgres`) instead.
 
-On-disk migration persistence, hash verification, and history reconstruction for Prisma Next.
+On-disk migration persistence, hash verification, and history reconstruction for Prisma 8.
 
 ## Responsibilities
 
@@ -66,21 +66,6 @@ graph TD
     GRAPH --> GR["graph.ts<br/>MigrationGraph, MigrationEdge"]
     GRAPH --> ABS["@internal/migration-tools/constants<br/>EMPTY_CONTRACT_HASH"]
 ```
-
-## Dependencies
-
-| Package | Why |
-|---|---|
-| `@internal/contract` | `Contract` type for embedded contracts in metadata |
-| `@internal/framework-components` | `MigrationPlanOperation` types (via `./control`) |
-| `@internal/emitter` | `canonicalizeContract` |
-| `arktype` | Runtime shape validation for `migration.json` and `ops.json` |
-| `@internal/utils` | Workspace utility dependency (currently no direct runtime imports in this package) |
-| `pathe` | Cross-platform path manipulation |
-
-### Dependents
-
-- `@internal/cli` (M3) — CLI commands consume these functions
 
 ## Export Subpaths
 

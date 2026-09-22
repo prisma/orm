@@ -332,7 +332,7 @@ class SqliteMigrationRunner implements SqlMigrationRunner<SqlitePlanTargetDetail
     return runnerFailure(
       'MIGRATION.LEGACY_MARKER_SHAPE',
       `Legacy marker-table shape detected on ${MARKER_TABLE_NAME} (no \`space\` column). ` +
-        'Prisma Next is in pre-1.0; the previous transitional auto-migration to the per-space-row schema has been removed. ' +
+        'Prisma 8 is in pre-1.0; the previous transitional auto-migration to the per-space-row schema has been removed. ' +
         `Drop \`${MARKER_TABLE_NAME}\` and re-run \`dbInit\` to reinitialise from a clean baseline.`,
       {
         meta: {

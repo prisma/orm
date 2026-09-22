@@ -22,6 +22,7 @@ import type {
 import type { PslDocumentAst } from '@internal/framework-components/psl-ast';
 import type { Result } from '@internal/utils/result';
 import type { ExecuteDbVerifyResult } from './operations/db-verify';
+import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
 
 // ============================================================================
 // Client Options
@@ -841,7 +842,7 @@ export interface ContractEmitResult {
 // ============================================================================
 
 /**
- * Programmatic control client for Prisma Next operations.
+ * Programmatic control client for Prisma ORM operations.
  *
  * Lifecycle: `connect(connection)` before operations, `close()` when done.
  * Both `init()` and `connect()` are auto-called by operations if needed,
@@ -1034,4 +1035,13 @@ export interface ControlClient {
    * @returns Result pattern: Ok with emit details, NotOk with failure details
    */
   emit(options: EmitOptions): Promise<EmitResult>;
+
+  /**
+   * Renders the `contract.d.ts` text for a `contract.json` that was already
+   * emitted. A snapshot of a contract is that JSON plus these declarations, so
+   * whoever writes a snapshot renders them from the JSON it is storing rather
+   * than reading a sibling file that may have drifted or gone missing.
+   * Offline: uses `init()` but never `connect()`.
+   */
+  renderContractDts(options: RenderContractDtsOptions): Promise<RenderContractDtsResult>;
 }

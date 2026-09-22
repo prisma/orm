@@ -1,3 +1,4 @@
+import { defaultTableName } from '@internal/sql-contract-psl/default-table-name';
 import pluralizeLib from 'pluralize';
 
 const PSL_RESERVED_WORDS = new Set(['model', 'enum', 'types', 'type', 'generator', 'datasource']);
@@ -80,7 +81,7 @@ export function toModelName(tableName: string): NameResult {
     return { name: escaped, map: tableName };
   }
 
-  if (name !== tableName) {
+  if (defaultTableName(name) !== tableName) {
     return { name, map: tableName };
   }
 

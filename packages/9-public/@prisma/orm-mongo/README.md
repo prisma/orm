@@ -15,7 +15,7 @@ The one package a MongoDB application installs. It wires the framework, the Mong
 └── @prisma/orm-toolchain      ORM command family for the `prisma` CLI, emitter, config loader
 ```
 
-`mongodb` is a peer dependency: the driver is the application's, so a single connection pool and a single BSON implementation serve both Prisma Next and any direct `mongodb` use in the same process.
+`mongodb` is a peer dependency: the driver is the application's, so a single connection pool and a single BSON implementation serve both Prisma 8 and any direct `mongodb` use in the same process.
 
 ## Entrypoints
 
@@ -48,7 +48,3 @@ This package ships no bin. The ORM commands run inside the unified `prisma` CLI,
 ## Responsibilities
 
 Composition only. Every behavior it exposes lives in the platform packages; this package chooses the default combination of them and gives it one name.
-
-## Dependencies
-
-`@prisma/orm-framework`, `@prisma/orm-family-mongo`, `@prisma/orm-target-mongo`, and `@prisma/orm-toolchain` at exact lockstep versions, plus `pathe`. `mongodb` is a peer dependency.

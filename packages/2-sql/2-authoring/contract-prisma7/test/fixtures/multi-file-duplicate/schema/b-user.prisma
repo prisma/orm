@@ -1,0 +1,7 @@
+model User {
+  id Int @id
+}
+
+enum Role {
+  USER
+}

@@ -124,6 +124,27 @@ export function errorContractArgConflict(options: {
   );
 }
 
+/**
+ * A command was told both which ref to advance and not to advance any ref.
+ * Same envelope as the positional/flag contract conflict, so a script sees
+ * every invocation conflict in one shape.
+ */
+export function errorAdvanceRefArgConflict(options: {
+  readonly advanceRef: string;
+}): ActionableCliError {
+  const fix = 'Pass either --advance-ref <name> or --no-advance-ref, not both.';
+  return new ActionableCliError(
+    'CLI.ADVANCE_REF_ARG_CONFLICT',
+    'Cannot specify both --advance-ref and --no-advance-ref',
+    {
+      why: `--advance-ref names "${options.advanceRef}" while --no-advance-ref asks for no ref to be written; there is no rule for which wins.`,
+      fix,
+      nextActions: [chooseAction(fix)],
+      meta: { advanceRef: options.advanceRef },
+    },
+  );
+}
+
 export function errorRefSetHashNotInGraph(
   resolvedHash: string,
   reachableHashes: readonly string[],

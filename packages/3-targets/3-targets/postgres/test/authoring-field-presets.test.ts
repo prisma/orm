@@ -98,10 +98,22 @@ describe('postgres temporal per-codec presets', () => {
         codecId: 'pg/timestamptz-string@1',
         nativeType: 'timestamptz',
       }),
+      createdAtJsDate: temporalAuthoringPresets({
+        codecId: 'pg/timestamptz-date@1',
+        nativeType: 'timestamptz',
+      }).createdAt,
+      updatedAtJsDate: temporalAuthoringPresets({
+        codecId: 'pg/timestamptz-date@1',
+        nativeType: 'timestamptz',
+      }).updatedAt,
+      timestamptzJsDate: temporalCodecPresetWithPrecision({
+        codecId: 'pg/timestamptz-date@1',
+        nativeType: 'timestamptz',
+      }),
       timestamp: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamp-temporal@1',
         nativeType: 'timestamp',
-        generatorId: 'instantNow',
+        generatorId: 'plainDateTimeNow',
       }),
       timestamptz: temporalCodecPresetWithPrecision({
         codecId: 'pg/timestamptz-temporal@1',
@@ -118,6 +130,27 @@ describe('postgres temporal per-codec presets', () => {
       }),
     });
   });
+
+  it.each([
+    ['timestamp', 'plainDateTimeNow'],
+    ['timestamptz', 'instantNow'],
+  ] as const)(
+    'temporal.%s answers `now` with the %s generator, the representation its codec encodes',
+    (helper, generatorId) => {
+      expect(postgresAuthoringFieldPresets.temporal[helper].output.executionDefaults).toEqual({
+        onCreate: {
+          kind: 'select',
+          index: 1,
+          cases: { now: { kind: 'generator', id: generatorId } },
+        },
+        onUpdate: {
+          kind: 'select',
+          index: 2,
+          cases: { now: { kind: 'generator', id: generatorId } },
+        },
+      });
+    },
+  );
 
   it('backs updatedAt and timestamptz with the same codec, so the convenience form is a shorthand', () => {
     expect(postgresAuthoringFieldPresets.temporal.updatedAt.output.codecId).toBe(
@@ -141,12 +174,14 @@ describe('postgres temporal per-codec presets', () => {
     });
   });
 
-  it.each(['createdAt', 'createdAtString'] as const)(
-    'gives %s a now() storage default rather than an execution generator',
-    (helper) => {
-      expect(postgresAuthoringFieldPresets.temporal[helper].output).toMatchObject({
-        default: { kind: 'function', expression: 'now()' },
-      });
-    },
-  );
+  it.each([
+    ['createdAt', 'instantNow'],
+    ['createdAtString', 'timestampNow'],
+  ] as const)('gives %s the %s generator only on create', (helper, generatorId) => {
+    const output = postgresAuthoringFieldPresets.temporal[helper].output;
+    expect(output.executionDefaults).toEqual({
+      onCreate: { kind: 'generator', id: generatorId },
+    });
+    expect(output).not.toHaveProperty('default');
+  });
 });

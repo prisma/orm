@@ -15,10 +15,12 @@
 
 import sqlFamilyPack from '@internal/family-sql/pack';
 import type { Codec, CodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { describe, expect, it } from 'vitest';
 import {
   postgresAuthoringEntityTypes,
@@ -26,6 +28,8 @@ import {
 } from '../src/core/authoring';
 import { PostgresNativeEnum } from '../src/core/postgres-native-enum';
 import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const assembled = assembleAuthoringContributions([
   {
@@ -52,25 +56,26 @@ const scalarColumnDescriptors = new Map<string, { codecId: string; nativeType: s
 ]);
 
 function parsePsl(source: string) {
-  const { document, sourceFile } = parse(source);
+  const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
   return buildSymbolTable({
-    document,
-    sourceFile,
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
 }
 
 function interpret(source: string) {
-  const { document, sourceFile } = parse(source);
-  const { table: symbolTable } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
+  const { symbolTable } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    dataTypeLookup: postgresDataTypeLookup,
+    document,
     symbolTable,
-    sourceFile,
-    sourceId: 'schema.prisma',
+    sources,
     capabilities: {},
     target: postgresTarget,
     scalarColumnDescriptors,
@@ -102,8 +107,8 @@ namespace auth {
   });
 
   it('places the parsed block in the auth namespace entries under native_enum', () => {
-    const { table } = parsePsl(source);
-    const authNs = table.topLevel.namespaces['auth'];
+    const { symbolTable } = parsePsl(source);
+    const authNs = symbolTable.topLevel.namespaces['auth'];
     expect(authNs).toBeDefined();
     const blocks = Object.values(authNs!.blocks).map((b) => b.block);
     expect(blocks).toHaveLength(1);
@@ -346,7 +351,7 @@ namespace auth {
     );
   });
 
-  it('an argument-less @@map() emits PSL_NATIVE_ENUM_INVALID_MAP', () => {
+  it('an argument-less @@map() is a symbol-table diagnostic from the kit', () => {
     const source = `
 namespace auth {
   native_enum AalLevel {
@@ -355,13 +360,14 @@ namespace auth {
   }
 }
 `;
-    const result = interpret(source);
+    const { diagnostics } = parsePsl(source);
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_NATIVE_ENUM_INVALID_MAP' })]),
-    );
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+        message: 'Attribute "map" is missing required argument "name"',
+      }),
+    ]);
   });
 
   it('a non-string member value emits PSL_EXTENSION_INVALID_VALUE', () => {
@@ -418,16 +424,17 @@ describe('native_enum coexists with a PSL enum block in the same namespace', () 
   };
 
   function interpretCombined(source: string) {
-    const { document, sourceFile } = parse(source);
-    const { table: symbolTable } = buildSymbolTable({
-      document,
-      sourceFile,
+    const { document, sources } = parse(source, 'psl-native-enum-authoring.test.psl');
+    const { symbolTable } = buildSymbolTable({
+      documents: [document],
+      sources,
       pslBlockDescriptors: combinedAssembled.pslBlockDescriptors,
     });
     return interpretPslDocumentToSqlContract({
+      dataTypeLookup: postgresDataTypeLookup,
+      document,
       symbolTable,
-      sourceFile,
-      sourceId: 'schema.prisma',
+      sources,
       capabilities: {},
       target: postgresTarget,
       scalarColumnDescriptors,

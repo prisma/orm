@@ -1,6 +1,6 @@
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withMongoPort } from '../../../_harness/mongo';
+import { timeouts, withMongoPort } from '../../../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -18,10 +18,10 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //   - filter equals shorthand→ identical (upstream passes the array directly).
 //
 // Non-ported (see _inbox ledger):
-//   - select   → embedded value-object subfield projection (no prisma-next surface).
+//   - select   → embedded value-object subfield projection (no Prisma 8 surface).
 //   - orderBy  → order by embedded list count (`orderBy: { contents: { _count } }`).
 //   - every / some / none / empty → composite list quantified filters
-//     (`every`/`some`/`none`/`isEmpty`); prisma-next `where` is equality-only.
+//     (`every`/`some`/`none`/`isEmpty`); Prisma 8 `where` is equality-only.
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
   return withMongoPort<Contract>({ contractJson }, fn);

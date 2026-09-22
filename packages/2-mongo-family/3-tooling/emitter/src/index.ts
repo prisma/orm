@@ -311,6 +311,7 @@ export const mongoEmission = {
       '  MongoCollection,',
       '  MongoContractWithTypeMaps,',
       '  MongoTypeMaps,',
+      '  RelationKeys,',
       `} from '${resolveImportSpecifier('@internal/mongo-contract')}';`,
     ];
   },

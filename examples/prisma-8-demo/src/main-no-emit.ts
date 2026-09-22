@@ -19,7 +19,7 @@
  * - users-with-posts [limit]   Users with posts via ORM client (include)
  * - enum-default-demo          Insert a Post without `priority` (typed-optional thanks to
  *                              `.default(Priority.members.Low)` in the inline TS contract),
- *                              read it back, and confirm the database supplied 'low'
+ *                              read it back, and confirm the database supplied 0 (Low)
  *
  * See also:
  * - main.ts: Full CLI using emitted contract.json + contract.d.ts

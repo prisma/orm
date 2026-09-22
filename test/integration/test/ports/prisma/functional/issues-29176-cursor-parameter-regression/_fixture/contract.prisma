@@ -19,4 +19,5 @@ model ListResult {
   result_index    Int
 
   @@unique([connection_uuid, query_ref, result_index])
+  @@map("listResult")
 }

@@ -4,9 +4,11 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   modelsOf,
+  postgresCodecLookup,
   postgresNativeScalarTypeDescriptors,
   postgresScalarAuthoringTypes,
   postgresScalarTypeDescriptors,
@@ -19,8 +21,13 @@ import { sqlStorageFromSuccessfulSqlInterpretation } from './interpret-sql-contr
 
 const baseInput = {
   target: postgresTarget,
+  codecLookup: postgresCodecLookup,
   scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-  authoringContributions: { type: postgresScalarAuthoringTypes },
+  authoringContributions: {
+    type: postgresScalarAuthoringTypes,
+    dataTypes: fixtureDataTypeSupport.entries,
+  },
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   composedExtensionContracts: new Map(),
   createNamespace: createTestSqlNamespace,
   capabilities: { sql: { scalarList: true } },
@@ -51,6 +58,68 @@ function expectDiagnosticForSchema(
 }
 
 describe('interpretPslDocumentToSqlContract diagnostics', () => {
+  it.each([
+    { declaration: 'name String @map("")', attribute: '@map("")', column: 15 },
+    { declaration: '@@map("")', attribute: '@@map("")', column: 3 },
+  ])(
+    'rejects empty mapped names in $declaration with an attribute span',
+    ({ declaration, attribute, column }) => {
+      const schema = `model User {\n  id Int @id\n  ${declaration}\n}`;
+      const result = interpretPslDocumentToSqlContract({
+        ...baseInput,
+        ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      const offset = schema.indexOf(attribute);
+      expect(result.failure.diagnostics).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+            message: 'Mapped name must not be empty',
+            sourceId: 'schema.prisma',
+            span: {
+              start: { offset, line: 3, column },
+              end: {
+                offset: offset + attribute.length,
+                line: 3,
+                column: column + attribute.length,
+              },
+            },
+          }),
+        ]),
+      );
+    },
+  );
+
+  it.each(['display_name', ' '])('accepts nonempty mapped names %j', (name) => {
+    const schema = `model User {\n  id Int @id\n  name String @map("${name}")\n  @@map("${name}")\n}`;
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('retains other field diagnostics alongside an empty mapped name', () => {
+    const schema = 'model User {\n  id Int @id\n  name String @map("")\n  bad MissingType\n}';
+    const result = interpretPslDocumentToSqlContract({
+      ...baseInput,
+      ...symbolTableInputFromParseArgs({ schema, sourceId: 'schema.prisma' }),
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
+          message: 'Mapped name must not be empty',
+        }),
+        expect.objectContaining({ code: 'PSL_UNSUPPORTED_FIELD_TYPE' }),
+      ]),
+    );
+  });
+
   it('returns diagnostics when target context is missing', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `model User {
@@ -1036,6 +1105,37 @@ model User {
   });
 
   describe('per-target namespace dispatch', () => {
+    it('locates every rejected namespace declaration separately', () => {
+      const result = interpretPslDocumentToSqlContract({
+        ...baseInput,
+        ...symbolTableInputFromParseArgs({
+          schema: `namespace auth {}
+namespace auth {}`,
+          sourceId: 'schema.prisma',
+        }),
+        target: sqliteTarget,
+        scalarColumnDescriptors: sqliteScalarColumnDescriptors,
+      });
+      expect(result.ok).toBe(false);
+      if (result.ok) throw new Error('Expected namespace rejection');
+      expect(result.failure.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
+          span: {
+            start: { offset: 0, line: 1, column: 1 },
+            end: { offset: 17, line: 1, column: 18 },
+          },
+        }),
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_NAMESPACE_BLOCK',
+          span: {
+            start: { offset: 18, line: 2, column: 1 },
+            end: { offset: 35, line: 2, column: 18 },
+          },
+        }),
+      ]);
+    });
+
     it('SQLite rejects every explicit `namespace { … }` block with a SQLite-flavoured diagnostic', () => {
       const document = symbolTableInputFromParseArgs({
         schema: `namespace auth {
@@ -1054,6 +1154,7 @@ model User {
         ...document,
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
         capabilities: { sql: { scalarList: true } },
       });
 
@@ -1091,6 +1192,7 @@ model User {
         ...document,
         controlMutationDefaults: builtinControlMutationDefaults,
         createNamespace: createTestSqlNamespace,
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
         capabilities: { sql: { scalarList: true } },
       });
 
@@ -1262,51 +1364,6 @@ namespace auth {
 });
 
 describe('interpretPslDocumentToSqlContract list-field constructs', () => {
-  it('rejects an execution default now() on a list field', () => {
-    expectDiagnosticForSchema(
-      `model Post {
-  id Int @id
-  tags String[] @default(now())
-}
-`,
-      {
-        code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
-        message:
-          'Field "Post.tags" is a list and cannot use an execution default ("now()"). Lists have no per-element execution-default semantics; use a literal list @default or remove the default.',
-      },
-    );
-  });
-
-  it('rejects an execution default uuid() on a list field', () => {
-    expectDiagnosticForSchema(
-      `model Post {
-  id Int @id
-  tags String[] @default(uuid())
-}
-`,
-      {
-        code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
-        message:
-          'Field "Post.tags" is a list and cannot use an execution default ("uuid()"). Lists have no per-element execution-default semantics; use a literal list @default or remove the default.',
-      },
-    );
-  });
-
-  it('rejects an execution default autoincrement() on a list field', () => {
-    expectDiagnosticForSchema(
-      `model Post {
-  id Int @id
-  tags Int[] @default(autoincrement())
-}
-`,
-      {
-        code: 'PSL_LIST_EXECUTION_DEFAULT_UNSUPPORTED',
-        message:
-          'Field "Post.tags" is a list and cannot use an execution default ("autoincrement()"). Lists have no per-element execution-default semantics; use a literal list @default or remove the default.',
-      },
-    );
-  });
-
   it('rejects @id on a list field', () => {
     expectDiagnosticForSchema(
       `model Post {
@@ -1395,7 +1452,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['tags']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
       nativeType: 'text',
       codecId: 'pg/text@1',
       many: true,
@@ -1423,7 +1480,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['tags']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
       many: true,
       default: { kind: 'literal', value: ['a', 'b'] },
     });
@@ -1449,7 +1506,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['scores']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['scores']).toMatchObject({
       many: true,
       default: { kind: 'literal', value: [1, 2] },
     });
@@ -1475,7 +1532,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['flags']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['flags']).toMatchObject({
       many: true,
       default: { kind: 'literal', value: [true, false] },
     });
@@ -1501,7 +1558,7 @@ describe('interpretPslDocumentToSqlContract list-field constructs', () => {
     if (!result.ok) return;
 
     const storage = sqlStorageFromSuccessfulSqlInterpretation(result.value);
-    expect(storage.namespaces['public']?.entries.table?.['post']?.columns['tags']).toMatchObject({
+    expect(storage.namespaces['public']?.entries.table?.['Post']?.columns['tags']).toMatchObject({
       many: true,
       default: { kind: 'literal', value: ['a,b', 'c'] },
     });

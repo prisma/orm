@@ -49,10 +49,8 @@ import {
   contractSnapshotJsonSpecifier,
   contractSnapshotTypesSpecifier,
 } from '@internal/framework-components/control';
-import {
-  snapshotsImportPathFrom,
-  writeContractSnapshot,
-} from '@internal/migration-tools/contract-snapshot-store';
+import { snapshotsImportPathFrom } from '@internal/migration-tools/contract-snapshot-store';
+import { refreshContractSnapshot } from './refresh-contract-snapshot.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const extensionsDir = join(repoRoot, 'packages', '3-extensions');
@@ -276,8 +274,14 @@ async function processExtension(extDir) {
   const headRef = readJson(headRefPath);
   const oldHash = headRef.hash;
 
+  const contractDts = readFileSync(join(dirname(contractJsonPath), 'contract.d.ts'), 'utf8');
+  const snapshot = await refreshContractSnapshot(migrationsDir, newHash, {
+    contractJson,
+    contractDts,
+  });
+
   if (oldHash === newHash) {
-    return 'skipped';
+    return snapshot.written ? 'refreshed' : 'skipped';
   }
 
   const headMigrationDir = findHeadMigrationDir(migrationsDir, oldHash);
@@ -285,10 +289,6 @@ async function processExtension(extDir) {
   if (!existsSync(migrationTsPath)) {
     throw new Error(`regen-extension-migrations: no migration.ts in ${headMigrationDir}`);
   }
-
-  const contractSrcDir = dirname(contractJsonPath);
-  const contractDts = readFileSync(join(contractSrcDir, 'contract.d.ts'), 'utf8');
-  await writeContractSnapshot(migrationsDir, newHash, { contractJson, contractDts });
 
   const snapshotsImportPath = snapshotsImportPathFrom(headMigrationDir, migrationsDir);
   const migrationTsSrc = readFileSync(migrationTsPath, 'utf8');
@@ -344,8 +344,8 @@ async function main() {
     const extDir = join(extensionsDir, entry.name);
     try {
       const result = await processExtension(extDir);
-      if (result === 'updated') {
-        process.stdout.write(`regen-extension-migrations: updated ${entry.name}\n`);
+      if (result !== 'skipped') {
+        process.stdout.write(`regen-extension-migrations: ${result} ${entry.name}\n`);
       }
     } catch (err) {
       process.stderr.write(`${err.message}\n`);
@@ -357,8 +357,8 @@ async function main() {
     if (!existsSync(extDir)) continue;
     try {
       const result = await processExtension(extDir);
-      if (result === 'updated') {
-        process.stdout.write(`regen-extension-migrations: updated ${extDir}\n`);
+      if (result !== 'skipped') {
+        process.stdout.write(`regen-extension-migrations: ${result} ${extDir}\n`);
       }
     } catch (err) {
       process.stderr.write(`${err.message}\n`);

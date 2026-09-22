@@ -1,5 +1,5 @@
 /**
- * CLI demo for Prisma Next on SQLite.
+ * CLI demo for Prisma 8 on SQLite.
  *
  * Usage: `pnpm start -- <command> [args]`
  *

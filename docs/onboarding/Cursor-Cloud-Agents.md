@@ -1,6 +1,6 @@
 # Cursor Cloud Agents
 
-Cursor Cloud Agents (formerly "background agents") run Cursor in an isolated VM that clones this repo from GitHub, runs an install script, and pushes signed commits back. This page explains how that works for `prisma-next`, where the config lives, how to change it, and how to debug it when it breaks.
+Cursor Cloud Agents (formerly "background agents") run Cursor in an isolated VM that clones this repo from GitHub, runs an install script, and pushes signed commits back. This page explains how that works for `Prisma 8`, where the config lives, how to change it, and how to debug it when it breaks.
 
 If you only want the day-to-day operational rules for the agent itself (what tests to run, what to ask first), see the [`Cursor Cloud specific instructions`](../../AGENTS.md#cursor-cloud-specific-instructions) section in `AGENTS.md`. This doc is the contributor-facing setup and reference page.
 
@@ -40,7 +40,7 @@ flowchart LR
 ```json
 {
   "$schema": "https://www.cursor.com/schemas/environment.schema.json",
-  "name": "prisma-next",
+  "name": "prisma-8",
   "repositoryDependencies": [
     "https://github.com/prisma/ignite"
   ],
@@ -175,7 +175,7 @@ Most failures fall into one of a few buckets. Check them in this order:
 4. **Snapshot drift.** Symptoms: CI passes, cloud agent fails on the same commit. Usually means the snapshot's installed `node_modules` or system packages don't match what the current `pnpm-lock.yaml` or `package.json` expects. Fix by rebuilding the snapshot from <https://cursor.com/onboard>.
 5. **Burn the snapshot escape hatch.** When all else fails, delete the snapshot and rebuild it from scratch. You'll lose the cache but you'll know the next run starts from a known-good base.
 
-If the failure looks like a Cursor platform issue (not a `prisma-next` issue), report it through the Cursor dashboard support flow rather than filing it as a repo bug.
+If the failure looks like a Cursor platform issue (not a Prisma 8 issue), report it through the Cursor dashboard support flow rather than filing it as a repo bug.
 
 ## Husky and the `prepare` script
 

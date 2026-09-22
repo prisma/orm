@@ -26,6 +26,7 @@ import {
   type CapabilityMatrix,
   type EnumTypeHandle,
   mergeCapabilityMatrices,
+  resolveToOneRelationNullable,
 } from '@internal/contract-authoring';
 import type {
   AuthoringContributions,
@@ -37,7 +38,12 @@ import {
   flushAuthoringWarnings,
   isAuthoringEntityTypeDescriptor,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup, ColumnTypeDescriptor } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookup,
+  type ColumnTypeDescriptor,
+  materializeCodec,
+} from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { lowerAuthoredCheck } from '@internal/sql-contract/authored-check-naming';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
@@ -74,10 +80,12 @@ import {
   computeCheckContentHash,
   derivedCheckPrefixes,
 } from '@internal/sql-schema-ir/naming';
+import { invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import type {
+  AuthoredColumnDefault,
   ContractDefinition,
   FieldNode,
   ModelNode,
@@ -85,13 +93,41 @@ import type {
   ValueObjectFieldNode,
 } from './contract-definition';
 import { contractError } from './contract-errors';
+import { toOneNullabilityContradictionMessage } from './to-one-nullability-message';
 
 type DomainFieldRef =
   | { readonly kind: 'scalar'; readonly many?: boolean }
   | { readonly kind: 'valueObject'; readonly name: string; readonly many?: boolean };
 
-function encodeViaCodec(value: unknown, codecId: string, codecLookup?: CodecLookup): JsonValue {
-  const codec = codecLookup?.get(codecId);
+/**
+ * The codec that encodes one column's default. Built with the column's own `typeParams`, because a
+ * parameterized codec answers for its params when it encodes — `pg/vector@1` checks the length its
+ * column declares — and the lookup's representative instance carries none. Only a column has params;
+ * every other encode site takes the representative instance.
+ */
+function columnCodec(
+  codecId: string,
+  typeParams: Record<string, unknown> | undefined,
+  codecLookup?: CodecLookup,
+): Codec | undefined {
+  const descriptor = codecLookup?.descriptorFor?.(codecId);
+  if (descriptor === undefined) return codecLookup?.get(codecId);
+  return materializeCodec(
+    descriptor,
+    {
+      codecId,
+      ...ifDefined(
+        'typeParams',
+        typeParams === undefined
+          ? undefined
+          : blindCast<JsonValue, 'typeParams are validated by the codec paramsSchema'>(typeParams),
+      ),
+    },
+    { name: codecId },
+  );
+}
+
+function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
   if (codec) {
     return codec.encodeJson(value);
   }
@@ -102,13 +138,21 @@ function encodeViaCodec(value: unknown, codecId: string, codecLookup?: CodecLook
 }
 
 function encodeColumnDefault(
-  defaultInput: ColumnDefault,
-  codecId: string,
-  codecLookup?: CodecLookup,
+  defaultInput: AuthoredColumnDefault,
+  codec: Codec | undefined,
   many = false,
 ): ColumnDefault {
   if (defaultInput.kind === 'function') {
     return { kind: 'function', expression: defaultInput.expression };
+  }
+  if ('canonical' in defaultInput && defaultInput.canonical === true) {
+    return {
+      kind: 'literal',
+      value: blindCast<
+        ColumnDefault extends { kind: 'literal'; value: infer V } ? V : never,
+        'a text contract source stores the canonical form its data type produced'
+      >(defaultInput.value),
+    };
   }
   if (many) {
     if (!Array.isArray(defaultInput.value)) {
@@ -119,12 +163,12 @@ function encodeColumnDefault(
     }
     return {
       kind: 'literal',
-      value: defaultInput.value.map((element) => encodeViaCodec(element, codecId, codecLookup)),
+      value: defaultInput.value.map((element) => encodeViaCodec(element, codec)),
     };
   }
   return {
     kind: 'literal',
-    value: encodeViaCodec(defaultInput.value, codecId, codecLookup),
+    value: encodeViaCodec(defaultInput.value, codec),
   };
 }
 
@@ -297,7 +341,7 @@ type CheckExpressionRenderer = (input: {
   readonly tableName: string;
   readonly columnName: string;
   readonly many: boolean;
-  readonly memberValues: readonly string[] | undefined;
+  readonly memberValues: readonly (string | number)[] | undefined;
 }) => ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
   readonly columnName: string;
@@ -329,21 +373,29 @@ function resolveCheckExpressionRenderer(
 
 /**
  * The member values a membership check must enforce, encoded exactly as the
- * column stores them. Only string members can be written as a predicate, so a
- * numeric enum fails here rather than emitting a wrong text-shaped check.
+ * column stores them. Membership predicates support strings and finite numbers.
  */
 function checkMemberValues(
   handle: EnumTypeHandle,
   codecLookup: CodecLookup | undefined,
-): readonly string[] {
-  const encoded = handle.values.map((value) => encodeViaCodec(value, handle.codecId, codecLookup));
-  const values: string[] = [];
+): readonly (string | number)[] {
+  const encoded = handle.values.map((value) =>
+    encodeViaCodec(value, codecLookup?.get(handle.codecId)),
+  );
+  const values: (string | number)[] = [];
   for (const value of encoded) {
-    if (typeof value !== 'string') {
+    if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) {
       throw contractError(
         'CONTRACT.ENUM_INVALID',
-        `enumType("${handle.enumName}"): has a non-string value; numeric-enum CHECK constraints are not yet supported.`,
-        { meta: { enumName: handle.enumName, reason: 'non-string-member-value' } },
+        `enumType("${handle.enumName}"): CHECK constraint members must encode to strings or finite numbers.`,
+        { meta: { enumName: handle.enumName, reason: 'unsupported-member-value' } },
+      );
+    }
+    if (typeof value !== typeof encoded[0]) {
+      throw contractError(
+        'CONTRACT.ENUM_INVALID',
+        `enumType("${handle.enumName}"): CHECK constraint members must encode to the same primitive type; mixed strings and numbers are not supported.`,
+        { meta: { enumName: handle.enumName, reason: 'mixed-member-types' } },
       );
     }
     values.push(value);
@@ -568,6 +620,47 @@ function resolveModelNamespaceId(
   return modelNameToNamespaceId.get(model.modelName) ?? defaultNamespaceId;
 }
 
+function toOneRelationNullable(semanticModel: ModelNode, relation: RelationNode): boolean {
+  const location = `Relation "${semanticModel.modelName}.${relation.fieldName}"`;
+  if (relation.nullable === undefined) {
+    throw contractError(
+      'CONTRACT.RELATION_INVALID',
+      `${location} with cardinality "${relation.cardinality}" must state whether it is nullable`,
+      {
+        meta: {
+          modelName: semanticModel.modelName,
+          relationName: relation.fieldName,
+          reason: 'to-one-nullability-missing',
+        },
+      },
+    );
+  }
+  const localColumns = relation.on.parentColumns;
+  const { contradiction } = resolveToOneRelationNullable({
+    declaredNullable: relation.nullable,
+    localFieldNullability: semanticModel.fields
+      .filter((field) => localColumns.includes(field.columnName))
+      .map((field) => field.nullable),
+    ownsReference: relation.cardinality === 'N:1',
+  });
+  if (contradiction !== undefined) {
+    throw contractError(
+      'CONTRACT.RELATION_INVALID',
+      relation.cardinality === 'N:1'
+        ? toOneNullabilityContradictionMessage(location, contradiction)
+        : `${location} is required but does not own the foreign key, so nothing in storage guarantees the related row exists`,
+      {
+        meta: {
+          modelName: semanticModel.modelName,
+          relationName: relation.fieldName,
+          reason: 'to-one-nullability-mismatch',
+        },
+      },
+    );
+  }
+  return relation.nullable;
+}
+
 function buildThroughDescriptor(
   through: NonNullable<RelationNode['through']>,
   tableNamespaceByName: ReadonlyMap<string, string>,
@@ -622,7 +715,7 @@ function buildStorageColumn(
   if (isValueObjectField(field)) {
     const encodedDefault =
       field.default !== undefined
-        ? encodeColumnDefault(field.default, JSONB_CODEC_ID, codecLookup)
+        ? encodeColumnDefault(field.default, codecLookup?.get(JSONB_CODEC_ID))
         : undefined;
 
     return {
@@ -636,7 +729,11 @@ function buildStorageColumn(
   const codecId = field.descriptor.codecId;
   const encodedDefault =
     field.default !== undefined
-      ? encodeColumnDefault(field.default, codecId, codecLookup, field.many === true)
+      ? encodeColumnDefault(
+          field.default,
+          columnCodec(codecId, field.descriptor.typeParams, codecLookup),
+          field.many === true,
+        )
       : undefined;
 
   // `storageValueSetRef` (derived from an `enumTypeHandle`) takes precedence
@@ -916,7 +1013,7 @@ export function buildSqlContractFromDefinition(
     const domainFields: Record<string, ContractField> = {};
     const domainFieldRefs: Record<string, DomainFieldRef> = {};
     const checksForTable: CheckConstraint[] = [];
-    // Enforcement is derived only for tables Prisma Next owns: the contract
+    // Enforcement is derived only for tables Prisma 8 owns: the contract
     // describes an external schema, it does not prescribe enforcement for it.
     // This reads the policy the source declares; a policy applied by a contract
     // specifier lands after the build and is handled by
@@ -1184,7 +1281,7 @@ export function buildSqlContractFromDefinition(
       );
       // Authored checks are lowered and merged into `checksForTable`
       // unconditionally — outside the `derivesChecks` guard above. A derived
-      // check is a Prisma Next prescription, scoped to tables it manages; an
+      // check is a Prisma 8 prescription, scoped to tables it manages; an
       // authored check is the author's own statement about a constraint they
       // know exists, and is emitted whatever the table's control policy.
       if (semanticModel.checks !== undefined && semanticModel.checks.length > 0) {
@@ -1276,6 +1373,7 @@ export function buildSqlContractFromDefinition(
           to: crossRef(relation.toModel, targetNamespaceId, relation.spaceId),
           // Cross-space belongsTo relations are always N:1 (the FK-owning side).
           cardinality: 'N:1',
+          nullable: toOneRelationNullable(semanticModel, relation),
           on: {
             localFields: relation.on.parentColumns.map((col) => columnToField.get(col) ?? col),
             // For cross-space targets the lowering carries field names directly
@@ -1293,6 +1391,10 @@ export function buildSqlContractFromDefinition(
         relation.toModel,
         relation.toNamespaceId,
         'Relation',
+      );
+      invariant(
+        relation.toTable !== undefined,
+        `Relation "${semanticModel.modelName}.${relation.fieldName}" is local but carries no target table; only cross-space relations may leave it unset.`,
       );
       assertTargetTableMatches(semanticModel.modelName, targetModel, relation.toTable, 'Relation');
 
@@ -1338,8 +1440,15 @@ export function buildSqlContractFromDefinition(
             defaultNamespaceId,
           ),
         };
+      } else if (relation.cardinality === '1:N') {
+        modelRelations[relation.fieldName] = { to, cardinality: '1:N', on };
       } else {
-        modelRelations[relation.fieldName] = { to, cardinality: relation.cardinality, on };
+        modelRelations[relation.fieldName] = {
+          to,
+          cardinality: relation.cardinality,
+          nullable: toOneRelationNullable(semanticModel, relation),
+          on,
+        };
       }
     }
 
@@ -1427,7 +1536,7 @@ export function buildSqlContractFromDefinition(
       codecId: handle.codecId,
       members: handle.enumMembers.map((m) => ({
         name: m.name,
-        value: encodeViaCodec(m.value, handle.codecId, codecLookup),
+        value: encodeViaCodec(m.value, codecLookup?.get(handle.codecId)),
       })),
     };
 
@@ -1438,7 +1547,7 @@ export function buildSqlContractFromDefinition(
     }
     storageSlot[enumName] = {
       kind: 'valueSet',
-      values: handle.values.map((v) => encodeViaCodec(v, handle.codecId, codecLookup)),
+      values: handle.values.map((v) => encodeViaCodec(v, codecLookup?.get(handle.codecId))),
     };
   }
 

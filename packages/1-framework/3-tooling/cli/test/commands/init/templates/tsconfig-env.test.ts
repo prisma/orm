@@ -208,7 +208,7 @@ describe('envFileContent', () => {
 // package.json#prismaNext.minServerVersion fields. The constant is
 // checked into source so we don't pay a workspace-fs read at every CLI
 // startup, but drift between the two values would silently mislead every
-// freshly-initialised user about which server versions Prisma Next
+// freshly-initialised user about which server versions Prisma 8
 // actually supports. This test fails loudly when the two diverge,
 // requiring the bump to be a coordinated change.
 // ---------------------------------------------------------------------------

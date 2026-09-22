@@ -1,0 +1,14 @@
+[
+  {
+    "code": "PSL_INVALID_ATTRIBUTE_ARGUMENT",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Field \"Post.author\": @relation onDelete must be a referential action."
+  },
+  {
+    "code": "PSL_INVALID_ATTRIBUTE_ARGUMENT",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "Field \"Post.editor\": @relation onUpdate must be a referential action."
+  }
+]

@@ -53,7 +53,7 @@ describe('offset tracking', () => {
 
 describe('peekKind', () => {
   it('reports upcoming significant kinds without consuming or emitting trivia', () => {
-    const cursor = new Cursor('  model User');
+    const cursor = new Cursor('test.psl', '  model User');
     expect(cursor.peekKind()).toBe('Ident');
     expect(cursor.peekKind(1)).toBe('Ident');
     // repeated peeks are stable — nothing was consumed
@@ -71,7 +71,7 @@ describe('peekKind', () => {
 
 describe('recoverToSyncPoint', () => {
   it('appends raw tokens up to the next Newline and stops before it', () => {
-    const cursor = new Cursor('broken stuff\nnext');
+    const cursor = new Cursor('test.psl', 'broken stuff\nnext');
     cursor.startNode('Document');
     cursor.recoverToSyncPoint();
     const node = cursor.finishNode();
@@ -80,7 +80,7 @@ describe('recoverToSyncPoint', () => {
   });
 
   it('stops before the enclosing RBrace', () => {
-    const cursor = new Cursor('junk}');
+    const cursor = new Cursor('test.psl', 'junk}');
     cursor.startNode('Document');
     cursor.recoverToSyncPoint();
     const node = cursor.finishNode();
@@ -89,7 +89,7 @@ describe('recoverToSyncPoint', () => {
   });
 
   it('stops at Eof', () => {
-    const cursor = new Cursor('only garbage here');
+    const cursor = new Cursor('test.psl', 'only garbage here');
     cursor.startNode('Document');
     cursor.recoverToSyncPoint();
     const node = cursor.finishNode();
@@ -99,7 +99,7 @@ describe('recoverToSyncPoint', () => {
 });
 
 function parse(source: string, run: (cursor: Cursor) => GreenNode) {
-  const cursor = new Cursor(source);
+  const cursor = new Cursor('test.psl', source);
   const node = run(cursor);
   return { node, diagnostics: cursor.diagnostics, cursor };
 }
@@ -108,7 +108,7 @@ function parse(source: string, run: (cursor: Cursor) => GreenNode) {
 // these well-formed cases are wrapped in a synthetic root to recover the
 // emitted `TypeAnnotation` subtree.
 function parseTypeAnnotationTree(source: string) {
-  const cursor = new Cursor(source);
+  const cursor = new Cursor('test.psl', source);
   cursor.startNode('Document');
   parseTypeAnnotation(cursor);
   const root = cursor.finishNode();
@@ -123,7 +123,7 @@ function parseTypeAnnotationTree(source: string) {
 // these content-bearing cases are wrapped in a synthetic root to recover the
 // emitted `AttributeArg` subtree.
 function parseAttributeArgTree(source: string) {
-  const cursor = new Cursor(source);
+  const cursor = new Cursor('test.psl', source);
   cursor.startNode('Document');
   parseAttributeArg(cursor);
   const root = cursor.finishNode();
@@ -564,7 +564,7 @@ describe('parseQualifiedName', () => {
 
   it('consumes a space:namespace.name chain into one QualifiedName, round-tripping', () => {
     const source = 'supabase:auth.User';
-    const cursor = new Cursor(source);
+    const cursor = new Cursor('test.psl', source);
     parseQualifiedName(cursor);
     cursor.startNode('Document');
     cursor.flushTrivia();
@@ -576,7 +576,7 @@ describe('parseQualifiedName', () => {
 
   it('stops at the first non-segment token, leaving it for the caller to peek', () => {
     // The `(` is left unconsumed: the caller decides constructor-vs-reference.
-    const cursor = new Cursor('pgvector.Vector(1536)');
+    const cursor = new Cursor('test.psl', 'pgvector.Vector(1536)');
     parseQualifiedName(cursor);
     expect(cursor.peekKind()).toBe('LParen');
     expect(cursor.diagnostics).toEqual([]);
@@ -745,7 +745,7 @@ describe('argument-position object literal', () => {
 });
 
 function expectNoOpReject(source: string, run: (cursor: Cursor) => GreenNode | undefined): void {
-  const cursor = new Cursor(source);
+  const cursor = new Cursor('test.psl', source);
   expect(run(cursor)).toBeUndefined();
   expect(cursor.diagnostics).toEqual([]);
   cursor.startNode('Document');

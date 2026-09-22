@@ -33,14 +33,6 @@ export function bindWhereExpr(
   expr: AnyExpression,
   namespaceId?: string,
 ): AnyExpression {
-  return bindWhereExprNode(contract, expr, namespaceId);
-}
-
-function bindWhereExprNode(
-  contract: Contract<SqlStorage>,
-  expr: AnyExpression,
-  namespaceId?: string,
-): AnyExpression {
   return expr.accept<AnyExpression>({
     columnRef(expr) {
       return bindExpression(contract, expr);
@@ -98,10 +90,10 @@ function bindWhereExprNode(
       );
     },
     and(expr) {
-      return AndExpr.of(expr.exprs.map((part) => bindWhereExprNode(contract, part, namespaceId)));
+      return AndExpr.of(expr.exprs.map((part) => bindWhereExpr(contract, part, namespaceId)));
     },
     or(expr) {
-      return OrExpr.of(expr.exprs.map((part) => bindWhereExprNode(contract, part, namespaceId)));
+      return OrExpr.of(expr.exprs.map((part) => bindWhereExpr(contract, part, namespaceId)));
     },
     exists(expr) {
       return expr.notExists
@@ -114,7 +106,7 @@ function bindWhereExprNode(
         : NullCheckExpr.isNotNull(bindExpression(contract, expr.expr));
     },
     not(expr) {
-      return new NotExpr(bindWhereExprNode(contract, expr.expr, namespaceId));
+      return new NotExpr(bindWhereExpr(contract, expr.expr, namespaceId));
     },
     rawExpr(expr) {
       return expr;
@@ -203,7 +195,7 @@ function bindJoin(contract: Contract<SqlStorage>, join: JoinAst): JoinAst {
   return new JoinAst(
     join.joinType,
     bindFromSource(contract, join.source),
-    join.on.kind === 'eq-col-join-on' ? join.on : bindWhereExprNode(contract, join.on, namespaceId),
+    join.on.kind === 'eq-col-join-on' ? join.on : bindWhereExpr(contract, join.on, namespaceId),
     join.lateral,
   );
 }
@@ -232,12 +224,12 @@ function bindSelectAst(contract: Contract<SqlStorage>, ast: SelectAst): SelectAs
           projection.codec,
         ),
     ),
-    where: ast.where ? bindWhereExprNode(contract, ast.where, namespaceId) : undefined,
+    where: ast.where ? bindWhereExpr(contract, ast.where, namespaceId) : undefined,
     orderBy: ast.orderBy?.map((orderItem) => bindOrderByItem(contract, orderItem)),
     distinct: ast.distinct,
     distinctOn: ast.distinctOn?.map((expr) => bindExpression(contract, expr)),
     groupBy: ast.groupBy?.map((expr) => bindExpression(contract, expr)),
-    having: ast.having ? bindWhereExprNode(contract, ast.having, namespaceId) : undefined,
+    having: ast.having ? bindWhereExpr(contract, ast.having, namespaceId) : undefined,
     limit: ast.limit,
     offset: ast.offset,
     selectAllIntent: ast.selectAllIntent,

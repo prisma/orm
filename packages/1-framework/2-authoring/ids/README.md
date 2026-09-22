@@ -1,8 +1,8 @@
 # @internal/ids
 
-ID generator helpers for Prisma Next contracts. This package provides ergonomic helpers that
+ID generator helpers for Prisma 8 contracts. This package provides ergonomic helpers that
 produce contract-safe, JSON-serializable execution defaults for client-generated IDs, plus
-runtime generation utilities that Prisma Next uses before sending data to adapters.
+runtime generation utilities that Prisma 8 uses before sending data to adapters.
 
 Each helper owns the column descriptor metadata associated with that generator, so callers only
 pass options supported by the underlying `uniku` generator.
@@ -12,11 +12,6 @@ pass options supported by the underlying `uniku` generator.
 - Provide ID helper functions (`ulid`, `nanoid`, `uuidv7`, `uuidv4`, `cuid2`, `ksuid`) for contract authoring.
 - Emit contract-safe execution defaults (no executable code stored in the contract).
 - Generate values at runtime using `uniku` when mutation defaults require them.
-
-## Dependencies
-
-- `@internal/contract` for shared contract types (`ExecutionMutationDefaultValue`).
-- `uniku` for ID generator implementations.
 
 ## Architecture
 

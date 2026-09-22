@@ -3,6 +3,7 @@ import { check, defineContract, field, model } from '@internal/sql-contract-ts/c
 import { describe, expect, it, vi } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
   postgresScalarTypeDescriptors,
@@ -25,6 +26,7 @@ function interpret(schema: string) {
     composedExtensionContracts: new Map(),
     controlMutationDefaults: builtinControlMutationDefaults,
     createNamespace: createTestSqlNamespace,
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     capabilities: { sql: { scalarList: true, checkConstraint: true } },
   });
 }
@@ -51,7 +53,7 @@ const orderFields = {
 };
 
 function orderTableOf(storage: SqlStorage) {
-  return storage.namespaces['public']?.entries.table?.['order'];
+  return storage.namespaces['public']?.entries.table?.['Order'];
 }
 
 describe('@@check PSL ↔ TS parity', () => {
@@ -75,7 +77,7 @@ model Order {
       createNamespace: createTestSqlNamespace,
       models: {
         Order: model('Order', { fields: orderFields }).sql({
-          table: 'order',
+          table: 'Order',
           checks: [check({ expression: 'total > 0', name: 'order_total_positive' })],
         }),
       },
@@ -116,7 +118,7 @@ model LegacyOrder {
         createNamespace: createTestSqlNamespace,
         models: {
           LegacyOrder: model('LegacyOrder', { fields: orderFields }).sql({
-            table: 'legacyOrder',
+            table: 'LegacyOrder',
             checks: [check({ expression: '(total > (0)::numeric)', map: 'positive_total' })],
           }),
         },
@@ -124,8 +126,8 @@ model LegacyOrder {
 
       const pslStorage = pslResult.value.storage as unknown as SqlStorage;
       const tsStorage = tsContract.storage as unknown as SqlStorage;
-      const pslTable = pslStorage.namespaces['public']?.entries.table?.['legacyOrder'];
-      const tsTable = tsStorage.namespaces['public']?.entries.table?.['legacyOrder'];
+      const pslTable = pslStorage.namespaces['public']?.entries.table?.['LegacyOrder'];
+      const tsTable = tsStorage.namespaces['public']?.entries.table?.['LegacyOrder'];
 
       expect(pslTable?.checks).toEqual([
         { name: 'positive_total', expression: '(total > (0)::numeric)' },
@@ -161,7 +163,7 @@ model Order {
         createNamespace: createTestSqlNamespace,
         models: {
           Order: model('Order', { fields: orderFields }).sql({
-            table: 'order',
+            table: 'Order',
             checks: [
               check({ expression: 'total > 0', name: 'order_total_positive' }),
               check({ expression: '(total > (0)::numeric)', map: 'positive_total' }),
@@ -329,6 +331,7 @@ model Order {
       scalarColumnDescriptors: sqliteScalarColumnDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: {} },
       ...document,
       controlMutationDefaults: builtinControlMutationDefaults,
@@ -365,6 +368,7 @@ model Order {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: {},
       ...document,
       controlMutationDefaults: builtinControlMutationDefaults,

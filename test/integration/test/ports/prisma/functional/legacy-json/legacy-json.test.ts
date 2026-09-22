@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -9,14 +9,14 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // Upstream uses copycat.uuid(1) for the id; we use the same deterministic value
 // directly. Upstream's requiredJson is a static object; we use the same shape.
 //
-// Prisma-next JSON behaviour vs upstream Prisma Client:
+// Prisma 8 JSON behaviour vs upstream Prisma Client:
 //   - JSON fields map to `pg/jsonb@1` (jsonb) returning a plain JsonValue.
-//   - prisma-next shorthand `where({ requiredJson: value })` does equality
+//   - Prisma 8 shorthand `where({ requiredJson: value })` does equality
 //     filtering (jsonb supports @= comparison).
 //   - `where: { requiredJson: { equals: ... } }` → `where({ requiredJson: ... })`
 //   - `where: { requiredJson: { not: ... } }` → `where((r) => r.requiredJson.neq(...))`
 //   - `where: { requiredJson: { path: [...], equals: ... } }` → no path-based
-//     JSON filter in prisma-next; recorded as non-ported.
+//     JSON filter in Prisma 8; recorded as non-ported.
 //   - No inline snapshot ID (copycat replaced with literal).
 
 const RESOURCE_ID = '02d25579a73a72373fa4e846';

@@ -1,6 +1,6 @@
 # ADR 051 — PPg preflight-as-a-service contract
 
-**Status:** Superseded. The preflight concept this service contract was designed around is abandoned: diffing is fully offline against on-disk contract snapshots, no shadow database will ever exist, and there is no sandbox-execution verb. See [CI Integration § No shadow database](../subsystems/8.%20CI%20Integration.md#no-shadow-database). The content below is preserved as a historical record of the superseded design.
+**Status:** Superseded as a core-CLI contract. Diffing is fully offline against on-disk contract snapshots, the CLI never provisions a shadow database, and there is no core sandbox-execution verb. Preflight returns as a database-extension hook: an extension may execute the attested `ops.json` against a fork of a target database and report timing and errors, and Prisma Postgres will provide such a hook. See [CI Integration § No shadow database](../subsystems/8.%20CI%20Integration.md#no-shadow-database). The content below is preserved as a historical record of the superseded design.
 
 ## Context
 

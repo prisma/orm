@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA7_UNKNOWN_DEFAULT",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Field \"Post.status\": @default holds a pg/text value, which pg/enum has no cast from; it casts from nothing."
+  }
+]

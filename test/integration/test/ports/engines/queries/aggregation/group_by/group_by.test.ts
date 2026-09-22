@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../../_harness/postgres';
 import type { Contract as MainContract } from './_fixture/main/generated/contract';
 import mainContractJson from './_fixture/main/generated/contract.json' with { type: 'json' };
 import type { Contract as Regression21789Contract } from './_fixture/regression-21789/generated/contract';
@@ -7,7 +7,7 @@ import regression21789ContractJson from './_fixture/regression-21789/generated/c
   type: 'json',
 };
 
-type MainContext = import('../../../../_harness/postgres').PortContext<MainContract>;
+type MainContext = import('../../../../../_harness/postgres').PortContext<MainContract>;
 type MainClient = MainContext['client'];
 type MainDb = MainContext['db'];
 

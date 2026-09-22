@@ -2,6 +2,7 @@ model Parent {
   id Int @id
   childId Int? @unique
   child Child? @relation(fields: [childId], references: [id])
+  @@map("parent")
 }
 model Child {
   id Int @id
@@ -10,4 +11,5 @@ model Child {
   json Json
   jsonb Jsonb
   parent Parent?
+  @@map("child")
 }

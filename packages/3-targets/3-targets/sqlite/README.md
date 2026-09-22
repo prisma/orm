@@ -1,6 +1,6 @@
 # @internal/target-sqlite
 
-SQLite target pack for Prisma Next.
+SQLite target pack for Prisma 8.
 
 ## Package Classification
 
@@ -49,14 +49,6 @@ SQLite-bound codecs use the public `SqliteCodecDescriptor` protocol, `sqliteCode
 ## Architecture
 
 This package provides a runtime entry point for the SQLite target. All declarative fields (version, capabilities) are defined directly on the descriptor. The `./pack` entry point provides a pure pack ref for contract authoring.
-
-## Dependencies
-
-- **`@internal/framework-components`**: Descriptor types (`RuntimeTargetInstance`)
-- **`@internal/sql-relational-core`**: Codec registry factory
-- **`@internal/sql-runtime`**: `SqlRuntimeTargetDescriptor` type
-- **`@internal/sql-contract`**: Pack ref types (`TargetPackRef`)
-- **`@internal/adapter-sqlite`** *(dev)*: Codec types for pack ref `__codecTypes`
 
 ## Related Subsystems
 

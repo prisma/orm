@@ -16,4 +16,5 @@
 model Post {
   id    String   @id @default(cuid(2))
   words String[]
+  @@map("post")
 }

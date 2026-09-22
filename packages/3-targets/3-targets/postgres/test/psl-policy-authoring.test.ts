@@ -13,10 +13,12 @@
  *     factory chain (no test-side hand-lowering).
  */
 
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { parse } from '@internal/psl-parser/syntax';
 import { interpretPslDocumentToSqlContract } from '@internal/sql-contract-psl';
+import { postgresDataTypes } from '@internal/target-postgres/data-types';
 import { createSqlContract } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 import {
@@ -28,6 +30,8 @@ import { PostgresContractSerializer } from '../src/core/postgres-contract-serial
 import { PostgresRlsPolicy } from '../src/core/postgres-rls-policy';
 import { PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 import { computeContentHash } from '../src/core/rls/canonicalize';
+
+const postgresDataTypeLookup = createDataTypeLookup(postgresDataTypes);
 
 const assembled = assembleAuthoringContributions([
   {
@@ -98,13 +102,13 @@ namespace public {
 `;
 
   function buildInput() {
-    const { document, sourceFile } = parse(source);
-    const { table, diagnostics } = buildSymbolTable({
-      document,
-      sourceFile,
+    const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
+    const { symbolTable, diagnostics } = buildSymbolTable({
+      documents: [document],
+      sources,
       pslBlockDescriptors: assembled.pslBlockDescriptors,
     });
-    return { symbolTable: table, sourceFile, diagnostics };
+    return { document, sources, symbolTable, diagnostics };
   }
 
   it('parses the policy_select block without diagnostics', () => {
@@ -221,19 +225,20 @@ namespace public {
   ]);
 
   it('lowers a policy_select block to entries.policy without test-side hand-lowering', () => {
-    const { document, sourceFile } = parse(source);
-    const { table: symbolTable, diagnostics } = buildSymbolTable({
-      document,
-      sourceFile,
+    const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
+    const { symbolTable, diagnostics } = buildSymbolTable({
+      documents: [document],
+      sources,
       pslBlockDescriptors: assembled.pslBlockDescriptors,
     });
 
     expect(diagnostics).toEqual([]);
 
     const result = interpretPslDocumentToSqlContract({
+      dataTypeLookup: postgresDataTypeLookup,
+      document,
       symbolTable,
-      sourceFile,
-      sourceId: 'schema.prisma',
+      sources,
       target: postgresTarget,
       scalarColumnDescriptors,
       authoringContributions: assembled,

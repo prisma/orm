@@ -65,7 +65,7 @@ export interface InitCommandDependencies {
 export const createInitCommand = (injected: InitCommandDependencies) =>
   defineOrmCommand({
     help: {
-      summary: 'Initialize a new Prisma Next project',
+      summary: 'Initialize a new Prisma ORM project',
       description:
         'Scaffolds config, schema, and runtime files, installs dependencies,\n' +
         'and emits the contract. Gets you from zero to typed queries in one step.\n' +
@@ -137,17 +137,17 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
 
       const deps = [targetPackageName(inputs.target, scaffold.resolveImportSpecifier), 'dotenv'];
       // The CLI the scaffolded scripts run is `prisma`, the unified CLI's
-      // published name, whose v8 line publishes under the `next` dist-tag (the
-      // `prisma-next` shim is no longer published). It is the package that
+      // published name, whose v8 line publishes under the `latest` dist-tag (the
+      // standalone shim is no longer published). It is the package that
       // carries the `prisma` binary, which is what the scaffolded scripts
       // invoke. `@prisma/cli-engine` — the config file's
-      // defineConfig import — is deliberately absent here: the CLI declares it
+      // definePrismaConfig import — is deliberately absent here: the CLI declares it
       // as an exact peer, so it installs in a second step at the version the
       // just-installed CLI names. Under moduleResolution 'bundler' the
       // scaffolded files reference process.env, which only typechecks with
       // Node's ambient types present; a project that already pins @types/node
       // keeps its own major.
-      const cliDevDeps = ['prisma@next'];
+      const cliDevDeps = ['prisma@latest'];
       const devDeps: string[] = scaffold.hasTypesNode ? cliDevDeps : [...cliDevDeps, '@types/node'];
 
       const findings: Diagnostic[] = [];
@@ -188,7 +188,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
               {
                 why: `The success document failed schema validation: ${String(validated)}`,
                 nextActions: [
-                  chooseAction('This is a bug in Prisma Next. Please report it with `-v` output.'),
+                  chooseAction('This is a bug in Prisma ORM. Please report it with `-v` output.'),
                 ],
                 docsUrl: docsUrlFor('CLI.INIT_INVALID_OUTPUT_DOCUMENT'),
               },

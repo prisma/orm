@@ -25,31 +25,36 @@ jobs:
       - id: detect
         uses: ./.github/actions/detect-inert-diff
 
+  # `Size Limit` is a required status check on main. The job itself always
+  # runs so it always reports; only its steps skip on an inert diff. A
+  # job-level `if` would leave docs-only PRs blocked on a check that never
+  # reports.
   size:
     name: Size Limit
     needs: changes
-    if: needs.changes.outputs.inert != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: needs.changes.outputs.inert != 'true'
         with:
           persist-credentials: false
           fetch-depth: 0
       - uses: ./.github/actions/setup
+        if: needs.changes.outputs.inert != 'true'
       # merge_group: the size-limit action requires a PR context to post a
       # comment, so run size-limit directly instead.
       - name: Install dependencies (merge queue)
-        if: github.event_name == 'merge_group'
+        if: needs.changes.outputs.inert != 'true' && github.event_name == 'merge_group'
         run: pnpm install --frozen-lockfile
       - name: Check size limits (merge queue)
-        if: github.event_name == 'merge_group'
+        if: needs.changes.outputs.inert != 'true' && github.event_name == 'merge_group'
         working-directory: examples/bundle-size
         run: pnpm size:build && pnpm exec size-limit
       - name: Check size and post PR comment
-        if: github.event_name == 'pull_request'
+        if: needs.changes.outputs.inert != 'true' && github.event_name == 'pull_request'
         uses: andresz1/size-limit-action@94bc357df29c36c8f8d50ea497c3e225c3c95d1d # v1.8.0
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}

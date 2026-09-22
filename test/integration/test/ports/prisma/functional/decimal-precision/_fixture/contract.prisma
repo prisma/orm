@@ -3,7 +3,7 @@
 //
 // Upstream matrix (postgres-applicable rows): a TestModel whose single
 // `decimal Decimal @db.Decimal(precision, scale)` field is materialised at
-// (10,0), (20,10) and (38,30). prisma-next PSL carries fixed precision/scale
+// (10,0), (20,10) and (38,30). Prisma 8 PSL carries fixed precision/scale
 // through a named `Numeric(p, s)` type, so one column per tested
 // precision reproduces the exact storage constraint under test.
 // (The (65,30) and (1000,500) matrix rows exceed postgres numeric limits and
@@ -19,4 +19,5 @@ model TestModel {
   d10_0  Decimal10_0?
   d20_10 Decimal20_10?
   d38_30 Decimal38_30?
+  @@map("testModel")
 }

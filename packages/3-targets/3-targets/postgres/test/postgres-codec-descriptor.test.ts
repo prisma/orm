@@ -6,6 +6,7 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   type CodecRef,
+  dataTypeId,
 } from '@internal/framework-components/codec';
 import {
   CaseExpr,
@@ -87,6 +88,7 @@ class VectorCodec<N extends number> extends CodecImpl<
 }
 
 class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
@@ -117,6 +119,7 @@ class GenericVectorDescriptor extends CodecDescriptorImpl<VectorParams> {
 }
 
 class DirectVectorDescriptor extends PostgresCodecDescriptor<VectorParams> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = 'demo/direct-vector@1' as const;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['vector'] as const;
@@ -274,6 +277,7 @@ describe('PostgresCodecDescriptor', () => {
 describe('postgresCodec', () => {
   it('preserves the wrapped descriptor contract and materialization behavior', () => {
     const descriptor = postgresCodec(genericVectorDescriptor, {
+      dataType: dataTypeId('demo/fixture'),
       nativeType: (params) => `vector(${params.length})`,
       jsonProjection: (expression, params) =>
         FunctionCallExpr.of('project_generic_vector', [expression, LiteralExpr.of(params.length)]),
@@ -302,6 +306,7 @@ describe('postgresCodec', () => {
   it('accepts an array override only after typed parameter validation', () => {
     const overrideCalls: VectorParams[] = [];
     const descriptor = postgresCodec(genericVectorDescriptor, {
+      dataType: dataTypeId('demo/fixture'),
       nativeType: (params) => `vector(${params.length})`,
       jsonProjection: (expression) => expression,
       jsonArrayProjection: (expression, params) => {

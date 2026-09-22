@@ -7,11 +7,12 @@ import stripAnsi from 'strip-ansi';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
-import { createTestProjectDir } from '../utils/test-project-dir';
+import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const mocks = {
   connect: vi.fn(),
   dbUpdate: vi.fn(),
+  renderContractDts: vi.fn(),
   close: vi.fn(),
 };
 
@@ -21,6 +22,7 @@ const commands = createBinCommands(
     ({
       connect: mocks.connect,
       dbUpdate: mocks.dbUpdate,
+      renderContractDts: mocks.renderContractDts,
       close: mocks.close,
     }) as unknown as ControlClient,
 );
@@ -48,6 +50,7 @@ const projectDirs: string[] = [];
 beforeEach(() => {
   projectDir = createTestProjectDir('orm-db-update-consent');
   projectDirs.push(projectDir);
+  writeProjectManifest(projectDir);
   writeFileSync(
     join(projectDir, 'contract.json'),
     JSON.stringify({ storage: { storageHash: MARKER_HASH } }),
@@ -56,6 +59,9 @@ beforeEach(() => {
   mocks.connect.mockReset().mockResolvedValue(undefined);
   mocks.close.mockReset().mockResolvedValue(undefined);
   mocks.dbUpdate.mockReset().mockImplementation(refuseUntilConsented());
+  mocks.renderContractDts
+    .mockReset()
+    .mockResolvedValue(ok({ contractDts: 'export type Contract = never;\n' }));
 });
 
 function ormConfig(overrides: Record<string, unknown> = {}): Record<string, unknown> {

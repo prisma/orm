@@ -1,6 +1,6 @@
 # @internal/extension-pgvector
 
-PostgreSQL pgvector extension pack for Prisma Next.
+PostgreSQL pgvector extension pack for Prisma 8.
 
 ## Overview
 
@@ -14,13 +14,6 @@ This extension pack adds support for the `vector` data type and vector similarit
 - **Runtime Extension**: Registers codecs and operations at runtime for vector column operations
 - **Pack Ref Export**: Ships a pure `/pack` entrypoint for TypeScript contract authoring without runtime filesystem access
 - **Baseline Migration**: Ships an on-disk baseline migration in its contract space that installs the `vector` Postgres extension (`CREATE EXTENSION IF NOT EXISTS vector`) when the extension is composed into an application
-
-## Dependencies
-
-- **`@internal/cli`**: CLI config types and extension descriptor interface
-- **`@internal/sql-operations`**: SQL operation signature types
-- **`@internal/sql-relational-core`**: Codec registry and AST types
-- **`arktype`**: Schema validation for manifest structure
 
 ## Installation
 
@@ -207,7 +200,7 @@ See [ADR 212 — Contract spaces](../../../docs/architecture%20docs/adrs/ADR%202
 ## References
 
 - [pgvector documentation](https://github.com/pgvector/pgvector)
-- [Prisma Next Architecture Overview](../../../docs/Architecture%20Overview.md)
+- [Prisma 8 Architecture Overview](../../../docs/Architecture%20Overview.md)
 - [Extension Packs Guide](../../../docs/reference/Extension-Packs-Naming-and-Layout.md)
 - [ADR 212 — Contract spaces](../../../docs/architecture%20docs/adrs/ADR%20212%20-%20Contract%20spaces.md)
 

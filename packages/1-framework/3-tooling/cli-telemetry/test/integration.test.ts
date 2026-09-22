@@ -108,7 +108,7 @@ interface SilentSenderResult {
  * used `stdio: ['pipe', 'ignore', 'ignore', 'ipc']` which discarded the
  * child's stderr entirely; this helper captures it so the test can pin the
  * silence invariant (no telemetry-originating output appears on stdout or
- * stderr in normal mode; output appears only under `PRISMA_NEXT_DEBUG=1`).
+ * stderr in normal mode; output appears only under `PRISMA_DEBUG=1`).
  *
  * Resolves on `exit` + both stdio streams reporting `end`. `close` is the
  * usual way to wait for both, but the sender's IPC-disconnect-driven idle
@@ -170,15 +170,15 @@ function spawnSenderCapturingStdio(options: {
 }
 
 /**
- * Returns a copy of the current process env with `PRISMA_NEXT_DEBUG` deleted
+ * Returns a copy of the current process env with `PRISMA_DEBUG` deleted
  * (so the failure-mode tests assert silence under the default-off debug
  * setting irrespective of whatever the developer's shell exports), then
  * layers `extra` on top — callers explicitly opt in to debug by passing
- * `{ PRISMA_NEXT_DEBUG: '1' }`.
+ * `{ PRISMA_DEBUG: '1' }`.
  */
 function envWithoutDebug(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env };
-  delete env['PRISMA_NEXT_DEBUG'];
+  delete env['PRISMA_DEBUG'];
   return { ...env, ...extra };
 }
 
@@ -203,7 +203,7 @@ describe('cli-telemetry end-to-end via telemetry backend', () => {
     expect(row?.tsVersion).toBe('5.9.3');
 
     // Happy-path silence: the child never writes to stdout or stderr when
-    // PRISMA_NEXT_DEBUG is unset, even when the POST succeeds.
+    // PRISMA_DEBUG is unset, even when the POST succeeds.
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe('');
@@ -311,11 +311,11 @@ describe('cli-telemetry end-to-end — failure modes are silent', () => {
     timeouts.databaseOperation,
   );
 
-  it('emits diagnostics to stderr under PRISMA_NEXT_DEBUG=1', async () => {
+  it('emits diagnostics to stderr under PRISMA_DEBUG=1', async () => {
     const payload = buildPayload({ endpoint: 'http://127.0.0.1:1/events' });
     const result = await spawnSenderCapturingStdio({
       payload,
-      env: envWithoutDebug({ PRISMA_NEXT_DEBUG: '1' }),
+      env: envWithoutDebug({ PRISMA_DEBUG: '1' }),
     });
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toBe('');

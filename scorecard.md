@@ -1,15 +1,15 @@
-# Prisma Next — Feature-Support Matrix (Prisma 8 RC1)
+# Prisma 8 — Feature-Support Matrix (RC1)
 
-This is the Prisma Next feature-support matrix feeding PR #986 (the Prisma 8 RC1 release). Each row is one feature; the three data columns state **whether that feature is available in Prisma Next** for **Postgres**, **SQLite**, and **MongoDB** — not whether Prisma 7 had it. The matrix lists *all* features Prisma Next exposes (mined from `prisma-8-api.md`), plus every notable Prisma 7 feature Prisma Next lacks, so that absences are named rather than silently missing. The **Prisma Next evidence** column points only to Prisma Next (TypeScript) test suites; Rust/engine tests and Prisma 7 tests are never cited here. When a cell is `🟡` the evidence is intentionally empty — that emptiness is what makes it untested rather than proven.
+This is the Prisma 8 feature-support matrix feeding PR #986 (the Prisma 8 RC1 release). Each row is one feature; the three data columns state **whether that feature is available in Prisma 8** for **Postgres**, **SQLite**, and **MongoDB** — not whether Prisma 7 had it. The matrix lists *all* features Prisma 8 exposes (mined from `prisma-8-api.md`), plus every notable Prisma 7 feature Prisma 8 lacks, so that absences are named rather than silently missing. The **Prisma 8 evidence** column points only to Prisma 8 (TypeScript) test suites; Rust/engine tests and Prisma 7 tests are never cited here. When a cell is `🟡` the evidence is intentionally empty — that emptiness is what makes it untested rather than proven.
 
 The matrix is split by category across the [`scorecard/`](scorecard/) directory — this page is the index. Each category file is self-contained (it repeats the legend below) and holds that category's table(s) verbatim. Follow the links in the [Categories](#categories) section to reach a specific category.
 
 Legend:
 
-- `✅` **Works** — proven by a Prisma Next **integration** test (one that executes the feature against a database — Postgres via PGlite, SQLite via its real driver, or MongoDB via mongodb-memory-server — and asserts the observable runtime result). Unit-tier tests (SQL/AST/plan/type/snapshot assertions, or any test that never hits a database) do not qualify. Per-database rigor applies: a Postgres integration test cannot justify a SQLite or MongoDB `✅`, and vice versa.
-- `🟡` **Untested** — reachable through the Prisma Next public surface, but no proving Prisma Next integration test exists yet (evidence left blank). This includes features whose only backing is a unit-tier test.
-- `🧪` **Experimental** — shipped in Prisma Next but outside the stability promise (polymorphism / multi-table inheritance).
-- `❌` **Not in 8.0** — deliberately absent from Prisma Next.
+- `✅` **Works** — proven by a Prisma 8 **integration** test (one that executes the feature against a database — Postgres via PGlite, SQLite via its real driver, or MongoDB via mongodb-memory-server — and asserts the observable runtime result). Unit-tier tests (SQL/AST/plan/type/snapshot assertions, or any test that never hits a database) do not qualify. Per-database rigor applies: a Postgres integration test cannot justify a SQLite or MongoDB `✅`, and vice versa.
+- `🟡` **Untested** — reachable through the Prisma 8 public surface, but no proving Prisma 8 integration test exists yet (evidence left blank). This includes features whose only backing is a unit-tier test.
+- `🧪` **Experimental** — shipped in Prisma 8 but outside the stability promise (polymorphism / multi-table inheritance).
+- `❌` **Not in 8.0** — deliberately absent from Prisma 8.
 - `—` **n/a** — feature does not apply to that database.
 
 Each row names exactly one capability. Where an operator/command/stage set was previously bundled, it has been split so every distinct feature carries its own per-database verdict and its own evidence.

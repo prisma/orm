@@ -18,10 +18,10 @@ enum user_type {
 }
 
 enum Priority {
-  @@type("pg/text@1")
-  Low    = "low"
-  High   = "high"
-  Urgent = "urgent"
+  @@type("pg/int4@1")
+  Low    = 0
+  High   = 1
+  Urgent = 2
 }
 
 model User {

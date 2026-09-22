@@ -45,6 +45,39 @@ export type AuthoredIndexInput = AuthoredIndexElements &
     readonly name: string | undefined;
   };
 
+/**
+ * Narrows the opaque payload a contributed model attribute returns under
+ * `index` (see `AuthoringModelAttributeIndexOutput`). The framework hands the
+ * value through untyped because an index's shape belongs to the family; this
+ * is the SQL family's boundary check. It proves the structure only — the
+ * name/map and expression rules stay where `@@index` enforces them, in
+ * {@link lowerAuthoredIndex}.
+ */
+export function isAuthoredIndexInput(value: unknown): value is AuthoredIndexInput {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate: Record<string, unknown> = { ...value };
+  const hasExpression = typeof candidate['expression'] === 'string';
+  const hasColumns =
+    Array.isArray(candidate['columns']) &&
+    candidate['columns'].every((element) => typeof element === 'string');
+  if (hasExpression === hasColumns) return false;
+  if (!isOptionalString(candidate['where'])) return false;
+  if (!isOptionalString(candidate['map'])) return false;
+  if (!isOptionalString(candidate['name'])) return false;
+  if (candidate['unique'] !== undefined && typeof candidate['unique'] !== 'boolean') return false;
+  if (candidate['type'] === undefined) return candidate['options'] === undefined;
+  if (typeof candidate['type'] !== 'string') return false;
+  const options = candidate['options'];
+  return (
+    options === undefined ||
+    (typeof options === 'object' && options !== null && !Array.isArray(options))
+  );
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string';
+}
+
 const EXACT_NAME_BODY_PREAMBLE =
   "Drift detection compares the authored SQL text byte-for-byte against Postgres's reprinted form, which is only reliable when the text was captured by contract infer.";
 
@@ -55,11 +88,11 @@ const EXACT_NAME_BODY_PREAMBLE =
  */
 const EXACT_NAME_BODY_REMEDIATION = {
   index:
-    'For hand-authored definitions, use name: and let Prisma Next manage the physical name; to migrate an adopted object to wire naming, replace map: with name: (keeping the body text unchanged) and apply the resulting rename migration.',
+    'For hand-authored definitions, use name: and let Prisma 8 manage the physical name; to migrate an adopted object to wire naming, replace map: with name: (keeping the body text unchanged) and apply the resulting rename migration.',
   policy:
     "For hand-authored definitions, drop @@map and let the policy block's head name the policy; to migrate an adopted policy to wire naming, remove @@map (keeping the body text unchanged) and apply the resulting rename migration.",
   check:
-    'For hand-authored definitions, use name: and let Prisma Next manage the physical name; to migrate an adopted check to wire naming, replace map: with name: (keeping the body text unchanged) and apply the resulting rename migration.',
+    'For hand-authored definitions, use name: and let Prisma 8 manage the physical name; to migrate an adopted check to wire naming, replace map: with name: (keeping the body text unchanged) and apply the resulting rename migration.',
 } as const;
 
 /** What the user actually wrote, per subject: index and check `map:`, policy `@@map`. */

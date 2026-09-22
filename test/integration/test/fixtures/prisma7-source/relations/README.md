@@ -1,0 +1,5 @@
+# Prisma 7 relations fixture
+
+`schema.prisma` is `../supported/schema.prisma` reduced to the relation models (`User`, `Post`, `Tag`, `Profile`, `Settings`, `Composite`, `AuditLog`, `LegacyThing`, `Review`, `CompositeChild`, `Label`) and both enums, with every default (`@default(...)`, `@updatedAt`) and every `@@index` removed, and the `Scalars`, `NativeTypes`, `Timestamps`, `Defaults`, `MappedIndexes`, `NumberDefaults`, `ListDefaults`, and `TemporalDefaults` models dropped (with them their `@@unique([firstName, other])` and `@@index`). Within the retained models, keys, uniques (`Post.slug @unique`, `@@unique([title, category])`, and the rest), and relations are unchanged from `supported/`. It keeps the relation shapes apart from defaults and indexes, so a relation defect fails this test on its own. The full schema is verified by `supported-verify/`.
+
+There is no `migration.sql` here on purpose: the test applies `../supported/migration.sql`, the SQL Prisma 7.10.0 generated for the full schema, so the database is exactly what Prisma 7 builds. The interpreted contract verifies with zero findings.

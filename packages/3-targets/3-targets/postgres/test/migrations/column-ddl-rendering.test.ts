@@ -123,24 +123,62 @@ describe('resolveColumnTemporaryDefault', () => {
 });
 
 describe('renderColumnDefaultSql', () => {
+  const noHooks = new Map();
+
   it('renders an empty string when the diff node carries no resolved default', () => {
     const defaultNode = new SqlColumnDefaultIR({ raw: "'hello'::text" });
 
-    expect(renderColumnDefaultSql(defaultNode)).toBe('');
+    expect(renderColumnDefaultSql(defaultNode, noHooks)).toBe('');
   });
 
-  it('renders a DEFAULT clause using the native-type context for literal quoting', () => {
+  it('renders a DEFAULT clause for a scalar literal', () => {
     const defaultNode = new SqlColumnDefaultIR({
       resolved: { kind: 'literal', value: 'hello' },
       nativeTypeContext: 'text',
+      codecRef: { codecId: 'pg/text@1' },
+      codecBaseNativeType: 'text',
     });
 
-    expect(renderColumnDefaultSql(defaultNode)).toBe("DEFAULT 'hello'");
+    expect(renderColumnDefaultSql(defaultNode, noHooks)).toBe("DEFAULT 'hello'");
   });
 
-  it('renders a DEFAULT clause with an empty native-type context when none is stamped', () => {
-    const defaultNode = new SqlColumnDefaultIR({ resolved: { kind: 'literal', value: 42 } });
+  it('renders a DEFAULT clause for a number literal', () => {
+    const defaultNode = new SqlColumnDefaultIR({
+      resolved: { kind: 'literal', value: 42 },
+      nativeTypeContext: 'int4',
+      codecRef: { codecId: 'pg/int4@1' },
+      codecBaseNativeType: 'int4',
+    });
 
-    expect(renderColumnDefaultSql(defaultNode)).toBe('DEFAULT 42');
+    expect(renderColumnDefaultSql(defaultNode, noHooks)).toBe('DEFAULT 42');
+  });
+
+  it.each([
+    { typeName: 'order', cast: '"order"[]' },
+    { typeName: 'my enum', cast: '"my enum"[]' },
+    { typeName: 'my"enum', cast: '"my""enum"[]' },
+    { typeName: 'audit.AuditAction', cast: '"audit"."AuditAction"[]' },
+  ])(
+    'casts a list default of the enum $typeName to the column type as DDL writes it',
+    ({ typeName, cast }) => {
+      const defaultNode = new SqlColumnDefaultIR({
+        resolved: { kind: 'literal', value: ['asc'] },
+        nativeTypeContext: `${typeName}[]`,
+        many: true,
+        codecRef: { codecId: 'pg/enum@1', typeParams: { typeName }, many: true },
+        codecBaseNativeType: typeName,
+      });
+
+      expect(renderColumnDefaultSql(defaultNode, noHooks)).toBe(`DEFAULT ARRAY['asc']::${cast}`);
+    },
+  );
+
+  it('throws when a default to render carries no codec identity', () => {
+    const defaultNode = new SqlColumnDefaultIR({
+      resolved: { kind: 'literal', value: 42 },
+      nativeTypeContext: 'int4',
+    });
+
+    expect(() => renderColumnDefaultSql(defaultNode, noHooks)).toThrow(/carries no codec identity/);
   });
 });

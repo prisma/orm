@@ -1,0 +1,15 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id      Int    @id
+  liked   Post[]
+  written Post[]
+}
+
+model Post {
+  id     Int    @id
+  likers User[]
+  author User[]
+}

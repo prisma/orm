@@ -289,10 +289,47 @@ describe('SQL contract validators', () => {
       const invalid = modelWithRelation({
         to: { model: 'Child', namespace: UNBOUND_NAMESPACE_ID },
         cardinality: 'N:1',
+        nullable: false,
         on: { localFields: ['parentId'], targetFields: ['id'] },
         through,
       });
       expect(() => validateModel(invalid)).toThrow();
+    });
+
+    it.each(['N:1', '1:1'])('accepts a %s relation with or without nullable', (cardinality) => {
+      const withFlag = modelWithRelation({
+        to: { model: 'Child', namespace: UNBOUND_NAMESPACE_ID },
+        cardinality,
+        nullable: true,
+        on: { localFields: ['parentId'], targetFields: ['id'] },
+      });
+      expect(() => validateModel(withFlag)).not.toThrow();
+      const withoutFlag = modelWithRelation({
+        to: { model: 'Child', namespace: UNBOUND_NAMESPACE_ID },
+        cardinality,
+        on: { localFields: ['parentId'], targetFields: ['id'] },
+      });
+      expect(() => validateModel(withoutFlag)).not.toThrow();
+    });
+
+    it('rejects a non-boolean nullable on a to-one relation', () => {
+      const invalid = modelWithRelation({
+        to: { model: 'Child', namespace: UNBOUND_NAMESPACE_ID },
+        cardinality: 'N:1',
+        nullable: 'yes',
+        on: { localFields: ['parentId'], targetFields: ['id'] },
+      });
+      expect(() => validateModel(invalid)).toThrow(/nullable/);
+    });
+
+    it('rejects nullable on a 1:N relation', () => {
+      const invalid = modelWithRelation({
+        to: { model: 'Child', namespace: UNBOUND_NAMESPACE_ID },
+        cardinality: '1:N',
+        nullable: true,
+        on: { localFields: ['id'], targetFields: ['parentId'] },
+      });
+      expect(() => validateModel(invalid)).toThrow(/nullable/);
     });
   });
 
@@ -324,6 +361,193 @@ describe('SQL contract validators', () => {
         },
       });
       expect(() => validateSqlContractFully(c)).not.toThrow();
+    });
+
+    const toOneContract = (input: {
+      readonly relation: Partial<ContractRelation>;
+      readonly authorIdNullable: boolean;
+    }) =>
+      createContract<SqlStorage>({
+        storage: unboundTables({
+          post: table({
+            id: col('int4', 'pg/int4@1'),
+            author_id: col('int4', 'pg/int4@1', input.authorIdNullable),
+          }),
+          user: table({ id: col('int4', 'pg/int4@1') }),
+        }),
+        models: {
+          Post: contractModel(
+            'post',
+            { id: { column: 'id' }, authorId: { column: 'author_id' } },
+            {
+              author: blindCast<ContractRelation, 'test relation literal'>({
+                to: crossRef('User', UNBOUND_NAMESPACE_ID),
+                cardinality: 'N:1',
+                on: { localFields: ['authorId'], targetFields: ['id'] },
+                ...input.relation,
+              }),
+            },
+          ),
+          User: contractModel('user', { id: { column: 'id' } }),
+        },
+      });
+
+    describe('to-one relation nullability against storage', () => {
+      it.each([true, false])('accepts nullable: %s when the FK column agrees', (nullable) => {
+        const c = toOneContract({ relation: { nullable }, authorIdNullable: nullable });
+        expect(() => validateSqlContractFully(c)).not.toThrow();
+      });
+
+      it('rejects nullable: true over a NOT NULL FK column, naming the column', () => {
+        const c = toOneContract({ relation: { nullable: true }, authorIdNullable: false });
+        expect(() => validateSqlContractFully(c)).toThrow(
+          expect.objectContaining({
+            phase: 'storage',
+            message: expect.stringMatching(
+              /Relation "author" on model "__unbound__:Post" is nullable but every local FK column is NOT NULL.*"author_id"/,
+            ),
+          }),
+        );
+      });
+
+      it('rejects nullable: false over a nullable FK column, naming the column', () => {
+        const c = toOneContract({ relation: { nullable: false }, authorIdNullable: true });
+        expect(() => validateSqlContractFully(c)).toThrow(
+          expect.objectContaining({
+            phase: 'storage',
+            message: expect.stringMatching(
+              /Relation "author" on model "__unbound__:Post" is required but a local FK column is nullable.*"author_id"/,
+            ),
+          }),
+        );
+      });
+
+      it('leaves a relation without the flag to hydration', () => {
+        const c = toOneContract({ relation: {}, authorIdNullable: true });
+        expect(() => validateSqlContractFully(c)).not.toThrow();
+      });
+
+      const backSideContract = (
+        nullable: boolean,
+        layout: 'with-primary-keys' | 'no-primary-keys' = 'with-primary-keys',
+      ) =>
+        createContract<SqlStorage>({
+          storage: unboundTables({
+            user: table(
+              { id: col('int4', 'pg/int4@1') },
+              layout === 'with-primary-keys' ? { pk: pk('id') } : undefined,
+            ),
+            profile: table(
+              { id: col('int4', 'pg/int4@1'), user_id: col('int4', 'pg/int4@1') },
+              layout === 'with-primary-keys' ? { pk: pk('id') } : undefined,
+            ),
+          }),
+          models: {
+            User: contractModel(
+              'user',
+              { id: { column: 'id' } },
+              {
+                profile: blindCast<ContractRelation, 'test relation literal'>({
+                  to: crossRef('Profile', UNBOUND_NAMESPACE_ID),
+                  cardinality: '1:1',
+                  nullable,
+                  on: { localFields: ['id'], targetFields: ['userId'] },
+                }),
+              },
+            ),
+            Profile: contractModel('profile', {
+              id: { column: 'id' },
+              userId: { column: 'user_id' },
+            }),
+          },
+        });
+
+      it('accepts nullable: true on the 1:1 side whose local columns are its primary key', () => {
+        expect(() => validateSqlContractFully(backSideContract(true))).not.toThrow();
+      });
+
+      it('rejects nullable: false on the 1:1 side that does not own the foreign key', () => {
+        expect(() => validateSqlContractFully(backSideContract(false))).toThrow(
+          expect.objectContaining({
+            phase: 'storage',
+            message: expect.stringMatching(
+              /Relation "profile" on model "__unbound__:User" is required but does not own the foreign key/,
+            ),
+          }),
+        );
+      });
+
+      it('accepts nullable: true on a 1:1 side with no primary key and no foreign key', () => {
+        expect(() =>
+          validateSqlContractFully(backSideContract(true, 'no-primary-keys')),
+        ).not.toThrow();
+      });
+
+      it('rejects nullable: false on a 1:1 side with no primary key and no foreign key, naming the relation', () => {
+        expect(() => validateSqlContractFully(backSideContract(false, 'no-primary-keys'))).toThrow(
+          expect.objectContaining({
+            phase: 'storage',
+            message: expect.stringMatching(
+              /Relation "profile" on model "__unbound__:User" is required but does not own the foreign key/,
+            ),
+          }),
+        );
+      });
+
+      const owningOneToOneContract = (input: { nullable: boolean; userIdNullable: boolean }) =>
+        createContract<SqlStorage>({
+          storage: unboundTables({
+            user: table({ id: col('int4', 'pg/int4@1') }),
+            profile: table(
+              {
+                id: col('int4', 'pg/int4@1'),
+                user_id: col('int4', 'pg/int4@1', input.userIdNullable),
+              },
+              { fks: [fk('profile', ['user_id'], 'user', ['id'])] },
+            ),
+          }),
+          models: {
+            User: contractModel('user', { id: { column: 'id' } }),
+            Profile: contractModel(
+              'profile',
+              { id: { column: 'id' }, userId: { column: 'user_id' } },
+              {
+                user: blindCast<ContractRelation, 'test relation literal'>({
+                  to: crossRef('User', UNBOUND_NAMESPACE_ID),
+                  cardinality: '1:1',
+                  nullable: input.nullable,
+                  on: { localFields: ['userId'], targetFields: ['id'] },
+                }),
+              },
+            ),
+          },
+        });
+
+      it.each([true, false])(
+        'accepts nullable: %s on a 1:1 side whose foreign key column agrees',
+        (nullable) => {
+          expect(() =>
+            validateSqlContractFully(
+              owningOneToOneContract({ nullable, userIdNullable: nullable }),
+            ),
+          ).not.toThrow();
+        },
+      );
+
+      it('rejects nullable: true on a 1:1 side whose foreign key column is NOT NULL', () => {
+        expect(() =>
+          validateSqlContractFully(
+            owningOneToOneContract({ nullable: true, userIdNullable: false }),
+          ),
+        ).toThrow(
+          expect.objectContaining({
+            phase: 'storage',
+            message: expect.stringMatching(
+              /Relation "user" on model "__unbound__:Profile" is nullable but every local FK column is NOT NULL.*"user_id"/,
+            ),
+          }),
+        );
+      });
     });
 
     const manyToManyContract = (relationOverrides: {

@@ -39,6 +39,7 @@ import {
   postgresSqlTextDescriptor,
   postgresSqlVarcharDescriptor,
 } from './codecs';
+import { pgTimestamptzDateDescriptor } from './date-codecs';
 import {
   pgDateTemporalDescriptor,
   pgTimestampTemporalDescriptor,
@@ -79,6 +80,7 @@ export const codecDescriptorMap = {
   'date-string': pgDateStringDescriptor,
   'timestamp-string': pgTimestampStringDescriptor,
   'timestamptz-string': pgTimestamptzStringDescriptor,
+  'timestamptz-date': pgTimestamptzDateDescriptor,
   'time-string': pgTimeStringDescriptor,
   timetz: pgTimetzDescriptor,
   bool: pgBoolDescriptor,

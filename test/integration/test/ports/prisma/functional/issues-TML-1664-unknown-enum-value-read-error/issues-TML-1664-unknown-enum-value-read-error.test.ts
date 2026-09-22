@@ -17,13 +17,13 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres only).
 //
 // Subject: reading a row whose enum column contains a value the schema does not
-// know about surfaces a structured error (Prisma P2023 → prisma-next:
+// know about surfaces a structured error (Prisma P2023 → Prisma 8:
 // RUNTIME.DECODE_FAILED or a SqlQueryError).
 //
 // Setup: after schema push (native PG ENUM "Status"), ALTER TYPE Status ADD VALUE
 // 'UNKNOWN_TO_PRISMA', then INSERT a row with that value via raw SQL. Then read via ORM.
 //
-// In prisma-next, the pg/enum@1 codec is a text passthrough — decode() returns
+// In Prisma 8, the pg/enum@1 codec is a text passthrough — decode() returns
 // the wire string verbatim without validation against the known member set.
 // So 'UNKNOWN_TO_PRISMA' is returned as-is rather than rejected at decode time.
 // The TypeScript type for status is `'ACTIVE' | 'INACTIVE'` so the type does not
@@ -31,7 +31,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // This is a gap relative to Prisma's P2023 behaviour. The test is marked
 // it.fails: the faithful assertion (expects a structured error) does not
-// hold; prisma-next returns the row with the raw unknown string.
+// hold; Prisma 8 returns the row with the raw unknown string.
 //
 // Disposition:
 //   'returns a structured error when reading an enum value unknown to the schema'

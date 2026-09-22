@@ -6,16 +6,18 @@
 //   model Accommodation { id Bytes @id; name String; timeTables AccommodationTimeTable[] }
 //   model AccommodationTimeTable { id Bytes @id; accommodationId Bytes; accommodation Accommodation @relation(...) }
 //
-// prisma-next Bytes are Uint8Array on both input and output.
+// Prisma 8 Bytes are Uint8Array on both input and output.
 
 model Accommodation {
   id         Bytes                   @id
   name       String
   timeTables AccommodationTimeTable[]
+  @@map("accommodation")
 }
 
 model AccommodationTimeTable {
   id              Bytes         @id
   accommodationId Bytes
   accommodation   Accommodation @relation(fields: [accommodationId], references: [id])
+  @@map("accommodationTimeTable")
 }

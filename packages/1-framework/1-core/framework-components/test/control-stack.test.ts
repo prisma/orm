@@ -16,6 +16,7 @@ import {
 import type { Codec } from '../src/shared/codec';
 import type { AnyCodecDescriptor } from '../src/shared/codec-descriptor';
 import type { CodecLookup } from '../src/shared/codec-types';
+import { dataTypeId } from '../src/shared/data-type';
 import type { ComponentDescriptor } from '../src/shared/framework-components';
 import { isRuntimeError } from '../src/shared/runtime-error';
 
@@ -129,11 +130,13 @@ describe('assembleAuthoringContributions', () => {
   it('returns empty namespaces for descriptors without authoring', () => {
     const result = assembleAuthoringContributions([createDescriptor()]);
     expect(result).toEqual({
+      dataTypes: {},
       field: {},
       type: {},
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
+      attributeSpecs: { model: {}, field: {} },
     });
   });
 
@@ -721,6 +724,71 @@ describe('assembleAuthoringContributions', () => {
     ).toThrow(/Malformed authoring pslBlock contribution at "broken"/);
   });
 
+  it('keeps a pslBlockDescriptors entry that declares block attributes', () => {
+    const mapFactory = () => ({ level: 'block', name: 'map' });
+    const result = assembleAuthoringContributions([
+      createDescriptor({
+        authoring: {
+          entityTypes: {
+            foo: { kind: 'entity', discriminator: 'fake-foo', output: { factory: () => ({}) } },
+          },
+          pslBlockDescriptors: {
+            fooBlock: {
+              ...makeDeclarativePslBlockDescriptor('fake-foo'),
+              attributes: { map: mapFactory },
+            },
+          },
+        },
+      }),
+    ]);
+    expect(result.pslBlockDescriptors['fooBlock']).toMatchObject({
+      attributes: { map: mapFactory },
+    });
+  });
+
+  it.each([
+    ['an undefined factory', { map: undefined }],
+    ['a non-function factory', { map: 'map' }],
+  ])('rejects a pslBlockDescriptors entry whose attributes carries %s', (_label, attributes) => {
+    expect(() =>
+      assembleAuthoringContributions([
+        createDescriptor({
+          authoring: {
+            entityTypes: {
+              foo: { kind: 'entity', discriminator: 'fake-foo', output: { factory: () => ({}) } },
+            },
+            pslBlockDescriptors: {
+              fooBlock: {
+                ...makeDeclarativePslBlockDescriptor('fake-foo'),
+                attributes,
+              } as unknown as never,
+            },
+          },
+        }),
+      ]),
+    ).toThrow(/Malformed authoring pslBlock contribution at "fooBlock"/);
+  });
+
+  it('rejects a pslBlockDescriptors entry whose attributes is not a record', () => {
+    expect(() =>
+      assembleAuthoringContributions([
+        createDescriptor({
+          authoring: {
+            entityTypes: {
+              foo: { kind: 'entity', discriminator: 'fake-foo', output: { factory: () => ({}) } },
+            },
+            pslBlockDescriptors: {
+              fooBlock: {
+                ...makeDeclarativePslBlockDescriptor('fake-foo'),
+                attributes: 'map',
+              } as unknown as never,
+            },
+          },
+        }),
+      ]),
+    ).toThrow(/Malformed authoring pslBlock contribution at "fooBlock"/);
+  });
+
   it('descends into a pslBlockDescriptors sub-namespace whose key is "kind" or "discriminator" without triggering malformed check', () => {
     // A sub-namespace keyed "kind" or "discriminator" that does not itself
     // look like a descriptor must descend normally.
@@ -1082,6 +1150,7 @@ describe('extractCodecLookup', () => {
 
   const stubDescriptor = (id: string): AnyCodecDescriptor => ({
     codecId: id,
+    dataType: dataTypeId('demo/stub'),
     traits: [],
     targetTypes: [],
     paramsSchema: {
@@ -1337,11 +1406,13 @@ describe('createControlStack', () => {
     expect(state.queryOperationTypeImports).toEqual([]);
     expect(state.extensionIds).toEqual(['fam', 'tgt']);
     expect(state.authoringContributions).toEqual({
+      dataTypes: {},
       field: {},
       type: {},
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
+      attributeSpecs: { model: {}, field: {} },
     });
     expect(state.scalarTypes).toEqual([]);
   });

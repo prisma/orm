@@ -1,4 +1,5 @@
 import type { Client } from 'pg';
+import { types as pgTypes } from 'pg';
 import { describe, expect, it, vi } from 'vitest';
 import { PostgresControlDriver } from '../src/exports/control';
 
@@ -29,6 +30,27 @@ describe('@internal/driver-postgres control', () => {
 
     await driver.close();
     vi.doUnmock('pg');
+  });
+
+  it('queries arrays as raw text while preserving scalar parsers', async () => {
+    const query = vi.fn(
+      async (config: {
+        readonly text: string;
+        readonly values?: readonly unknown[];
+        readonly types?: {
+          readonly getTypeParser: (oid: number, format?: string) => (value: string) => unknown;
+        };
+      }) => {
+        expect(config.types?.getTypeParser(1009, 'text')('{a,b}')).toBe('{a,b}');
+        expect(config.types?.getTypeParser(1114, 'text')('2026-01-02 03:04:05')).toEqual(
+          pgTypes.getTypeParser(1114, 'text')('2026-01-02 03:04:05'),
+        );
+        return { rows: [{ name: 'appdb' }] };
+      },
+    );
+    const driver = new PostgresControlDriver({ query } as unknown as Client);
+
+    await expect(driver.query('select 1')).resolves.toEqual({ rows: [{ name: 'appdb' }] });
   });
 
   it('names the connected database', async () => {

@@ -10,7 +10,7 @@ import type { TargetId } from './code-templates';
  * Bumping a value here in isolation is **not** safe: edit the
  * corresponding target package's `package.json` first, then mirror
  * here. The scaffold's `.env.example` and the "Requirements" section
- * of `prisma-next.md` both read from this constant, so a stale value
+ * of `prisma-8.md` both read from this constant, so a stale value
  * lies to every freshly initialised user.
  */
 export const MIN_SERVER_VERSION: Record<TargetId, string> = {

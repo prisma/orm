@@ -38,6 +38,7 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  dataTypeId,
   voidParamsSchema,
 } from '../src/exports/codec';
 import type { PslExtensionBlock } from '../src/exports/psl-ast';
@@ -78,6 +79,7 @@ class StubStringCodec extends CodecImpl<'stub/string@1', readonly ['textual'], s
 }
 
 class StubStringDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = dataTypeId('stub/string');
   override readonly codecId = 'stub/string@1' as const;
   override readonly traits = ['textual'] as const;
   override readonly targetTypes = ['text'] as const;
@@ -127,6 +129,7 @@ function validNode(): PslExtensionBlock {
       using: { kind: 'value', raw: '"auth.uid() = user_id"', span: stubSpan() },
     },
     blockAttributes: [],
+    attributes: {},
   };
 }
 
@@ -511,6 +514,7 @@ describe('validateExtensionBlock', () => {
             target: { kind: 'ref', identifier: 'Post', span: stubSpan() },
           },
           blockAttributes: [],
+          attributes: {},
         };
 
         const diagnostics = validateExtensionBlock(
@@ -550,6 +554,7 @@ describe('validateExtensionBlock', () => {
             target: { kind: 'ref', identifier: 'Ghost', span: stubSpan() },
           },
           blockAttributes: [],
+          attributes: {},
         };
 
         const diagnostics = validateExtensionBlock(
@@ -638,6 +643,7 @@ describe('validateExtensionBlock', () => {
           },
         },
         blockAttributes: [],
+        attributes: {},
       };
 
       const diagnostics = validateExtensionBlock(node, listDescriptor, SOURCE_ID, codecLookup);
@@ -686,6 +692,7 @@ describe('validateExtensionBlock', () => {
           using: { kind: 'value', raw: 'not_quoted', span: stubSpan() },
         },
         blockAttributes: [],
+        attributes: {},
         // target (required) is missing
         // using (required) — present but invalid
       };

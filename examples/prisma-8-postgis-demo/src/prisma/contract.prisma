@@ -1,4 +1,4 @@
-// use prisma-next
+// use prisma-8
 
 types {
   // Geographic geometry — WGS84 (SRID 4326). Generates `geometry(Geometry, 4326)` in DDL

@@ -1,7 +1,4 @@
-import type {
-  ContractSourceDiagnostic,
-  ContractSourceDiagnosticSpan,
-} from '@internal/config/config-types';
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { ParseDiagnostic, Range, SourceFile } from '@internal/psl-parser/syntax';
 
 export const ParseDiagnosticSeverity = {
@@ -44,19 +41,9 @@ export function mapInterpreterDiagnostics(
     range:
       diagnostic.span === undefined
         ? documentStartRange
-        : pslSpanToRange(diagnostic.span, sourceFile),
+        : sourceFile.pslSpanToRange(diagnostic.span),
     message: diagnostic.message,
     code: diagnostic.code,
     severity: ParseDiagnosticSeverity.Error,
   }));
-}
-
-// Inverse of psl-parser's rangeToPslSpan, which derives every span position
-// from a source offset: recovering the 0-based LSP position from that same
-// offset round-trips exactly.
-function pslSpanToRange(span: ContractSourceDiagnosticSpan, sourceFile: SourceFile): Range {
-  return {
-    start: sourceFile.positionAt(span.start.offset),
-    end: sourceFile.positionAt(span.end.offset),
-  };
 }

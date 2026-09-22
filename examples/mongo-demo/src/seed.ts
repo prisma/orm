@@ -28,8 +28,8 @@ export async function seed(orm: Db['orm']) {
 
   await articles.createAll([
     {
-      title: 'Getting Started with Prisma Next',
-      content: 'Learn how to build contract-first data access layers with Prisma Next and MongoDB.',
+      title: 'Getting Started with Prisma 8',
+      content: 'Learn how to build contract-first data access layers with Prisma 8 and MongoDB.',
       summary: 'A comprehensive introduction to contract-first data layers.',
       authorId: alice._id,
       createdAt: new Date('2026-01-15'),
@@ -46,8 +46,8 @@ export async function seed(orm: Db['orm']) {
 
   await tutorials.createAll([
     {
-      title: 'Build a REST API with Prisma Next',
-      content: 'Step-by-step tutorial for building a REST API with Prisma Next and MongoDB.',
+      title: 'Build a REST API with Prisma 8',
+      content: 'Step-by-step tutorial for building a REST API with Prisma 8 and MongoDB.',
       difficulty: 'intermediate',
       duration: 45,
       authorId: bob._id,

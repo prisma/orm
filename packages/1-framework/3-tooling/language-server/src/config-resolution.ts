@@ -72,6 +72,10 @@ function pipelineInputsFromStack(stack: ControlStack): PipelineInputs {
   return {
     scalarTypes: [...stack.scalarTypes],
     pslBlockDescriptors: stack.authoringContributions.pslBlockDescriptors,
+    authoringContributions: stack.authoringContributions,
+    ...(stack.controlMutationDefaults === undefined
+      ? {}
+      : { controlMutationDefaults: stack.controlMutationDefaults }),
   };
 }
 
@@ -91,6 +95,7 @@ function resolveInterpretation(
       composedExtensionContracts: stack.extensionContracts,
       authoringContributions: stack.authoringContributions,
       codecLookup: stack.codecLookup,
+      dataTypeLookup: stack.dataTypeLookup,
       controlMutationDefaults: stack.controlMutationDefaults,
       resolvedInputs: [...inputs.uris()],
       capabilities: stack.capabilities,

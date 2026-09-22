@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -7,7 +7,7 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 // (postgres matrix entry).
 //
 // Upstream uses `where: { name }` as the conflict key (a @unique field).
-// prisma-next upsert() uses `conflictOn: { name }` to specify the unique
+// Prisma 8 upsert() uses `conflictOn: { name }` to specify the unique
 // constraint. Count checks use aggregate().
 
 describe('ports/prisma/functional/methods-upsert-simple', () => {

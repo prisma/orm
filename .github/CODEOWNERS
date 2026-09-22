@@ -1,4 +1,4 @@
-# Code owners for prisma-next.
+# Code owners for Prisma 8.
 #
 # Every PR auto-routes to @prisma/ORM-TS-Maintain for review. Branch
 # protection on `main` requires at least one approving review from a

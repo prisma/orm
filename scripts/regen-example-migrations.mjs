@@ -17,8 +17,8 @@
  *      to emit fresh `contract.json` + `contract.d.ts` for that migration's
  *      end state into a scratch directory, then writes them into the
  *      migrations-root-wide content-addressed store
- *      (`migrations/snapshots/<hex>/`, write-if-absent) under the freshly
- *      emitted hash. The predecessor's end state is already in the store
+ *      (`migrations/snapshots/<hex>/`) under the freshly emitted hash,
+ *      replacing an existing entry whose files no longer match the emit. The predecessor's end state is already in the store
  *      under its own hash (chain order guarantees it was written on the
  *      previous iteration), so there is nothing to copy for the start side.
  *   3. Rewrites the `endContract` / `startContract` (and `Contract as End` /
@@ -43,7 +43,7 @@
  *      canonical form is the committed shape).
  *
  * Idempotence: on a second run with no schema changes the emitted contract is
- * byte-identical to the store entry already on disk (write-if-absent is a
+ * byte-identical to the store entry already on disk (the refresh is a
  * no-op), so the specifier rewrite is a no-op and the tsx re-run produces no
  * diff.
  *
@@ -70,10 +70,8 @@ import {
   contractSnapshotJsonSpecifier,
   contractSnapshotTypesSpecifier,
 } from '@internal/framework-components/control';
-import {
-  snapshotsImportPathFrom,
-  writeContractSnapshot,
-} from '@internal/migration-tools/contract-snapshot-store';
+import { snapshotsImportPathFrom } from '@internal/migration-tools/contract-snapshot-store';
+import { refreshContractSnapshot } from './refresh-contract-snapshot.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const biome = join(repoRoot, 'node_modules', '.bin', 'biome');
@@ -306,13 +304,13 @@ function rewriteContractSnapshotSpecifiers(source, snapshotsImportPath, toHash, 
 function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
   if (contractFamily === 'sql') {
     return (
-      `import { defineConfig as engineDefineConfig } from '@prisma/cli-engine';\n` +
+      `import { definePrismaConfig } from '@prisma/cli-engine';\n` +
       `import { defineConfig } from '${frameworkConfigTypes}';\n` +
       `import { prismaContract } from '${sqlContractPslProvider}';\n` +
       `import postgresPackRef from '${targetPostgresPack}';\n` +
       `import { postgresCreateNamespace } from '${targetPostgresTypes}';\n` +
       `import realConfig from '${realConfigAbsPath}';\n\n` +
-      'export default engineDefineConfig({\n' +
+      'export default definePrismaConfig({\n' +
       '  orm: defineConfig({\n' +
       '    ...realConfig.orm,\n' +
       `    contract: prismaContract('${schemaSrc}', {\n` +
@@ -325,11 +323,11 @@ function buildTempConfigSource(schemaSrc, realConfigAbsPath, contractFamily) {
   }
   // Default: mongo
   return (
-    `import { defineConfig as engineDefineConfig } from '@prisma/cli-engine';\n` +
+    `import { definePrismaConfig } from '@prisma/cli-engine';\n` +
     `import { defineConfig } from '${frameworkConfigTypes}';\n` +
     `import { mongoContract } from '${mongoContractPslProvider}';\n` +
     `import realConfig from '${realConfigAbsPath}';\n\n` +
-    'export default engineDefineConfig({\n' +
+    'export default definePrismaConfig({\n' +
     '  orm: defineConfig({\n' +
     '    ...realConfig.orm,\n' +
     `    contract: mongoContract('${schemaSrc}'),\n` +
@@ -454,9 +452,9 @@ async function processMigration(
   } = emitMigrationContract(exampleDir, migrationDir, realConfigAbsPath, contractFamily);
 
   // The predecessor's end state (== this migration's start state) was
-  // already written to the store on the previous chain iteration;
-  // write-if-absent makes this call for `newHash` the only write needed.
-  await writeContractSnapshot(migrationsRootDir, newHash, { contractJson, contractDts });
+  // already written to the store on the previous chain iteration, so the
+  // entry for `newHash` is the only one this iteration has to refresh.
+  await refreshContractSnapshot(migrationsRootDir, newHash, { contractJson, contractDts });
 
   const migrationTsPath = join(migrationDir, 'migration.ts');
   if (!existsSync(migrationTsPath)) {

@@ -68,7 +68,7 @@ export function classifyPackage(pkgJson) {
   return null;
 }
 
-const REQUIRED_REPO_URL = 'https://github.com/prisma/prisma.git';
+const REQUIRED_REPO_URL = 'https://github.com/prisma/orm.git';
 
 /**
  * Classifies a publishable `package.json` against the repository rule.

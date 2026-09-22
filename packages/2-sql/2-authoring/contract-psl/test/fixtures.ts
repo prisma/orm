@@ -18,7 +18,6 @@ import {
   type PslExtensionBlock,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
   ControlMutationDefaultEntry,
@@ -28,20 +27,22 @@ import type {
 } from '@internal/framework-components/control';
 import type { FuncCallSig, SymbolTable } from '@internal/psl-parser';
 import {
+  blockAttribute,
   buildSymbolTable,
   int,
   num,
   oneOf,
   optional,
-  rangeToPslSpan,
   str,
 } from '@internal/psl-parser';
-import type { SourceFile } from '@internal/psl-parser/syntax';
+import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { postgresCodecLookup } from './fixture-codec-descriptors';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 
 function testEnumFactory(
   block: PslExtensionBlock,
@@ -162,6 +163,28 @@ function testEnumFactory(
   );
 }
 
+export const testEnumPslBlockDescriptor = {
+  kind: 'pslBlock' as const,
+  keyword: 'enum',
+  discriminator: 'enum',
+  name: { required: true },
+  parameters: {},
+  variadicParameters: true,
+  attributes: {
+    type: () =>
+      blockAttribute('type', {
+        documentation: 'Selects the storage codec for this enum.',
+        positional: [
+          {
+            key: 'codecId',
+            type: str(),
+            documentation: 'The fully qualified codec identifier for enum values.',
+          },
+        ],
+      }),
+  },
+};
+
 export const testEnumEntityContributions = {
   enum: {
     kind: 'entity' as const,
@@ -220,7 +243,7 @@ export function testRenderCheckExpressions(input: {
   readonly tableName: string;
   readonly columnName: string;
   readonly many: boolean;
-  readonly memberValues: readonly string[] | undefined;
+  readonly memberValues: readonly (string | number)[] | undefined;
 }): ReadonlyArray<{
   readonly kind: 'membership' | 'elementNotNull';
   readonly columnName: string;
@@ -233,12 +256,15 @@ export function testRenderCheckExpressions(input: {
   }> = [];
   const column = `"${input.columnName}"`;
   if (input.memberValues !== undefined) {
-    const members = input.memberValues.map((v) => `'${v}'`).join(', ');
+    const members = input.memberValues
+      .map((v) => (typeof v === 'number' ? String(v) : `'${v}'`))
+      .join(', ');
+    const arrayType = input.memberValues.every((v) => typeof v === 'number') ? 'numeric' : 'text';
     candidates.push({
       kind: 'membership',
       columnName: input.columnName,
       expression: input.many
-        ? `${column}::text[] <@ ARRAY[${members}]::text[]`
+        ? `${column}::${arrayType}[] <@ ARRAY[${members}]::${arrayType}[]`
         : `${column} IN (${members})`,
     });
   }
@@ -263,10 +289,7 @@ export const postgresTarget: TargetPackRef<'sql', 'postgres'> = {
 };
 
 /**
- * `postgresTarget` plus the check-rendering hook. Kept separate because
- * rendering a membership check for an int-backed enum throws
- * `CONTRACT.ENUM_INVALID` (numeric enums are not supported), and several tests
- * here author int-backed enums deliberately.
+ * `postgresTarget` plus the check-rendering hook for check emission tests.
  *
  * Not annotated `TargetPackRef`: `AuthoringContributions` deliberately does not
  * name the duck-typed hooks, so an annotated literal would reject the extra
@@ -410,10 +433,12 @@ export const postgresNativeScalarTypeDescriptors = collectScalarTypeConstructors
  * Controlled test-only descriptor — intentionally uses pg/vector@1 with maximum: 2000 rather than importing the real pgvector pack, so interpreter unit tests stay layer-isolated. Real-pack parity is covered by `test/integration/test/authoring/parity/ts-psl-parity.real-packs.test.ts`.
  */
 export const pgvectorAuthoringContributions = {
+  dataTypes: {},
   entityTypes: {},
   field: {},
   pslBlockDescriptors: {},
   modelAttributes: {},
+  attributeSpecs: { model: {}, field: {} },
   type: {
     ...postgresScalarAuthoringTypes,
     pgvector: {
@@ -439,7 +464,9 @@ export function buildSymbolTableInput(
     readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
   },
 ): {
+  document: DocumentAst;
   symbolTable: SymbolTable;
+  sources: PslSources;
   sourceFile: SourceFile;
   sourceId: string;
   seedDiagnostics: ContractSourceDiagnostic[];
@@ -447,20 +474,23 @@ export function buildSymbolTableInput(
 } {
   const sourceId = options?.sourceId ?? 'schema.prisma';
   const pslBlockDescriptors = options?.pslBlockDescriptors ?? {};
-  const { document, sourceFile } = parse(schema);
-  const { table, diagnostics } = buildSymbolTable({
-    document,
-    sourceFile,
+  const { document, sources } = parse(schema, sourceId);
+  const sourceFile = sources.sourceFileFor(document.syntax);
+  const { symbolTable, diagnostics } = buildSymbolTable({
+    documents: [document],
+    sources,
     pslBlockDescriptors,
   });
   const seedDiagnostics: ContractSourceDiagnostic[] = diagnostics.map((diagnostic) => ({
     code: diagnostic.code,
     message: diagnostic.message,
     sourceId,
-    span: rangeToPslSpan(diagnostic.range, sourceFile),
+    span: sourceFile.rangeToPslSpan(diagnostic.range),
   }));
   return {
-    symbolTable: table,
+    document,
+    symbolTable,
+    sources,
     sourceFile,
     sourceId,
     seedDiagnostics,
@@ -473,7 +503,9 @@ export function symbolTableInputFromParseArgs(args: {
   readonly sourceId?: string;
   readonly pslBlockDescriptors?: AuthoringPslBlockDescriptorNamespace;
 }): {
+  document: DocumentAst;
   symbolTable: SymbolTable;
+  sources: PslSources;
   sourceFile: SourceFile;
   sourceId: string;
   seedDiagnostics: ContractSourceDiagnostic[];
@@ -512,37 +544,7 @@ export const sqliteScalarColumnDescriptors = collectScalarTypeConstructors(
   sqliteScalarAuthoringTypes,
 );
 
-const targetTypesByCodecId: Record<string, readonly string[]> = {
-  'pg/text@1': ['text'],
-  'pg/int@1': ['int4'],
-  'pg/bool@1': ['bool'],
-  'pg/int4@1': ['int4'],
-  'pg/int8@1': ['int8'],
-  'pg/float8@1': ['float8'],
-  'pg/numeric@1': ['numeric'],
-  'pg/timestamptz-temporal@1': ['timestamptz'],
-  'pg/jsonb@1': ['jsonb'],
-  'pg/bytea@1': ['bytea'],
-  'sql/char@1': ['character'],
-  'sql/varchar@1': ['character varying'],
-  'pg/int2@1': ['int2'],
-  'pg/float4@1': ['float4'],
-  'pg/timestamp-temporal@1': ['timestamp'],
-  'pg/date-temporal@1': ['date'],
-  'pg/time-temporal@1': ['time'],
-  'pg/timetz@1': ['timetz'],
-  'pg/json@1': ['json'],
-  'pg/vector@1': ['vector'],
-};
-
-export const postgresCodecLookup: CodecLookup = {
-  get: (id: string) => {
-    if (!targetTypesByCodecId[id]) return undefined;
-    return { id } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => targetTypesByCodecId[id],
-  renderOutputTypeFor: () => undefined,
-};
+export { postgresCodecLookup } from './fixture-codec-descriptors';
 
 export function createPostgresTestContext(
   overrides?: Partial<ContractSourceContext>,
@@ -551,32 +553,68 @@ export function createPostgresTestContext(
     composedExtensions: [],
     composedExtensionContracts: new Map(),
     authoringContributions: {
+      dataTypes: fixtureDataTypeSupport.entries,
       field: {},
       type: postgresScalarAuthoringTypes,
       entityTypes: {},
       pslBlockDescriptors: {},
       modelAttributes: {},
+      attributeSpecs: { model: {}, field: {} },
       valueObjectStorageType: 'Jsonb',
     },
     codecLookup: postgresCodecLookup,
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     resolvedInputs: [],
     capabilities: { sql: { scalarList: true } },
     ...overrides,
   };
 }
 
-const nowSig: FuncCallSig = {};
-const autoincrementSig: FuncCallSig = {};
-const ulidSig: FuncCallSig = {};
+const nowSig: FuncCallSig = {
+  documentation: 'Uses the current database timestamp as the default value.',
+};
+const autoincrementSig: FuncCallSig = {
+  documentation: 'Generates an increasing integer value in the database.',
+};
+const ulidSig: FuncCallSig = { documentation: 'Generates a ULID when a value is not supplied.' };
 const uuidSig: FuncCallSig = {
-  positional: [{ key: 'version', type: optional(oneOf(num(4), num(7))) }],
+  documentation: 'Generates a UUID when a value is not supplied.',
+  positional: [
+    {
+      key: 'version',
+      type: optional(oneOf(num(4), num(7))),
+      documentation: 'The UUID version: `4` or `7`. Defaults to `4`.',
+    },
+  ],
 };
-const cuidSig: FuncCallSig = { positional: [{ key: 'version', type: num(2) }] };
+const cuidSig: FuncCallSig = {
+  documentation: 'Generates a CUID2 identifier when a value is not supplied.',
+  positional: [
+    { key: 'version', type: num(2), documentation: 'The CUID version. Only `2` is supported.' },
+  ],
+};
 const nanoidSig: FuncCallSig = {
-  positional: [{ key: 'size', type: optional(int({ min: 2, max: 255 })) }],
+  documentation: 'Generates a Nano ID when a value is not supplied.',
+  positional: [
+    {
+      key: 'size',
+      type: optional(int({ min: 2, max: 255 })),
+      documentation:
+        'The identifier length, from `2` through `255`. Omit to use the generator default.',
+    },
+  ],
 };
-const dbgeneratedSig: FuncCallSig = { positional: [{ key: 'expression', type: str() }] };
+const dbgeneratedSig: FuncCallSig = {
+  documentation: 'Uses a database SQL expression as the default value.',
+  positional: [
+    {
+      key: 'expression',
+      type: str(),
+      documentation: 'The nonempty SQL expression evaluated by the database.',
+    },
+  ],
+};
 
 export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefaults {
   return {
@@ -851,7 +889,7 @@ export const temporalConvenienceMirrors = {
       output: {
         codecId: 'pg/timestamptz-temporal@1',
         nativeType: 'timestamptz',
-        default: { kind: 'function', expression: 'now()' },
+        executionDefaults: { onCreate: TEMPORAL_MIRROR_NOW_PHASE },
       },
     },
     updatedAt: {
@@ -872,7 +910,7 @@ export const temporalConvenienceMirrors = {
       output: {
         codecId: 'sqlite/datetime@1',
         nativeType: 'text',
-        default: { kind: 'function', expression: 'now()' },
+        executionDefaults: { onCreate: TEMPORAL_MIRROR_NOW_PHASE },
       },
     },
     updatedAt: {

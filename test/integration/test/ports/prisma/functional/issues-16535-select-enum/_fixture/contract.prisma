@@ -5,7 +5,7 @@
 //   model User { id String @id; role UserRole }
 //   enum UserRole { ADMIN USER }
 //
-// prisma-next: text-backed enum uses @@type("pg/text@1").
+// Prisma 8: text-backed enum uses @@type("pg/text@1").
 
 enum UserRole {
   @@type("pg/text@1")
@@ -16,4 +16,5 @@ enum UserRole {
 model User {
   id   String   @id @default(cuid(2))
   role UserRole
+  @@map("user")
 }

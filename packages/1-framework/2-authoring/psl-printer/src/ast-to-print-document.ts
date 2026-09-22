@@ -23,7 +23,7 @@ import type { PrinterField, PrinterModel, PrinterNamedType } from './types';
 // `contract emit` to produce the canonical artifacts. The header invites that
 // workflow rather than warning against it.
 const DEFAULT_AST_PRINT_HEADER =
-  '// use prisma-next\n// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.';
+  '// use prisma-8\n// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.';
 
 export function astDocumentToPrintDocument(ast: PslDocumentAst): PrintDocument {
   // FK dependencies are resolved across the whole document — a model in one
@@ -145,8 +145,9 @@ function getPositionalStringArg(attr: PslAttribute, index: number): string | und
   const raw = positional[index]?.value.trim();
   if (!raw) return undefined;
   const m = raw.match(/^(['"])(.*)\1$/);
-  if (!m) return undefined;
-  return unescapePslString(m[2] as string);
+  const unescaped = m?.[2];
+  if (unescaped === undefined) return undefined;
+  return unescapePslString(unescaped);
 }
 
 /**
@@ -281,7 +282,7 @@ function buildModelFkDeps(
       const refModel = relationReferencedModel(field, modelNames);
       if (!refModel || refModel === m.name) continue;
       if (!hasFullRelation(field)) continue;
-      (deps.get(m.name) as Set<string>).add(refModel);
+      deps.get(m.name)?.add(refModel);
     }
   }
 

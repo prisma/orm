@@ -53,9 +53,3 @@ const kmsSecretCodec = mongoCodec({
 Codec bodies that ignore `ctx.signal` complete in the background (cooperative cancellation); aborts still surface to the caller as `RUNTIME.ABORTED`.
 
 See [ADR 204 — Single-Path Async Codec Runtime](../../../../docs/architecture%20docs/adrs/ADR%20204%20-%20Single-Path%20Async%20Codec%20Runtime.md) for the codec runtime's async boundary contract, and [ADR 207 — Codec call context: per-query `AbortSignal` and column metadata](../../../../docs/architecture%20docs/adrs/ADR%20207%20-%20Codec%20call%20context%20per-query%20AbortSignal%20and%20column%20metadata.md) for the per-call context shape.
-
-## Dependencies
-
-- **Depends on**: nothing (leaf package)
-- **Depended on by**:
-  - `@internal/adapter-mongo` (registers concrete codec implementations)

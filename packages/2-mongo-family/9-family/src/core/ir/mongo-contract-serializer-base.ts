@@ -1,4 +1,5 @@
 import { validateContractDomain } from '@internal/contract/validate-domain';
+import { withDerivedToOneRelationNullability } from '@internal/contract-authoring';
 import type { ContractSerializer } from '@internal/framework-components/control';
 import {
   type AnyEntityKindDescriptor,
@@ -9,6 +10,7 @@ import {
   type MongoContract,
   MongoContractSchema,
   type MongoNamespaceEntries,
+  resolveMongoToOneRelationFields,
   validateMongoStorage,
 } from '@internal/mongo-contract';
 import { mongoContractCanonicalizationHooks } from '@internal/mongo-contract/canonicalization-hooks';
@@ -39,6 +41,22 @@ import { type as arktypeType, type Type } from 'arktype';
  * can be `JSON.stringify`'d directly. Targets that need on-the-way-out
  * canonicalization override `serializeContract`.
  */
+/**
+ * A `contract.json` written before to-one relations recorded `nullable` (rc.9 and earlier)
+ * loads with the flag derived from the model: nullable when any local field is nullable or is
+ * not declared.
+ */
+function withMongoToOneRelationNullability(contract: MongoContract): MongoContract {
+  const domain = withDerivedToOneRelationNullability(contract.domain, ({ model, relation }) => {
+    const { ownsForeignKey, fields } = resolveMongoToOneRelationFields(model, relation);
+    return {
+      ownsReference: ownsForeignKey,
+      localFieldNullability: fields.map((field) => field.nullable),
+    };
+  });
+  return { ...contract, domain };
+}
+
 export abstract class MongoContractSerializerBase<TContract>
   implements ContractSerializer<TContract>
 {
@@ -75,6 +93,12 @@ export abstract class MongoContractSerializerBase<TContract>
    * than in the family-agnostic canonicalizer.
    */
   shouldPreserveEmpty = mongoContractCanonicalizationHooks.shouldPreserveEmpty;
+
+  // No hashCanonicalizationHooks: the Mongo emit pipeline hashes a projection
+  // of storage (`{ id, collections }` per namespace), not the persisted
+  // `{ id, entries: { collection } }` shape, so the published hash cannot be
+  // recomputed from a snapshot's content. Mongo snapshots therefore read
+  // without content verification until the hash covers the persisted shape.
 
   /**
    * Family-shared structural validation: parse against the Mongo
@@ -116,7 +140,9 @@ export abstract class MongoContractSerializerBase<TContract>
     // / `options`).
     const validatedShape = parsed as unknown as MongoContract;
 
-    const hydratedContract = this.hydrateMongoContract(validatedShape);
+    const hydratedContract = this.hydrateMongoContract(
+      withMongoToOneRelationNullability(validatedShape),
+    );
 
     validateContractDomain(hydratedContract);
     validateMongoStorage(hydratedContract);

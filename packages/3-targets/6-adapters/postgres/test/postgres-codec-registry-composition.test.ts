@@ -1,6 +1,9 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { AnyCodecDescriptor } from '@internal/framework-components/codec';
-import { voidParamsSchema } from '@internal/framework-components/codec';
+import type {
+  AnyCodecDescriptor,
+  AnyCodecDescriptorTemplate,
+} from '@internal/framework-components/codec';
+import { dataType, dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import type { RuntimeExtensionDescriptor } from '@internal/framework-components/execution';
 import {
@@ -39,6 +42,15 @@ import {
 } from './helpers/composed-adapter';
 import { defineTestCodec } from './test-codec';
 
+/** The data types the fixture codecs of one contribution represent, so assembly finds them. */
+/** A fixture codec's data type: its own id without the version. */
+const fixtureTypeId = (codecId: string) => dataTypeId(codecId.split('@')[0] ?? codecId);
+
+const fixtureDataTypes = (descriptors: readonly { readonly dataType?: string }[]) =>
+  [...new Set(descriptors.map((descriptor) => descriptor.dataType))]
+    .filter((id): id is string => id !== undefined)
+    .map((id) => dataType(id, {}));
+
 const contract = new SqlContractSerializer().deserializeContract({
   target: 'postgres',
   targetFamily: 'sql',
@@ -73,7 +85,7 @@ const contract = new SqlContractSerializer().deserializeContract({
   domain: applicationDomainOf({ models: {} }),
 }) as PostgresContract;
 
-function genericDescriptor(codecId: string): AnyCodecDescriptor {
+function genericDescriptor(codecId: string): AnyCodecDescriptorTemplate {
   const codec = defineTestCodec({
     typeId: codecId,
     encode: (value: JsonValue): JsonValue => value,
@@ -95,6 +107,7 @@ function postgresDescriptor(
   onProjection?: () => void,
 ): AnyPostgresCodecDescriptor {
   return postgresCodec(genericDescriptor(codecId), {
+    dataType: fixtureTypeId(codecId),
     nativeType: () => nativeType,
     jsonProjection(expression: ProjectionExpr): ProjectionExpr {
       onProjection?.();
@@ -113,7 +126,7 @@ function transformingPostgresDescriptor(
     encode: (value: string): string => `encoded:${value}`,
     decode: (wire: string): string => wire,
   });
-  const descriptor: AnyCodecDescriptor = {
+  const descriptor: AnyCodecDescriptorTemplate = {
     codecId,
     traits: ['equality'],
     targetTypes: [nativeType],
@@ -125,6 +138,7 @@ function transformingPostgresDescriptor(
     },
   };
   return postgresCodec(descriptor, {
+    dataType: fixtureTypeId(codecId),
     nativeType: () => nativeType,
     jsonProjection: (expression: ProjectionExpr) => expression,
   });
@@ -140,6 +154,7 @@ function runtimeExtension(
     version: '0.0.1',
     familyId: 'sql',
     targetId: 'postgres',
+    dataTypes: fixtureDataTypes(descriptors),
     types: { codecTypes: { codecDescriptors: descriptors } },
     create() {
       return { familyId: 'sql', targetId: 'postgres' };
@@ -157,6 +172,7 @@ function controlExtension(
     version: '0.0.1',
     familyId: 'sql',
     targetId: 'postgres',
+    dataTypes: fixtureDataTypes(descriptors),
     types: { codecTypes: { codecDescriptors: descriptors } },
     create() {
       return { familyId: 'sql', targetId: 'postgres' };
@@ -294,21 +310,26 @@ describe('PostgreSQL adapter codec registry composition', () => {
   });
 
   it('rejects raw, wrong-target, and malformed contributions before lowering on both planes', () => {
-    const raw = genericDescriptor('app/raw@1');
+    // Each carries a data type its contribution registers, so the descriptor-validity check is the
+    // only one that can fire.
+    const raw = { ...genericDescriptor('app/raw@1'), dataType: fixtureTypeId('app/raw@1') };
     const wrongTarget = {
       ...genericDescriptor('app/wrong-target@1'),
+      dataType: fixtureTypeId('app/wrong-target@1'),
       descriptorKind: 'sqlite-codec',
       nativeTypeFor: () => 'text',
       projectJson: (expression: ProjectionExpr) => expression,
     } as const;
     const malformed = {
       ...genericDescriptor('app/malformed@1'),
+      dataType: fixtureTypeId('app/malformed@1'),
       descriptorKind: 'postgres-codec',
       nativeTypeFor: () => 'text',
       projectJson: undefined,
     } as const;
 
-    for (const descriptor of [raw, wrongTarget, malformed]) {
+    const invalid = [raw, wrongTarget, malformed] as unknown as AnyCodecDescriptor[];
+    for (const descriptor of invalid) {
       expect(() =>
         createComposedPostgresAdapter({
           extensions: [runtimeExtension('invalid-runtime', [descriptor])],

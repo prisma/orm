@@ -1,6 +1,6 @@
 # @internal/sql-builder
 
-Type-safe SQL query builder for Prisma Next with runtime execution.
+Type-safe SQL query builder for Prisma 8 with runtime execution.
 
 ## Usage
 
@@ -51,11 +51,6 @@ const counts = await db.posts
   .having((_f, fns) => fns.gt(fns.count(), 1))
   .all();
 ```
-
-## Dependencies
-
-- `@internal/sql-relational-core` — AST nodes, execution context, query operation registry
-- `@internal/sql-runtime` — Runtime type for query execution
 
 ## Architecture
 

@@ -1,0 +1,32 @@
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String @id
+  nullable  Post[] @relation("SetNullOptionalRelation")
+  generated Post[] @relation("SetDefaultGenerator")
+}
+
+model Post {
+  id        Int    @id
+  a         String
+  nullable  User?  @relation("SetNullOptionalRelation", fields: [a], references: [id], onDelete: SetNull)
+  b         String @default(uuid())
+  generated User   @relation("SetDefaultGenerator", fields: [b], references: [id], onDelete: SetDefault)
+}
+
+model Team {
+  id      String
+  region  Int
+  members Member[]
+
+  @@id([id, region])
+}
+
+model Member {
+  id     Int    @id
+  teamId String @default(uuid())
+  region Int
+  team   Team   @relation(fields: [teamId, region], references: [id, region], onDelete: SetDefault)
+}

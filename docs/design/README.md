@@ -1,6 +1,6 @@
 # Design
 
-Durable design reference material for Prisma Next, organised per the `docs-framework` skill's layout. User-facing docs (onboarding, tutorials, the CLI reference, the glossary) derive from material here.
+Durable design reference material for Prisma 8, organised per the `docs-framework` skill's layout. User-facing docs (onboarding, tutorials, the CLI reference, the glossary) derive from material here.
 
 ## Current state
 

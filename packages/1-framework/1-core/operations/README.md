@@ -1,6 +1,6 @@
 # @internal/operations
 
-Target-neutral operation registry for Prisma Next.
+Target-neutral operation registry for Prisma 8.
 
 ## Overview
 
@@ -15,15 +15,6 @@ This package provides a generic, target-neutral operation registry. It's part of
   - `OperationDescriptor<T>`: Alias for the entry shape used at registration sites
   - `OperationDescriptors<T>`: `Readonly<Record<string, OperationDescriptor<T>>>` — the natural shape contributors return, where the record key IS the method name
   - `ParamSpec`: Describes an operation parameter (`codecId`, `nullable`), used for both arguments and return values
-
-## Dependencies
-
-
-- **Depends on**: Nothing (leaf package)
-- **Depended on by**:
-  - `@internal/sql-operations` (extends with SQL-specific lowering specs)
-  - `@internal/sql-relational-core` (imports `ParamSpec` for AST and type definitions)
-  - `@internal/sql-runtime`, `@internal/framework-components`, and other packages that build on the operation registry
 
 ## Architecture
 

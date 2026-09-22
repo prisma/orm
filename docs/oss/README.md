@@ -1,6 +1,6 @@
 # OSS posture
 
-This directory documents the **policies and posture** that govern Prisma Next as an open-source project — how decisions are made, how dependencies are managed, how releases are produced, and how external contributions are handled.
+This directory documents the **policies and posture** that govern Prisma 8 as an open-source project — how decisions are made, how dependencies are managed, how releases are produced, and how external contributions are handled.
 
 These pages are written for maintainers and curious contributors who want to understand the *reasoning* behind a policy, not just the rule itself. Audience-facing documents that GitHub surfaces by convention — [`CONTRIBUTING.md`](../../CONTRIBUTING.md), [`SECURITY.md`](../../SECURITY.md), [`CODE_OF_CONDUCT.md`](../../CODE_OF_CONDUCT.md), [`LICENSE`](../../LICENSE) — remain the primary entry points for their respective audiences. The pages here cross-reference those files; they don't duplicate them.
 
@@ -23,4 +23,4 @@ These pages are written for maintainers and curious contributors who want to und
 - [`supply-chain.md`](./supply-chain.md) — License declarations, NOTICE audit, npm provenance, Dependabot soak window.
 - [`ci-pipeline.md`](./ci-pipeline.md) — How PR CI builds once, caches deterministic tasks, and skips heavy work on inert diffs.
 - [`pr-triage.md`](./pr-triage.md) — Criteria for triaging external contributor PRs: fork-CI safety, version-line scope, direction fit, staleness, and the verdict vocabulary.
-- [`versioning.md`](./versioning.md) — Pre-1.0 cadence and breaking-change policy, lockstep contract (and what it means for skill/extension authors), dist-tag convention, release procedure.
+- [`versioning.md`](./versioning.md) — Release-candidate cadence and breaking-change policy, lockstep contract (and what it means for skill/extension authors), dist-tag convention, release procedure.

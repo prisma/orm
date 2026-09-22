@@ -7,6 +7,7 @@ import type {
   MongoCollection,
   MongoContractWithTypeMaps,
   MongoTypeMaps,
+  RelationKeys,
 } from '@prisma/orm-mongo/family-contract';
 import type {
   Contract as ContractType,
@@ -34,6 +35,20 @@ export type FieldInputTypes = {
     readonly Note: { readonly _id: CodecTypes['mongo/objectId@1']['input'] };
   };
 };
+
+export namespace Models {
+  export type unbound_Note = {
+    _id: CodecTypes['mongo/objectId@1']['output'];
+    readonly [RelationKeys]?: never;
+  };
+}
+
+export declare const models: {
+  __unbound__: {
+    Note: Models.unbound_Note;
+  };
+};
+
 export type TypeMaps = MongoTypeMaps<CodecTypes, FieldOutputTypes, FieldInputTypes>;
 
 type ContractBase = Omit<

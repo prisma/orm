@@ -7,7 +7,7 @@ import {
   runCheck,
 } from './validate-package-manifests.mjs';
 
-const REPO_URL = 'https://github.com/prisma/prisma.git';
+const REPO_URL = 'https://github.com/prisma/orm.git';
 
 function recorder() {
   const calls = [];

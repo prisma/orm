@@ -80,6 +80,7 @@ describe('mongo contract builder', () => {
         author: {
           to: crossRef('User'),
           cardinality: 'N:1',
+          nullable: false,
           on: {
             localFields: ['authorId'],
             targetFields: ['_id'],
@@ -89,6 +90,126 @@ describe('mongo contract builder', () => {
     });
     expect(contract.profileHash).toMatch(/^[a-f0-9]{64}$/);
     expect(contract.storage.storageHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  describe('to-one relation nullability', () => {
+    const User = model('User', {
+      collection: 'users',
+      fields: { _id: field.objectId() },
+    });
+
+    type ObjectIdField = ReturnType<typeof field.objectId>;
+    function postWith(
+      authorId: ObjectIdField | ReturnType<ObjectIdField['optional']>,
+      options: object,
+    ) {
+      const Post = model('Post', {
+        collection: 'posts',
+        fields: { _id: field.objectId(), authorId },
+        relations: {
+          author: rel.belongsTo(User, { from: 'authorId', to: User.ref('_id'), ...options }),
+        },
+      });
+      return defineContract({
+        family: mongoFamilyPack,
+        target: mongoTargetPack,
+        models: { User, Post },
+      });
+    }
+
+    function authorRelation(contract: ReturnType<typeof postWith>) {
+      return domainModelsAtDefaultNamespace(contract.domain)['Post']?.relations['author'];
+    }
+
+    it('belongsTo derives nullable from the local fields when no flag is given', () => {
+      expect(authorRelation(postWith(field.objectId(), {}))).toMatchObject({ nullable: false });
+      expect(authorRelation(postWith(field.objectId().optional(), {}))).toMatchObject({
+        nullable: true,
+      });
+    });
+
+    it('belongsTo records an explicit optional flag that agrees with the local fields', () => {
+      expect(
+        authorRelation(postWith(field.objectId().optional(), { optional: true })),
+      ).toMatchObject({ nullable: true });
+      expect(authorRelation(postWith(field.objectId(), { optional: false }))).toMatchObject({
+        nullable: false,
+      });
+    });
+
+    it('rejects an optional flag that contradicts the local fields', () => {
+      expect(() => postWith(field.objectId(), { optional: true })).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.RELATION_INVALID',
+          message: expect.stringContaining('Relation "Post.author" is optional'),
+        }),
+      );
+      expect(() => postWith(field.objectId().optional(), { optional: false })).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.RELATION_INVALID',
+          message: expect.stringContaining('Relation "Post.author" is required'),
+        }),
+      );
+    });
+
+    it('rejects a local field the model does not declare', () => {
+      expect(() => postWith(field.objectId(), { from: 'missingId' })).toThrow(
+        expect.objectContaining({
+          code: 'CONTRACT.RELATION_INVALID',
+          message:
+            'Relation "Post.author" joins on local field "missingId", which model "Post" does not declare',
+          meta: {
+            modelName: 'Post',
+            relationName: 'author',
+            fieldName: 'missingId',
+            reason: 'local-field-unknown',
+          },
+        }),
+      );
+    });
+
+    it('hasOne reference is always nullable; embeds and hasMany carry no flag', () => {
+      const Profile = model('Profile', {
+        collection: 'profiles',
+        fields: { _id: field.objectId(), userId: field.objectId() },
+      });
+      const Owner = model('Owner', {
+        collection: 'owners',
+        fields: { _id: field.objectId() },
+        relations: {
+          profile: rel.hasOne(Profile, { from: '_id', to: Profile.ref('userId') }),
+          profiles: rel.hasMany(Profile, { from: '_id', to: Profile.ref('userId') }),
+          home: rel.hasOne('Address'),
+          addresses: rel.hasMany('Address'),
+        },
+      });
+      const Address = model('Address', { owner: Owner, fields: { street: field.string() } });
+      const contract = defineContract({
+        family: mongoFamilyPack,
+        target: mongoTargetPack,
+        models: { Owner, Profile, Address },
+      });
+      expect(domainModelsAtDefaultNamespace(contract.domain)['Owner']?.relations).toMatchObject({
+        profile: { cardinality: '1:1', nullable: true },
+        profiles: expect.not.objectContaining({ nullable: expect.anything() }),
+        home: expect.not.objectContaining({ nullable: expect.anything() }),
+        addresses: expect.not.objectContaining({ nullable: expect.anything() }),
+      });
+    });
+
+    it('hasOne does not accept an optional flag', () => {
+      const Profile = model('Profile', {
+        collection: 'profiles',
+        fields: { _id: field.objectId(), userId: field.objectId() },
+      });
+      const relation = rel.hasOne(Profile, {
+        from: '_id',
+        to: Profile.ref('userId'),
+        // @ts-expect-error the side of a one-to-one relation without the foreign key is always nullable
+        optional: false,
+      });
+      expect(relation.__nullable).toBe(true);
+    });
   });
 
   it('supports owned models, polymorphism, and value objects', () => {

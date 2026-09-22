@@ -200,7 +200,7 @@ The split between **dev** and **deploy** semantics is a **Prisma-current innovat
 
 ### Fit to our model
 
-**The user's proposed `prisma-next migrate --db URL --to <ref>` is excellent vocabulary.**
+**The user's proposed `prisma migrate --db URL --to <ref>` is excellent vocabulary.**
 
 - `migrate` as a verb is **the most common forward-execution verb across the surveyed systems** (Rails, Django, Atlas, Prisma all use it).
 - `--db URL` parameterizes the target, matching Atlas's URL-as-first-class-target convention.
@@ -245,7 +245,7 @@ Atlas's parameterized model is the closer ancestor; we go one step further by gi
 
 **Reject the dev/deploy verb split.** `migrate --to <ref>` is the canonical and only forward-execution verb. `db update` (off-graph reconciliation, dev-only) and `migrate --to <ref>` (graph walk, environment-agnostic) are two different operations, not two flavors of one.
 
-The shadow-DB concept does not surface in our model at all: diffing is fully offline against on-disk contract snapshots, and no shadow database will ever exist (§ 7b).
+The shadow-DB concept does not surface in the core model: diffing is fully offline against on-disk contract snapshots, and the CLI never provisions a shadow database (§ 7b). Rehearsal against a fork of a real database is a database-extension preflight hook.
 
 ---
 
@@ -277,7 +277,7 @@ Most surveyed systems answer #1 implicitly (during apply) and #2 only via shadow
 
 ### Verdict
 
-**Adopt `db verify` as a first-class verb; reject sandbox preflight.** An earlier draft proposed `migration preflight <id>` (shadow-DB apply locally, PPg hosted). Rejected: diffing is fully offline against on-disk snapshots, and no shadow database will ever exist.
+**Adopt `db verify` as a first-class verb; reject sandbox preflight as a core verb.** An earlier draft proposed `migration preflight <id>` (shadow-DB apply locally, PPg hosted). Rejected from the core: diffing is fully offline against on-disk snapshots, and the CLI never provisions a shadow database. Preflight survives as a hook a database extension may provide.
 
 ---
 
@@ -310,7 +310,7 @@ Surveyed systems mostly handle #2 via a `--fake`-style flag bolted onto the appl
 Two explicit verbs, neither conflated with `migrate`:
 
 - **`db init`** — case #1. Lay down structure. Live, may mutate. Handles greenfield and brownfield-incremental.
-- **`db sign [<contract>]`** *(explicit: `db sign --contract <contract>`)* — case #2. **Verifies** that the live DB satisfies the contract, then writes the contract hash into the marker. **Refuses if it doesn't satisfy** (unlike `--fake`, which trusts the operator blindly). No structural mutation. Default with no argument: the current `contract.json`.
+- **`db sign [<contract>]`** *(explicit: `db sign --contract <contract>`)* — case #2. **Verifies** that the live DB satisfies the contract, then writes the contract hash into the marker and, by default, advances the `db` ref to it (`--no-advance-ref` skips the ref). **Refuses if it doesn't satisfy** (unlike `--fake`, which trusts the operator blindly). No structural mutation. Default with no argument: the current `contract.json`.
 
 ### Verdict
 
@@ -384,7 +384,7 @@ Our cyclic graph enables "rollback" as a forward-applied migration to a destinat
 
 **Closest analog: Atlas's `migrate diff`** (generate a migration file from a desired-state input). Prisma's `migrate dev` does the same thing implicitly. No surveyed system has a separate verb for "compute the canonical artifacts from authoring sources" the way we do.
 
-**Verdict:** "Emit" / "emission" is internally established and precise. For user-facing, `contract emit` is acceptable (Atlas / Prisma users will recognize the pattern from `migrate diff` / `migrate dev`). The dual emission paths — contract emission and migration self-emission — should be named consistently. `prisma-next migration plan` is the analog of `atlas migrate diff` and the right user-facing verb for *generating a migration package from a contract diff*.
+**Verdict:** "Emit" / "emission" is internally established and precise. For user-facing, `contract emit` is acceptable (Atlas / Prisma users will recognize the pattern from `migrate diff` / `migrate dev`). The dual emission paths — contract emission and migration self-emission — should be named consistently. `prisma migration plan` is the analog of `atlas migrate diff` and the right user-facing verb for *generating a migration package from a contract diff*.
 
 ---
 
@@ -413,12 +413,12 @@ The final step of the audit walks this table against every existing CLI command 
 | **contract spaces** | **Novel — keep** | Django's apps + Sqitch's foreign-project refs are closest analogs; neither is sufficient. |
 | **cyclic graph** | **Novel — don't expose** | Path-finding handles cycles internally; users see only refs and `migrate --to`. |
 | **emission** (canonical artifacts from authoring source) | **Adopt the underlying concept; keep `emit` as the verb** | Atlas's `migrate diff` is the closest analog. For migration source, use **`migration compile`** (TS → JSON) — `emit` reads wrong because `migration.ts` already *is* the migration. |
-| **shadow database** | **Reject** | Atlas and Prisma both rely on shadow DBs for diff safety. We never need one: every migration's bookend contracts are on-disk snapshots, so diffing is fully offline. No shadow database will ever exist. |
+| **shadow database** | **Reject (core)** | Atlas and Prisma both rely on shadow DBs for diff safety. We never need one for diffing: every migration's bookend contracts are on-disk snapshots, so diffing is fully offline, and the CLI never provisions a shadow database. Rehearsing a migration against a fork of a real database is a preflight hook a database extension may provide. |
 | **baseline** (the noun) | **Reject** | Atlas's baseline ≠ Prisma's baseline ≠ Django's `--fake-initial`. A migration from `∅` is just a regular migration. |
 
 ---
 
 ## See also
 
-- [`../../10-domains/migration/`](../../10-domains/migration/) — the Prisma Next migration domain model, which acts on the verdicts in this synthesis.
+- [`../../10-domains/migration/`](../../10-domains/migration/) — the Prisma 8 migration domain model, which acts on the verdicts in this synthesis.
 - [`./atlas.md`](./atlas.md), [`./active-record.md`](./active-record.md) — per-system vocabulary summaries this synthesis drew from.

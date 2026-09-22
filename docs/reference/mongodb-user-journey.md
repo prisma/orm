@@ -1,6 +1,6 @@
 # MongoDB User Journey
 
-A narrative walkthrough of a typical developer's experience using an ORM with MongoDB, highlighting the friction points that Prisma Next aims to solve. Based on input from MongoDB's Node.js Driver team.
+A narrative walkthrough of a typical developer's experience using an ORM with MongoDB, highlighting the friction points that Prisma 8 aims to solve. Based on input from MongoDB's Node.js Driver team.
 
 ---
 
@@ -32,7 +32,7 @@ The type-safe ORM client — the best part of the experience — couldn't help w
 
 ---
 
-## What this means for Prisma Next
+## What this means for Prisma 8
 
 The friction points map directly to PN's design priorities:
 

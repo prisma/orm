@@ -7,3 +7,4 @@ export {
   type InterpretPslDocumentToMongoContractInput,
   interpretPslDocumentToMongoContract,
 } from '../interpreter';
+export { mongoAttributeSpecs } from '../mongo-attribute-specs';

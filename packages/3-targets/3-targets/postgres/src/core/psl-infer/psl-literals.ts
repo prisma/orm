@@ -6,6 +6,7 @@ import type {
   PslFieldAttribute,
   PslSpan,
 } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 
 export const SYNTHETIC_SPAN: PslSpan = {
   start: { offset: 0, line: 1, column: 1 },
@@ -56,35 +57,6 @@ export function positionalArg(value: string): PslAttributeArgument {
 
 export function namedArg(name: string, value: string): PslAttributeArgument {
   return { kind: 'named', name, value, span: SYNTHETIC_SPAN };
-}
-
-export function escapePslString(value: string): string {
-  return value
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"')
-    .replace(/\n/g, '\\n')
-    .replace(/\r/g, '\\r');
-}
-
-/**
- * Formats a resolved literal-default array as PSL literal-list syntax
- * (`[1, 2, 3]`, `["a", "b"]`, `[]`). PSL's list-literal grammar only accepts
- * string/number/boolean elements, so any other element (e.g. `null`, a
- * nested array/object) makes the value unrepresentable and this returns
- * `undefined`.
- */
-export function formatPslListLiteralValue(elements: readonly unknown[]): string | undefined {
-  const parts: string[] = [];
-  for (const element of elements) {
-    if (typeof element === 'string') {
-      parts.push(`"${escapePslString(element)}"`);
-    } else if (typeof element === 'number' || typeof element === 'boolean') {
-      parts.push(String(element));
-    } else {
-      return undefined;
-    }
-  }
-  return `[${parts.join(', ')}]`;
 }
 
 /**

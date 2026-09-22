@@ -1,6 +1,6 @@
 # @internal/extension-paradedb
 
-ParadeDB full-text search extension pack for Prisma Next.
+ParadeDB full-text search extension pack for Prisma 8.
 
 ## Overview
 
@@ -13,12 +13,6 @@ The v1 surface covers the `key_field` storage parameter only. Per-field tokenize
 - **bm25 index registration**: declares a `'bm25'` entry via `defineIndexTypes()` carrying an arktype validator for the bm25 options shape
 - **Extension descriptor**: declares the `paradedb/bm25` capability for contract-level feature detection
 - **Pack ref export**: ships a pure `/pack` entrypoint for TypeScript contract authoring
-
-## Dependencies
-
-- **`@internal/sql-contract`**: index-type registry primitive
-- **`@internal/contract`** / **`@internal/contract-authoring`**: core contract types
-- **`arktype`**: option-shape validation
 
 ## Installation
 
@@ -89,4 +83,4 @@ See [ADR 212 — Contract spaces](../../../docs/architecture%20docs/adrs/ADR%202
 - [ParadeDB CREATE INDEX](https://docs.paradedb.com/documentation/indexing/create-index)
 - [ADR 210 — Index-type registry](../../../docs/architecture%20docs/adrs/ADR%20210%20-%20Index-type%20registry.md)
 - [ADR 212 — Contract spaces](../../../docs/architecture%20docs/adrs/ADR%20212%20-%20Contract%20spaces.md)
-- [Prisma Next Architecture Overview](../../../docs/Architecture%20Overview.md)
+- [Prisma 8 Architecture Overview](../../../docs/Architecture%20Overview.md)

@@ -1,6 +1,7 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import { isPlainRecord } from '@internal/contract/is-plain-record';
 import type { Contract } from '@internal/contract/types';
+import { withDerivedToOneRelationNullability } from '@internal/contract-authoring';
 import type { ContractSerializer } from '@internal/framework-components/control';
 import {
   type AnyEntityKindDescriptor,
@@ -11,6 +12,7 @@ import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonic
 import { composeSqlEntityKinds } from '@internal/sql-contract/entity-kinds';
 import {
   isMaterializedSqlNamespace,
+  type SqlModelStorage,
   type SqlNamespaceInput,
   SqlStorage,
   type SqlStorageInput,
@@ -18,6 +20,7 @@ import {
 } from '@internal/sql-contract/types';
 import {
   createSqlContractSchema,
+  resolveSqlToOneRelationStorage,
   validateSqlContractFully,
 } from '@internal/sql-contract/validators';
 import { blindCast } from '@internal/utils/casts';
@@ -35,6 +38,26 @@ const NamespaceRawSchema = type({
 });
 
 export type SqlEntityHydrationFactory = (entry: unknown) => unknown;
+
+/**
+ * A `contract.json` written before to-one relations recorded `nullable` (rc.9 and earlier)
+ * loads with the flag derived from storage: nullable when any local FK column is nullable or
+ * cannot be resolved.
+ */
+function withSqlToOneRelationNullability(contract: Contract<SqlStorage>): Contract<SqlStorage> {
+  const domain = withDerivedToOneRelationNullability(contract.domain, ({ model, relation }) => {
+    const storage = blindCast<
+      SqlModelStorage,
+      'validateSqlContractFully checked every model storage against the SQL model storage schema'
+    >(model.storage);
+    const { ownsForeignKey, columns } = resolveSqlToOneRelationStorage(contract, storage, relation);
+    return {
+      ownsReference: ownsForeignKey,
+      localFieldNullability: columns.map((column) => column.nullable),
+    };
+  });
+  return { ...contract, domain };
+}
 
 /**
  * SQL family `ContractSerializer` abstract base. Carries the SQL-shared
@@ -79,18 +102,26 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
   }
 
   deserializeContract<T extends TContract = TContract>(json: unknown): T {
-    const validated = this.parseSqlContractStructure(json);
+    const validated = withSqlToOneRelationNullability(this.parseSqlContractStructure(json));
     const hydrated = this.hydrateSqlStorage(validated);
-    return this.constructTargetContract(hydrated) as T;
+    return blindCast<
+      T,
+      'target serializer constructTargetContract returns the requested contract subtype'
+    >(this.constructTargetContract(hydrated));
   }
 
   serializeContract(contract: TContract): JsonObject {
-    return contract as unknown as JsonObject;
+    return blindCast<
+      JsonObject,
+      'SQL contract instances are JSON-clean envelopes and stringify to the persisted contract object'
+    >(contract);
   }
 
   shouldPreserveEmpty = sqlContractCanonicalizationHooks.shouldPreserveEmpty;
 
   sortStorage = sqlContractCanonicalizationHooks.sortStorage;
+
+  hashCanonicalizationHooks = sqlContractCanonicalizationHooks;
 
   protected parseSqlContractStructure(json: unknown): Contract<SqlStorage> {
     return validateSqlContractFully<Contract<SqlStorage>>(
@@ -198,7 +229,7 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
     if (typeof entry !== 'object' || entry === null) {
       return entry;
     }
-    const kind = (entry as { kind?: unknown }).kind;
+    const kind = isPlainRecord(entry) ? entry['kind'] : undefined;
     if (typeof kind !== 'string') {
       return entry;
     }
@@ -213,7 +244,10 @@ export abstract class SqlContractSerializerBase<TContract extends Contract<SqlSt
   }
 
   protected constructTargetContract(hydrated: Contract<SqlStorage>): TContract {
-    return hydrated as TContract;
+    return blindCast<
+      TContract,
+      'base serializer target contract type is the hydrated SQL contract unless a target override refines it'
+    >(hydrated);
   }
 
   /**

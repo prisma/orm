@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { setupIntegrationTest, timeouts } from './setup';
 
-describe('integration: ilike (adapter operation)', { timeout: timeouts.databaseOperation }, () => {
+describe('integration: ilike (target operation)', { timeout: timeouts.databaseOperation }, () => {
   const { db, runtime } = setupIntegrationTest();
 
   it('ilike filters case-insensitively in WHERE', async () => {
@@ -81,5 +81,94 @@ describe('integration: extension functions', { timeout: timeouts.databaseOperati
     );
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.some((r) => r.id === 1)).toBe(true);
+  });
+});
+
+describe('integration: full-text search', { timeout: timeouts.databaseOperation }, () => {
+  const { db, runtime } = setupIntegrationTest();
+
+  const idsMatching = async (query: string, language?: 'german') => {
+    const rows = await runtime().query(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) =>
+          language === undefined
+            ? fns.fullTextMatches(f.body, query)
+            : fns.fullTextMatches(f.body, query, { language }),
+        )
+        .build(),
+    );
+    return rows.map((row) => row.id).sort((a, b) => a - b);
+  };
+
+  it('fullTextMatches keeps rows containing the word and drops the rest', async () => {
+    expect(await idsMatching('alice')).toEqual([101, 102, 106]);
+  });
+
+  it('fullTextMatches on a quoted phrase requires the words to be adjacent', async () => {
+    expect(await idsMatching('"quick brown"')).toEqual([104]);
+  });
+
+  it('fullTextMatches excludes rows carrying a -prefixed word', async () => {
+    expect(await idsMatching('alice -manuscript')).toEqual([101, 102]);
+  });
+
+  it('fullTextMatches accepts a non-default language', async () => {
+    expect(await idsMatching('alice', 'german')).toEqual([101, 102, 106]);
+  });
+
+  it('fullTextRank ranks the row with more occurrences first', async () => {
+    const rows = await runtime().query(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, 'alice'))
+        .orderBy((f, fns) => fns.fullTextRank(f.body, 'alice'), { direction: 'desc' })
+        .build(),
+    );
+    expect(rows.map((row) => row.id)[0]).toBe(102);
+  });
+
+  it('fullTextHeadline takes the markers it is given', async () => {
+    const row = await runtime()
+      .query(
+        db()
+          .public.comments.select('id')
+          .select('snippet', (f, fns) =>
+            fns.fullTextHeadline(f.body, 'alice', { startSel: '<mark>', stopSel: '</mark>' }),
+          )
+          .where((f, fns) => fns.eq(f.id, 101))
+          .build(),
+      )
+      .firstOrThrow();
+    expect(row.snippet).toBe('<mark>alice</mark> wrote the report');
+  });
+
+  it('fullTextRank normalizes the score into (0, 1] when asked', async () => {
+    const rows = await runtime().query(
+      db()
+        .public.comments.select('id')
+        .select('rank', (f, fns) => fns.fullTextRank(f.body, 'alice', { normalization: 32 }))
+        .where((f, fns) => fns.fullTextMatches(f.body, 'alice'))
+        .build(),
+    );
+
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.rank).toBeGreaterThan(0);
+      expect(row.rank).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('fullTextHeadline marks the matched word up', async () => {
+    const row = await runtime()
+      .query(
+        db()
+          .public.comments.select('id')
+          .select('snippet', (f, fns) => fns.fullTextHeadline(f.body, 'alice'))
+          .where((f, fns) => fns.eq(f.id, 101))
+          .build(),
+      )
+      .firstOrThrow();
+    expect(row.snippet).toBe('<b>alice</b> wrote the report');
   });
 });

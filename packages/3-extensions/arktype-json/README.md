@@ -1,6 +1,6 @@
 # `@internal/extension-arktype-json`
 
-Per-library JSON-with-schema column factory for Prisma Next, built on [arktype](https://arktype.io). Ships the `arktypeJson(schema)` column-author helper and the `arktype/json@1` codec descriptor.
+Per-library JSON-with-schema column factory for Prisma 8, built on [arktype](https://arktype.io). Ships the `arktypeJson(schema)` column-author helper and the `arktype/json@1` codec descriptor.
 
 ## What it does
 

@@ -1,3 +1,4 @@
+import type { ColumnDefault, ColumnDefaultLiteralInputValue } from '@internal/contract/types';
 import type {
   DefaultMappingOptions,
   PslPrinterOptions,
@@ -13,6 +14,7 @@ import type {
   PslModelAttribute,
   PslTypeConstructorCall,
 } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 import {
   composeCheckWirePrefix,
   computeCheckContentHash,
@@ -21,6 +23,7 @@ import {
 import type { SqlColumnIR, SqlTableIR } from '@internal/sql-schema-ir/types';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresRenderCheckExpressions } from '../check-expressions';
+import { dataTypeForPrintedType, printedDefaultReadsBack } from './infer-default-codec';
 import { buildDanglingForeignKeyWarning, type DanglingForeignKeyInfo } from './infer-foreign-keys';
 import {
   buildCheckAttribute,
@@ -36,8 +39,6 @@ import {
   buildAttribute,
   buildMapAttribute,
   buildSimpleConstraintFieldAttribute,
-  escapePslString,
-  formatPslListLiteralValue,
   namedArg,
   parseColumnDefault,
   parseDefaultAttributeString,
@@ -277,43 +278,20 @@ function buildScalarField(
     attributes.push(buildSimpleConstraintFieldAttribute('id', singlePkConstraintName));
   }
 
-  if (
-    column.default === undefined &&
-    column.resolvedDefault?.kind === 'function' &&
-    column.resolvedDefault.expression === 'autoincrement()'
-  ) {
-    // An identity column: a `resolvedDefault` with no raw `default` is the
-    // only introspected shape the control adapter produces for
-    // `GENERATED ... AS IDENTITY` (Postgres reports no `column_default`;
-    // the adapter stamps `autoincrement()` directly). There is no
-    // `identity` field on the column IR — this pairing is the marker.
-    attributes.push(parseDefaultAttributeString('@default(autoincrement())'));
-  } else if (column.many === true && column.resolvedDefault?.kind === 'literal') {
-    // A list column's default must print from `resolvedDefault`: the raw SQL
-    // text (e.g. `'{}'::text[]`) only parses to `dbgenerated(...)`, which the
-    // interpreter rejects on a list column (lists accept literal defaults
-    // only). PSL literal-list elements are string/number/boolean only, so a
-    // resolved value holding anything else has no spelling — the default is
-    // then omitted, which verify reports as a live-only "extra", not a
-    // false mismatch.
-    const formatted = Array.isArray(column.resolvedDefault.value)
-      ? formatPslListLiteralValue(column.resolvedDefault.value)
-      : undefined;
-    if (formatted !== undefined) {
-      attributes.push(parseDefaultAttributeString(`@default(${formatted})`));
-    }
-  } else if (column.default !== undefined) {
-    const parsed = parseColumnDefault(column.default, column.nativeType, rawDefaultParser);
-    if (parsed) {
-      const result = mapDefault(parsed, defaultMapping);
-      if ('attribute' in result) {
-        attributes.push(parseDefaultAttributeString(result.attribute));
-      }
-      // 'comment' fallback (unrecognized raw default) is dropped — the
-      // M1 legacy path emitted a `// Raw default: ...` line above the field via
-      // `PrinterField.comment`. M2 drops this since it would require comment
-      // nodes in the AST.
-    }
+  const isEnumColumn = enumPslName !== undefined;
+  const defaultAttribute = inferDefaultAttribute(
+    column,
+    rawDefaultParser,
+    {
+      ...defaultMapping,
+      ...ifDefined('columnDataType', dataTypeForPrintedType(resolution.pslType.name, isEnumColumn)),
+      list: column.many === true,
+    },
+    (value) =>
+      printedDefaultReadsBack(value, resolution.pslType.name, isEnumColumn, column.many === true),
+  );
+  if (defaultAttribute !== undefined) {
+    attributes.push(parseDefaultAttributeString(defaultAttribute));
   }
 
   if (uniqueColumns.has(column.name) && !isId) {
@@ -360,6 +338,76 @@ function buildScalarField(
     attributes,
     span: SYNTHETIC_SPAN,
   };
+}
+
+/**
+ * A literal default prints as the PSL literal the column's data type takes. A literal that has no
+ * such PSL literal prints as `dbgenerated(...)` with the expression Postgres reported: `contract
+ * emit` accepts that on a scalar column and rejects it at the field on a list column.
+ */
+function inferDefaultAttribute(
+  column: SqlColumnIR,
+  rawDefaultParser: PslPrinterOptions['parseRawDefault'],
+  defaultMapping: DefaultMappingOptions,
+  readsBack: (value: ColumnDefaultLiteralInputValue) => boolean,
+): string | undefined {
+  if (
+    column.default === undefined &&
+    column.resolvedDefault?.kind === 'function' &&
+    column.resolvedDefault.expression === 'autoincrement()'
+  ) {
+    // An identity column: a `resolvedDefault` with no raw `default` is the
+    // only introspected shape the control adapter produces for
+    // `GENERATED ... AS IDENTITY` (Postgres reports no `column_default`;
+    // the adapter stamps `autoincrement()` directly). There is no
+    // `identity` field on the column IR — this pairing is the marker.
+    return '@default(autoincrement())';
+  }
+  if (column.many === true && column.resolvedDefault?.kind === 'literal') {
+    // A list column's literal default prints from `resolvedDefault`: the raw
+    // SQL text read against the element type only yields a function, which
+    // the interpreter rejects on a list column.
+    return Array.isArray(column.resolvedDefault.value)
+      ? literalOrRawAttribute(column.resolvedDefault, column, defaultMapping, readsBack)
+      : undefined;
+  }
+  const parsed = parseColumnDefault(column.default, column.nativeType, rawDefaultParser);
+  if (parsed === undefined) {
+    return undefined;
+  }
+  if (parsed.kind === 'literal') {
+    return literalOrRawAttribute(parsed, column, defaultMapping, readsBack);
+  }
+  return mappedAttribute(parsed, defaultMapping);
+}
+
+/**
+ * A literal no data type the column takes writes, or that the column's codec does not read back,
+ * has no PSL literal, so the raw database default prints instead.
+ */
+function literalOrRawAttribute(
+  columnDefault: ColumnDefault,
+  column: SqlColumnIR,
+  defaultMapping: DefaultMappingOptions,
+  readsBack: (value: ColumnDefaultLiteralInputValue) => boolean,
+): string | undefined {
+  const result =
+    columnDefault.kind === 'literal' && !readsBack(columnDefault.value)
+      ? { comment: '' }
+      : mapDefault(columnDefault, defaultMapping);
+  if ('attribute' in result) return result.attribute;
+  return typeof column.default === 'string'
+    ? mappedAttribute({ kind: 'function', expression: column.default }, defaultMapping)
+    : undefined;
+}
+
+/** A default the mapping can only describe in a comment is dropped: a field AST node has no comment. */
+function mappedAttribute(
+  columnDefault: ColumnDefault,
+  defaultMapping: DefaultMappingOptions | undefined,
+): string | undefined {
+  const result = mapDefault(columnDefault, defaultMapping);
+  return 'attribute' in result ? result.attribute : undefined;
 }
 
 export function buildRelationField(

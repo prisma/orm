@@ -189,7 +189,7 @@
     "execute": [
       {
         "description": "create table \"post\"",
-        "sql": "CREATE TABLE \"public\".\"post\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"embedding\" vector(1536),\n  \"id\" uuid NOT NULL,\n  \"priority\" text DEFAULT 'low' NOT NULL,\n  \"title\" text NOT NULL,\n  \"userId\" uuid NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"post_priority_check_09b41aa0\" CHECK (\"priority\" IN ('low', 'high', 'urgent'))\n)",
+        "sql": "CREATE TABLE \"public\".\"post\" (\n  \"createdAt\" timestamptz DEFAULT (now()) NOT NULL,\n  \"embedding\" vector(1536),\n  \"id\" uuid NOT NULL,\n  \"priority\" int4 DEFAULT 0 NOT NULL,\n  \"title\" text NOT NULL,\n  \"userId\" uuid NOT NULL,\n  PRIMARY KEY (\"id\"),\n  CONSTRAINT \"post_priority_check_b236ace9\" CHECK (\"priority\" IN (0, 1, 2))\n)",
         "params": []
       }
     ],

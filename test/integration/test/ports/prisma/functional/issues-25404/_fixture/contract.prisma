@@ -10,4 +10,5 @@
 model User {
   id   String @id
   memo String
+  @@map("user")
 }

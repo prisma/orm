@@ -145,12 +145,6 @@
       "plane": "migration"
     },
     {
-      "glob": "packages/9-public/prisma-next/**",
-      "domain": "framework",
-      "layer": "tooling",
-      "plane": "migration"
-    },
-    {
       "glob": "packages/1-framework/3-tooling/vite-plugin-contract-emit/**",
       "domain": "framework",
       "layer": "tooling",

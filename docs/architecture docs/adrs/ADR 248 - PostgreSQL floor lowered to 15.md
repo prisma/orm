@@ -66,5 +66,4 @@ If any of these becomes worth emitting, the path is per-server capability gating
 
 - Postgres 15 and 16 users are supported. The scaffold's `.env.example` and generated `prisma-next.md` now state "Requires PostgreSQL >= 15".
 - The `init --probe-db` warning threshold follows the mirror automatically.
-- The overdue minimum-version decision in `ROADMAP.md` is resolved; scoreboard verdicts for version-sensitive cells are unblocked.
 - The floor and the tested version now coincide, restoring ADR 222's governing principle in fact as well as in intent.

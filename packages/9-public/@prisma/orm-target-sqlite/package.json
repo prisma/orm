@@ -1,10 +1,10 @@
 {
   "name": "@prisma/orm-target-sqlite",
-  "version": "8.0.0-rc.7",
+  "version": "8.0.0-rc.11",
   "license": "Apache-2.0",
   "type": "module",
   "sideEffects": false,
-  "description": "Prisma Next SQLite target: target descriptor, adapter, driver",
+  "description": "Prisma 8 SQLite target: target descriptor, adapter, driver",
   "files": [
     "dist"
   ],
@@ -14,19 +14,19 @@
     "clean": "rm -rf dist src-gen"
   },
   "dependencies": {
-    "@prisma/orm-family-sql": "workspace:8.0.0-rc.7",
-    "@prisma/orm-framework": "workspace:8.0.0-rc.7",
-    "@prisma/orm-toolchain": "workspace:8.0.0-rc.7",
+    "@prisma/orm-family-sql": "workspace:8.0.0-rc.11",
+    "@prisma/orm-framework": "workspace:8.0.0-rc.11",
+    "@prisma/orm-toolchain": "workspace:8.0.0-rc.11",
     "@standard-schema/spec": "1.1.0",
     "arktype": "^2.2.2",
     "pathe": "^2.0.3"
   },
   "devDependencies": {
-    "@internal/adapter-sqlite": "workspace:8.0.0-rc.7",
-    "@internal/driver-sqlite": "workspace:8.0.0-rc.7",
-    "@internal/target-sqlite": "workspace:8.0.0-rc.7",
-    "@repo/tsconfig": "workspace:8.0.0-rc.7",
-    "@repo/tsdown": "workspace:8.0.0-rc.7",
+    "@internal/adapter-sqlite": "workspace:8.0.0-rc.11",
+    "@internal/driver-sqlite": "workspace:8.0.0-rc.11",
+    "@internal/target-sqlite": "workspace:8.0.0-rc.11",
+    "@repo/tsconfig": "workspace:8.0.0-rc.11",
+    "@repo/tsdown": "workspace:8.0.0-rc.11",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
@@ -59,6 +59,7 @@
     "./target/contract-free": "./dist/target__contract-free.mjs",
     "./target/control": "./dist/target__control.mjs",
     "./target/control-tables": "./dist/target__control-tables.mjs",
+    "./target/data-types": "./dist/target__data-types.mjs",
     "./target/ddl": "./dist/target__ddl.mjs",
     "./target/default-normalizer": "./dist/target__default-normalizer.mjs",
     "./target/migration": "./dist/target__migration.mjs",
@@ -75,7 +76,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/prisma/prisma.git",
+    "url": "https://github.com/prisma/orm.git",
     "directory": "packages/9-public/@prisma/orm-target-sqlite"
   }
 }

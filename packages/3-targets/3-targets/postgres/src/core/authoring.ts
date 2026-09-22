@@ -16,7 +16,17 @@ import type {
 } from '@internal/framework-components/authoring';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
-import { modelAttribute } from '@internal/psl-parser';
+import type { ModelAttributeSpecFactory } from '@internal/psl-parser';
+import {
+  blockAttribute,
+  fieldRef,
+  leafDiagnostic,
+  list,
+  modelAttribute,
+  oneOf,
+  optional,
+  str,
+} from '@internal/psl-parser';
 import type {
   EntityHandleLoweringInput,
   LoweredPackEntity,
@@ -26,12 +36,23 @@ import type {
 import { exactNameBodyWarning } from '@internal/sql-contract/index-naming';
 import type { SqlValueSetDerivingEntityTypeOutput } from '@internal/sql-contract/value-set-derivation-hook';
 import { assertWireNamePrefixLength, normalizeSqlBody } from '@internal/sql-schema-ir/naming';
-import { assertDefined } from '@internal/utils/assertions';
+import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
-import { PG_ENUM_CODEC_ID } from './codec-ids';
+import {
+  PG_ENUM_CODEC_ID,
+  PG_TIMESTAMP_STRING_CODEC_ID,
+  PG_TIMESTAMP_TEMPORAL_CODEC_ID,
+  PG_TIMESTAMPTZ_DATE_CODEC_ID,
+  PG_TIMESTAMPTZ_STRING_CODEC_ID,
+  PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
+} from './codec-ids';
 import { postgresError } from './errors';
-import { INSTANT_NOW_GENERATOR_ID } from './instant-now-generator';
+import {
+  isFullTextIndexableCodec,
+  renderFullTextIndexExpression,
+} from './full-text-index-expression';
+import { postgresNowGeneratorIds } from './now-generators';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
 import { PostgresRlsPolicy, type RlsPolicyOperation } from './postgres-rls-policy';
@@ -43,6 +64,11 @@ import {
   PostgresRoleSchema,
 } from './postgres-validators';
 import { computeContentHash, POLICY_OPERATION_PREDICATES } from './rls/canonicalize';
+import {
+  DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
+  type FullTextSearchLanguage,
+  POSTGRES_TEXT_SEARCH_LANGUAGES,
+} from './text-search-languages';
 
 // Contributed diagnostic codes, declared once as typed consts — the
 // `ContributedPslDiagnosticCode` type is the only thing enforcing the
@@ -52,7 +78,13 @@ import { computeContentHash, POLICY_OPERATION_PREDICATES } from './rls/canonical
 const PSL_RLS_PREDICATE_NOT_FOR_OPERATION: ContributedPslDiagnosticCode =
   'PSL_RLS_PREDICATE_NOT_FOR_OPERATION';
 const PSL_POLICY_INVALID_MAP: ContributedPslDiagnosticCode = 'PSL_POLICY_INVALID_MAP';
-const PSL_NATIVE_ENUM_INVALID_MAP: ContributedPslDiagnosticCode = 'PSL_NATIVE_ENUM_INVALID_MAP';
+const PSL_FULL_TEXT_INDEX_ONE_FIELD: ContributedPslDiagnosticCode = 'PSL_FULL_TEXT_INDEX_ONE_FIELD';
+const PSL_FULL_TEXT_INDEX_REQUIRES_NAME: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_REQUIRES_NAME';
+const PSL_FULL_TEXT_INDEX_NAME_XOR_MAP: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_NAME_XOR_MAP';
+const PSL_FULL_TEXT_INDEX_TEXT_FIELD: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_TEXT_FIELD';
 const PSL_NATIVE_ENUM_BARE_MEMBER: ContributedPslDiagnosticCode = 'PSL_NATIVE_ENUM_BARE_MEMBER';
 const PSL_EXTENSION_INVALID_VALUE: ContributedPslDiagnosticCode = 'PSL_EXTENSION_INVALID_VALUE';
 const PSL_NATIVE_ENUM_DUPLICATE_MEMBER_VALUE: ContributedPslDiagnosticCode =
@@ -73,6 +105,8 @@ const PSL_ROLE_BLOCK_OUTSIDE_UNBOUND_NAMESPACE: ContributedPslDiagnosticCode =
 export const postgresAuthoringTypes = {
   BigIntNumber: {
     kind: 'typeConstructor',
+    documentation:
+      'A PostgreSQL 64-bit integer represented as a JavaScript number within its safe integer range.',
     output: {
       codecId: 'pg/int8number@1',
       nativeType: 'int8',
@@ -80,6 +114,8 @@ export const postgresAuthoringTypes = {
   },
   UnboundedInt: {
     kind: 'typeConstructor',
+    documentation:
+      'An arbitrary-precision integer stored as PostgreSQL numeric and represented as bigint.',
     output: {
       codecId: 'pg/unboundedint@1',
       nativeType: 'numeric',
@@ -269,22 +305,10 @@ function lowerRlsPolicyFromBlock(
   // and no wire-prefix length cap (exact names are verbatim physical names,
   // same stance as index `map:`). The block head stays the source-level
   // logical identifier, so head-keyed duplicate checking is unchanged.
-  const mapAttr = block.blockAttributes.find((a) => a.name === 'map');
-  if (mapAttr) {
-    const rawArg = mapAttr.args[0]?.value;
-    const exactName =
-      rawArg?.startsWith('"') && rawArg.endsWith('"') && rawArg.length >= 2
-        ? unwrapQuotedString(rawArg)
-        : undefined;
-    if (exactName === undefined || exactName === '') {
-      ctx.diagnostics?.push({
-        code: PSL_POLICY_INVALID_MAP,
-        message: `\`${block.keyword}\` policy "${block.name}" @@map attribute must have a quoted, non-empty policy-name argument`,
-        sourceId: ctx.sourceId ?? 'unknown',
-        span: mapAttr.span,
-      });
-      return undefined;
-    }
+  const mapAttr = block.attributes['map'];
+  if (mapAttr !== undefined) {
+    const exactName = mapAttr.args['name'];
+    invariant(typeof exactName === 'string', '@@map on a policy block parses one string argument');
     ctx.warnings?.push(exactNameBodyWarning('policy', exactName));
     return new PostgresRlsPolicy({
       naming: { kind: 'exact', name: exactName },
@@ -327,20 +351,14 @@ function lowerNativeEnumFromBlock(
   const sourceId = ctx.sourceId ?? 'unknown';
   const diagnostics = ctx.diagnostics;
 
-  const mapAttr = block.blockAttributes.find((a) => a.name === 'map');
+  const mapAttr = block.attributes['map'];
   let typeName = block.name;
-  if (mapAttr) {
-    const rawArg = mapAttr.args[0]?.value;
-    const mapped = rawArg !== undefined ? unwrapQuotedString(rawArg) : undefined;
-    if (mapped === undefined) {
-      diagnostics?.push({
-        code: PSL_NATIVE_ENUM_INVALID_MAP,
-        message: `native_enum "${block.name}" @@map attribute must have a quoted type-name argument`,
-        sourceId,
-        span: mapAttr.span,
-      });
-      return undefined;
-    }
+  if (mapAttr !== undefined) {
+    const mapped = mapAttr.args['name'];
+    invariant(
+      typeof mapped === 'string',
+      '@@map on a native_enum block parses one string argument',
+    );
     typeName = mapped;
   }
 
@@ -516,20 +534,55 @@ export const postgresAuthoringEntityTypes = {
  */
 const policyTargetParam = {
   kind: 'ref',
+  documentation: 'The model protected by this policy; it must declare @@rls.',
   refKind: 'model',
   scope: 'same-namespace',
   required: true,
 } as const;
 const policyRolesParam = {
   kind: 'list',
+  documentation: 'The database roles to which this policy applies.',
   of: { kind: 'ref', refKind: 'role', scope: 'cross-space' },
 } as const;
-const policyPredicateParam = { kind: 'value', codecId: 'pg/text@1', required: true } as const;
-const policyPermissiveParam = { kind: 'value', codecId: 'pg/bool@1' } as const;
+const policyPredicateParam = {
+  kind: 'value',
+  codecId: 'pg/text@1',
+  required: true,
+  documentation: 'A SQL predicate controlling which rows this policy permits.',
+} as const;
+const policyPermissiveParam = {
+  kind: 'value',
+  codecId: 'pg/bool@1',
+  documentation:
+    'Whether the policy is permissive (combined with OR) rather than restrictive (combined with AND).',
+} as const;
 // A policy may only target an RLS-controlled model: the model named by
 // `target` must declare `@@rls`, or the load fails with a diagnostic naming
 // the model and the policy prefix.
 const policyRequiresRls = { parameter: 'target', attribute: 'rls' } as const;
+
+const policyMapAttribute = blockAttribute('map', {
+  documentation: 'Maps this row-level security policy to its PostgreSQL policy name.',
+  positional: [{ key: 'name', type: str(), documentation: 'The nonempty PostgreSQL policy name.' }],
+  refine: (parsed, ctx, attributeNode) =>
+    parsed.name === ''
+      ? [
+          leafDiagnostic(
+            ctx,
+            attributeNode,
+            '@@map policy name must be a non-empty string',
+            PSL_POLICY_INVALID_MAP,
+          ),
+        ]
+      : [],
+});
+
+const policyBlockAttributes = { map: () => policyMapAttribute };
+
+const nativeEnumMapAttribute = blockAttribute('map', {
+  documentation: 'Maps this native enum to its PostgreSQL type name.',
+  positional: [{ key: 'name', type: str(), documentation: 'The PostgreSQL enum type name.' }],
+});
 
 export const postgresAuthoringPslBlockDescriptors = {
   // The predicate param set per keyword mirrors Postgres: SELECT/DELETE take
@@ -541,6 +594,7 @@ export const postgresAuthoringPslBlockDescriptors = {
   policy_select: {
     kind: 'pslBlock',
     keyword: 'policy_select',
+    documentation: 'Defines a row-level security policy controlling which rows can be selected.',
     discriminator: 'policy',
     name: { required: true },
     parameters: {
@@ -550,10 +604,12 @@ export const postgresAuthoringPslBlockDescriptors = {
       permissive: policyPermissiveParam,
     },
     requiresModelAttribute: policyRequiresRls,
+    attributes: policyBlockAttributes,
   },
   policy_delete: {
     kind: 'pslBlock',
     keyword: 'policy_delete',
+    documentation: 'Defines a row-level security policy controlling which rows can be deleted.',
     discriminator: 'policy',
     name: { required: true },
     parameters: {
@@ -563,10 +619,12 @@ export const postgresAuthoringPslBlockDescriptors = {
       permissive: policyPermissiveParam,
     },
     requiresModelAttribute: policyRequiresRls,
+    attributes: policyBlockAttributes,
   },
   policy_insert: {
     kind: 'pslBlock',
     keyword: 'policy_insert',
+    documentation: 'Defines a row-level security policy checking rows being inserted.',
     discriminator: 'policy',
     name: { required: true },
     parameters: {
@@ -576,10 +634,13 @@ export const postgresAuthoringPslBlockDescriptors = {
       permissive: policyPermissiveParam,
     },
     requiresModelAttribute: policyRequiresRls,
+    attributes: policyBlockAttributes,
   },
   policy_update: {
     kind: 'pslBlock',
     keyword: 'policy_update',
+    documentation:
+      'Defines a row-level security policy controlling row visibility and checks for updates.',
     discriminator: 'policy',
     name: { required: true },
     parameters: {
@@ -590,10 +651,12 @@ export const postgresAuthoringPslBlockDescriptors = {
       permissive: policyPermissiveParam,
     },
     requiresModelAttribute: policyRequiresRls,
+    attributes: policyBlockAttributes,
   },
   policy_all: {
     kind: 'pslBlock',
     keyword: 'policy_all',
+    documentation: 'Defines a row-level security policy applying to all operations.',
     discriminator: 'policy',
     name: { required: true },
     parameters: {
@@ -604,6 +667,7 @@ export const postgresAuthoringPslBlockDescriptors = {
       permissive: policyPermissiveParam,
     },
     requiresModelAttribute: policyRequiresRls,
+    attributes: policyBlockAttributes,
   },
   /**
    * PSL block descriptor for `native_enum`.
@@ -618,10 +682,12 @@ export const postgresAuthoringPslBlockDescriptors = {
   native_enum: {
     kind: 'pslBlock',
     keyword: 'native_enum',
+    documentation: 'Defines a PostgreSQL enum type with named string-valued members.',
     discriminator: 'native_enum',
     name: { required: true },
     parameters: {},
     variadicParameters: true,
+    attributes: { map: () => nativeEnumMapAttribute },
   },
   /**
    * PSL block descriptor for `role` (e.g. `role anon {}`). Name-only, no
@@ -632,11 +698,98 @@ export const postgresAuthoringPslBlockDescriptors = {
   role: {
     kind: 'pslBlock',
     keyword: 'role',
+    documentation:
+      'Declares an existing database role in namespace unbound for use in security policies.',
     discriminator: 'role',
     name: { required: true },
     parameters: {},
   },
 } as const satisfies AuthoringPslBlockDescriptorNamespace;
+
+const postgresRlsSpec = modelAttribute('rls', {
+  documentation: 'Enables PostgreSQL row-level security on this model’s table.',
+});
+
+const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
+
+const [firstLanguage, ...remainingLanguages] = POSTGRES_TEXT_SEARCH_LANGUAGES;
+
+const postgresFullTextIndexSpec = modelAttribute('fullTextIndex', {
+  documentation:
+    'Indexes one text column for full-text search, rendering the expression `fullTextMatches`, `fullTextRank` and `fullTextHeadline` lower to.',
+  positional: [
+    {
+      key: 'fields',
+      type: list(fieldRef(), { allowEmpty: false, unique: true }),
+      documentation: 'The single field to index.',
+    },
+  ],
+  named: {
+    language: {
+      type: optional(
+        oneOf(str(firstLanguage), ...remainingLanguages.map((language) => str(language))),
+      ),
+      documentation:
+        'The text-search configuration. Defaults to `english`, and must match the language the query operations are given.',
+    },
+    name: {
+      type: optional(str()),
+      documentation: 'The index name. Mutually exclusive with `map`.',
+    },
+    map: {
+      type: optional(str()),
+      documentation: 'The database index name. Mutually exclusive with `name`.',
+    },
+    where: {
+      type: optional(str()),
+      documentation: 'The SQL predicate restricting rows included in a partial index.',
+    },
+  },
+  refine: (value, ctx, attributeNode) => {
+    const diagnostics = [];
+    if (value.fields.length !== 1) {
+      diagnostics.push(
+        leafDiagnostic(
+          ctx,
+          attributeNode,
+          'The full-text operations work on one column; declare one `@@fullTextIndex` per column',
+          PSL_FULL_TEXT_INDEX_ONE_FIELD,
+        ),
+      );
+    }
+    if (value.name === undefined && value.map === undefined) {
+      diagnostics.push(
+        leafDiagnostic(
+          ctx,
+          attributeNode,
+          '`@@fullTextIndex` requires a `name` or `map` argument (a default name cannot be derived from an expression)',
+          PSL_FULL_TEXT_INDEX_REQUIRES_NAME,
+        ),
+      );
+    }
+    if (value.name !== undefined && value.map !== undefined) {
+      diagnostics.push(
+        leafDiagnostic(
+          ctx,
+          attributeNode,
+          '`@@fullTextIndex` takes at most one of `name` and `map`',
+          PSL_FULL_TEXT_INDEX_NAME_XOR_MAP,
+        ),
+      );
+    }
+    return diagnostics;
+  },
+});
+
+const postgresFullTextIndexSpecFactory: ModelAttributeSpecFactory = () => postgresFullTextIndexSpec;
+
+type PostgresFullTextIndexParsed = {
+  readonly fields: readonly string[];
+  readonly language?: FullTextSearchLanguage;
+  readonly name?: string;
+  readonly map?: string;
+  readonly where?: string;
+};
 
 /**
  * `@@` model attributes contributed by the Postgres target pack.
@@ -651,7 +804,7 @@ export const postgresAuthoringModelAttributes = {
   rls: {
     kind: 'modelAttribute',
     attribute: 'rls',
-    spec: modelAttribute('rls', {}),
+    spec: postgresRlsSpecFactory,
     lower: (_parsed: Record<never, never>, ctx: AuthoringModelAttributeContext) => ({
       key: ctx.storageName,
       entity: new PostgresRlsEnablement({
@@ -659,6 +812,45 @@ export const postgresAuthoringModelAttributes = {
         namespaceId: ctx.namespaceId,
       }),
     }),
+  },
+  fullTextIndex: {
+    kind: 'modelAttribute',
+    attribute: 'fullTextIndex',
+    spec: postgresFullTextIndexSpecFactory,
+    repeatable: true,
+    lower: (parsed: PostgresFullTextIndexParsed, ctx: AuthoringModelAttributeContext) => {
+      const fieldName = parsed.fields[0];
+      invariant(
+        fieldName !== undefined && parsed.fields.length === 1,
+        `@@fullTextIndex on "${ctx.modelName}" lowered with ${parsed.fields.length} fields`,
+      );
+      const columnName = ctx.fieldStorageName(fieldName);
+      const codecId = ctx.fieldCodecId(fieldName);
+      // A relation field parses as a field reference but stores no value, so it
+      // reaches here with neither a column nor a codec.
+      if (columnName === undefined || codecId === undefined || !isFullTextIndexableCodec(codecId)) {
+        ctx.diagnostics?.push({
+          code: PSL_FULL_TEXT_INDEX_TEXT_FIELD,
+          message: `\`@@fullTextIndex\` indexes a text column, but "${ctx.modelName}.${fieldName}" is ${codecId === undefined ? 'not a stored scalar field' : `stored as \`${codecId}\``}.`,
+          sourceId: ctx.sourceId ?? 'unknown',
+        });
+        return undefined;
+      }
+      return {
+        index: {
+          expression: renderFullTextIndexExpression(
+            parsed.language ?? DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
+            columnName,
+          ),
+          type: 'gin',
+          options: undefined,
+          where: parsed.where,
+          unique: undefined,
+          name: parsed.name,
+          map: parsed.map,
+        },
+      };
+    },
   },
 } as const satisfies AuthoringModelAttributeDescriptorNamespace;
 
@@ -727,32 +919,50 @@ export const postgresAuthoringFieldPresets = {
     },
   },
   temporal: {
-    .../* @__PURE__ */ temporalAuthoringPresets({
-      codecId: 'pg/timestamptz-temporal@1',
+    createdAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
+      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
       nativeType: 'timestamptz',
-      generatorId: INSTANT_NOW_GENERATOR_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
+    }).createdAt,
+    updatedAtJsDate: /* @__PURE__ */ temporalAuthoringPresets({
+      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
+      nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
+    }).updatedAt,
+    timestamptzJsDate: /* @__PURE__ */ temporalCodecPresetWithPrecision({
+      codecId: PG_TIMESTAMPTZ_DATE_CODEC_ID,
+      nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_DATE_CODEC_ID],
+    }),
+    .../* @__PURE__ */ temporalAuthoringPresets({
+      codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
+      nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID],
     }),
     .../* @__PURE__ */ temporalStringAuthoringPresets({
-      codecId: 'pg/timestamptz-string@1',
+      codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
       nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
     }),
     timestamp: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamp-temporal@1',
+      codecId: PG_TIMESTAMP_TEMPORAL_CODEC_ID,
       nativeType: 'timestamp',
-      generatorId: INSTANT_NOW_GENERATOR_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMP_TEMPORAL_CODEC_ID],
     }),
     timestamptz: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamptz-temporal@1',
+      codecId: PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
       nativeType: 'timestamptz',
-      generatorId: INSTANT_NOW_GENERATOR_ID,
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID],
     }),
     timestampString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamp-string@1',
+      codecId: PG_TIMESTAMP_STRING_CODEC_ID,
       nativeType: 'timestamp',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMP_STRING_CODEC_ID],
     }),
     timestamptzString: /* @__PURE__ */ temporalCodecPresetWithPrecision({
-      codecId: 'pg/timestamptz-string@1',
+      codecId: PG_TIMESTAMPTZ_STRING_CODEC_ID,
       nativeType: 'timestamptz',
+      generatorId: postgresNowGeneratorIds[PG_TIMESTAMPTZ_STRING_CODEC_ID],
     }),
   },
   uuidNative: {

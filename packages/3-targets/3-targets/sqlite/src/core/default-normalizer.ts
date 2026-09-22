@@ -90,3 +90,19 @@ export function parseSqliteDefault(
   // Unrecognized expression — preserve as function
   return { kind: 'function', expression: trimmed };
 }
+
+/**
+ * The contract-derived side of verify: an authored function default is read
+ * through the same parser as an introspected one, so `` sql`CURRENT_TIMESTAMP` ``
+ * and the database's `CURRENT_TIMESTAMP` compare equal. Mirrors Postgres's
+ * `postgresResolveDefault`.
+ */
+export function sqliteResolveDefault(
+  def: ColumnDefault,
+  resolvedNativeType: string,
+): ColumnDefault {
+  if (def.kind !== 'function') {
+    return def;
+  }
+  return parseSqliteDefault(def.expression, resolvedNativeType) ?? def;
+}

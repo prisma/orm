@@ -20,11 +20,11 @@
 // Subject: creating a record with a @map'd enum value works (enum member names differ
 // from their DB-level values).
 //
-// In prisma-next PSL, native_enum member values (right-hand side of =) are the PG
+// In Prisma 8 PSL, native_enum member values (right-hand side of =) are the PG
 // enum labels stored in the database. The faithful translation uses the mapped
 // (lowercase) values so the DB schema matches the upstream schema exactly.
 //
-// NOTE: prisma-next's pg/enum@1 codec returns the PG label verbatim, so a read
+// NOTE: Prisma 8's pg/enum@1 codec returns the PG label verbatim, so a read
 // of status after creating with "pending" returns "pending", not "PENDING". The
 // upstream test asserts `status === 'PENDING'` (the TS enum name). This is the
 // faithfully-ported but failing test — marked it.fails in the test file.

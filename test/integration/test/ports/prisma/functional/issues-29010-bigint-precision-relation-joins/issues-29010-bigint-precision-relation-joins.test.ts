@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { timeouts, withPostgresPort } from '../../../_harness/postgres';
+import { timeouts, withPostgresPort } from '../../../../_harness/postgres';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
@@ -9,10 +9,10 @@ import contractJson from './_fixture/generated/contract.json' with { type: 'json
 //
 // Subject: BigInt ids that exceed Number.MAX_SAFE_INTEGER keep precision when
 // returned via relation-join (include) queries. Upstream pins
-// `relationLoadStrategy: 'join'`; prisma-next has no strategy selector, and
+// `relationLoadStrategy: 'join'`; Prisma 8 has no strategy selector, and
 // `.include()` is its relation-join read, so the subject ports onto `.include()`.
 //
-// prisma-next pg/int8@1 carries `bigint` application values, so the upstream
+// Prisma 8 pg/int8@1 carries `bigint` application values, so the upstream
 // BigInt ids and their assertions port across directly. Both tests were
 // `it.fails` while int8 read back through the include path as an imprecise
 // float64; lossless JSON projection (#29844) closed that gap.
@@ -60,9 +60,9 @@ describe('ports/prisma/functional/issues-29010-bigint-precision-relation-joins',
         expect(post).not.toBeNull();
         expect(post!.id).toBe(POST_ID);
         expect(post!.authorId).toBe(USER_ID);
-        expect(post!.author['id']).toBe(USER_ID);
-        expect(post!.author.posts).toHaveLength(1);
-        expect(post!.author.posts[0]!['id']).toBe(POST_ID);
+        expect(post!.author!['id']).toBe(USER_ID);
+        expect(post!.author!.posts).toHaveLength(1);
+        expect(post!.author!.posts[0]!['id']).toBe(POST_ID);
       }),
     timeouts.spinUpPpgDev,
   );

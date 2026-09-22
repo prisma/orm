@@ -16,12 +16,13 @@
 //   }
 //
 // Issue: Prisma codegen produced an args type named `CharacterInfoEntryLanguageCharacterIdCompoundUniqueInput`
-// that conflicted with the args type for `include`. prisma-next uses structural
+// that conflicted with the args type for `include`. Prisma 8 uses structural
 // types and has no such codegen conflict.
 
 model Character {
   id   String          @id
   info CharacterInfo[]
+  @@map("character")
 }
 
 model CharacterInfo {
@@ -31,4 +32,5 @@ model CharacterInfo {
   details       Character @relation(fields: [characterId], references: [id])
 
   @@unique([entryLanguage, characterId])
+  @@map("characterInfo")
 }

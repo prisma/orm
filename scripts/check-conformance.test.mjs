@@ -328,7 +328,7 @@ describe('runCheck', () => {
         version: '8.0.0-rc.1',
         dependencies: { declared: '1.0.0' },
         peerDependencies: { '@prisma/cli-engine': '0.0.9' },
-        bin: { 'prisma-next': './dist/bin__prisma-next.mjs' },
+        bin: { 'prisma-cli': './dist/bin__prisma-cli.mjs' },
       }),
       readPackedJsSources: () => new Map([['dist/index.mjs', cleanJs]]),
       listPackedCommonJs: () => [],
@@ -444,7 +444,7 @@ describe('runCheck', () => {
         version: '8.0.0-rc.1',
         dependencies: { declared: '1.0.0' },
         peerDependencies: { '@prisma/cli-engine': '0.0.9' },
-        bin: { 'prisma-next': './dist/bin__prisma-next.mjs', other: './dist/other.mjs' },
+        bin: { 'prisma-cli': './dist/bin__prisma-cli.mjs', other: './dist/other.mjs' },
       }),
       runBin: async (...args) => {
         runBin(...args);
@@ -454,7 +454,7 @@ describe('runCheck', () => {
     assert.equal(await runCheck({ argv: [], io }), 0);
     assert.equal(runBin.calls.length, 2);
     assert.deepEqual(runBin.calls.map((c) => c[0].relPath).sort(), [
-      './dist/bin__prisma-next.mjs',
+      './dist/bin__prisma-cli.mjs',
       './dist/other.mjs',
     ]);
   });
@@ -466,7 +466,7 @@ describe('runCheck', () => {
         name: '@prisma/orm-toolchain',
         version: '8.0.0-rc.1',
         dependencies: { declared: '1.0.0', '@prisma/cli-engine': '0.0.9' },
-        bin: { 'prisma-next': './dist/bin__prisma-next.mjs' },
+        bin: { 'prisma-cli': './dist/bin__prisma-cli.mjs' },
       }),
       stdoutWrite,
     });
@@ -502,7 +502,7 @@ describe('runCheck', () => {
           '@prisma/orm-framework': '8.0.0-rc.1',
         },
         peerDependencies: { '@prisma/cli-engine': '0.0.9' },
-        bin: { 'prisma-next': './dist/bin__prisma-next.mjs' },
+        bin: { 'prisma-cli': './dist/bin__prisma-cli.mjs' },
       },
       'prisma-orm-framework-8.0.0-rc.1.tgz': {
         name: '@prisma/orm-framework',

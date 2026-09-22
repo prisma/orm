@@ -1,6 +1,6 @@
 # @internal/adapter-sqlite
 
-SQLite adapter for Prisma Next.
+SQLite adapter for Prisma 8.
 
 ## Package Classification
 
@@ -14,7 +14,7 @@ The SQLite adapter implements the adapter SPI for SQLite databases. It provides 
 
 ## Purpose
 
-Provide SQLite-specific adapter implementation, codecs, and capabilities. Enable SQLite dialect support in Prisma Next through the adapter SPI.
+Provide SQLite-specific adapter implementation, codecs, and capabilities. Enable SQLite dialect support in Prisma 8 through the adapter SPI.
 
 ## Responsibilities
 
@@ -123,13 +123,6 @@ flowchart TD
 
 **Types Export (`types.ts`)**
 - Re-exports SQLite-specific types
-
-## Dependencies
-
-- **`@internal/sql-contract`**: SQL contract types
-- **`@internal/sql-relational-core`**: SQL AST types and codec registry
-- **`@internal/sql-runtime`**: Runtime adapter descriptor types
-- **`@internal/framework-components`**: Descriptor types
 
 ## Related Subsystems
 

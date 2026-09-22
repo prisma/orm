@@ -3,6 +3,7 @@ import type { Runtime } from '@prisma/orm-postgres/family-runtime';
 import { orm } from '@prisma/orm-postgres/orm-client';
 import postgres from '@prisma/orm-postgres/runtime';
 import { contract } from '../../prisma/contract';
+import { MissingNamespaceError } from '../errors';
 import { PostCollection, UserCollection } from '../orm-client/collections';
 
 // No-emit flow: hand the TypeScript-authored contract straight to the
@@ -29,7 +30,7 @@ export function createOrmClient(runtime: Runtime) {
   });
   const publicNs = client['public'];
   if (publicNs === undefined) {
-    throw new Error("ORM client is missing the 'public' namespace");
+    throw new MissingNamespaceError('public', 'ORM client');
   }
   return publicNs;
 }

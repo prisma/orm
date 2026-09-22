@@ -4,7 +4,7 @@ Source: `packages/client/tests/functional/extensions/tx.ts`
 
 Every test in this file exercises `$extends` extension behavior inside array/batch `$transaction([...])`:
 rollback/commit via normal and custom extension methods, isolation-level typing, and tuple
-destructuring of the batch result on an extended client. prisma-next has no `$extends` client-extension
+destructuring of the batch result on an extended client. Prisma 8 has no `$extends` client-extension
 surface (zero hits for `$extends`/`getExtensionContext`/`defineExtension` across `packages/` outside
 node_modules/dist), and separately the array/batch `$transaction([...])` form is itself absent (only
 the interactive callback facade exists). The subject of each test is inexpressible.

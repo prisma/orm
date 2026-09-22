@@ -80,7 +80,7 @@ function erroredEnvelope(run: { readonly json: readonly StreamEvent[] }): Errore
  */
 const RAISED_BY_PRISMA = new CliStructuredError(
   'CONFIG.VALIDATION_FAILED',
-  'Prisma Next configuration is not usable',
+  'Prisma 8 configuration is not usable',
   {
     why: 'contract.source.inputs names a file that does not exist.',
     fix: 'Correct contract.source.inputs in prisma.config.ts and re-run',

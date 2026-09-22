@@ -198,7 +198,7 @@ describe('a retired invocation', () => {
  */
 function processWithUnreadableCwd(stderr: string[]): HostProcess {
   return {
-    argv: ['node', 'prisma-next', 'migration', 'list'],
+    argv: ['node', 'prisma', 'migration', 'list'],
     env: {},
     version: process.version,
     versions: process.versions,
@@ -223,7 +223,7 @@ function processWithOutputStreams(
   stderr: HostProcess['stderr'] & { readonly fd?: number },
 ): HostProcess {
   return {
-    argv: ['node', 'prisma-next'],
+    argv: ['node', 'prisma'],
     env: {},
     version: process.version,
     versions: process.versions,

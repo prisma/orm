@@ -1,5 +1,6 @@
 import type {
   ColumnDefault,
+  ColumnDefaultLiteralInputValue,
   ControlPolicy,
   ExecutionMutationDefaultPhases,
 } from '@internal/contract/types';
@@ -36,12 +37,35 @@ export type AttachedEntities = Readonly<
   Record<string, Readonly<Record<string, Readonly<Record<string, unknown>>>>>
 >;
 
+/**
+ * A literal default as an authoring surface builds it. The contract build encodes it through the
+ * column codec into a {@link ColumnDefault}, so it may hold a `bigint`, which JSON cannot.
+ */
+export type AuthoredColumnDefaultLiteralValue =
+  | ColumnDefaultLiteralInputValue
+  | bigint
+  | readonly AuthoredColumnDefaultLiteralValue[];
+
+export type AuthoredColumnDefault =
+  | ColumnDefault
+  | {
+      readonly kind: 'literal';
+      readonly value: AuthoredColumnDefaultLiteralValue;
+      /**
+       * Whether the value is already the canonical form the contract stores. A text contract source
+       * reads a written default into the canonical form itself, through the column's data type and
+       * its casts, so the build stores it as it stands; a TypeScript `.default(value)` hands over an
+       * application value, which the column's codec encodes. ADR 254.
+       */
+      readonly canonical?: boolean;
+    };
+
 export interface FieldNode {
   readonly fieldName: string;
   readonly columnName: string;
   readonly descriptor: ColumnTypeDescriptor;
   readonly nullable: boolean;
-  readonly default?: ColumnDefault;
+  readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
   readonly many?: boolean;
   /**
@@ -130,7 +154,11 @@ export interface ForeignKeyNode {
 export interface RelationNode {
   readonly fieldName: string;
   readonly toModel: string;
-  readonly toTable: string;
+  /**
+   * Physical table of the related model. Undefined only for a cross-space
+   * relation whose handle carries no static table name.
+   */
+  readonly toTable: string | undefined;
   /**
    * Namespace coordinate of the related model. When omitted the assembler
    * resolves the coordinate from the referenced model node's own
@@ -140,6 +168,11 @@ export interface RelationNode {
    */
   readonly toNamespaceId?: string;
   readonly cardinality: '1:1' | '1:N' | 'N:1' | 'N:M';
+  /**
+   * Whether the related row may be absent, as stated by the schema. Present on
+   * every `'1:1'` and `'N:1'` relation; absent on `'1:N'` and `'N:M'`.
+   */
+  readonly nullable?: boolean;
   /**
    * Contract-space identity of the related model. When present, the
    * related model lives in a different contract space. Absent for local
@@ -154,7 +187,7 @@ export interface RelationNode {
   readonly on: {
     readonly parentTable: string;
     readonly parentColumns: readonly string[];
-    readonly childTable: string;
+    readonly childTable: string | undefined;
     readonly childColumns: readonly string[];
   };
   readonly through?: {
@@ -177,7 +210,7 @@ export interface ValueObjectFieldNode {
   readonly columnName: string;
   readonly valueObjectName: string;
   readonly nullable: boolean;
-  readonly default?: ColumnDefault;
+  readonly default?: AuthoredColumnDefault;
   readonly executionDefaults?: ExecutionMutationDefaultPhases;
   readonly many?: boolean;
 }
@@ -223,6 +256,13 @@ export interface ContractDefinition {
   readonly target: TargetPackRef<'sql', string>;
   readonly defaultControlPolicy?: ControlPolicy;
   readonly extensions?: Record<string, ExtensionPackRef<'sql', string>>;
+  /**
+   * Test-fixture escape hatch: pins the emitted `storage.storageHash`
+   * instead of computing it from content. A pinned hash is not
+   * content-derived, so snapshot content verification
+   * (`MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH`) rejects any migration
+   * snapshot addressed by it — never set this in a real project.
+   */
   readonly storageHash?: string;
   readonly foreignKeyDefaults?: ForeignKeyDefaultsState;
   readonly storageTypes?: Record<string, StorageTypeInstance>;

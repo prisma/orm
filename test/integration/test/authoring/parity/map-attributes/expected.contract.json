@@ -37,6 +37,7 @@
             "relations": {
               "team": {
                 "cardinality": "N:1",
+                "nullable": false,
                 "on": {
                   "localFields": ["teamId"],
                   "targetFields": ["id"]
@@ -172,6 +173,8 @@
       "checkConstraint": true,
       "defaultInInsert": true,
       "enums": true,
+      "insertOnConflictSkip": true,
+      "insertOnConflictWithoutTarget": true,
       "lateral": true,
       "returning": true,
       "scalarList": true

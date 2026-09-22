@@ -225,6 +225,11 @@ export class GenericBlockDeclarationAst implements BracedBlock {
     yield* filterChildren(this.syntax, KeyValuePairAst.cast);
   }
 
+  /** Field lines of a block parsed with the model-member grammar (a Prisma 7 `view`). Empty for every other generic block. */
+  *fields(): Iterable<FieldDeclarationAst> {
+    yield* filterChildren(this.syntax, FieldDeclarationAst.cast);
+  }
+
   *attributes(): Iterable<ModelAttributeAst> {
     yield* filterChildren(this.syntax, ModelAttributeAst.cast);
   }
@@ -271,6 +276,11 @@ export class KeyValuePairAst implements AstNode {
       }
     }
     return undefined;
+  }
+
+  /** `@` attributes after the key or value (a Prisma 7 enum member's `@map`). */
+  *attributes(): Iterable<FieldAttributeAst> {
+    yield* filterChildren(this.syntax, FieldAttributeAst.cast);
   }
 
   static cast(node: SyntaxNode): KeyValuePairAst | undefined {

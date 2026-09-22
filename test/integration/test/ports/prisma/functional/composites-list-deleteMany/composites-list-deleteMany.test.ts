@@ -1,14 +1,14 @@
 import { ObjectId } from 'mongodb';
 import { describe, expect, it } from 'vitest';
-import { timeouts, withMongoPort } from '../../../_harness/mongo';
+import { timeouts, withMongoPort } from '../../../../_harness/mongo';
 import type { Contract } from './_fixture/generated/contract';
 import contractJson from './_fixture/generated/contract.json' with { type: 'json' };
 
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/composites/list/deleteMany.ts
 // (mongodb matrix entry).
 //
-// Upstream `deleteMany` maps to prisma-next `deleteCount`. Deletion is verified
-// via a follow-up `.where().all()` (prisma-next has no `count` method).
+// Upstream `deleteMany` maps to Prisma 8 `deleteCount`. Deletion is verified
+// via a follow-up `.where().all()` (Prisma 8 has no `count` method).
 
 function withComposites(fn: Parameters<typeof withMongoPort<Contract>>[1]) {
   return withMongoPort<Contract>({ contractJson }, fn);

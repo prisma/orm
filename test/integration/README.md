@@ -1,6 +1,6 @@
 # integration-tests
 
-Integration tests for Prisma Next that verify end-to-end behavior across packages.
+Integration tests for Prisma 8 that verify end-to-end behavior across packages.
 
 ## Overview
 
@@ -20,6 +20,11 @@ This package contains integration tests that verify the complete flow from contr
 - `test/*.test-d.ts` - Type-only test files (for testing TypeScript types)
 - `test/*.helpers.ts` - Shared test helpers for related test files
 - `test/fixtures/` - Test fixtures (contract JSON, type definitions, CLI fixture apps)
+- `test/packaging/` - Tarball suites that `pnpm pack` real workspace packages
+
+### Packaging suites run sequentially
+
+The suites under `test/packaging/` pack overlapping real package directories (both pack the Postgres facade, whose `prepack` rewrites its `skills/` tree in place), so two of them packing concurrently corrupt each other's tarballs. `vitest.config.ts` therefore isolates them in a dedicated `packaging` project with `fileParallelism: false`: Vitest runs every such project in one shared sequential group while the `integration` project keeps its normal file parallelism.
 
 **Note**: Integration tests that depend on multiple packages (for example SQL authoring, emission, and runtime packages together) are placed here to avoid cyclic dependencies.
 
@@ -46,20 +51,6 @@ The `*.e2e.test.ts` files in this directory are **in-process CLI tests** that:
 - Run commands via `command.parseAsync()` in the same Node process
 
 **Note**: These are named "e2e" for historical reasons but are really integration tests. True subprocess E2E tests (which spawn the CLI as a separate process) should use the pattern in `cli.emit-cli-process.e2e.test.ts` and ideally live in `test/e2e/framework/`.
-
-## Dependencies
-
-This package depends on all packages under test via workspace protocol:
-- `@internal/adapter-postgres` - Postgres adapter
-- `@internal/cli` - CLI for contract emission
-- `@internal/contract` - Contract types
-- `@internal/driver-postgres` - Postgres driver
-- `@internal/emitter` - Contract emission
-- `@internal/runtime` - Execution runtime
-- `@internal/sql-contract-ts` - SQL contract authoring (for integration tests)
-- `@internal/sql-builder` - SQL builder lane
-- `@internal/sql-relational-core` - Shared relational lane helpers
-- `@internal/sql-contract` - SQL contract types (canonical source: `@internal/sql-contract/types`)
 
 ## Location
 

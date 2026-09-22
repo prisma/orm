@@ -217,6 +217,7 @@ model Reading {
       ];
       const payloads = [new Uint8Array([1, 2, 3]), new Uint8Array([255, 0, 127])];
       const amounts = ['1.5', '999999999999.99', '-0.001'];
+      const expectedAmounts = ['1.5000000000', '999999999999.9900000000', '-0.0010000000'];
 
       await withClient(database.connectionString, async (client) => {
         const runtime = await createTestRuntimeFromClient(contract, client, {
@@ -265,7 +266,7 @@ model Reading {
         expect(row.payloads.map((value) => [...value])).toEqual(
           payloads.map((value) => [...value]),
         );
-        expect(row.amounts).toEqual(amounts);
+        expect(row.amounts).toEqual(expectedAmounts);
       });
     },
     timeouts.spinUpPpgDev,

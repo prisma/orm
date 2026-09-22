@@ -1,10 +1,10 @@
 # @internal/sql-contract-emitter
 
-SQL emitter hook for Prisma Next.
+SQL emitter hook for Prisma 8.
 
 ## Overview
 
-This package provides the SQL-specific emitter hook implementation for the Prisma Next emitter. It validates SQL contracts and generates TypeScript type definitions for SQL contracts. It's part of the SQL tooling layer (migration plane) and implements the `TargetFamilyHook` interface.
+This package provides the SQL-specific emitter hook implementation for the Prisma 8 emitter. It validates SQL contracts and generates TypeScript type definitions for SQL contracts. It's part of the SQL tooling layer (migration plane) and implements the `TargetFamilyHook` interface.
 
 ## Responsibilities
 
@@ -14,16 +14,6 @@ This package provides the SQL-specific emitter hook implementation for the Prism
 
 - **Type Generation**: Generates TypeScript type definitions for SQL contracts
   - `generateContractTypes()`: Generates `contract.d.ts` file content (receives a `codecTypeImports` array)
-
-## Dependencies
-
-- **Depends on**:
-  - `@internal/contract` (contract IR, `TargetFamilyHook` SPI, `ValidationContext`, `TypesImportSpec` - types moved to shared plane)
-  - `@internal/emitter` (emitter core, `EmitOptions`, `EmitResult`)
-  - `@internal/sql-contract` (SQL contract type definitions)
-- **Depended on by**:
-  - `@internal/cli` (uses for contract emission)
-  - `integration-tests` (uses for contract emission tests)
 
 ## Architecture
 

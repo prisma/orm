@@ -20,6 +20,7 @@ import {
   type EntityHelpersFromNamespace,
   type ExtractAuthoringNamespaceFromPack,
   type MergeExtensionAuthoringNamespaces,
+  resolveToOneRelationNullable,
 } from '@internal/contract-authoring';
 import { errorEnumCodecNotInPackStack } from '@internal/errors/control';
 import type { AuthoringEntityTypeNamespace } from '@internal/framework-components/authoring';
@@ -204,11 +205,18 @@ export interface RelationBuilder<
   To extends string = string,
   Cardinality extends '1:1' | '1:N' | 'N:1' = '1:1' | '1:N' | 'N:1',
   On extends RelationOn | undefined = RelationOn | undefined,
+  Nullable extends boolean | undefined = boolean | undefined,
 > {
   readonly __kind: 'relation';
   readonly __to: To;
   readonly __cardinality: Cardinality;
   readonly __on: On;
+  /**
+   * The authored `optional` flag of a `belongsTo`; `undefined` when the author
+   * gave none. Always `true` for a `hasOne` reference: the side without the
+   * foreign key has nothing guaranteeing the related document exists.
+   */
+  readonly __nullable: Nullable;
 }
 
 export interface ModelBuilder<
@@ -420,30 +428,64 @@ type ContractValueObjectsFromRecord<ValueObjects extends Record<string, AnyValue
     >]: ContractValueObjectFromBuilder<ValueObjects[K]>;
   }>;
 
-type ContractRelationFromBuilder<TBuilder> =
+type AnyFieldNullable<
+  Fields extends Record<string, AnyFieldBuilder>,
+  FieldNames extends readonly string[],
+> = FieldNames[number] extends infer Name
+  ? Name extends keyof Fields
+    ? Fields[Name] extends FieldBuilder<ContractFieldType, true, boolean>
+      ? true
+      : never
+    : never
+  : never;
+
+type ToOneRelationNullable<
+  Fields extends Record<string, AnyFieldBuilder>,
+  Cardinality extends '1:1' | 'N:1',
+  On extends RelationOn,
+  Nullable extends boolean | undefined,
+> = Nullable extends boolean
+  ? Nullable
+  : Cardinality extends '1:1'
+    ? true
+    : [AnyFieldNullable<Fields, On['localFields']>] extends [never]
+      ? false
+      : true;
+
+type ContractRelationFromBuilder<TBuilder, Fields extends Record<string, AnyFieldBuilder>> =
   TBuilder extends RelationBuilder<
     infer To extends string,
     infer Cardinality extends '1:1' | '1:N' | 'N:1',
-    infer On extends RelationOn | undefined
+    infer On extends RelationOn | undefined,
+    infer Nullable extends boolean | undefined
   >
     ? On extends RelationOn
-      ? {
-          readonly to: CrossRefFor<To>;
-          readonly cardinality: Cardinality;
-          readonly on: On;
-        }
+      ? Cardinality extends '1:1' | 'N:1'
+        ? {
+            readonly to: CrossRefFor<To>;
+            readonly cardinality: Cardinality;
+            readonly nullable: ToOneRelationNullable<Fields, Cardinality, On, Nullable>;
+            readonly on: On;
+          }
+        : {
+            readonly to: CrossRefFor<To>;
+            readonly cardinality: Cardinality;
+            readonly on: On;
+          }
       : {
           readonly to: CrossRefFor<To>;
           readonly cardinality: Cardinality;
         }
     : never;
 
-type ContractRelationsFromRecord<Relations extends Record<string, AnyRelationBuilder>> =
-  keyof Relations extends never
-    ? Record<string, never>
-    : Simplify<{
-        readonly [K in keyof Relations]: ContractRelationFromBuilder<Relations[K]>;
-      }>;
+type ContractRelationsFromRecord<
+  Relations extends Record<string, AnyRelationBuilder>,
+  Fields extends Record<string, AnyFieldBuilder>,
+> = keyof Relations extends never
+  ? Record<string, never>
+  : Simplify<{
+      readonly [K in keyof Relations]: ContractRelationFromBuilder<Relations[K], Fields>;
+    }>;
 
 type ContractModelStorageFromBuilder<TBuilder> = ModelStorageSection<TBuilder> &
   ModelStorageRelationsSection<TBuilder>;
@@ -476,7 +518,7 @@ type ContractModelFromBuilder<TBuilder> =
     ? Simplify<
         {
           readonly fields: ContractFieldsFromRecord<Fields>;
-          readonly relations: ContractRelationsFromRecord<Relations>;
+          readonly relations: ContractRelationsFromRecord<Relations, Fields>;
           readonly storage: ContractModelStorageFromBuilder<TBuilder>;
         } & MaybeOwner<Owner> &
           MaybeBase<Base> &
@@ -1121,6 +1163,19 @@ type ReferenceOptions<
   readonly to: To;
 };
 
+type BelongsToOptions<
+  Target extends ModelNameInput,
+  From extends StringListInput,
+  To extends RelationTargetFieldsInput<NormalizeModelName<Target>>,
+  Nullable extends boolean,
+> = ReferenceOptions<Target, From, To> & {
+  /**
+   * Whether the related document may be absent. Defaults to whether any `from`
+   * field is optional; an explicit value that contradicts them is rejected.
+   */
+  readonly optional: Nullable;
+};
+
 type RelationOnFromOptions<
   From extends StringListInput,
   To extends RelationTargetFieldsInput<string>,
@@ -1133,16 +1188,19 @@ function createRelationBuilder<
   To extends string,
   Cardinality extends '1:1' | '1:N' | 'N:1',
   On extends RelationOn | undefined,
+  Nullable extends boolean | undefined,
 >(spec: {
   readonly to: To;
   readonly cardinality: Cardinality;
   readonly on: On;
-}): RelationBuilder<To, Cardinality, On> {
+  readonly nullable: Nullable;
+}): RelationBuilder<To, Cardinality, On, Nullable> {
   return {
     __kind: 'relation',
     __to: spec.to,
     __cardinality: spec.cardinality,
     __on: spec.on,
+    __nullable: spec.nullable,
   };
 }
 
@@ -1151,11 +1209,18 @@ function createReferenceRelationBuilder<
   Cardinality extends '1:1' | '1:N' | 'N:1',
   From extends StringListInput,
   To extends RelationTargetFieldsInput<NormalizeModelName<Target>>,
+  Nullable extends boolean | undefined,
 >(
   target: Target,
   cardinality: Cardinality,
   options: ReferenceOptions<Target, From, To>,
-): RelationBuilder<NormalizeModelName<Target>, Cardinality, RelationOnFromOptions<From, To>> {
+  nullable: Nullable,
+): RelationBuilder<
+  NormalizeModelName<Target>,
+  Cardinality,
+  RelationOnFromOptions<From, To>,
+  Nullable
+> {
   const targetModelName = resolveModelName(target);
 
   return createRelationBuilder({
@@ -1168,6 +1233,7 @@ function createReferenceRelationBuilder<
         options.to,
       ) as NormalizeTargetFieldList<To>,
     },
+    nullable,
   });
 }
 
@@ -1177,17 +1243,18 @@ function createEmbedRelationBuilder<
 >(
   target: Target,
   cardinality: Cardinality,
-): RelationBuilder<NormalizeModelName<Target>, Cardinality, undefined> {
+): RelationBuilder<NormalizeModelName<Target>, Cardinality, undefined, undefined> {
   return createRelationBuilder({
     to: resolveModelName(target) as NormalizeModelName<Target>,
     cardinality,
     on: undefined,
+    nullable: undefined,
   });
 }
 
 function hasOne<const Target extends ModelNameInput>(
   target: Target,
-): RelationBuilder<NormalizeModelName<Target>, '1:1', undefined>;
+): RelationBuilder<NormalizeModelName<Target>, '1:1', undefined, undefined>;
 function hasOne<
   const Target extends ModelNameInput,
   const From extends StringListInput,
@@ -1195,7 +1262,7 @@ function hasOne<
 >(
   target: Target,
   options: ReferenceOptions<Target, From, To>,
-): RelationBuilder<NormalizeModelName<Target>, '1:1', RelationOnFromOptions<From, To>>;
+): RelationBuilder<NormalizeModelName<Target>, '1:1', RelationOnFromOptions<From, To>, true>;
 function hasOne(
   target: ModelNameInput,
   options?: ReferenceOptions<ModelNameInput, StringListInput, RelationTargetFieldsInput<string>>,
@@ -1204,12 +1271,12 @@ function hasOne(
     return createEmbedRelationBuilder(target, '1:1');
   }
 
-  return createReferenceRelationBuilder(target, '1:1', options);
+  return createReferenceRelationBuilder(target, '1:1', options, true);
 }
 
 function hasMany<const Target extends ModelNameInput>(
   target: Target,
-): RelationBuilder<NormalizeModelName<Target>, '1:N', undefined>;
+): RelationBuilder<NormalizeModelName<Target>, '1:N', undefined, undefined>;
 function hasMany<
   const Target extends ModelNameInput,
   const From extends StringListInput,
@@ -1217,7 +1284,7 @@ function hasMany<
 >(
   target: Target,
   options: ReferenceOptions<Target, From, To>,
-): RelationBuilder<NormalizeModelName<Target>, '1:N', RelationOnFromOptions<From, To>>;
+): RelationBuilder<NormalizeModelName<Target>, '1:N', RelationOnFromOptions<From, To>, undefined>;
 function hasMany(
   target: ModelNameInput,
   options?: ReferenceOptions<ModelNameInput, StringListInput, RelationTargetFieldsInput<string>>,
@@ -1226,9 +1293,18 @@ function hasMany(
     return createEmbedRelationBuilder(target, '1:N');
   }
 
-  return createReferenceRelationBuilder(target, '1:N', options);
+  return createReferenceRelationBuilder(target, '1:N', options, undefined);
 }
 
+function belongsTo<
+  const Target extends ModelNameInput,
+  const From extends StringListInput,
+  const To extends RelationTargetFieldsInput<NormalizeModelName<Target>>,
+  const Nullable extends boolean,
+>(
+  target: Target,
+  options: BelongsToOptions<Target, From, To, Nullable>,
+): RelationBuilder<NormalizeModelName<Target>, 'N:1', RelationOnFromOptions<From, To>, Nullable>;
 function belongsTo<
   const Target extends ModelNameInput,
   const From extends StringListInput,
@@ -1236,8 +1312,14 @@ function belongsTo<
 >(
   target: Target,
   options: ReferenceOptions<Target, From, To>,
-): RelationBuilder<NormalizeModelName<Target>, 'N:1', RelationOnFromOptions<From, To>> {
-  return createReferenceRelationBuilder(target, 'N:1', options);
+): RelationBuilder<NormalizeModelName<Target>, 'N:1', RelationOnFromOptions<From, To>, undefined>;
+function belongsTo(
+  target: ModelNameInput,
+  options: ReferenceOptions<ModelNameInput, StringListInput, RelationTargetFieldsInput<string>> & {
+    readonly optional?: boolean;
+  },
+) {
+  return createReferenceRelationBuilder(target, 'N:1', options, options.optional);
 }
 
 export const rel = {
@@ -1487,29 +1569,78 @@ function buildFields(fields: Record<string, AnyFieldBuilder>): Record<string, Co
   return builtFields;
 }
 
-function buildRelation(
+function toOneRelationNullable(
+  modelName: string,
+  relationName: string,
   relationBuilder: AnyRelationBuilder,
+  on: RelationOn,
+  fields: Record<string, AnyFieldBuilder>,
+): boolean {
+  const location = `Relation "${modelName}.${relationName}"`;
+  const ownsForeignKey = relationBuilder.__cardinality !== '1:1';
+  const localFields = ownsForeignKey
+    ? on.localFields.map((fieldName) => {
+        const localField = fields[fieldName];
+        if (localField === undefined) {
+          throw contractError(
+            'CONTRACT.RELATION_INVALID',
+            `${location} joins on local field "${fieldName}", which model "${modelName}" does not declare`,
+            { meta: { modelName, relationName, fieldName, reason: 'local-field-unknown' } },
+          );
+        }
+        return localField;
+      })
+    : [];
+  const { nullable, contradiction } = resolveToOneRelationNullable({
+    declaredNullable: relationBuilder.__nullable,
+    localFieldNullability: localFields.map((localField) => localField.__nullable === true),
+    ownsReference: ownsForeignKey,
+  });
+  if (contradiction !== undefined) {
+    throw contractError(
+      'CONTRACT.RELATION_INVALID',
+      !ownsForeignKey
+        ? `${location} is required but does not own the foreign key, so nothing in storage guarantees the related document exists`
+        : contradiction === 'declared-optional'
+          ? `${location} is optional but every local field it joins on is required`
+          : `${location} is required but a local field it joins on is nullable`,
+      { meta: { modelName, relationName, reason: 'to-one-nullability-mismatch' } },
+    );
+  }
+  return nullable;
+}
+
+function buildRelation(
+  modelName: string,
+  relationName: string,
+  relationBuilder: AnyRelationBuilder,
+  fields: Record<string, AnyFieldBuilder>,
 ): ContractEmbedRelation | ContractReferenceRelation {
   const to = crossRef(relationBuilder.__to, UNBOUND_NAMESPACE_ID);
-  return relationBuilder.__on
-    ? {
-        to,
-        cardinality: relationBuilder.__cardinality,
-        on: relationBuilder.__on,
-      }
-    : {
-        to,
-        cardinality: relationBuilder.__cardinality,
-      };
+  const on = relationBuilder.__on;
+  if (on === undefined) {
+    return { to, cardinality: relationBuilder.__cardinality };
+  }
+  if (relationBuilder.__cardinality === '1:N') {
+    return { to, cardinality: '1:N', on };
+  }
+  return {
+    to,
+    cardinality: relationBuilder.__cardinality,
+    nullable: toOneRelationNullable(modelName, relationName, relationBuilder, on, fields),
+    on,
+  };
 }
 
 function buildRelations(
+  modelName: string,
   relations: Record<string, AnyRelationBuilder>,
+  fields: Record<string, AnyFieldBuilder>,
 ): Record<string, ContractEmbedRelation | ContractReferenceRelation> {
   const builtRelations: Record<string, ContractEmbedRelation | ContractReferenceRelation> = {};
 
   for (const [relationName, relationBuilder] of Object.entries(relations)) {
-    builtRelations[relationName] = buildRelation(relationBuilder);
+    builtRelations[relationName] = buildRelation(modelName, relationName, relationBuilder, fields);
   }
 
   return builtRelations;
@@ -1558,7 +1689,11 @@ function buildModels(
 
     builtModels[modelBuilder.__name] = {
       fields: buildFields(modelBuilder.__fields),
-      relations: buildRelations(modelBuilder.__relations),
+      relations: buildRelations(
+        modelBuilder.__name,
+        modelBuilder.__relations,
+        modelBuilder.__fields,
+      ),
       storage,
       ...(modelBuilder.__owner ? { owner: modelBuilder.__owner } : {}),
       ...(modelBuilder.__base ? { base: crossRef(modelBuilder.__base, UNBOUND_NAMESPACE_ID) } : {}),

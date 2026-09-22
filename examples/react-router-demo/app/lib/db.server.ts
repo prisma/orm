@@ -12,7 +12,7 @@ export function getDb(): Db {
     const connectionString = process.env['DATABASE_URL'];
     if (!connectionString) {
       throw new Error(
-        'DATABASE_URL is required to construct the Prisma Next runtime. Set it in your environment (see .env.example) before invoking a loader or action.',
+        'DATABASE_URL is required to construct the Prisma 8 runtime. Set it in your environment (see .env.example) before invoking a loader or action.',
       );
     }
     // REACT_ROUTER_DEMO_PG_POOL_MAX, when set, caps the pool size. The smoke

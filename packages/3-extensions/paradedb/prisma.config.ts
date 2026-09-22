@@ -1,5 +1,5 @@
 /**
- * Prisma Next config for the `extension-paradedb` package.
+ * Prisma 8 config for the `extension-paradedb` package.
  *
  * The extension package is treated as a self-contained "project" for
  * the CLI: `prisma contract emit` writes
@@ -18,9 +18,9 @@ import sql from '@internal/family-sql/control';
 import { emptyContract } from '@internal/sql-contract-ts/config-types';
 import postgres from '@internal/target-postgres/control';
 import { postgresCreateNamespace } from '@internal/target-postgres/types';
-import { defineConfig } from '@prisma/cli-engine';
+import { definePrismaConfig } from '@prisma/cli-engine';
 
-export default defineConfig({
+export default definePrismaConfig({
   orm: ormConfig({
     family: sql,
     target: postgres,

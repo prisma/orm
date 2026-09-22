@@ -1,6 +1,6 @@
 # Mongo pipeline builder
 
-The Mongo pipeline builder is a typed query API that turns chained method calls into MongoDB aggregation pipelines. It is the entry point for reads, writes, and find-and-modify operations on a Mongo-backed Prisma Next contract.
+The Mongo pipeline builder is a typed query API that turns chained method calls into MongoDB aggregation pipelines. It is the entry point for reads, writes, and find-and-modify operations on a Mongo-backed Prisma 8 contract.
 
 This page is a working reference: a concrete example to ground the mental model, then an explanation of how queries are shaped, then the surface itself.
 
@@ -31,7 +31,7 @@ const plan = query
 
 ## The decision: aggregation-only reads
 
-Prisma Next's Mongo surface has **one read API: aggregation pipelines**. There is no `find()`. Every read — including the simple ones that would normally call `db.collection.find({...})` — is expressed as a pipeline that ends in a read terminal.
+Prisma 8's Mongo surface has **one read API: aggregation pipelines**. There is no `find()`. Every read — including the simple ones that would normally call `db.collection.find({...})` — is expressed as a pipeline that ends in a read terminal.
 
 This is a deliberate design choice ([ADR 183](../architecture%20docs/adrs/ADR%20183%20-%20Aggregation%20pipeline%20only,%20never%20find%20API.md)). It has three consequences worth keeping in mind:
 
@@ -198,7 +198,7 @@ Geo, window, multi-pipeline, search, and densify/fill stages are also exposed. T
 | `$search` / `$searchMeta` | `.search(config, indexName?)`, `.searchMeta(config)` |
 | `$vectorSearch` | `.vectorSearch({ index, path, queryVector, … })` |
 
-The Atlas-only search stages take their config as an object that mirrors the MongoDB Atlas Search shape — Prisma Next does not provide a typed wrapper for those configs.
+The Atlas-only search stages take their config as an object that mirrors the MongoDB Atlas Search shape — Prisma 8 does not provide a typed wrapper for those configs.
 
 ## Writing
 

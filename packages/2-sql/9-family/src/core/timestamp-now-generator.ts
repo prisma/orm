@@ -37,8 +37,8 @@ export function timestampNowControlDescriptor(): MutationDefaultGeneratorDescrip
 
 /**
  * Builds the canonical `temporal.{createdAt,updatedAt}` field-preset pair
- * for a SQL target. `createdAt` lowers to a `now()` storage default;
- * `updatedAt` lowers to an execution generator on both `onCreate` and
+ * for a SQL target. `createdAt` lowers to an execution generator on `onCreate`;
+ * `updatedAt` lowers to the same generator on both `onCreate` and
  * `onUpdate` (RD: "last modified time", non-null). Targets supply the
  * codec/native-type pair that matches their timestamp column; everything
  * else is shared so PSL `temporal.updatedAt()` and TS
@@ -63,7 +63,9 @@ export function temporalAuthoringPresets<
       output: {
         codecId,
         nativeType,
-        default: { kind: 'function', expression: 'now()' },
+        executionDefaults: {
+          onCreate: { kind: 'generator', id: generatorId },
+        },
       },
     },
     updatedAt: {
@@ -83,7 +85,12 @@ export function temporalAuthoringPresets<
 export function temporalStringAuthoringPresets<
   const CodecId extends string,
   const NativeType extends string,
->(input: { readonly codecId: CodecId; readonly nativeType: NativeType }) {
+  const GeneratorId extends string = typeof TIMESTAMP_NOW_GENERATOR_ID,
+>(input: {
+  readonly codecId: CodecId;
+  readonly nativeType: NativeType;
+  readonly generatorId?: GeneratorId;
+}) {
   const presets = temporalAuthoringPresets(input);
   return {
     createdAtString: presets.createdAt,

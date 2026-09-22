@@ -36,6 +36,11 @@ export type UnboundTables<C extends TableProxyContract> = {
   readonly [Name in TableNamesAcrossNamespaces<C>]: TableInAnyNamespace<C, Name>;
 };
 
+export type TableNamesInNamespace<
+  C extends TableProxyContract,
+  NsId extends keyof C['storage']['namespaces'],
+> = keyof TablesInNamespace<C['storage']['namespaces'][NsId]> & string;
+
 export type TableNamesAcrossNamespaces<C extends TableProxyContract> = {
   [NSId in keyof C['storage']['namespaces']]: keyof TablesInNamespace<
     C['storage']['namespaces'][NSId]

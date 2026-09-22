@@ -1,6 +1,6 @@
 # @internal/mongo-orm
 
-MongoDB ORM client for Prisma Next.
+MongoDB ORM client for Prisma 8.
 
 ## Responsibilities
 
@@ -10,10 +10,6 @@ MongoDB ORM client for Prisma Next.
 - **Polymorphic narrowing**: Discriminator field carries literal variant values, enabling TypeScript `switch`/`if` narrowing
 - **Execution interface**: Declares `MongoQueryExecutor` interface structurally satisfied by the runtime layer
 
-## Dependencies
+## Related Docs
 
-- **Depends on**:
-  - `@internal/mongo-core` (contract types, row inference, query plan types)
-  - `@internal/framework-components` (`AsyncIterableResult` return type, imported from `@internal/framework-components/runtime`)
-- **Depended on by**:
-  - `@internal/mongo-runtime` (structurally satisfies `MongoQueryExecutor`)
+- [Naming model and result types](../../../../docs/reference/model-and-result-types.md)

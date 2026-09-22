@@ -2,7 +2,7 @@
 /**
  * Validates SKILL.md frontmatter across every skill root the `skills` CLI
  * and `prisma orm init` discover skills from: `skills-contrib` (contributor
- * skill sources, linted only) and the user-facing tree that `prisma-next
+ * skill sources, linted only) and the user-facing tree that `prisma
  * init` installs into consumer projects (`skills`). YAML must parse, and
  * `name` + `description`
  * must be non-empty strings. Also enforces the agentskills.io 1024-character

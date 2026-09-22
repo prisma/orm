@@ -1,6 +1,6 @@
 # @internal/sql-relational-core
 
-Schema and column builders, operation attachment, and AST types for Prisma Next.
+Schema and column builders, operation attachment, and AST types for Prisma 8.
 
 ## Package Classification
 
@@ -170,15 +170,6 @@ See [ADR 204 — Single-Path Async Codec Runtime](../../../../docs/architecture%
 - Provides type inference utilities for extracting JavaScript types from codec types (e.g., `ExtractJsTypeFromColumnBuilder`)
 - Defines projection row inference types
 - Defines `AnyColumnBuilder` helper type for accepting column builders with any operation types
-
-## Dependencies
-
-- **`@internal/contract`**: Core contract types
-- **`@internal/operations`**: Operation registry used by schema builders
-- **`@internal/sql-contract`**: SQL contract types (via `@internal/sql-contract/types`)
-- **`arktype`**: Parameter schema typing for codec definitions
-
-**Note**: This package does not depend on specific adapters (e.g., `@internal/adapter-postgres`). Test fixtures define `CodecTypes` inline to remain adapter-agnostic and avoid cyclic dependencies.
 
 ## Package Structure
 

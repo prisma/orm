@@ -1,4 +1,4 @@
-import type { PortContext } from '../../../_harness/postgres';
+import type { PortContext } from '../../../../_harness/postgres';
 import type { Contract as RepresentativeContract } from './_fixture/default-nomap/generated/contract';
 
 // Shared helpers for the relationMode-in-separate-gh-action m:n port.

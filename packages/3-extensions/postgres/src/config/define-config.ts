@@ -1,5 +1,5 @@
 import postgresAdapter from '@internal/adapter-postgres/control';
-import type { PrismaNextConfig } from '@internal/config/config-types';
+import type { ContractConfig, PrismaNextConfig } from '@internal/config/config-types';
 import { defineConfig as coreDefineConfig } from '@internal/config/config-types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
@@ -14,7 +14,8 @@ import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
 
 export interface PostgresConfigOptions {
-  readonly contract: string;
+  /** A contract file path (`.prisma` or `.ts`), or a ready `ContractConfig` such as `prisma7Schema(...)`. */
+  readonly contract: string | ContractConfig;
   readonly output?: string;
   readonly db?: {
     readonly connection?: string;
@@ -33,23 +34,37 @@ function deriveOutputPath(contractPath: string): string {
   return `${contractPath.slice(0, -ext.length)}.json`;
 }
 
+function contractConfigFromPath(contractPath: string, output: string): ContractConfig {
+  return extname(contractPath) === '.ts'
+    ? typescriptContractFromPath(contractPath, output)
+    : prismaContract(contractPath, {
+        output,
+        target: postgresPackRef,
+        createNamespace: postgresCreateNamespace,
+        enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
+      });
+}
+
+function resolveContractConfig(options: PostgresConfigOptions): ContractConfig {
+  const explicitOutput =
+    options.output !== undefined ? join(options.output, 'contract.json') : undefined;
+  if (typeof options.contract === 'string') {
+    return contractConfigFromPath(
+      options.contract,
+      explicitOutput ?? deriveOutputPath(options.contract),
+    );
+  }
+  const firstInput = options.contract.source.inputs?.[0];
+  const output =
+    explicitOutput ??
+    options.contract.output ??
+    (firstInput !== undefined ? deriveOutputPath(firstInput) : undefined);
+  return { ...options.contract, ...ifDefined('output', output) };
+}
+
 export function defineConfig(options: PostgresConfigOptions): PrismaNextConfig<'sql', 'postgres'> {
   const extensions = options.extensions ?? [];
-  const output =
-    options.output !== undefined
-      ? join(options.output, 'contract.json')
-      : deriveOutputPath(options.contract);
-  const ext = extname(options.contract);
-
-  const contractConfig =
-    ext === '.ts'
-      ? typescriptContractFromPath(options.contract, output)
-      : prismaContract(options.contract, {
-          output,
-          target: postgresPackRef,
-          createNamespace: postgresCreateNamespace,
-          enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
-        });
+  const contractConfig = resolveContractConfig(options);
 
   return coreDefineConfig({
     family: sql,

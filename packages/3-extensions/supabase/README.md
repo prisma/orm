@@ -1,6 +1,6 @@
 # @internal/extension-supabase
 
-Supabase extension pack for Prisma Next.
+Supabase extension pack for Prisma 8.
 
 ## Overview
 
@@ -19,17 +19,6 @@ The contract is **introspected, not hand-authored**: `pnpm contract:generate` re
 - **`/runtime` subpath**: the `SupabaseRuntime` role-binding runtime and `supabase({...})` facade (session-coupled `set_config` role + claims binding, per [ADR 230](../../../docs/architecture%20docs/adrs/ADR%20230%20-%20Runtime%20target%20layer%20session-coupled%20connections.md)), plus the `service_role`-only `.supabase` secondary root.
 - **`/contract` subpath**: branded model handles for the commonly-referenced models (`AuthUser`, `AuthIdentity`, `AuthSession`, `StorageBucket`, `StorageObject`) used for cross-space FK references from app contracts. The handle set is deliberately curated, not one-per-table.
 - **Internal test substrate** (not published): `test/fixtures/supabase-reference/set-up-mock-schema.ts` exports `setUpSupabaseMockSchema(client)`, restoring the reference fixture (all Supabase schemas, tables, roles, and the platform's real default privileges) into a test database. Used only by this package's tests — including the hermetic PGlite coverage of the example app's flows (`test/fixtures/example-app/`); `examples/supabase` itself ships only the real-Supabase acceptance suite.
-
-## Dependencies
-
-- **`@internal/contract`**: contract types the `/pack` descriptor and emitted artefacts depend on.
-- **`@internal/family-sql`**: SQL family pack ref + `SqlControlExtensionDescriptor` type the `/pack` descriptor satisfies.
-- **`@internal/framework-components`**: shared component / pack-ref type shapes the descriptor consumes.
-- **`@internal/sql-runtime`**: `SqlRuntimeExtensionDescriptor` the `/runtime` minimal descriptor satisfies.
-- **`@internal/sql-contract-psl`**: `prismaContract` provider used by `prisma.config.ts` to emit the PSL-authored contract.
-- **`@internal/utils`**: `blindCast` helper for narrowing the imported `contract.json` to the emitted `Contract` type.
-
-The `/runtime` subpath additionally pulls in the Postgres runtime stack (`@internal/postgres`, `@internal/sql-runtime`, `@internal/sql-builder`, `@internal/sql-orm-client`) plus `jose` (JWT verification) and `pg` (Postgres client/pool). It does **not** depend on `@supabase/supabase-js` — the framework speaks Postgres directly.
 
 ## Installation
 
@@ -132,7 +121,7 @@ The example authors its RLS policies in PSL (`policy_select` / `policy_update` +
 - **Direct merged cross-space queries** — `db.sql.auth.users` off the app db does not exist by design (cross-space *querying* was not built; only FK *references* cross the boundary). Use `db.asServiceRole().supabase.sql.auth.users` for Supabase-internal tables.
 - **Supabase Realtime** — the WebSocket change feed is a separate subsystem.
 - **Storage uploads** — `storage.*` tables are declared for reference/reads; file upload/download helpers are out of scope (use `@supabase/storage-js`).
-- **PostgREST / `@supabase/supabase-js` interop** — Prisma Next connects directly to Postgres; there is no `serviceRoleKey` / PostgREST path.
+- **PostgREST / `@supabase/supabase-js` interop** — Prisma 8 connects directly to Postgres; there is no `serviceRoleKey` / PostgREST path.
 - **Edge runtimes** — the runtime needs a Postgres driver; Cloudflare Workers / Deno / Vercel Edge are out of scope (Node.js + Bun for v0.1).
 - **Triggers & functions as first-class IR** — the "create a profile on signup" trigger is a documented raw-SQL recipe, not contract-authored (functions are not contract elements). `auth.uid()` etc. live inside opaque RLS predicate strings.
 

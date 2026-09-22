@@ -19,7 +19,7 @@ export interface BridgeOptions {
  * shared server (the same one Vite serves the editor from) and only claims
  * WebSocket upgrades on {@link BridgeOptions.path}, leaving Vite's own HMR
  * WebSocket and all HTTP requests untouched. On each accepted connection it
- * spawns `node <cliEntry> orm lsp --stdio` and forwards LSP
+ * spawns `node <cliEntry> lsp --stdio` and forwards LSP
  * JSON-RPC traffic between the browser editor and that stdio process.
  *
  * Adapted from the canonical `vscode-ws-jsonrpc` example
@@ -76,17 +76,12 @@ function launch(socket: IWebSocket, options: BridgeOptions): void {
   const reader = new WebSocketMessageReader(socket);
   const writer = new WebSocketMessageWriter(socket);
   const socketConnection = createConnection(reader, writer, () => socket.dispose());
-  const serverConnection = createServerProcess('PSL', 'node', [
-    options.cliEntry,
-    'orm',
-    'lsp',
-    '--stdio',
-  ]);
+  const serverConnection = createServerProcess('PSL', 'node', [options.cliEntry, 'lsp', '--stdio']);
   if (serverConnection === undefined) {
     // The LSP subprocess could not be spawned. Don't leave the client hanging
     // on a backend-less socket: report it and close the connection.
     console.error(
-      `Failed to spawn the language server (node ${options.cliEntry} orm lsp --stdio). Has the workspace been built?`,
+      `Failed to spawn the language server (node ${options.cliEntry} lsp --stdio). Has the workspace been built?`,
     );
     socket.dispose();
     return;

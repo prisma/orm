@@ -1,6 +1,6 @@
 # @internal/target-mongo
 
-MongoDB target pack for Prisma Next.
+MongoDB target pack for Prisma 8.
 
 ## Responsibilities
 

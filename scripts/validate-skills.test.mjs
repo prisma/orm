@@ -114,8 +114,8 @@ description: ${longDescription}
     // Mirrors the PR #987 regression: an unquoted plain scalar describing
     // `extensions: [supabasePack]` reads as a nested YAML mapping, not text.
     const broken = `---
-name: prisma-next-supabase
-description: Use Prisma Next with Supabase — wire extensions: [supabasePack] into your db.
+name: prisma-8-supabase
+description: Use Prisma 8 with Supabase — wire extensions: [supabasePack] into your db.
 ---
 
 # Supabase

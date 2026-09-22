@@ -48,7 +48,7 @@ function loadContractFixture(): Contract {
   const contractPath = join(fixtureDir, 'fixtures/contract.json');
   const json = readFileSync(contractPath, 'utf8');
   const contractJson = JSON.parse(json) as unknown;
-  return validateContract<Contract>(contractJson);
+  return validateSqlContractFully<Contract>(contractJson);
 }
 
 // Later in tests:

@@ -1,6 +1,6 @@
 # @internal/sql-schema-ir
 
-SQL Schema Intermediate Representation (IR) types for Prisma Next.
+SQL Schema Intermediate Representation (IR) types for Prisma 8.
 
 ## Overview
 
@@ -19,20 +19,6 @@ This package defines the core types for the SQL Schema IR, a target-agnostic rep
 - **Shared Plane Package**: Located in the shared plane, making it accessible to both migration-plane and runtime-plane packages
 - **Extensibility**: Supports annotations for targets and extension packs to attach metadata without modifying core IR structure
 - **Type Safety**: Provides TypeScript types for schema representation with proper nullability and constraint modeling
-
-## Dependencies
-
-- **`@internal/contract`**: For `Contract` type (used in `SqlSchemaIR`)
-
-**Dependents:**
-- **Migration Plane**:
-  - `@internal/family-sql` - SQL family instance uses SqlSchemaIR for schema verification
-  - `@internal/framework-components` - Core verification logic (via `./control`)
-  - `@internal/adapter-postgres` - Postgres introspection
-  - `@internal/extension-pgvector` - Extension verification hooks
-- **Runtime Plane** (future):
-  - Migration planning logic
-  - Schema diff utilities
 
 ## Types
 
@@ -144,11 +130,9 @@ const result = await familyInstance.schemaVerify({
 
 This package sits at the core layer in the shared plane, making it accessible to both migration-plane (authoring, tooling, targets) and runtime-plane (lanes, runtime, adapters) packages.
 
-
 ## Related Documentation
 
 - `docs/briefs/11-schema-ir.md` - Schema IR project brief
 - `docs/briefs/SQL Schema IR and Verification.md` - Detailed design document
 - `packages/2-sql/3-tooling/family/src/core/instance.ts` - SQL family instance with `schemaVerify()` method
 - `packages/3-targets/6-adapters/postgres/src/exports/control.ts` - Postgres introspection entrypoint
-

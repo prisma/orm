@@ -91,6 +91,20 @@ describe('SQLite adapter', () => {
     expect(adapter.profile.capabilities['sql']).not.toMatchObject({ scalarList: true });
   });
 
+  it.each([
+    ['eq', '='],
+    ['neq', '!='],
+    ['isNotDistinctFrom', 'IS'],
+    ['isDistinctFrom', 'IS NOT'],
+  ] as const)('lowers %s without changing ordinary equality', (op, sqlOperator) => {
+    const ast = SelectAst.from(TableSource.named('user'))
+      .withProjection([ProjectionItem.of('id', ColumnRef.of('user', 'id'))])
+      .withWhere(new BinaryExpr(op, ColumnRef.of('user', 'id'), ParamRef.of(null)));
+    expect(adapter.lower(ast, { contract }).sql).toBe(
+      `SELECT "user"."id" AS "id" FROM "user" WHERE "user"."id" ${sqlOperator} ?`,
+    );
+  });
+
   describe('SELECT', () => {
     it('renders simple select', () => {
       const ast = SelectAst.from(TableSource.named('user')).withProjection([
@@ -405,6 +419,34 @@ describe('SQLite adapter', () => {
 
       const { sql } = adapter.lower(ast, { contract });
       expect(sql).toContain('ON CONFLICT ("email") DO NOTHING');
+    });
+
+    it('renders a targetless ON CONFLICT DO NOTHING without a column list', () => {
+      const ast = InsertAst.into(TableSource.named('user'))
+        .withRows([{ id: ParamRef.of(1), email: ParamRef.of('a@example.com') }])
+        .withOnConflict(InsertOnConflict.doNothing());
+
+      const { sql } = adapter.lower(ast, { contract });
+      expect(sql).toBe('INSERT INTO "user" ("id", "email") VALUES (?, ?) ON CONFLICT DO NOTHING');
+    });
+
+    it('throws when a targetless conflict clause carries DO UPDATE SET', () => {
+      const ast = InsertAst.into(TableSource.named('user'))
+        .withRows([{ id: ParamRef.of(1), email: ParamRef.of('a@example.com') }])
+        .withOnConflict(
+          InsertOnConflict.doNothing().doUpdateSet({
+            email: ColumnRef.of('excluded', 'email'),
+          }),
+        );
+
+      expect(() => adapter.lower(ast, { contract })).toThrow(
+        expect.objectContaining({
+          code: 'RUNTIME.AST_INVALID',
+          message: expect.stringContaining(
+            'INSERT onConflict requires at least one conflict column',
+          ),
+        }),
+      );
     });
 
     it('renders ON CONFLICT DO UPDATE SET', () => {

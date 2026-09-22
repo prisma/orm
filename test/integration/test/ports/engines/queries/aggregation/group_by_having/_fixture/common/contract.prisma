@@ -4,4 +4,5 @@ model TestModel {
   bInt   BigInt?
   float  Float?
   string String?
+  @@map("testModel")
 }

@@ -19,6 +19,7 @@ model User {
   id    BigInt  @id
   name  String
   posts Post[]
+  @@map("user")
 }
 
 model Post {
@@ -26,4 +27,5 @@ model Post {
   title    String
   authorId BigInt
   author   User    @relation(fields: [authorId], references: [id])
+  @@map("post")
 }
