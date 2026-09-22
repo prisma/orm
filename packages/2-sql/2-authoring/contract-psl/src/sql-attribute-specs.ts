@@ -49,8 +49,10 @@ import type {
   ModelAttributeAst,
   PslSources,
 } from '@internal/psl-parser/syntax';
+import { FunctionCallAst } from '@internal/psl-parser/syntax';
 import { blindCast } from '@internal/utils/casts';
 import { notOk } from '@internal/utils/result';
+import { removedDbgeneratedMessage } from './default-function-registry';
 
 export function findModelAttributeNode(
   model: ModelSymbol,
@@ -217,6 +219,34 @@ function scalarDefaultArms(
     : [str(), numLiteral(), bool(), ...funcArms, ...tagArms(), listArm()];
 }
 
+/**
+ * The `@default` value arms, with a `dbgenerated(...)` call reported as removed before the arms
+ * are tried, so the author is told what replaced it instead of being shown the list of arms.
+ */
+function defaultValueArm(
+  arms: readonly [
+    ArgType<DefaultArgValue, AttributeCtx>,
+    ...ArgType<DefaultArgValue, AttributeCtx>[],
+  ],
+  registry: ControlDefaultRegistries['defaultFunctionRegistry'],
+) {
+  const value = oneOf(...arms);
+  return {
+    ...value,
+    parse: (arg: Parameters<typeof value.parse>[0], ctx: AttributeCtx) =>
+      FunctionCallAst.cast(arg.syntax)?.path().join('.') === 'dbgenerated'
+        ? notOk<readonly PslDiagnostic[]>([
+            leafDiagnostic(
+              ctx,
+              arg,
+              removedDbgeneratedMessage(registry),
+              'PSL_UNKNOWN_DEFAULT_FUNCTION',
+            ),
+          ])
+        : value.parse(arg, ctx),
+  };
+}
+
 function noEnumMember(): RejectingArgType<never, AttributeCtx> {
   return {
     kind: 'rejecting',
@@ -258,7 +288,7 @@ function defaultFieldSpec(ctx: FieldAttributeSpecContext) {
     positional: [
       {
         key: 'value',
-        type: oneOf(...valueArms),
+        type: defaultValueArm(valueArms, ctx.controlMutationDefaults.defaultFunctionRegistry),
         documentation:
           'A literal, enum member, or registered default function compatible with this field.',
       },

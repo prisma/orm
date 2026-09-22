@@ -337,7 +337,7 @@ function lowerFunction(
   const span = input.attribute.span;
   const callArgs = [...call.args()];
   if (fn === 'dbgenerated') {
-    return lowerDbgenerated(callArgs, unknown, span);
+    return dbgeneratedDefault(callArgs, unknown, span);
   }
   const keys = FUNCTION_ARGUMENT_KEYS[fn];
   const entry = input.controlMutationDefaults.defaultFunctionRegistry.get(fn);
@@ -394,7 +394,7 @@ function lowerFunction(
  * `dbgenerated()` means the column has no default. Prisma 7 refuses a blank string, so this
  * source does too.
  */
-function lowerDbgenerated(
+function dbgeneratedDefault(
   callArgs: readonly AttributeArgAst[],
   unknown: (reason: string, span: PslSpan) => undefined,
   span: PslSpan,

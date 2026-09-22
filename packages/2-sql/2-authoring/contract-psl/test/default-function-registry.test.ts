@@ -132,19 +132,4 @@ describe('default function registry', () => {
 
     expect(loweredUnknown.diagnostic.message).toContain('uuid(7)');
   });
-
-  it('rejects an empty dbgenerated expression as a semantic argument error', () => {
-    const lowered = lowerDefaultFunctionWithRegistry({
-      call: call('dbgenerated', { expression: '' }),
-      registry: builtinRegistry,
-      context: loweringContext,
-      source,
-    });
-    expect(lowered.ok).toBe(false);
-    if (lowered.ok) return;
-    expect(lowered.diagnostic).toMatchObject({
-      code: 'PSL_INVALID_DEFAULT_FUNCTION_ARGUMENT',
-      message: expect.stringContaining('dbgenerated'),
-    });
-  });
 });

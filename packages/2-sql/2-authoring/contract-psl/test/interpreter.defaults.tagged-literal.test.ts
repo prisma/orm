@@ -128,7 +128,7 @@ describe('interpretPslDocumentToSqlContract tagged literal defaults', () => {
       {
         code: 'PSL_INVALID_ATTRIBUTE_SYNTAX',
         message:
-          'Expected one of: string | number | boolean | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | dbgenerated() | json`...` | sql`...` | list of (string | number | boolean | json`...` | sql`...`)',
+          'Expected one of: string | number | boolean | autoincrement() | now() | uuid() | cuid() | ulid() | nanoid() | json`...` | sql`...` | list of (string | number | boolean | json`...` | sql`...`)',
         sourceId: 'schema.prisma',
         span: lineThreeSpan(21, 'gen_random_uuid()'.length),
       },
