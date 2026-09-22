@@ -30,6 +30,7 @@ import { aggregateOperationNames } from './aggregate-operations';
 import { mapCursorValuesToColumns, mapFieldsToColumns } from './collection-column-mapping';
 import {
   assertDistinctOnCapability,
+  assertInsertConflictSkipCapability,
   assertReturningCapability,
   getColumnToFieldMap,
   getFieldToColumnMap,
@@ -39,6 +40,7 @@ import {
   type PolymorphismVariantInfo,
   resolveFieldToColumn,
   resolveIncludeRelation,
+  resolveInsertConflictColumns,
   resolveModelTableName,
   resolvePolymorphismInfo,
   resolvePrimaryKeyColumn,
@@ -103,6 +105,7 @@ import {
   compileUpdateCount,
   compileUpdateReturning,
   compileUpsertReturning,
+  type InsertConflictSkip,
   mergeAnnotations,
 } from './query-plan';
 import { queryPlanRows } from './query-plan-rows';
@@ -200,6 +203,38 @@ function isWhereDirectInput(value: unknown): value is WhereDirectInput {
       typeof value.accept === 'function') ||
     isToWhereExprInput(value)
   );
+}
+
+type WriteConfigure = (meta: MetaBuilder<'write'>) => void;
+
+/**
+ * Ask the database to skip rows that collide with a unique constraint
+ * instead of failing the whole statement.
+ *
+ * `conflictOn` names the scalar fields of the constraint to watch; omit
+ * it to skip on any unique constraint of the table. Requires the
+ * contract capability `insertOnConflictSkip`, and
+ * `insertOnConflictWithoutTarget` as well when `conflictOn` is omitted.
+ */
+export interface CreateConflictOptions<
+  TContract extends Contract<SqlStorage>,
+  ModelName extends string,
+> {
+  readonly onConflict: 'skip';
+  readonly conflictOn?: readonly (keyof DefaultModelRow<TContract, ModelName> & string)[];
+}
+
+function splitCreateArguments<TContract extends Contract<SqlStorage>, ModelName extends string>(
+  optionsOrConfigure: CreateConflictOptions<TContract, ModelName> | WriteConfigure | undefined,
+  configure: WriteConfigure | undefined,
+): {
+  options: CreateConflictOptions<TContract, ModelName> | undefined;
+  configureCallback: WriteConfigure | undefined;
+} {
+  if (typeof optionsOrConfigure === 'function') {
+    return { options: undefined, configureCallback: optionsOrConfigure };
+  }
+  return { options: optionsOrConfigure, configureCallback: configure };
 }
 
 type MtiVariantInfo = Simplify<PolymorphismVariantInfo & { readonly strategy: 'mti' }>;
@@ -1480,11 +1515,19 @@ class CollectionImpl<
    * for await (const row of db.orm.User.createAll(seedUsers)) {
    *   console.log('inserted', row.id);
    * }
+   *
+   * // Let the database skip rows that collide with a unique
+   * // constraint; only the rows it inserted come back:
+   * const inserted = await db.orm.User.createAll(seedUsers, {
+   *   onConflict: 'skip',
+   *   conflictOn: ['email'],
+   * });
    * ```
    *
    * Accepts an optional `configure` callback that receives a
    * `MetaBuilder<'write'>` for attaching typed annotations to the
-   * compiled insert plan.
+   * compiled insert plan. It may be passed in second position when
+   * there are no options.
    */
   createAll(
     data: readonly ResolvedScalarCreateInput<
@@ -1493,11 +1536,15 @@ class CollectionImpl<
       State['variantName'],
       State['nsId']
     >[],
-    configure?: (meta: MetaBuilder<'write'>) => void,
+    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    configure?: WriteConfigure,
   ): AsyncIterableResult<Row> {
+    const { options, configureCallback } = splitCreateArguments(optionsOrConfigure, configure);
+    const conflictSkip = this.#resolveConflictSkip(options, 'createAll()');
     return this.#createAllWithAnnotations(
       data,
-      this.#collectAnnotationsFromMeta(configure, 'write', 'createAll'),
+      this.#collectAnnotationsFromMeta(configureCallback, 'write', 'createAll'),
+      conflictSkip,
     );
   }
 
@@ -1509,6 +1556,7 @@ class CollectionImpl<
       State['nsId']
     >[],
     annotationsMap: ReadonlyMap<string, AnnotationValue<unknown, OperationKind>> | undefined,
+    conflictSkip?: InsertConflictSkip,
   ): AsyncIterableResult<Row> {
     if (data.length === 0) {
       const generator = async function* (): AsyncGenerator<Row, void, unknown> {};
@@ -1536,6 +1584,7 @@ class CollectionImpl<
         this.tableName,
         mappedRows,
         selectedForInsert,
+        conflictSkip,
       ).map((plan) => mergeAnnotations(plan, annotationsMap));
       return dispatchSplitMutationRows<Row>({
         context: this.ctx.context,
@@ -1560,6 +1609,7 @@ class CollectionImpl<
         this.tableName,
         mappedRows,
         selectedForInsert,
+        conflictSkip,
       ),
       annotationsMap,
     );
@@ -1577,6 +1627,36 @@ class CollectionImpl<
       mapRow: (mapped) =>
         blindCast<Row, 'mapped mutation storage row matches the collection generic row'>(mapped),
     });
+  }
+
+  #resolveConflictSkip(
+    options: CreateConflictOptions<TContract, ModelName> | undefined,
+    method: string,
+  ): InsertConflictSkip | undefined {
+    if (options === undefined) return undefined;
+
+    if (options.onConflict !== 'skip') {
+      throw ormError(
+        'ORM.ARGUMENT_INVALID',
+        `${method} onConflict must be "skip"; received ${JSON.stringify(options.onConflict)}`,
+        { meta: { method, model: this.modelName } },
+      );
+    }
+
+    this.#assertNotMtiVariant(method);
+
+    const conflictOn = options.conflictOn ?? [];
+    assertInsertConflictSkipCapability(this.contract, method, conflictOn.length > 0);
+
+    return {
+      columns: resolveInsertConflictColumns(
+        this.contract,
+        this.namespaceId,
+        this.modelName,
+        conflictOn,
+        method,
+      ),
+    };
   }
 
   #assertNotMtiVariant(method: string): void {
@@ -1794,7 +1874,8 @@ class CollectionImpl<
 
   /**
    * Write terminal: insert many rows without materializing the
-   * inserted rows, returning the number of inserted records.
+   * inserted rows, returning the number of rows the database reports
+   * inserting.
    *
    * Prefer `createAll(...)` when you need the returned rows; prefer
    * this when you only need to know how many rows were inserted (the
@@ -1806,6 +1887,12 @@ class CollectionImpl<
    *   { email: 'b@example.com' },
    * ]);
    * // inserted === 2
+   *
+   * // Let the database skip rows that collide with a unique
+   * // constraint; the count is how many it actually inserted:
+   * const added = await db.orm.User.createAndCount(seedUsers, {
+   *   onConflict: 'skip',
+   * });
    * ```
    *
    * Not supported on MTI variants — use `createAll(...)` instead.
@@ -1817,14 +1904,22 @@ class CollectionImpl<
       State['variantName'],
       State['nsId']
     >[],
-    configure?: (meta: MetaBuilder<'write'>) => void,
+    optionsOrConfigure?: CreateConflictOptions<TContract, ModelName> | WriteConfigure,
+    configure?: WriteConfigure,
   ): Promise<number> {
+    const { options, configureCallback } = splitCreateArguments(optionsOrConfigure, configure);
+    const conflictSkip = this.#resolveConflictSkip(options, 'createAndCount()');
+
     if (data.length === 0) {
       return 0;
     }
 
     this.#assertNotMtiVariant('createAndCount()');
-    const annotationsMap = this.#collectAnnotationsFromMeta(configure, 'write', 'createAndCount');
+    const annotationsMap = this.#collectAnnotationsFromMeta(
+      configureCallback,
+      'write',
+      'createAndCount',
+    );
 
     const rows = blindCast<
       readonly Record<string, unknown>[],
@@ -1839,19 +1934,22 @@ class CollectionImpl<
         this.namespaceId,
         this.tableName,
         mappedRows,
+        conflictSkip,
       ).map((plan) => mergeAnnotations(plan, annotationsMap));
+      let affectedRows = 0;
       for (const plan of plans) {
-        await this.ctx.runtime.execute(plan);
+        const stats = await this.ctx.runtime.execute(plan);
+        affectedRows += stats.affectedRows;
       }
-      return data.length;
+      return affectedRows;
     }
 
     const compiled = mergeAnnotations(
-      compileInsertCount(this.contract, this.namespaceId, this.tableName, mappedRows),
+      compileInsertCount(this.contract, this.namespaceId, this.tableName, mappedRows, conflictSkip),
       annotationsMap,
     );
-    await this.ctx.runtime.execute(compiled);
-    return data.length;
+    const stats = await this.ctx.runtime.execute(compiled);
+    return stats.affectedRows;
   }
 
   /**

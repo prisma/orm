@@ -37,6 +37,8 @@ const defaultCapabilities = Object.freeze({
     lateral: true,
     scalarList: true,
     checkConstraint: true,
+    insertOnConflictSkip: true,
+    insertOnConflictWithoutTarget: true,
   },
 });
 
