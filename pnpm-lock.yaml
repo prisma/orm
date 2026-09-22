@@ -3427,6 +3427,9 @@ importers:
         specifier: 'catalog:'
         version: 0.2.17
     devDependencies:
+      '@internal/config-loader':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../1-framework/3-tooling/config-loader
       '@internal/emitter':
         specifier: workspace:8.0.0-rc.11
         version: link:../../1-framework/3-tooling/emitter
