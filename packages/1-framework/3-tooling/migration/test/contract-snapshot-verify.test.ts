@@ -66,34 +66,20 @@ describe('createSnapshotContentVerifier', () => {
     expect(error.meta?.['computedHash']).not.toBe(storageHash);
   });
 
-  it('recomputes each hash once per verifier instance', () => {
-    let hookCalls = 0;
-    const hooks = {
-      shouldPreserveEmpty: () => {
-        hookCalls += 1;
-        return false;
-      },
-    };
-    const storage = { namespaces: { a: { entries: {} } } };
-    const storageHash = computeStorageHash({
-      target: TARGET,
-      targetFamily: TARGET_FAMILY,
-      storage,
-      ...hooks,
-    });
-    const contractJson = {
-      storage: { ...storage, storageHash },
-      target: TARGET,
-      targetFamily: TARGET_FAMILY,
+  it('re-verifies on every assertion, so content mutated after a clean pass is caught', () => {
+    const { contractJson, storageHash } = genuineContract({ namespaces: {} });
+    const mutable = {
+      ...contractJson,
+      storage: { ...contractJson.storage } as Record<string, unknown>,
     };
 
-    const verifier = createSnapshotContentVerifier(hooks);
-    verifier.assertSnapshotContentMatches(contractJson, storageHash, 'p');
-    const callsAfterFirst = hookCalls;
-    verifier.assertSnapshotContentMatches(contractJson, storageHash, 'p');
+    const verifier = createSnapshotContentVerifier();
+    verifier.assertSnapshotContentMatches(mutable, storageHash, 'p');
+    mutable.storage['namespaces'] = { sneaky: { entries: {} } };
 
-    expect(callsAfterFirst).toBeGreaterThan(0);
-    expect(hookCalls).toBe(callsAfterFirst);
+    expect(() => verifier.assertSnapshotContentMatches(mutable, storageHash, 'p')).toThrowError(
+      /CONTRACT_SNAPSHOT_CONTENT_MISMATCH|does not match/,
+    );
   });
 });
 
