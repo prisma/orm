@@ -47,36 +47,12 @@ const assembled = assembleAuthoringContributions([
 // Helpers
 // ---------------------------------------------------------------------------
 
-function readRefParam(params: Record<string, unknown>, key: string): string | undefined {
-  const param = params[key];
-  if (!param || typeof param !== 'object') return undefined;
-  const p = param as { kind?: string; identifier?: string };
-  return p.kind === 'ref' && typeof p.identifier === 'string' ? p.identifier : undefined;
-}
-
-function readValueParam(params: Record<string, unknown>, key: string): string | undefined {
-  const param = params[key];
-  if (!param || typeof param !== 'object') return undefined;
-  const p = param as { kind?: string; raw?: string };
-  return p.kind === 'value' && typeof p.raw === 'string' ? p.raw : undefined;
-}
-
-function readListRefParams(params: Record<string, unknown>, key: string): string[] {
-  const param = params[key];
-  if (!param || typeof param !== 'object') return [];
-  const p = param as { kind?: string; items?: unknown[] };
-  if (p.kind !== 'list' || !Array.isArray(p.items)) return [];
-  return p.items.flatMap((item) => {
-    const i = item as { kind?: string; identifier?: string };
-    return i.kind === 'ref' && typeof i.identifier === 'string' ? [i.identifier] : [];
-  });
-}
-
-function unwrapQuotedString(raw: string): string {
-  if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) {
-    return raw.slice(1, -1);
-  }
-  return raw;
+function readRoleNames(values: Readonly<Record<string, unknown>>): string[] {
+  const roles = values['roles'];
+  if (!Array.isArray(roles)) return [];
+  return roles.map((role) =>
+    typeof role === 'string' ? role : (role as { declaration: { name: string } }).declaration.name,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -103,12 +79,12 @@ namespace public {
 
   function buildInput() {
     const { document, sources } = parse(source, 'psl-policy-authoring.test.psl');
-    const { symbolTable, diagnostics } = buildSymbolTable({
+    const { symbolTable, diagnostics, parsedBlocks } = buildSymbolTable({
       documents: [document],
       sources,
       pslBlockDescriptors: assembled.pslBlockDescriptors,
     });
-    return { document, sources, symbolTable, diagnostics };
+    return { document, sources, symbolTable, diagnostics, parsedBlocks };
   }
 
   it('parses the policy_select block without diagnostics', () => {
@@ -126,18 +102,19 @@ namespace public {
   });
 
   it('lowers the block to a PostgresRlsPolicy with the expected fields', () => {
-    const { symbolTable } = buildInput();
+    const { symbolTable, parsedBlocks } = buildInput();
     const publicNs = symbolTable.topLevel.namespaces['public'];
     const blockSymbol = Object.values(publicNs!.blocks)[0];
     if (!blockSymbol) throw new Error('expected one extension block');
-    const block = blockSymbol.block;
+    const envelope = parsedBlocks.get(blockSymbol);
+    if (!envelope) throw new Error('expected a typed envelope for the policy block');
 
     const namespaceId = publicNs!.name;
-    const prefix = block.name;
-    const targetModelName = readRefParam(block.parameters, 'target') ?? '';
-    const tableName = targetModelName.charAt(0).toLowerCase() + targetModelName.slice(1);
-    const roles = [...readListRefParams(block.parameters, 'roles')].sort();
-    const using = unwrapQuotedString(readValueParam(block.parameters, 'using') ?? '');
+    const prefix = envelope.name;
+    const target = envelope.values['target'] as { declaration: { name: string } };
+    const tableName = target.declaration.name;
+    const roles = [...readRoleNames(envelope.values)].sort();
+    const using = envelope.values['using'] as string;
 
     const wireHash = computeContentHash({ using, roles, operation: 'select', permissive: true });
     const wireName = `${prefix}_${wireHash}`;
