@@ -46,14 +46,13 @@ import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { Binder } from '@internal/psl-parser';
 import {
   type BlockSymbol,
-  blockSpecFactoryOf,
   type CompositeTypeSymbol,
   createPslDiagnosticCollector,
   type DiagnosticSource,
+  deriveParsedBlocks,
   diagnosticSource,
   type FieldSymbol,
   findBlockDescriptor,
-  interpretExtensionBlock,
   keywordPslSpan,
   type ModelAttributeSpecFactory,
   type ModelSymbol,
@@ -138,6 +137,12 @@ export interface InterpretPslDocumentToSqlContractInput {
   readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
+  /**
+   * Typed envelopes from the `buildSymbolTable` lifecycle. Provider paths
+   * thread this through; a direct caller that omits it falls back to the
+   * parser's `deriveParsedBlocks`.
+   */
+  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   readonly target: TargetPackRef<'sql', string>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly composedExtensions?: readonly string[];
@@ -543,40 +548,6 @@ function lowerExtensionBlocksForNamespace(
   return rows;
 }
 
-/**
- * Re-derives the parser's successful typed envelopes from the collected
- * symbol table. `buildSymbolTable` already reported every block value and
- * attribute failure — provider paths seed those diagnostics into the
- * interpretation result — so this derivation keeps only successes, the same
- * split the early model-mapping resolution uses for its duplicate run.
- * Spec factories may resolve declarations through the complete table; they
- * never observe another block's interpreted output.
- */
-function deriveParsedBlocks(
-  symbolTable: SymbolTable,
-  sources: PslSources,
-  pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace,
-): ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock> {
-  const parsedBlocks = new Map<BlockSymbol, ParsedPslExtensionBlock>();
-  const scopes = [symbolTable.topLevel, ...Object.values(symbolTable.topLevel.namespaces)];
-  for (const scope of scopes) {
-    for (const block of Object.values(scope.blocks)) {
-      const descriptor = findBlockDescriptor(pslBlockDescriptors, block.keyword);
-      if (descriptor === undefined) continue;
-      const spec = blockSpecFactoryOf(descriptor)({ symbols: symbolTable, block });
-      const parsed = interpretExtensionBlock({
-        block,
-        descriptor,
-        spec,
-        symbols: symbolTable,
-        sources,
-      });
-      if (parsed.ok) parsedBlocks.set(block, parsed.value);
-    }
-  }
-  return parsedBlocks;
-}
-
 interface ProcessEnumDeclarationsInput {
   readonly enumBlocks: readonly BlockSymbol[];
   readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
@@ -700,6 +671,8 @@ interface BuildModelNodeInput {
   readonly contributedModelAttributeSpecs: Readonly<Record<string, ModelAttributeSpecFactory>>;
   /** The target's default namespace id — the lowering context's `namespaceId` fallback for a model with no explicit PSL namespace. */
   readonly defaultNamespaceId: string;
+  /** Typed envelopes for spec factories whose grammar reads interpreted blocks (enum default arms). */
+  readonly parsedBlocks: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }
 
 interface BuildModelNodeResult {
@@ -773,6 +746,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
 
   const resolvedFields = collectResolvedFields({
     model,
+    parsedBlocks: input.parsedBlocks,
     symbolTable: input.symbolTable,
     mapping,
     enumTypeDescriptors: input.enumTypeDescriptors,
@@ -2184,11 +2158,9 @@ export function interpretPslDocumentToSqlContract(
     diagnostics,
   });
   const composedPslBlockDescriptors = input.authoringContributions?.pslBlockDescriptors ?? {};
-  const parsedBlocks = deriveParsedBlocks(
-    input.symbolTable,
-    input.sources,
-    composedPslBlockDescriptors,
-  );
+  const parsedBlocks =
+    input.parsedBlocks ??
+    deriveParsedBlocks(input.symbolTable, input.sources, composedPslBlockDescriptors);
   validateBlockModelAttributeRequirements({
     parsedBlocks,
     pslBlockDescriptors: composedPslBlockDescriptors,
@@ -2582,6 +2554,7 @@ export function interpretPslDocumentToSqlContract(
       modelAttributesByName,
       contributedModelAttributeSpecs: contributedModelSpecs,
       defaultNamespaceId,
+      parsedBlocks,
     });
     modelNodes.push(
       namespaceId !== undefined ? { ...result.modelNode, namespaceId } : result.modelNode,

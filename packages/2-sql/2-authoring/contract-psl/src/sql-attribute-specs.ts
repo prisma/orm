@@ -7,7 +7,10 @@ import type {
 } from '@internal/framework-components/authoring';
 import { isAuthoringFieldPresetDescriptor } from '@internal/framework-components/authoring';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
-import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
+import type {
+  ContributedPslDiagnosticCode,
+  ParsedPslExtensionBlock,
+} from '@internal/framework-components/psl-ast';
 import type {
   ArgType,
   AttributeCtx,
@@ -16,6 +19,7 @@ import type {
   AttributeSpecNamespace,
   Binder,
   DescribeUnsupportedAttribute,
+  BlockSymbol,
   FieldAttributeCtx,
   FieldAttributeSpecContext,
   FieldSymbol,
@@ -344,7 +348,9 @@ function enumMemberNames(ctx: FieldAttributeSpecContext): readonly string[] | un
       : ctx.symbols.topLevel.namespaces[ctx.field.typeNamespaceId];
   const block = scope?.blocks[ctx.field.typeName];
   if (block === undefined || block.keyword !== 'enum') return undefined;
-  return Object.keys(block.block.parameters);
+  const envelope = ctx.parsedBlocks?.get(block);
+  if (envelope === undefined) return undefined;
+  return Object.keys(envelope.values);
 }
 
 function enumDefaultArms(
@@ -768,12 +774,14 @@ export function fieldSpecContext(input: {
   readonly model: ModelSymbol;
   readonly field: FieldSymbol;
   readonly controlMutationDefaults: ControlDefaultRegistries;
+  readonly parsedBlocks?: ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
 }): FieldAttributeSpecContext {
   return {
     symbols: input.symbols,
     model: input.model,
     field: input.field,
     controlMutationDefaults: input.controlMutationDefaults,
+    ...(input.parsedBlocks !== undefined ? { parsedBlocks: input.parsedBlocks } : {}),
   };
 }
 
