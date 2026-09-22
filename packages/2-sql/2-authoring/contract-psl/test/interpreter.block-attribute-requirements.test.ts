@@ -1,5 +1,6 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
-import { modelAttribute } from '@internal/psl-parser';
+import type { PslBlockSpecDescriptor } from '@internal/psl-parser';
+import { entityRef, fixedBlock, modelAttribute, optional } from '@internal/psl-parser';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
@@ -16,11 +17,17 @@ const pslBlockDescriptors = {
     keyword: 'audit_rule',
     discriminator: 'audit_rule',
     name: { required: true },
-    parameters: {
-      target: { kind: 'ref' as const, refKind: 'model', scope: 'same-namespace' as const },
-    },
+    spec: () =>
+      fixedBlock({
+        parameters: {
+          target: {
+            type: optional(entityRef({ kind: 'model' })),
+            documentation: 'The audited model.',
+          },
+        },
+      }),
     requiresModelAttribute: { parameter: 'target', attribute: 'audited' },
-  },
+  } satisfies PslBlockSpecDescriptor,
 };
 
 const auditedModelSpec = modelAttribute('audited', {
@@ -164,5 +171,94 @@ namespace public {
           (d) => d.code === 'PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE',
         ),
     ).toBe(true);
+  });
+
+  it('checks the requirement on a top-level fallback selection', () => {
+    const result = interpretWith(`
+namespace reporting {
+  audit_rule track_widgets {
+    target = Widget
+  }
+}
+
+model Widget {
+  id Int @id
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE',
+          message:
+            '`audit_rule` block "track_widgets" targets model "Widget", which does not declare `@@audited`. Add `@@audited` to model "Widget".',
+        }),
+      ]),
+    );
+  });
+
+  it('accepts a top-level fallback selection that declares the attribute', () => {
+    const result = interpretWith(`
+namespace reporting {
+  audit_rule track_widgets {
+    target = Widget
+  }
+}
+
+model Widget {
+  id Int @id
+
+  @@audited
+}
+`);
+    expect(result.ok).toBe(true);
+  });
+
+  it('checks the selected local declaration, not a same-named attributed top-level model', () => {
+    const result = interpretWith(`
+namespace reporting {
+  model Widget {
+    id Int @id
+  }
+
+  audit_rule track_widgets {
+    target = Widget
+  }
+}
+
+model Widget {
+  id Int @id
+
+  @@audited
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE' }),
+      ]),
+    );
+  });
+
+  it('anchors the diagnostic on the parameter entry span', () => {
+    const result = interpretWith(`
+namespace public {
+  model Widget {
+    id Int @id
+  }
+
+  audit_rule track_widgets {
+    target = Widget
+  }
+}
+`);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const finding = result.failure.diagnostics.find(
+      (d) => d.code === 'PSL_EXTENSION_TARGET_MODEL_MISSING_ATTRIBUTE',
+    );
+    expect(finding?.span).toMatchObject({ start: { line: 8, column: 5 } });
   });
 });

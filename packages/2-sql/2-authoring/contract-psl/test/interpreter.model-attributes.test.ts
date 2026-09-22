@@ -1,6 +1,6 @@
 import type { AuthoringContributions } from '@internal/framework-components/authoring';
 import type { ModelAttributeSpecFactory } from '@internal/psl-parser';
-import { fieldRef, list, modelAttribute, optional, str } from '@internal/psl-parser';
+import { fieldRef, list, fixedBlock, modelAttribute, optional, str } from '@internal/psl-parser';
 import type { SqlNamespaceInput } from '@internal/sql-contract/types';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
@@ -302,7 +302,7 @@ model Gadget {
         keyword: 'stamp_block',
         discriminator: 'stamp',
         name: { required: true },
-        parameters: {},
+        spec: () => fixedBlock({ parameters: {} }),
       },
     };
     const collidingContributions: AuthoringContributions = {
