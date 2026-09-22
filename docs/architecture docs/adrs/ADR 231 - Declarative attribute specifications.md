@@ -1,6 +1,6 @@
 # ADR 231 — Declarative attribute specifications: composable argument combinators with typed inference
 
-**Status:** Accepted
+**Status:** Accepted. Amended 2026-09-22: top-level extension-block member values are declared through this same combinator kit via block specs (`fixedBlock` / `entriesBlock`), and the shared `jsonValue()` rule reads native JSON-compatible literals from the AST — see [ADR 255 — Block specs bind top-level block values](ADR%20255%20-%20Block%20specs%20bind%20top-level%20block%20values.md). Central spec discovery and language-server consumption, listed below as follow-up, are delivered by [ADR 249 — Central attribute-spec registry](ADR%20249%20-%20Central%20attribute-spec%20registry.md).
 **Date:** 2026-06-29
 **Accepted:** 2026-08-27
 
