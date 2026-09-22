@@ -97,11 +97,11 @@ describe('the orm section', () => {
 
   it('reports descriptor field problems', () => {
     expect(fields(validRaw({ family: { kind: 'family' } }))).toEqual([
-      'family.create',
-      'family.emission',
-      'family.familyId',
       'family.id',
+      'family.familyId',
       'family.version',
+      'family.emission',
+      'family.create',
     ]);
   });
 
@@ -154,6 +154,35 @@ describe('the orm section', () => {
       'formatter.newline',
     ]);
     expect(fields(validRaw({ formatter: { indent: 'tab', newline: 'LF' } }))).toEqual([]);
+  });
+
+  it('keeps every descriptor by reference, so closures, prototypes and this survive', () => {
+    class Serializer {
+      deserializeContract(json: unknown): unknown {
+        return json;
+      }
+    }
+    const target = {
+      ...descriptorBase,
+      kind: 'target',
+      id: 'postgres',
+      contractSerializer: new Serializer(),
+      create() {
+        return this.id;
+      },
+    };
+    const source = { format: 'psl', inputs: ['./schema.prisma'], load: () => ({}) };
+    const raw = validRaw({ target, contract: { source } });
+
+    const result = validateOrmSection(raw, provenanceFor(raw));
+
+    if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+    expect(result.value.target).toBe(target);
+    expect(result.value.family).toBe(raw['family']);
+    expect(result.value.adapter).toBe(raw['adapter']);
+    expect((result.value.target as unknown as typeof target).create()).toBe('postgres');
+    expect(result.value.contract?.source.load).toBe(source.load);
+    expect(result.value.contract?.source.inputs).toEqual(['/project/schema.prisma']);
   });
 
   it('keeps descriptor fields the schema does not name', () => {

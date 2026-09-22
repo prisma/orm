@@ -1524,6 +1524,9 @@ importers:
       '@internal/utils':
         specifier: workspace:8.0.0-rc.11
         version: link:../../0-foundation/utils
+      arktype:
+        specifier: ^2.2.2
+        version: 2.2.3
       c12:
         specifier: ^3.3.4
         version: 3.3.4(magicast@0.5.4)
