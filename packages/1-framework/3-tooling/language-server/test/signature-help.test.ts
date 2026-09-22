@@ -8,6 +8,7 @@ import {
   bool,
   buildSymbolTable,
   fieldAttribute,
+  fixedBlock,
   funcCall,
   list,
   modelAttribute,
@@ -113,7 +114,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy',
     discriminator: 'signature-policy',
     name: { required: true },
-    parameters: {},
+    spec: () => fixedBlock({ parameters: {} }),
     attributes: { probe: () => blockSpec },
   },
 };

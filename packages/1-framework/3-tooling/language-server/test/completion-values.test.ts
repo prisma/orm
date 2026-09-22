@@ -10,6 +10,7 @@ import {
   buildSymbolTable,
   entityRef,
   fieldAttribute,
+  fixedBlock,
   funcCall,
   identifier,
   int,
@@ -195,7 +196,7 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy',
     discriminator: 'completion-policy',
     name: { required: true },
-    parameters: {},
+    spec: () => fixedBlock({ parameters: {} }),
     attributes: { probe: () => blockSpec },
   },
 };

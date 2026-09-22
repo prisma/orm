@@ -11,6 +11,7 @@ import {
 import type { AuthoringPslBlockDescriptorNamespace } from '@internal/framework-components/authoring';
 import type { ControlStack } from '@internal/framework-components/control';
 import * as control from '@internal/framework-components/control';
+import { entriesBlock, jsonValue } from '@internal/psl-parser';
 import { notOk, ok } from '@internal/utils/result';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
@@ -231,8 +232,11 @@ describe('control-stack input derivation', () => {
         keyword: 'enum',
         discriminator: 'enum',
         name: { required: true },
-        parameters: {},
-        variadicParameters: true,
+        spec: () =>
+          entriesBlock({
+            value: { type: jsonValue(), documentation: 'The member value.' },
+            allowBare: true,
+          }),
       },
     };
     mockLoadedConfig(loadedConfig('psl', ['/abs/schema.psl']));
