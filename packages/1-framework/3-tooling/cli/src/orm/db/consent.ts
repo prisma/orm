@@ -23,7 +23,9 @@ export function errorConsentTokenUnresolved(targetId: string): CliStructuredErro
 }
 
 /** A prompt that names nothing cannot be consented to knowingly. */
-export function errorConsentOperationsMissing(): CliStructuredError {
+export function errorConsentOperationsMissing(options?: {
+  readonly previewCommand?: string;
+}): CliStructuredError {
   return new CliStructuredError(
     'CLI.CONSENT_OPERATIONS_MISSING',
     'The plan was refused as destructive but named no operations to confirm.',
@@ -33,11 +35,16 @@ export function errorConsentOperationsMissing(): CliStructuredError {
         {
           kind: 'run-command',
           label: 'Preview the plan',
-          command: '{bin} db update --dry-run',
+          command: options?.previewCommand ?? '{bin} db update --dry-run',
         },
       ],
     },
   );
+}
+
+/** The indented per-operation list every destructive-consent question renders. */
+export function destructiveOperationList(operations: readonly DestructivePlanOperation[]): string {
+  return operations.map((operation) => `  - ${operation.label}`).join('\n');
 }
 
 /** The question the user answers before anything is dropped. */
@@ -45,9 +52,8 @@ export function destructiveConsentQuestion(
   operations: readonly DestructivePlanOperation[],
   token: string,
 ): string {
-  const listed = operations.map((operation) => `  - ${operation.label}`).join('\n');
   return [
     `Apply ${operations.length} destructive operation(s) to ${token}? Data they remove cannot be recovered:`,
-    listed,
+    destructiveOperationList(operations),
   ].join('\n');
 }

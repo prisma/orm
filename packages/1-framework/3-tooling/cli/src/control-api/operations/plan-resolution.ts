@@ -26,10 +26,31 @@ export function looksLikeFullHash(input: string): boolean {
   return FULL_HASH_PATTERN.test(input);
 }
 
+/**
+ * Set when the origin was derived from the `db` ref by default (no `--from`)
+ * and that ref sits on an in-graph node that is not the graph tip. Planning
+ * from it forks the graph, so the caller must surface it to the user.
+ */
+export interface DefaultOriginBehindTip {
+  readonly refName: string;
+  readonly refHash: string;
+  readonly tipHash: string;
+}
+
 export type FromResolution =
   | { kind: 'greenfield'; fromHash: null; fromContract: null; defaulted: boolean }
-  | { kind: 'graph-node'; fromHash: string; fromContract: Contract }
-  | { kind: 'ref'; fromHash: string; fromContract: Contract }
+  | {
+      kind: 'graph-node';
+      fromHash: string;
+      fromContract: Contract;
+      defaultOriginBehindTip?: DefaultOriginBehindTip;
+    }
+  | {
+      kind: 'ref';
+      fromHash: string;
+      fromContract: Contract;
+      defaultOriginBehindTip?: DefaultOriginBehindTip;
+    }
   | { kind: 'auto-baseline'; fromHash: string; fromContract: Contract };
 
 export interface ResolveFromForPlanInput {
@@ -39,6 +60,25 @@ export interface ResolveFromForPlanInput {
 
 function graphIsEmpty(space: AggregateContractSpace): boolean {
   return space.packages.length === 0;
+}
+
+/**
+ * The graph tip, or `null` when the graph is empty or already forked —
+ * a forked graph has no single tip to compare the default ref against.
+ */
+function findUnambiguousTip(graph: MigrationGraph): string | null {
+  try {
+    return findLatestMigration(graph)?.to ?? null;
+  } catch (error) {
+    // Any graph-shape error (AMBIGUOUS_TARGET, NO_INITIAL_MIGRATION,
+    // NO_TARGET) means there is no single tip to compare the default ref
+    // against; the warning is skipped rather than failing a plan that never
+    // consulted the tip before.
+    if (MigrationToolsError.is(error)) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 function getReachableRefs(
@@ -174,11 +214,25 @@ export async function resolveFromForPlan(
         ),
       );
     }
-    return resolveFromPolicy(
+    const resolved = await resolveFromPolicy(
       { hash: dbRef.hash, provenance: { kind: 'ref', refName: 'db' } },
       input,
       refs,
     );
+    if (!resolved.ok) {
+      return resolved;
+    }
+    const value = resolved.value;
+    if (value.kind === 'ref' || value.kind === 'graph-node') {
+      const tipHash = findUnambiguousTip(graph);
+      if (tipHash !== null && tipHash !== value.fromHash) {
+        return ok({
+          ...value,
+          defaultOriginBehindTip: { refName: 'db', refHash: value.fromHash, tipHash },
+        });
+      }
+    }
+    return resolved;
   }
 
   const refResult = parseContractRef(optionsFrom, { graph, refs });

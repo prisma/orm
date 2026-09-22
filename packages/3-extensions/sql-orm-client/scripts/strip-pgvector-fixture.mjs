@@ -33,10 +33,9 @@ const source = readFileSync(target, 'utf8');
  * be. That is not something this script should care about.
  */
 const importBlock =
-  /import type \{ QueryOperationTypes as PgAdapterQueryOps \} from '@internal\/adapter-postgres\/operation-types';\nimport type \{[\s\S]*?\} from '@internal\/extension-pgvector\/codec-types';\nimport type \{ QueryOperationTypes as PgVectorQueryOperationTypes \} from '@internal\/extension-pgvector\/operation-types';/;
+  /import type \{[^}]*\} from '@internal\/extension-pgvector\/codec-types';\nimport type \{ QueryOperationTypes as PgVectorQueryOperationTypes \} from '@internal\/extension-pgvector\/operation-types';/;
 
 const replacement = [
-  "import type { QueryOperationTypes as PgAdapterQueryOps } from '@internal/adapter-postgres/operation-types';",
   '// pgvector types replaced with local aliases (see note above)',
   'type PgVectorTypes = object;',
   'type Vector<_N extends number> = number[];',

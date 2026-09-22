@@ -30,7 +30,15 @@ export type {
   RelationNode,
   UniqueConstraintNode,
 } from '../contract-definition';
-export type { CheckKind, TargetFieldRef } from '../contract-dsl';
+export type {
+  CheckKind,
+  ColumnRef,
+  DeferredIndexColumn,
+  DeferredIndexExpression,
+  IndexConstraint,
+  IndexExpressionInput,
+  TargetFieldRef,
+} from '../contract-dsl';
 export { buildContractDefinition } from '../contract-lowering';
 export type { ExtractCodecTypesFromPack } from '../contract-types';
 export { autoincrement, now } from '../default-functions';

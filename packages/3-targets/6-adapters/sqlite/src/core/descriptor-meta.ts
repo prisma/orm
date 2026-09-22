@@ -26,6 +26,8 @@ export const sqliteAdapterDescriptorMeta = {
       returning: true,
       foreignKeys: true,
       enums: false,
+      insertOnConflictSkip: true,
+      insertOnConflictWithoutTarget: true,
     },
   },
   dataTypes: sqliteDataTypes,

@@ -60,6 +60,27 @@ const posts = await db.Post
   .all();
 ```
 
+## Skipping rows that collide with a unique constraint
+
+`createAll` and `createAndCount` take an options object in second position that asks the database to skip rows colliding with a unique constraint instead of failing the whole statement.
+
+```ts
+// Skip on any unique constraint of the table.
+const inserted = await db.User.createAll(rows, { onConflict: 'skip' });
+
+// Skip only on the constraint over `email`.
+const added = await db.User.createAndCount(rows, {
+  onConflict: 'skip',
+  conflictOn: ['email'],
+});
+```
+
+`createAll` yields only the rows the database inserted; `createAndCount` returns its count. A collision on a constraint other than the one `conflictOn` names is not skipped — it surfaces as a unique violation.
+
+The option needs the contract capability `insertOnConflictSkip`, and `insertOnConflictWithoutTarget` as well when `conflictOn` is omitted. A contract emitted before the adapters reported these keys is refused with `ORM.CAPABILITY_MISSING`; re-emit it. MTI variant collections refuse the option with `ORM.OPERATION_UNSUPPORTED`. `create()` does not take it.
+
+The optional `configure` callback may still be passed in second position when there are no options.
+
 ## Prepared row descriptions
 
 Built-in collection chains expose terminal-only `.prepared.all(configure?)` and `.prepared.first(filter?, configure?)` views. They synchronously return a `Preparable<DbRow, Result>` without executing it: a description containing a SQL `plan` and a required `consume` function. The description is not itself a `SqlQueryPlan`. Filters, projection, includes, variants, first-row limit replacement and read annotations use the ordinary row pipeline.

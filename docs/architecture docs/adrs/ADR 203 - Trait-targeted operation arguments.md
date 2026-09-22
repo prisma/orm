@@ -2,7 +2,7 @@
 
 ## Context
 
-Adapters and extensions register query operations (e.g., `ilike`, `cosineDistance`) that attach to fields of a given shape. Until now an operation declared its `self` argument as a specific `codecId` — `pgvector/vector@1` for `cosineDistance`, for example. The type and runtime machinery then surfaced that operation on every field whose codec matched that ID.
+Adapters and extensions register query operations (e.g., `ilike`, `cosineDistance`) that attach to fields of a given shape. (Per [ADR 206](ADR%20206%20-%20Operations%20as%20TypeScript%20functions.md)'s amendment, a target registers its built-in operations too — `ilike` is contributed by the Postgres target, not its adapter.) Until now an operation declared its `self` argument as a specific `codecId` — `pgvector/vector@1` for `cosineDistance`, for example. The type and runtime machinery then surfaced that operation on every field whose codec matched that ID.
 
 Codec-ID targeting works when an operation is tied to one concrete codec. It breaks down when an operation is defined by a *capability* that multiple codecs share:
 
@@ -21,10 +21,10 @@ Extend operation argument specs with an optional `traits` field alongside `codec
 
 ## Grounding example
 
-Adapter-provided operations declare their arguments as trait-targeted where appropriate. The Postgres `ilike` descriptor names no specific textual codec — just the `textual` trait on its self argument:
+Operations contributed by a target, adapter or extension declare their arguments as trait-targeted where appropriate. The Postgres target's `ilike` descriptor names no specific textual codec — just the `textual` trait on its self argument:
 
 ```typescript
-// Adapter descriptor (runtime shape)
+// Postgres target descriptor (runtime shape)
 {
   method: 'ilike',
   args: [
@@ -52,7 +52,7 @@ readonly ilike: {
 };
 ```
 
-From this single descriptor, every textual field in the contract gains the operation. A non-textual field does not. An adapter that does not register the operation never exposes it, regardless of what codecs are on the target.
+From this single descriptor, every textual field in the contract gains the operation. A non-textual field does not. A target, adapter or extension that does not register the operation never exposes it, regardless of what codecs are on the target.
 
 ## Design principles
 
@@ -60,7 +60,7 @@ From this single descriptor, every textual field in the contract gains the opera
 2. **Traits are a closed union at the type level, an open set at runtime.** `CodecTrait` is a union so type matching stays structural and narrowing works; `ParamSpec.traits` is `readonly string[]` at runtime so registries can carry forward trait values they don't statically know about.
 3. **Return targeting stays exact.** Predicate detection and result decoding depend on knowing the concrete return codec. `ReturnSpec` enforces this separately, so loosening `ParamSpec.codecId` to optional does not weaken return-type guarantees.
 4. **Registration does the expansion work.** Operation lookup is on the hot path — it happens for every field access on an ORM model accessor. Trait resolution runs once per operation at registration time so field access remains a single map lookup.
-5. **Same descriptor, different reachability per contract.** Contracts see different operation sets because their adapters register different operations — not because core branches on target. This preserves the thin-core discipline from [ADR 005](ADR%20005%20-%20Thin%20Core%20Fat%20Targets.md).
+5. **Same descriptor, different reachability per contract.** Contracts see different operation sets because their targets, adapters and extensions register different operations — not because core branches on target. This preserves the thin-core discipline from [ADR 005](ADR%20005%20-%20Thin%20Core%20Fat%20Targets.md).
 
 ## How matching works
 
@@ -89,7 +89,7 @@ The ORM client surfaces this distinction by returning an `AnyExpression` (compos
 ## Interaction with other subsystems
 
 - **Codec registry** ([ADR 030](ADR%20030%20-%20Result%20decoding%20%26%20codecs%20registry.md)). Traits are codec metadata, owned by the codec registry. Operation matching reads traits from there; no new source of truth is introduced.
-- **Adapter SPI** ([ADR 016](ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md)). Adapter runtime descriptors expose `queryOperations()` alongside the existing lowering surface. Contract emission picks up `types.queryOperationTypes` from descriptor meta, and trait-targeted operations flow through the same pipeline as codec-ID operations.
+- **Adapter SPI** ([ADR 016](ADR%20016%20-%20Adapter%20SPI%20for%20Lowering.md)). Target, adapter and extension runtime descriptors expose `queryOperations()`; for adapters it sits alongside the existing lowering surface. Contract emission picks up `types.queryOperationTypes` from descriptor meta, and trait-targeted operations flow through the same pipeline as codec-ID operations.
 - **Contract extension encoding** ([ADR 105](ADR%20105%20-%20Contract%20extension%20encoding.md)) and [ADR 106](ADR%20106%20-%20Canonicalization%20for%20extensions.md). Trait-targeted argument specs serialize with `traits` as a string at the type level and as a string array at runtime. Canonicalization treats the `traits` field as opaque to the extension owner.
 - **Extension compatibility** ([ADR 017](ADR%20017%20-%20Extension%20Compatibility%20Policy.md)). Trait-targeting is additive. Existing codec-ID-targeted operations continue to work without changes.
 
@@ -104,8 +104,8 @@ The ORM client surfaces this distinction by returning an `AnyExpression` (compos
 
 ### Positive
 
-- Adapter-specific operations that apply to a capability (rather than one codec) can be registered once and automatically attach to every matching codec — including codecs added later by downstream extensions.
-- Operations are reachable only on contracts whose adapter registered them. Capability-based operators no longer need runtime guards to reject calls on unsupported targets; the operation is absent from the type surface.
+- Target-, adapter- or extension-specific operations that apply to a capability (rather than one codec) can be registered once and automatically attach to every matching codec — including codecs added later by downstream extensions.
+- Operations are reachable only on contracts whose target, adapter or extension registered them. Capability-based operators no longer need runtime guards to reject calls on unsupported targets; the operation is absent from the type surface.
 - Boolean-returning extension operations are predicates by construction, composable with `and`/`or`/`not` without special-casing per operation.
 
 ### Trade-offs
@@ -137,7 +137,7 @@ Doubles the surface — adapters, runtime registries, and type-level matchers al
 ## Open questions
 
 - Whether trait-targeted arguments should support OR-composition of required traits. Today `traits` is a single string at the type level and a conjunction at runtime. A more expressive combinator can be added later without breaking the current shape.
-- How the emitter pipeline should validate that every adapter-declared `QueryOperationTypes` entry has a corresponding runtime descriptor registered. The two are wired through descriptor meta but not cross-checked at emission time.
+- How the emitter pipeline should validate that every contributor-declared `QueryOperationTypes` entry has a corresponding runtime descriptor registered. The two are wired through descriptor meta but not cross-checked at emission time.
 
 ## Decision record
 

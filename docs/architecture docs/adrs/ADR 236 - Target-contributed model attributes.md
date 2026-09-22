@@ -72,7 +72,7 @@ A registry of `AuthoringModelAttributeDescriptor`s. Each descriptor:
 
 - **claims a bare `@@` attribute name** (`attribute: 'rls'`);
 - **supplies a factory for the declarative parameter spec** — a `ModelAttributeSpecFactory`, called with the declaring model's context and returning a spec built with the same `modelAttribute(...)` constructors as every other declarative attribute ([ADR 231](ADR%20231%20-%20Declarative%20attribute%20specifications.md)) — so parsing, validation, and printing come for free from the generic machinery. A spec that needs nothing from the context, like `@@rls`, returns a hoisted module constant so its identity is stable across calls;
-- **supplies a `lower` function** that turns the parsed attribute into a pack entity keyed into the namespace's `entries`.
+- **supplies a `lower` function** that turns the parsed attribute into a pack entity keyed into the namespace's `entries`. A lowering may instead return `{ index }`; see the amendment below.
 
 The factory indirection is uniform across every registered attribute spec, so one entry shape serves both this channel and the family built-ins that share the registry.
 
@@ -98,6 +98,16 @@ The field expresses exactly one constraint — *one* ref parameter's model must 
 
 - Both SPIs are durable public framework surface with a single consumer (`@@rls`). The shapes are the narrowest that serve it; a second consumer may force widening (e.g. multiple `requiresModelAttribute` pairs), which is additive but still a surface change.
 - An argument-less attribute's `lower` receives an empty parse (`Record<never, never>`); the descriptor machinery's generality is unused until an attribute with parameters arrives.
+
+## Amendment: a contributed attribute may produce a table index
+
+A lowering returns either the entity it always could or `{ index }`, an opaque payload the family narrows. The SQL interpreter checks it with `isAuthoredIndexInput` and pushes it onto the same `indexNodes` list `@@index` fills, so index naming, index-type registration and the name-xor-map rules are shared rather than reimplemented. The framework declares only the arm: an index's *shape* belongs to the family, because a Mongo index and a SQL index agree on nothing but the word.
+
+Two smaller additions serve the same case. A descriptor may declare itself `repeatable`, which skips the duplicate-attribute diagnostic, since a model may want several such indexes. And the lowering context resolves a field of the declaring model to its storage name and to the codec it stores through — `fieldStorageName` and `fieldCodecId` — so a lowering that renders storage-level text never guesses past `@map` or a naming convention, and can refuse a field whose values it cannot express.
+
+Postgres's `@@fullTextIndex` is the first attribute to use all three. It renders `to_tsvector('<language>', "<column>")` from the resolved column and the same language allowlist the query operations check, and refuses a field that is not stored through a textual codec. Postgres uses such an index only for a query whose expression is the same function over the same configuration literal and the same column — it compares parsed expressions, not text, so qualifying the column or not makes no difference. Sharing one renderer between the attribute, the TypeScript helper and the operations keeps the *rendering* from diverging, but it cannot make the two agree on the configuration: an author who passes one language to the index and another to the operation gets no error, just a sequential scan.
+
+Anchors: the `{ index }` arm and `repeatable` in [`interpreter.ts`](../../../packages/2-sql/2-authoring/contract-psl/src/interpreter.ts); the attribute in [`authoring.ts`](../../../packages/3-targets/3-targets/postgres/src/core/authoring.ts); the one place its expression is rendered in [`full-text-index-expression.ts`](../../../packages/3-targets/3-targets/postgres/src/core/full-text-index-expression.ts); and [`full-text-index-usage.test.ts`](../../../test/integration/test/sql-builder/full-text-index-usage.test.ts), which proves with `EXPLAIN` against a real server that Postgres chooses the index for the SQL the lanes lower.
 
 ## Alternatives considered
 

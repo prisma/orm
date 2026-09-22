@@ -21,6 +21,8 @@ Common SQL features reported by adapters using the `sql` namespace. This is a na
 | `checkConstraint` | boolean | Supports CHECK constraint DDL. Gates the `@@check` authoring surface: a PSL contract declaring a check against an adapter that does not report this is refused at authoring. | Stable |
 | `autoIndexesForeignKeys` | boolean | Database automatically creates indexes for foreign keys | Stable |
 | `defaultInInsert` | boolean | Supports `DEFAULT` as a value in multi-row `INSERT ... VALUES` (e.g. `INSERT INTO t (a, b) VALUES (1, DEFAULT)`). When false, the ORM splits multi-row inserts by column signature so each statement has a uniform column list. | Stable |
+| `insertOnConflictSkip` | boolean | Can skip rows that collide with a unique constraint instead of failing the statement. Gates `createAll(rows, { onConflict: 'skip' })` and the same option on `createAndCount`. | Stable |
+| `insertOnConflictWithoutTarget` | boolean | Can skip colliding rows without naming the constraint that was violated. Gates the same option when `conflictOn` is omitted. | Stable |
 
 ### `postgres`
 PostgreSQL-specific capabilities managed by the adapter.
@@ -228,6 +230,8 @@ Canonical capability keys with descriptions, typical implementers, and ADR refer
 | sql.checkConstraint | CHECK constraint DDL support; gates `@@check` | adapters that support CHECK | ADR 244 |
 | sql.autoIndexesForeignKeys | DB auto-indexes FKs | adapters where DB auto-creates FK indexes | ADR 161 |
 | sql.defaultInInsert | Supports DEFAULT in multi-row INSERT VALUES | adapters that support DEFAULT keyword as a value | — |
+| sql.insertOnConflictSkip | Skip rows colliding with a unique constraint; gates `onConflict: 'skip'` | adapters that can skip conflicting rows | — |
+| sql.insertOnConflictWithoutTarget | Skip colliding rows without naming the constraint | adapters that can skip without a conflict target | — |
 | postgres.partialIndex | Partial/filtered index support | postgres adapter | ADR 065 |
 | mysql.generatedColumns | Generated column support | mysql adapter | ADR 065 |
 | sqlite.fts5 | FTS5 support | sqlite adapter | ADR 065 |

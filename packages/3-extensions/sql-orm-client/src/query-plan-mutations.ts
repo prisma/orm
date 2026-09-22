@@ -133,16 +133,37 @@ function normalizeInsertRows(
   return { rows: normalizedRows };
 }
 
+/**
+ * Ask the database to skip rows that collide with a unique constraint.
+ * An empty `columns` list means every unique constraint on the table.
+ */
+export interface InsertConflictSkip {
+  readonly columns: readonly string[];
+}
+
+function conflictSkipClause(
+  tableName: string,
+  conflictSkip: InsertConflictSkip | undefined,
+): InsertOnConflict | undefined {
+  if (!conflictSkip) return undefined;
+  if (conflictSkip.columns.length === 0) return InsertOnConflict.doNothing();
+  return InsertOnConflict.on(
+    conflictSkip.columns.map((column) => ColumnRef.of(tableName, column)),
+  ).doNothing();
+}
+
 export function compileInsertReturning(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   tableName: string,
   rows: readonly Record<string, unknown>[],
   returningColumns: readonly string[] | undefined,
+  conflictSkip?: InsertConflictSkip,
 ): SqlQueryPlan<Record<string, unknown>> {
   const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
   const ast = InsertAst.into(tableSourceForContract(contract, namespaceId, tableName))
     .withRows(normalizedRows)
+    .withOnConflict(conflictSkipClause(tableName, conflictSkip))
     .withReturning(buildReturningColumns(contract, namespaceId, tableName, returningColumns));
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
@@ -153,11 +174,12 @@ export function compileInsertCount(
   namespaceId: string,
   tableName: string,
   rows: readonly Record<string, unknown>[],
+  conflictSkip?: InsertConflictSkip,
 ): SqlQueryPlan<Record<string, unknown>> {
   const { rows: normalizedRows } = normalizeInsertRows(contract, namespaceId, tableName, rows);
-  const ast = InsertAst.into(tableSourceForContract(contract, namespaceId, tableName)).withRows(
-    normalizedRows,
-  );
+  const ast = InsertAst.into(tableSourceForContract(contract, namespaceId, tableName))
+    .withRows(normalizedRows)
+    .withOnConflict(conflictSkipClause(tableName, conflictSkip));
   const { params } = deriveParamsFromAst(ast);
   return buildOrmQueryPlan(contract, ast, params);
 }
@@ -270,6 +292,7 @@ export function compileInsertReturningSplit(
   tableName: string,
   rows: readonly Record<string, unknown>[],
   returningColumns: readonly string[] | undefined,
+  conflictSkip?: InsertConflictSkip,
 ): ReadonlyArray<SqlQueryPlan<Record<string, unknown>>> {
   if (rows.length === 0) {
     throw ormError('ORM.MUTATION_DATA_MISSING', 'create() requires at least one row', {
@@ -277,7 +300,7 @@ export function compileInsertReturningSplit(
     });
   }
   return groupRowsByColumnSignature(rows).map((group) =>
-    compileInsertReturning(contract, namespaceId, tableName, group, returningColumns),
+    compileInsertReturning(contract, namespaceId, tableName, group, returningColumns, conflictSkip),
   );
 }
 
@@ -286,6 +309,7 @@ export function compileInsertCountSplit(
   namespaceId: string,
   tableName: string,
   rows: readonly Record<string, unknown>[],
+  conflictSkip?: InsertConflictSkip,
 ): ReadonlyArray<SqlQueryPlan<Record<string, unknown>>> {
   if (rows.length === 0) {
     throw ormError('ORM.MUTATION_DATA_MISSING', 'createAndCount() requires at least one row', {
@@ -293,7 +317,7 @@ export function compileInsertCountSplit(
     });
   }
   return groupRowsByColumnSignature(rows).map((group) =>
-    compileInsertCount(contract, namespaceId, tableName, group),
+    compileInsertCount(contract, namespaceId, tableName, group, conflictSkip),
   );
 }
 

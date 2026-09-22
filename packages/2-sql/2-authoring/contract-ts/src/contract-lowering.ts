@@ -31,6 +31,8 @@ import {
   applyNaming,
   type ContractInput,
   type ContractModelBuilder,
+  type DeferredIndexColumn,
+  type DeferredIndexExpression,
   type FieldStateOf,
   type ForeignKeyConstraint,
   type IdConstraint,
@@ -816,6 +818,30 @@ function resolveForeignKeyNodes(
   return [...relationForeignKeys, ...sqlForeignKeys];
 }
 
+/**
+ * Resolves a deferred index expression's field refs the way the field-tuple form
+ * resolves its columns, and pairs each with the codec the column stores through
+ * so a renderer can refuse a column it cannot express.
+ */
+function resolveDeferredColumns(
+  spec: Pick<RuntimeModelSpec, 'modelName' | 'fieldToColumn'>,
+  expression: DeferredIndexExpression,
+  fieldCodecIds: Readonly<Record<string, string>>,
+): readonly DeferredIndexColumn[] {
+  const fieldNames = expression.fields.map((ref) => ref.fieldName);
+  const columnNames = mapFieldNamesToColumnNames(spec.modelName, fieldNames, spec.fieldToColumn);
+  return fieldNames.map((fieldName, position) => {
+    const name = columnNames[position];
+    const codecId = fieldCodecIds[fieldName];
+    if (name === undefined || codecId === undefined) {
+      throw new InternalError(
+        `Deferred index expression on "${spec.modelName}" resolved no column for field "${fieldName}"`,
+      );
+    }
+    return { name, codecId };
+  });
+}
+
 function resolveModelNode(
   spec: RuntimeModelSpec,
   allSpecs: ReadonlyMap<string, RuntimeModelSpec>,
@@ -824,6 +850,8 @@ function resolveModelNode(
   extensions?: Record<string, ExtensionPackRef<'sql', string>>,
 ): ModelNode {
   const fields: FieldNode[] = [];
+  /** Filled by the field loop below, read by a deferred index expression. */
+  const fieldCodecIds: Record<string, string> = {};
 
   for (const [fieldName, fieldBuilder] of Object.entries(spec.fieldBuilders)) {
     const fieldState = fieldBuilder.build();
@@ -838,6 +866,7 @@ function resolveModelNode(
     if (!columnName) {
       throw new InternalError(`Column name resolution failed for "${spec.modelName}.${fieldName}"`);
     }
+    fieldCodecIds[fieldName] = descriptor.codecId;
 
     const enumHandle =
       'typeRef' in fieldState && isEnumTypeHandle(fieldState.typeRef)
@@ -879,7 +908,15 @@ function resolveModelNode(
       ...method,
     };
     return index.expression !== undefined
-      ? { ...carried, expression: index.expression }
+      ? {
+          ...carried,
+          expression:
+            typeof index.expression === 'string'
+              ? index.expression
+              : index.expression.render(
+                  resolveDeferredColumns(spec, index.expression, fieldCodecIds),
+                ),
+        }
       : {
           ...carried,
           columns: mapFieldNamesToColumnNames(

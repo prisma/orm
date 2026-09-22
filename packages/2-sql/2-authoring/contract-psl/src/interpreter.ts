@@ -63,6 +63,7 @@ import {
 } from '@internal/psl-parser';
 import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
+import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
 import type {
   SqlModelStorage,
   SqlNamespaceBase,
@@ -1118,7 +1119,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     }
     const contributedModelAttribute = input.modelAttributesByName.get(modelAttribute.name);
     if (contributedModelAttribute !== undefined) {
-      if (declaredContributedModelAttributes.has(modelAttribute.name)) {
+      if (
+        contributedModelAttribute.repeatable !== true &&
+        declaredContributedModelAttributes.has(modelAttribute.name)
+      ) {
         diagnostics.push(
           duplicateModelAttributeDiagnostic({
             name: modelAttribute.name,
@@ -1167,6 +1171,9 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         target: input.targetId,
         modelName: model.name,
         storageName: tableName,
+        fieldStorageName: (fieldName) => mapping.fieldColumns.get(fieldName),
+        fieldCodecId: (fieldName) =>
+          resolvedFields.find((resolved) => resolved.field.name === fieldName)?.descriptor.codecId,
         namespaceId: modelNamespaceId ?? input.defaultNamespaceId,
         sourceId: source.sources.sourceFileFor(source.node).filename,
         diagnostics: {
@@ -1178,6 +1185,17 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         },
       });
       if (lowered === undefined) {
+        continue;
+      }
+      if ('index' in lowered) {
+        if (!isAuthoredIndexInput(lowered.index)) {
+          throw contractError(
+            'CONTRACT.PACK_CONTRIBUTION_INVALID',
+            `model attribute "@@${modelAttribute.name}" on model "${model.name}" lowered to a malformed index. A contributed attribute that returns { index } must return an authored-index input: exactly one of a columns list or an expression, plus explicit where/unique/name/map and a type-with-options pair.`,
+            { meta: { attribute: modelAttribute.name, modelName: model.name } },
+          );
+        }
+        indexNodes.push(lowered.index);
         continue;
       }
       const slot = modelAttributeEntities[contributedModelAttribute.attribute] ?? {};
