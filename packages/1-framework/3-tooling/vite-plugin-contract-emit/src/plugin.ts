@@ -1,6 +1,6 @@
 import type { ContractEmitResult } from '@internal/cli/control-api';
 import { disposeEmitQueue, executeContractEmit } from '@internal/cli/control-api';
-import { loadConfigForSections } from '@internal/config-loader';
+import { expandContractInputs, loadConfigForSections } from '@internal/config-loader';
 import { getEmittedArtifactPaths } from '@internal/emitter';
 import { extname, resolve } from 'pathe';
 import type { Plugin, ViteDevServer } from 'vite';
@@ -308,7 +308,7 @@ export function prismaVitePlugin(
       }
 
       const files = new Set<string>([absoluteConfigPath]);
-      const inputs = contract.source.inputs ?? [];
+      const inputs = await expandContractInputs(contract.source.inputs);
       for (const outputFile of resolveContractOutputFiles(contract.output)) {
         ignoredOutputFiles.add(outputFile);
       }

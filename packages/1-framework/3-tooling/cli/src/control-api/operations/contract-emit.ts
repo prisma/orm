@@ -1,4 +1,5 @@
 import { mkdir } from 'node:fs/promises';
+import { expandContractInputs } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
 import { createControlStack } from '@internal/framework-components/control';
@@ -293,7 +294,7 @@ export async function executeContractEmit(
       authoringContributions: stack.authoringContributions,
       codecLookup: stack.codecLookup,
       controlMutationDefaults: stack.controlMutationDefaults,
-      resolvedInputs: contractConfig.source.inputs ?? [],
+      resolvedInputs: await unlessAborted(expandContractInputs(contractConfig.source.inputs)),
       capabilities: stack.capabilities,
     };
 

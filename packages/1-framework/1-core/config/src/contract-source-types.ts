@@ -44,6 +44,11 @@ export interface ContractSourceContext {
   readonly authoringContributions: AssembledAuthoringContributions;
   readonly codecLookup: CodecLookup;
   readonly controlMutationDefaults: ControlMutationDefaults;
+  /**
+   * The flat, expanded, deduped, sorted member file list — every
+   * `source.inputs` glob resolved to the files it currently matches. Not
+   * positionally matched to `source.inputs`.
+   */
   readonly resolvedInputs: readonly string[];
   readonly capabilities: CapabilityMatrix;
 }
@@ -52,6 +57,11 @@ export interface ContractSourceContext {
 export type ContractSourceFormat = 'psl' | 'typescript';
 
 export interface ContractSourceProviderBase {
+  /**
+   * Glob patterns naming the contract source's member files. A wildcard-free
+   * entry is the degenerate glob (a literal path). Directories are not
+   * auto-expanded.
+   */
   readonly inputs?: readonly string[];
   readonly load: (
     context: ContractSourceContext,

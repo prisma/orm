@@ -298,6 +298,17 @@ describe('collectConfigIssues', () => {
     ).toEqual([]);
   });
 
+  it('accepts inputs entries that are glob patterns, not just literal paths', () => {
+    const issues = collectConfigIssues(
+      createValidRawConfig({
+        contract: {
+          source: createSourceProvider({ inputs: ['./prisma/**/*.prisma', './extra.prisma'] }),
+        },
+      }),
+    );
+    expect(issues).toEqual([]);
+  });
+
   it('accepts a provider with an unknown format string and extra keys', () => {
     const issues = collectConfigIssues(
       createValidRawConfig({

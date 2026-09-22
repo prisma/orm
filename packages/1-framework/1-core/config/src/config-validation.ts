@@ -212,6 +212,9 @@ function validateContract(config: Record<string, unknown>, issues: IssueCollecto
     return;
   }
 
+  // Entries are glob patterns (a wildcard-free entry is the degenerate glob,
+  // a literal path); this only checks the array-of-strings shape, not glob
+  // syntax.
   const inputs = Object.hasOwn(source, 'inputs') ? source['inputs'] : undefined;
   if (inputs !== undefined) {
     if (!Array.isArray(inputs)) {

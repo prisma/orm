@@ -14,11 +14,16 @@ const loadConfigForSectionsMock = vi.hoisted(() => vi.fn());
 // The production code consumes `loadConfigForSections`, which wraps the config
 // in a Result. Tests keep resolving plain configs (or rejecting); the wrapper
 // adds the `ok(...)` so every existing fixture stays unchanged.
+// `expandContractInputs` is passthrough here: fixtures already name each
+// member file as a distinct absolute path, and this suite tests the
+// plugin's file-set bookkeeping, not glob expansion (covered in
+// `@internal/config-loader`'s own tests).
 vi.mock('@internal/config-loader', async () => {
   const { ok } = await import('@internal/utils/result');
   return {
     loadConfigForSections: async (...args: unknown[]) =>
       ok(await loadConfigForSectionsMock(...args)),
+    expandContractInputs: async (patterns: readonly string[] | undefined) => patterns ?? [],
   };
 });
 

@@ -45,7 +45,7 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
       const [absoluteSchemaPath] = context.resolvedInputs;
       if (absoluteSchemaPath === undefined) {
         throw new InternalError(
-          'mongoContract: context.resolvedInputs is empty. The CLI config loader should populate it positional-matched with source.inputs.',
+          'mongoContract: context.resolvedInputs is empty. The CLI config loader should populate it by expanding source.inputs.',
         );
       }
       let schema: string;
