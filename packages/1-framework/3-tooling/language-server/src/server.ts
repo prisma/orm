@@ -455,6 +455,7 @@ function createServerOn(connection: Connection): LanguageServer {
       document: artifacts.document,
       sourceFile: artifacts.sourceFile,
       symbolTable: project.artifacts.symbolTable(),
+      parsedBlocks: project.artifacts.parsedBlocks(),
       scalarTypes: project.controlStack.scalarTypes,
     };
     return buildSemanticTokens(source, range);
@@ -490,6 +491,7 @@ function createServerOn(connection: Connection): LanguageServer {
             scalarTypes: project.controlStack.scalarTypes,
             pslBlockDescriptors: project.controlStack.pslBlockDescriptors,
             symbolTable: project.artifacts.symbolTable(),
+            parsedBlocks: project.artifacts.parsedBlocks(),
             ...(project.controlStack.authoringContributions === undefined
               ? {}
               : { authoringContributions: project.controlStack.authoringContributions }),
@@ -527,6 +529,7 @@ function createServerOn(connection: Connection): LanguageServer {
         candidates: {
           pslBlockDescriptors: project.controlStack.pslBlockDescriptors,
           symbolTable: project.artifacts.symbolTable(),
+          parsedBlocks: project.artifacts.parsedBlocks(),
           ...(project.controlStack.authoringContributions === undefined
             ? {}
             : { authoringContributions: project.controlStack.authoringContributions }),

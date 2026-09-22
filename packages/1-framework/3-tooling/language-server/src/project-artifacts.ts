@@ -1,4 +1,6 @@
+import type { ParsedPslExtensionBlock } from '@internal/framework-components/authoring';
 import {
+  type BlockSymbol,
   buildSymbolTable,
   type PslDiagnostic,
   type SymbolTable,
@@ -52,6 +54,7 @@ export interface ProjectArtifacts {
    */
   document(uri: string): DocumentArtifacts | undefined;
   symbolTable(): SymbolTable;
+  parsedBlocks(): ReadonlyMap<BlockSymbol, ParsedPslExtensionBlock>;
   symbolDiagnostics(): readonly PslDiagnostic[];
   documentChanged(uri: string): void;
   documentClosed(uri: string): void;
@@ -91,6 +94,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
             documents: [document],
             sources,
             symbolTable: currentSymbolTable,
+            parsedBlocks: readSymbolTableResult().parsedBlocks,
           },
           interpretation.context,
         );
@@ -199,6 +203,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
     },
     document: readDocument,
     symbolTable: readSymbolTable,
+    parsedBlocks: () => readSymbolTableResult().parsedBlocks,
     symbolDiagnostics: () => readSymbolTableResult().diagnostics,
     documentChanged: drop,
     documentClosed: drop,

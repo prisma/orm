@@ -13,7 +13,9 @@ import {
   blockAttribute,
   bool,
   buildSymbolTable,
+  entityRef,
   fieldAttribute,
+  fixedBlock,
   funcCall,
   identifier,
   int,
@@ -139,11 +141,22 @@ const pslBlockDescriptors: AuthoringPslBlockDescriptorNamespace = {
     keyword: 'policy',
     discriminator: 'fixture-policy',
     name: { required: true },
-    parameters: {
-      on: { kind: 'ref', refKind: 'model', scope: 'same-space' },
-      where: { kind: 'value', codecId: 'fixture/text@1' },
-      mode: { kind: 'option', values: ['permissive', 'restrictive'] },
-    },
+    spec: () =>
+      fixedBlock({
+        parameters: {
+          on: { type: optional(entityRef({ kind: 'model' })), documentation: '' },
+          where: { type: optional(str()), documentation: '' },
+          mode: {
+            type: optional(
+              oneOf(
+                identifier('permissive', { documentation: 'Combined with OR.' }),
+                identifier('restrictive', { documentation: 'Combined with AND.' }),
+              ),
+            ),
+            documentation: '',
+          },
+        },
+      }),
   },
 };
 
@@ -282,7 +295,7 @@ async function recursiveCompletionResolution(): Promise<ConfigResolution> {
       keyword: 'policy',
       discriminator: 'completion-policy',
       name: { required: true },
-      parameters: {},
+      spec: () => fixedBlock({ parameters: {} }),
       attributes: { probe: () => probeBlock },
     },
   };
@@ -1728,7 +1741,7 @@ describe('language server', { timeout: timeouts.databaseOperation }, () => {
     expect(items.find((item) => item.label === 'policy')).toMatchObject({
       insertTextFormat: InsertTextFormat.Snippet,
       textEdit: {
-        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block parameters and attributes}\n}`,
+        newText: `policy ${nameSnippetPlaceholder} {\n  \${0:// Block keys and attributes}\n}`,
       },
     });
   });
