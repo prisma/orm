@@ -17,19 +17,21 @@ export interface RecoveredEnumColumn {
 
 const RECOVERABLE_NATIVE_TYPE_CODECS: Readonly<Record<string, string>> = {
   text: PG_TEXT_CODEC_ID,
-  varchar: PG_VARCHAR_CODEC_ID,
   'character varying': PG_VARCHAR_CODEC_ID,
-  char: PG_CHAR_CODEC_ID,
   character: PG_CHAR_CODEC_ID,
+  'character(1)': PG_CHAR_CODEC_ID,
 };
 
 /**
  * The codec id a recovered enum's `@@type` carries for a column of this
  * native type, or undefined when no text-backed codec maps — an unmapped
- * type is simply not recovered, never an error. Only the exact codec target
- * spellings map: a parameterized spelling like `varchar(20)` must keep its
- * `@@check`, because `@@type` re-emits the codec's bare target type and the
- * planner would widen the column to it.
+ * type is simply not recovered, never an error. The keys are the spellings
+ * introspection actually produces (`format_type` renders canonical long
+ * names, never `varchar`/`char`/`bpchar`). A parameterized spelling like
+ * `varchar(20)` must keep its `@@check`, because `@@type` re-emits the
+ * codec's bare target type and the planner would widen the column to it —
+ * except `character(1)`, which IS the bare `character` type: a length-less
+ * `char` column always introspects with the implicit `(1)`.
  */
 function recoveredEnumCodecId(nativeType: string): string | undefined {
   return Object.hasOwn(RECOVERABLE_NATIVE_TYPE_CODECS, nativeType)

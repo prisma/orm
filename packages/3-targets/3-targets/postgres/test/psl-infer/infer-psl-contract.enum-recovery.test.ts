@@ -244,37 +244,7 @@ describe('Path A recovery — text scalar', () => {
 });
 
 describe('Path A recovery — varchar scalar', () => {
-  it('recovers a bare varchar column with the pg/varchar@1 codec', () => {
-    const output = inferAndPrint(
-      tree({
-        public: namespaceNode('public', {
-          orders: table(
-            'orders',
-            {
-              id: idColumn,
-              status: { name: 'status', nativeType: 'varchar', nullable: false },
-            },
-            [
-              membershipCheck(
-                'orders',
-                'status',
-                false,
-                ['open', 'closed'],
-                `((status)::text = ANY ((ARRAY['open'::character varying, 'closed'::character varying])::text[]))`,
-              ),
-            ],
-          ),
-        }),
-      }),
-    );
-
-    expect(output).toContain('enum OrdersStatus {');
-    expect(output).toContain('@@type("pg/varchar@1")');
-    expect(output).toMatch(/status\s+OrdersStatus\n/);
-    expect(output).not.toContain('@@check');
-  });
-
-  it('recovers the bare `character varying` spelling too', () => {
+  it('recovers the bare `character varying` spelling', () => {
     const output = inferAndPrint(
       tree({
         public: namespaceNode('public', {
@@ -359,6 +329,100 @@ describe('Path A recovery — varchar scalar', () => {
 
     expect(output).not.toContain('enum ');
     expect(output).toContain('VarChar(20)');
+    expect(output).toContain('@@check');
+  });
+});
+
+describe('Path A recovery — char scalar', () => {
+  // A bare `char` column always introspects as `character(1)` — `format_type`
+  // renders the implicit length — so that spelling is the reachable one, and
+  // it recovers: bare `character` means `character(1)`, so `@@type`
+  // re-emitting the codec's bare target type drops no length.
+  it('recovers a character(1) column with the pg/char@1 codec', () => {
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode('public', {
+          flags: table(
+            'flags',
+            {
+              id: idColumn,
+              state: { name: 'state', nativeType: 'character(1)', nullable: false },
+            },
+            [
+              membershipCheck(
+                'flags',
+                'state',
+                false,
+                ['y', 'n'],
+                `((state)::text = ANY ((ARRAY['y'::bpchar, 'n'::bpchar])::text[]))`,
+              ),
+            ],
+          ),
+        }),
+      }),
+    );
+
+    expect(output).toContain('enum FlagsState {');
+    expect(output).toContain('@@type("pg/char@1")');
+    expect(output).toMatch(/state\s+FlagsState\n/);
+    expect(output).not.toContain('@@check');
+  });
+
+  it('a character(3) column recovers nothing — recovery would drop the length', () => {
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode('public', {
+          flags: table(
+            'flags',
+            {
+              id: idColumn,
+              state: { name: 'state', nativeType: 'character(3)', nullable: false },
+            },
+            [
+              membershipCheck(
+                'flags',
+                'state',
+                false,
+                ['yes', 'no'],
+                `((state)::text = ANY ((ARRAY['yes'::bpchar, 'no'::bpchar])::text[]))`,
+              ),
+            ],
+          ),
+        }),
+      }),
+    );
+
+    expect(output).not.toContain('enum ');
+    expect(output).toContain('@@check');
+  });
+
+  it('the short `varchar` spelling recovers nothing — introspection never produces it', () => {
+    // `format_type` always renders the canonical long spelling, so the map
+    // keys only what a real pull can carry.
+    const output = inferAndPrint(
+      tree({
+        public: namespaceNode('public', {
+          orders: table(
+            'orders',
+            {
+              id: idColumn,
+              status: { name: 'status', nativeType: 'varchar', nullable: false },
+            },
+            [
+              membershipCheck(
+                'orders',
+                'status',
+                false,
+                ['open', 'closed'],
+                `((status)::text = ANY ((ARRAY['open'::character varying, 'closed'::character varying])::text[]))`,
+              ),
+            ],
+          ),
+        }),
+      }),
+    );
+
+    expect(output).not.toContain('enum ');
     expect(output).toContain('@@check');
   });
 });
@@ -689,7 +753,7 @@ describe('Path A recovery — negative cases', () => {
     );
 
     expect(output).toMatchInlineSnapshot(`
-      "// use prisma-next
+      "// use prisma-8
       // Contract inferred from the live database schema. Edit as needed, then run \`prisma contract emit\`.
 
       model Orders {
