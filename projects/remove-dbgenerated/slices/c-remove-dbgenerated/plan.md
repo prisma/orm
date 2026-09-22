@@ -30,3 +30,4 @@ Spec: [`spec.md`](spec.md). Branch `remove-dbgenerated-delete` off `main` at `6f
 
 - Linear: the project has no ticket. The PR title carries no ticket prefix and the checklist says so, as slices A and B did.
 - `deferred.md` item 8 (quote-aware SQL body check) is unchanged by this slice.
+- `test/integration` `driver-adapters-error-forwarding`: an `it.fails` case passed during dispatch 2's run in two vitest projects at once. The reviewer read the test: it drives a mocked `pg` Pool through the ORM and nothing in this slice is on that path. Dispatch 5 re-runs it; if it still passes, it is checked on `main` and reported as a pre-existing item, not fixed here.
