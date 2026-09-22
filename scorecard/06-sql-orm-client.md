@@ -59,7 +59,7 @@ Legend:
 | String `endsWith` first-class helper | 🟡 | 🟡 | — | |
 | `findUniqueOrThrow` / `findFirstOrThrow` terminal | ❌ | ❌ | — | |
 | Per-query / global `omit` | ❌ | ❌ | — | |
-| `createMany({ skipDuplicates })` | ❌ | ❌ | — | |
+| `createMany({ skipDuplicates })` — `createAll`/`createAndCount` with `{ onConflict: 'skip' }` | ✅ | ✅ | — | `test/integration/test/sql-orm-client/create-on-conflict.test.ts`; `test/e2e/framework/test/sqlite/orm.test.ts` (`createAll with onConflict skip`) |
 | `updateMany({ limit })` | ❌ | ❌ | — | |
 | `relationLoadStrategy: 'query' \| 'join'` | ❌ | ❌ | — | |
 | `Prisma.skip` | ❌ | ❌ | — | |

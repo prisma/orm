@@ -2,6 +2,7 @@ import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   documentScopedTypes,
   pgvectorAuthoringContributions,
@@ -12,6 +13,7 @@ import {
 } from './fixtures';
 
 const baseInput = {
+  dataTypeLookup: fixtureDataTypeSupport.lookup,
   target: postgresTarget,
   scalarColumnDescriptors: postgresScalarTypeDescriptors,
   composedExtensionContracts: new Map(),
@@ -581,6 +583,7 @@ namespace public {
     });
 
     const result = interpretPslDocumentToSqlContract({
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       ...symbolTableInput,
       target: postgresTarget,
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
@@ -649,6 +652,7 @@ model Foo {
       });
 
       const result = interpretPslDocumentToSqlContract({
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
         ...symbolTableInput,
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
@@ -696,6 +700,7 @@ namespace auth {
       });
 
       const result = interpretPslDocumentToSqlContract({
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
         ...symbolTableInput,
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,
@@ -744,6 +749,7 @@ namespace auth {
       });
 
       const result = interpretPslDocumentToSqlContract({
+        dataTypeLookup: fixtureDataTypeSupport.lookup,
         ...symbolTableInput,
         target: postgresTarget,
         scalarColumnDescriptors: postgresScalarTypeDescriptors,

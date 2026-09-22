@@ -22,6 +22,7 @@ import {
   CodecDescriptorImpl,
   CodecImpl,
   type CodecInstanceContext,
+  dataTypeId,
   voidParamsSchema,
 } from '@internal/framework-components/codec';
 import {
@@ -82,6 +83,7 @@ class FixturePolicyTextCodec extends CodecImpl<
 }
 
 class FixturePolicyTextDescriptor extends CodecDescriptorImpl<void> {
+  override readonly dataType = dataTypeId('demo/fixture');
   override readonly codecId = FIXTURE_POLICY_CODEC_ID as typeof FIXTURE_POLICY_CODEC_ID;
   override readonly traits = ['textual'] as const;
   override readonly targetTypes = ['text'] as const;

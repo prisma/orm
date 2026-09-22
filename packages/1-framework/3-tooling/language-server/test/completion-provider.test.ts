@@ -1,13 +1,13 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type {
+  AuthoringDataTypeEntry,
   AuthoringEntityTypeNamespace,
   AuthoringPslBlockDescriptorNamespace,
 } from '@internal/framework-components/authoring';
 import {
   assembleAuthoringContributions,
   assembleControlMutationDefaults,
-  type ControlDefaultLiteralTagRegistry,
   type ControlMutationDefaultRegistry,
 } from '@internal/framework-components/control';
 import {
@@ -198,11 +198,14 @@ interface ActualSqlBlockModule {
 
 interface ActualPostgresDefaultsModule {
   createPostgresDefaultFunctionRegistry(): ControlMutationDefaultRegistry;
-  createPostgresDefaultLiteralTagRegistry(): ControlDefaultLiteralTagRegistry;
 }
 
-interface ActualSqliteDefaultsModule {
-  createSqliteDefaultLiteralTagRegistry(): ControlDefaultLiteralTagRegistry;
+interface ActualPostgresDataTypesModule {
+  createPostgresDataTypeEntries(): Readonly<Record<string, AuthoringDataTypeEntry>>;
+}
+
+interface ActualSqliteDataTypesModule {
+  createSqliteDataTypeEntries(): Readonly<Record<string, AuthoringDataTypeEntry>>;
 }
 
 interface ActualMongoAttributeModule {
@@ -317,12 +320,17 @@ function completeWithActualStack(
   options: {
     readonly clientSupportsSnippets?: boolean;
     readonly controlMutationDefaults?: typeof controlMutationDefaults;
+    readonly dataTypes?: Readonly<Record<string, AuthoringDataTypeEntry>>;
   } = {},
 ) {
+  const contributions = actualAuthoringContributions(stack);
   return completeWithSource({
     markedSource,
     pslBlockDescriptors: stack.pslBlockDescriptors,
-    authoringContributions: actualAuthoringContributions(stack),
+    authoringContributions:
+      options.dataTypes === undefined
+        ? contributions
+        : { ...contributions, dataTypes: options.dataTypes },
     controlMutationDefaults: options.controlMutationDefaults ?? controlMutationDefaults,
     clientSupportsSnippets: options.clientSupportsSnippets === true,
   });
@@ -1180,62 +1188,82 @@ describe('providePslCompletionItems', () => {
     );
   }, 5_000);
 
-  it('offers each registered literal tag inside @default( through the SQL factory', async () => {
+  it('offers each registered tag inside @default( with its own documentation', async () => {
     const stack = await actualSqlStack();
     const [postgres, sqlite] = await Promise.all([
-      importFromPackageRoot<ActualPostgresDefaultsModule>(
-        '../../../3-targets/6-adapters/postgres/src/core/control-mutation-defaults.ts',
+      importFromPackageRoot<ActualPostgresDataTypesModule>(
+        '../../../3-targets/6-adapters/postgres/src/core/data-type-authoring.ts',
       ),
-      importFromPackageRoot<ActualSqliteDefaultsModule>(
-        '../../../3-targets/6-adapters/sqlite/src/core/control-mutation-defaults.ts',
+      importFromPackageRoot<ActualSqliteDataTypesModule>(
+        '../../../3-targets/6-adapters/sqlite/src/core/data-type-authoring.ts',
       ),
     ]);
     const complete = (
-      defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry,
+      dataTypes: Readonly<Record<string, AuthoringDataTypeEntry>>,
       clientSupportsSnippets: boolean,
     ) =>
       completeWithActualStack('model Post { value String @default(|) }', stack, {
         clientSupportsSnippets,
-        controlMutationDefaults: { ...controlMutationDefaults, defaultLiteralTagRegistry },
+        controlMutationDefaults,
+        dataTypes,
       }).items.map((item) => ({
         label: item.label,
         detail: item.detail,
         newText: item.textEdit?.newText,
         insertTextFormat: item.insertTextFormat,
       }));
-    const postgresTags = postgres.createPostgresDefaultLiteralTagRegistry();
-    const documentation = postgresTags.get('sql')?.documentation;
+    const postgresEntries = postgres.createPostgresDataTypeEntries();
+    const documentationOf = (
+      entries: Readonly<Record<string, AuthoringDataTypeEntry>>,
+      tag: string,
+    ) =>
+      Object.values(entries).find(
+        (entry) => entry.written.kind === 'tag' && entry.written.tag === tag,
+      )?.documentation;
     const value = (label: string) => ({
       label,
       detail: 'PSL argument value',
       newText: label,
       insertTextFormat: undefined,
     });
-    const tag = (label: string, snippet: boolean) => ({
+    const tag = (
+      entries: Readonly<Record<string, AuthoringDataTypeEntry>>,
+      label: string,
+      snippet: boolean,
+    ) => ({
       label,
-      detail: documentation,
+      detail: documentationOf(entries, label),
       newText: snippet ? `${label}\`$1\`` : label,
       insertTextFormat: snippet ? InsertTextFormat.Snippet : undefined,
     });
 
-    expect(complete(postgresTags, true)).toEqual([
+    expect(complete(postgresEntries, true)).toEqual([
       value('true'),
       value('false'),
-      tag('sql', true),
-      tag('pg.sql', true),
+      tag(postgresEntries, 'json', true),
+      tag(postgresEntries, 'sql', true),
+      tag(postgresEntries, 'pg.sql', true),
     ]);
-    expect(complete(sqlite.createSqliteDefaultLiteralTagRegistry(), true)).toEqual([
+    const sqliteEntries = sqlite.createSqliteDataTypeEntries();
+    expect(complete(sqliteEntries, true)).toEqual([
       value('true'),
       value('false'),
-      tag('sql', true),
-      tag('sqlite.sql', true),
+      tag(sqliteEntries, 'json', true),
+      tag(sqliteEntries, 'sql', true),
+      tag(sqliteEntries, 'sqlite.sql', true),
     ]);
-    expect(complete(postgresTags, false)).toEqual([
+    expect(complete(postgresEntries, false)).toEqual([
       value('true'),
       value('false'),
-      tag('sql', false),
-      tag('pg.sql', false),
+      tag(postgresEntries, 'json', false),
+      tag(postgresEntries, 'sql', false),
+      tag(postgresEntries, 'pg.sql', false),
     ]);
+
+    // Each tag carries the text of the tag it names, not every registered tag's text.
+    expect(documentationOf(postgresEntries, 'json')).not.toBe(
+      documentationOf(postgresEntries, 'sql'),
+    );
   }, 5_000);
 
   it('uses distinct local and referenced fields through actual SQL relation specs', async () => {

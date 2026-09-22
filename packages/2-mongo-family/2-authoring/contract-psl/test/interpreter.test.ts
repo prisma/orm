@@ -112,8 +112,8 @@ function interpret(
     ...buildSymbolTableInput(schema),
     scalarTypeCodecIds: mongoScalarTypeDescriptors,
     controlMutationDefaults: {
+      dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
     },
     codecLookup: mongoCodecLookup,
     ...overrides,
@@ -162,8 +162,8 @@ describe('interpretPslDocumentToMongoContract', () => {
       ...input,
       scalarTypeCodecIds: mongoScalarTypeDescriptors,
       controlMutationDefaults: {
+        dataTypeEntries: {},
         defaultFunctionRegistry: new Map(),
-        defaultLiteralTagRegistry: new Map(),
       },
       codecLookup: mongoCodecLookup,
     });
@@ -2221,8 +2221,8 @@ describe('interpretPslDocumentToMongoContract', () => {
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
         controlMutationDefaults: {
+          dataTypeEntries: {},
           defaultFunctionRegistry: new Map(),
-          defaultLiteralTagRegistry: new Map(),
         },
       });
 
@@ -2255,8 +2255,8 @@ describe('interpretPslDocumentToMongoContract', () => {
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
         controlMutationDefaults: {
+          dataTypeEntries: {},
           defaultFunctionRegistry: new Map(),
-          defaultLiteralTagRegistry: new Map(),
         },
       });
 
@@ -2281,8 +2281,8 @@ describe('interpretPslDocumentToMongoContract', () => {
         ),
         scalarTypeCodecIds: mongoScalarTypeDescriptors,
         controlMutationDefaults: {
+          dataTypeEntries: {},
           defaultFunctionRegistry: new Map(),
-          defaultLiteralTagRegistry: new Map(),
         },
       });
 

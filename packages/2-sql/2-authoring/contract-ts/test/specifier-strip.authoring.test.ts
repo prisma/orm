@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { ContractSourceContext } from '@internal/config/config-types';
 import { type Contract, type ControlPolicy, coreHash, profileHash } from '@internal/contract/types';
+import { createDataTypeLookup } from '@internal/framework-components/codec';
 import type { FamilyPackRef } from '@internal/framework-components/components';
 import { type CheckConstraint, SqlStorage, type StorageTable } from '@internal/sql-contract/types';
 import { applicationDomainOf, timeouts } from '@repo/test-utils';
@@ -93,6 +94,7 @@ const stubContext: ContractSourceContext = {
   composedExtensions: [],
   composedExtensionContracts: new Map(),
   authoringContributions: {
+    dataTypes: {},
     field: {},
     type: {},
     entityTypes: {},
@@ -100,13 +102,13 @@ const stubContext: ContractSourceContext = {
     modelAttributes: {},
     attributeSpecs: { model: {}, field: {} },
   },
+  dataTypeLookup: createDataTypeLookup([]),
   codecLookup: {
     get: () => undefined,
     targetTypesFor: () => undefined,
     renderOutputTypeFor: () => undefined,
   },
   controlMutationDefaults: {
-    defaultLiteralTagRegistry: new Map(),
     defaultFunctionRegistry: new Map(),
     generatorDescriptors: [],
   },

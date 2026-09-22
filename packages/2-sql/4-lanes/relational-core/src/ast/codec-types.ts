@@ -3,6 +3,7 @@ import type {
   Codec as BaseCodec,
   CodecCallContext,
   CodecDescriptor,
+  CodecDescriptorTemplate,
   CodecInstanceContext,
   CodecRef,
   CodecTrait,
@@ -129,6 +130,10 @@ export interface ContractCodecRegistry {
  */
 // biome-ignore lint/suspicious/noExplicitAny: descriptor variance erasure — `P` is contravariant on the factory and renderOutputType slots, so heterogeneous descriptor storage cannot use `unknown`.
 export type AnyCodecDescriptor = CodecDescriptor<any>;
+
+/** Variance-erased {@link CodecDescriptorTemplate}: a descriptor whose data type the adapting target names. */
+// biome-ignore lint/suspicious/noExplicitAny: variance erasure, as for AnyCodecDescriptor
+export type AnyCodecDescriptorTemplate = CodecDescriptorTemplate<any>;
 
 type DescriptorResolvedCodec<D> =
   D extends CodecDescriptor<infer _P> ? ReturnType<ReturnType<D['factory']>> : never;

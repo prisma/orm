@@ -354,7 +354,7 @@ describe('collection row query', () => {
           source([
             { name: 'A', posts: null },
             { name: 'B', posts: { value: null } },
-            { name: 'C', posts: { value: 2 } },
+            { name: 'C', posts: { value: '2' } },
           ]),
         ),
       ).toEqual([
@@ -444,16 +444,16 @@ describe('collection row query', () => {
         source([
           {
             name: 'Alice',
-            posts: { rows: [{ user_id: 1, comments: [{ post_id: 10 }] }], count: { value: 1 } },
+            posts: { rows: [{ user_id: 1, comments: [{ post_id: 10 }] }], count: { value: '1' } },
           },
-          { name: 'Bob', posts: { rows: [], count: { value: 0 } } },
+          { name: 'Bob', posts: { rows: [], count: { value: '0' } } },
         ]),
       )
       [Symbol.asyncIterator]();
     const second = query
       .consume(
         source([
-          { name: 'Cara', posts: { rows: [{ user_id: 3, comments: [] }], count: { value: 1 } } },
+          { name: 'Cara', posts: { rows: [{ user_id: 3, comments: [] }], count: { value: '1' } } },
         ]),
       )
       [Symbol.asyncIterator]();

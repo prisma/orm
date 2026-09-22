@@ -14,8 +14,10 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   createBuiltinLikeControlMutationDefaults,
+  postgresCodecLookup,
   postgresEnumInferenceCodecs,
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -79,6 +81,7 @@ const testCodecLookup: CodecLookup = {
   get(id: string): Codec | undefined {
     return codecsById[id];
   },
+  descriptorFor: (id: string) => postgresCodecLookup.descriptorFor?.(id),
   targetTypesFor(id: string): readonly string[] | undefined {
     return targetTypesById[id];
   },
@@ -108,7 +111,14 @@ function interpret(schema: string, overrides?: Partial<InterpretPslDocumentToSql
     scalarColumnDescriptors: postgresScalarTypeDescriptors,
     composedExtensionContracts: new Map(),
     controlMutationDefaults: builtinControlMutationDefaults,
-    authoringContributions: contributions,
+    authoringContributions: {
+      ...contributions,
+      dataTypes: {
+        ...fixtureDataTypeSupport.entries,
+        ...('dataTypes' in contributions ? contributions.dataTypes : {}),
+      },
+    },
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     codecLookup: testCodecLookup,
     createNamespace: createTestSqlNamespace,
     enumInferenceCodecs: postgresEnumInferenceCodecs,

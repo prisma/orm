@@ -81,6 +81,8 @@ const defaultCapabilities = Object.freeze({
     jsonAgg: true,
     returning: true,
     enums: false,
+    insertOnConflictSkip: true,
+    insertOnConflictWithoutTarget: true,
   },
 });
 
@@ -778,24 +780,25 @@ function renderInsert(ast: InsertAst, ctx: SqliteRenderContext): string {
   let onConflictClause = '';
   if (ast.onConflict) {
     const conflictColumns = ast.onConflict.columns.map((col) => quoteIdentifier(col.column));
-    if (conflictColumns.length === 0) {
-      throw structuredError(
-        'RUNTIME.AST_INVALID',
-        'INSERT onConflict requires at least one conflict column',
-        { meta: { node: 'insert', table: ast.table.name } },
-      );
-    }
+    const target = conflictColumns.length === 0 ? '' : ` (${conflictColumns.join(', ')})`;
 
     const action = ast.onConflict.action;
     switch (action.kind) {
       case 'do-nothing':
-        onConflictClause = ` ON CONFLICT (${conflictColumns.join(', ')}) DO NOTHING`;
+        onConflictClause = ` ON CONFLICT${target} DO NOTHING`;
         break;
       case 'do-update-set': {
+        if (conflictColumns.length === 0) {
+          throw structuredError(
+            'RUNTIME.AST_INVALID',
+            'INSERT onConflict requires at least one conflict column',
+            { meta: { node: 'insert', table: ast.table.name } },
+          );
+        }
         const updates = Object.entries(action.set).map(([colName, value]) => {
           return `${quoteIdentifier(colName)} = ${renderExpr(value, ctx)}`;
         });
-        onConflictClause = ` ON CONFLICT (${conflictColumns.join(', ')}) DO UPDATE SET ${updates.join(', ')}`;
+        onConflictClause = ` ON CONFLICT${target} DO UPDATE SET ${updates.join(', ')}`;
         break;
       }
       default:

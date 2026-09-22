@@ -72,7 +72,7 @@ describe('PostgreSQL aggregate resolution', () => {
       operation: 'count',
       output: { codecId: 'pg/int8number@1' },
       nullable: false,
-      emptyResultJson: 0,
+      emptyResultJson: '0',
       lower: undefined,
     });
     expect(registry.resolve('count', { codecId: 'pg/text@1' })?.output).toEqual({

@@ -3,6 +3,7 @@ import { structuredError } from '@internal/utils/structured-error';
 
 export type PostgresErrorCode =
   | 'CONTRACT.ENUM_INVALID'
+  | 'CONTRACT.INDEX_INVALID'
   | 'CONTRACT.POLICY_INVALID'
   | 'RUNTIME.BINDING_INVALID'
   | 'RUNTIME.BINDING_MISSING'

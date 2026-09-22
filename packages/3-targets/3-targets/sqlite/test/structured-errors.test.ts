@@ -51,9 +51,9 @@ describe('structured error codes', () => {
     });
   });
 
-  it('bigint codec decode of a number raises RUNTIME.DECODE_FAILED', () => {
+  it('bigint codec decode of a boolean raises RUNTIME.DECODE_FAILED', () => {
     const bigintCodec = sqliteBigintDescriptor.factory()({ name: 'test' });
-    const error = capture(() => bigintCodec.decodeJson(42));
+    const error = capture(() => bigintCodec.decodeJson(true));
     expect(isStructuredError(error)).toBe(true);
     expect(error).toMatchObject({
       code: 'RUNTIME.DECODE_FAILED',

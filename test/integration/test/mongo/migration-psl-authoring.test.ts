@@ -81,8 +81,8 @@ function pslToContract(schema: string): MongoContract {
     sources,
     scalarTypeCodecIds,
     controlMutationDefaults: {
+      dataTypeEntries: {},
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
     },
     codecLookup: mongoCodecLookup,
   });

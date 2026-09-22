@@ -61,6 +61,7 @@
     "./contract-free": "./dist/contract-free.mjs",
     "./control": "./dist/control.mjs",
     "./control-tables": "./dist/control-tables.mjs",
+    "./data-types": "./dist/data-types.mjs",
     "./ddl": "./dist/ddl.mjs",
     "./default-normalizer": "./dist/default-normalizer.mjs",
     "./migration": "./dist/migration.mjs",

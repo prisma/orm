@@ -49,8 +49,8 @@ describe('resolveImportSpecifier', () => {
         '@prisma/orm-postgres/target/codec-types',
       );
       expect(
-        resolveImportSpecifier('@internal/adapter-postgres/operation-types', postgresFacade),
-      ).toBe('@prisma/orm-postgres/adapter/operation-types');
+        resolveImportSpecifier('@internal/target-postgres/operation-types', postgresFacade),
+      ).toBe('@prisma/orm-postgres/target/operation-types');
     });
 
     it('resolves the facade package itself to the facade shell', () => {

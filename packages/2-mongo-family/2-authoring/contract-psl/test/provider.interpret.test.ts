@@ -5,7 +5,7 @@ import type {
   ContractSourceDiagnostic,
 } from '@internal/config/config-types';
 import type { AuthoringEntityContext } from '@internal/framework-components/authoring';
-import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { buildSymbolTable } from '@internal/psl-parser';
 import { hasPslInterpreter, type PslInterpretInput } from '@internal/psl-parser/interpret';
 import { PslSources, parse } from '@internal/psl-parser/syntax';
@@ -28,6 +28,7 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
     composedExtensions: [],
     composedExtensionContracts: new Map(),
     authoringContributions: {
+      dataTypes: {},
       field: {},
       type: mongoScalarAuthoringTypes,
       entityTypes: {},
@@ -35,9 +36,9 @@ function createMongoTestContext(overrides?: Partial<ContractSourceContext>): Con
       modelAttributes: {},
       attributeSpecs: { model: {}, field: {} },
     },
+    dataTypeLookup: createDataTypeLookup([]),
     codecLookup: emptyCodecLookup,
     controlMutationDefaults: {
-      defaultLiteralTagRegistry: new Map(),
       defaultFunctionRegistry: new Map(),
       generatorDescriptors: [],
     },

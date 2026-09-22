@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { postgresNativeAuthoringTypes } from '../src/core/control-mutation-defaults';
 import { postgresAdapterDescriptorMeta } from '../src/core/descriptor-meta';
+import postgresRuntimeAdapterDescriptor from '../src/exports/runtime';
 
 const storage = postgresAdapterDescriptorMeta.types.storage;
 
@@ -252,4 +253,16 @@ describe('precision bounds agree between authoring and expansion', () => {
       ).toBe(`${nativeType}(${minimum})`);
     },
   );
+});
+
+describe('postgres adapter query operations', () => {
+  // Postgres built-in operations moved to @internal/target-postgres; the adapter contributes none,
+  // so a stale slot here would register them twice.
+  it('the runtime descriptor contributes no query operations', () => {
+    expect(postgresRuntimeAdapterDescriptor.queryOperations).toBeUndefined();
+  });
+
+  it('the descriptor meta declares no query-operation type import', () => {
+    expect(postgresAdapterDescriptorMeta.types).not.toHaveProperty('queryOperationTypes');
+  });
 });

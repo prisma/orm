@@ -57,6 +57,7 @@ function sourceContext(resolvedInputs: readonly string[]): ContractSourceContext
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
+    dataTypeLookup: stack.dataTypeLookup,
     resolvedInputs,
     capabilities: stack.capabilities,
   };

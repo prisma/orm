@@ -555,6 +555,19 @@ describe('MTI variant mutation guards', () => {
     );
   });
 
+  it('createAll() with the skip option throws for MTI variants', async () => {
+    const { collection } = createReturningMixedPolyCollection();
+    const narrowed = collection.variant('Feature' as never) as typeof collection;
+    expect(() =>
+      narrowed.createAll([{ title: 'X', priority: 1 } as never], { onConflict: 'skip' }),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'ORM.OPERATION_UNSUPPORTED',
+        message: expect.stringContaining('is not supported for MTI variant'),
+      }),
+    );
+  });
+
   it('upsert() throws for MTI variants', async () => {
     const { collection } = createReturningMixedPolyCollection();
     const narrowed = collection.variant('Feature' as never) as typeof collection;

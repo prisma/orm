@@ -17,7 +17,16 @@ import type {
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type { ModelAttributeSpecFactory } from '@internal/psl-parser';
-import { blockAttribute, leafDiagnostic, modelAttribute, str } from '@internal/psl-parser';
+import {
+  blockAttribute,
+  fieldRef,
+  leafDiagnostic,
+  list,
+  modelAttribute,
+  oneOf,
+  optional,
+  str,
+} from '@internal/psl-parser';
 import type {
   EntityHandleLoweringInput,
   LoweredPackEntity,
@@ -39,6 +48,10 @@ import {
   PG_TIMESTAMPTZ_TEMPORAL_CODEC_ID,
 } from './codec-ids';
 import { postgresError } from './errors';
+import {
+  isFullTextIndexableCodec,
+  renderFullTextIndexExpression,
+} from './full-text-index-expression';
 import { postgresNowGeneratorIds } from './now-generators';
 import { PostgresNativeEnum } from './postgres-native-enum';
 import { PostgresRlsEnablement, type PostgresRlsEnablementInput } from './postgres-rls-enablement';
@@ -51,6 +64,11 @@ import {
   PostgresRoleSchema,
 } from './postgres-validators';
 import { computeContentHash, POLICY_OPERATION_PREDICATES } from './rls/canonicalize';
+import {
+  DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
+  type FullTextSearchLanguage,
+  POSTGRES_TEXT_SEARCH_LANGUAGES,
+} from './text-search-languages';
 
 // Contributed diagnostic codes, declared once as typed consts — the
 // `ContributedPslDiagnosticCode` type is the only thing enforcing the
@@ -60,6 +78,13 @@ import { computeContentHash, POLICY_OPERATION_PREDICATES } from './rls/canonical
 const PSL_RLS_PREDICATE_NOT_FOR_OPERATION: ContributedPslDiagnosticCode =
   'PSL_RLS_PREDICATE_NOT_FOR_OPERATION';
 const PSL_POLICY_INVALID_MAP: ContributedPslDiagnosticCode = 'PSL_POLICY_INVALID_MAP';
+const PSL_FULL_TEXT_INDEX_ONE_FIELD: ContributedPslDiagnosticCode = 'PSL_FULL_TEXT_INDEX_ONE_FIELD';
+const PSL_FULL_TEXT_INDEX_REQUIRES_NAME: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_REQUIRES_NAME';
+const PSL_FULL_TEXT_INDEX_NAME_XOR_MAP: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_NAME_XOR_MAP';
+const PSL_FULL_TEXT_INDEX_TEXT_FIELD: ContributedPslDiagnosticCode =
+  'PSL_FULL_TEXT_INDEX_TEXT_FIELD';
 const PSL_NATIVE_ENUM_BARE_MEMBER: ContributedPslDiagnosticCode = 'PSL_NATIVE_ENUM_BARE_MEMBER';
 const PSL_EXTENSION_INVALID_VALUE: ContributedPslDiagnosticCode = 'PSL_EXTENSION_INVALID_VALUE';
 const PSL_NATIVE_ENUM_DUPLICATE_MEMBER_VALUE: ContributedPslDiagnosticCode =
@@ -687,6 +712,85 @@ const postgresRlsSpec = modelAttribute('rls', {
 
 const postgresRlsSpecFactory: ModelAttributeSpecFactory = () => postgresRlsSpec;
 
+const [firstLanguage, ...remainingLanguages] = POSTGRES_TEXT_SEARCH_LANGUAGES;
+
+const postgresFullTextIndexSpec = modelAttribute('fullTextIndex', {
+  documentation:
+    'Indexes one text column for full-text search, rendering the expression `fullTextMatches`, `fullTextRank` and `fullTextHeadline` lower to.',
+  positional: [
+    {
+      key: 'fields',
+      type: list(fieldRef(), { allowEmpty: false, unique: true }),
+      documentation: 'The single field to index.',
+    },
+  ],
+  named: {
+    language: {
+      type: optional(
+        oneOf(str(firstLanguage), ...remainingLanguages.map((language) => str(language))),
+      ),
+      documentation:
+        'The text-search configuration. Defaults to `english`, and must match the language the query operations are given.',
+    },
+    name: {
+      type: optional(str()),
+      documentation: 'The index name. Mutually exclusive with `map`.',
+    },
+    map: {
+      type: optional(str()),
+      documentation: 'The database index name. Mutually exclusive with `name`.',
+    },
+    where: {
+      type: optional(str()),
+      documentation: 'The SQL predicate restricting rows included in a partial index.',
+    },
+  },
+  refine: (value, ctx, attributeNode) => {
+    const diagnostics = [];
+    if (value.fields.length !== 1) {
+      diagnostics.push(
+        leafDiagnostic(
+          ctx,
+          attributeNode,
+          'The full-text operations work on one column; declare one `@@fullTextIndex` per column',
+          PSL_FULL_TEXT_INDEX_ONE_FIELD,
+        ),
+      );
+    }
+    if (value.name === undefined && value.map === undefined) {
+      diagnostics.push(
+        leafDiagnostic(
+          ctx,
+          attributeNode,
+          '`@@fullTextIndex` requires a `name` or `map` argument (a default name cannot be derived from an expression)',
+          PSL_FULL_TEXT_INDEX_REQUIRES_NAME,
+        ),
+      );
+    }
+    if (value.name !== undefined && value.map !== undefined) {
+      diagnostics.push(
+        leafDiagnostic(
+          ctx,
+          attributeNode,
+          '`@@fullTextIndex` takes at most one of `name` and `map`',
+          PSL_FULL_TEXT_INDEX_NAME_XOR_MAP,
+        ),
+      );
+    }
+    return diagnostics;
+  },
+});
+
+const postgresFullTextIndexSpecFactory: ModelAttributeSpecFactory = () => postgresFullTextIndexSpec;
+
+type PostgresFullTextIndexParsed = {
+  readonly fields: readonly string[];
+  readonly language?: FullTextSearchLanguage;
+  readonly name?: string;
+  readonly map?: string;
+  readonly where?: string;
+};
+
 /**
  * `@@` model attributes contributed by the Postgres target pack.
  *
@@ -708,6 +812,45 @@ export const postgresAuthoringModelAttributes = {
         namespaceId: ctx.namespaceId,
       }),
     }),
+  },
+  fullTextIndex: {
+    kind: 'modelAttribute',
+    attribute: 'fullTextIndex',
+    spec: postgresFullTextIndexSpecFactory,
+    repeatable: true,
+    lower: (parsed: PostgresFullTextIndexParsed, ctx: AuthoringModelAttributeContext) => {
+      const fieldName = parsed.fields[0];
+      invariant(
+        fieldName !== undefined && parsed.fields.length === 1,
+        `@@fullTextIndex on "${ctx.modelName}" lowered with ${parsed.fields.length} fields`,
+      );
+      const columnName = ctx.fieldStorageName(fieldName);
+      const codecId = ctx.fieldCodecId(fieldName);
+      // A relation field parses as a field reference but stores no value, so it
+      // reaches here with neither a column nor a codec.
+      if (columnName === undefined || codecId === undefined || !isFullTextIndexableCodec(codecId)) {
+        ctx.diagnostics?.push({
+          code: PSL_FULL_TEXT_INDEX_TEXT_FIELD,
+          message: `\`@@fullTextIndex\` indexes a text column, but "${ctx.modelName}.${fieldName}" is ${codecId === undefined ? 'not a stored scalar field' : `stored as \`${codecId}\``}.`,
+          sourceId: ctx.sourceId ?? 'unknown',
+        });
+        return undefined;
+      }
+      return {
+        index: {
+          expression: renderFullTextIndexExpression(
+            parsed.language ?? DEFAULT_FULL_TEXT_SEARCH_LANGUAGE,
+            columnName,
+          ),
+          type: 'gin',
+          options: undefined,
+          where: parsed.where,
+          unique: undefined,
+          name: parsed.name,
+          map: parsed.map,
+        },
+      };
+    },
   },
 } as const satisfies AuthoringModelAttributeDescriptorNamespace;
 

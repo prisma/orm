@@ -18,10 +18,8 @@ import {
   type PslExtensionBlock,
   resolveEnumCodecId,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-components/components';
 import type {
-  ControlDefaultLiteralTagEntry,
   ControlMutationDefaultEntry,
   ControlMutationDefaults,
   DefaultFunctionLoweringContext,
@@ -40,10 +38,11 @@ import {
 import type { DocumentAst, PslSources, SourceFile } from '@internal/psl-parser/syntax';
 import { parse } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
-import { checkSqlDefaultBody, reservedSqlDefaultBody } from '@internal/sql-contract/validators';
 import { type EnumTypeHandle, enumType } from '@internal/sql-contract-ts/contract-builder';
 import { blindCast } from '@internal/utils/casts';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
+import { postgresCodecLookup } from './fixture-codec-descriptors';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 
 function testEnumFactory(
   block: PslExtensionBlock,
@@ -434,6 +433,7 @@ export const postgresNativeScalarTypeDescriptors = collectScalarTypeConstructors
  * Controlled test-only descriptor — intentionally uses pg/vector@1 with maximum: 2000 rather than importing the real pgvector pack, so interpreter unit tests stay layer-isolated. Real-pack parity is covered by `test/integration/test/authoring/parity/ts-psl-parity.real-packs.test.ts`.
  */
 export const pgvectorAuthoringContributions = {
+  dataTypes: {},
   entityTypes: {},
   field: {},
   pslBlockDescriptors: {},
@@ -544,37 +544,7 @@ export const sqliteScalarColumnDescriptors = collectScalarTypeConstructors(
   sqliteScalarAuthoringTypes,
 );
 
-const targetTypesByCodecId: Record<string, readonly string[]> = {
-  'pg/text@1': ['text'],
-  'pg/int@1': ['int4'],
-  'pg/bool@1': ['bool'],
-  'pg/int4@1': ['int4'],
-  'pg/int8@1': ['int8'],
-  'pg/float8@1': ['float8'],
-  'pg/numeric@1': ['numeric'],
-  'pg/timestamptz-temporal@1': ['timestamptz'],
-  'pg/jsonb@1': ['jsonb'],
-  'pg/bytea@1': ['bytea'],
-  'sql/char@1': ['character'],
-  'sql/varchar@1': ['character varying'],
-  'pg/int2@1': ['int2'],
-  'pg/float4@1': ['float4'],
-  'pg/timestamp-temporal@1': ['timestamp'],
-  'pg/date-temporal@1': ['date'],
-  'pg/time-temporal@1': ['time'],
-  'pg/timetz@1': ['timetz'],
-  'pg/json@1': ['json'],
-  'pg/vector@1': ['vector'],
-};
-
-export const postgresCodecLookup: CodecLookup = {
-  get: (id: string) => {
-    if (!targetTypesByCodecId[id]) return undefined;
-    return { id } as ReturnType<CodecLookup['get']>;
-  },
-  targetTypesFor: (id: string) => targetTypesByCodecId[id],
-  renderOutputTypeFor: () => undefined,
-};
+export { postgresCodecLookup } from './fixture-codec-descriptors';
 
 export function createPostgresTestContext(
   overrides?: Partial<ContractSourceContext>,
@@ -583,6 +553,7 @@ export function createPostgresTestContext(
     composedExtensions: [],
     composedExtensionContracts: new Map(),
     authoringContributions: {
+      dataTypes: fixtureDataTypeSupport.entries,
       field: {},
       type: postgresScalarAuthoringTypes,
       entityTypes: {},
@@ -593,6 +564,7 @@ export function createPostgresTestContext(
     },
     codecLookup: postgresCodecLookup,
     controlMutationDefaults: createBuiltinLikeControlMutationDefaults(),
+    dataTypeLookup: fixtureDataTypeSupport.lookup,
     resolvedInputs: [],
     capabilities: { sql: { scalarList: true } },
     ...overrides,
@@ -643,40 +615,6 @@ const dbgeneratedSig: FuncCallSig = {
     },
   ],
 };
-
-// Mirrors the SQL family's `sqlDefaultLiteralTagEntry`; the authoring layer's tests cannot import the family.
-function sqlLiteralTagEntry(usage: string): ControlDefaultLiteralTagEntry {
-  return {
-    usage,
-    documentation: "Uses the SQL in the string, verbatim, as the column's default expression.",
-    lower: ({ literal, context }) => {
-      const reject = (message: string) => ({
-        ok: false as const,
-        diagnostic: {
-          code: 'PSL_INVALID_DEFAULT_SQL',
-          message,
-          sourceId: context.sourceId,
-          span: literal.span,
-        },
-      });
-      const reserved = reservedSqlDefaultBody(literal.body);
-      if (reserved !== undefined) {
-        return reject(
-          `Write @default(${reserved}()) instead of ${literal.tag}\`${reserved}()\`; ${reserved}() is a Prisma default function, not raw SQL.`,
-        );
-      }
-      const unsafe = checkSqlDefaultBody(literal.body);
-      if (unsafe !== undefined) return reject(unsafe);
-      return {
-        ok: true as const,
-        value: {
-          kind: 'storage' as const,
-          defaultValue: { kind: 'function' as const, expression: literal.body },
-        },
-      };
-    },
-  };
-}
 
 export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefaults {
   return {
@@ -773,10 +711,6 @@ export function createBuiltinLikeControlMutationDefaults(): ControlMutationDefau
           usageSignatures: ['dbgenerated("...")'],
         },
       ],
-    ]),
-    defaultLiteralTagRegistry: new Map<string, ControlDefaultLiteralTagEntry>([
-      ['sql', sqlLiteralTagEntry('sql`...`')],
-      ['pg.sql', sqlLiteralTagEntry('pg.sql`...`')],
     ]),
     generatorDescriptors: [
       {

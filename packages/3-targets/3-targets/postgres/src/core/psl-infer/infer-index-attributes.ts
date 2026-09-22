@@ -2,9 +2,10 @@ import type {
   PslAttributeArgument,
   PslModelAttribute,
 } from '@internal/framework-components/psl-ast';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 import { computeIndexContentHash, parseWireName } from '@internal/sql-schema-ir/naming';
 import { assertDefined } from '@internal/utils/assertions';
-import { buildAttribute, escapePslString, namedArg, positionalArg } from './psl-literals';
+import { buildAttribute, namedArg, positionalArg } from './psl-literals';
 
 export function buildModelConstraintAttribute(
   name: 'id' | 'unique',

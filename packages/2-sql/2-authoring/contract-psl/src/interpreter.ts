@@ -30,14 +30,13 @@ import {
   isAuthoringModelAttributeDescriptor,
   isAuthoringPslBlockDescriptor,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup } from '@internal/framework-components/codec';
+import type { CodecLookup, DataTypeLookup } from '@internal/framework-components/codec';
 import type {
   CapabilityMatrix,
   ExtensionPackRef,
   TargetPackRef,
 } from '@internal/framework-components/components';
 import type {
-  ControlDefaultLiteralTagRegistry,
   ControlMutationDefaultRegistry,
   ControlMutationDefaults,
   MutationDefaultGeneratorDescriptor,
@@ -64,6 +63,7 @@ import {
 } from '@internal/psl-parser';
 import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
+import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
 import type {
   SqlModelStorage,
   SqlNamespaceBase,
@@ -88,7 +88,7 @@ import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
 import { notOk, ok, type Result } from '@internal/utils/result';
 import { contractError } from './contract-errors';
-
+import type { DataTypeSupport } from './data-type-default';
 import { getAttribute, getNamedArgument, mapFieldNamesToColumns } from './psl-attribute-parsing';
 import type { ColumnDescriptor } from './psl-column-resolution';
 import {
@@ -131,6 +131,8 @@ export interface InterpretPslDocumentToSqlContractInput {
   readonly composedExtensions?: readonly string[];
   readonly composedExtensionPackRefs?: readonly ExtensionPackRef<'sql', string>[];
   readonly controlMutationDefaults?: ControlMutationDefaults;
+  /** The stack's data types; the PSL support for them travels in `authoringContributions`. ADR 254. */
+  readonly dataTypeLookup: DataTypeLookup;
   readonly authoringContributions?: AuthoringContributions;
   /**
    * Extension contracts keyed by space ID. Required for cross-space FK
@@ -636,7 +638,7 @@ interface BuildModelNodeInput {
   readonly targetId: string;
   readonly authoringContributions: AuthoringContributions | undefined;
   readonly defaultFunctionRegistry: ControlMutationDefaultRegistry;
-  readonly defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry;
+  readonly dataTypeSupport: DataTypeSupport;
   readonly generatorDescriptorById: ReadonlyMap<string, MutationDefaultGeneratorDescriptor>;
   readonly scalarColumnDescriptors: ReadonlyMap<string, ColumnDescriptor>;
   readonly sources: PslSources;
@@ -747,7 +749,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     familyId: input.familyId,
     targetId: input.targetId,
     defaultFunctionRegistry: input.defaultFunctionRegistry,
-    defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+    dataTypeSupport: input.dataTypeSupport,
     generatorDescriptorById: input.generatorDescriptorById,
     diagnostics,
     sources: input.sources,
@@ -1117,7 +1119,10 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
     }
     const contributedModelAttribute = input.modelAttributesByName.get(modelAttribute.name);
     if (contributedModelAttribute !== undefined) {
-      if (declaredContributedModelAttributes.has(modelAttribute.name)) {
+      if (
+        contributedModelAttribute.repeatable !== true &&
+        declaredContributedModelAttributes.has(modelAttribute.name)
+      ) {
         diagnostics.push(
           duplicateModelAttributeDiagnostic({
             name: modelAttribute.name,
@@ -1144,7 +1149,7 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
           model,
           controlMutationDefaults: {
             defaultFunctionRegistry: input.defaultFunctionRegistry,
-            defaultLiteralTagRegistry: input.defaultLiteralTagRegistry,
+            dataTypeEntries: input.dataTypeSupport.entries,
           },
         }),
         model,
@@ -1166,6 +1171,9 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         target: input.targetId,
         modelName: model.name,
         storageName: tableName,
+        fieldStorageName: (fieldName) => mapping.fieldColumns.get(fieldName),
+        fieldCodecId: (fieldName) =>
+          resolvedFields.find((resolved) => resolved.field.name === fieldName)?.descriptor.codecId,
         namespaceId: modelNamespaceId ?? input.defaultNamespaceId,
         sourceId: source.sources.sourceFileFor(source.node).filename,
         diagnostics: {
@@ -1177,6 +1185,17 @@ function buildModelNodeFromPsl(input: BuildModelNodeInput): BuildModelNodeResult
         },
       });
       if (lowered === undefined) {
+        continue;
+      }
+      if ('index' in lowered) {
+        if (!isAuthoredIndexInput(lowered.index)) {
+          throw contractError(
+            'CONTRACT.PACK_CONTRIBUTION_INVALID',
+            `model attribute "@@${modelAttribute.name}" on model "${model.name}" lowered to a malformed index. A contributed attribute that returns { index } must return an authored-index input: exactly one of a columns list or an expression, plus explicit where/unique/name/map and a type-with-options pair.`,
+            { meta: { attribute: modelAttribute.name, modelName: model.name } },
+          );
+        }
+        indexNodes.push(lowered.index);
         continue;
       }
       const slot = modelAttributeEntities[contributedModelAttribute.attribute] ?? {};
@@ -2145,8 +2164,10 @@ export function interpretPslDocumentToSqlContract(
     input.composedExtensionContracts;
   const defaultFunctionRegistry: ControlMutationDefaultRegistry =
     input.controlMutationDefaults?.defaultFunctionRegistry ?? new Map();
-  const defaultLiteralTagRegistry: ControlDefaultLiteralTagRegistry =
-    input.controlMutationDefaults?.defaultLiteralTagRegistry ?? new Map();
+  const dataTypeSupport: DataTypeSupport = {
+    entries: input.authoringContributions?.dataTypes ?? {},
+    lookup: input.dataTypeLookup,
+  };
   const generatorDescriptors = input.controlMutationDefaults?.generatorDescriptors ?? [];
   const generatorDescriptorById = new Map<string, MutationDefaultGeneratorDescriptor>();
   for (const descriptor of generatorDescriptors) {
@@ -2470,7 +2491,7 @@ export function interpretPslDocumentToSqlContract(
       targetId: input.target.targetId,
       authoringContributions: input.authoringContributions,
       defaultFunctionRegistry,
-      defaultLiteralTagRegistry,
+      dataTypeSupport,
       generatorDescriptorById,
       scalarColumnDescriptors: input.scalarColumnDescriptors,
       sources: input.sources,

@@ -7,6 +7,7 @@ import {
   UNBOUND_DOMAIN_NAMESPACE_ID,
 } from '@internal/contract/types';
 import type { CodecDescriptor, CodecTrait } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import { APP_SPACE_ID } from '@internal/framework-components/control';
 import {
   instantiateExecutionStack,
@@ -314,6 +315,7 @@ export function descriptorsFromCodecs(
     };
     descriptors.push({
       codecId: instance.id,
+      dataType: dataTypeId('demo/fixture'),
       traits: legacy.traits ?? [],
       targetTypes: legacy.targetTypes ?? [],
       paramsSchema: acceptAnyParamsSchema,

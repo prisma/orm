@@ -38,7 +38,12 @@ import {
   flushAuthoringWarnings,
   isAuthoringEntityTypeDescriptor,
 } from '@internal/framework-components/authoring';
-import type { CodecLookup, ColumnTypeDescriptor } from '@internal/framework-components/codec';
+import {
+  type Codec,
+  type CodecLookup,
+  type ColumnTypeDescriptor,
+  materializeCodec,
+} from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { lowerAuthoredCheck } from '@internal/sql-contract/authored-check-naming';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
@@ -94,8 +99,35 @@ type DomainFieldRef =
   | { readonly kind: 'scalar'; readonly many?: boolean }
   | { readonly kind: 'valueObject'; readonly name: string; readonly many?: boolean };
 
-function encodeViaCodec(value: unknown, codecId: string, codecLookup?: CodecLookup): JsonValue {
-  const codec = codecLookup?.get(codecId);
+/**
+ * The codec that encodes one column's default. Built with the column's own `typeParams`, because a
+ * parameterized codec answers for its params when it encodes — `pg/vector@1` checks the length its
+ * column declares — and the lookup's representative instance carries none. Only a column has params;
+ * every other encode site takes the representative instance.
+ */
+function columnCodec(
+  codecId: string,
+  typeParams: Record<string, unknown> | undefined,
+  codecLookup?: CodecLookup,
+): Codec | undefined {
+  const descriptor = codecLookup?.descriptorFor?.(codecId);
+  if (descriptor === undefined) return codecLookup?.get(codecId);
+  return materializeCodec(
+    descriptor,
+    {
+      codecId,
+      ...ifDefined(
+        'typeParams',
+        typeParams === undefined
+          ? undefined
+          : blindCast<JsonValue, 'typeParams are validated by the codec paramsSchema'>(typeParams),
+      ),
+    },
+    { name: codecId },
+  );
+}
+
+function encodeViaCodec(value: unknown, codec: Codec | undefined): JsonValue {
   if (codec) {
     return codec.encodeJson(value);
   }
@@ -107,12 +139,20 @@ function encodeViaCodec(value: unknown, codecId: string, codecLookup?: CodecLook
 
 function encodeColumnDefault(
   defaultInput: AuthoredColumnDefault,
-  codecId: string,
-  codecLookup?: CodecLookup,
+  codec: Codec | undefined,
   many = false,
 ): ColumnDefault {
   if (defaultInput.kind === 'function') {
     return { kind: 'function', expression: defaultInput.expression };
+  }
+  if ('canonical' in defaultInput && defaultInput.canonical === true) {
+    return {
+      kind: 'literal',
+      value: blindCast<
+        ColumnDefault extends { kind: 'literal'; value: infer V } ? V : never,
+        'a text contract source stores the canonical form its data type produced'
+      >(defaultInput.value),
+    };
   }
   if (many) {
     if (!Array.isArray(defaultInput.value)) {
@@ -123,12 +163,12 @@ function encodeColumnDefault(
     }
     return {
       kind: 'literal',
-      value: defaultInput.value.map((element) => encodeViaCodec(element, codecId, codecLookup)),
+      value: defaultInput.value.map((element) => encodeViaCodec(element, codec)),
     };
   }
   return {
     kind: 'literal',
-    value: encodeViaCodec(defaultInput.value, codecId, codecLookup),
+    value: encodeViaCodec(defaultInput.value, codec),
   };
 }
 
@@ -339,7 +379,9 @@ function checkMemberValues(
   handle: EnumTypeHandle,
   codecLookup: CodecLookup | undefined,
 ): readonly (string | number)[] {
-  const encoded = handle.values.map((value) => encodeViaCodec(value, handle.codecId, codecLookup));
+  const encoded = handle.values.map((value) =>
+    encodeViaCodec(value, codecLookup?.get(handle.codecId)),
+  );
   const values: (string | number)[] = [];
   for (const value of encoded) {
     if (typeof value !== 'string' && !(typeof value === 'number' && Number.isFinite(value))) {
@@ -673,7 +715,7 @@ function buildStorageColumn(
   if (isValueObjectField(field)) {
     const encodedDefault =
       field.default !== undefined
-        ? encodeColumnDefault(field.default, JSONB_CODEC_ID, codecLookup)
+        ? encodeColumnDefault(field.default, codecLookup?.get(JSONB_CODEC_ID))
         : undefined;
 
     return {
@@ -687,7 +729,11 @@ function buildStorageColumn(
   const codecId = field.descriptor.codecId;
   const encodedDefault =
     field.default !== undefined
-      ? encodeColumnDefault(field.default, codecId, codecLookup, field.many === true)
+      ? encodeColumnDefault(
+          field.default,
+          columnCodec(codecId, field.descriptor.typeParams, codecLookup),
+          field.many === true,
+        )
       : undefined;
 
   // `storageValueSetRef` (derived from an `enumTypeHandle`) takes precedence
@@ -1490,7 +1536,7 @@ export function buildSqlContractFromDefinition(
       codecId: handle.codecId,
       members: handle.enumMembers.map((m) => ({
         name: m.name,
-        value: encodeViaCodec(m.value, handle.codecId, codecLookup),
+        value: encodeViaCodec(m.value, codecLookup?.get(handle.codecId)),
       })),
     };
 
@@ -1501,7 +1547,7 @@ export function buildSqlContractFromDefinition(
     }
     storageSlot[enumName] = {
       kind: 'valueSet',
-      values: handle.values.map((v) => encodeViaCodec(v, handle.codecId, codecLookup)),
+      values: handle.values.map((v) => encodeViaCodec(v, codecLookup?.get(handle.codecId))),
     };
   }
 

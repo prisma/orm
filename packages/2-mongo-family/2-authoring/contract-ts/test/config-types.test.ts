@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import type { ContractSourceContext } from '@internal/config/config-types';
 import type { Contract, ControlPolicy } from '@internal/contract/types';
-import { emptyCodecLookup } from '@internal/framework-components/codec';
+import { createDataTypeLookup, emptyCodecLookup } from '@internal/framework-components/codec';
 import { timeouts } from '@repo/test-utils';
 import { join } from 'pathe';
 import { describe, expect, it } from 'vitest';
@@ -13,6 +13,7 @@ const emptyContext: ContractSourceContext = {
   composedExtensionContracts: new Map(),
 
   authoringContributions: {
+    dataTypes: {},
     field: {},
     type: {},
     entityTypes: {},
@@ -20,9 +21,9 @@ const emptyContext: ContractSourceContext = {
     modelAttributes: {},
     attributeSpecs: { model: {}, field: {} },
   },
+  dataTypeLookup: createDataTypeLookup([]),
   codecLookup: emptyCodecLookup,
   controlMutationDefaults: {
-    defaultLiteralTagRegistry: new Map(),
     defaultFunctionRegistry: new Map(),
     generatorDescriptors: [],
   },

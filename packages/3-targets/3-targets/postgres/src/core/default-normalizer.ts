@@ -1,4 +1,5 @@
 import type { ColumnDefault, JsonValue } from '@internal/contract/types';
+import { blindCast } from '@internal/utils/casts';
 
 /**
  * Pre-compiled regex patterns for performance.
@@ -219,11 +220,15 @@ function parseArrayLiteralBody(
     if (token.quoted) {
       // A quoted token is always a string — `"NULL"`, `"true"`, `"1"` are the
       // literal text, never the keyword/number.
-      result.push(token.value);
+      result.push(textElementValue(token.value, elementType));
       continue;
     }
     const el = token.value.trim();
     if (el.toUpperCase() === 'NULL') {
+      // A `json`/`jsonb` element's quoted `'null'` is the JSON value null, and an unquoted SQL NULL
+      // is the absence of a value. Both would read back as JSON null, so the whole default is left
+      // as its raw expression rather than printed as one the other reads back as.
+      if (isJsonElementType(elementType)) return undefined;
       result.push(null);
       continue;
     }
@@ -282,12 +287,29 @@ function splitConstructorElements(body: string): readonly string[] {
  * raw expression.
  */
 function parseConstructorElement(element: string, elementType: string): JsonValue | undefined {
-  if (NULL_PATTERN.test(element)) return null;
+  // See `parseArrayLiteralBody`: an unquoted SQL NULL in a json list is not the JSON value null.
+  if (NULL_PATTERN.test(element)) return isJsonElementType(elementType) ? undefined : null;
   if (TRUE_PATTERN.test(element)) return true;
   if (FALSE_PATTERN.test(element)) return false;
   const token = readLiteralToken(element);
   if (token === undefined) return undefined;
-  return token.kind === 'number' ? numberValue(token.numeral, elementType) : token.text;
+  return token.kind === 'number'
+    ? numberValue(token.numeral, elementType)
+    : textElementValue(token.text, elementType);
+}
+
+function isJsonElementType(elementType: string): boolean {
+  return elementType === 'json' || elementType === 'jsonb';
+}
+
+/** A `json`/`jsonb` element's text is a JSON document, as it is on a scalar column of the same type. */
+function textElementValue(text: string, elementType: string): JsonValue {
+  if (!isJsonElementType(elementType)) return text;
+  try {
+    return blindCast<JsonValue, 'JSON.parse yields a JSON value'>(JSON.parse(text));
+  } catch {
+    return text;
+  }
 }
 
 function parseArrayConstructor(

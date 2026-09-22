@@ -1,3 +1,4 @@
+import { dataTypeId } from '@internal/framework-components/codec';
 import { createSqlOperationRegistry } from '@internal/sql-operations';
 import type { CodecTrait } from '@internal/sql-relational-core/ast';
 import {
@@ -68,6 +69,7 @@ describe('createModelAccessor', () => {
             },
           },
           isParameterized: false,
+          dataType: dataTypeId('demo/fixture'),
           // The trait-gating tests don't materialize codecs; the factory is shape-only and never invoked.
           factory: () => () => {
             throw new Error('test descriptor factory not exercised');

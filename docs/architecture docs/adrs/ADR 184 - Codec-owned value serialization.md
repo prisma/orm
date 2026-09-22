@@ -2,6 +2,8 @@
 
 > **Retrospective note.** This ADR's examples use the `defineCodec({...})` factory. That factory was the canonical codec-author surface at the time; it was later retired in favor of class-based authoring: concrete codecs extend `CodecImpl`, descriptors extend `CodecDescriptorImpl`, and per-codec column helpers tie helpers to descriptors with `satisfies`. The ADR's *decision* — that codecs own both wire and JSON-safe representations through `encode` / `decode` + `encodeJson` / `decodeJson` — is unchanged; only the authoring shape has moved on. See [ADR 208 — Higher-order codecs for parameterized types](ADR%20208%20-%20Higher-order%20codecs%20for%20parameterized%20types.md) and the [Codec authoring guide](../../reference/codec-authoring-guide.md) for the current shape.
 
+> **PSL half: see [ADR 254 — Data types and casts](ADR%20254%20-%20Data%20types%20and%20casts.md).** The `PslLiteralCodec` interface sketched below is replaced there: codec descriptors name the literal types they are compatible with, codecs gain no methods, and codecs never receive PSL syntax. The JSON half of this ADR is unaffected.
+
 ## At a glance
 
 A column with `codecId: "pg/timestamptz@1"` has a default value of `new Date('2024-01-15')` — a JavaScript `Date`. This value has to survive a round-trip through `contract.json`, but `Date` has no JSON representation. The codec handles it:

@@ -44,6 +44,7 @@
     "./adapter/codec-types": "./dist/adapter__codec-types.mjs",
     "./adapter/codecs": "./dist/adapter__codecs.mjs",
     "./adapter/control": "./dist/adapter__control.mjs",
+    "./adapter/data-types": "./dist/adapter__data-types.mjs",
     "./adapter/runtime": "./dist/adapter__runtime.mjs",
     "./bson": "./dist/bson.mjs",
     "./components": "./dist/components.mjs",

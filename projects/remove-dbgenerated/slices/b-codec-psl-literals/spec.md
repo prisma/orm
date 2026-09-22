@@ -1,181 +1,202 @@
-# Slice B — Codec-owned PSL literals (the PSL half of ADR 184)
+# Slice B — Data types and casts for column defaults
 
-**Project:** [Remove `dbgenerated`](../../spec.md). **Linear:** not yet created. **Branch:** `remove-dbgenerated-codec-psl-literals` off `main`. **Shape:** one PR. **Runs in parallel with:** [slice A](../a-sql-default-literal/spec.md). **Touches nothing slice A touches** except the `@default` argument arms in `sql-attribute-specs.ts`, where each slice adds its own arm.
+**Project:** [Remove `dbgenerated`](../../spec.md). **Design:** [ADR 254 — Data types and casts](../../../../docs/architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md). **Linear:** not yet created. **Branch:** `remove-dbgenerated-literal-types`, PR #30350. **Shape:** one PR. **Depends on:** slice A, merged. **Followed by:** slice C, and by an independent project that implements the rest of ADR 254 (see "Not in this slice").
+
+The branch already implements an earlier shape of this design under the name "literal types" (a closed framework union, per-codec accepted lists, conversion inside `decodeJson`, a tag registry under mutation defaults). This spec describes the rework of that branch to ADR 254's names and shapes, limited to what removing `dbgenerated` needs, so that the future project extends what ships rather than replacing it.
 
 ## Outcome
 
-Every typed literal default is read from PSL and printed back to PSL by the column's codec. There is no type-specific code in the interpreter, the printer, or the Prisma 7 source for numbers, JSON, or anything else. Concretely, after this slice:
+Every value written in PSL has a data type, every column has one through its codec, and a written default is admitted when its type is the column's or the column's type casts from it. Codecs of one type share its contract form. Extension authors declare a data type for every codec they ship. Nothing named in the code, the diagnostics, the docs or the upgrade instructions contradicts ADR 254.
+
+After this slice, all of the following are true on Postgres:
 
 ```prisma
-model T {
-  meta    Jsonb   @default("{}")
-  items   Json    @default("[1, 2]")
-  big     BigInt  @default(9007199254740993)
-  price   Decimal @default(1.50)
-  ratio   Float   @default("NaN")
-  name    String  @default("x")
-  flag    Boolean @default(true)
-  scores  Int[]   @default([1, 2])
+model Account {
+  id       Int        @id
+  name     String     @default("anonymous")
+  small    SmallInt   @default(100)
+  count    Int        @default(100000)
+  balance  BigInt     @default(100000000000000099)
+  price    Decimal    @default(1.50)
+  ratio    Float      @default(NaN)
+  active   Boolean    @default(true)
+  meta     Jsonb      @default(json`{ "plan": "free", "seats": 1 }`)
+  scores   Int[]      @default([1, 2])
+  docs     Jsonb[]    @default([json`{}`, json`[]`])
+  embed    pgvector.Vector(3) @default([0.1, 0.2, 0.3])
+  status   Status     @default(ACTIVE)
+  expires  DateTime   @default(sql`(now() + '3 days'::interval)`)
 }
 ```
 
-emits a contract in which `meta` holds the JSON object `{}`, `big` holds every digit, `price` holds `1.50` with its trailing zero, and `contract infer` prints each of them back in exactly that form.
+Every one of those emits, migrates onto a dev database, verifies clean, reads back through the client with its decoded type, and `contract infer` prints them back in the same forms. These are errors, each pointing at the written value:
+
+```prisma
+count  Int     @default(100000000000000099)  // pg/int4 has no cast from pg/int8; it casts from pg/int2
+count  Int     @default(1.5)                 // pg/int4 has no cast from pg/numeric; ...
+meta   Jsonb   @default("{}")                // pg/jsonb has no cast from pg/text; it casts from pg/json
+price  Decimal @default("1.50")              // pg/numeric has no cast from pg/text; ...
+meta   Jsonb   @default(json`{ plan }`)      // PSL_INVALID_JSON_LITERAL
+embed  pgvector.Vector(3) @default([1, 2])   // PSL_INVALID_DEFAULT_LITERAL, with the vector codec's length message
+scores Int[]   @default([1, "x"])            // no cast, named at element 2
+```
+
+## Decisions that scope this slice
+
+Agreed with Will and Serhii on 2026-09-21.
+
+1. **A data type is the database type made first-class, per target.** No family-level types. On Postgres the types coincide with the database's: `pg/int2`, `pg/int4`, `pg/int8`, `pg/numeric`, `pg/json`, `pg/jsonb`, and so on. On SQLite, whose storage classes are shared by several logical types, the target declares its own: `sqlite/integer` and `sqlite/bigint` are distinct types although both are `INTEGER`; `sqlite/text`, `sqlite/datetime` and `sqlite/json` are distinct although all are `TEXT`. The rule is: the target declares the types it distinguishes, and each codec names exactly one of them.
+2. **Codecs of one type share its canonical contract form.** `pg/int8number@1` joins `pg/int8@1` on digit text; `sqlite/bigintnumber@1` joins `sqlite/bigint@1` on digit text. Existing contracts with such columns change form once; we are in the RC and that is an emit and a sign.
+3. **Strict.** A codec that names no registered data type is an assembly error. In-repo extensions (pgvector, postgis, arktype-json) are migrated in this slice; external authors get an upgrade instruction.
+4. **A cast that returns the value unchanged is a valid declaration.** `pg/jsonb` casts from `pg/json` unchanged; it states that jsonb takes json values.
+5. **Not in this slice** (an independent project implements them): DDL name, aliases, parameters and their rendering moving from codec descriptors onto data types; `nativeType` derived and dropped from the contract; type constructors naming a type and a codec; function parameters typed by a data type through the attribute spec; temporal and bytes tags; the Mongo target's types beyond a name per codec.
+
+## Amendments made during the rework
+
+- **Generic relational codecs are descriptor templates.** `sql/text@1`, `sql/int@1`, `sql/float@1`, `sql/char@1` and `sql/varchar@1` are shared by both targets, so they carry everything a descriptor has except the data type (`CodecDescriptorTemplate`), and `postgresCodec()` / `sqliteCodec()` require `dataType` when they adapt one. (R1.)
+- **Data type ids are lower case** (`mongo/objectid`). `pg/char@1` and `pg/varchar@1` name `pg/char` and `pg/varchar`; SQLite's adapted `sql/char@1`, `sql/varchar@1` name `sqlite/text`, `sql/int@1` names `sqlite/integer`, `sql/float@1` names `sqlite/real`. SQLite binds no `Boolean`, so the boolean halt condition does not apply. (R1.)
+- **`dataTypes` sits at `types.codecTypes.dataTypes`** beside `codecDescriptors`; the assembled authoring contribution's `dataTypes` is required. The four invariants run behind one seam, `enforceDataTypeInvariants`, enabled once any component registers a type; R2 removes the gate. (R1.)
+
+- **The plain-number authoring entry declares the types its classifier can return** (`types`), and assembly counts those as writable for invariant 4, since `pg/int2` and friends have no entry of their own and are reached only through the classifier. The number form carries `classify` instead of `parse`. (R2.)
+- **Data types are registered on `ComponentMetadata.dataTypes`**, a sibling of `types`, `authoring` and `controlMutationDefaults`, not under `types.codecTypes`: an extension's `types` block is copied into its contract space, and a cast is a function no contract can hold. (R2.)
+- **SQLite has no boolean data type and no boolean entry.** A plain `true`/`false` on SQLite is refused with a diagnostic saying the target has no data type for a boolean value; nothing on `main` accepted it either, since SQLite binds no `Boolean`. (R2, for R3.)
+- **`@prisma/orm-postgres` exposes a `./data-types` subpath** so the target's declarations are reachable through the facade. (R2.)
 
 ## Design
 
-### B1. The `PslLiteral` type
+### B1. Data types in the framework
 
-File: [`packages/1-framework/1-core/framework-components/src/shared/codec-types.ts`](../../../../packages/1-framework/1-core/framework-components/src/shared/codec-types.ts).
+File: `packages/1-framework/1-core/framework-components/src/shared/data-type.ts`, exported through `src/exports/codec.ts`. Replaces `literal-types.ts` and `literal-types-write.ts` (deleted; the classifier implementation and the numeral writer move to the SQL family, B4).
 
 ```ts
-/** A PSL scalar literal as its content, with the fence removed and escapes resolved. */
-export interface PslLiteral {
-  readonly kind: 'string' | 'number' | 'boolean';
-  /** string: the characters between the quotes with escapes resolved. number: the digits exactly as written. boolean: 'true' or 'false'. */
-  readonly text: string;
+export type DataTypeId = string & { readonly __brand: 'DataTypeId' };   // 'owner/name', no version
+export type Cast = (value: JsonValue) => JsonValue;                     // canonical form of the source → canonical form of this type; may throw a structured error
+export interface DataType {
+  readonly id: DataTypeId;
+  readonly casts: Readonly<Record<DataTypeId, Cast>>;
+  readonly listCast?: { readonly of: readonly DataTypeId[]; readonly cast: (elements: readonly JsonValue[]) => JsonValue };
+}
+export function dataType(id: string, spec: { casts?: ...; listCast?: ... }): DataType;
+export function dataTypeId(id: string): DataTypeId;                      // validates 'owner/name'
+```
+
+`listCast` is how a type whose single value holds several elements (vector) takes a PSL list: each element's type must be in `of`, and `cast` receives the elements' canonical forms. There is no list data type.
+
+`CodecDescriptor` gains `readonly dataType: DataTypeId`, required, abstract on `CodecDescriptorImpl`; `literalTypes` is removed. Mongo's `mongoCodec({...})` factory takes `dataType` too.
+
+Registration: a pack's codec contribution gains a sibling `dataTypes: readonly DataType[]`. The control stack assembles them into a `DataTypeLookup` (`get(id)`, `has(id)`) beside `CodecLookup`, refusing two declarations of one id, and enforces at assembly, with a structured error naming the contributor and the dangling id:
+
+1. every codec's `dataType` is registered;
+2. every `authoring.dataTypes` key and every cast source (scalar and `listCast.of`) is registered;
+3. no two authoring entries claim one tag or one plain kind;
+4. every cast source has an authoring entry (a type nobody can write cannot be cast from).
+
+References inside a pack are by constant (`pgInt8.id`), never by string literal.
+
+### B2. PSL support for data types
+
+The tag registry leaves `ControlMutationDefaults`. The authoring contribution (`AuthoringContributions`, where entity types and attribute specs already live) gains `dataTypes`, keyed by type id:
+
+```ts
+interface DataTypeAuthoringEntry {
+  readonly written: { kind: 'tag'; tag: string } | { kind: 'plain'; syntax: 'string' | 'boolean' | 'number' };
+  readonly parse: (text: string) => JsonValue;          // throws a structured error for text it cannot read
+  readonly print: (value: JsonValue) => string;
+  readonly documentation: string;
 }
 ```
 
-Nothing converts `text` to a JavaScript number before a codec sees it.
+For the plain `number` syntax one entry per target carries the **classifier**: `classify(text): { type: DataTypeId; value: JsonValue } | undefined`. The `sql` tag is registered in the same map as the one lowering entry (`{ written: { kind: 'tag', tag: 'sql' }, lower }`), keyed by a reserved key rather than a type id; `pg.sql` and `sqlite.sql` likewise. Assembly merges every contributor's map (invariant 3 above). The language server reads tag completion and documentation from these entries; the interpreter, the printer and the Prisma 7 reader read `parse`, `print` and the classifier.
 
-### B2. The `Codec` interface
+### B3. Postgres
 
-File: [`packages/1-framework/1-core/framework-components/src/shared/codec.ts`](../../../../packages/1-framework/1-core/framework-components/src/shared/codec.ts).
+Files: `packages/3-targets/3-targets/postgres/src/core/data-types.ts` (new), `codecs.ts`, `temporal-codecs.ts`, `temporal-string-codecs.ts`, `date-codecs.ts`, `codec-helpers.ts`; `packages/3-targets/6-adapters/postgres/src/core/control-mutation-defaults.ts` (the tag registration moves out) and the adapter's authoring contribution.
 
-```ts
-export interface Codec<...> {
-  // existing: encode, decode, encodeJson, decodeJson
-  /** The PSL literal that denotes this value in schema source. */
-  encodePsl(value: TInput): PslLiteral;
-  /** The value a PSL literal denotes. Throws when the literal is not a value of this type. */
-  decodePsl(literal: PslLiteral): TInput;
-}
+Types, one per database type the target's codecs bind to, with each codec's `dataType`:
 
-export abstract class CodecImpl<...> {
-  abstract encodePsl(value: TInput): PslLiteral;
-  abstract decodePsl(literal: PslLiteral): TInput;
-}
-```
+| Data type | Codecs | Canonical form | Casts from |
+|---|---|---|---|
+| `pg/text` | `pg/text@1`, `sql/text@1` | text | |
+| `pg/char`, `pg/varchar` | `sql/char@1`, `sql/varchar@1` | text | `pg/text` |
+| `pg/uuid`, `pg/inet`, `pg/bit`, `pg/varbit`, `pg/timetz`, `pg/interval`, `pg/bytea` | the codec of each | text | `pg/text` |
+| `pg/date`, `pg/time`, `pg/timestamp`, `pg/timestamptz` | the `-string@1`, `-temporal@1` and `timestamptz-date@1` codecs of each | text | `pg/text` |
+| `pg/enum` | `pg/enum@1` | text | none (members are references) |
+| `pg/int2` | `pg/int2@1` | JSON number | |
+| `pg/int4` | `pg/int4@1`, `pg/int@1`, `sql/int@1` | JSON number | `pg/int2` |
+| `pg/int8` | `pg/int8@1`, `pg/int8number@1` | digit text | `pg/int2`, `pg/int4` (number → digit text) |
+| `pg/numeric` | `pg/numeric@1`, `pg/unboundedint@1` | decimal text, or `NaN`/`Infinity`/`-Infinity` | `pg/int2`, `pg/int4` (number → text), `pg/int8` (text) |
+| `pg/float4`, `pg/float8` | `pg/float4@1`, `pg/float8@1`, `pg/float@1`, `sql/float@1` | JSON number, or the three words as text | `pg/int2`, `pg/int4`, `pg/int8`, `pg/numeric` (text and words → number or word) |
+| `pg/bool` | `pg/bool@1` | boolean | |
+| `pg/json` | `pg/json@1` | the document | |
+| `pg/jsonb` | `pg/jsonb@1` | the document | `pg/json` (unchanged) |
+| `pg/text-array` | `pg/text-array@1` | array of text | none (contract-free only) |
 
-- Both members are required. There is no base-class default. A codec that omits them fails to compile.
-- `decodePsl` throws an ordinary `Error` whose message says what the codec accepts, for example `pg/int4@1 reads a number literal; got a string`. Callers turn the message into a diagnostic.
-- Update the file's header comment, which lists the four conversion methods, to list six and say when each pair runs (PSL: schema reading and schema printing).
+`pg/unboundedint@1` binds `numeric`; its digit text is a valid decimal text, so it is a codec of `pg/numeric`. `pg/float@1` and `sql/float@1` refuse the three words in `decodeJson` (representation limit); the cast from `pg/numeric` still produces them and the codec refuses with its own message. A codec whose database type is not in this table is a halt condition.
 
-### B3. The PSL form of each codec
+Authoring entries: `pg/text` plain string; `pg/bool` plain boolean; the number classifier: a whole number within 16 bits is `pg/int2`, within 32 `pg/int4`, within 64 `pg/int8`, anything else (larger, a fraction, or the three words) `pg/numeric`; `pg/json` tag `json`; the `sql` and `pg.sql` lowering entries.
 
-One rule, applied to every codec:
+### B4. SQLite and the SQL family
 
-- If `encodeJson(value)` is a JSON string, the PSL form is `{ kind: 'string', text: <that string> }`, and `decodePsl` accepts a string literal and returns `decodeJson(text)`.
-- If `encodeJson(value)` is a JSON number, the PSL form is `{ kind: 'number', text }` where `text` is the exact decimal text of the value with no exponent, and `decodePsl` accepts a number literal and reads its text without passing through `Number()` unless the codec's own type is a JavaScript number.
-- If `encodeJson(value)` is a JSON boolean, the PSL form is `{ kind: 'boolean', text }`, and `decodePsl` accepts a boolean literal.
-- If `encodeJson(value)` is a JSON object, array, or null, the PSL form is `{ kind: 'string', text: JSON.stringify(encodeJson(value)) }`, and `decodePsl` accepts a string literal, parses it as JSON, and returns `decodeJson(parsed)`. This covers the JSON codecs, the arktype-json codec, pgvector, and postgis.
+SQLite (`packages/3-targets/3-targets/sqlite/src/core/`, adapter authoring contribution): types `sqlite/text` (`text@1`), `sqlite/datetime` (`datetime@1`, casts from `sqlite/text`), `sqlite/json` (`json@1`, tag `json`), `sqlite/blob` (`blob@1`, casts from `sqlite/text`), `sqlite/integer` (`integer@1`, JSON number), `sqlite/bigint` (`bigint@1`, `bigintnumber@1`, digit text; casts from `sqlite/integer`), `sqlite/real` (`real@1`, JSON number; casts from `sqlite/integer` and `sqlite/bigint`). Classifier: a whole number within the safe integer range is `sqlite/integer`, within 64 bits `sqlite/bigint`, a fraction `sqlite/real`, anything else refused with a message saying no SQLite type holds it. Plain string → `sqlite/text`. There is no boolean type on SQLite unless the target already binds `Boolean`; if it does, the implementer reports how before adding one (halt condition).
 
-Named exceptions to the rule, each already how PSL is written today:
+The SQL family (`packages/2-sql/9-family`, `relational-core`) registers no types. It exports the shared implementations the targets use: the integer-width classifier (parameterised by the target's type ids and widths), the numeral canonicaliser (leading zeros, sign of zero, trailing zeros kept) and writer (no exponent), the JSON parse and print, and the `sql` lowering entry. The generic `sql/*` codecs name the data type of whichever target adapts them (`sql/int@1` is a codec of `pg/int4` on Postgres).
 
-- Float codecs (`pg/float4@1`, `pg/float8@1`, and SQLite's real codec): `NaN`, `Infinity`, and `-Infinity` are written as string literals `"NaN"`, `"Infinity"`, `"-Infinity"`, because PSL has no number token for them. `decodePsl` accepts both a number literal and one of those three strings.
-- Integer codecs whose JavaScript type is `bigint` or a decimal string (`pg/int8@1`, `pg/numeric@1`, the decimal codecs): `decodePsl` reads the digits from `text` directly; `encodePsl` prints them directly. The number never touches a JavaScript `number`.
-- Codecs whose JSON form is a string but whose PSL form must be a number (none known). If one is found, stop and report.
+Extensions: `pgvector/vector` (`pg/vector@1`; `listCast` of `pg/int2`, `pg/int4`, `pg/int8`, `pg/numeric`, elements to numbers); `postgis/geometry` (`pg/geometry@1`; casts from `pg/text`); `arktype/json` (`arktype/json@1`; casts from `pg/json` unchanged, the codec instance validates). Mongo: one type per codec, no casts, no authoring entries.
 
-Per-codec inventory the implementer must complete (grep `extends CodecImpl`; the abstract members make omissions compile errors, so the list is checked by the typecheck):
+### B5. Codecs are strict again
 
-- `packages/3-targets/3-targets/postgres/src/core/codecs.ts` (21 classes)
-- `packages/3-targets/3-targets/postgres/src/core/temporal-codecs.ts` (4)
-- `packages/3-targets/3-targets/postgres/src/core/temporal-string-codecs.ts` (4)
-- `packages/3-targets/3-targets/postgres/src/core/date-codecs.ts` (1)
-- `packages/3-targets/3-targets/sqlite/src/core/codecs.ts` (8)
-- `packages/2-sql/4-lanes/relational-core/src/ast/sql-codecs.ts` (5)
-- `packages/3-extensions/pgvector/src/core/codecs.ts` (1)
-- `packages/3-extensions/postgis/src/core/codecs.ts` (1)
-- `packages/3-extensions/arktype-json/src/core/arktype-json-codec.ts` (1)
-- `packages/2-mongo-family/1-foundation/mongo-codec/src/codecs.ts` (all classes; nothing in Mongo authoring calls them yet)
-- Any alias or higher-order codec class the typecheck reports.
+Every coercion added to `decodeJson` on this branch (int8 and bigint codecs reading numbers, number-valued codecs reading text, numeric reading numbers, float codecs reading text, vector reading text elements) is removed; those conversions are the casts in B3 and B4. `pg/float4@1`/`pg/float8@1` keep the non-finite words as their JSON and wire form, because that is the type's canonical form. `pg/int8number@1` and `sqlite/bigintnumber@1` change `encodeJson` to digit text and `decodeJson` to read it, refusing past 2^53 with a message naming the limit. `isNumeralText`/`isNonFiniteText`/`numeralText` move to the family export.
 
-Shared helpers are allowed and expected: for instance one `stringPslCodec()` mixin-style pair of functions the identity-string codecs share, one `jsonTextPsl` pair the object-valued codecs share. Put family-shared helpers in `packages/1-framework/1-core/framework-components/src/shared/psl-literal-helpers.ts`. Do not put a default on `CodecImpl`.
+### B6. The interpreter
 
-### B4. The `literal()` combinator
+`packages/2-sql/2-authoring/contract-psl/src/literal-default.ts`, `psl-column-resolution.ts`, `sql-attribute-specs.ts`. The `@default` arms are unchanged from the branch (plain scalars, list, function calls, one tagged-literal arm per entry). Reading a default:
 
-File: new `packages/1-framework/2-authoring/psl-parser/src/attribute-spec/combinators/literal.ts`; types in `attribute-spec/types.ts`.
+1. A reference resolves (enum member path unchanged); a call dispatches; a lowering tag lowers.
+2. A literal is parsed through the authoring entry for its syntax (tag by name; plain string, boolean, or the classifier) into `{ type, value }`. A parse failure is `PSL_INVALID_DEFAULT_LITERAL`, or `PSL_INVALID_JSON_LITERAL` for the `json` entry; an unregistered tag is `PSL_UNKNOWN_DEFAULT_LITERAL_TAG`.
+3. The column's type is `codecLookup.descriptorFor(codecId).dataType`. If the value's type differs, the column type's `casts[valueType]` is applied (per element against the element codec's type for a list column; `listCast` for a list literal on a scalar column). No cast is `PSL_DEFAULT_TYPE_INCOMPATIBLE`: `Field "Account.count": pg/int4 has no cast from pg/int8; it casts from pg/int2`, with ` at element N` inside a list. A cast that throws is `PSL_INVALID_DEFAULT_LITERAL` with its message.
+4. The canonical form is validated by the codec instance for the column's `typeParams` (`materializeCodec`, `decodeJson`); a throw is `PSL_INVALID_DEFAULT_LITERAL` with the codec's message.
+5. The canonical form is stored as the default's literal value. `build-contract.ts` no longer re-encodes a PSL default (it still encodes a TypeScript `.default(value)` through `encodeJson`); `AuthoredColumnDefaultLiteralValue` loses its `bigint` arm if nothing else needs it.
 
-```ts
-export function literal(): LiteralArgType<AttributeCtx>; // parses to PslLiteral
-```
+`PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE` is renamed `PSL_DEFAULT_TYPE_INCOMPATIBLE`. The Prisma 7 reader (`contract-prisma7/src/defaults.ts`) calls the same core with its own syntax mapped onto the plain kinds and the `json` entry; its diagnostic code and the Bytes/DateTime expression path are unchanged.
 
-- `ArgTypeKind` gains `'literal'`. Label `literal`.
-- A `StringLiteralExprAst` yields `{ kind: 'string', text: literal.value() }` (escapes resolved by the existing `value()`). A `NumberLiteralExprAst` yields `{ kind: 'number', text: token.text }`. A boolean literal yields `{ kind: 'boolean', text }`. Anything else: `Expected a string, number, or boolean literal`.
-- `numLiteral()` stays for its other consumers (the Prisma 7 source uses it for attribute arguments); `@default` no longer uses it.
+### B7. The printer
 
-### B5. Interpreter
+`packages/2-sql/9-family/src/core/psl-contract-infer/default-mapping.ts`, `packages/3-targets/3-targets/postgres/src/core/psl-infer/`. For a stored literal: classify the canonical form with the target's rules (digit text or a number through the classifier, the three words → the numeric type, a document → the JSON type, text → the text type, a boolean, an array element by element); confirm the column's type is that type or casts from it; print with the source entry's `print`; run the text back through parse and cast and confirm it equals the stored value; otherwise the raw-expression fallback. `infer-default-codec.ts` resolves a printed type name to a codec descriptor as on the branch, and reads the type from it.
 
-Files: [`sql-attribute-specs.ts`](../../../../packages/2-sql/2-authoring/contract-psl/src/sql-attribute-specs.ts), [`psl-column-resolution.ts`](../../../../packages/2-sql/2-authoring/contract-psl/src/psl-column-resolution.ts), [`number-literal-default.ts`](../../../../packages/2-sql/2-authoring/contract-psl/src/number-literal-default.ts).
+### B8. Docs and upgrade instructions
 
-- `scalarDefaultArms`: the literal arms `str(), numLiteral(), bool()` become one `literal()` arm; the list case becomes `list(literal())`. The function arms are unchanged. (Slice A appends a tagged-literal arm after the function arms; the two edits do not overlap.)
-- `DefaultArgValue` becomes `PslLiteral | PslLiteral[] | TypedFuncCall` (slice A adds its own member).
-- `psl-column-resolution.ts`: for a `PslLiteral` or a list of them, look up the column codec with `codecLookup.get(codecId)`. The codec must exist; a missing codec is an `InternalError` (the codec lookup is already required to build the column). Call `codec.decodePsl(literal)` for the value or for each element. A thrown error becomes diagnostic `PSL_INVALID_DEFAULT_LITERAL` at the attribute's span with message `Field "<Model>.<field>": @default(<source text>) is not a value of <codecId>: <error message>`. The decoded value goes into `{ kind: 'literal', value }` exactly where today's value goes; encoding to JSON for the contract happens where it happens today (`encodeColumnDefault` in `contract-ts/src/build-contract.ts` calls `encodeJson`).
-- Delete `number-literal-default.ts` and its test. Delete the `numeric` trait check that gated it. Remove `numberLiteralDefault` from `contract-psl`'s `resolution` export; its one external consumer (the Prisma 7 source) is rewritten in B7.
-- The enum-member arm is unchanged: members lower to their storage value as today.
-
-### B6. Printer
-
-Files: [`9-family/src/core/psl-contract-infer/default-mapping.ts`](../../../../packages/2-sql/9-family/src/core/psl-contract-infer/default-mapping.ts), [`postgres/src/core/psl-infer/psl-literals.ts`](../../../../packages/3-targets/3-targets/postgres/src/core/psl-infer/psl-literals.ts), [`infer-model-blocks.ts`](../../../../packages/3-targets/3-targets/postgres/src/core/psl-infer/infer-model-blocks.ts), `printer-config.ts`.
-
-- `mapDefault(columnDefault, options)` gains a required `codec: Codec` in its options for the literal arm. The literal arm prints `formatPslLiteral(codec.encodePsl(codec.decodeJson(value)))`; for a list column, each element, joined as `[a, b]`. The contract holds values in JSON form, so `decodeJson` runs first to get the codec's own type.
-- New family function `formatPslLiteral(literal: PslLiteral): string`: `string` → `"` + escaped text + `"` using the existing `escapePslString` rules (moved to the family if it lives in the target today); `number` and `boolean` → `text`.
-- Delete `formatLiteralValue`, `quoteString`, `escapeString` from `default-mapping.ts`.
-- Delete the per-codec formatter table in `psl-literals.ts` (`PslDefaultValueFormat`, `formatPslValue`, `formatNumber`, `formatFloat`, `formatInteger`, `plainNumeral`, and the table that maps codec IDs to them) and the `printer-config.ts` option that carries it. `infer-model-blocks.ts` passes the column's codec to `mapDefault` instead.
-- The list-literal printing path in `infer-model-blocks.ts` (the one that prints `@default([...])` from `resolvedDefault`) uses the same `formatPslLiteral` per element.
-
-### B7. Prisma 7 source
-
-Files: [`contract-prisma7/src/defaults.ts`](../../../../packages/2-sql/2-authoring/contract-prisma7/src/defaults.ts), [`contract-prisma7/src/target-binding.ts`](../../../../packages/2-sql/2-authoring/contract-prisma7/src/target-binding.ts), [`postgres/src/core/prisma7-binding.ts`](../../../../packages/3-targets/3-targets/postgres/src/core/prisma7-binding.ts).
-
-- `Prisma7LiteralDefaultForm` loses the `{ kind: 'json' }` member. `literalDefaultForm` in the Postgres binding no longer returns it for `json`/`jsonb`; those columns take the codec path like every other column. The `sqlExpression` member stays for `bytea` and the temporal types (project spec D11).
-- `scalarValue`, `elementValue`, `numberValue`, `rejectedNumberReason`, `WHOLE_NUMBER_SCALARS`, and `WHOLE_NUMBER_TEXT` are replaced by: build a `PslLiteral` from the expression (string → `{ kind: 'string', text: value() }`; number → `{ kind: 'number', text: token.text }`; boolean → boolean), call `codecLookup.get(codecId).decodePsl(literal)`, and turn a thrown error into `PSL.PRISMA7_UNKNOWN_DEFAULT` with message `Field "<Model>.<field>": @default(<source>) is not a value of <codecId>: <error message>`. The enum-member path (identifier → `enumMembers.get`) is unchanged. The `PRISMA7_JSON_NULL_DEFAULT_UNSUPPORTED` diagnostic stays and fires when the decoded value is `null` on a JSON-typed column.
-- The Prisma 7 rule that `Int` and `BigInt` defaults must be whole numbers is now the codec's rule: `pg/int4@1` and `pg/int8@1` `decodePsl` reject `1.5`. The fixture expectations that quote the old message text are updated to the codec's message.
-
-### B8. ADR 184 amendment
-
-Add a section "Amendment — PSL literal methods live on `Codec`" to [ADR 184](../../../../docs/architecture%20docs/adrs/ADR%20184%20-%20Codec-owned%20value%20serialization.md): `encodePsl` and `decodePsl` are required members of the `Codec` interface and abstract on `CodecImpl`; the `PslLiteralCodec` interface sketched in the ADR is not a separate entity and never was, it is the consumer's view of the same codec (dependency inversion); the "single interface with all boundaries" alternative is no longer rejected for PSL; the `PslLiteral` shape and the one rule from B3 with its named exceptions; DDL methods remain future work with a pointer to [`deferred.md`](../../deferred.md) item 3. Update the `docs/reference/codec-authoring-guide.md` to list six methods and show a JSON-valued and a string-valued example. Update the ADR index summary line.
-
-### B9. Docs
-
-- `contract-psl/README.md`: one paragraph on literal defaults: the written form is whatever the column's codec accepts; JSON columns take a string holding JSON text; numbers are read exactly as written.
-- `docs/reference/error-reference.md`: add `PSL_INVALID_DEFAULT_LITERAL`; update the Prisma 7 messages that changed.
+- ADR 254: add the SQLite note from decision 1 (a target declares the types it distinguishes where the database's storage classes are shared).
+- `docs/reference/codec-authoring-guide.md`: `dataType` is required on every descriptor; how to declare a data type with casts; the authoring entry; strict assembly.
+- `docs/reference/error-reference.md`: the renamed code and messages.
+- `packages/2-sql/2-authoring/contract-psl/README.md`: the paragraph on defaults in the ADR's words.
+- `upgrade-instructions/pending/literal-types-column-defaults/`: app instructions gain the contract-form change for `int8number`/`bigintnumber` columns (re-run `contract emit`, then `db sign`); extension instructions are rewritten: declare a data type per codec, name it on the descriptor, casts replace accepted lists, `decodeJson` takes only the canonical form, the authoring entry replaces the tag registry entry, strict assembly.
+- Every "literal type" this branch introduced in code, comments, docs and tests becomes "data type"; `git grep -n "literalTypes\|LiteralTypeName\|isCompatible\|integerLiteralTypesUpTo\|defaultLiteralTagRegistry\|isDefaultLiteralTagLoweringEntry\|PSL_DEFAULT_LITERAL_TYPE_INCOMPATIBLE" -- packages docs upgrade-instructions` returns nothing, and `git grep -in "literal type" -- $(git diff --name-only origin/main...HEAD)` returns nothing (pre-existing text elsewhere is out of scope).
 
 ## Tests (written first; each named test must fail before its implementation lands)
 
-Framework (`framework-components/test`):
-- `PslLiteral` type test; `CodecImpl` subclass without the methods fails to compile (`test-d`).
-
-Per pack, a table test that for every codec the pack registers, `decodePsl(encodePsl(v))` equals `v` for at least one sample value per codec, and `decodePsl` of a wrong-kind literal throws with a message naming the codec. Packs: Postgres target, SQLite target, relational-core, pgvector, postgis, arktype-json, Mongo codec package.
-
-Interpreter (`contract-psl/test/interpreter.defaults.test.ts`), each case asserting the whole default object:
-- `Jsonb @default("{}")` → literal `{}` (object); `Json @default("[1, 2]")` → `[1, 2]`; `Json @default("null")` → literal `null` (allowed in Prisma 8 authoring); `BigInt @default(9007199254740993)` → exact; `Decimal @default(1.50)` → `"1.50"`; `Float @default("NaN")`; `Float @default(1.5)`; `Int @default(1.5)` → `PSL_INVALID_DEFAULT_LITERAL` with the codec's message; `Int @default("1")` → `PSL_INVALID_DEFAULT_LITERAL`; `String @default("a\"b")` → `a"b`; `Boolean @default(true)`; `Int[] @default([1, 2])`; `Int[] @default([1, "x"])` → diagnostic naming the element.
-- The existing `preserves raw dbgenerated defaults for timestamp and json columns` test is unchanged (slice C rewrites it).
-
-Printer (`9-family/test/psl-contract-infer/default-mapping.test.ts`, `postgres/test/psl-infer/print-psl/print-psl.defaults-and-types.test.ts`):
-- every case above printed back to the same source text; a `pg/float8@1` value `NaN` prints `"NaN"`; a `pg/int8@1` value beyond 2^53 prints every digit; a jsonb object prints `"{\"a\":1}"` with escapes.
-
-Prisma 7 source (`contract-prisma7/test`):
-- existing `defaults` fixture green with updated messages; `jsonLiteral Json @default("{\"a\":1}")` lowers through the codec; `Int @default(1.5)` rejected with the codec's message; `json-null-default` fixture unchanged.
-
-Journeys:
-- `test/integration/test/cli-journeys/infer-roundtrip-fidelity.e2e.test.ts`: the jsonb default case now asserts that emit succeeds without the workaround and that infer prints `@default("{}")`; delete the comment that says it is "left broken".
-- New integration test: the Outcome schema emits, `db init` succeeds, `db verify --schema-only --strict` reports nothing, and a row read through the client returns the defaults with their decoded types.
+- Framework: `dataType()` validates ids; `DataTypeLookup`; each of the four assembly invariants fails with the named contributor and id; a codec descriptor without `dataType` fails to compile (test-d).
+- Per pack: an inventory test asserting every registered codec's `dataType` and every registered type's cast sources against a table (Postgres, SQLite, relational-core adapted codecs, pgvector, postgis, arktype-json, Mongo).
+- Casts: each cast in B3/B4 with its conversion (`pg/int2 → pg/int8`: `42 → "42"`; `pg/numeric → pg/float8`: `"1.5" → 1.5`, `"NaN" → "NaN"`; `pg/json → pg/jsonb` unchanged; vector list cast).
+- Classifier per target: every boundary (16, 32, 64 bits, safe integer on SQLite, negative bounds, `-0`, leading zeros, trailing zeros, the three words, refused on SQLite).
+- Codecs: `decodeJson` refuses every non-canonical shape it accepted on the branch; `int8number`/`bigintnumber` round-trip digit text and refuse past 2^53.
+- Interpreter: every Outcome column and every error form above, whole default object asserted; the enum reference path; Prisma 7 reader parity.
+- Printer: round trip for every Outcome column; the decode-check fallback for `'infinity'::timestamp`.
+- Journeys: the branch's e2e, pgvector, infer round-trip and parity tests, updated to the new names; `pnpm fixtures:check` shows exactly the `int8number`/`bigintnumber` columns changing form and nothing else, after which the fixtures are re-emitted and committed.
 
 ## Definition of done
 
-- All tests above green; `pnpm test:packages`, `pnpm test:integration`, `pnpm test:e2e`, `pnpm fixtures:check`, `pnpm lint:deps`, `pnpm lint:docs`, root typecheck green.
-- `git grep -n "numberLiteralDefault\|PslDefaultValueFormat\|formatLiteralValue" -- packages` returns nothing.
-- `git grep -n "kind: 'json'" -- packages/2-sql/2-authoring/contract-prisma7 packages/3-targets/3-targets/postgres/src/core/prisma7-binding.ts` returns nothing.
-- Every existing fixture's `contract.json` is byte-identical (`pnpm fixtures:check`); the JSON form of values does not change.
-- ADR 184 amendment and codec guide update merged with the PR.
+- `pnpm typecheck`, `pnpm test:packages`, `pnpm test:integration`, `pnpm test:e2e`, `pnpm lint`, `pnpm lint:deps`, `pnpm lint:docs`, `pnpm lint:throws`, `pnpm lint:framework-vocabulary`, `pnpm fixtures:check`, `pnpm check:upgrade-coverage --mode pr` green.
+- The grep in B8 returns nothing; `git grep -n "defaultLiteralTagRegistry" -- packages` returns nothing.
+- Every in-repo codec names a registered data type; assembly is strict.
+- PR #30350 updated: description rewritten around ADR 254, title without a Linear prefix.
 
 ## Halt conditions
 
-- A codec's JSON form is a string but its natural PSL form must be a number, or the reverse. Report the codec; do not add a per-codec branch outside that codec.
-- A consumer other than the interpreter, the printer, and the Prisma 7 source depends on the deleted formatter table. Report it.
-- The Mongo codec package cannot depend on `PslLiteral` without a layering violation. Report; do not duplicate the type.
+- A codec binds a database type that the B3/B4 tables do not place, or two codecs of one type cannot share a canonical form without a conversion the ADR does not describe.
+- SQLite binds `Boolean` to a codec that also serves another type.
+- The authoring contribution cannot carry `dataTypes` without a layering violation.
+- A contract other than the `int8number`/`bigintnumber` columns changes form under `fixtures:check`.
 
-## Repository rules that apply
+## Not in this slice
 
-`CLAUDE.md`; `.agents/rules/running-tests.mdc`; `.agents/rules/git-staging.mdc`; `.agents/rules/no-bare-casts.mdc`; `.agents/rules/contract-default-values.mdc`; `.agents/rules/storage-type-hooks.mdc`; `.agents/rules/prefer-assertions-over-defensive-checks.mdc`; `.agents/rules/omit-should-in-tests.mdc`; `docs/reference/codec-authoring-guide.md`.
+See decision 5. The future project owns: DDL name and aliases, parameters and rendering on data types; `nativeType` removal; type constructors naming a type and a codec; function parameters as typed receivers; temporal and bytes tags; Mongo types beyond a name per codec.

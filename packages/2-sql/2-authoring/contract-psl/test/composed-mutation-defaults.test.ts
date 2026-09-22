@@ -8,6 +8,7 @@ import {
   type InterpretPslDocumentToSqlContractInput,
   interpretPslDocumentToSqlContract as interpretPslDocumentToSqlContractInternal,
 } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   postgresScalarTypeDescriptors,
   postgresTarget,
@@ -23,6 +24,7 @@ describe('composed mutation default registries', () => {
       | 'composedExtensionContracts'
       | 'createNamespace'
       | 'capabilities'
+      | 'dataTypeLookup'
     > &
       Partial<Pick<InterpretPslDocumentToSqlContractInput, 'composedExtensionContracts'>>,
   ) =>
@@ -31,6 +33,7 @@ describe('composed mutation default registries', () => {
       scalarColumnDescriptors: postgresScalarTypeDescriptors,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       capabilities: { sql: { scalarList: true } },
       ...input,
     });
@@ -73,7 +76,6 @@ describe('composed mutation default registries', () => {
     const result = interpretPslDocumentToSqlContract({
       ...document,
       controlMutationDefaults: {
-        defaultLiteralTagRegistry: new Map(),
         defaultFunctionRegistry: new Map([
           [
             'slugid',
@@ -132,7 +134,6 @@ describe('composed mutation default registries', () => {
     const result = interpretPslDocumentToSqlContract({
       ...document,
       controlMutationDefaults: {
-        defaultLiteralTagRegistry: new Map(),
         defaultFunctionRegistry: new Map([
           [
             'slugid',

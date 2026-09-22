@@ -30,6 +30,7 @@ function sourceContextFromConfig(config: PrismaNextConfig): ContractSourceContex
     composedExtensionContracts: new Map(),
     authoringContributions: stack.authoringContributions,
     codecLookup: stack.codecLookup,
+    dataTypeLookup: stack.dataTypeLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     resolvedInputs: config.contract?.source.inputs ?? [],
     capabilities: stack.capabilities,

@@ -225,6 +225,10 @@ The SQL emitter is asked to emit an aggregate result row whose declared result c
 
 The control plane resolves a codec referenced by the contract (a `CodecRef.codecId`) against the contract's pack stack and finds no registered codec descriptor for that id. Hit during control-plane operations (emit, migration tooling) when a contract references a codec no composed pack provides. Payload: `codecId`.
 
+### CONTRACT.CAST_REFUSED
+
+A value handed to a data type's cast, or to an authoring entry that reads written text, is not one that type takes: it is not in the shape the source type stores, its magnitude is outside the range the receiving type holds, or the text is not a boolean. Raised by a target's or extension's casts and authoring entries. A contract source reading a column default reports it to the author as the PSL diagnostic `PSL_INVALID_DEFAULT_LITERAL`. Payload: `why`, `fix`.
+
 ### CONTRACT.CHECK_NAME_RESERVED
 
 An authored `@@check` / `check()`'s `name:` prefix matches the shape a derived enforcement check would use for a column of the same table (`<table>_<column>_check` or `<table>_<column>_elem_not_null`), so it cannot be told apart from a derived check once a non-`managed` table strips those. The message and `collidingColumns` meta name the column(s) whose derived-check shape the prefix matches. Raised while building a SQL contract, once the table's real columns are in hand. The fix is to choose a different `name:`. Payload: `tableName`, `prefix`, `collidingColumns`.
@@ -252,6 +256,29 @@ A model declares an empty unique constraint (a unique with no fields), raised du
 ### CONTRACT.PRINT_UNSUPPORTED
 
 `contract print` cannot write the loaded contract as a Prisma 8 PSL file that reads back as the same contract, so it writes nothing. Either the configured target has no `printPslContract` hook on its descriptor (meta: `targetId`), or the contract holds something the PSL language has no form for. The message names the model, column, field, or entity. The refused shapes: a column whose native type is outside the target's type map; a generated value the target cannot author, or a column that takes a wall-clock-now generator in one phase and a different generator in the other; a to-one relation with no foreign key behind it, or a foreign key no relation travels; a field whose type is a union of types, or a dictionary field; a column with its own control policy (PSL declares the policy per model); a model with an owner; one model name declared in more than one namespace; an entity kind an extension contributes (row-level security policies, roles), whose PSL syntax the target printer does not know; and a value-object field whose codec the Postgres target does not own. Meta at the shape sites: `coordinate`, `nativeType`, `onCreate`, `onUpdate`, `model`, `field`, `columns`, `kind`, `control`, `owner`, `modelName`, `namespaces`, `names`, `codecId`.
+### CONTRACT.DATA_TYPE_DUPLICATE
+
+Two components in the composed stack register the same data type id, which has exactly one owner. Raised while assembling the stack's data types. Payload: `dataType`, `contributedBy`, `owner`.
+
+### CONTRACT.DATA_TYPE_ENTRY_DUPLICATE
+
+Two components contribute an authoring entry under the same key, so the stack cannot tell which one reads that data type's written form. Raised while merging authoring contributions. Payload: `key`, `contributedBy`, `owner`.
+
+### CONTRACT.DATA_TYPE_ID_INVALID
+
+A string given where a data type id belongs is not `owner/name` in lower case, or carries a version (a versioned id names a codec, not a data type). Raised by `dataTypeId()` while declaring a data type or a cast. Payload: `id`.
+
+### CONTRACT.DATA_TYPE_NOT_WRITABLE
+
+A data type declares a cast from a type no contract source can write, so the cast could never be exercised. Raised while checking the assembled data types. Payload: `dataType`, `source`, `contributedBy`.
+
+### CONTRACT.DATA_TYPE_UNREGISTERED
+
+Something names a data type that no component in the stack registers: a codec's `dataType`, an authoring entry's key, a type its number classifier returns, or a type a cast takes values of. Raised while checking the assembled data types. Payload: `dataType`, `contributedBy`.
+
+### CONTRACT.DATA_TYPE_WRITTEN_FORM_DUPLICATE
+
+Two authoring entries claim the same written form — the same literal tag, or the same plain string, boolean, or number syntax — so a written default would have two readers. Raised while checking the assembled data types. Payload: `claim`, `key`, `contributedBy`, `owner`, `ownerContributedBy`.
 
 ### CONTRACT.DEFAULT_INVALID
 
@@ -312,6 +339,10 @@ A Mongo variant model declares an index that conflicts with the discriminator sc
 ### CONTRACT.INTROSPECTION_UNSUPPORTED
 
 Introspection read an unrecognized or malformed database shape: an unknown referential action rule, or a malformed index reloption entry. Raised by the Postgres and SQLite control adapters. Payload: `rule`, `entry`, `indexName`.
+
+### CONTRACT.INVALID_JSON_LITERAL
+
+The body of a JSON default is not a JSON document, or holds a number outside the range a JSON number holds (`JSON.parse` reads such a numeral as `Infinity`, which `JSON.stringify` writes back as `null`). Raised while canonicalizing a JSON default body. Contract sources report it to the author as the PSL diagnostic `PSL_INVALID_JSON_LITERAL`. Payload: `why`, `fix`.
 
 ### CONTRACT.MARKER_MISMATCH
 
@@ -387,7 +418,7 @@ A native type name in the contract fails the identifier-safety pattern required 
 
 ### CONTRACT.PACK_CONTRIBUTION_INVALID
 
-A composed pack's contribution is malformed or collides with another contribution; this is the extension-author-facing bucket. Covers: entity types colliding with reserved helper keys, duplicate entity kinds or index-type registrations, a registered entity kind with no `lowerEntityHandles` lowering, an invalid `indexTypes` shape, entries-slot collisions between a model attribute and a block entry kind, bad authoring-helper paths, a codec registered with an entity-ref arg but no `columnFromEntity` hook, and print-time contribution mismatches (missing/mismatched PSL block descriptor, param descriptor kind disagreeing with the AST node, unregistered codec id, raw literal that is not valid JSON). Raised during contract authoring/lowering and PSL printing. Payload: `packId`, `contribution`, `reason`, `keyword`, `paramName`, `codecId`.
+A composed pack's contribution is malformed or collides with another contribution; this is the extension-author-facing bucket. Covers: entity types colliding with reserved helper keys, duplicate entity kinds or index-type registrations, a registered entity kind with no `lowerEntityHandles` lowering, an invalid `indexTypes` shape, entries-slot collisions between a model attribute and a block entry kind, a model attribute that lowers to a malformed index, bad authoring-helper paths, a codec registered with an entity-ref arg but no `columnFromEntity` hook, and print-time contribution mismatches (missing/mismatched PSL block descriptor, param descriptor kind disagreeing with the AST node, unregistered codec id, raw literal that is not valid JSON). Raised during contract authoring/lowering and PSL printing. Payload: `packId`, `contribution`, `reason`, `keyword`, `paramName`, `codecId`.
 
 ### CONTRACT.PACK_FAMILY_MISMATCH
 
@@ -549,7 +580,7 @@ An attribute Prisma 7 for the target does not have, or one the source does not r
 
 ### PSL.PRISMA7_UNKNOWN_DEFAULT
 
-A `@default` value the source cannot read: an unknown function, an enum member on a non-enum field or a non-member, a number with a fraction on an `Int` or `BigInt` field, a malformed JSON or base64 literal, or `dbgenerated()` with no expression on a required field. Use a literal, an enum member, or a supported function. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A `@default` value the source cannot read, or one the column's data type or codec refuses. The message is `Field "<Model>.<field>": @default <reason>`. Every reason below carries ` at element <n>` after the value it is about when that value is one element of a list. The reasons that come from reading the value are: `holds text that this contract source does not read: <the reading entry's message>`; `holds a <tag> literal, which this stack does not register.`; `holds a <string|boolean|number> value, which this target has no data type for.`; `holds a <value type> value, which <column type> has no cast from; it casts from <types>.` (or `it casts from nothing`); and `holds a value that <codecId> does not read: <the codec's message>`. The rest do not involve the value's type — an unknown function, an enum member on a non-enum field or a non-member, and `dbgenerated()` with no expression on a required field. Write a value of a type the column's type is or casts from, an enum member, or a supported function. Reported by the Prisma 7 contract source (`prisma7Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA7_UNSUPPORTED_TYPE
 
@@ -574,6 +605,22 @@ A backtick string appears somewhere other than after a tag, for example `` @map(
 ### PSL_UNKNOWN_DEFAULT_LITERAL_TAG
 
 A `@default` tagged literal uses a tag no pack in the stack registered: `Unknown literal tag "<tag>". Known tags: <tags in registration order>.` Every SQL target registers `sql`; Postgres also registers `pg.sql` and SQLite `sqlite.sql`. Reported at the literal when the default is lowered.
+
+### PSL_DEFAULT_TYPE_INCOMPATIBLE
+
+A written `@default` value has a data type the column's type neither is nor casts from: `Field "<Model>.<field>": <column type> has no cast from <value type>; it casts from <types>`, or `; it casts from nothing` when the column's type declares no cast at all. A written value has a data type of its own — a number's comes from its own size and precision, so on Postgres `42` is `pg/int2` and `100000000000000099` is `pg/int8` — and a data type declares which other types' values it takes. Inside a written list the message names the element: `Field "<Model>.<field>" at element 2: ...`.
+
+The same code reports a written form this target has no data type for at all: `Field "<Model>.<field>"[ at element <n>]: this target has no data type for a <string|boolean|number> value` — `true` on SQLite, for instance, which registers no boolean entry.
+
+Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
+
+### PSL_INVALID_DEFAULT_LITERAL
+
+A written `@default` value that whatever read it refused: the authoring entry's parse, a cast, or the column's codec. A `pgvector.Vector(3)` column given two elements, a magnitude no double holds written on a `Float` column, a body a tag's parse cannot read, or a number no data type of the target holds — `no data type of this target holds the number <text>`, which is how SQLite refuses a whole number past 64 bits. The message is `Field "<Model>.<field>": <the message of whatever refused it>`, with ` at element <n>` after the field path when it is one element of a written list. Reported at the `@default` attribute. See [ADR 254](../architecture%20docs/adrs/ADR%20254%20-%20Data%20types%20and%20casts.md).
+
+### PSL_INVALID_JSON_LITERAL
+
+A `` @default(json`...`) `` body is not a JSON document: `Field "<Model>.<field>": <the JSON parser's message>`, with ` at element <n>` after the field path when it is one element of a written list. It is `PSL_INVALID_DEFAULT_LITERAL` narrowed to the one case of a `json` body, so that a malformed document is distinguishable from a value a cast or a codec refused. Reported at the `@default` attribute.
 
 ### PSL_TAGGED_LITERAL_NUL
 
@@ -730,6 +777,10 @@ Two trait-matching aggregate descriptors for one operation both claim a register
 ### RUNTIME.ANNOTATION_INAPPLICABLE
 
 A lane terminal (SQL DSL `.build()`, ORM collection terminal) received an annotation whose declared `applicableTo` set does not include the operation kind being built: the runtime check that backs up the type-level annotation validation when it is bypassed via casts or dynamic invocation. Payload: `namespace`, `terminalName`, `kind`, `applicableTo`.
+
+### RUNTIME.ARGUMENT_INVALID
+
+A built-in Postgres query operation received an argument it cannot use. Today the only such argument is the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`: the language is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused. Raised while the query is being built, before any SQL reaches the database. Payload: `helper`, `argument`, `received`.
 
 ### RUNTIME.AST_INVALID
 
@@ -1010,6 +1061,10 @@ A `migration check` finding, carried as an `error` diagnostic on a completed run
 
 A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a ref file in a space's `refs/` directory cannot be read or parsed. Repair or remove the corrupt ref file.
 
+### MIGRATION.CHECK_SNAPSHOT_CONTENT_MISMATCH
+
+A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a contract snapshot's declared `storage.storageHash` agrees with the migration's `to` hash, but the snapshot's content recomputes to a different storage hash — the file under `migrations/snapshots/<hash>/` has been edited (or corrupted) since it was written. Restore `migrations/snapshots/` from version control, or re-run the command that produced the migration to regenerate its snapshot.
+
 ### MIGRATION.CHECK_SNAPSHOT_HASH_MISMATCH
 
 A `migration check` finding, carried as an `error` diagnostic on a completed run that exits `4`: a migration declares a destination hash `to` but the contract snapshot stored for that hash has a different inner `storage.storageHash`. Re-emit the package so `migration.json` and its snapshot agree.
@@ -1037,6 +1092,10 @@ An apply carrying consent was refused because the plan recomputed for it is not 
 ### MIGRATION.CONTRACT_DESERIALIZATION_FAILED
 
 A contract JSON on disk failed to deserialize into a valid contract: either a snapshot-store entry read while migration tooling resolved a contract at a ref or hash, or the emitted `contract.json` read as the fallback source by `db sign` / `db update --to` (invalid JSON, or a value that is not a JSON object). Re-emit the owning migration package (or re-run `prisma contract emit` for the emitted contract), or restore the file from version control. Payload: `filePath`, `message`. Also raised by `migration new` when the emitted `contract.json` fails to deserialize; that site has no meta and attaches the deserialization failure as `cause`.
+
+### MIGRATION.CONTRACT_SNAPSHOT_CONTENT_MISMATCH
+
+A contract snapshot loaded from `migrations/snapshots/<hash>/contract.json` does not reproduce the storage hash it is addressed by: the store is content-addressed, and the file has been edited (or corrupted) since it was written. Raised at the snapshot-store load seam, so every command that resolves a contract from the store (`migration plan`, `ref set`, `db sign` / `db update --to`, aggregate contract resolution) refuses instead of treating the edited content as the recorded contract. The envelope names the file and both hashes (meta: `storageHash`, `computedHash`, `jsonPath`). Restore `migrations/snapshots/` from version control, or re-run the command that authored the referencing migration to regenerate the snapshot.
 
 ### MIGRATION.CONTRACT_SNAPSHOT_HASH_MISMATCH
 
@@ -1076,7 +1135,7 @@ Runner-level failure during apply (`db init`, `db update`, `migrate`): the plan'
 
 ### MIGRATION.DESTRUCTIVE_CHANGES
 
-The planned operations include destructive changes (e.g. DROP) and the command was run without explicit consent. `db update` asks for that consent instead of failing: interactively it asks you to type the name of the database it is about to change, and outside an interactive terminal it is granted by `--confirm <database>` (`--yes` accepts declared prompt defaults and never grants consent; `--confirm` is read only when the run is non-interactive or `--yes` is set, so a script run from a terminal needs `--no-interactive --confirm <database>`). The name is the `database` a driver connection object carries, or the connection URL's first path segment, else its host, falling back to the target id. A run with nobody to ask and no `--confirm` settles as `CLI.CONSENT_REQUIRED` at exit 2; a run whose prompt is cancelled settles as `CLI.PROMPT_CANCELLED` at exit 3. `--dry-run` never asks; it settles as this error instead. Use it to preview the operations first.
+The planned operations include destructive changes (e.g. DROP) and the command was run without explicit consent. `db update` asks for that consent instead of failing: interactively it asks you to type the name of the database it is about to change, and outside an interactive terminal it is granted by `--confirm <database>` (`--yes` accepts declared prompt defaults and never grants consent; `--confirm` is read only when the run is non-interactive or `--yes` is set, so a script run from a terminal needs `--no-interactive --confirm <database>`). The name is the `database` a driver connection object carries, or the connection URL's first path segment, else its host, falling back to the target id. A run with nobody to ask and no `--confirm` settles as `CLI.CONSENT_REQUIRED` at exit 2; a run whose prompt is cancelled settles as `CLI.PROMPT_CANCELLED` at exit 3. `--dry-run` never asks; it settles as this error instead. Use it to preview the operations first. `migration plan` raises the same refusal before writing an auto-baseline package (planned on an empty migrations directory from the `db` ref) whose operations would remove data when applied; there the consent token is the project directory name, so a non-interactive run passes `--no-interactive --confirm <directory>`, and a consented re-run that no longer plans the consented baseline settles as `MIGRATION.CONSENT_PLAN_MISMATCH`. Payload at the `migration plan` site: `destructiveOperations`, `planHash`.
 
 ### MIGRATION.DIR_EXISTS
 
@@ -1112,7 +1171,7 @@ A migration package on disk is corrupt: the `migrationHash` stored in `migration
 
 ### MIGRATION.HASH_NOT_IN_GRAPH
 
-A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `ref set`, and `migration new --from`. The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`, sometimes `graphTipHash`; none at the `migration new` site.
+A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`, sometimes `graphTipHash`; none at the `migration new` sites.
 
 ### MIGRATION.INVALID_DEFAULT_EXPORT
 
@@ -1256,7 +1315,7 @@ The `providedInvariants` stored in `migration.json` disagrees with the canonical
 
 ### MIGRATION.REF_AMBIGUOUS
 
-A contract or migration reference prefix matches more than one candidate (raised by the shared ref-resolution mapper used across CLI commands). Provide a longer prefix or the full hash. Payload: `input`, `candidates`, `grammar`.
+A contract or migration reference prefix matches more than one candidate (raised by the shared ref-resolution mapper used across CLI commands, and by `migration new --from` when the prefix matches several migration target hashes). Provide a longer prefix or the full hash. Payload: `input`, `candidates`, and at the shared-mapper site `grammar`.
 
 ### MIGRATION.REF_INVALID_FORMAT
 

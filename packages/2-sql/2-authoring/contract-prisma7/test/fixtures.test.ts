@@ -50,6 +50,7 @@ describe('Prisma 7 fixtures', () => {
       'defaults',
       'enum-default-member',
       'enum-default-member-unmapped-type',
+      'enum-default-quoted-string',
       'enum-namespace-mismatch',
       'enum-native',
       'enum-unreferenced',
