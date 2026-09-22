@@ -6,10 +6,9 @@
  * findings against the database the Prisma 7 SQL built. It runs over the
  * `relations` fixture, whose database is the SQL Prisma 7.10.0 generated for
  * the full `supported` schema. The command is not tied to Prisma 7: a PSL source prints
- * as the same schema. Three things are refused with exit 2 and no file
- * written: a Prisma 7 schema Prisma 8 cannot read, an output path that is the
- * schema being read, and a schema holding a column that cannot be written in
- * Prisma 8 PSL.
+ * as the same schema. Two things are refused with exit 2 and no file
+ * written: a Prisma 7 schema Prisma 8 cannot read, and an output path that is
+ * the schema being read.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -157,12 +156,12 @@ withTempDir(({ createTempDir }) => {
       onReady: (cs) => withClient(cs, (client) => client.query(PRISMA7_DDL)),
     });
 
-    it(
-      'converts relations across two schemas and verifies against the database Prisma 7 built',
-      async () => {
+    it.each(['relations', 'supported-verify'])(
+      'prints the %s fixture and verifies against the database Prisma 7 built',
+      async (fixture) => {
         await convertAndVerify(
           setupPrisma7Project(createTempDir, db.connectionString, {
-            copyFrom: join(PRISMA7_FIXTURES, 'relations/schema.prisma'),
+            copyFrom: join(PRISMA7_FIXTURES, `${fixture}/schema.prisma`),
           }),
           db.connectionString,
         );
@@ -209,20 +208,6 @@ withTempDir(({ createTempDir }) => {
       expect(convert.exitCode, output(convert)).toBe(2);
       expect(errorOf(convert).code).toBe('CONTRACT.PRINT_OUTPUT_IS_SOURCE');
       expect(readFileSync(schemaPath, 'utf-8')).toBe(before);
-      expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
-    });
-
-    it('refuses the first column it cannot write and writes nothing', async () => {
-      const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, {
-        copyFrom: join(PRISMA7_FIXTURES, 'supported-verify/schema.prisma'),
-      });
-
-      const convert = await runContractPrint(ctx, ['--json']);
-
-      expect(convert.exitCode, output(convert)).toBe(2);
-      const { code, summary } = errorOf(convert);
-      expect(code).toBe('CONTRACT.PRINT_UNSUPPORTED');
-      expect(summary).toContain('"Defaults"."jsonLiteral"');
       expect(existsSync(join(ctx.testDir, 'contract.prisma'))).toBe(false);
     });
   });

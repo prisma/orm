@@ -21,12 +21,6 @@ const cases = readdirSync(fixturesDir, { withFileTypes: true })
 /** Why each fixture does not round-trip yet, naming every cause it has. */
 const expectedFailures: ReadonlyMap<string, readonly string[]> = new Map([
   [
-    'defaults',
-    [
-      'a Json object literal default is refused, because PSL reads a quoted default back as a string',
-    ],
-  ],
-  [
     'junction-name-in-other-schema',
     ['one model name in two namespaces cannot be written in a Prisma 8 schema'],
   ],

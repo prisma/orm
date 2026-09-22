@@ -5,10 +5,11 @@ import type {
   PslExtensionBlockParamValue,
 } from '@internal/framework-components/psl-ast';
 import type { StorageColumn } from '@internal/sql-contract/types';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 import type { PostgresNativeEnum } from '../postgres-native-enum';
 import { buildNativeEnumBlock } from '../psl-infer/infer-enum-blocks';
 import { createUniqueFieldName } from '../psl-infer/infer-names';
-import { escapePslString, SYNTHETIC_SPAN } from '../psl-infer/psl-literals';
+import { SYNTHETIC_SPAN } from '../psl-infer/psl-literals';
 
 /** One `enum <name> { … }` block per domain enum, each member written as `Name = <value>` under `@@type`. */
 export function buildDomainEnumBlocks(

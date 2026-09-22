@@ -120,7 +120,6 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 
 The refusals, and what would lift each:
 
-- A `Json` or `Jsonb` column whose default is an object or array literal. The PSL reader treats `@default("...")` on a Json field as a string. Lifted by slice B of [`projects/remove-dbgenerated`](../remove-dbgenerated/spec.md) (codec-owned PSL literals). Slice C of that project switches `print-column-default.ts` from `dbgenerated("...")` to the `sql` tagged literal along with every other printer.
 - One model name declared in two namespaces. The PSL reader keys relation targets, junction detection and id columns by model name alone (`contract-psl/src/interpreter.ts`, `fkRelationsByDeclaringModel`, `modelIdColumns`), so the two models read back as one. Lifted by re-keying those on (namespace, model).
 - A domain enum outside the default namespace. The PSL reader refuses an `enum` block inside a `namespace` block. Lifted by a reader change.
 - A foreign key no relation travels, and a to-one relation with no foreign key behind it. The PSL reader derives every foreign key from a `@relation`, and every `@relation(fields:, references:)` lowers to one. Lifted by a relation argument that declines the constraint.
@@ -128,7 +127,7 @@ The refusals, and what would lift each:
 - An entity kind an extension contributes (row-level security policies, roles). Its PSL syntax belongs to the extension. Lifted by a per-kind print hook on the extension pack, the mirror of the block descriptors extensions already contribute for reading.
 - A generator the Postgres printer has no PSL form for (none of the Prisma 7 generators, which all print).
 
-Three list-column cases were refused in the first version and now print: a nullable list type (`Tag[]?`, printed since #30313), a database-side default on a list column (read since #30325), and type parameters on a list field (`Decimal @db.Numeric(65,30)[]`; the PSL reader now keeps them on the domain field, in `contract-psl/src/interpreter.ts`, `patchModelDomainFields`). Every list fixture round-trips.
+A `Json` object or array literal default was refused in the first version and now prints as a `json` tagged literal through the data types of ADR 254; the `defaults` fixture round-trips. Slice C of [`projects/remove-dbgenerated`](../remove-dbgenerated/spec.md) switches `print-column-default.ts` from `dbgenerated("...")` to the `sql` tagged literal along with every other printer. Three list-column cases were refused in the first version and now print: a nullable list type (`Tag[]?`, printed since #30313), a database-side default on a list column (read since #30325), and type parameters on a list field (`Decimal @db.Numeric(65,30)[]`; the PSL reader now keeps them on the domain field, in `contract-psl/src/interpreter.ts`, `patchModelDomainFields`). Every list fixture round-trips.
 
 ### Found outside this project's scope
 

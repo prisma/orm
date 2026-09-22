@@ -373,7 +373,7 @@ The written file opens with the two lines that say where it came from:
 ```
 
 The written file must read back as the identical contract. The printer writes models, value objects (`type` blocks), named types (`types` block), native enums, keys, indexes with every argument, checks, relations, polymorphism (`@@discriminator`, `@@base`), control policies and execution defaults. Where the PSL language has no form for something the contract holds, the command refuses and writes nothing. Three things are refused with exit `2`:
-- A shape the language cannot carry exits with `CONTRACT.PRINT_UNSUPPORTED`, naming the model, column, field or entity it stopped on: a foreign key no relation travels, a to-one relation with no foreign key, a union or dictionary field, a column with its own control policy, a model with an owner, one model name declared in two namespaces, a `Json` object or array literal default, or an entity an extension contributes (row-level security policies, roles).
+- A shape the language cannot carry exits with `CONTRACT.PRINT_UNSUPPORTED`, naming the model, column, field or entity it stopped on: a foreign key no relation travels, a to-one relation with no foreign key, a union or dictionary field, a column with its own control policy, a model with an owner, one model name declared in two namespaces, or an entity an extension contributes (row-level security policies, roles).
 - A source Prisma 8 cannot read exits with `CONTRACT.SOURCE_LOAD_FAILED`, reporting exactly what `contract emit` reports for the same source.
 - An `--output` path that is a source file the config reads, or sits inside a directory of source files, exits with `CONTRACT.PRINT_OUTPUT_IS_SOURCE`. Pick another path.
 

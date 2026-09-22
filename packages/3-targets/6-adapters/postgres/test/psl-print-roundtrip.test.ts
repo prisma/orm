@@ -1,7 +1,6 @@
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import type { ContractSourceContext } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import postgresDriver from '@internal/driver-postgres/control';
 import sql from '@internal/family-sql/control';
@@ -43,7 +42,9 @@ const cases: ReadonlyArray<{ readonly name: string; readonly contractJson: strin
   },
 ];
 
-function sourceContext(resolvedInputs: readonly string[]): ContractSourceContext {
+type SourceContext = Parameters<ReturnType<typeof prismaContract>['source']['load']>[0];
+
+function sourceContext(resolvedInputs: readonly string[]): SourceContext {
   const stack = createControlStack({
     family: sql,
     target: postgres,

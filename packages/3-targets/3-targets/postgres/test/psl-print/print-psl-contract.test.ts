@@ -247,7 +247,7 @@ describe('column defaults', () => {
         nullable: false,
         default: { kind: 'literal', value: '1.50' },
       }),
-    ).toBe('@default("1.50")');
+    ).toBe('@default(1.50)');
   });
 
   it('prints an integer default unquoted', () => {
@@ -285,8 +285,8 @@ describe('column defaults', () => {
     let thrown: unknown;
     try {
       defaultOf({
-        nativeType: 'jsonb',
-        codecId: 'pg/jsonb@1',
+        nativeType: 'inet',
+        codecId: 'pg/inet@1',
         nullable: false,
         default: { kind: 'literal', value: { a: 1 } },
       });

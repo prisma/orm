@@ -2,6 +2,7 @@ import type { AuthoringTypeNamespace } from '@internal/framework-components/auth
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import { interpretPslDocumentToSqlContract } from '../src/interpreter';
+import { fixtureDataTypeSupport } from './fixture-data-types';
 import {
   modelsOf,
   postgresNativeScalarTypeDescriptors,
@@ -33,7 +34,8 @@ describe('interpretPslDocumentToSqlContract list fields with type parameters', (
       ...document,
       target: postgresTarget,
       scalarColumnDescriptors: postgresNativeScalarTypeDescriptors,
-      authoringContributions: { type: authoringTypes },
+      authoringContributions: { type: authoringTypes, dataTypes: fixtureDataTypeSupport.entries },
+      dataTypeLookup: fixtureDataTypeSupport.lookup,
       composedExtensionContracts: new Map(),
       createNamespace: createTestSqlNamespace,
       capabilities: { sql: { scalarList: true } },

@@ -1,14 +1,10 @@
 import type { ContractReferenceRelation, ContractRelation } from '@internal/contract/types';
 import type { PslAttributeArgument, PslField } from '@internal/framework-components/psl-ast';
 import type { ForeignKey, ReferentialAction } from '@internal/sql-contract/types';
+import { escapePslString } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
 import { postgresError } from '../errors';
-import {
-  buildAttribute,
-  escapePslString,
-  namedArg,
-  SYNTHETIC_SPAN,
-} from '../psl-infer/psl-literals';
+import { buildAttribute, namedArg, SYNTHETIC_SPAN } from '../psl-infer/psl-literals';
 import { crossReferenceCoordinate, type ModelEntry, modelCoordinate } from './contract-model-index';
 
 const PSL_REFERENTIAL_ACTIONS: Readonly<Record<ReferentialAction, string>> = {
