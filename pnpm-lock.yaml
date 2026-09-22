@@ -2564,6 +2564,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.11
@@ -3074,6 +3077,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/emitter':
         specifier: workspace:8.0.0-rc.11
@@ -3417,6 +3423,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/emitter':
         specifier: workspace:8.0.0-rc.11
@@ -3578,6 +3587,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/psl-parser':
         specifier: workspace:8.0.0-rc.11

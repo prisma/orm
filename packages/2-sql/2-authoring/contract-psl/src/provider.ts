@@ -12,6 +12,7 @@ import { applySqlSpecifierControlPolicy } from '@internal/sql-contract-ts/contra
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok } from '@internal/utils/result';
 import { basename, extname } from 'pathe';
+import { isDynamicPattern } from 'tinyglobby';
 
 import { interpretPslDocumentToSqlContract } from './interpreter';
 import type { ColumnDescriptor } from './psl-column-resolution';
@@ -27,13 +28,34 @@ export interface PrismaContractOptions {
 }
 
 /**
+ * The directory portion of `pattern` before its first glob-magic segment,
+ * joined back with `/` (e.g. a `prisma` directory holding a recursive
+ * `.prisma` glob derives `./prisma`). A rootless pattern with no static
+ * segments yields `''`.
+ */
+function staticPrefixDirectory(pattern: string): string {
+  const staticSegments: string[] = [];
+  for (const segment of pattern.split('/')) {
+    if (isDynamicPattern(segment)) break;
+    staticSegments.push(segment);
+  }
+  return staticSegments.join('/');
+}
+
+/**
  * Derives the emit output path from the schema input path so artefacts land
  * colocated with the source (e.g. `src/contract/schema.prisma` →
- * `src/contract/contract.json`). The provider owns this because it is the
- * only layer that knows the input path; the upstream `normalizeContractConfig`
+ * `src/contract/contract.json`). A glob-shaped path derives from its static
+ * prefix directory instead (a recursive glob under `prisma` derives
+ * `./prisma/contract.json`). The provider owns this because it is the only
+ * layer that knows the input path; the upstream `normalizeContractConfig`
  * default is a last-resort fallback for providers that don't carry one.
  */
 function defaultOutputFromSchemaPath(schemaPath: string): string {
+  if (isDynamicPattern(schemaPath)) {
+    const prefix = staticPrefixDirectory(schemaPath);
+    return prefix.length === 0 ? 'contract.json' : `${prefix}/contract.json`;
+  }
   const ext = extname(schemaPath);
   if (ext.length === 0) return `${schemaPath}.json`;
   const base = schemaPath.slice(0, -ext.length);

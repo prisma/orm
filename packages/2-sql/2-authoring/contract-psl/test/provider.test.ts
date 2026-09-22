@@ -62,6 +62,21 @@ describe('prismaContract provider helper', () => {
       const contract = prismaContract('./prisma/my-schema.prisma', baseOptions);
       expect(contract.output).toBe('./prisma/my-schema.json');
     });
+
+    it('derives output from the static prefix directory of a glob', () => {
+      const contract = prismaContract('./prisma/**/*.prisma', baseOptions);
+      expect(contract.output).toBe('./prisma/contract.json');
+    });
+
+    it('derives output from the static prefix directory of a single-star glob', () => {
+      const contract = prismaContract('./prisma/*.prisma', baseOptions);
+      expect(contract.output).toBe('./prisma/contract.json');
+    });
+
+    it('derives a bare contract.json for a rootless glob', () => {
+      const contract = prismaContract('**/*.prisma', baseOptions);
+      expect(contract.output).toBe('contract.json');
+    });
   });
 
   describe('defaultControlPolicy specifier precedence', () => {

@@ -97,6 +97,13 @@ describe('defineConfig facade', () => {
     expect(config.contract?.output).toBe('./prisma/contract.json');
   });
 
+  it('derives output from the static prefix directory of a glob contract', () => {
+    const config = defineConfig({ contract: './prisma/**/*.prisma' });
+
+    expect(config.contract?.output).toBe('./prisma/contract.json');
+    expect(config.contract?.source.inputs).toEqual(['./prisma/**/*.prisma']);
+  });
+
   it('passes db config through', () => {
     const config = defineConfig({
       contract: './prisma/contract.prisma',
