@@ -84,8 +84,6 @@ These codes surface on `migration plan`, `migration ref set`, and `db migrate` �
 | `MIGRATION.MARKER_MISMATCH` | `db migrate` (pre-DDL, before the runner) | Live DB marker hash is not a graph node — drift the offline planner cannot see. | `migration plan --from <graph-tip>` if the marker is canonical; `migration ref set db <marker-hash>` if the on-disk graph is canonical; investigate out-of-band applies. |
 | `MIGRATION.PATH_UNREACHABLE` | `db migrate` (path resolution) | No migration path from the current marker to the resolved target in the on-disk graph. | Read the improved `fix` payload — it names `fromHash` / `targetHash` and suggests `migration plan --from <from> --to <target>`; run `migration list` to inspect the graph. |
 
-`migration status` is a report, not a gate. A CI job does not parse it: `db migrate` refuses a drifted database on its own (see *Workflow — CI* below).
-
 ## Workflow — *"What's about to run on deploy?"*
 
 The user asks: *"I'm about to merge this PR. What migrations are going to run when I deploy to staging?"*
@@ -175,7 +173,7 @@ The whole job is one command:
   run: pnpm prisma db migrate --to staging --db "$STAGING_DATABASE_URL"
 ```
 
-`db migrate` is safe to run unattended, by design. Before any operation runs it reads the live marker and refuses with `MIGRATION.MARKER_MISMATCH` if that hash is not a node in the on-disk graph, which is what a database changed outside the migration system looks like. Each operation then evaluates its own `precheck[]` and stops if the database is not in the state the operation expects. A successful run writes the destination hash as the new marker. So a CI job needs no check of its own before `db migrate`, and must not build one by parsing `migration status --json`: that command reports, it does not refuse, and its exit code is 0 even when it attaches a `warn` diagnostic.
+`db migrate` is safe to run unattended, by design. Before any operation runs it reads the live marker and refuses with `MIGRATION.MARKER_MISMATCH` if that hash is not a node in the on-disk graph, which is what a database changed outside the migration system looks like. Each operation then evaluates its own `precheck[]` and stops if the database is not in the state the operation expects. A successful run writes the destination hash as the new marker. Nothing runs before `db migrate` in the job.
 
 `migration status --to staging --db $URL` is what a human or agent runs to answer *"what will run on deploy?"* before merging: it reports the path from the live marker to the ref without changing anything. `db migrate --show --db $URL` gives the same path as an ordered preview; `migration log --db $URL` gives the applied history after a deploy.
 
@@ -207,7 +205,7 @@ This skill is intentionally body-only; the underlying CLI reference (`prisma mig
 - [ ] For concurrent-migration conflicts: re-applied the *core* workflow (edit → plan → apply) rather than following a memorised "diamond convergence" procedure. Ported any data-transform logic from the abandoned `migration.ts` over.
 - [ ] For a ref-mismatch: investigated *which* piece of state is wrong (DB ahead, DB behind, DB on a divergent branch). Did NOT `migration ref set` to silence the mismatch.
 - [ ] Surfaced the destructive-op count from `migration status` (the only operation class that warrants manual review pre-deploy) before the user merges or deploys.
-- [ ] In CI: the deploy job is `prisma db migrate --to <ref> --db $URL` and nothing else. Did NOT put a `migration status` parse in front of it (`db migrate` refuses drift on its own), and did NOT rely on a `--dry-run` flag on `db migrate` (no such flag exists).
+- [ ] In CI: the deploy job is `prisma db migrate --to <ref> --db $URL` and nothing else. Did NOT rely on a `--dry-run` flag on `db migrate` (no such flag exists).
 - [ ] Did NOT confuse `--to` with database selection (`--to` picks the destination hash; `--db` picks the database).
 - [ ] Did NOT use `--ref` (removed; use `--to`).
 - [ ] Did NOT confabulate a "branch diff" CLI subcommand, a `migration revalidate` step, or any other API the skill above doesn't reference.
