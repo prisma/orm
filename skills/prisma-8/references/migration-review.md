@@ -84,7 +84,7 @@ These codes surface on `migration plan`, `migration ref set`, and `db migrate` �
 | `MIGRATION.MARKER_MISMATCH` | `db migrate` (pre-DDL, before the runner) | Live DB marker hash is not a graph node — drift the offline planner cannot see. | `migration plan --from <graph-tip>` if the marker is canonical; `migration ref set db <marker-hash>` if the on-disk graph is canonical; investigate out-of-band applies. |
 | `MIGRATION.PATH_UNREACHABLE` | `db migrate` (path resolution) | No migration path from the current marker to the resolved target in the on-disk graph. | Read the improved `fix` payload — it names `fromHash` / `targetHash` and suggests `migration plan --from <from> --to <target>`; run `migration list` to inspect the graph. |
 
-A CI gate should read `diagnostics` from `--json` output and decide based on `severity` plus `code`; see *Workflow — CI* below for the structure.
+`migration status` is a report, not a gate. A CI job does not parse it: `db migrate` refuses a drifted database on its own (see *Workflow — CI* below).
 
 ## Workflow — *"What's about to run on deploy?"*
 
@@ -166,46 +166,18 @@ The mismatch is a fact about *two pieces of state that disagree*. The investigat
 
 `migration ref set` to silently align the ref with whatever the DB happens to be at is almost never the right move. It papers over drift that you'll pay for later.
 
-## Workflow — CI: verify a branch can advance the target environment
+## Workflow — CI: deploy to an environment
 
-The gate is `migration status --to <env> --db $URL`: it computes the path from the live marker to the ref and reports it, without mutating anything. There is no `--dry-run` flag on `db migrate`; the inspect / gate step is `migration status`.
-
-For a human-readable ordered preview of the migration path before applying, use `db migrate --show --db $URL`. For applied history after a deploy, use `migration log --db $URL` (flat chronological table).
+The whole job is one command:
 
 ```yaml
-- name: Verify staging is reachable
-  run: |
-    pnpm prisma migration status \
-      --to staging --db "$STAGING_DATABASE_URL" --json > status.json
-    node -e '
-      const s = JSON.parse(require("fs").readFileSync("status.json", "utf8"));
-      const problems = [];
-      for (const d of s.diagnostics ?? []) {
-        if (d.severity === "warn") problems.push(`${d.code}: ${d.message}`);
-      }
-      for (const space of s.spaces ?? []) {
-        if (space.currentContract === null) problems.push(`${space.space}: database has no marker`);
-        const unreachable = space.migrations.filter(m => m.status === "unreachable");
-        if (unreachable.length) problems.push(`${space.space}: ${unreachable.length} unreachable migration(s)`);
-      }
-      // Pending migrations are the normal case before Apply; block on them
-      // only if this job is a verify-only gate (set EXPECT_UP_TO_DATE=1).
-      if (process.env.EXPECT_UP_TO_DATE === "1") {
-        for (const space of s.spaces ?? []) {
-          const pending = space.migrations.filter(m => m.status === "pending");
-          if (pending.length) problems.push(`${space.space}: ${pending.length} pending migration(s)`);
-        }
-      }
-      if (problems.length) {
-        console.error("Blocking:\n" + problems.join("\n"));
-        process.exit(1);
-      }
-    '
-- name: Apply
+- name: Migrate staging
   run: pnpm prisma db migrate --to staging --db "$STAGING_DATABASE_URL"
 ```
 
-`migration status` exits non-zero only on hard errors (unreadable migrations directory, unsatisfiable invariants, unreconstructable history). Pending migrations, a missing marker (`currentContract: null`), and the `warn` diagnostics (`MIGRATION.MARKER_NOT_IN_HISTORY`, `MIGRATION.MISSING_INVARIANTS`, `CONTRACT.UNREADABLE`) all leave the exit code at `0` — the agent (or a CI gate) must inspect `spaces[]` and `diagnostics[]` and fail the build itself. Use `--json` so the gate parses a structured shape rather than the human summary.
+`db migrate` is safe to run unattended, by design. Before any operation runs it reads the live marker and refuses with `MIGRATION.MARKER_MISMATCH` if that hash is not a node in the on-disk graph, which is what a database changed outside the migration system looks like. Each operation then evaluates its own `precheck[]` and stops if the database is not in the state the operation expects. A successful run writes the destination hash as the new marker. So a CI job needs no check of its own before `db migrate`, and must not build one by parsing `migration status --json`: that command reports, it does not refuse, and its exit code is 0 even when it attaches a `warn` diagnostic.
+
+`migration status --to staging --db $URL` is what a human or agent runs to answer *"what will run on deploy?"* before merging: it reports the path from the live marker to the ref without changing anything. `db migrate --show --db $URL` gives the same path as an ordered preview; `migration log --db $URL` gives the applied history after a deploy.
 
 `db migrate` is interactive-free and has no destructive-op confirmation prompt — the safety rails that prompt for destructive changes live on `db update` (see the `references/migrations.md` skill). Whatever the planner put in the migration graph is what `db migrate` runs; review happens at `migration plan` and at `migration status` time, before the apply step.
 
