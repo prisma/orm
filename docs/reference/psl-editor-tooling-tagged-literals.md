@@ -1,6 +1,6 @@
 # Editor tooling brief: tagged literal defaults
 
-Handover for the PSL editor tools after raw SQL defaults moved from `dbgenerated("...")` to tagged literals. Everything below names the code as it is on the `remove-dbgenerated-delete` branch.
+What the PSL editor tools (language server, formatter, highlighting) need to do for tagged literal defaults such as `` @default(sql`gen_random_uuid()`) ``, and which parts are not done yet. Everything below names the code as it is on `main` after the removal of `dbgenerated` (PR #30380).
 
 ## What changed in the parser
 
