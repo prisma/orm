@@ -207,7 +207,7 @@ This skill is intentionally body-only; the underlying CLI reference (`prisma mig
 - [ ] For concurrent-migration conflicts: re-applied the *core* workflow (edit → plan → apply) rather than following a memorised "diamond convergence" procedure. Ported any data-transform logic from the abandoned `migration.ts` over.
 - [ ] For a ref-mismatch: investigated *which* piece of state is wrong (DB ahead, DB behind, DB on a divergent branch). Did NOT `migration ref set` to silence the mismatch.
 - [ ] Surfaced the destructive-op count from `migration status` (the only operation class that warrants manual review pre-deploy) before the user merges or deploys.
-- [ ] In CI: parsed `migration status --json` `diagnostics[]` and gated on `severity === 'warn'`; did NOT rely on a `--dry-run` flag on `db migrate` (no such flag exists).
+- [ ] In CI: the deploy job is `prisma db migrate --to <ref> --db $URL` and nothing else. Did NOT put a `migration status` parse in front of it (`db migrate` refuses drift on its own), and did NOT rely on a `--dry-run` flag on `db migrate` (no such flag exists).
 - [ ] Did NOT confuse `--to` with database selection (`--to` picks the destination hash; `--db` picks the database).
 - [ ] Did NOT use `--ref` (removed; use `--to`).
 - [ ] Did NOT confabulate a "branch diff" CLI subcommand, a `migration revalidate` step, or any other API the skill above doesn't reference.
