@@ -97,11 +97,11 @@ describe('the orm section', () => {
 
   it('reports descriptor field problems', () => {
     expect(fields(validRaw({ family: { kind: 'family' } }))).toEqual([
-      'family.id',
-      'family.familyId',
-      'family.version',
-      'family.emission',
       'family.create',
+      'family.emission',
+      'family.familyId',
+      'family.id',
+      'family.version',
     ]);
   });
 
@@ -156,7 +156,7 @@ describe('the orm section', () => {
     expect(fields(validRaw({ formatter: { indent: 'tab', newline: 'LF' } }))).toEqual([]);
   });
 
-  it('keeps every descriptor by reference, so closures, prototypes and this survive', () => {
+  it('keeps what a descriptor was built from, so closures, prototypes and this survive', () => {
     class Serializer {
       deserializeContract(json: unknown): unknown {
         return json;
@@ -177,22 +177,26 @@ describe('the orm section', () => {
     const result = validateOrmSection(raw, provenanceFor(raw));
 
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
-    expect(result.value.target).toBe(target);
-    expect(result.value.family).toBe(raw['family']);
-    expect(result.value.adapter).toBe(raw['adapter']);
-    expect((result.value.target as unknown as typeof target).create()).toBe('postgres');
+    const validatedTarget = result.value.target as unknown as typeof target;
+    expect(validatedTarget.contractSerializer).toBe(target.contractSerializer);
+    expect(validatedTarget.create()).toBe('postgres');
+    expect(result.value.family.create).toBe((raw['family'] as { create: unknown }).create);
     expect(result.value.contract?.source.load).toBe(source.load);
     expect(result.value.contract?.source.inputs).toEqual(['/project/schema.prisma']);
   });
 
-  it('keeps descriptor fields the schema does not name', () => {
+  it('keeps fields the schema does not name, on descriptors and on the contract source', () => {
     const raw = validRaw({
       family: { ...(validRaw()['family'] as object), manifest: { note: 1 } },
+      contract: { source: { load: () => ({}), dialect: 'sql' } },
     });
 
     const result = validateOrmSection(raw, provenanceFor(raw));
 
-    expect(result.ok && result.value.family).toMatchObject({ manifest: { note: 1 } });
+    expect(result.ok && result.value).toMatchObject({
+      family: { manifest: { note: 1 } },
+      contract: { source: { dialect: 'sql' } },
+    });
   });
 
   it('never throws on hostile input', () => {

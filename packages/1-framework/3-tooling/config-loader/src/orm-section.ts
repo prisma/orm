@@ -2,7 +2,6 @@ import type { PrismaNextConfig } from '@internal/config/config-types';
 import { blindCast } from '@internal/utils/casts';
 import type { ConfigSection as EngineConfigSection, SectionProvenance } from '@prisma/cli-engine';
 import { configSchema, defineConfigSection, validateSectionWithSchema } from '@prisma/cli-engine';
-import { type } from 'arktype';
 
 /** The single config section the `orm` command family owns. */
 export const ORM_CONFIG_SECTION_NAME = 'orm';
@@ -39,77 +38,30 @@ export function isConfigSection(value: string): value is ConfigSection {
   return CONFIG_SECTIONS.some((section) => section === value);
 }
 
-type DescriptorKind = 'family' | 'target' | 'adapter' | 'driver' | 'extension';
-
-const DESCRIPTOR_STRING_FIELDS = ['id', 'familyId', 'version'] as const;
-
-type Problem = { readonly field: string; readonly expected: string; readonly actual: string };
-
-function descriptorProblems(
-  kind: DescriptorKind,
-  targetLike: boolean,
-  value: Record<string, unknown>,
-): readonly Problem[] {
-  const problems: Problem[] = [];
-  if (value['kind'] !== kind) {
-    problems.push({ field: 'kind', expected: `'${kind}'`, actual: JSON.stringify(value['kind']) });
-  }
-  for (const field of DESCRIPTOR_STRING_FIELDS) {
-    if (typeof value[field] !== 'string') {
-      problems.push({ field, expected: 'a string', actual: typeof value[field] });
-    }
-  }
-  if (targetLike && typeof value['targetId'] !== 'string') {
-    problems.push({ field: 'targetId', expected: 'a string', actual: typeof value['targetId'] });
-  }
-  if (kind === 'family' && (typeof value['emission'] !== 'object' || value['emission'] === null)) {
-    problems.push({
-      field: 'emission',
-      expected: 'an EmissionSpi object',
-      actual: typeof value['emission'],
-    });
-  }
-  if (typeof value['create'] !== 'function') {
-    problems.push({ field: 'create', expected: 'a function', actual: typeof value['create'] });
-  }
-  return problems;
-}
-
 /**
- * A control descriptor is a runtime object the config file constructs: its
- * `create` closes over module state, and its nested tables (codecs, the
- * contract serializer, migration hooks) rely on their prototypes and on
- * `this`. arktype rebuilds every object it validates structurally, which would
- * strip all of that. So a descriptor is validated by predicate, which keeps
- * the reference the file built, and only its identifying fields are checked.
- * Every problem is reported, at its full path: a predicate's own `path` is
- * relative to the value, so the traversal path is prepended by hand.
+ * The fields that identify a control descriptor. Only these are declared: a
+ * descriptor is a runtime object the family builds, and its other members
+ * (codec tables, the contract serializer, migration hooks) pass through as
+ * the config file constructed them.
  */
-function descriptor(kind: DescriptorKind, targetLike: boolean) {
-  return type('object').narrow((value, ctx) => {
-    const problems = descriptorProblems(kind, targetLike, value as Record<string, unknown>);
-    for (const problem of problems) {
-      ctx.error({
-        path: [...ctx.path, problem.field],
-        expected: problem.expected,
-        actual: problem.actual,
-      });
-    }
-    return problems.length === 0;
-  });
-}
+const descriptorFields = {
+  id: 'string',
+  familyId: 'string',
+  version: 'string',
+  create: 'Function',
+} as const;
+
+const targetLikeFields = { ...descriptorFields, targetId: 'string' } as const;
 
 /**
- * The contract source provider: its `load` closes over the authored contract
- * and is kept by reference (arktype never clones functions), while `inputs`
- * are paths the schema resolves against the config file. Other keys a
- * provider carries (`format`, provider-specific fields) pass through.
+ * The contract source provider: `load` closes over the authored contract,
+ * and `inputs` are paths the schema resolves against the config file. Other
+ * keys a provider carries pass through.
  */
 const contractSource = {
   load: 'Function',
   'inputs?': 'path[]',
   'format?': 'string',
-  '+': 'ignore',
 } as const;
 
 /**
@@ -120,11 +72,11 @@ const contractSource = {
  * before any command sees the value, and the value carries `baseDir`.
  */
 export const ormConfigSchema = configSchema({
-  family: descriptor('family', false),
-  target: descriptor('target', true),
-  adapter: descriptor('adapter', true),
-  'driver?': descriptor('driver', true),
-  'extensions?': [descriptor('extension', true), '[]'],
+  family: { kind: "'family'", ...descriptorFields, emission: 'object' },
+  target: { kind: "'target'", ...targetLikeFields },
+  adapter: { kind: "'adapter'", ...targetLikeFields },
+  'driver?': { kind: "'driver'", ...targetLikeFields },
+  'extensions?': [{ kind: "'extension'", ...targetLikeFields }, '[]'],
   'db?': { 'connection?': 'unknown' },
   'contract?': {
     source: contractSource,
@@ -139,8 +91,7 @@ export const ormConfigSchema = configSchema({
       message: 'Config.extensionPacks is no longer supported; rename it to Config.extensions',
     });
   }
-  const family = config.family as { readonly familyId: string };
-  const target = config.target as { readonly familyId: string; readonly targetId: string };
+  const { family, target } = config;
   if (target.familyId !== family.familyId) {
     return ctx.reject({
       path: ['target', 'familyId'],
@@ -151,13 +102,10 @@ export const ormConfigSchema = configSchema({
   const targetLike: ReadonlyArray<
     readonly [readonly PropertyKey[], { readonly familyId: string; readonly targetId: string }]
   > = [
-    [['adapter'], config.adapter as { familyId: string; targetId: string }],
-    ...(config.driver === undefined
-      ? []
-      : [[['driver'], config.driver as { familyId: string; targetId: string }] as const]),
+    [['adapter'], config.adapter],
+    ...(config.driver === undefined ? [] : [[['driver'], config.driver] as const]),
     ...(config.extensions ?? []).map(
-      (extension, index) =>
-        [['extensions', index], extension as { familyId: string; targetId: string }] as const,
+      (extension, index) => [['extensions', index], extension] as const,
     ),
   ];
   for (const [path, descriptor] of targetLike) {
