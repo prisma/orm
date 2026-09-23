@@ -5,6 +5,10 @@
  * migrations, example-app migrations form multi-step chains, so the script
  * walks each chain in order and re-derives every contract snapshot from its
  * per-migration PSL source file (`contract.prisma` inside each migration dir).
+ * That copy is what lets us rewrite an example's history when the contract
+ * representation changes. `migration plan` does not write it, so a freshly
+ * planned package has none; such a package keeps the snapshot it was planned
+ * against, taken as committed, until someone adds the copy.
  *
  * For each migration directory in chain order the script:
  *
@@ -70,7 +74,10 @@ import {
   contractSnapshotJsonSpecifier,
   contractSnapshotTypesSpecifier,
 } from '@internal/framework-components/control';
-import { snapshotsImportPathFrom } from '@internal/migration-tools/contract-snapshot-store';
+import {
+  contractSnapshotDir,
+  snapshotsImportPathFrom,
+} from '@internal/migration-tools/contract-snapshot-store';
 import { refreshContractSnapshot } from './refresh-contract-snapshot.mjs';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -366,12 +373,6 @@ function emitMigrationContract(exampleDir, migrationDir, realConfigAbsPath, cont
   }
 
   const schemaSrc = join(migrationDir, 'contract.prisma');
-  if (!existsSync(schemaSrc)) {
-    throw new Error(
-      `regen-example-migrations: no contract.prisma in ${migrationDir}. ` +
-        'Each migration directory must contain a contract.prisma for its end state.',
-    );
-  }
 
   // The temp config imports the example's real config and overrides only the
   // contract path. Absolute paths for both imports ensure resolution is
@@ -427,6 +428,56 @@ function emitMigrationContract(exampleDir, migrationDir, realConfigAbsPath, cont
 }
 
 /**
+ * Re-emit the end-state contract from the package's `contract.prisma` and
+ * refresh the store entry it hashes to. The predecessor's end state (== this
+ * migration's start state) was already written to the store on the previous
+ * chain iteration, so this entry is the only one the iteration refreshes.
+ */
+async function refreshFromPslSource(
+  exampleDir,
+  migrationDir,
+  migrationsRootDir,
+  realConfigAbsPath,
+  contractFamily,
+) {
+  const { storageHash, contractJson, contractDts } = emitMigrationContract(
+    exampleDir,
+    migrationDir,
+    realConfigAbsPath,
+    contractFamily,
+  );
+  await refreshContractSnapshot(migrationsRootDir, storageHash, { contractJson, contractDts });
+  return storageHash;
+}
+
+/**
+ * The end state of a package that carries no `contract.prisma`: the snapshot
+ * its `migration.json` names as `to`, taken as committed. `migration plan`
+ * writes no PSL copy, so a freshly planned package looks like this until
+ * someone adds the copy to make its history regenerable.
+ */
+function committedEndStateHash(migrationDir, migrationsRootDir) {
+  const manifestPath = join(migrationDir, 'migration.json');
+  if (!existsSync(manifestPath)) {
+    throw new Error(`regen-example-migrations: no migration.json in ${migrationDir}`);
+  }
+  const { to } = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (typeof to !== 'string' || !/^[0-9a-f]{64}$/.test(to)) {
+    throw new Error(
+      `regen-example-migrations: ${manifestPath} has a malformed "to" hash: ${String(to)}`,
+    );
+  }
+  const snapshotJson = join(contractSnapshotDir(migrationsRootDir, to), 'contract.json');
+  if (!existsSync(snapshotJson)) {
+    throw new Error(
+      `regen-example-migrations: ${migrationDir} has no contract.prisma and ${snapshotJson} does not exist; ` +
+        'commit the snapshot the migration was planned against, or add a contract.prisma to regenerate it.',
+    );
+  }
+  return to;
+}
+
+/**
  * Process a single migration directory.
  *
  * @param {string}        exampleDir         - Absolute path to the example package root.
@@ -445,16 +496,15 @@ async function processMigration(
   realConfigAbsPath,
   contractFamily,
 ) {
-  const {
-    storageHash: newHash,
-    contractJson,
-    contractDts,
-  } = emitMigrationContract(exampleDir, migrationDir, realConfigAbsPath, contractFamily);
-
-  // The predecessor's end state (== this migration's start state) was
-  // already written to the store on the previous chain iteration, so the
-  // entry for `newHash` is the only one this iteration has to refresh.
-  await refreshContractSnapshot(migrationsRootDir, newHash, { contractJson, contractDts });
+  const newHash = existsSync(join(migrationDir, 'contract.prisma'))
+    ? await refreshFromPslSource(
+        exampleDir,
+        migrationDir,
+        migrationsRootDir,
+        realConfigAbsPath,
+        contractFamily,
+      )
+    : committedEndStateHash(migrationDir, migrationsRootDir);
 
   const migrationTsPath = join(migrationDir, 'migration.ts');
   if (!existsSync(migrationTsPath)) {
