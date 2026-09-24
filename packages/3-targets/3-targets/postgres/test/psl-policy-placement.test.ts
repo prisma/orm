@@ -65,7 +65,7 @@ function interpret(source: string) {
   expect(diagnostics).toEqual([]);
   return interpretPslDocumentToSqlContract({
     dataTypeLookup: postgresDataTypeLookup,
-    document,
+    documents: [document],
     symbolTable,
     sources,
     target: postgresTarget,
