@@ -11,8 +11,17 @@ export interface ContributedTypeSymbol {
   readonly descriptor: AuthoringTypeConstructorDescriptor;
 }
 
+export interface ContributedNamespaceSymbol {
+  readonly kind: 'contributedNamespace';
+  readonly name: string;
+  readonly path: readonly string[];
+  readonly members: ReadonlyMap<string, ContributedMember>;
+}
+
+export type ContributedMember = ContributedTypeSymbol | ContributedNamespaceSymbol;
+
 export interface ContributedTypeScope {
-  lookup(path: readonly string[]): ContributedTypeSymbol | undefined;
+  lookup(name: string): ContributedMember | undefined;
 }
 
 const scopes = new WeakMap<AuthoringTypeNamespace, ContributedTypeScope>();
@@ -22,32 +31,29 @@ export function contributedTypeScope(
 ): ContributedTypeScope {
   const existing = scopes.get(typeConstructors);
   if (existing !== undefined) return existing;
-  const created = buildScope(typeConstructors);
-  scopes.set(typeConstructors, created);
-  return created;
-}
-
-function buildScope(typeConstructors: AuthoringTypeNamespace): ContributedTypeScope {
-  const symbols = new Map<string, ContributedTypeSymbol>();
-  collect(typeConstructors, [], symbols);
-  return {
-    lookup(path) {
-      return symbols.get(path.join('.'));
+  const members = collect(typeConstructors, []);
+  const created: ContributedTypeScope = {
+    lookup(name) {
+      return members.get(name);
     },
   };
+  scopes.set(typeConstructors, created);
+  return created;
 }
 
 function collect(
   namespace: AuthoringTypeNamespace,
   prefix: readonly string[],
-  symbols: Map<string, ContributedTypeSymbol>,
-): void {
+): ReadonlyMap<string, ContributedMember> {
+  const members = new Map<string, ContributedMember>();
   for (const [name, value] of Object.entries(namespace)) {
     const path = [...prefix, name];
-    if (isAuthoringTypeConstructorDescriptor(value)) {
-      symbols.set(path.join('.'), { kind: 'contributedType', name, path, descriptor: value });
-    } else {
-      collect(value, path, symbols);
-    }
+    members.set(
+      name,
+      isAuthoringTypeConstructorDescriptor(value)
+        ? { kind: 'contributedType', name, path, descriptor: value }
+        : { kind: 'contributedNamespace', name, path, members: collect(value, path) },
+    );
   }
+  return members;
 }

@@ -383,6 +383,28 @@ describe('createBinder — qualified references', () => {
     });
   });
 
+  it('reports a qualifier that is not a namespace as what it is', () => {
+    const { symbolTable, binder, diagnostics } = bind(
+      'model app {\n  id Int\n}\nmodel Cart {\n  slot app.Thing\n}',
+    );
+
+    expect(binder.symbolForNode(typeNodeOf(symbolTable, 'Cart', 'slot'))).toEqual({
+      kind: 'unresolved',
+      name: 'app',
+    });
+    expect(diagnostics.map(({ code, message }) => [code, message])).toEqual([
+      ['PSL_UNRESOLVED_REFERENCE', '"app" is a model, not a namespace'],
+    ]);
+  });
+
+  it('reports an enum qualifier as an enum, not a namespace', () => {
+    const { diagnostics } = bind('enum Role {\n  Admin\n}\nmodel Cart {\n  slot Role.Admin\n}');
+
+    expect(diagnostics.map(({ message }) => message)).toEqual([
+      '"Role" is an enum, not a namespace',
+    ]);
+  });
+
   it('reports an unresolved qualified reference against a known namespace', () => {
     const { symbolTable, binder, diagnostics } = bind(
       [

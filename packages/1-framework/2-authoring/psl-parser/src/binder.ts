@@ -3,11 +3,19 @@ import type { ControlDefaultRegistries } from '@internal/framework-components/co
 import type { ContributedPslDiagnosticCode } from '@internal/framework-components/psl-ast';
 import type { AttributeSpecNamespace } from './attribute-spec/spec-context';
 import type { AttributeSpec, FieldAttributeCtx, ModelAttributeCtx } from './attribute-spec/types';
-import { type ContributedTypeScope, contributedTypeScope } from './contributed-type-scope';
+import { contributedTypeScope } from './contributed-type-scope';
 import { diagnosticSource } from './diagnostic';
 import type { ParseDiagnostic } from './parse';
 import type { ResolvedAttribute } from './resolve';
-import { lookupIn, qualifiedChain, type ScopeResolution, unqualifiedChain } from './scope-chain';
+import {
+  contributedScope,
+  documentScope,
+  isNamespaceLike,
+  lookupMember,
+  namespaceScope,
+  type Scope,
+  type ScopeResolution,
+} from './scope';
 import type { PslSources } from './source-file';
 import type {
   BlockSymbol,
@@ -17,7 +25,6 @@ import type {
   NamedTypeSymbol,
   NamespaceSymbol,
   SymbolTable,
-  TopLevelScope,
 } from './symbol-table';
 import type { FieldAttributeAst, ModelAttributeAst } from './syntax/ast/attributes';
 import { ArrayLiteralAst, type ExpressionAst } from './syntax/ast/expressions';
@@ -109,7 +116,7 @@ class PslBinder implements Binder {
 }
 
 interface ScopedEntity {
-  readonly scope: NamespaceSymbol | undefined;
+  readonly scope: Scope;
   readonly entity: ModelSymbol | CompositeTypeSymbol;
 }
 
@@ -122,7 +129,10 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     controlMutationDefaults,
     describeUnsupportedAttribute,
   } = options;
-  const contributedTypes = contributedTypeScope(typeConstructors);
+  const document = documentScope(
+    symbolTable.topLevel,
+    contributedScope(contributedTypeScope(typeConstructors)),
+  );
   const declarations = new WeakMap<SyntaxNode, PslSymbol>();
   const references = new WeakMap<SyntaxNode, Resolution>();
   const diagnostics: ParseDiagnostic[] = [];
@@ -142,28 +152,27 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
     }
   }
 
-  for (const { scope, entity } of entities(symbolTable)) {
+  for (const { scope, entity } of entities(symbolTable, document)) {
     declarations.set(entity.node.syntax, entity);
     for (const field of Object.values(entity.fields)) {
       declarations.set(field.node.syntax, field);
       const node = typeReferenceNode(field);
       if (node === undefined) continue;
-      const resolution = resolveTypeReference(field, scope, symbolTable.topLevel, contributedTypes);
-      if (resolution === undefined) continue;
-      references.set(node, resolution);
-      const typeFailure = typePositionFailure(resolution, field);
-      if (typeFailure !== undefined) {
+      const outcome = resolveTypeReference(field, scope);
+      if (outcome === undefined) continue;
+      references.set(node, outcome.resolution);
+      if (outcome.message !== undefined) {
         diagnostics.push({
           code: PSL_UNRESOLVED_REFERENCE,
-          message: typeFailure.message,
-          data: { reference: 'type', name: typeFailure.name },
+          message: outcome.message,
+          data: { reference: 'type', name: outcome.name },
           ...diagnosticSource(sources, node).at(),
         });
       }
     }
   }
 
-  for (const { scope, entity } of entities(symbolTable)) {
+  for (const { scope, entity } of entities(symbolTable, document)) {
     const context = {
       owner: entity,
       scope,
@@ -171,7 +180,6 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
       diagnostics,
       symbolTable,
       sources,
-      contributedTypes,
       describeUnsupportedAttribute,
     };
     const specContext =
@@ -201,13 +209,12 @@ export function createBinder(options: CreateBinderOptions): BinderResult {
 
 interface BindContext {
   readonly owner: ModelSymbol | CompositeTypeSymbol;
-  readonly scope: NamespaceSymbol | undefined;
+  readonly scope: Scope;
   readonly field: FieldSymbol | undefined;
   readonly references: WeakMap<SyntaxNode, Resolution>;
   readonly diagnostics: ParseDiagnostic[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
-  readonly contributedTypes: ContributedTypeScope;
   readonly describeUnsupportedAttribute: DescribeUnsupportedAttribute | undefined;
 }
 
@@ -316,10 +323,7 @@ function targetFields(
 }
 
 function resolveEntity(name: string, node: SyntaxNode, ctx: BindContext): Resolution {
-  const found = lookupIn(
-    unqualifiedChain(ctx.scope, ctx.symbolTable.topLevel, ctx.contributedTypes),
-    name,
-  );
+  const found = ctx.scope.lookup(name);
   if (found === undefined) {
     report(`Cannot find entity "${name}"`, node, ctx, 'entity');
     return { kind: 'unresolved', name };
@@ -365,58 +369,91 @@ function referenceNodes(expression: ExpressionAst): readonly SyntaxNode[] {
   return Array.from(array.elements(), (element) => element.syntax);
 }
 
-function* entities(symbolTable: SymbolTable): Iterable<ScopedEntity> {
+function* entities(symbolTable: SymbolTable, document: Scope): Iterable<ScopedEntity> {
   const { topLevel } = symbolTable;
-  for (const entity of Object.values(topLevel.models)) yield { scope: undefined, entity };
-  for (const entity of Object.values(topLevel.compositeTypes)) yield { scope: undefined, entity };
-  for (const scope of Object.values(topLevel.namespaces)) {
-    for (const entity of Object.values(scope.models)) yield { scope, entity };
-    for (const entity of Object.values(scope.compositeTypes)) yield { scope, entity };
+  for (const entity of Object.values(topLevel.models)) yield { scope: document, entity };
+  for (const entity of Object.values(topLevel.compositeTypes)) yield { scope: document, entity };
+  for (const namespace of Object.values(topLevel.namespaces)) {
+    const scope = namespaceScope(namespace, document);
+    for (const entity of Object.values(namespace.models)) yield { scope, entity };
+    for (const entity of Object.values(namespace.compositeTypes)) yield { scope, entity };
   }
 }
 
-function typePositionFailure(
-  resolution: Resolution,
-  field: FieldSymbol,
-): { readonly message: string; readonly name: string } | undefined {
-  if (resolution.kind === 'unresolved') {
-    return { message: `Cannot find type "${resolution.name}"`, name: resolution.name };
-  }
-  if (resolution.kind !== 'namespace') return undefined;
-  const name =
-    field.typeNamespaceId === undefined
-      ? field.typeName
-      : `${field.typeNamespaceId}.${field.typeName}`;
-  return {
-    message: `"${name}" is a namespace; a type reference must name a model, composite type, enum, or named type`,
-    name,
-  };
+interface TypeReferenceOutcome {
+  readonly resolution: Resolution;
+  readonly message?: string;
+  readonly name?: string;
 }
 
-function resolveTypeReference(
-  field: FieldSymbol,
-  scope: NamespaceSymbol | undefined,
-  topLevel: TopLevelScope,
-  contributedTypes: ContributedTypeScope,
-): Resolution | undefined {
+function resolveTypeReference(field: FieldSymbol, scope: Scope): TypeReferenceOutcome | undefined {
   if (field.malformedType === true) return undefined;
-  if (field.typeContractSpaceId !== undefined) return { kind: 'crossSpace' };
+  if (field.typeContractSpaceId !== undefined) return { resolution: { kind: 'crossSpace' } };
   const name = field.typeName;
   if (name === '') return undefined;
-
   const namespaceId = field.typeNamespaceId;
-  const chain =
-    namespaceId === undefined
-      ? unqualifiedChain(scope, topLevel, contributedTypes)
-      : qualifiedChain(namespaceId, topLevel, contributedTypes);
-  const found = lookupIn(chain, name);
+  const found =
+    namespaceId === undefined ? scope.lookup(name) : qualifiedMember(namespaceId, name, scope);
   if (found === undefined) {
+    const written = namespaceId === undefined ? name : `${namespaceId}.${name}`;
     return {
-      kind: 'unresolved',
-      name: namespaceId === undefined ? name : `${namespaceId}.${name}`,
+      resolution: { kind: 'unresolved', name: written },
+      message: `Cannot find type "${written}"`,
+      name: written,
     };
   }
-  return found;
+  if ('badQualifier' in found) {
+    return {
+      resolution: { kind: 'unresolved', name: found.qualifier },
+      message: found.badQualifier,
+      name: found.qualifier,
+    };
+  }
+  if (found.kind === 'namespace' || found.kind === 'contributedNamespace') {
+    const written = namespaceId === undefined ? name : `${namespaceId}.${name}`;
+    return {
+      resolution: found,
+      message: `"${written}" is a namespace; a type reference must name a model, composite type, enum, or named type`,
+      name: written,
+    };
+  }
+  return { resolution: found };
+}
+
+interface BadQualifier {
+  readonly badQualifier: string;
+  readonly qualifier: string;
+}
+
+function qualifiedMember(
+  namespaceId: string,
+  name: string,
+  scope: Scope,
+): ScopeResolution | BadQualifier | undefined {
+  const qualifier = scope.lookup(namespaceId);
+  if (qualifier === undefined) return undefined;
+  if (!isNamespaceLike(qualifier)) {
+    return {
+      badQualifier: `"${namespaceId}" is ${describeQualifier(qualifier)}, not a namespace`,
+      qualifier: namespaceId,
+    };
+  }
+  return lookupMember(qualifier, name);
+}
+
+function describeQualifier(resolution: ScopeResolution): string {
+  switch (resolution.kind) {
+    case 'model':
+      return 'a model';
+    case 'compositeType':
+      return 'a composite type';
+    case 'namedType':
+      return 'a named type';
+    case 'block':
+      return `${resolution.symbol.keyword === 'enum' ? 'an' : 'a'} ${resolution.symbol.keyword}`;
+    default:
+      return 'a scalar type';
+  }
 }
 
 function own<T>(record: Record<string, T>, name: string): T | undefined {

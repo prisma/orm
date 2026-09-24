@@ -121,7 +121,12 @@ export {
   modelAttributeContext,
   referencedModel,
 } from '../binder-context';
-export type { ContributedTypeScope, ContributedTypeSymbol } from '../contributed-type-scope';
+export type {
+  ContributedMember,
+  ContributedNamespaceSymbol,
+  ContributedTypeScope,
+  ContributedTypeSymbol,
+} from '../contributed-type-scope';
 export type { DiagnosticSource, PslDiagnostic, PslDiagnosticCollector } from '../diagnostic';
 export {
   createPslDiagnosticCollector,
@@ -145,8 +150,7 @@ export {
   readResolvedConstructorCall,
 } from '../resolve';
 export { isPrismaNextSchema, renameLegacyDirective } from '../schema-directive';
-export type { Scope, ScopeResolution } from '../scope-chain';
-export { lookupIn, qualifiedChain, unqualifiedChain } from '../scope-chain';
+export type { Scope, ScopeResolution } from '../scope';
 export type {
   BlockSymbol,
   BuildSymbolTableOptions,

@@ -1,5 +1,5 @@
 import type { Resolution } from './binder';
-import { lookupIn, type ScopeResolution, unqualifiedChain } from './scope-chain';
+import { documentScope, namespaceScope, type Scope, type ScopeResolution } from './scope';
 import type {
   BlockSymbol,
   CompositeTypeSymbol,
@@ -38,9 +38,11 @@ export function lookupEntityReferenceInSymbols(
     .findAncestor(NamespaceDeclarationAst.cast)
     ?.name()
     ?.name();
+  const document: Scope = documentScope(symbols.topLevel, undefined);
   const namespace =
     namespaceName === undefined ? undefined : symbols.topLevel.namespaces[namespaceName];
-  return lookupIn(unqualifiedChain(namespace, symbols.topLevel), name);
+  const scope = namespace === undefined ? document : namespaceScope(namespace, document);
+  return scope.lookup(name);
 }
 
 const references = new WeakMap<EntityDeclaration, ResolvedEntityReference>();
