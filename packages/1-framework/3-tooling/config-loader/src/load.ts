@@ -19,6 +19,7 @@ import type { SectionProvenance } from '@prisma/cli-engine';
 import { dirname, join, resolve } from 'pathe';
 import {
   type ConfigSection,
+  descriptorRelationshipProblems,
   isConfigSection,
   validateOrmSection,
   validateOrmSectionExcept,
@@ -118,7 +119,8 @@ function buildLoadedConfig(
       });
     });
     // Subsections that failed stay exactly as authored; the rest are validated
-    // on their own, so a command that reads only them sees resolved paths.
+    // on their own, so a command that reads only them sees resolved paths,
+    // and are held to the same relationship and artifact rules.
     const failing = new Set(
       diagnostics.map((diagnostic) => String(diagnostic.meta?.['section'] ?? '')),
     );
@@ -127,7 +129,21 @@ function buildLoadedConfig(
       PrismaNextConfig,
       'a config with diagnostics is guarded by requireConfigSections before any subsection is read'
     >(partial.ok ? partial.value : rawConfig);
-    return { config, diagnostics };
+    if (!partial.ok) {
+      return { config, diagnostics };
+    }
+    const related = descriptorRelationshipProblems(config, (section) => !failing.has(section)).map(
+      (problem) =>
+        errorConfigValidation(problem.path.join('.'), {
+          why: `${problem.path.join('.')} must be ${problem.expected} (was ${problem.actual})`,
+          section: String(problem.path[0]),
+        }),
+    );
+    const collisions =
+      failing.has('contract') || config.contract === undefined
+        ? []
+        : collectArtifactCollisionDiagnostics(config.contract);
+    return { config, diagnostics: [...diagnostics, ...related, ...collisions] };
   }
   const config = validation.value;
   if (config.contract === undefined) {

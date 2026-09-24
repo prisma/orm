@@ -234,6 +234,51 @@ describe('loadConfig', () => {
   );
 
   it(
+    'checks the contract artifacts when another subsection is invalid',
+    async () => {
+      const colliding = CONFIG_BODY.replace(
+        "inputs: ['./schema.prisma']",
+        "inputs: ['./generated/contract.json']",
+      );
+      writeFileSync(
+        join(tempDir, 'prisma.config.ts'),
+        `${colliding}\nObject.assign(config, { formatter: { indent: 0 } });\n${NEW_SHAPE_STAMP}`,
+      );
+      process.chdir(tempDir);
+
+      const loaded = (await loadConfig()).assertOk();
+
+      expect(loaded.diagnostics).toContainEqual(
+        expect.objectContaining({
+          meta: { field: 'contract.source.inputs[]', section: 'contract' },
+        }),
+      );
+      expect(requireConfigSections(loaded, ['contract']).ok).toBe(false);
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
+    'checks how descriptors relate when another subsection is invalid',
+    async () => {
+      writeFileSync(
+        join(tempDir, 'prisma.config.ts'),
+        `${CONFIG_BODY}\nObject.assign(config.target, { familyId: 'mongo' });\nObject.assign(config, { formatter: { indent: 0 } });\n${NEW_SHAPE_STAMP}`,
+      );
+      process.chdir(tempDir);
+
+      const loaded = (await loadConfig()).assertOk();
+
+      expect(loaded.diagnostics).toContainEqual(
+        expect.objectContaining({ meta: { field: 'target.familyId', section: 'target' } }),
+      );
+      expect(requireConfigSections(loaded, ['target']).ok).toBe(false);
+      expect(requireConfigSections(loaded, ['contract']).ok).toBe(true);
+    },
+    timeouts.typeScriptCompilation,
+  );
+
+  it(
     'reads an empty orm section from a config that declares none',
     async () => {
       writeFileSync(join(tempDir, 'prisma.config.ts'), 'export default { $prismaConfig: 1 };\n');

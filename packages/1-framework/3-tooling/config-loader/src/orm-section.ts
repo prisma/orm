@@ -80,6 +80,71 @@ const ormSubsectionsSchema = configSchema({
   'formatter?': { 'indent?': "number.integer >= 1 | 'tab'", 'newline?': "'LF' | 'CRLF'" },
 });
 
+interface RelatedDescriptor {
+  readonly familyId: string;
+  readonly targetId: string;
+}
+
+/** The subsections the relationship rules read, each present only if it validated. */
+interface DescriptorSubsections {
+  readonly family?: { readonly familyId: string };
+  readonly target?: RelatedDescriptor;
+  readonly adapter?: RelatedDescriptor;
+  readonly driver?: RelatedDescriptor | undefined;
+  readonly extensions?: readonly RelatedDescriptor[] | undefined;
+}
+
+/** A broken rule relating two subsections, at the field that breaks it. */
+export interface RelationshipProblem {
+  readonly path: readonly PropertyKey[];
+  readonly expected: string;
+  readonly actual: string;
+}
+
+/**
+ * Every broken rule relating the descriptor subsections: each descriptor
+ * shares the family's `familyId`, and each target-bound descriptor shares
+ * the target's `targetId`. A rule is checked only when `checked` accepts
+ * both subsections it relates, so a loader can check the subsections that
+ * validated while others have diagnostics.
+ */
+export function descriptorRelationshipProblems(
+  config: DescriptorSubsections,
+  checked: (section: ConfigSection) => boolean,
+): RelationshipProblem[] {
+  const family = checked('family') ? config.family : undefined;
+  const target = checked('target') ? config.target : undefined;
+  const bound: ReadonlyArray<readonly [readonly PropertyKey[], RelatedDescriptor | undefined]> = [
+    [['target'], target],
+    [['adapter'], checked('adapter') ? config.adapter : undefined],
+    [['driver'], checked('driver') ? config.driver : undefined],
+    ...(checked('extensions') ? (config.extensions ?? []) : []).map(
+      (extension, index) => [['extensions', index], extension] as const,
+    ),
+  ];
+  const problems: RelationshipProblem[] = [];
+  for (const [path, descriptor] of bound) {
+    if (descriptor === undefined) {
+      continue;
+    }
+    if (family !== undefined && descriptor.familyId !== family.familyId) {
+      problems.push({
+        path: [...path, 'familyId'],
+        expected: `Config.family.familyId (${family.familyId})`,
+        actual: descriptor.familyId,
+      });
+    }
+    if (target !== undefined && path[0] !== 'target' && descriptor.targetId !== target.targetId) {
+      problems.push({
+        path: [...path, 'targetId'],
+        expected: `Config.target.targetId (${target.targetId})`,
+        actual: descriptor.targetId,
+      });
+    }
+  }
+  return problems;
+}
+
 /**
  * The shape of the `orm` section of `prisma.config.ts`, declared once. The
  * CLI engine derives validation, the diagnostics naming a bad field and the
@@ -94,40 +159,11 @@ export const ormConfigSchema = ormSubsectionsSchema.narrow((config, ctx) => {
       message: 'Config.extensionPacks is no longer supported; rename it to Config.extensions',
     });
   }
-  const { family, target } = config;
-  if (target.familyId !== family.familyId) {
-    return ctx.reject({
-      path: ['target', 'familyId'],
-      expected: `Config.family.familyId (${family.familyId})`,
-      actual: target.familyId,
-    });
+  const problems = descriptorRelationshipProblems(config, () => true);
+  for (const problem of problems) {
+    ctx.error({ path: [...problem.path], expected: problem.expected, actual: problem.actual });
   }
-  const targetLike: ReadonlyArray<
-    readonly [readonly PropertyKey[], { readonly familyId: string; readonly targetId: string }]
-  > = [
-    [['adapter'], config.adapter],
-    ...(config.driver === undefined ? [] : [[['driver'], config.driver] as const]),
-    ...(config.extensions ?? []).map(
-      (extension, index) => [['extensions', index], extension] as const,
-    ),
-  ];
-  for (const [path, descriptor] of targetLike) {
-    if (descriptor.familyId !== family.familyId) {
-      return ctx.reject({
-        path: [...path, 'familyId'],
-        expected: `Config.family.familyId (${family.familyId})`,
-        actual: descriptor.familyId,
-      });
-    }
-    if (descriptor.targetId !== target.targetId) {
-      return ctx.reject({
-        path: [...path, 'targetId'],
-        expected: `Config.target.targetId (${target.targetId})`,
-        actual: descriptor.targetId,
-      });
-    }
-  }
-  return true;
+  return problems.length === 0;
 });
 
 /**
@@ -156,9 +192,11 @@ export function validateOrmSection(
 }
 
 /**
- * Validates every subsection except `failing`, which comes back as authored.
- * A loader uses it when some subsections have diagnostics, so a caller that
- * reads only the others still gets their paths resolved and defaults applied.
+ * Validates the shape of every subsection except `failing`, which comes back
+ * as authored. A loader uses it when some subsections have diagnostics, so a
+ * caller that reads only the others still gets their paths resolved and
+ * defaults applied. The rules relating subsections are not applied here; see
+ * {@link descriptorRelationshipProblems}.
  */
 export function validateOrmSectionExcept(
   raw: unknown,
