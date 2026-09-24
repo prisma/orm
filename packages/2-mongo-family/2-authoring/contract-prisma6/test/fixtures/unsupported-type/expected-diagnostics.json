@@ -4,5 +4,11 @@
     "file": "schema.prisma",
     "line": 8,
     "message": "Field \"Place.location\" has type \"Unsupported(...)\", which has no Prisma 8 codec, so model \"Place\" cannot use this contract source while it has the field. Prisma 6 rejects @ignore on an Unsupported field. Removing the field from the schema leaves its stored values in the documents, but the Prisma 6 client no longer reads or writes them. Adding @@ignore to model \"Place\" keeps the model out of the contract, but the model disappears from the Prisma 6 client too, and every relation field in another model that points to it needs @ignore, which removes that field from the Prisma 6 client as well."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_UNSUPPORTED_TYPE",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"Place.shape\" has unknown type \"Polygon\": it is not a scalar type, an enum, a composite type, or a model. Correct the type name."
   }
 ]

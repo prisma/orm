@@ -599,12 +599,14 @@ function resolveFieldType(
     ? binding.scalarCodecIds[field.typeName]
     : undefined;
   if (scalarCodecId === undefined) {
-    diagnostics.push({
-      code: 'PSL_UNSUPPORTED_FIELD_TYPE',
-      message: `${label} type "${field.typeName}" is not supported by the Prisma 6 MongoDB contract source.`,
-      sourceId,
-      span: field.span,
-    });
+    diagnostics.push(
+      prisma6Diagnostic(
+        'PSL.PRISMA6_MONGO_UNSUPPORTED_TYPE',
+        `${label} has unknown type "${field.typeName}": it is not a scalar type, an enum, a composite type, or a model. Correct the type name.`,
+        sourceId,
+        field.span,
+      ),
+    );
     return undefined;
   }
   let codecId = scalarCodecId;

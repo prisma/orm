@@ -601,7 +601,7 @@ An attribute the source does not read. Remove it. Reported by the Prisma 6 Mongo
 
 ### PSL.PRISMA6_MONGO_UNSUPPORTED_TYPE
 
-A field of type `Unsupported("...")`, which has no Prisma 8 codec. Prisma 6 rejects `@ignore` on such a field; remove the field, or add `@@ignore` to the model, which also needs `@ignore` on every relation field that points to it. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
+A field of type `Unsupported("...")`, which has no Prisma 8 codec, or of a type name that is not a scalar type, enum, composite type, or model. For `Unsupported`, Prisma 6 rejects `@ignore` on the field; remove the field, or add `@@ignore` to the model, which also needs `@ignore` on every relation field that points to it. For an unknown name, correct the type name. Reported by the Prisma 6 MongoDB contract source (`prisma6Schema`) during `contract emit`, as a finding in the `diagnostics` list of `CONTRACT.SOURCE_LOAD_FAILED`, never on its own. `summary` is `<file>:<line>:<column> <message>`, with only the file when there is no position (the terminal prints the code before it), and `where` carries `path` and, when known, `line`. Payload: none.
 
 ### PSL.PRISMA6_MONGO_UPDATED_AT_TYPE_UNSUPPORTED
 

@@ -6,4 +6,5 @@ datasource db {
 model Place {
   id       String                  @id @default(auto()) @map("_id") @db.ObjectId
   location Unsupported("geometry")?
+  shape    Polygon
 }
