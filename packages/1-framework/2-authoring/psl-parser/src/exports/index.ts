@@ -109,18 +109,7 @@ export type {
 export {
   createBinder,
   PSL_UNRESOLVED_REFERENCE,
-  typeReferenceNode,
 } from '../binder';
-export type {
-  AttributeContextInput,
-  FieldAttributeContextInput,
-  ModelAttributeContextInput,
-} from '../binder-context';
-export {
-  fieldAttributeContext,
-  modelAttributeContext,
-  referencedModel,
-} from '../binder-context';
 export type {
   ContributedMember,
   ContributedNamespaceSymbol,
