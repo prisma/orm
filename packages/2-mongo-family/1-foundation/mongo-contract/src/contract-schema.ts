@@ -1,40 +1,8 @@
-import { CrossReferenceSchema } from '@internal/contract/types';
+import { ContractExecutionSectionSchema, CrossReferenceSchema } from '@internal/contract/types';
 import { type Type, type } from 'arktype';
 import type { MongoJsonObject, MongoJsonPrimitive, MongoJsonValue } from './contract-types';
 
 const ControlPolicySchema = type("'managed' | 'tolerated' | 'external' | 'observed'");
-
-const generatorIdSchema = type('string').narrow((value, ctx) => {
-  return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value) ? true : ctx.mustBe('a flat generator id');
-});
-
-const ExecutionMutationDefaultValueSchema = type({
-  '+': 'reject',
-  kind: "'generator'",
-  id: generatorIdSchema,
-  'params?': 'Record<string, unknown>',
-});
-
-const ExecutionMutationDefaultSchema = type({
-  '+': 'reject',
-  ref: {
-    '+': 'reject',
-    namespace: 'string',
-    entry: 'string',
-    field: 'string',
-  },
-  'onCreate?': ExecutionMutationDefaultValueSchema,
-  'onUpdate?': ExecutionMutationDefaultValueSchema,
-});
-
-const ExecutionSchema = type({
-  '+': 'reject',
-  executionHash: 'string',
-  mutations: {
-    '+': 'reject',
-    defaults: ExecutionMutationDefaultSchema.array().readonly(),
-  },
-});
 
 const ScalarFieldTypeSchema = type({
   '+': 'reject',
@@ -484,7 +452,7 @@ export function createMongoContractSchema(
     'extensions?': 'Record<string, unknown>',
     'meta?': 'Record<string, unknown>',
     'defaultControlPolicy?': ControlPolicySchema,
-    'execution?': ExecutionSchema,
+    'execution?': ContractExecutionSectionSchema,
     'sources?': 'Record<string, unknown>',
     '_generated?': 'Record<string, unknown>',
     domain: type({

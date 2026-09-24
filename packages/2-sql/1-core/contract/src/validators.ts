@@ -1,6 +1,7 @@
 import { ContractValidationError } from '@internal/contract/contract-validation-error';
 import {
   type Contract,
+  ContractExecutionSectionSchema,
   type ContractField,
   type ContractModel,
   CrossReferenceSchema,
@@ -43,40 +44,7 @@ import type {
   StorageTypeInstanceInput,
 } from './types';
 
-const generatorKindSchema = type("'generator'");
 const ControlPolicySchema = type("'managed' | 'tolerated' | 'external' | 'observed'");
-const generatorIdSchema = type('string').narrow((value, ctx) => {
-  return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value) ? true : ctx.mustBe('a flat generator id');
-});
-
-const ExecutionMutationDefaultValueSchema = type({
-  '+': 'reject',
-  kind: generatorKindSchema,
-  id: generatorIdSchema,
-  'params?': 'Record<string, unknown>',
-});
-
-const ExecutionMutationDefaultSchema = type({
-  '+': 'reject',
-  ref: {
-    '+': 'reject',
-    namespace: 'string',
-    entry: 'string',
-    field: 'string',
-  },
-  'onCreate?': ExecutionMutationDefaultValueSchema,
-  'onUpdate?': ExecutionMutationDefaultValueSchema,
-});
-
-const ExecutionSchema = type({
-  '+': 'reject',
-  executionHash: 'string',
-  mutations: {
-    '+': 'reject',
-    defaults: ExecutionMutationDefaultSchema.array().readonly(),
-  },
-});
-
 const DomainEnumRefSchema = type({
   plane: "'domain'",
   namespaceId: 'string',
@@ -475,7 +443,7 @@ export function createSqlContractSchema(
       }),
     }),
     storage,
-    'execution?': ExecutionSchema,
+    'execution?': ContractExecutionSectionSchema,
   }) as Type<unknown>;
 }
 
