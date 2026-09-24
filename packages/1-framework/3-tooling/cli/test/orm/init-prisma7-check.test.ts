@@ -7,7 +7,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import type { MountedTree, PackageManagerRunner } from '@prisma/cli-engine';
+import type { MountedTree, PackageManagerId, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
 import { basename, join } from 'pathe';
@@ -26,18 +26,23 @@ const VIEW_DIAGNOSTIC = {
   span: { start: { offset: 477, line: 26, column: 1 }, end: { offset: 481, line: 26, column: 5 } },
 };
 
+const PNPM_WORKSPACE_LEAK =
+  'ERR_PNPM_WORKSPACE_PKG_NOT_FOUND  In : "@prisma/orm-postgres@workspace:*" is in the dependencies but no package named "@prisma/orm-postgres" is present in the workspace';
+
 let projectDir: string;
 let installs: (readonly string[])[];
+let script: { readonly exitCode: number; readonly stderr: string }[];
 let loadTargetConfig: ImportFromProject;
 
 const runner: PackageManagerRunner = async (request) => {
   installs.push([...request.args]);
-  return { exitCode: 0, stderr: '' };
+  return script.shift() ?? { exitCode: 0, stderr: '' };
 };
 
 beforeEach(() => {
   projectDir = createTestProjectDir('orm-init-prisma7-check');
   installs = [];
+  script = [];
   loadTargetConfig = importFromProject;
 });
 
@@ -45,7 +50,7 @@ afterEach(() => {
   rmSync(projectDir, { recursive: true, force: true });
 });
 
-function harness() {
+function harness(packageManager?: PackageManagerId) {
   const commands: MountedTree = {
     ...BIN_COMMANDS,
     'orm init': createInitCommand({
@@ -53,7 +58,12 @@ function harness() {
       importFromProject: (cwd, specifier) => loadTargetConfig(cwd, specifier),
     }),
   };
-  return createTestCli({ commands, groups: BIN_GROUPS, packageManagerRunner: runner });
+  return createTestCli({
+    commands,
+    groups: BIN_GROUPS,
+    packageManagerRunner: runner,
+    ...(packageManager === undefined ? {} : { packageManager }),
+  });
 }
 
 function copyFixture(): void {
@@ -243,12 +253,113 @@ describe('the Prisma 7 check before init changes the project', () => {
         authoring: 'psl',
         schemaPath: 'src/prisma/contract.prisma',
         prisma7: null,
-        warnings: expect.arrayContaining([
-          '@prisma/orm-postgres cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project and leaves prisma/schema.prisma alone.',
-        ]),
       });
+      const warnings = Reflect.get(Object(run.presented?.data), 'warnings');
+      expect(warnings.filter((text: string) => text.includes('cannot read'))).toEqual([
+        '@prisma/orm-postgres cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project instead and leaves prisma/schema.prisma alone. It asks before replacing the Prisma 7 prisma.config.ts, and it installs prisma@latest, which replaces the Prisma 7 CLI.',
+      ]);
+      expect(projectFile('prisma.config.ts')).toContain('definePrismaConfig');
       expect(installs[0]).toEqual(['add', '@prisma/orm-postgres', 'dotenv']);
       expect(installs.filter((args) => args.includes('dotenv'))).toHaveLength(1);
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'names the packages it installed when a later consent cannot be answered',
+    async () => {
+      copyFixture();
+
+      const run = await harness().run(
+        ['orm', 'init', '--from-prisma7-schema', 'prisma/schema.prisma'],
+        { cwd: projectDir },
+      );
+
+      expect(run.exitCode).toBe(2);
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.CONSENT_REQUIRED',
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: expect.stringMatching(
+                /^init added @prisma\/orm-postgres and dotenv to package\.json before checking; remove them with `\w+ (remove|uninstall) @prisma\/orm-postgres dotenv`\.$/,
+              ),
+            }),
+          ]),
+          meta: expect.objectContaining({ packagesAdded: ['@prisma/orm-postgres', 'dotenv'] }),
+        },
+      });
+      expectProjectUnchangedApartFromTheCheckInstall();
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'keeps the install warnings when the install before the check fails',
+    async () => {
+      copyFixture();
+      script = [
+        { exitCode: 1, stderr: PNPM_WORKSPACE_LEAK },
+        { exitCode: 1, stderr: 'npm ERR! 404 Not Found' },
+      ];
+
+      const run = await harness('pnpm').run(prisma7Argv(), { cwd: projectDir });
+
+      expect(run.exitCode).toBe(4);
+      expect(run.presented?.data).toMatchObject({
+        filesWritten: [],
+        warnings: expect.arrayContaining([
+          expect.stringContaining('ERR_PNPM_WORKSPACE_PKG_NOT_FOUND'),
+        ]),
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'names the package manager that finished the install in the remove command',
+    async () => {
+      copyFixture();
+      script = [{ exitCode: 1, stderr: PNPM_WORKSPACE_LEAK }];
+      loadTargetConfig = await targetConfigWith(refusingSource);
+
+      const run = await harness('pnpm').run(prisma7Argv(), { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_PRISMA7_SCHEMA_REFUSED',
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: expect.stringContaining('`npm uninstall @prisma/orm-postgres dotenv`'),
+            }),
+          ]),
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'says the target package could not be loaded when it was installed but does not resolve',
+    async () => {
+      copyFixture();
+      loadTargetConfig = async () => undefined;
+
+      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE',
+          summary: 'Could not load @prisma/orm-postgres from the project',
+          meta: { reason: 'not-resolvable' },
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: expect.stringMatching(/^Check that @prisma\/orm-postgres is installed/),
+            }),
+          ]),
+        },
+      });
+      expectProjectUnchangedApartFromTheCheckInstall();
     },
     timeouts.coldTransformImport,
   );

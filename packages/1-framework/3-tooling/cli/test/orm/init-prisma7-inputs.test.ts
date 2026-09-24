@@ -396,6 +396,34 @@ describe(
         });
       });
 
+      it('is not asked when --target disagrees with the provider', async () => {
+        writePrisma7Schema();
+        const { prompt, calls } = scriptedPrompt({
+          'How do you want to write your schema?': 'psl',
+        });
+
+        const inputs = await resolveInputs({
+          cwd: projectDir,
+          flags: flags({ target: 'mongodb' }),
+          prompt,
+        });
+
+        expect(calls.map((call) => call.question)).not.toContain(PRISMA7_QUESTION);
+        expect(inputs).toMatchObject({ target: 'mongo', contractSource: { kind: 'starter' } });
+      });
+
+      it('is not asked for a provider with no known target', async () => {
+        writePrisma7Schema('sqlite');
+        const { prompt, calls } = scriptedPrompt({
+          'What database are you using?': 'postgres',
+          'How do you want to write your schema?': 'psl',
+        });
+
+        await resolveInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt });
+
+        expect(calls.map((call) => call.question)).not.toContain(PRISMA7_QUESTION);
+      });
+
       it('is not asked when --authoring or --schema-path is given', async () => {
         writePrisma7Schema();
         const { prompt, calls } = scriptedPrompt();

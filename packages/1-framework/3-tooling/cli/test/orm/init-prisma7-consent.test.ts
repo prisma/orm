@@ -1,4 +1,5 @@
 import { rmSync } from 'node:fs';
+import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { timeouts } from '@repo/test-utils';
 import { basename } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -6,6 +7,7 @@ import { createTestProjectDir } from '../utils/test-project-dir';
 import {
   flags,
   PRISMA7_CONFIG,
+  PRISMA7_QUESTION,
   PRISMA8_CONFIG,
   projectFiles,
   resolveInputs,
@@ -190,25 +192,65 @@ describe(
         expect(calls).toEqual([]);
       });
 
-      it('names the packages it installed when a consent is declined afterwards', async () => {
+      it('adds the installed packages to an error a later prompt raises', async () => {
         writePrisma7Schema();
         writeManifest({ name: 'app', devDependencies: { prisma: '^7.3.0' } });
-        const { prompt } = scriptedPrompt({ [SIDE_BY_SIDE_QUESTION]: false });
+        const { prompt } = scriptedPrompt();
+        const consentRequired = new CliStructuredError('CLI.CONSENT_REQUIRED', 'needs consent', {
+          nextActions: [{ kind: 'user-choice', label: 'pass --confirm' }],
+          meta: { consentToken: 'app' },
+        });
 
         await expect(
           resolveInputs({
             cwd: projectDir,
             flags: prisma7Flags(),
-            prompt,
-            checkPrisma7Source: stubCheck({ added: ADDED }),
+            prompt: {
+              ...prompt,
+              consent: async () => {
+                throw consentRequired;
+              },
+            },
+            checkPrisma7Source: stubCheck({ installed: ADDED.packages, added: ADDED }),
           }),
         ).rejects.toMatchObject({
-          code: 'CLI.INIT_USER_ABORTED',
-          fix: expect.stringContaining(
-            'init added stub-target-package and dotenv to package.json before checking; remove them with `pnpm remove stub-target-package dotenv`.',
-          ),
-          meta: { packagesAdded: ADDED.packages },
+          code: 'CLI.CONSENT_REQUIRED',
+          nextActions: [
+            { kind: 'user-choice', label: 'pass --confirm' },
+            {
+              kind: 'user-choice',
+              label:
+                'init added stub-target-package and dotenv to package.json before checking; remove them with `pnpm remove stub-target-package dotenv`.',
+            },
+          ],
+          meta: { consentToken: 'app', packagesAdded: ADDED.packages },
         });
+      });
+
+      it('warns about the fresh init before asking its questions', async () => {
+        writePrisma7Schema();
+        const { prompt, calls } = scriptedPrompt({
+          [PRISMA7_QUESTION]: true,
+          'How do you want to write your schema?': 'psl',
+        });
+        const warned: { readonly text: string; readonly promptsSoFar: number }[] = [];
+
+        const inputs = await resolveInputs({
+          cwd: projectDir,
+          flags: flags(NO_FLAGS),
+          prompt,
+          checkPrisma7Source: stubCheck({ outcome: 'no-source' }),
+          warn: (text) => warned.push({ text, promptsSoFar: calls.length }),
+        });
+
+        expect(warned).toEqual([
+          {
+            text: 'stub-target-package cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project instead and leaves prisma/schema.prisma alone.',
+            promptsSoFar: 1,
+          },
+        ]);
+        expect(inputs.contractSource.kind).toBe('starter');
+        expect(inputs.warnings).toEqual([]);
       });
 
       it('records what it installed so the install phase skips it', async () => {

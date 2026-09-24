@@ -104,12 +104,11 @@ export function errorInitAuthoringSchemaPathMismatch(options: {
  * selection) — the generic "user said no" path. Maps to exit code
  * 3 (USER_ABORTED).
  */
-export function errorInitUserAborted(added?: PackagesAdded): CliStructuredError {
+export function errorInitUserAborted(): CliStructuredError {
   return new CliStructuredError('CLI.INIT_USER_ABORTED', 'Init cancelled', {
     why: 'The interactive prompt was cancelled before all required inputs were supplied. No files were modified.',
-    fix: `Re-run \`prisma orm init\` and complete the prompts, or pass the required inputs as flags (see \`--help\`) for a non-interactive run.${packagesAddedNote(added)}`,
+    fix: 'Re-run `prisma orm init` and complete the prompts, or pass the required inputs as flags (see `--help`) for a non-interactive run.',
     severity: 'info',
-    ...(added === undefined ? {} : { meta: { packagesAdded: added.packages } }),
   });
 }
 
@@ -381,7 +380,10 @@ export function errorInitPrisma7SchemaInvalid(options: {
   });
 }
 
-/** A Prisma 7 `prisma.config.*` sits beside a `prisma7.config.*`, so neither can be renamed onto the other. */
+/**
+ * A Prisma 7 `prisma.config.*` sits beside a `prisma7.config.*`, so neither can be renamed onto the
+ * other.
+ */
 export function errorInitPrisma7ConfigCollision(options: {
   readonly prismaConfigPath: string;
   readonly prisma7ConfigPath: string;
@@ -436,10 +438,14 @@ export interface PackagesAdded {
   readonly removeCommand: string;
 }
 
+/** The next action that tells the user how to undo what the Prisma 7 check installed. */
+export function packagesAddedAction(added: PackagesAdded): string {
+  const pronoun = added.packages.length === 1 ? 'it' : 'them';
+  return `init added ${added.packages.join(' and ')} to package.json before checking; remove ${pronoun} with \`${added.removeCommand}\`.`;
+}
+
 function packagesAddedNote(added: PackagesAdded | undefined): string {
-  return added === undefined
-    ? ''
-    : `\ninit added ${added.packages.join(' and ')} to package.json before checking; remove ${added.packages.length === 1 ? 'it' : 'them'} with \`${added.removeCommand}\`.`;
+  return added === undefined ? '' : `\n${packagesAddedAction(added)}`;
 }
 
 /**
@@ -453,28 +459,36 @@ export function errorInitPrisma7SourceUnavailable(options: {
   readonly reason: 'not-resolvable' | 'no-prisma7-source';
   readonly added: PackagesAdded | undefined;
 }): CliStructuredError {
-  const why =
+  const { packageName, schemaPath } = options;
+  const wording =
     options.reason === 'not-resolvable'
-      ? `${options.packageName} could not be loaded from the project after it was installed, so init cannot read ${options.schemaPath}.`
-      : `${options.packageName} does not provide a Prisma 7 contract source, so it cannot read ${options.schemaPath}.`;
-  return new CliStructuredError(
-    'CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE',
-    'No Prisma 7 contract source for this database',
-    {
-      why,
-      fix: `Choose a database whose Prisma 8 package reads Prisma 7 schemas, or run \`prisma orm init\` without \`--from-prisma7-schema\`.${packagesAddedNote(options.added)}`,
-      docsUrl: docsUrlFor('CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE'),
-      meta: {
-        schemaPath: options.schemaPath,
-        packageName: options.packageName,
-        reason: options.reason,
-        packagesAdded: options.added?.packages ?? [],
-      },
+      ? {
+          summary: `Could not load ${packageName} from the project`,
+          why: `${packageName} was installed but could not be loaded from the project, so init cannot check that Prisma 8 reads ${schemaPath}.`,
+          fix: `Check that ${packageName} is installed and resolves from this directory (Yarn Plug'n'Play hides packages from Node), then run \`prisma orm init\` again.`,
+        }
+      : {
+          summary: 'No Prisma 7 contract source for this database',
+          why: `${packageName} does not provide a Prisma 7 contract source, so it cannot read ${schemaPath}.`,
+          fix: 'Choose a database whose Prisma 8 package reads Prisma 7 schemas, or run `prisma orm init` without `--from-prisma7-schema`.',
+        };
+  return new CliStructuredError('CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE', wording.summary, {
+    why: wording.why,
+    fix: `${wording.fix}${packagesAddedNote(options.added)}`,
+    docsUrl: docsUrlFor('CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE'),
+    meta: {
+      schemaPath: options.schemaPath,
+      packageName: options.packageName,
+      reason: options.reason,
+      packagesAdded: options.added?.packages ?? [],
     },
-  );
+  });
 }
 
-/** The target package's Prisma 7 contract source refused the schema. Nothing but the check's install happened. */
+/**
+ * The target package's Prisma 7 contract source refused the schema. Nothing but the check's install
+ * happened.
+ */
 export function errorInitPrisma7SchemaRefused(options: {
   readonly schemaPath: string;
   readonly packageName: string;

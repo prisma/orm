@@ -205,6 +205,13 @@ describe('the Prisma 7 result document', () => {
       expect(steps[1]).toMatch(/install this run attempted failed.*@prisma\/prisma7@7/);
       expect(steps[2]).toBe('3. Emit the contract: `prisma contract emit`');
       expect(steps[3]).toContain('prisma db sign');
+      expect(run.presented?.data).toMatchObject({
+        packagesInstalled: {
+          status: 'failed',
+          deps: ['@prisma/orm-postgres', 'dotenv'],
+          devDeps: [],
+        },
+      });
     },
     timeouts.coldTransformImport,
   );

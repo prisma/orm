@@ -155,10 +155,14 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
             install: !args.flags.skipInstall,
             importFromProject: injected.importFromProject,
           }),
+          warn,
         });
       } catch (error) {
         if (!(error instanceof Prisma7CheckInstallFailed)) {
           throw error;
+        }
+        for (const warning of error.warnings) {
+          warn(warning);
         }
         const document: InitOutput = {
           ok: true,
@@ -259,7 +263,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
           filesRenamed: scaffold.filesRenamed,
           packagesInstalled: {
             status: packagesInstalled,
-            deps: installed ? deps : [],
+            deps: installed ? deps : [...inputs.preinstalled],
             devDeps: installed ? devDeps : [],
           },
           contractEmitted,

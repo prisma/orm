@@ -165,7 +165,7 @@ On the Prisma 7 path of `prisma orm init`, the target package cannot read the Pr
 
 ### CLI.INIT_PRISMA7_TARGET_MISMATCH
 
-On the Prisma 7 path of `prisma orm init`, `--target` names a different database than the schema's `datasource` provider, for example `--target mongodb` for a schema that declares `provider = "postgresql"`. Refused before anything is asked, installed, or written. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider`, `target` (as passed).
+On the Prisma 7 path of `prisma orm init`, `--target` names a different database than the schema's `datasource` provider, for example `--target mongodb` for a schema that declares `provider = "postgresql"`. With `--from-prisma7-schema` it is refused before anything is asked, installed, or written. Without the flag init does not ask its Prisma 7 question and runs as a fresh init, so this code is not raised. Maps to init exit code 2 (PRECONDITION). Payload: `schemaPath`, `provider`, `target` (as passed).
 
 ### CLI.INIT_PROBE_FAILED
 
@@ -187,7 +187,7 @@ Retired. `prisma orm init` used to fetch the agent skills from GitHub with `skil
 
 ### CLI.INIT_USER_ABORTED
 
-The user cancelled an interactive `prisma orm init` prompt (Ctrl-C, escape, or declining a selection) before all required inputs were supplied. No files were modified. On the Prisma 7 path, the check before the consent questions may already have installed the target package and `dotenv`; the next actions then name them and the command that removes them. Severity is `info`, not `error`; maps to init exit code 3 (USER_ABORTED). Payload: none, or `packagesAdded` when the check installed packages.
+The user cancelled an interactive `prisma orm init` prompt (Ctrl-C, escape, or declining a selection) before all required inputs were supplied. No files were modified. Severity is `info`, not `error`; maps to init exit code 3 (USER_ABORTED). Payload: none.
 
 Raised by the commander `init` (deleted in the S5 cutover). On the engine-hosted `init` a cancelled prompt is the engine's own `CLI.PROMPT_CANCELLED`, which exits 3 for every command rather than only this one; the engine-hosted `init` keeps this code for a consent the user declines, which settles as an errored envelope at exit 2 like every other structured failure there. Because that command's consent declares a token, the engine answers a wrong or absent answer with `CLI.PROMPT_INVALID` or `CLI.CONSENT_REQUIRED` before a decline can be expressed, so the code is the refusal that runs if a future consent drops its token.
 

@@ -3,8 +3,10 @@ import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import { buildLoadedConfig, requireConfigSections } from '@internal/config-loader';
+import { ifDefined } from '@internal/utils/defined';
+import { isStructuredError } from '@internal/utils/structured-error';
 import type { PackageOperations } from '@prisma/cli-engine';
-import type { CliStructuredError } from '@prisma/cli-engine/protocol';
+import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
 import { buildCatalogWarnings } from '../commands/init/catalog-warnings';
 import { formatRemoveCommand, type PackageManager } from '../commands/init/detect-package-manager';
@@ -12,6 +14,7 @@ import {
   errorInitPrisma7SchemaRefused,
   errorInitPrisma7SourceUnavailable,
   type PackagesAdded,
+  packagesAddedAction,
 } from '../commands/init/errors';
 import {
   scaffoldSpecifierResolverFor,
@@ -20,7 +23,9 @@ import {
   targetPackageName,
 } from '../commands/init/templates/code-templates';
 import { loadContractSource } from '../control-api/operations/contract-emit';
+import { chooseAction } from '../utils/next-actions';
 import { installProjectDependencies } from './init-packages';
+import { normalizeError } from './normalize-error';
 
 /** A module as the project itself resolves it; `undefined` when the project cannot resolve it. */
 export type ImportFromProject = (
@@ -41,9 +46,8 @@ export const importFromProject: ImportFromProject = async (cwd, specifier) => {
 
 export interface Prisma7SourceCheck {
   /**
-   * `readable`: the target package read the schema. `unchecked`: the package
-   * is not installed and `--skip-install` forbade installing it. `no-source`:
-   * the package has no Prisma 7 contract source.
+   * `readable`: the target package read the schema. `unchecked`: the package is not installed and
+   * `--skip-install` forbade installing it. `no-source`: the package has no Prisma 7 contract source.
    */
   readonly outcome: 'readable' | 'unchecked' | 'no-source';
   readonly packageName: string;
@@ -65,6 +69,7 @@ export class Prisma7CheckInstallFailed extends Error {
     readonly failure: CliStructuredError,
     readonly target: TargetId,
     readonly schemaPath: string,
+    readonly warnings: readonly string[],
   ) {
     super(failure.message);
     this.name = 'Prisma7CheckInstallFailed';
@@ -72,12 +77,32 @@ export class Prisma7CheckInstallFailed extends Error {
 }
 
 /**
- * Finds out whether the chosen target package can read the Prisma 7 schema
- * before init changes the project: installs the package and `dotenv` (the
- * packages every init installs), loads the package's config entrypoint as the
- * project resolves it, and runs its `prisma7Schema` source without writing.
- * The CLI carries no target code, so the installed package is the only one
- * that can answer.
+ * Adds the check's undo instruction to an error raised after the check installed packages, such
+ * as the engine's own consent or cancellation errors, which init cannot word itself.
+ */
+export function withPackagesAddedAction(error: unknown, added: PackagesAdded): unknown {
+  if (!(error instanceof Error) || !(CliStructuredError.is(error) || isStructuredError(error))) {
+    return error;
+  }
+  const engineError = normalizeError(error);
+  return new CliStructuredError(engineError.code, engineError.message, {
+    severity: engineError.severity,
+    nextActions: [...engineError.nextActions, chooseAction(packagesAddedAction(added))],
+    diagnostics: engineError.diagnostics,
+    meta: { ...engineError.meta, packagesAdded: added.packages },
+    ...ifDefined('why', engineError.why),
+    ...ifDefined('where', engineError.where),
+    ...ifDefined('docsUrl', engineError.docsUrl),
+    cause: error,
+  });
+}
+
+/**
+ * Finds out whether the chosen target package can read the Prisma 7 schema before init changes the
+ * project: installs the package and `dotenv` (the packages every init installs), loads the
+ * package's config entrypoint as the project resolves it, and runs its `prisma7Schema` source
+ * without writing. The CLI carries no target code, so the installed package is the only one that
+ * can answer.
  */
 export function createPrisma7SourceCheck(ctx: {
   readonly cwd: string;
@@ -104,7 +129,7 @@ export function createPrisma7SourceCheck(ctx: {
         catalogWarnings: ctx.packageManager === 'pnpm' ? buildCatalogWarnings(ctx.cwd, deps) : [],
       });
       if (outcome.failure !== undefined) {
-        throw new Prisma7CheckInstallFailed(outcome.failure, target, schemaPath);
+        throw new Prisma7CheckInstallFailed(outcome.failure, target, schemaPath, outcome.warnings);
       }
       warnings.push(...outcome.warnings);
       installed = deps;
@@ -114,7 +139,10 @@ export function createPrisma7SourceCheck(ctx: {
           ? undefined
           : {
               packages: newlyDeclared,
-              removeCommand: formatRemoveCommand(ctx.packageManager, newlyDeclared),
+              removeCommand: formatRemoveCommand(
+                outcome.manager ?? ctx.packageManager,
+                newlyDeclared,
+              ),
             };
     }
 

@@ -115,11 +115,12 @@ export function stubCheck(
 
 type ResolveContext = Parameters<typeof resolveInitInputs>[0];
 
-/** Input resolution with a check that reads every schema, unless the test supplies its own. */
+/** Input resolution with a check that reads every schema and no warning sink, unless the test supplies its own. */
 export function resolveInputs(
-  ctx: Omit<ResolveContext, 'checkPrisma7Source'> & {
+  ctx: Omit<ResolveContext, 'checkPrisma7Source' | 'warn'> & {
     readonly checkPrisma7Source?: CheckPrisma7Source;
+    readonly warn?: ResolveContext['warn'];
   },
 ) {
-  return resolveInitInputs({ checkPrisma7Source: stubCheck(), ...ctx });
+  return resolveInitInputs({ checkPrisma7Source: stubCheck(), warn: () => {}, ...ctx });
 }

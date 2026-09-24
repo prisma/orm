@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { notOk, ok, type Result } from '@internal/utils/result';
 import type { PromptSurface } from '@prisma/cli-engine';
 import { basename, extname, join } from 'pathe';
 import {
@@ -12,7 +13,6 @@ import {
   errorInitPrisma7TargetMismatch,
   errorInitStrictProbeWithoutProbe,
   errorInitUserAborted,
-  type PackagesAdded,
 } from '../commands/init/errors';
 import {
   resolveAuthoring,
@@ -33,7 +33,11 @@ import {
   targetLabel,
   targetPackageName,
 } from '../commands/init/templates/code-templates';
-import type { CheckPrisma7Source } from './init-prisma7-check';
+import {
+  type CheckPrisma7Source,
+  type Prisma7SourceCheck,
+  withPackagesAddedAction,
+} from './init-prisma7-check';
 import {
   CONFIG_FILE,
   generatedFilesInitReplaces,
@@ -274,11 +278,16 @@ async function choosePrisma7Path(ctx: {
   readonly flags: InitFlagValues;
   readonly prompt: PromptSurface;
   readonly detection: Prisma7Detection;
+  readonly flagTarget: TargetId | undefined;
 }): Promise<boolean> {
   if (ctx.flags.fromPrisma7Schema !== undefined) {
     return true;
   }
   if (!looksLikePrisma7(ctx.detection)) {
+    return false;
+  }
+  const { schema } = ctx.detection;
+  if (schema.kind === 'datasource' && !prisma7Target(schema, ctx.flagTarget, ctx.flags.target).ok) {
     return false;
   }
   try {
@@ -299,27 +308,43 @@ function prisma7Target(
   schema: Extract<Prisma7SchemaDetection, { readonly kind: 'datasource' }>,
   flagTarget: TargetId | undefined,
   rawFlagTarget: string | undefined,
-): TargetId {
+): Result<TargetId, ReturnType<typeof errorInitPrisma7TargetMismatch>> {
   const providerTarget =
     schema.provider === undefined ? undefined : targetFromProviderName(schema.provider);
   if (schema.provider !== undefined && providerTarget === undefined) {
-    throw errorInitPrisma7ProviderUnsupported({
-      schemaPath: schema.path,
-      provider: schema.provider,
-    });
+    return notOk(
+      errorInitPrisma7ProviderUnsupported({ schemaPath: schema.path, provider: schema.provider }),
+    );
   }
   if (schema.provider !== undefined && flagTarget !== undefined && flagTarget !== providerTarget) {
-    throw errorInitPrisma7TargetMismatch({
-      schemaPath: schema.path,
-      provider: schema.provider,
-      target: rawFlagTarget ?? flagTarget,
-    });
+    return notOk(
+      errorInitPrisma7TargetMismatch({
+        schemaPath: schema.path,
+        provider: schema.provider,
+        target: rawFlagTarget ?? flagTarget,
+      }),
+    );
   }
   const target = flagTarget ?? providerTarget;
-  if (target === undefined) {
-    throw errorInitPrisma7ProviderUnsupported({ schemaPath: schema.path, provider: undefined });
-  }
-  return target;
+  return target === undefined
+    ? notOk(errorInitPrisma7ProviderUnsupported({ schemaPath: schema.path, provider: undefined }))
+    : ok(target);
+}
+
+/**
+ * What a fresh init does to a Prisma 7 project, said before its questions: the user answered yes
+ * to adopting the schema and is about to be asked something else.
+ */
+function freshInitWarning(packageName: string, detection: Prisma7Detection): string {
+  const { config, schema, cli } = detection;
+  const effects = [
+    ...(config.kind === 'prisma7' && config.path === CONFIG_FILE
+      ? [`asks before replacing the Prisma 7 ${CONFIG_FILE}`]
+      : []),
+    ...(cli.kind === 'earlier' ? ['installs prisma@latest, which replaces the Prisma 7 CLI'] : []),
+  ];
+  const consequences = effects.length === 0 ? '' : ` It ${effects.join(', and it ')}.`;
+  return `${packageName} cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project instead and leaves ${schema.path} alone.${consequences}`;
 }
 
 function sideBySidePlan(detection: Prisma7Detection): Prisma7SideBySidePlan | null {
@@ -351,7 +376,6 @@ async function requireReinitConsent(ctx: {
   readonly cwd: string;
   readonly prompt: PromptSurface;
   readonly replaced: readonly string[];
-  readonly added: PackagesAdded | undefined;
 }): Promise<boolean> {
   if (ctx.replaced.length === 0) {
     return false;
@@ -360,7 +384,7 @@ async function requireReinitConsent(ctx: {
     token: consentToken(ctx.cwd),
   });
   if (!granted) {
-    throw errorInitUserAborted(ctx.added);
+    throw errorInitUserAborted();
   }
   return true;
 }
@@ -391,6 +415,7 @@ async function resolvePrisma7Inputs(ctx: {
   readonly detection: Prisma7Detection;
   readonly flagTarget: TargetId | undefined;
   readonly checkPrisma7Source: CheckPrisma7Source;
+  readonly warn: (text: string) => void;
 }): Promise<ResolvedInitInputs> {
   const { cwd, flags, prompt, detection, flagTarget } = ctx;
   const { config, schema } = detection;
@@ -406,42 +431,60 @@ async function resolvePrisma7Inputs(ctx: {
   if (schema.kind !== 'datasource') {
     throw errorInitPrisma7SchemaInvalid({ schemaPath: schema.path, reason: schema.kind });
   }
-  const target = prisma7Target(schema, flagTarget, flags.target);
+  const targetResult = prisma7Target(schema, flagTarget, flags.target);
+  if (!targetResult.ok) {
+    throw targetResult.failure;
+  }
+  const target = targetResult.value;
 
   const check = await ctx.checkPrisma7Source({ target, schemaPath: schema.path });
-  const preinstalled = check.installed;
-  if (check.outcome === 'no-source') {
-    if (flags.fromPrisma7Schema !== undefined) {
-      throw errorInitPrisma7SourceUnavailable({
-        schemaPath: schema.path,
-        packageName: check.packageName,
-        reason: 'no-prisma7-source',
-        added: check.added,
-      });
-    }
-    return resolveStarterInputs({
-      cwd,
-      flags,
-      prompt,
-      target,
-      flagAuthoring: undefined,
-      prisma7SchemaPath: undefined,
-      warnings: [
-        ...check.warnings,
-        `${check.packageName} cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project and leaves ${schema.path} alone.`,
-      ],
-      installed: check.installed,
+  if (check.outcome === 'no-source' && flags.fromPrisma7Schema !== undefined) {
+    throw errorInitPrisma7SourceUnavailable({
+      schemaPath: schema.path,
+      packageName: check.packageName,
+      reason: 'no-prisma7-source',
       added: check.added,
     });
   }
+  try {
+    if (check.outcome === 'no-source') {
+      ctx.warn(freshInitWarning(check.packageName, detection));
+      return await resolveStarterInputs({
+        cwd,
+        flags,
+        prompt,
+        target,
+        flagAuthoring: undefined,
+        prisma7SchemaPath: undefined,
+        warnings: [...detection.warnings, ...check.warnings],
+        installed: check.installed,
+      });
+    }
+    return await confirmPrisma7Inputs({ cwd, flags, prompt, detection, schema, target, check });
+  } catch (error) {
+    throw check.added === undefined ? error : withPackagesAddedAction(error, check.added);
+  }
+}
 
+/** The consents and questions of the Prisma 7 path, once the check has read the schema. */
+async function confirmPrisma7Inputs(ctx: {
+  readonly cwd: string;
+  readonly flags: InitFlagValues;
+  readonly prompt: PromptSurface;
+  readonly detection: Prisma7Detection;
+  readonly schema: Extract<Prisma7SchemaDetection, { readonly kind: 'datasource' }>;
+  readonly target: TargetId;
+  readonly check: Prisma7SourceCheck;
+}): Promise<ResolvedInitInputs> {
+  const { cwd, flags, prompt, detection, schema, target, check } = ctx;
+  const { config } = detection;
   const prisma7ConfigOccupiesConfigFile = config.kind === 'prisma7' && config.path === CONFIG_FILE;
   const replaced = generatedFilesPrisma7PathReplaces().filter(
     (relative) =>
       (relative !== CONFIG_FILE || !prisma7ConfigOccupiesConfigFile) &&
       existsSync(join(cwd, relative)),
   );
-  const reinit = await requireReinitConsent({ cwd, prompt, replaced, added: check.added });
+  const reinit = await requireReinitConsent({ cwd, prompt, replaced });
 
   const sideBySide = sideBySidePlan(detection);
   if (sideBySide !== null) {
@@ -449,7 +492,7 @@ async function resolvePrisma7Inputs(ctx: {
       token: consentToken(cwd),
     });
     if (!granted) {
-      throw errorInitUserAborted(check.added);
+      throw errorInitUserAborted();
     }
   }
 
@@ -474,7 +517,7 @@ async function resolvePrisma7Inputs(ctx: {
     sideBySide,
     warnings: [...detection.warnings, ...check.warnings],
     install: !flags.skipInstall,
-    preinstalled,
+    preinstalled: check.installed,
     writeEnv,
     probeDb: flags.probeDb,
     strictProbe: flags.strictProbe,
@@ -494,7 +537,6 @@ async function resolveStarterInputs(ctx: {
   readonly warnings: readonly string[];
   /** What the Prisma 7 check installed before it found no source. */
   readonly installed: readonly string[];
-  readonly added: PackagesAdded | undefined;
 }): Promise<ResolvedInitInputs> {
   const { cwd, flags, prompt, flagAuthoring } = ctx;
   let target: TargetId;
@@ -525,7 +567,7 @@ async function resolveStarterInputs(ctx: {
   const replaced = generatedFilesInitReplaces(schemaPath).filter((relative) =>
     existsSync(join(cwd, relative)),
   );
-  const reinit = await requireReinitConsent({ cwd, prompt, replaced, added: ctx.added });
+  const reinit = await requireReinitConsent({ cwd, prompt, replaced });
 
   const writeEnv = await askWriteEnv(flags, prompt);
 
@@ -569,6 +611,8 @@ export async function resolveInitInputs(ctx: {
   readonly flags: InitFlagValues;
   readonly prompt: PromptSurface;
   readonly checkPrisma7Source: CheckPrisma7Source;
+  /** Reports a warning at once, for what the user should know before the next question. */
+  readonly warn: (text: string) => void;
 }): Promise<ResolvedInitInputs> {
   const { cwd, flags, prompt } = ctx;
 
@@ -588,7 +632,7 @@ export async function resolveInitInputs(ctx: {
   let prisma7SchemaPath: string | undefined;
   if (mayAdoptPrisma7) {
     const detection = await detectPrisma7Project({ cwd, schemaPath: flags.fromPrisma7Schema });
-    if (await choosePrisma7Path({ flags, prompt, detection })) {
+    if (await choosePrisma7Path({ flags, prompt, detection, flagTarget })) {
       return resolvePrisma7Inputs({
         cwd,
         flags,
@@ -596,6 +640,7 @@ export async function resolveInitInputs(ctx: {
         detection,
         flagTarget,
         checkPrisma7Source: ctx.checkPrisma7Source,
+        warn: ctx.warn,
       });
     }
     prisma7SchemaPath = looksLikePrisma7(detection) ? detection.schema.path : undefined;
@@ -610,6 +655,5 @@ export async function resolveInitInputs(ctx: {
     prisma7SchemaPath,
     warnings: [],
     installed: [],
-    added: undefined,
   });
 }
