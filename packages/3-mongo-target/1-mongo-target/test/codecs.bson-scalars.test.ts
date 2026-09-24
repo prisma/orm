@@ -61,6 +61,37 @@ describe('mongoInt64Codec', () => {
     await expect(mongoInt64Codec.encode(wrongWire<bigint>(42), {})).rejects.toThrow(encodeFailed);
   });
 
+  const int64Max = 2n ** 63n - 1n;
+  const int64Min = -(2n ** 63n);
+
+  it('encodes both ends of the signed 64-bit range exactly', async () => {
+    for (const value of [int64Max, int64Min]) {
+      expect(await mongoInt64Codec.decode(await mongoInt64Codec.encode(value, {}), {})).toBe(value);
+    }
+  });
+
+  it('refuses a bigint outside the signed 64-bit range instead of wrapping it', async () => {
+    await expect(mongoInt64Codec.encode(int64Max + 1n, {})).rejects.toThrow(encodeFailed);
+    await expect(mongoInt64Codec.encode(int64Min - 1n, {})).rejects.toThrow(encodeFailed);
+  });
+
+  it('writes both ends of the signed 64-bit range as JSON and reads them back', () => {
+    for (const value of [int64Max, int64Min]) {
+      expect(mongoInt64Codec.decodeJson(mongoInt64Codec.encodeJson(value))).toBe(value);
+    }
+  });
+
+  it('refuses a bigint outside the signed 64-bit range on the way into JSON', () => {
+    expect(() => mongoInt64Codec.encodeJson(int64Max + 1n)).toThrow(encodeFailed);
+    expect(() => mongoInt64Codec.encodeJson(int64Min - 1n)).toThrow(encodeFailed);
+  });
+
+  it('refuses JSON decimal text outside the signed 64-bit range', () => {
+    expect(() => mongoInt64Codec.decodeJson((int64Max + 1n).toString())).toThrow(decodeFailed);
+    expect(() => mongoInt64Codec.decodeJson((int64Min - 1n).toString())).toThrow(decodeFailed);
+    expect(() => mongoInt64Codec.decodeJson('99999999999999999999')).toThrow(decodeFailed);
+  });
+
   it('writes decimal text as its JSON form and reads it back', () => {
     expect(mongoInt64Codec.encodeJson(-123n)).toBe('-123');
     expect(mongoInt64Codec.decodeJson('-123')).toBe(-123n);

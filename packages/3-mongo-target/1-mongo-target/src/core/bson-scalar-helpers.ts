@@ -40,9 +40,24 @@ function encodeFailed(codecId: string, message: string, received: unknown): neve
   });
 }
 
+const INT64_MIN = -(2n ** 63n);
+const INT64_MAX = 2n ** 63n - 1n;
+
+/**
+ * `Long.fromBigInt` keeps the low 64 bits of any bigint, so an out-of-range value would be stored as a different number without error.
+ */
+function isInt64(value: bigint): boolean {
+  return value >= INT64_MIN && value <= INT64_MAX;
+}
+
+function requireInt64(codecId: string, value: bigint): bigint {
+  if (!isInt64(value)) encodeFailed(codecId, 'value is outside the signed 64-bit range', value);
+  return value;
+}
+
 export function int64Encode(codecId: string, value: bigint): Long {
   if (typeof value !== 'bigint') encodeFailed(codecId, 'value must be a bigint', value);
-  return Long.fromBigInt(value);
+  return Long.fromBigInt(requireInt64(codecId, value));
 }
 
 /**
@@ -59,7 +74,7 @@ export function int64Decode(codecId: string, wire: Long | number | bigint): bigi
  * A schema-written default arrives as a `number`; one that is a safe integer names its value exactly, so it is accepted like `pg/int8@1` accepts it.
  */
 export function int64EncodeJson(codecId: string, value: bigint | number): string {
-  if (typeof value === 'bigint') return value.toString();
+  if (typeof value === 'bigint') return requireInt64(codecId, value).toString();
   if (typeof value === 'number' && Number.isSafeInteger(value)) return BigInt(value).toString();
   return encodeFailed(codecId, 'value must be a bigint or a safe integer', value);
 }
@@ -68,7 +83,11 @@ export function int64DecodeJson(codecId: string, json: JsonValue): bigint {
   if (typeof json !== 'string' || !DECIMAL_INTEGER.test(json)) {
     return decodeFailed(codecId, 'JSON value must be decimal integer text', json);
   }
-  return BigInt(json);
+  const value = BigInt(json);
+  if (!isInt64(value)) {
+    return decodeFailed(codecId, 'JSON value is outside the signed 64-bit range', json);
+  }
+  return value;
 }
 
 export function decimalTextBigintLiteral(value: JsonValue): string | undefined {
