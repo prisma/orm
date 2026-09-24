@@ -16,34 +16,56 @@ export interface MongoRunnerDependencies {
 
 Every dependency is an abstract interface. `MongoDdlCommandVisitor` and `MongoInspectionCommandVisitor` are the visitor SPIs from `@internal/mongo-query-ast`. `MongoAdapter` and `MongoDriver` are the runtime query-execution abstractions already used by the rest of the system. `MarkerOperations` is a small interface covering the four marker-ledger calls. The runner has zero imports from `mongodb`.
 
-The concrete implementations — `MongoCommandExecutor`, `MongoInspectionExecutor`, and a `MarkerOperations` literal backed by `Db` — live in the adapter (`@internal/adapter-mongo`) and are wired in at the composition site:
+The concrete implementations live in the adapter (`@internal/adapter-mongo`). The `MongoControlAdapter` SPI in the family layer (`@internal/family-mongo/control-adapter`) declares the method that builds them for one control driver, and `MongoControlAdapterImpl` implements it:
 
 ```ts
-// adapter-mongo/src/core/runner-deps.ts
-export function createMongoRunnerDeps(
-  driver: ControlDriverInstance<'mongo', 'mongo'>,
-): MongoRunnerDependencies {
-  const db = extractDb(driver);
+// family-mongo/src/core/control-adapter.ts
+export interface MongoControlAdapter<TTarget extends string = string>
+  extends ControlAdapterInstance<'mongo', TTarget> {
+  // ...marker-ledger CAS operations and introspectSchema
+  createRunnerDependencies(
+    driver: ControlDriverInstance<'mongo', TTarget>,
+  ): MongoRunnerDependencies;
+}
+
+// adapter-mongo/src/core/mongo-control-adapter.ts
+createRunnerDependencies(driver: ControlDriverInstance<'mongo', 'mongo'>): MongoRunnerDependencies {
+  const controlDriver = requireMongoControlDriver(driver);
   return {
-    commandExecutor: new MongoCommandExecutor(db),
-    inspectionExecutor: new MongoInspectionExecutor(db),
-    adapter: createMongoAdapter(),
-    driver: new MigrationMongoDriver(db),
+    inspectionExecutor: new MongoInspectionExecutor(controlDriver.db),
+    adapter: this.#adapter,
+    driver: controlDriver,
+    executeDdl: (command) => this.executeDdl(controlDriver, command),
     markerOps: {
-      readMarker: () => readMarker(db),
-      initMarker: (dest) => initMarker(db, dest),
-      updateMarker: (expectedFrom, dest) => updateMarker(db, expectedFrom, dest),
-      writeLedgerEntry: (entry) => writeLedgerEntry(db, entry),
+      readMarker: (space) => this.readMarker(controlDriver, space),
+      initMarker: (space, destination) => this.initMarker(controlDriver, space, destination),
+      updateMarker: (space, expectedFrom, destination) =>
+        this.updateMarker(controlDriver, space, expectedFrom, destination),
+      writeLedgerEntry: (space, entry) => this.writeLedgerEntry(controlDriver, space, entry),
     },
+    introspectSchema: () => this.introspectSchema(controlDriver),
   };
 }
 ```
 
-The family descriptor's `createRunner` calls `createMongoRunnerDeps` and passes the result to `new MongoMigrationRunner(deps)`. That is the only place in the system where the runner meets concrete driver types.
+The family instance forwards the call to the control adapter it resolves from the control stack, and the target's `createRunner` asks the family for the dependencies:
+
+```ts
+// family-mongo/src/core/control-instance.ts
+createRunnerDependencies(options): MongoRunnerDependencies {
+  return getControlAdapter().createRunnerDependencies(asMongoDriver(options.driver));
+}
+
+// target-mongo/src/core/control-target.ts, inside createRunner(family)
+cachedDeps ??= family.createRunnerDependencies({ driver });
+return new MongoMigrationRunner(cachedDeps).execute({ ... });
+```
+
+The adapter's `createRunnerDependencies` is the only place in the system where the runner's dependencies meet concrete driver types. The target names neither the adapter nor the driver package.
 
 ## Decision
 
-The runner depends on abstract visitor interfaces and an abstract `MarkerOperations` interface — not on `mongodb`'s `Db` type. Concrete implementations stay in the adapter; composition happens at the family descriptor.
+The runner depends on abstract visitor interfaces and an abstract `MarkerOperations` interface — not on `mongodb`'s `Db` type. Concrete implementations stay in the adapter, which builds them behind the family's `MongoControlAdapter` SPI; the target reaches them through the family instance.
 
 This gives the runner a clean package-layer position. It lives in the target package (`@internal/target-mongo`), which sits above the family-layer AST types but below the adapter. A target-layer module must not import adapter or driver code. The visitor SPIs make this possible: they are defined in the family layer (`@internal/mongo-query-ast`), the runner depends on them, and the adapter provides implementations.
 
@@ -86,7 +108,7 @@ The concrete implementation calls into the migration marker collection per [ADR 
 
 ### Composition site
 
-The family descriptor (`mongoTargetDescriptor.createRunner`) is the composition site. It has access to the adapter's concrete executors and to the control driver's `Db` handle. It builds a `MongoRunnerDependencies` object and passes it to the runner. The runner is instantiated fresh for each `execute()` call but reuses the same dependencies across operations within a run.
+The target descriptor's `mongoTargetDescriptor.migrations.createRunner(family)` is where the runner is assembled, but it holds no concrete types. On the first `execute()` it calls `family.createRunnerDependencies({ driver })`. The family instance resolves the `MongoControlAdapter` from the control stack and delegates to `createRunnerDependencies(driver)`, which the adapter implements with its executors and the control driver's `Db` handle. The target caches the resulting `MongoRunnerDependencies` for the driver and passes it to a fresh `MongoMigrationRunner` for each contract space it applies.
 
 ## Consequences
 
