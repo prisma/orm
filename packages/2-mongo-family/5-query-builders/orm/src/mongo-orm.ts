@@ -2,6 +2,7 @@ import type {
   AnyMongoTypeMaps,
   MongoContract,
   MongoContractWithTypeMaps,
+  MongoMutationDefaults,
   RootModelName,
 } from '@internal/mongo-contract';
 import { blindCast } from '@internal/utils/casts';
@@ -12,6 +13,8 @@ import type { MongoQueryExecutor } from './executor';
 export interface MongoOrmOptions<TContract extends MongoContract> {
   readonly contract: TContract;
   readonly executor: MongoQueryExecutor;
+  /** Fills the contract's execution defaults on writes. Without it, no generated values are applied. */
+  readonly mutationDefaults?: MongoMutationDefaults;
 }
 
 export type MongoOrmClient<
@@ -26,7 +29,7 @@ export type MongoOrmClient<
 export function mongoOrm<
   TContract extends MongoContractWithTypeMaps<MongoContract, AnyMongoTypeMaps>,
 >(options: MongoOrmOptions<TContract>): MongoOrmClient<TContract> {
-  const { contract, executor } = options;
+  const { contract, executor, mutationDefaults } = options;
   const client: Record<string, unknown> = {};
 
   for (const [rootName, rootRef] of Object.entries(contract.roots)) {
@@ -37,6 +40,7 @@ export function mongoOrm<
         'roots entries are CrossReferences; rootRef.model is a valid RootModelName for this contract'
       >(rootRef.model),
       executor,
+      mutationDefaults,
     );
   }
 
