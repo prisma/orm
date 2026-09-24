@@ -1,16 +1,16 @@
 import type { ControlDriverInstance } from '@internal/framework-components/control';
+import { ListCollectionsCommand } from '@internal/mongo-query-ast/control';
 import { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it, vi } from 'vitest';
-import { MongoInspectionExecutor } from '../src/core/inspection-executor';
 import { MongoControlAdapterImpl } from '../src/core/mongo-control-adapter';
 import { extractDb } from '../src/core/mongo-control-driver';
 
-function fakeControlDriver() {
+function fakeControlDriver(db: unknown = { __id: 'fake-db' }) {
   return {
     familyId: 'mongo',
     targetId: 'mongo',
-    db: { __id: 'fake-db' },
+    db,
     execute: () => {
       throw new Error('not used');
     },
@@ -81,9 +81,12 @@ describe('MongoControlAdapterImpl.createRunnerDependencies', () => {
     expect(introspectSchema).toHaveBeenCalledWith(driver);
   });
 
-  it('builds the inspection executor over the control driver db', () => {
-    const deps = new MongoControlAdapterImpl().createRunnerDependencies(fakeControlDriver());
-    expect(deps.inspectionExecutor).toBeInstanceOf(MongoInspectionExecutor);
+  it('builds the inspection executor over the control driver db', async () => {
+    const rows = [{ name: 'users' }];
+    const db = { listCollections: () => ({ toArray: async () => rows }) };
+    const deps = new MongoControlAdapterImpl().createRunnerDependencies(fakeControlDriver(db));
+
+    expect(await deps.inspectionExecutor.listCollections(new ListCollectionsCommand())).toBe(rows);
   });
 
   it('throws CONFIG.VALIDATION_FAILED when the value is not a Mongo control driver', () => {
