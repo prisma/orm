@@ -134,8 +134,6 @@ export function buildNextSteps(options: {
   return steps;
 }
 
-// biome-ignore lint/plugin/no-family-vocabulary: names the target on purpose — the title of the public upgrade guide
-export const PRISMA7_UPGRADE_GUIDE_TITLE = 'Prisma ORM 7 to 8 (PostgreSQL)';
 export const DB_SIGN_STEP =
   'Adopt your existing database: `prisma db sign` verifies it against the contract and records the signing marker and the `db` ref. It makes no change to the database schema.';
 export const PRISMA7_ROUTES_STEP =
@@ -144,7 +142,6 @@ export const PRISMA7_LOOP_STEP =
   'After each `prisma7 migrate dev`, run `prisma contract emit` and then `prisma db sign`.';
 export const PRISMA7_GENERATE_STEP =
   'Run `prisma7 generate` so the Prisma 7 client matches the Prisma 7 CLI.';
-export const PRISMA7_CUTOVER_STEP = `When the last route has moved, follow section 4 (cutover) of the "${PRISMA7_UPGRADE_GUIDE_TITLE}" upgrade guide.`;
 export const PRISMA7_QUICK_REFERENCE_STEP =
   'Open prisma-8.md for a quick reference on the transition loop and your first typed query.';
 export const AGENT_SKILLS_STEP =
@@ -186,7 +183,6 @@ function pushPrisma7Steps(
   if (options.prisma7.clientMoved) {
     push(PRISMA7_GENERATE_STEP);
   }
-  push(PRISMA7_CUTOVER_STEP);
   push(PRISMA7_QUICK_REFERENCE_STEP);
   push(AGENT_SKILLS_STEP);
 }

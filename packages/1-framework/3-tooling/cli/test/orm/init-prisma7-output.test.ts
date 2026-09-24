@@ -110,9 +110,8 @@ describe('the Prisma 7 result document', () => {
           '4. Adopt your existing database: `prisma db sign` verifies it against the contract and records the signing marker and the `db` ref. It makes no change to the database schema.',
           '5. Move your routes one at a time to the Prisma 8 client in src/prisma/db.ts.',
           '6. After each `prisma7 migrate dev`, run `prisma contract emit` and then `prisma db sign`.',
-          '7. When the last route has moved, follow section 4 (cutover) of the "Prisma ORM 7 to 8 (PostgreSQL)" upgrade guide.',
-          '8. Open prisma-8.md for a quick reference on the transition loop and your first typed query.',
-          '9. Working with a coding agent? Run `prisma init` in this project to set up the Prisma agent skills.',
+          '7. Open prisma-8.md for a quick reference on the transition loop and your first typed query.',
+          '8. Working with a coding agent? Run `prisma init` in this project to set up the Prisma agent skills.',
         ],
         warnings: [],
       });
@@ -160,9 +159,8 @@ describe('the Prisma 7 result document', () => {
         '3. Move your routes one at a time to the Prisma 8 client in src/prisma/db.ts.',
         '4. After each `prisma7 migrate dev`, run `prisma contract emit` and then `prisma db sign`.',
         '5. Run `prisma7 generate` so the Prisma 7 client matches the Prisma 7 CLI.',
-        '6. When the last route has moved, follow section 4 (cutover) of the "Prisma ORM 7 to 8 (PostgreSQL)" upgrade guide.',
-        '7. Open prisma-8.md for a quick reference on the transition loop and your first typed query.',
-        '8. Working with a coding agent? Run `prisma init` in this project to set up the Prisma agent skills.',
+        '6. Open prisma-8.md for a quick reference on the transition loop and your first typed query.',
+        '7. Working with a coding agent? Run `prisma init` in this project to set up the Prisma agent skills.',
       ]);
       expect(run.presented?.presentation.next).toEqual([
         expect.objectContaining({
@@ -179,7 +177,6 @@ describe('the Prisma 7 result document', () => {
           label: expect.stringContaining('prisma7 migrate dev'),
         }),
         expect.objectContaining({ kind: 'run-command', command: 'prisma7 generate' }),
-        expect.objectContaining({ kind: 'user-choice', label: expect.stringContaining('cutover') }),
         expect.objectContaining({
           kind: 'user-choice',
           label: expect.stringContaining('prisma-8.md'),

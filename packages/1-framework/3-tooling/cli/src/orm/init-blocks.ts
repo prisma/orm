@@ -3,7 +3,6 @@ import type { NextAction } from '@prisma/cli-engine/protocol';
 import {
   DB_SIGN_STEP,
   type InitOutput,
-  PRISMA7_CUTOVER_STEP,
   PRISMA7_LOOP_STEP,
   PRISMA7_QUICK_REFERENCE_STEP,
 } from '../commands/init/output';
@@ -85,7 +84,6 @@ export function buildInitNextActions(inputs: {
         runCommandAction('Regenerate the Prisma 7 client to match its CLI', 'prisma7 generate'),
       );
     }
-    actions.push(chooseAction(PRISMA7_CUTOVER_STEP));
     actions.push(chooseAction(PRISMA7_QUICK_REFERENCE_STEP));
     actions.push(
       runCommandAction('Set up the Prisma agent skills for your coding agent', 'prisma init'),

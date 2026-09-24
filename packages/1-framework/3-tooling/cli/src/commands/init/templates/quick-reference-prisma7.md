@@ -54,7 +54,6 @@ DATABASE_URL="postgresql://user:password@localhost:5432/mydb"
 1. Run `{{pkgRun}} db sign` once so Prisma 8 knows the database matches the contract.
 2. Move your routes to the Prisma 8 client in [`{{outputDir}}/db.ts`]({{outputDir}}/db.ts) one at a time.
 3. After each `prisma7 migrate dev`, run `{{pkgRun}} contract emit` and then `{{pkgRun}} db sign`.
-4. When the last route has moved, follow the cutover section of the Prisma 7 to 8 upgrade guide.
 
 ## Quick reference
 

@@ -100,7 +100,6 @@ function prisma7Inputs(overrides: Partial<ResolvedInitInputs> = {}): ResolvedIni
       kind: 'prisma7-schema',
       schemaPath: 'prisma/schema.prisma',
       provider: 'postgresql',
-      targetSource: 'provider',
     },
     sideBySide: null,
     warnings: [],
@@ -173,6 +172,7 @@ describe('the Prisma 7 scaffold', () => {
       expect(reference).toContain('prisma7 migrate dev');
       expect(reference).toContain('pnpm prisma db sign');
       expect(reference).not.toContain('model User');
+      expect(reference).not.toContain('cutover');
     });
 
     it('writes no README even when the project has src/index.ts', () => {
