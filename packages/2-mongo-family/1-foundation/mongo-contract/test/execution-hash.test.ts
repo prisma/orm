@@ -8,7 +8,7 @@ function mongoExecution(overrides?: { readonly field?: string; readonly onUpdate
     mutations: {
       defaults: [
         {
-          ref: { namespace: '__unbound__', model: 'Post', field: overrides?.field ?? 'updatedAt' },
+          ref: { namespace: '__unbound__', entry: 'posts', field: overrides?.field ?? 'updatedAt' },
           onCreate: timestampNow,
           ...(overrides?.onUpdate === false ? {} : { onUpdate: timestampNow }),
         },
@@ -24,7 +24,7 @@ function hashOf(execution: Record<string, unknown>): string {
 describe('computeExecutionHash over a Mongo execution section', () => {
   it('hashes a fixed section to a fixed value', () => {
     expect(hashOf(mongoExecution())).toBe(
-      '04c3f9bea4b4576a043838138389dd47a38aff0c5436681d164872d6806a4c91',
+      'f84b1eeee7c7c1c4ceeb98277516a2189072e6c86e21d90d20492b5743f79b65',
     );
   });
 

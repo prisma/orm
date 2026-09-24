@@ -18,7 +18,7 @@ function withExecution(defaults: readonly unknown[]) {
 }
 
 const validDefault = {
-  ref: { namespace: '__unbound__', model: 'Item', field: 'updatedAt' },
+  ref: { namespace: '__unbound__', entry: 'items', field: 'updatedAt' },
   onCreate: timestampNow,
   onUpdate: timestampNow,
 };
@@ -26,7 +26,7 @@ const validDefault = {
 const validationFailed = expect.objectContaining({ code: 'CONTRACT.VALIDATION_FAILED' });
 
 describe('Mongo contract execution section', () => {
-  it('validates a section whose defaults name a model and a field', () => {
+  it('validates a section whose defaults name an entry and a field', () => {
     const contract = new MongoContractSerializer().deserializeContract(
       withExecution([validDefault]),
     );
@@ -36,7 +36,7 @@ describe('Mongo contract execution section', () => {
     });
   });
 
-  it('round-trips through canonicalization with execution between storage and capabilities', () => {
+  it('canonicalizes the section right after storage and before capabilities', () => {
     const contract = new MongoContractSerializer().deserializeContract(
       withExecution([validDefault]),
     );
@@ -62,7 +62,17 @@ describe('Mongo contract execution section', () => {
     ).toThrow(validationFailed);
   });
 
-  it('rejects a ref with a table key next to model and field', () => {
+  it('rejects a default whose ref names a model instead of an entry', () => {
+    const modelRef = {
+      ref: { namespace: '__unbound__', model: 'Item', field: 'updatedAt' },
+      onCreate: timestampNow,
+    };
+    expect(() =>
+      new MongoContractSerializer().deserializeContract(withExecution([modelRef])),
+    ).toThrow(validationFailed);
+  });
+
+  it('rejects a ref with a table key next to entry and field', () => {
     const extraKey = { ...validDefault, ref: { ...validDefault.ref, table: 'items' } };
     expect(() =>
       new MongoContractSerializer().deserializeContract(withExecution([extraKey])),

@@ -1,23 +1,17 @@
-import type { ExecutionMutationDefaultValue } from '@internal/contract/types';
+import type { ContractExecutionSection } from '@internal/contract/types';
 import { expectTypeOf, test } from 'vitest';
-import type {
-  MongoContractExecutionSection,
-  MongoExecutionMutationDefault,
-} from '../src/contract-types';
+import type { MongoContract } from '../src/contract-types';
 
-test('a Mongo mutation default names a model and a field', () => {
-  expectTypeOf<MongoExecutionMutationDefault['ref']>().toEqualTypeOf<{
-    readonly namespace: string;
-    readonly model: string;
-    readonly field: string;
-  }>();
-  expectTypeOf<MongoExecutionMutationDefault['onCreate']>().toEqualTypeOf<
-    ExecutionMutationDefaultValue | undefined
-  >();
+test('a Mongo contract carries the framework execution section', () => {
+  expectTypeOf<MongoContract['execution']>().toEqualTypeOf<ContractExecutionSection | undefined>();
 });
 
-test('the Mongo execution section lists Mongo mutation defaults', () => {
+test('a Mongo mutation default names an entry and a field', () => {
   expectTypeOf<
-    MongoContractExecutionSection['mutations']['defaults'][number]
-  >().toEqualTypeOf<MongoExecutionMutationDefault>();
+    NonNullable<MongoContract['execution']>['mutations']['defaults'][number]['ref']
+  >().toEqualTypeOf<{
+    readonly namespace: string;
+    readonly entry: string;
+    readonly field: string;
+  }>();
 });

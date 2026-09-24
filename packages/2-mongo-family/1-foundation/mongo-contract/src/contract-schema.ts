@@ -20,7 +20,7 @@ const ExecutionMutationDefaultSchema = type({
   ref: {
     '+': 'reject',
     namespace: 'string',
-    model: 'string',
+    entry: 'string',
     field: 'string',
   },
   'onCreate?': ExecutionMutationDefaultValueSchema,
