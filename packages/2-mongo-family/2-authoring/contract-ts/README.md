@@ -23,7 +23,7 @@ The current implementation supports:
 - top-level value objects referenced from fields
 - Mongo collection index authoring via model-local `indexes`
 - Mongo collection option authoring via model-local `collectionOptions`
-- base Mongo codec helpers such as `field.objectId()`, `field.string()`, `field.double()`, `field.int32()`, `field.bool()`, `field.date()`, and `field.vector()`
+- base Mongo codec helpers such as `field.objectId()`, `field.string()`, `field.double()`, `field.int32()`, `field.bool()`, `field.date()`, `field.int64()`, `field.decimal128()`, `field.binary()`, `field.json()`, and `field.vector()`
 
 This first slice does not yet cover union or dict authoring, or Mongo validator authoring.
 
