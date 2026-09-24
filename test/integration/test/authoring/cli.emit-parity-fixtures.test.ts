@@ -1,12 +1,13 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import type { ContractSourceContext, PrismaNextConfig } from '@internal/cli/config-types';
 import { enrichContract } from '@internal/cli/control-api';
+import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import { loadConfig } from '@internal/config-loader';
 import { createControlStack } from '@internal/framework-components/control';
 import { sqlContractCanonicalizationHooks } from '@internal/sql-contract/canonicalization-hooks';
 import { sqlEmission } from '@internal/sql-contract-emitter';
 import { timeouts } from '@repo/test-utils';
+import { join, relative, sep } from 'pathe';
 import { describe, expect, it } from 'vitest';
 import { emit } from '../../utils/emit';
 import { runOnEngine } from '../utils/cli-test-helpers';
@@ -17,6 +18,33 @@ import {
 } from './authoring-parity-test-helpers';
 
 const writeExpected = process.env['UPDATE_AUTHORING_PARITY_EXPECTED'] === '1';
+
+/**
+ * Diagnostic `sourceId` values are each member's resolved absolute path, but
+ * the checked-in fixtures predate that convention and assert a stable
+ * relative form. The per-run test directory is machine- and run-specific, so
+ * it cannot appear in a checked-in fixture; this relativizes it back to the
+ * `./`-prefixed form the fixtures already carry. A `sourceId` outside
+ * `testDir` (there is none today, but a future multi-directory case could
+ * have one) passes through unchanged.
+ */
+function relativizeSourceId(sourceId: string, testDir: string): string {
+  const rel = relative(testDir, sourceId);
+  if (rel === '' || rel.startsWith(`..${sep}`) || rel === '..') {
+    return sourceId;
+  }
+  return `./${rel.split(sep).join('/')}`;
+}
+
+function relativizeDiagnostics(
+  diagnostics: readonly ContractSourceDiagnostic[],
+  testDir: string,
+): readonly ContractSourceDiagnostic[] {
+  return diagnostics.map((diagnostic) => ({
+    ...diagnostic,
+    sourceId: relativizeSourceId(diagnostic.sourceId, testDir),
+  }));
+}
 
 function sourceContextFromConfig(config: PrismaNextConfig): ContractSourceContext {
   const stack = createControlStack({
@@ -66,6 +94,32 @@ function parseExpectedDiagnosticsFixture(
 ): ExpectedDiagnosticsFixture {
   return JSON.parse(expectedDiagnosticsJson) as ExpectedDiagnosticsFixture;
 }
+
+describe('relativizeSourceId', () => {
+  it('relativizes a sourceId under the test directory to the ./-prefixed POSIX form', () => {
+    expect(relativizeSourceId(join('/tmp/test-xxx', 'schema.prisma'), '/tmp/test-xxx')).toBe(
+      './schema.prisma',
+    );
+  });
+
+  it('relativizes a nested member path', () => {
+    expect(
+      relativizeSourceId(join('/tmp/test-xxx', 'sub', 'dir', 'file.prisma'), '/tmp/test-xxx'),
+    ).toBe('./sub/dir/file.prisma');
+  });
+
+  it('passes a sourceId outside the test directory through unchanged', () => {
+    expect(relativizeSourceId('/elsewhere/schema.prisma', '/tmp/test-xxx')).toBe(
+      '/elsewhere/schema.prisma',
+    );
+  });
+
+  it('passes a sourceId that only shares the test directory as a name prefix through unchanged', () => {
+    expect(relativizeSourceId('/tmp/test-xxx-other/schema.prisma', '/tmp/test-xxx')).toBe(
+      '/tmp/test-xxx-other/schema.prisma',
+    );
+  });
+});
 
 const parityCases = listAuthoringParityFixtureCases();
 const diagnosticsCases = listAuthoringDiagnosticsFixtureCases();
@@ -258,9 +312,14 @@ describe('emit parity fixture diagnostics', () => {
           throw new Error(`Expected PSL source provider to fail for ${diagnosticsCase.caseName}`);
         }
 
+        const actualDiagnostics = relativizeDiagnostics(
+          sourceResult.failure.diagnostics,
+          testSetup.testDir,
+        );
+
         expect(sourceResult.failure.summary).toBe(expectedFixture.failureSummary);
-        expect(sourceResult.failure.diagnostics).toHaveLength(expectedFixture.diagnostics.length);
-        expect(sourceResult.failure.diagnostics).toEqual(
+        expect(actualDiagnostics).toHaveLength(expectedFixture.diagnostics.length);
+        expect(actualDiagnostics).toEqual(
           expect.arrayContaining(
             expectedFixture.diagnostics.map((diagnostic) =>
               expect.objectContaining({

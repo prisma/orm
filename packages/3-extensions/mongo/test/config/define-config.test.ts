@@ -97,6 +97,21 @@ describe('defineConfig facade', () => {
     expect(config.contract?.output).toBe('./prisma/contract.json');
   });
 
+  it('derives output from the static prefix directory of a glob contract', () => {
+    const config = defineConfig({ contract: './prisma/**/*.prisma' });
+
+    expect(config.contract?.output).toBe('./prisma/contract.json');
+    expect(config.contract?.source.inputs).toEqual(['./prisma/**/*.prisma']);
+  });
+
+  it('derives the same output from a backslash-separated glob contract as its forward-slash twin', () => {
+    const forwardSlash = defineConfig({ contract: './prisma/**/*.prisma' });
+    const backslash = defineConfig({ contract: '.\\prisma\\**\\*.prisma' });
+
+    expect(backslash.contract?.output).toBe(forwardSlash.contract?.output);
+    expect(backslash.contract?.output).toBe('./prisma/contract.json');
+  });
+
   it('passes db config through', () => {
     const config = defineConfig({
       contract: './prisma/contract.prisma',

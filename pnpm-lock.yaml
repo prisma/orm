@@ -33,6 +33,9 @@ catalogs:
     pg:
       specifier: 8.22.0
       version: 8.22.0
+    tinyglobby:
+      specifier: ^0.2.17
+      version: 0.2.17
     tsdown:
       specifier: 0.22.14
       version: 0.22.14
@@ -1533,6 +1536,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@prisma/cli-engine':
         specifier: 0.6.0
@@ -2504,6 +2510,9 @@ importers:
       '@internal/adapter-postgres':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../3-targets/6-adapters/postgres
+      '@internal/config-loader':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../../1-framework/3-tooling/config-loader
       '@internal/driver-postgres':
         specifier: workspace:8.0.0-rc.11
         version: link:../../../3-targets/7-drivers/postgres
@@ -2564,6 +2573,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@repo/test-utils':
         specifier: workspace:8.0.0-rc.11
@@ -3074,6 +3086,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/emitter':
         specifier: workspace:8.0.0-rc.11
@@ -3417,7 +3432,13 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
+      '@internal/config-loader':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../1-framework/3-tooling/config-loader
       '@internal/emitter':
         specifier: workspace:8.0.0-rc.11
         version: link:../../1-framework/3-tooling/emitter
@@ -3578,6 +3599,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/psl-parser':
         specifier: workspace:8.0.0-rc.11
@@ -4810,6 +4834,9 @@ importers:
       pluralize:
         specifier: ^8.0.0
         version: 8.0.0
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
       ts-toolbelt:
         specifier: ^9.6.0
         version: 9.6.0
@@ -4953,6 +4980,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/mongo':
         specifier: workspace:8.0.0-rc.11
@@ -4996,6 +5026,9 @@ importers:
       pg:
         specifier: 'catalog:'
         version: 8.22.0
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/postgres':
         specifier: workspace:8.0.0-rc.11
@@ -5030,6 +5063,9 @@ importers:
       pathe:
         specifier: ^2.0.3
         version: 2.0.3
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
     devDependencies:
       '@internal/sqlite':
         specifier: workspace:8.0.0-rc.11
@@ -5244,6 +5280,9 @@ importers:
       strip-ansi:
         specifier: ^7.2.0
         version: 7.2.0
+      tinyglobby:
+        specifier: 'catalog:'
+        version: 0.2.17
       vite:
         specifier: ^7.0.0 || ^8.0.0
         version: 8.1.0(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0)
@@ -5517,6 +5556,9 @@ importers:
         specifier: 'catalog:'
         version: 2.2.3
     devDependencies:
+      '@internal/config':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../packages/1-framework/1-core/config
       '@internal/framework-components':
         specifier: workspace:8.0.0-rc.11
         version: link:../../packages/1-framework/1-core/framework-components

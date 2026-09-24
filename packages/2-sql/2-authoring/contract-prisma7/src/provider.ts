@@ -98,7 +98,7 @@ export function prisma7Contract(
         const [absolutePath] = context.resolvedInputs;
         if (absolutePath === undefined) {
           throw new InternalError(
-            'prisma7Contract: context.resolvedInputs is empty. The CLI config loader should populate it positional-matched with source.inputs.',
+            'prisma7Contract: context.resolvedInputs is empty. The CLI config loader should populate it from source.inputs.',
           );
         }
         let files: SchemaFile[];

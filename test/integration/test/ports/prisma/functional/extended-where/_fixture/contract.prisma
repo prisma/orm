@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `extended-where`
 // (packages/client/tests/functional/extended-where, postgres matrix entry):
 //

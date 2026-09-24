@@ -58,7 +58,7 @@ export const mongoFrameworkComponents = [mongoTargetDescriptor, mongoAdapter] as
 function writeSchemaToTempFile(schema: string): string {
   const dir = mkdtempSync(join(tmpdir(), 'psl-list-'));
   const path = join(dir, 'schema.prisma');
-  writeFileSync(path, schema, 'utf-8');
+  writeFileSync(path, `// use prisma-8\n\n${schema}`, 'utf-8');
   return path;
 }
 

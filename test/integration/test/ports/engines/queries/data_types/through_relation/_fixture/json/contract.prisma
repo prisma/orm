@@ -1,3 +1,5 @@
+// use prisma-8
+
 model Parent {
   id Int @id
   children Child[]

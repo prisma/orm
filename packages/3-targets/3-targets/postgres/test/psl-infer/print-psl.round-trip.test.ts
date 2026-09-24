@@ -138,7 +138,7 @@ function roundTrippedDefaults(columns: readonly SqlColumnIRInput[]) {
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const emitted = interpretPslDocumentToSqlContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     capabilities: { sql: { scalarList: true } },

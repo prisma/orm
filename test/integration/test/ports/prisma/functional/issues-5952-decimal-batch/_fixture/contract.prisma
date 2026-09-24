@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `issues/5952-decimal-batch`
 // (postgres matrix entry):
 //

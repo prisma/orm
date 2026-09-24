@@ -1,3 +1,5 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import type { ContractSourceProvider } from '@internal/config/config-types';
 import type { Contract, LedgerEntryRecord } from '@internal/contract/types';
 import type {
@@ -15,6 +17,7 @@ import type { EmissionSpi } from '@internal/framework-components/emission';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok } from '@internal/utils/result';
 import { timeouts } from '@repo/test-utils';
+import { join } from 'pathe';
 import { describe, expect, it, vi } from 'vitest';
 import { createControlClient } from '../../src/control-api/client';
 import type { ControlProgressEvent } from '../../src/control-api/types';
@@ -466,33 +469,41 @@ describe('ControlClient progress emission', () => {
     );
 
     it(
-      'passes declared source inputs to the provider',
+      'passes the expanded source inputs to the provider',
       async () => {
-        const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
-        const load = vi.fn<ContractSourceProvider['load']>(async () => ok(emittableContract()));
-        const source = createSourceProvider(load, ['/tmp/schema.prisma']);
+        const dir = await mkdtemp(join(tmpdir(), 'control-client-emit-'));
+        try {
+          const schemaPath = join(dir, 'schema.prisma');
+          await writeFile(schemaPath, 'model User {}\n', 'utf-8');
 
-        const client = createControlClient({
-          family: mockFamily,
-          target: mockTarget,
-          adapter: mockAdapter,
-        });
+          const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
+          const load = vi.fn<ContractSourceProvider['load']>(async () => ok(emittableContract()));
+          const source = createSourceProvider(load, [schemaPath]);
 
-        const result = await client.emit({
-          contractConfig: {
-            source,
-            output: '/tmp/contract.json',
-          },
-        });
+          const client = createControlClient({
+            family: mockFamily,
+            target: mockTarget,
+            adapter: mockAdapter,
+          });
 
-        await client.close();
+          const result = await client.emit({
+            contractConfig: {
+              source,
+              output: '/tmp/contract.json',
+            },
+          });
 
-        expect(result.ok).toBe(true);
-        expect(load).toHaveBeenCalledWith(
-          expect.objectContaining({
-            resolvedInputs: ['/tmp/schema.prisma'],
-          }),
-        );
+          await client.close();
+
+          expect(result.ok).toBe(true);
+          expect(load).toHaveBeenCalledWith(
+            expect.objectContaining({
+              resolvedInputs: [schemaPath],
+            }),
+          );
+        } finally {
+          await rm(dir, { recursive: true, force: true });
+        }
       },
       timeouts.databaseOperation,
     );

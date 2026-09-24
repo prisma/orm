@@ -9,20 +9,21 @@ import { normalizeError } from './normalize-error';
 
 const NOTHING_TO_FORMAT = 'Nothing to format (contract source is not PSL).';
 
+function formattedBlock(path: string, cwd: string): Block {
+  return {
+    kind: 'summary',
+    status: 'ok',
+    text: [{ text: 'Formatted ' }, { text: relative(cwd, path), tone: 'identifier' }],
+  };
+}
+
 function formatPresentations(document: FormatOperationResult, cwd: string): Presentations {
-  const path = document.path;
   return {
     stdout: () => [],
     next: () => [],
     human: (): readonly Block[] =>
-      document.formatted && path !== undefined
-        ? [
-            {
-              kind: 'summary',
-              status: 'ok',
-              text: [{ text: 'Formatted ' }, { text: relative(cwd, path), tone: 'identifier' }],
-            },
-          ]
+      document.formatted
+        ? document.paths.map((path) => formattedBlock(path, cwd))
         : [{ kind: 'summary', status: 'info', text: NOTHING_TO_FORMAT }],
     json: () => document,
   };
@@ -33,11 +34,11 @@ export function createFormatCommand(execute: typeof executeFormat = executeForma
     help: {
       summary: 'Format your PSL contract source',
       description:
-        'Formats the Prisma schema (PSL) contract source declared in your config\n' +
-        '(contract.source.inputs[0]) in place. Only runs when contract.source.format\n' +
-        "is 'psl'; a TypeScript or unset source is left untouched. Indent and newline\n" +
-        'are read from the optional formatter config section, defaulting to two\n' +
-        'spaces and the system newline.',
+        'Formats every file matched by the PSL contract source declared in your\n' +
+        'config (contract.source.inputs) in place. Only runs when\n' +
+        "contract.source.format is 'psl'; a TypeScript or unset source is left\n" +
+        'untouched. Indent and newline are read from the optional formatter config\n' +
+        'section, defaulting to two spaces and the system newline.',
       examples: ['contract format', 'contract format --json'],
     },
     needs: { config: ormConfigSection },

@@ -119,13 +119,27 @@ Pack refs are pure JSON-friendly objects that make TypeScript contract authoring
 
 This package contributes the built-in Postgres query operations — `ilike`, and the three full-text search operations below — through `queryOperations` on its runtime descriptor, with their types on `./operation-types`. Emitted `contract.d.ts` files import them from there.
 
-`fullTextMatches` is a predicate, `fullTextRank` scores a row for ordering, and `fullTextHeadline` returns the matched text with `<b>` around the matching words. All three take the search string as a bound parameter and lower to `websearch_to_tsquery`, so a user can type `"an exact phrase"` and `-excluded` and get what those mean in a search box.
+`fullTextMatches` is a predicate, `fullTextRank` scores a row for ordering, and `fullTextHeadline` returns the matched text with `<b>` around the matching words. All three take a `tsquery` as their first argument. A bare string is a type error: Postgres would read it as `tsquery` syntax without lowercasing or stemming it, so a search-box string would match nothing or fail. Build the query with a helper from `./full-text`:
 
-Each takes an options object as its second argument. `language` is common to all three and defaults to `english`; `fullTextRank` adds `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (which selects `ts_rank_cd`); `fullTextHeadline` adds `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`, which become `ts_headline`'s fourth argument:
+- `websearchToTsquery(text)` for a search box: quotes, `or` and `-` work, and it never errors. `plaintoTsquery` requires every word, and `phrasetoTsquery` requires the words in order.
+- `` tsquery`${term}:*` `` for `tsquery` operator syntax around user input, such as a typeahead prefix match. The literal parts are trusted syntax the application writes. Each interpolated value becomes exactly one quoted term, so user input cannot add operators or break the syntax. An empty value adds no words, like a stop word. A value with several words becomes a phrase: `` tsquery`${'new y'}:*` `` gives `'new':* <-> 'y':*`, so the words must be adjacent and in order, and `:*` applies to each word. Do not put quotes around the interpolation yourself: `` tsquery`'${term}':*` `` is a syntax error for every input. Postgres `to_tsquery` then lowercases and stems every word. `` tsquery({ language: 'german' })`...` `` picks the configuration.
+- `toTsquery(text)` for operator syntax the application writes in full, such as `'zebra' & !'graze'`. Malformed text fails at execution, so never pass user input; use the `tsquery` tag instead.
+
+The four parsers take text (a string, or a column of any `textual` type such as `text` or `varchar`) and `{ language? }`, bind the text as a parameter, and lower to the Postgres function of the same name. They are also registered as query operations that attach to no column, so the SQL builder's `fns` has them by name; the ORM reaches them, and the `tsquery` tag, through the import. A `tsquery` value read back from a query can be passed straight back as the query; it binds as a `tsquery` parameter.
+
+Each operation takes an options object as its second argument. `language` is common to all three, defaults to `english`, and is the configuration of the column-side `to_tsvector` the index covers (the parser's or tag's own `language` governs the query side); `fullTextRank` adds `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (which selects `ts_rank_cd`); `fullTextHeadline` adds `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`, which become `ts_headline`'s fourth argument:
 
 ```typescript
-row.text.fullTextRank(query, { language: 'german', normalization: 32, coverDensity: true });
-row.text.fullTextHeadline(query, { startSel: '<mark>', stopSel: '</mark>', maxWords: 20 });
+row.text.fullTextRank(websearchToTsquery(query, { language: 'german' }), {
+  language: 'german',
+  normalization: 32,
+  coverDensity: true,
+});
+row.text.fullTextHeadline(websearchToTsquery(query), {
+  startSel: '<mark>',
+  stopSel: '</mark>',
+  maxWords: 20,
+});
 ```
 
 Postgres takes no parameter in any of those positions, so every option is written into the SQL as a literal and is therefore checked first: an unknown configuration, a normalization outside 0 to 63, a word count that is not a positive integer, a `minWords` above `maxWords`, or a marker carrying `ts_headline`'s own `"` `,` `=` delimiters all raise `RUNTIME.ARGUMENT_INVALID` before a statement is built.
@@ -133,20 +147,29 @@ Postgres takes no parameter in any of those positions, so every option is writte
 Through the ORM:
 
 ```typescript
+import { tsquery, websearchToTsquery } from '@internal/target-postgres/full-text';
+
+const q = websearchToTsquery(query);
 const hits = await db.orm.public.Message.select('id', 'text')
-  .where((row) => row.text.fullTextMatches(query))
-  .orderBy((row) => row.text.fullTextRank(query).desc())
+  .where((row) => row.text.fullTextMatches(q))
+  .orderBy((row) => row.text.fullTextRank(q).desc())
   .limit(20)
+  .all();
+
+const suggestions = await db.orm.public.Message.select('id', 'text')
+  .where((row) => row.text.fullTextMatches(tsquery`${term}:*`))
   .all();
 ```
 
-Through the SQL builder:
+Through the SQL builder, with one query for the filter, the order and the snippet, so the snippet highlights what selected the row:
 
 ```typescript
+const q = websearchToTsquery(query);
 const snippets = db.sql.public.message
   .select('id')
-  .select('snippet', (f, fns) => fns.fullTextHeadline(f.text, query))
-  .where((f, fns) => fns.fullTextMatches(f.text, query))
+  .select('snippet', (f, fns) => fns.fullTextHeadline(f.text, q))
+  .where((f, fns) => fns.fullTextMatches(f.text, q))
+  .orderBy((f, fns) => fns.fullTextRank(f.text, q), { direction: 'desc' })
   .build();
 ```
 
@@ -209,7 +232,8 @@ Postgres prints a `timestamptz` value in the session's time zone, and dates and 
 - `./control`: Control plane entry point for `SqlControlTargetDescriptor`
 - `./runtime`: Runtime entry point for target-specific runtime code
 - `./pack`: Pure pack ref for `defineContract({ family, target: postgresPack, ... })`
-- `./operation-types`: `QueryOperationTypes` for the built-in Postgres query operations, plus `FullTextSearchLanguage`
+- `./operation-types`: `QueryOperationTypes` for the built-in Postgres query operations, and the types their signatures name (`TsqueryArgument`, the `FullText*Options` types, `FullTextSearchLanguage`)
+- `./full-text`: what an application calls to build a full-text query: the four parsers, the `tsquery` tag, and their types
 - `./prisma7-binding`: `prisma7PostgresBinding`, this target's view for the Prisma 7 contract source (see above)
 
 ## Tests

@@ -68,7 +68,7 @@ function pslIndexes() {
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   const result = interpretPslDocumentToSqlContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     capabilities: {},

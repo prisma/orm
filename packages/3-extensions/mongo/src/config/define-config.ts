@@ -10,6 +10,7 @@ import { typescriptContractFromPath } from '@internal/mongo-contract-ts/config-t
 import { mongoTargetDescriptor } from '@internal/target-mongo/control';
 import { ifDefined } from '@internal/utils/defined';
 import { extname, join } from 'pathe';
+import { isDynamicPattern } from 'tinyglobby';
 
 export interface MongoConfigOptions {
   readonly contract: string;
@@ -23,7 +24,20 @@ export interface MongoConfigOptions {
   };
 }
 
+function staticPrefixDirectory(pattern: string): string {
+  const staticSegments: string[] = [];
+  for (const segment of pattern.replaceAll('\\', '/').split('/')) {
+    if (isDynamicPattern(segment)) break;
+    staticSegments.push(segment);
+  }
+  return staticSegments.join('/');
+}
+
 function deriveOutputPath(contractPath: string): string {
+  if (isDynamicPattern(contractPath)) {
+    const prefix = staticPrefixDirectory(contractPath);
+    return prefix.length === 0 ? 'contract.json' : `${prefix}/contract.json`;
+  }
   const ext = extname(contractPath);
   if (ext.length === 0) {
     return `${contractPath}.json`;

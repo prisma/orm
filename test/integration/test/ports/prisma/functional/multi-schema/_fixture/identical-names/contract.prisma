@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma@a6d0155
 // packages/client/tests/functional/multi-schema (postgres matrix entry, mapTable = 'IDENTICAL_NAMES').
 //

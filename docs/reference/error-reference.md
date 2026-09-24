@@ -805,7 +805,7 @@ A lane terminal (SQL DSL `.build()`, ORM collection terminal) received an annota
 
 ### RUNTIME.ARGUMENT_INVALID
 
-A built-in Postgres query operation received an argument it cannot use. Today the only such argument is the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`: the language is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused. Raised while the query is being built, before any SQL reaches the database. Payload: `helper`, `argument`, `received`.
+A built-in Postgres query operation or full-text helper received an argument it cannot use. One case is the `language` of `fullTextMatches`, `fullTextRank` and `fullTextHeadline`, of the `tsquery` parsers (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`) and of the `tsquery` template tag: the language is written into the SQL as an inline literal rather than a bound parameter, so it is checked against the text-search configurations a stock PostgreSQL server ships with and anything else is refused. The other case is a literal part of a `tsquery` template with an invalid JavaScript escape, such as `\u`: JavaScript gives the tag no text for that part, so the tag refuses it rather than drop it. Raised while the query is being built, before any SQL reaches the database. Payload: `helper`, `argument`, `received`.
 
 ### RUNTIME.AST_INVALID
 

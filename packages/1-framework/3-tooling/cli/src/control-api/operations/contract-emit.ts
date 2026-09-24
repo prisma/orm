@@ -1,5 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import type { PrismaNextConfig } from '@internal/config/config-types';
+import { expandContractInputs } from '@internal/config-loader';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
 import { type ControlStack, createControlStack } from '@internal/framework-components/control';
@@ -276,7 +277,7 @@ async function resolveContractSource(
     codecLookup: stack.codecLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     dataTypeLookup: stack.dataTypeLookup,
-    resolvedInputs: contractConfig.source.inputs ?? [],
+    resolvedInputs: await abortable(signal)(expandContractInputs(contractConfig.source.inputs)),
     capabilities: stack.capabilities,
   };
 

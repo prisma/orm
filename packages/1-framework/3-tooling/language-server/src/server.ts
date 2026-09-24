@@ -1,7 +1,7 @@
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { findNearestConfigPathForFile } from '@internal/config-loader';
 import { CliStructuredError } from '@internal/errors/control';
-import type { SymbolTable } from '@internal/psl-parser';
+import { isPrismaNextSchema, renameLegacyDirective, type SymbolTable } from '@internal/psl-parser';
 import { type FormatOptions, format } from '@internal/psl-parser/format';
 import { join } from 'pathe';
 import {
@@ -46,7 +46,6 @@ import {
   type DocumentArtifacts,
   type ProjectArtifacts,
 } from './project-artifacts';
-import { isPrismaNextSchema, renameLegacyDirective } from './schema-directive';
 import { canonicalFileIdentity, type SchemaInputSet } from './schema-inputs';
 import { buildSemanticTokens, semanticTokensLegend } from './semantic-tokens';
 import { providePslSignatureHelp } from './signature-help';

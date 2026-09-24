@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Port of prisma/prisma@a6d0155 packages/client/tests/functional/composites/object
 // (mongodb matrix entry).
 //

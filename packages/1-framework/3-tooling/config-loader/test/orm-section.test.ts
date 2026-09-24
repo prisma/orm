@@ -83,6 +83,21 @@ describe('the orm section', () => {
     });
   });
 
+  it('resolves glob pattern inputs against the config file and keeps the pattern', () => {
+    const raw = validRaw({
+      contract: {
+        source: { load: () => ({}), inputs: ['./prisma/**/*.prisma', './extra.prisma'] },
+      },
+    });
+
+    const result = validateOrmSection(raw, provenanceFor(raw));
+
+    expect(result.ok && result.value.contract?.source.inputs).toEqual([
+      '/project/prisma/**/*.prisma',
+      '/project/extra.prisma',
+    ]);
+  });
+
   it('leaves an absolute path alone', () => {
     const raw = validRaw({ migrations: { dir: '/elsewhere/db' } });
 

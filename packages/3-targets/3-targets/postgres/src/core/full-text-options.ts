@@ -18,7 +18,11 @@ import {
 } from './text-search-languages';
 
 export interface FullTextMatchesOptions {
-  /** Text-search configuration. Defaults to `english`. */
+  /**
+   * Text-search configuration of the searched column, the `to_tsvector` side. Defaults to
+   * `english`. It must match the `@@fullTextIndex` language for the index to be used. It does not
+   * configure the query: a parser or the `tsquery` tag takes its own `language`.
+   */
   readonly language?: FullTextSearchLanguage;
 }
 
