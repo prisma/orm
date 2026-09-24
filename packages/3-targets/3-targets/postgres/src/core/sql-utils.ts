@@ -14,6 +14,8 @@ import { postgresError } from './errors';
 
 const MAX_IDENTIFIER_LENGTH = 63;
 
+const MAX_UTF8_BYTES_PER_UTF16_UNIT = 3;
+
 const utf8 = new TextEncoder();
 
 /**
@@ -47,7 +49,10 @@ export function quoteIdentifier(identifier: string): string {
       meta: { value: identifier.replace(/\0/g, '\\0'), context: 'identifier' },
     });
   }
-  if (byteLength(identifier) > MAX_IDENTIFIER_LENGTH) {
+  if (
+    identifier.length * MAX_UTF8_BYTES_PER_UTF16_UNIT > MAX_IDENTIFIER_LENGTH &&
+    byteLength(identifier) > MAX_IDENTIFIER_LENGTH
+  ) {
     console.warn(
       `Identifier "${identifier.slice(0, 20)}..." exceeds PostgreSQL's ${MAX_IDENTIFIER_LENGTH}-byte limit and will be truncated`,
     );
