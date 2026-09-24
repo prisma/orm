@@ -51,15 +51,29 @@ export interface ContractSourceContext {
 }
 
 /**
- * A contract source: the inputs it reads and the `load` that turns them into a
- * contract. The framework never enumerates sources. `format` is a tag the
- * owning package gives its source; tooling that acts on one kind of source
- * checks for the capability that package exports, never for the tag alone.
+ * A contract source is PSL or TypeScript: the inputs it reads and the `load`
+ * that turns them into a contract. `format` says which language the inputs are
+ * written in; a source that declares none is a TypeScript source. A PSL source
+ * may also carry the `interpret` capability `@internal/psl-parser` defines;
+ * tooling that rewrites PSL in place narrows through `hasPslInterpreter`,
+ * because PSL text exists that the Prisma 8 reader does not interpret, such as
+ * a Prisma 7 schema.
  */
-export interface ContractSourceProvider {
+export type ContractSourceFormat = 'psl' | 'typescript';
+
+export interface ContractSourceProviderBase {
   readonly inputs?: readonly string[];
-  readonly format?: string;
   readonly load: (
     context: ContractSourceContext,
   ) => Promise<Result<Contract, ContractSourceDiagnostics>>;
 }
+
+export interface PslContractSourceProvider extends ContractSourceProviderBase {
+  readonly format: 'psl';
+}
+
+export interface TypeScriptContractSourceProvider extends ContractSourceProviderBase {
+  readonly format?: 'typescript';
+}
+
+export type ContractSourceProvider = PslContractSourceProvider | TypeScriptContractSourceProvider;

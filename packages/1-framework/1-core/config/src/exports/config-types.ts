@@ -10,5 +10,9 @@ export type {
   ContractSourceDiagnosticPosition,
   ContractSourceDiagnosticSpan,
   ContractSourceDiagnostics,
+  ContractSourceFormat,
   ContractSourceProvider,
+  ContractSourceProviderBase,
+  PslContractSourceProvider,
+  TypeScriptContractSourceProvider,
 } from '../contract-source-types';

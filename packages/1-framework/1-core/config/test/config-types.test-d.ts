@@ -12,7 +12,10 @@ import { expectTypeOf, test } from 'vitest';
 import { defineConfig, type FormatterConfig, type PrismaNextConfig } from '../src/config-types';
 import type {
   ContractSourceDiagnostic,
+  ContractSourceFormat,
   ContractSourceProvider,
+  PslContractSourceProvider,
+  TypeScriptContractSourceProvider,
 } from '../src/contract-source-types';
 
 const mockHook = {
@@ -121,7 +124,7 @@ test('accepts contract source providers with declared inputs', () => {
   };
 
   const result = defineConfig(config);
-  expectTypeOf(result.contract!.source.format).toEqualTypeOf<string | undefined>();
+  expectTypeOf(result.contract!.source.format).toEqualTypeOf<ContractSourceFormat | undefined>();
   expectTypeOf(result.contract!.source.inputs).toEqualTypeOf<readonly string[] | undefined>();
   expectTypeOf(result.contract!.source.load).toEqualTypeOf<ContractSourceProvider['load']>();
 });
@@ -142,13 +145,20 @@ test('source diagnostics require a filename but not a span', () => {
   void missingFilename;
 });
 
-test('a contract source is one open interface: the framework enumerates no formats', () => {
-  expectTypeOf<ContractSourceProvider['format']>().toEqualTypeOf<string | undefined>();
-  const load: ContractSourceProvider['load'] = async () => ok({} as never);
-  const tagged: ContractSourceProvider = { format: 'anything', inputs: ['./x'], load };
-  const untagged: ContractSourceProvider = { inputs: ['./x'], load };
-  expectTypeOf(tagged).toExtend<ContractSourceProvider>();
-  expectTypeOf(untagged).toExtend<ContractSourceProvider>();
+test('a contract source is PSL or TypeScript, and nothing else', () => {
+  expectTypeOf<ContractSourceProvider>().toEqualTypeOf<
+    PslContractSourceProvider | TypeScriptContractSourceProvider
+  >();
+  expectTypeOf<ContractSourceFormat>().toEqualTypeOf<'psl' | 'typescript'>();
+  expectTypeOf<PslContractSourceProvider['format']>().toEqualTypeOf<'psl'>();
+  expectTypeOf<TypeScriptContractSourceProvider['format']>().toEqualTypeOf<
+    'typescript' | undefined
+  >();
+  const untagged: ContractSourceProvider = { inputs: [], load: async () => ok({} as never) };
+  expectTypeOf(untagged).toExtend<TypeScriptContractSourceProvider>();
+  // @ts-expect-error a source format the framework does not have
+  const other: ContractSourceProvider = { format: 'other', inputs: [], load: async () => ok({}) };
+  void other;
 });
 
 test('carries an optional formatter section', () => {

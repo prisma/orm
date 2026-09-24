@@ -15,7 +15,7 @@ function pslConfig(
 ) {
   return mockConfig({
     contract: {
-      source: { format: 'psl', inputs: [inputPath], load: () => {} },
+      source: { format: 'psl', inputs: [inputPath], load: () => {}, interpret: () => {} },
       output: join(inputPath, '..', 'contract.json'),
     },
     ...(formatter ? { formatter } : {}),
@@ -66,6 +66,28 @@ describe('executeFormat', () => {
 
     expect(result.ok).toBe(true);
     expect(await readFile(inputPath, 'utf-8')).toBe(FORMATTED_PSL);
+  });
+
+  it('leaves a psl source the Prisma 8 reader does not interpret untouched', async () => {
+    const inputPath = join(tmpDir, 'schema.prisma');
+    await writeFile(inputPath, MESSY_PSL, 'utf-8');
+
+    const result = await executeFormat({
+      config: mockConfig({
+        contract: {
+          source: { format: 'psl', inputs: [inputPath], load: () => {} },
+          output: join(tmpDir, 'contract.json'),
+        },
+      }),
+      cwd: tmpDir,
+      eol: '\n',
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.formatted).toBe(false);
+    }
+    expect(await readFile(inputPath, 'utf-8')).toBe(MESSY_PSL);
   });
 
   it('leaves a typescript source untouched', async () => {

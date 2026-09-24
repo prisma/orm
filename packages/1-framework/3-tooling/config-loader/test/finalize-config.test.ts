@@ -46,6 +46,7 @@ function createConfig(
 
 function createSource(inputs?: readonly string[]) {
   return {
+    format: 'typescript' as const,
     ...(inputs ? { inputs } : {}),
     load: async () => ok({ targetFamily: 'sql' } as never),
   };

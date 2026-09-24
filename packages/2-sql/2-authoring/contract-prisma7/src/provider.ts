@@ -92,7 +92,7 @@ export function prisma7Contract(
 ): ContractConfig {
   return {
     source: {
-      format: 'prisma7',
+      format: 'psl',
       inputs: [schemaPath],
       async load(context) {
         const [absolutePath] = context.resolvedInputs;

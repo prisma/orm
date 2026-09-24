@@ -46,6 +46,7 @@ function createSourceProvider(
   inputs?: readonly string[],
 ): ContractSourceProvider {
   return {
+    format: 'typescript',
     ...ifDefined('inputs', inputs),
     load,
   };

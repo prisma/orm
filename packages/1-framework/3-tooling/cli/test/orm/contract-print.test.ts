@@ -80,7 +80,7 @@ function ormConfig(dir: string, overrides: Record<string, unknown> = {}): Record
     adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
     driver: { ...DESCRIPTOR, kind: 'driver', id: 'pg-driver' },
     contract: {
-      source: { format: 'fixture', inputs: ['./prisma/schema.prisma'], load: mocks.load },
+      source: { format: 'typescript', inputs: ['./prisma/schema.prisma'], load: mocks.load },
       output: join(dir, 'generated', 'contract.json'),
     },
     ...overrides,
@@ -255,7 +255,7 @@ describe('contract print', () => {
     const dir = await projectDir();
     const config = ormConfig(dir, {
       contract: {
-        source: { format: 'fixture', inputs: ['./prisma'], load: mocks.load },
+        source: { format: 'typescript', inputs: ['./prisma'], load: mocks.load },
         output: join(dir, 'generated', 'contract.json'),
       },
     });
