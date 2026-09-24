@@ -38,9 +38,11 @@
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "pathe": "^2.0.3",
-    "pg": "catalog:"
+    "pg": "catalog:",
+    "tinyglobby": "catalog:"
   },
   "devDependencies": {
+    "@internal/config-loader": "workspace:8.0.0-rc.11",
     "@internal/emitter": "workspace:8.0.0-rc.11",
     "@internal/psl-parser": "workspace:8.0.0-rc.11",
     "@internal/sql-contract-emitter": "workspace:8.0.0-rc.11",

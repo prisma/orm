@@ -332,7 +332,6 @@ export const knownInternalNamesInDist: readonly string[] = [
   '@internal/cli-telemetry/sender',
   '@internal/cli/migration-cli',
   '@internal/config',
-  '@internal/config/config-validation',
   '@internal/contract/types',
   '@internal/driver-mongo/control',
   '@internal/emitter',

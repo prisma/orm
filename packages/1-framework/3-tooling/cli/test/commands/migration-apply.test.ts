@@ -10,7 +10,7 @@ import {
   writeMigrationPackage,
 } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
-import { findLeaf, findPath, reconstructGraph } from '@internal/migration-tools/migration-graph';
+import { findPath, reconstructGraph } from '@internal/migration-tools/migration-graph';
 import { timeouts } from '@repo/test-utils';
 import { describe, expect, it } from 'vitest';
 
@@ -78,10 +78,9 @@ describe('migrate — pending migration resolution', {
     const { packages } = await readMigrationsDir(migrationsDir, { migrationsDir });
     const attested = packages;
     const graph = reconstructGraph(attested);
-    const leaf = findLeaf(graph);
 
     const markerHash = EMPTY_CONTRACT_HASH;
-    const path = findPath(graph, markerHash, leaf!);
+    const path = findPath(graph, markerHash, 'hash-a');
 
     expect(path).not.toBeNull();
     expect(path).toHaveLength(1);
@@ -113,14 +112,13 @@ describe('migrate — pending migration resolution', {
     const { packages } = await readMigrationsDir(migrationsDir, { migrationsDir });
     const attested = packages;
     const graph = reconstructGraph(attested);
-    const leaf = findLeaf(graph);
 
-    const path = findPath(graph, 'hash-a', leaf!);
+    const path = findPath(graph, 'hash-a', 'hash-b');
     expect(path).toHaveLength(1);
     expect(path![0]!.from).toBe('hash-a');
     expect(path![0]!.to).toBe('hash-b');
 
-    const fullPath = findPath(graph, EMPTY_CONTRACT_HASH, leaf!);
+    const fullPath = findPath(graph, EMPTY_CONTRACT_HASH, 'hash-b');
     expect(fullPath).toHaveLength(2);
     expect(fullPath![0]!.to).toBe('hash-a');
     expect(fullPath![1]!.to).toBe('hash-b');
@@ -172,9 +170,8 @@ describe('migrate — pending migration resolution', {
     const { packages } = await readMigrationsDir(migrationsDir, { migrationsDir });
     const attested = packages;
     const graph = reconstructGraph(attested);
-    const leaf = findLeaf(graph);
 
-    const path = findPath(graph, 'hash-a', leaf!);
+    const path = findPath(graph, 'hash-a', 'hash-a');
     expect(path).toHaveLength(0);
   });
 
@@ -194,9 +191,8 @@ describe('migrate — pending migration resolution', {
     const { packages } = await readMigrationsDir(migrationsDir, { migrationsDir });
     const attested = packages;
     const graph = reconstructGraph(attested);
-    const leaf = findLeaf(graph);
 
-    const path = findPath(graph, 'unknown-hash', leaf!);
+    const path = findPath(graph, 'unknown-hash', 'hash-a');
     expect(path).toBeNull();
   });
 
@@ -268,10 +264,9 @@ describe('migrate — pending migration resolution', {
     const { packages } = await readMigrationsDir(migrationsDir, { migrationsDir });
     const attested = packages;
     const graph = reconstructGraph(attested);
-    const leaf = findLeaf(graph);
 
     const corruptedMarkerHash = EMPTY_CONTRACT_HASH;
-    const path = findPath(graph, corruptedMarkerHash, leaf!);
+    const path = findPath(graph, corruptedMarkerHash, 'hash-b');
     expect(path).toHaveLength(2);
   });
 
@@ -299,8 +294,7 @@ describe('migrate — pending migration resolution', {
     const { packages } = await readMigrationsDir(migrationsDir, { migrationsDir });
     const attested = packages;
     const graph = reconstructGraph(attested);
-    const leaf = findLeaf(graph);
-    const path = findPath(graph, EMPTY_CONTRACT_HASH, leaf!)!;
+    const path = findPath(graph, EMPTY_CONTRACT_HASH, 'hash-b')!;
 
     expect(path).toHaveLength(2);
 

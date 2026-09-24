@@ -1,3 +1,4 @@
+import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import {
@@ -120,7 +121,7 @@ describe('interpretPslDocumentToSqlContract diagnostics', () => {
     );
   });
 
-  it('returns diagnostics when target context is missing', () => {
+  it('throws when target context is missing', () => {
     const document = symbolTableInputFromParseArgs({
       schema: `model User {
   id Int @id
@@ -128,21 +129,13 @@ describe('interpretPslDocumentToSqlContract diagnostics', () => {
       sourceId: 'schema.prisma',
     });
 
-    // Intentionally bypasses strict input typing to verify missing target diagnostics.
-    const result = interpretPslDocumentToSqlContract({
-      ...document,
-      scalarColumnDescriptors: postgresScalarTypeDescriptors,
-    } as unknown as InterpretPslDocumentToSqlContractInput);
-
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.failure.diagnostics).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'PSL_TARGET_CONTEXT_REQUIRED',
-        }),
-      ]),
-    );
+    // Intentionally bypasses strict input typing to verify the missing-target assertion.
+    expect(() =>
+      interpretPslDocumentToSqlContract({
+        ...document,
+        scalarColumnDescriptors: postgresScalarTypeDescriptors,
+      } as unknown as InterpretPslDocumentToSqlContractInput),
+    ).toThrow(InternalError);
   });
 
   it('guards against named type declarations missing both base type and constructor', () => {

@@ -24,6 +24,7 @@ catalog:
   mongodb: ^7.4.0
   mongodb-memory-server: 11.2.0
   pg: 8.22.0
+  tinyglobby: ^0.2.17
   tsdown: 0.22.14
   tsx: ^4.23.5
   typescript: 5.9.3

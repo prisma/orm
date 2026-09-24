@@ -1,6 +1,11 @@
 import { buildOperation, toExpr } from '@internal/sql-relational-core/expression';
 import type { QueryOperationTypes } from '../types/operation-types';
-import { PG_BOOL_CODEC_ID, PG_FLOAT4_CODEC_ID, PG_TEXT_CODEC_ID } from './codec-ids';
+import {
+  PG_BOOL_CODEC_ID,
+  PG_FLOAT4_CODEC_ID,
+  PG_TEXT_CODEC_ID,
+  PG_TSQUERY_CODEC_ID,
+} from './codec-ids';
 import {
   type FullTextHeadlineOptions,
   type FullTextMatchesOptions,
@@ -9,11 +14,18 @@ import {
   languageLiteral,
   normalizationLiteral,
 } from './full-text-options';
+import {
+  phrasetoTsquery,
+  plaintoTsquery,
+  toTsquery,
+  websearchToTsquery,
+} from './full-text-parsers';
 import { DEFAULT_FULL_TEXT_SEARCH_LANGUAGE } from './text-search-languages';
 
 type CodecTypesBase = Record<string, { readonly input: unknown; readonly output: unknown }>;
 
 const TEXT_REF = { codecId: PG_TEXT_CODEC_ID } as const;
+const TSQUERY_REF = { codecId: PG_TSQUERY_CODEC_ID } as const;
 
 const languageOf = (options: FullTextMatchesOptions) =>
   options.language ?? DEFAULT_FULL_TEXT_SEARCH_LANGUAGE;
@@ -37,13 +49,13 @@ export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           method: 'fullTextMatches',
           args: [
             toExpr(self),
-            toExpr(query, TEXT_REF),
+            toExpr(query, TSQUERY_REF),
             languageLiteral('fullTextMatches', languageOf(options)),
           ],
           returns: { codecId: PG_BOOL_CODEC_ID, nullable: false },
           lowering: {
             targetFamily: 'sql',
-            template: 'to_tsvector({{arg1}}, {{self}}) @@ websearch_to_tsquery({{arg1}}, {{arg0}})',
+            template: 'to_tsvector({{arg1}}, {{self}}) @@ {{arg0}}',
           },
         }),
     },
@@ -55,13 +67,12 @@ export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOpera
           options.normalization === undefined
             ? undefined
             : normalizationLiteral('fullTextRank', options.normalization);
-        const vectorAndQuery =
-          'to_tsvector({{arg1}}, {{self}}), websearch_to_tsquery({{arg1}}, {{arg0}})';
+        const vectorAndQuery = 'to_tsvector({{arg1}}, {{self}}), {{arg0}}';
         return buildOperation({
           method: 'fullTextRank',
           args: [
             toExpr(self),
-            toExpr(query, TEXT_REF),
+            toExpr(query, TSQUERY_REF),
             languageLiteral('fullTextRank', languageOf(options)),
             ...(normalization === undefined ? [] : [normalization]),
           ],
@@ -77,12 +88,12 @@ export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOpera
       self: { traits: ['textual'] },
       impl: (self, query, options: FullTextHeadlineOptions = {}) => {
         const headlineOptions = headlineOptionsLiteral('fullTextHeadline', options);
-        const base = 'ts_headline({{arg1}}, {{self}}, websearch_to_tsquery({{arg1}}, {{arg0}})';
+        const base = 'ts_headline({{arg1}}, {{self}}, {{arg0}}';
         return buildOperation({
           method: 'fullTextHeadline',
           args: [
             toExpr(self),
-            toExpr(query, TEXT_REF),
+            toExpr(query, TSQUERY_REF),
             languageLiteral('fullTextHeadline', languageOf(options)),
             ...(headlineOptions === undefined ? [] : [headlineOptions]),
           ],
@@ -94,5 +105,9 @@ export function postgresQueryOperations<CT extends CodecTypesBase>(): QueryOpera
         });
       },
     },
+    websearchToTsquery: { impl: websearchToTsquery },
+    toTsquery: { impl: toTsquery },
+    plaintoTsquery: { impl: plaintoTsquery },
+    phrasetoTsquery: { impl: phrasetoTsquery },
   };
 }

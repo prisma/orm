@@ -22,11 +22,7 @@ function recordingLoader(): {
     asked,
     loadConfig: (configPath) => {
       asked.push(configPath ?? '(none)');
-      return Promise.resolve({
-        path: configPath ?? 'prisma.config.ts',
-        sections: {},
-        diagnostics: [],
-      });
+      return Promise.resolve({ files: [], diagnostics: [] });
     },
   };
 }

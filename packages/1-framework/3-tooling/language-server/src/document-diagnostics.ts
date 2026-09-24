@@ -1,8 +1,7 @@
-import type { SymbolTable } from '@internal/psl-parser';
+import { isPrismaNextSchema, type SymbolTable } from '@internal/psl-parser';
 import type { DocumentAst, SourceFile } from '@internal/psl-parser/syntax';
 import type { LspDiagnostic } from './diagnostic-mapping';
 import { type PipelineInputs, runPipeline } from './pipeline';
-import { isPrismaNextSchema } from './schema-directive';
 import type { SchemaInputSet } from './schema-inputs';
 
 export interface DocumentDiagnostics {

@@ -24,7 +24,11 @@ export { enrichContract } from '../control-api/contract-enrichment';
 // (TML-3173, consolidate-clis slice 1b).
 export { mapCaughtMigrationError } from '../control-api/operations/caught-errors';
 export { mapContractAtError } from '../control-api/operations/contract-at-errors';
-export { executeContractEmit } from '../control-api/operations/contract-emit';
+export {
+  type ContractSourceFailure,
+  executeContractEmit,
+  loadContractSource,
+} from '../control-api/operations/contract-emit';
 export {
   type ResolveContractRefToSnapshotOptions,
   type ResolveContractRefToSnapshotSuccess,

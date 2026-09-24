@@ -23,7 +23,7 @@ export type {
   CodecRegistry,
   CodecTrait,
 } from '../shared/codec-types';
-export { emptyCodecLookup, voidParamsSchema } from '../shared/codec-types';
+export { emptyCodecLookup } from '../shared/codec-types';
 export type {
   ColumnHelperFor,
   ColumnHelperForStrict,

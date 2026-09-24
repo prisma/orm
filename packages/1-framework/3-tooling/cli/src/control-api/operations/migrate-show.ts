@@ -44,8 +44,6 @@ export interface ExecuteMigrateShowPlanOptions {
   readonly config: PrismaNextConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** `--config` as the user wrote it, used only to locate the migrations directory and for display. */
-  readonly configPath?: string;
   readonly db?: string;
   readonly to?: string;
   readonly from?: string;
@@ -90,7 +88,6 @@ export async function executeMigrateShowPlan(
 ): Promise<Result<MigrateShowPlanSuccess, CliStructuredError>> {
   const config = options.config;
   const { configPath, migrationsDir, migrationsRelative, refsDir } = resolveMigrationPaths(
-    options.configPath,
     config,
     options.cwd,
   );

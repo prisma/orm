@@ -88,7 +88,7 @@ export function createProjectArtifacts(options: ProjectArtifactsOptions): Projec
       if (memo === undefined || memoSources !== sources) {
         const result = interpretation.source.interpret(
           {
-            document,
+            documents: [document],
             sources,
             symbolTable: currentSymbolTable,
           },

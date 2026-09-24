@@ -12,7 +12,6 @@ import {
   type CodecTrait,
   dataTypeId,
   materializeCodec,
-  voidParamsSchema,
 } from '../src/exports/codec';
 
 class Int4FixtureCodec extends CodecImpl<'demo/int4@1', readonly ['equality'], number, number> {
@@ -35,7 +34,7 @@ class Int4FixtureDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = 'demo/int4@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
   override readonly targetTypes: readonly string[] = ['int4'];
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => Int4FixtureCodec {
     return () => new Int4FixtureCodec(this);
   }
@@ -125,4 +124,45 @@ test('materializeCodec produces a codec whose encode/decode still run through th
   const wire = await codec.encode([1, 2, 3], {});
   expect(wire).toBe('[1,2,3]');
   expect(await codec.decode(wire, {})).toEqual([1, 2, 3]);
+});
+
+/**
+ * Copies a descriptor the way arktype's default clone does when a config section is validated:
+ * same prototype, and every plain object it holds is a new object with the same keys.
+ */
+function copyLikeArktype<T extends object>(original: T): T {
+  const copy = Object.create(Object.getPrototypeOf(original));
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(original))) {
+    const value: unknown = descriptor.value;
+    const isPlainObject =
+      typeof value === 'object' &&
+      value !== null &&
+      Object.getPrototypeOf(value) === Object.prototype;
+    Object.defineProperty(copy, key, {
+      ...descriptor,
+      value: isPlainObject ? { ...value } : value,
+    });
+  }
+  return copy;
+}
+
+test('a codec without params stays non-parameterized when its descriptor is copied', ({
+  expect,
+}) => {
+  expect(copyLikeArktype(int4FixtureDescriptor).isParameterized).toBe(false);
+  expect(copyLikeArktype(vectorFixtureDescriptor).isParameterized).toBe(true);
+});
+
+test('materializeCodec rejects typeParams for a codec without params', ({ expect }) => {
+  const ref: CodecRef = { codecId: 'demo/int4@1', typeParams: { length: 3 } };
+  expect(() => materializeCodec(descriptorFor(ref), ref, stubCtx)).toThrow(
+    "Invalid typeParams for codec 'demo/int4@1': unexpected typeParams for non-parameterized codec",
+  );
+});
+
+test('materializeCodec treats empty typeParams as none for a codec without params', ({
+  expect,
+}) => {
+  const ref: CodecRef = { codecId: 'demo/int4@1', typeParams: {} };
+  expect(materializeCodec(descriptorFor(ref), ref, stubCtx).id).toBe('demo/int4@1');
 });

@@ -1,5 +1,4 @@
 import type { JsonValue } from '@internal/contract/types';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
 import type { Codec } from './codec';
 import type { AnyCodecDescriptor } from './codec-descriptor';
 
@@ -18,7 +17,7 @@ export function isCodecTrait(value: unknown): value is CodecTrait {
  *
  * `(codecId, typeParams?)` is the single fact the runtime needs to materialize a codec via `descriptorFor(codecId).factory(typeParams)(ctx)`. The pair is content-keyed: two refs with the same `codecId` and structurally equal `typeParams` (regardless of object key ordering) resolve to the same memoized {@link Codec} instance.
  *
- * `typeParams` is `JsonValue`-constrained so the ref survives JSON serialization (relevant for AST-embedded migration ops). Non-parameterized codecs leave `typeParams` undefined; the descriptor's `paramsSchema` validates the value at the JSON boundary.
+ * `typeParams` is `JsonValue`-constrained so the ref survives JSON serialization (relevant for AST-embedded migration ops). Non-parameterized codecs leave `typeParams` undefined or empty; a parameterized codec's `paramsSchema` validates the value at the JSON boundary.
  *
  * `many` marks a scalar-array (list-typed) column. When `true`, the encode/decode paths map the element codec over array elements rather than applying the codec to the whole value. The element codec id is `codecId`; each family or target owns how its stored list frame is traversed. For Postgres, inbound list framing is target-owned while outbound parameters still rely on the driver/library's array serialization under the adapter-emitted SQL type context. Absent for scalar columns.
  *
@@ -110,23 +109,3 @@ export const emptyCodecLookup: CodecLookup = {
 export interface CodecInstanceContext {
   readonly name: string;
 }
-
-/**
- * Standard Schema validator for `void` params. Accepts only `undefined` (or absent input); rejects any other value so a contract that tries to thread `typeParams` through a non-parameterized codec id fails fast at the JSON boundary instead of silently coercing the value away. Used by the framework-supplied non-parameterized descriptor synthesizer.
- */
-export const voidParamsSchema: StandardSchemaV1<void> = {
-  '~standard': {
-    version: 1,
-    vendor: 'prisma',
-    validate: (input) =>
-      input === undefined
-        ? { value: undefined }
-        : {
-            issues: [
-              {
-                message: 'unexpected typeParams for non-parameterized codec (void params expected)',
-              },
-            ],
-          },
-  },
-};

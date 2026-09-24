@@ -53,9 +53,9 @@ describe('sql-codec-helpers', () => {
       targetTypes: ['varchar'],
       hasParamsSchema: true,
     },
-    { scalar: 'int', id: SQL_INT_CODEC_ID, targetTypes: ['int'], hasParamsSchema: true },
-    { scalar: 'float', id: SQL_FLOAT_CODEC_ID, targetTypes: ['float'], hasParamsSchema: true },
-    { scalar: 'text', id: SQL_TEXT_CODEC_ID, targetTypes: ['text'], hasParamsSchema: true },
+    { scalar: 'int', id: SQL_INT_CODEC_ID, targetTypes: ['int'], hasParamsSchema: false },
+    { scalar: 'float', id: SQL_FLOAT_CODEC_ID, targetTypes: ['float'], hasParamsSchema: false },
+    { scalar: 'text', id: SQL_TEXT_CODEC_ID, targetTypes: ['text'], hasParamsSchema: false },
   ];
 
   it.each(codecDefinitionCases)(

@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite
 // `issues/21631-batching-in-transaction` (postgres matrix entry):
 //

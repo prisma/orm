@@ -1021,5 +1021,25 @@ describe('createModelAccessor', () => {
       const views = post['views'] as unknown as Record<string, unknown>;
       expect(views['synthetic']).toBeUndefined();
     });
+
+    it('attaches an operation without self to no field', () => {
+      const queryOperations = createSqlOperationRegistry();
+      queryOperations.register('attached', {
+        self: { traits: ['textual'] },
+        impl: () => undefined as never,
+      });
+      queryOperations.register('selfless', { impl: () => undefined as never });
+
+      const codecDescriptors = makeDescriptors({ 'pg/text@1': ['equality', 'textual'] });
+      const user = createModelAccessor(
+        { ...context, queryOperations, codecDescriptors },
+        'public',
+        'User',
+      );
+
+      const name = user['name'] as unknown as Record<string, unknown>;
+      expect(typeof name['attached']).toBe('function');
+      expect(name['selfless']).toBeUndefined();
+    });
   });
 });

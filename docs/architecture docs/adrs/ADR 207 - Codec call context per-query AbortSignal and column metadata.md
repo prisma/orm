@@ -14,7 +14,6 @@ A codec author shipping an encrypted-JSON column type with cancellation and colu
 import {
   CodecDescriptorImpl,
   CodecImpl,
-  voidParamsSchema,
   type CodecInstanceContext,
 } from '@internal/framework-components/codec';
 import type { JsonValue } from '@internal/contract/types';
@@ -51,7 +50,7 @@ class EncryptedJsonDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = 'encrypted/json@1';
   override readonly traits = [] as const;
   override readonly targetTypes = ['jsonb'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override readonly factory = () => (_ctx: CodecInstanceContext) => new EncryptedJsonCodec();
 }
 ```

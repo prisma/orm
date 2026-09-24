@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `decimal/precision`
 // (packages/client/tests/functional/decimal/precision).
 //

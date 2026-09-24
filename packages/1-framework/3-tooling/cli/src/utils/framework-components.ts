@@ -16,7 +16,7 @@ import { errorConfigValidation, errorContractMissingExtensions } from './cli-err
  *
  * This validation happens at the CLI composition boundary, before passing components
  * to typed planner/runner instances. It fills the gap between runtime validation
- * (via the config loader's `collectConfigIssues` diagnostics) and compile-time
+ * (the `orm` config schema's diagnostics) and compile-time
  * type enforcement.
  *
  * @param expectedFamilyId - The expected family ID (e.g., 'sql')

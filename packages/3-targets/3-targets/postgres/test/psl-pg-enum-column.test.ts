@@ -102,8 +102,8 @@ function interpret(source: string, capabilities: Record<string, Record<string, b
     pslBlockDescriptors: assembled.pslBlockDescriptors,
   });
   return interpretPslDocumentToSqlContract({
+    documents: [document],
     dataTypeLookup: postgresDataTypeLookup,
-    document,
     symbolTable,
     sources,
     capabilities,

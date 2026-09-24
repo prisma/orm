@@ -56,13 +56,24 @@ model('Message', { fields: { id, text } }).sql(({ cols }) => ({
 }));
 ```
 
-The operations themselves take an options object as their second argument — `language` for all three, plus `normalization` and `coverDensity` on `fullTextRank` and the `ts_headline` options (`startSel`, `stopSel`, `maxWords`, `minWords`, `highlightAll`) on `fullTextHeadline`:
+The first argument of each operation is a `tsquery`, built with a helper from `@prisma/orm-postgres/target/full-text`. A bare string is a type error. Use `websearchToTsquery(query)` for search-box text; `plaintoTsquery` requires every word and `phrasetoTsquery` the words in order. In the SQL builder these four parsers are also `fns` members. For user input inside `tsquery` operator syntax, such as a typeahead prefix match, use the `tsquery` tag: `` tsquery`${term}:*` `` quotes each interpolated value as one term, so user input cannot add operators or break the syntax, and Postgres then lowercases and stems the words. A value with several words becomes a phrase: `` tsquery`${'new y'}:*` `` gives `'new':* <-> 'y':*`, so the words must be adjacent and in order, and `:*` applies to each word. Do not put quotes around the interpolation yourself: `` tsquery`'${term}':*` `` is a syntax error for every input. `toTsquery` takes operator syntax the application writes in full; never pass user input to it.
+
+The operations also take an options object as their second argument — `language` for all three, plus `normalization` and `coverDensity` on `fullTextRank` and the `ts_headline` options (`startSel`, `stopSel`, `maxWords`, `minWords`, `highlightAll`) on `fullTextHeadline`:
 
 ```ts
+import { tsquery, websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
+
+const q = websearchToTsquery(query);
 await db.orm.public.Message.select('id', 'text')
-  .where((m) => m.text.fullTextMatches(query))
-  .orderBy((m) => m.text.fullTextRank(query, { normalization: 32 }).desc())
+  .where((m) => m.text.fullTextMatches(q))
+  .orderBy((m) => m.text.fullTextRank(q, { normalization: 32 }).desc())
+  .all();
+
+const suggestions = await db.orm.public.Message.select('id', 'text')
+  .where((m) => m.text.fullTextMatches(tsquery`${term}:*`))
   .all();
 ```
+
+The operation's `language` configures only the searched column. The parser or tag takes its own `language` for the query; pass the same value to both.
 
 Postgres only uses a full-text index whose expression is the same `to_tsvector` over the same configuration literal and the same column as the query, so prefer these over writing `@@index(expression: "to_tsvector(…)", type: "gin", …)` by hand. Pass the same `language` to the index and to the operation: a mismatch is silent, and the query falls back to a sequential scan.

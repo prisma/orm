@@ -1,3 +1,4 @@
+import { ormConfigSection } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
 import type { Block, Presentations } from '@prisma/cli-engine';
 import { flag } from '@prisma/cli-engine';
@@ -23,7 +24,6 @@ import {
 import { createToneMigrationListStyler } from '../../utils/formatters/migration-list-styler';
 import { toneDrawing } from '../../utils/formatters/tone-markup';
 import type { GlyphMode } from '../../utils/glyph-mode';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 import { displayPath, migrationsDirFor } from './paths';
@@ -112,7 +112,7 @@ export const migrationGraphCommand = defineOrmCommand({
       return notOk(normalizeError(errorLegendHumanOnly('--dot')));
     }
 
-    const migrationsDir = migrationsDirFor(ctx.config, ctx.cwd);
+    const migrationsDir = migrationsDirFor(ctx.config);
     const loaded = await buildReadAggregate(ctx.config, { migrationsDir });
     if (!loaded.ok) {
       return notOk(normalizeError(loaded.failure));

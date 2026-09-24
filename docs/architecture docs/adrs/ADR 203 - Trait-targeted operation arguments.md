@@ -53,6 +53,8 @@ readonly ilike: {
 
 From this single descriptor, every textual field in the contract gains the operation. A non-textual field does not. A target, adapter or extension that does not register the operation never exposes it, regardless of what codecs are on the target.
 
+So `textual` is a promise that the database accepts the column wherever it expects text. A Postgres codec may declare it only if Postgres accepts its column in `ILIKE`, in `to_tsvector`, and in a `to_tsvector` index, and the Postgres codec testkit checks every built-in `textual` codec against a live database. A native enum fails all three, so `pg/enum@1` is not `textual` even though its values are strings.
+
 ## Design principles
 
 1. **Codec identity and codec capability are independent axes.** An operation should be free to target either. Forcing capability-based operations into codec-ID enumerations duplicates what traits already encode on codecs and prevents extensibility.

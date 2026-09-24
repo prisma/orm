@@ -1,9 +1,5 @@
 import type { AnyCodecDescriptor, Codec } from '@internal/framework-components/codec';
-import {
-  CodecDescriptorImpl,
-  dataTypeId,
-  voidParamsSchema,
-} from '@internal/framework-components/codec';
+import { CodecDescriptorImpl, dataTypeId } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage, type StorageTableInput } from '@internal/sql-contract/types';
 import type { ContractCodecRegistry, ProjectionExpr } from '@internal/sql-relational-core/ast';
@@ -44,7 +40,7 @@ const transformingCodecDescriptor: AnyCodecDescriptor = {
   dataType: dataTypeId('test/transform'),
   traits: [],
   targetTypes: ['text'],
-  paramsSchema: voidParamsSchema,
+  paramsSchema: undefined,
   isParameterized: false,
   factory: () => () => transformingCodec,
 };
@@ -290,7 +286,7 @@ class ExtTransformDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = EXT_CODEC_ID;
   override readonly traits = [] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: object) => Codec {
     return () =>
       ({

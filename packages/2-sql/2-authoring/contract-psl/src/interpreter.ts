@@ -82,7 +82,7 @@ import {
   type RelationNode,
   type UniqueConstraintNode,
 } from '@internal/sql-contract-ts/contract-builder';
-import { invariant } from '@internal/utils/assertions';
+import { assertDefined, invariant } from '@internal/utils/assertions';
 import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import { InternalError } from '@internal/utils/internal-error';
@@ -123,7 +123,7 @@ import {
 } from './sql-attribute-specs';
 
 export interface InterpretPslDocumentToSqlContractInput {
-  readonly document: DocumentAst;
+  readonly documents: readonly DocumentAst[];
   readonly symbolTable: SymbolTable;
   readonly sources: PslSources;
   readonly target: TargetPackRef<'sql', string>;
@@ -2087,30 +2087,18 @@ function stripStorageOnlyDomainFields(
 export function interpretPslDocumentToSqlContract(
   input: InterpretPslDocumentToSqlContractInput,
 ): Result<Contract, ContractSourceDiagnostics> {
-  const source = diagnosticSource(input.sources, input.document.syntax);
-  const diagnostics = createPslDiagnosticCollector(input.sources);
   if (!input.target) {
-    diagnostics.pushUnlocated({
-      code: 'PSL_TARGET_CONTEXT_REQUIRED',
-      message: 'PSL interpretation requires an explicit target context from composition.',
-      ...source.at(),
-    });
-    return notOk({
-      summary: 'PSL to SQL contract interpretation failed',
-      diagnostics: diagnostics.toExternal(),
-    });
+    throw new InternalError(
+      'PSL interpretation requires an explicit target context from composition.',
+    );
   }
   if (!input.scalarColumnDescriptors) {
-    diagnostics.pushUnlocated({
-      code: 'PSL_SCALAR_TYPE_CONTEXT_REQUIRED',
-      message: 'PSL interpretation requires composed scalar type descriptors.',
-      ...source.at(),
-    });
-    return notOk({
-      summary: 'PSL to SQL contract interpretation failed',
-      diagnostics: diagnostics.toExternal(),
-    });
+    throw new InternalError('PSL interpretation requires composed scalar type descriptors.');
   }
+  const [anchorDocument] = input.documents;
+  assertDefined(anchorDocument, 'interpretPslDocumentToSqlContract requires at least one document');
+  const source = diagnosticSource(input.sources, anchorDocument.syntax);
+  const diagnostics = createPslDiagnosticCollector(input.sources);
 
   const { topLevel } = input.symbolTable;
   const namespaceSymbols = Object.values(topLevel.namespaces);

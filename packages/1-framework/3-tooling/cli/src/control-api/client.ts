@@ -1,3 +1,4 @@
+import { expandContractInputs } from '@internal/config-loader';
 import type { Contract, ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { emit as emitContractArtifacts } from '@internal/emitter';
 import { CliStructuredError } from '@internal/errors/control';
@@ -647,7 +648,7 @@ class ControlClientImpl implements ControlClient {
         codecLookup: stack.codecLookup,
         controlMutationDefaults: stack.controlMutationDefaults,
         dataTypeLookup: stack.dataTypeLookup,
-        resolvedInputs: contractConfig.source.inputs ?? [],
+        resolvedInputs: await expandContractInputs(contractConfig.source.inputs),
         capabilities: stack.capabilities,
       };
       const providerResult = await contractConfig.source.load(sourceContext);

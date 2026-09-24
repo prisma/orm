@@ -231,37 +231,6 @@ export function errorSameSourceAndTarget(dir: string, hash: string): MigrationTo
   );
 }
 
-export function errorAmbiguousTarget(
-  branchTips: readonly string[],
-  context?: {
-    divergencePoint: string;
-    branches: readonly {
-      tip: string;
-      edges: readonly { dirName: string; from: string; to: string }[];
-    }[];
-  },
-): MigrationToolsError {
-  const divergenceInfo = context
-    ? `\nDivergence point: ${context.divergencePoint}\nBranches:\n${context.branches.map((b) => `  → ${b.tip} (${b.edges.length} edge(s): ${b.edges.map((e) => e.dirName).join(' → ') || 'direct'})`).join('\n')}`
-    : '';
-  return new MigrationToolsError('MIGRATION.AMBIGUOUS_TARGET', 'Ambiguous migration target', {
-    why: `The migration history has diverged into multiple branches: ${branchTips.join(', ')}. This typically happens when two developers plan migrations from the same starting point.${divergenceInfo}`,
-    fix: 'Use `{bin} migration ref set <name> <hash>` to target a specific branch, delete one of the conflicting migration directories and re-run `{bin} migration plan`, or use --from <hash> to explicitly select a starting point.',
-    meta: {
-      branchTips,
-      ...(context ? { divergencePoint: context.divergencePoint, branches: context.branches } : {}),
-    },
-  });
-}
-
-export function errorNoInitialMigration(nodes: readonly string[]): MigrationToolsError {
-  return new MigrationToolsError('MIGRATION.NO_INITIAL_MIGRATION', 'No initial migration found', {
-    why: `No migration starts from the empty contract state (known hashes: ${nodes.join(', ')}). At least one migration must originate from the empty state.`,
-    fix: 'Inspect the migrations directory for corrupted migration.json files. At least one migration must start from the empty contract hash.',
-    meta: { nodes },
-  });
-}
-
 export function errorInvalidRefs(refsPath: string, reason: string): MigrationToolsError {
   return new MigrationToolsError('MIGRATION.INVALID_REFS', 'Invalid refs.json', {
     why: `refs.json at "${refsPath}" is invalid: ${reason}`,
@@ -283,14 +252,6 @@ export function errorInvalidRefName(refName: string): MigrationToolsError {
     why: `Ref name "${refName}" is invalid. Names must be lowercase alphanumeric with hyphens or forward slashes (no "." or ".." segments).`,
     fix: `Use a valid ref name (e.g., "staging", "envs/production").`,
     meta: { refName },
-  });
-}
-
-export function errorNoTarget(reachableHashes: readonly string[]): MigrationToolsError {
-  return new MigrationToolsError('MIGRATION.NO_TARGET', 'No migration target could be resolved', {
-    why: `The migration history contains cycles and no target can be resolved automatically (reachable hashes: ${reachableHashes.join(', ')}). This typically happens after rollback migrations (e.g., C1→C2→C1).`,
-    fix: 'Use --from <hash> to specify the planning origin explicitly.',
-    meta: { reachableHashes },
   });
 }
 

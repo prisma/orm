@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Faithful translation of prisma/prisma functional suite `methods/count`
 // (packages/client/tests/functional/methods/count, postgres matrix entry):
 //

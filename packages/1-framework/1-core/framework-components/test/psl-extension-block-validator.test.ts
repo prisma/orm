@@ -20,7 +20,6 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { describe, expect, it } from 'vitest';
 import { extractCodecLookup } from '../src/control/control-stack';
 import {
@@ -39,7 +38,6 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   dataTypeId,
-  voidParamsSchema,
 } from '../src/exports/codec';
 import type { PslExtensionBlock } from '../src/exports/psl-ast';
 
@@ -83,7 +81,7 @@ class StubStringDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = 'stub/string@1' as const;
   override readonly traits = ['textual'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => StubStringCodec {
     return () => new StubStringCodec(this);
   }

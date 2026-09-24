@@ -223,11 +223,12 @@ export function isPostgresCodecDescriptor(value: unknown): value is AnyPostgresC
     Array.isArray(value.targetTypes) &&
     value.targetTypes.every((targetType) => typeof targetType === 'string') &&
     'paramsSchema' in value &&
-    isObjectLike(value.paramsSchema) &&
-    '~standard' in value.paramsSchema &&
-    isObjectLike(value.paramsSchema['~standard']) &&
-    'validate' in value.paramsSchema['~standard'] &&
-    typeof value.paramsSchema['~standard'].validate === 'function' &&
+    (value.paramsSchema === undefined ||
+      (isObjectLike(value.paramsSchema) &&
+        '~standard' in value.paramsSchema &&
+        isObjectLike(value.paramsSchema['~standard']) &&
+        'validate' in value.paramsSchema['~standard'] &&
+        typeof value.paramsSchema['~standard'].validate === 'function')) &&
     'isParameterized' in value &&
     typeof value.isParameterized === 'boolean' &&
     'factory' in value &&

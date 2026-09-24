@@ -1,3 +1,5 @@
+// use prisma-8
+
 model Contact { id String @id identities Identity[] @@map("contact") }
 model Identity { id String @id contactId String contact Contact @relation(fields: [contactId], references: [id]) subscriptions Subscription[] @@map("identity") }
 model Subscription { id String @id identityId String audienceId String optedOutAt DateTime? audience Audience @relation(fields: [audienceId], references: [id]) identity Identity @relation(fields: [identityId], references: [id]) @@map("subscription") }

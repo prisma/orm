@@ -120,7 +120,7 @@ function makeContractFromPsl(): MongoContract {
     pslBlockDescriptors: {},
   });
   const result = interpretPslDocumentToMongoContract({
-    document,
+    documents: [document],
     symbolTable,
     sources,
     scalarTypeCodecIds: mongoScalarTypeDescriptors,

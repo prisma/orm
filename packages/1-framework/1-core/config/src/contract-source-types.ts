@@ -46,6 +46,12 @@ export interface ContractSourceContext {
   /** The stack's data types, so a written default can be cast into a column's type. ADR 254. */
   readonly dataTypeLookup: DataTypeLookup;
   readonly controlMutationDefaults: ControlMutationDefaults;
+  /**
+   * The flat, expanded, deduped, sorted member file list — every
+   * `source.inputs` glob resolved to the files it currently matches. A glob
+   * can expand to many files or none, so this list's length and order do
+   * not mirror `source.inputs` entry-for-entry.
+   */
   readonly resolvedInputs: readonly string[];
   readonly capabilities: CapabilityMatrix;
 }
@@ -54,6 +60,11 @@ export interface ContractSourceContext {
 export type ContractSourceFormat = 'psl' | 'typescript';
 
 export interface ContractSourceProviderBase {
+  /**
+   * Glob patterns naming the contract source's member files. A wildcard-free
+   * entry is the degenerate glob (a literal path). Directories are not
+   * auto-expanded.
+   */
   readonly inputs?: readonly string[];
   readonly load: (
     context: ContractSourceContext,

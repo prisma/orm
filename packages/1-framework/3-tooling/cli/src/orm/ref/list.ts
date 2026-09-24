@@ -1,9 +1,9 @@
+import { ormConfigSection } from '@internal/config-loader';
 import type { Refs } from '@internal/migration-tools/refs';
 import type { Block, Presentations, Text } from '@prisma/cli-engine';
 import { notOk, ok } from '@prisma/cli-engine/protocol';
 import type { RefListResult } from '../../control-api/operations/ref';
 import { executeRefListCommand } from '../../control-api/operations/ref';
-import { ormConfigSection } from '../config-section';
 import { defineOrmCommand } from '../define-command';
 import { normalizeError } from '../normalize-error';
 

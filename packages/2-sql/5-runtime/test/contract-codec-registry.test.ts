@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash, profileHash } from '@internal/contract/types';
 import type { CodecDescriptor, CodecInstanceContext } from '@internal/framework-components/codec';
-import { dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import { SqlStorage } from '@internal/sql-contract/types';
 import type { Codec } from '@internal/sql-relational-core/ast';
 import { ifDefined } from '@internal/utils/defined';
@@ -84,7 +84,7 @@ function createNonParameterizedExtensionDescriptor(): SqlRuntimeExtensionDescrip
     dataType: dataTypeId('test/scalar'),
     traits: [],
     targetTypes: ['scalar'],
-    paramsSchema: voidParamsSchema,
+    paramsSchema: undefined,
     isParameterized: false,
     factory: () => () => scalarCodec,
   };

@@ -37,7 +37,7 @@ test('guard narrows the union to expose a fully typed interpret method', () => {
 });
 
 test('interpret input carries the parser artifact vocabulary', () => {
-  expectTypeOf<PslInterpretInput['document']>().toEqualTypeOf<DocumentAst>();
+  expectTypeOf<PslInterpretInput['documents']>().toEqualTypeOf<readonly DocumentAst[]>();
   expectTypeOf<PslInterpretInput['sources']>().toEqualTypeOf<PslSources>();
   expectTypeOf<PslInterpretInput['symbolTable']>().toEqualTypeOf<SymbolTable>();
 });

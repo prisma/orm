@@ -1,3 +1,5 @@
+// use prisma-8
+
 // Real emitted fixture for the non-identifier-name ORM round-trip integration test.
 //
 // `@map`/`@@map` accept physical names that are legal quoted SQL identifiers

@@ -39,8 +39,8 @@ export interface CodecDescriptor<P = void> {
   readonly traits: readonly CodecTrait[];
   readonly targetTypes: readonly string[];
   readonly meta?: CodecMeta;
-  readonly paramsSchema: StandardSchemaV1<P>;
-  readonly isParameterized: boolean;
+  readonly paramsSchema: StandardSchemaV1<P> | undefined; // undefined when P = void
+  readonly isParameterized: boolean; // paramsSchema !== undefined
   readonly renderOutputType?: (params: P) => string | undefined;
   readonly factory: (params: P) => (ctx: CodecInstanceContext) => Codec;
 }
@@ -51,8 +51,8 @@ export abstract class CodecDescriptorImpl<P = void> implements CodecDescriptor<P
   abstract readonly traits: readonly CodecTrait[];
   abstract readonly targetTypes: readonly string[];
   readonly meta?: CodecMeta;
-  abstract readonly paramsSchema: StandardSchemaV1<P>;
-  readonly isParameterized: boolean; // derived from `paramsSchema !== voidParamsSchema`
+  abstract readonly paramsSchema: StandardSchemaV1<P> | undefined; // undefined when P = void
+  readonly isParameterized: boolean; // derived from `paramsSchema !== undefined`
   renderOutputType?(params: P): string | undefined;
   abstract factory(params: P): (ctx: CodecInstanceContext) => Codec;
 }
@@ -109,7 +109,7 @@ class PgTextDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = 'pg/text@1' as const;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => PgTextCodec {
     const shared = new PgTextCodec(this);
     return () => shared;

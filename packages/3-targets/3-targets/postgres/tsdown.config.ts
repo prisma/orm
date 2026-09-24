@@ -15,6 +15,7 @@ export default defineConfig({
     'src/exports/default-normalizer.ts',
     'src/exports/diff-database-schema.ts',
     'src/exports/errors.ts',
+    'src/exports/full-text.ts',
     'src/exports/issue-planner.ts',
     'src/exports/migration.ts',
     'src/exports/native-type-normalizer.ts',

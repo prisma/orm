@@ -66,7 +66,10 @@ import { createAstCodecResolver } from './codecs/ast-codec-resolver';
  *
  * Codec-registry-unification spec § Decision.
  */
-export type RuntimeParameterizedCodecDescriptor<P = Record<string, unknown>> = CodecDescriptor<P>;
+export type RuntimeParameterizedCodecDescriptor<P = Record<string, unknown>> =
+  CodecDescriptor<P> & {
+    readonly paramsSchema: NonNullable<CodecDescriptor<P>['paramsSchema']>;
+  };
 
 /**
  * Contributor protocol for SQL components (target, adapter, extension pack). The unified `codecs:` slot returns the full {@link CodecDescriptor} list — non-parameterized and parameterized descriptors live side-by-side in the same array. The framework dispatches every codec id through the unified descriptor map without branching on parameterization.
@@ -262,7 +265,7 @@ function validateTypeParams(
 }
 
 /**
- * Collect every {@link CodecDescriptor} contributed by the SQL stack and partition into "parameterized" vs "non-parameterized" via the descriptor's own {@link CodecDescriptorImpl.isParameterized} getter. The getter is the canonical discriminator — a `paramsSchema` identity check would misroute any descriptor that doesn't reuse the exact `voidParamsSchema` singleton (e.g. a non-parameterized codec authoring its own no-op schema).
+ * Collect every {@link CodecDescriptor} contributed by the SQL stack and partition into "parameterized" vs "non-parameterized" via the descriptor's own {@link CodecDescriptorImpl.isParameterized} getter: a descriptor is parameterized when it has a `paramsSchema`.
  *
  * The unified descriptor list collapses the legacy split (a separate slot used to register parameterized codecs) — every codec id resolves through the same map (codec-registry-unification spec § Decision).
  */
@@ -415,13 +418,14 @@ function assertColumnCodecIntegrity(
           );
         }
 
-        if (descriptor.isParameterized && ref.typeParams === undefined) {
+        const paramsSchema = descriptor.paramsSchema;
+        if (paramsSchema !== undefined && ref.typeParams === undefined) {
           // Some parameterized codecs declare every paramsSchema field as optional
           // (e.g. `pg/timestamptz-temporal@1` precision). Defer to the descriptor's own
           // schema rather than rejecting purely on structural absence: probe the
           // schema with an empty params object and only fail when the schema
           // rejects it (i.e. at least one field is required).
-          const probe = descriptor.paramsSchema['~standard'].validate({});
+          const probe = paramsSchema['~standard'].validate({});
           if (probe instanceof Promise) {
             // Swallow the probe Promise's rejection so Node doesn't warn about an
             // unhandled rejection once we throw synchronously below.

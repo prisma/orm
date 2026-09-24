@@ -9,7 +9,7 @@ import {
   readContractSnapshotJson,
 } from '@internal/migration-tools/contract-snapshot-store';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import { findLatestMigration, isGraphNode } from '@internal/migration-tools/migration-graph';
+import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import { parseContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry } from '@internal/migration-tools/refs';
 import {
@@ -64,8 +64,6 @@ export interface RefOperationOptions {
   readonly config: PrismaNextConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** `--config` as the user wrote it, used only to locate the migrations directory and for display. */
-  readonly configPath?: string;
 }
 
 function cliErrorInvalidRefName(name: string): CliStructuredError {
@@ -86,11 +84,7 @@ export async function executeRefSetCommand(
 
   const config = options.config;
   try {
-    const { migrationsDir, refsDir } = resolveMigrationPaths(
-      options.configPath,
-      config,
-      options.cwd,
-    );
+    const { migrationsDir, refsDir } = resolveMigrationPaths(config, options.cwd);
     const loaded = await buildReadAggregate(config, { migrationsDir });
     if (!loaded.ok) {
       return notOk(loaded.failure);
@@ -114,8 +108,7 @@ export async function executeRefSetCommand(
       return notOk(errorRefSetEmptySentinel(resolvedHash));
     }
     if (!isGraphNode(resolvedHash, graph)) {
-      const graphTip = findLatestMigration(graph)?.to ?? null;
-      return notOk(errorRefSetHashNotInGraph(resolvedHash, [...graph.nodes].sort(), graphTip));
+      return notOk(errorRefSetHashNotInGraph(resolvedHash, [...graph.nodes].sort()));
     }
 
     const matchingBundle = bundles.find((bundle) => bundle.metadata.to === resolvedHash);
@@ -158,7 +151,7 @@ export async function executeRefDeleteCommand(
   options: RefOperationOptions,
 ): Promise<Result<RefDeleteResult, CliStructuredError>> {
   try {
-    const { refsDir } = resolveMigrationPaths(options.configPath, options.config, options.cwd);
+    const { refsDir } = resolveMigrationPaths(options.config, options.cwd);
     await deleteRef(refsDir, name);
     return ok({ ok: true as const, ref: name, deleted: true as const });
   } catch (error) {
@@ -171,7 +164,7 @@ export async function executeRefListCommand(
   options: RefOperationOptions,
 ): Promise<Result<RefListResult, CliStructuredError>> {
   try {
-    const { refsDir } = resolveMigrationPaths(options.configPath, options.config, options.cwd);
+    const { refsDir } = resolveMigrationPaths(options.config, options.cwd);
     const refs = await readRefs(refsDir);
     return ok({ ok: true as const, refs });
   } catch (error) {
