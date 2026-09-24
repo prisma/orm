@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
@@ -46,7 +47,9 @@ export interface Prisma7SourceCheck {
    */
   readonly outcome: 'readable' | 'unchecked' | 'no-source';
   readonly packageName: string;
-  /** What the check installed; `undefined` when it installed nothing. */
+  /** Every package the check installed, so the install phase skips them. */
+  readonly installed: readonly string[];
+  /** The installed packages the project did not declare before; `undefined` when there are none. */
   readonly added: PackagesAdded | undefined;
   readonly warnings: readonly string[];
 }
@@ -87,10 +90,12 @@ export function createPrisma7SourceCheck(ctx: {
     const resolveImportSpecifier = scaffoldSpecifierResolverFor(target);
     const packageName = targetPackageName(target, resolveImportSpecifier);
     const warnings: string[] = [];
+    let installed: readonly string[] = [];
     let added: PackagesAdded | undefined;
 
     if (ctx.install) {
       const deps = [packageName, 'dotenv'];
+      const declaredBefore = declaredPackages(ctx.cwd);
       const outcome = await installProjectDependencies({
         packages: ctx.packages,
         cwd: ctx.cwd,
@@ -102,7 +107,15 @@ export function createPrisma7SourceCheck(ctx: {
         throw new Prisma7CheckInstallFailed(outcome.failure, target, schemaPath);
       }
       warnings.push(...outcome.warnings);
-      added = { packages: deps, removeCommand: formatRemoveCommand(ctx.packageManager, deps) };
+      installed = deps;
+      const newlyDeclared = deps.filter((dep) => !declaredBefore.has(dep));
+      added =
+        newlyDeclared.length === 0
+          ? undefined
+          : {
+              packages: newlyDeclared,
+              removeCommand: formatRemoveCommand(ctx.packageManager, newlyDeclared),
+            };
     }
 
     const module = await ctx.importFromProject(
@@ -114,7 +127,7 @@ export function createPrisma7SourceCheck(ctx: {
         warnings.push(
           `Could not check that Prisma 8 can read ${schemaPath}: ${packageName} is not installed. Install the dependencies and run \`prisma contract emit\` to check it.`,
         );
-        return { outcome: 'unchecked', packageName, added, warnings };
+        return { outcome: 'unchecked', packageName, installed, added, warnings };
       }
       throw errorInitPrisma7SourceUnavailable({
         schemaPath,
@@ -126,7 +139,7 @@ export function createPrisma7SourceCheck(ctx: {
 
     const { defineConfig, prisma7Schema } = module;
     if (typeof defineConfig !== 'function' || typeof prisma7Schema !== 'function') {
-      return { outcome: 'no-source', packageName, added, warnings };
+      return { outcome: 'no-source', packageName, installed, added, warnings };
     }
 
     const section: unknown = defineConfig({
@@ -148,8 +161,25 @@ export function createPrisma7SourceCheck(ctx: {
         added,
       });
     }
-    return { outcome: 'readable', packageName, added, warnings };
+    return { outcome: 'readable', packageName, installed, added, warnings };
   };
+}
+
+function declaredPackages(cwd: string): ReadonlySet<string> {
+  let manifest: unknown;
+  try {
+    manifest = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf-8'));
+  } catch {
+    return new Set();
+  }
+  if (!isRecord(manifest)) {
+    return new Set();
+  }
+  const names = ['dependencies', 'devDependencies', 'optionalDependencies'].flatMap((field) => {
+    const section = manifest[field];
+    return isRecord(section) ? Object.keys(section) : [];
+  });
+  return new Set(names);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

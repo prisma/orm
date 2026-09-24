@@ -104,6 +104,7 @@ export function stubCheck(
     return {
       outcome: 'readable' as const,
       packageName: STUB_PACKAGE,
+      installed: [],
       added: undefined,
       warnings: [],
       ...outcome,

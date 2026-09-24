@@ -171,6 +171,35 @@ describe('the Prisma 7 check before init changes the project', () => {
   );
 
   it(
+    'names only the packages the project did not declare before the check',
+    async () => {
+      copyFixture();
+      const manifest = JSON.parse(projectFile('package.json'));
+      manifest.dependencies = { ...manifest.dependencies, dotenv: '^17.0.0' };
+      writeFileSync(join(projectDir, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+      loadTargetConfig = await targetConfigWith(refusingSource);
+
+      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code: 'CLI.INIT_PRISMA7_SCHEMA_REFUSED',
+          nextActions: [
+            expect.anything(),
+            expect.objectContaining({
+              label: expect.stringMatching(
+                /^init added @prisma\/orm-postgres to package\.json before checking; remove it with `\w+ (remove|uninstall) @prisma\/orm-postgres`\.$/,
+              ),
+            }),
+          ],
+          meta: { packagesAdded: ['@prisma/orm-postgres'] },
+        },
+      });
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
     'refuses --from-prisma7-schema when the target package has no Prisma 7 source',
     async () => {
       copyFixture();

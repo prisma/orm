@@ -439,7 +439,7 @@ export interface PackagesAdded {
 function packagesAddedNote(added: PackagesAdded | undefined): string {
   return added === undefined
     ? ''
-    : `\ninit added ${added.packages.join(' and ')} to package.json before checking; remove them with \`${added.removeCommand}\`.`;
+    : `\ninit added ${added.packages.join(' and ')} to package.json before checking; remove ${added.packages.length === 1 ? 'it' : 'them'} with \`${added.removeCommand}\`.`;
 }
 
 /**

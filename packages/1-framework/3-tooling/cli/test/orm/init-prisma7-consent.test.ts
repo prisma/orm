@@ -202,7 +202,11 @@ describe(
           cwd: projectDir,
           flags: prisma7Flags(),
           prompt,
-          checkPrisma7Source: stubCheck({ added: ADDED, warnings: ['from the install'] }),
+          checkPrisma7Source: stubCheck({
+            installed: ADDED.packages,
+            added: ADDED,
+            warnings: ['from the install'],
+          }),
         });
 
         expect(inputs).toMatchObject({

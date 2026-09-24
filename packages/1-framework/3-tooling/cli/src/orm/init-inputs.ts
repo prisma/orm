@@ -409,7 +409,7 @@ async function resolvePrisma7Inputs(ctx: {
   const target = prisma7Target(schema, flagTarget, flags.target);
 
   const check = await ctx.checkPrisma7Source({ target, schemaPath: schema.path });
-  const preinstalled = check.added?.packages ?? [];
+  const preinstalled = check.installed;
   if (check.outcome === 'no-source') {
     if (flags.fromPrisma7Schema !== undefined) {
       throw errorInitPrisma7SourceUnavailable({
@@ -430,6 +430,7 @@ async function resolvePrisma7Inputs(ctx: {
         ...check.warnings,
         `${check.packageName} cannot read Prisma 7 schemas, so init sets up a fresh Prisma 8 project and leaves ${schema.path} alone.`,
       ],
+      installed: check.installed,
       added: check.added,
     });
   }
@@ -490,6 +491,7 @@ async function resolveStarterInputs(ctx: {
   readonly prisma7SchemaPath: string | undefined;
   readonly warnings: readonly string[];
   /** What the Prisma 7 check installed before it found no source. */
+  readonly installed: readonly string[];
   readonly added: PackagesAdded | undefined;
 }): Promise<ResolvedInitInputs> {
   const { cwd, flags, prompt, flagAuthoring } = ctx;
@@ -541,7 +543,7 @@ async function resolveStarterInputs(ctx: {
     sideBySide: null,
     warnings: ctx.warnings,
     install: !flags.skipInstall,
-    preinstalled: ctx.added?.packages ?? [],
+    preinstalled: ctx.installed,
     writeEnv,
     probeDb: flags.probeDb,
     strictProbe: flags.strictProbe,
@@ -605,6 +607,7 @@ export async function resolveInitInputs(ctx: {
     flagAuthoring,
     prisma7SchemaPath,
     warnings: [],
+    installed: [],
     added: undefined,
   });
 }
