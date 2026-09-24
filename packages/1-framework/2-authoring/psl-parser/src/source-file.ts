@@ -142,6 +142,22 @@ export class PslSources {
     }
   }
 
+  /**
+   * Unites the per-document `PslSources` registries `parse()` returns for each
+   * member of a multi-file schema into the one registry `buildSymbolTable` and
+   * the interpreters expect.
+   */
+  static merge(
+    parsed: readonly { readonly document: DocumentAst; readonly sources: PslSources }[],
+  ): PslSources {
+    return new PslSources(
+      parsed.map(
+        ({ document, sources }) =>
+          [document.syntax, sources.sourceFileFor(document.syntax)] as const,
+      ),
+    );
+  }
+
   sourceFileNamed(filename: string): SourceFile {
     let match: SourceFile | undefined;
     for (const sourceFile of this.#sourcesByRoot.values()) {
@@ -167,21 +183,6 @@ export class PslSources {
     }
     return sourceFile;
   }
-}
-
-/**
- * Unites the per-document `PslSources` registries `parse()` returns for each
- * member of a multi-file schema into the one registry `buildSymbolTable` and
- * the interpreters expect.
- */
-export function mergePslSources(
-  parsed: readonly { readonly document: DocumentAst; readonly sources: PslSources }[],
-): PslSources {
-  return new PslSources(
-    parsed.map(
-      ({ document, sources }) => [document.syntax, sources.sourceFileFor(document.syntax)] as const,
-    ),
-  );
 }
 
 function clamp(value: number, min: number, max: number): number {

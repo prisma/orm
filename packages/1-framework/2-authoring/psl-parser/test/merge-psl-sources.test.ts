@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../src/parse';
-import { mergePslSources } from '../src/source-file';
+import { PslSources } from '../src/source-file';
 
-describe('mergePslSources', () => {
+describe('PslSources.merge', () => {
   it('unites per-document sources into one registry addressable by either document', () => {
     const first = parse('model User { id Int }', 'a.prisma');
     const second = parse('model Post { id Int }', 'b.prisma');
 
-    const merged = mergePslSources([first, second]);
+    const merged = PslSources.merge([first, second]);
 
     expect(merged.sourceFileFor(first.document.syntax).filename).toBe('a.prisma');
     expect(merged.sourceFileFor(second.document.syntax).filename).toBe('b.prisma');
@@ -16,7 +16,7 @@ describe('mergePslSources', () => {
   });
 
   it('returns an empty registry for no documents', () => {
-    const merged = mergePslSources([]);
+    const merged = PslSources.merge([]);
 
     expect(() => merged.sourceFileNamed('anything.prisma')).toThrow();
   });
