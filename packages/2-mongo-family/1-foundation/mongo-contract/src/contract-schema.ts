@@ -4,6 +4,38 @@ import type { MongoJsonObject, MongoJsonPrimitive, MongoJsonValue } from './cont
 
 const ControlPolicySchema = type("'managed' | 'tolerated' | 'external' | 'observed'");
 
+const generatorIdSchema = type('string').narrow((value, ctx) => {
+  return /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(value) ? true : ctx.mustBe('a flat generator id');
+});
+
+const ExecutionMutationDefaultValueSchema = type({
+  '+': 'reject',
+  kind: "'generator'",
+  id: generatorIdSchema,
+  'params?': 'Record<string, unknown>',
+});
+
+const ExecutionMutationDefaultSchema = type({
+  '+': 'reject',
+  ref: {
+    '+': 'reject',
+    namespace: 'string',
+    model: 'string',
+    field: 'string',
+  },
+  'onCreate?': ExecutionMutationDefaultValueSchema,
+  'onUpdate?': ExecutionMutationDefaultValueSchema,
+});
+
+const ExecutionSchema = type({
+  '+': 'reject',
+  executionHash: 'string',
+  mutations: {
+    '+': 'reject',
+    defaults: ExecutionMutationDefaultSchema.array().readonly(),
+  },
+});
+
 const ScalarFieldTypeSchema = type({
   '+': 'reject',
   kind: "'scalar'",
@@ -452,6 +484,7 @@ export function createMongoContractSchema(
     'extensions?': 'Record<string, unknown>',
     'meta?': 'Record<string, unknown>',
     'defaultControlPolicy?': ControlPolicySchema,
+    'execution?': ExecutionSchema,
     'sources?': 'Record<string, unknown>',
     '_generated?': 'Record<string, unknown>',
     domain: type({

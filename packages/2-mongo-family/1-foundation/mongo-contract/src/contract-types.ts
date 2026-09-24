@@ -1,4 +1,10 @@
-import type { Contract, ContractModel, StorageBase } from '@internal/contract/types';
+import type {
+  Contract,
+  ContractModel,
+  ExecutionHashBase,
+  ExecutionMutationDefaultValue,
+  StorageBase,
+} from '@internal/contract/types';
 import type { Namespace, UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoIndexOptionsInput } from './ir/mongo-index-options';
 
@@ -63,6 +69,22 @@ export type MongoStorageShape<THash extends string = string> = StorageBase<THash
       readonly entries: MongoNamespaceEntries;
     }
   >;
+};
+
+/**
+ * A mutation default on a Mongo field: the generator that fills it on create, on update, or both.
+ */
+export type MongoExecutionMutationDefault = {
+  readonly ref: { readonly namespace: string; readonly model: string; readonly field: string };
+  readonly onCreate?: ExecutionMutationDefaultValue;
+  readonly onUpdate?: ExecutionMutationDefaultValue;
+};
+
+export type MongoContractExecutionSection<THash extends string = string> = {
+  readonly executionHash: ExecutionHashBase<THash>;
+  readonly mutations: {
+    readonly defaults: ReadonlyArray<MongoExecutionMutationDefault>;
+  };
 };
 
 export type MongoContract<S extends MongoStorageShape = MongoStorageShape> = Contract<S>;
