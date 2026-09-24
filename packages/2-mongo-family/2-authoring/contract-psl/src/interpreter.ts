@@ -59,10 +59,13 @@ import {
   type PslDiagnosticCollector,
 } from '@internal/psl-parser';
 import {
+  claimedBlockKeywords,
   consumeInvalidFkPairing,
+  enumMemberAttributeDiagnostics,
   fkRelationPairKey,
   type InvalidFkPairing,
   requiredOneToOneBackrelationDiagnostic,
+  unsupportedBlockDiagnostic,
 } from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
 import { assertDefined } from '@internal/utils/assertions';
@@ -1057,17 +1060,7 @@ function processEnumDeclarations(input: {
   for (const enumSymbol of input.enumSymbols) {
     const sourceFile = input.sources.sourceFileFor(enumSymbol.node.syntax);
     const decl = enumSymbol.block;
-    for (const entry of enumSymbol.node.entries()) {
-      for (const attribute of entry.attributes()) {
-        input.diagnostics.push({
-          code: 'PSL_ENUM_MEMBER_ATTRIBUTE_UNSUPPORTED',
-          message: `enum "${decl.name}": member "${entry.key()?.name() ?? '?'}" carries @${attribute.name()?.path().join('.') ?? '?'}, but an enum member takes no attributes`,
-          ...diagnosticSource(input.sources, enumSymbol.node.syntax).at(
-            nodePslSpan(attribute.syntax, input.sources),
-          ),
-        });
-      }
-    }
+    input.diagnostics.push(...enumMemberAttributeDiagnostics(enumSymbol, input.sources));
     const handle = instantiateAuthoringEntityType<EnumTypeHandle | undefined>(
       'enum',
       enumDescriptor,
@@ -1136,7 +1129,13 @@ export function interpretPslDocumentToMongoContract(
     });
   }
 
-  const topLevelEnumSymbols = Object.values(topLevel.blocks).filter((b) => b.keyword === 'enum');
+  const blockKeywords = claimedBlockKeywords(input.authoringContributions?.pslBlockDescriptors);
+  const claimedBlocks: BlockSymbol[] = [];
+  for (const block of Object.values(topLevel.blocks)) {
+    if (blockKeywords.has(block.keyword)) claimedBlocks.push(block);
+    else diagnostics.push(unsupportedBlockDiagnostic(block, sources));
+  }
+  const topLevelEnumSymbols = claimedBlocks.filter((b) => b.keyword === 'enum');
 
   const builtEnums = processEnumDeclarations({
     enumSymbols: topLevelEnumSymbols,

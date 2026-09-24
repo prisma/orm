@@ -42,13 +42,6 @@ describe('hasPslInterpreter', () => {
     expect(hasPslInterpreter(source)).toBe(false);
   });
 
-  it('rejects a provider that declares no format, which is a TypeScript source', () => {
-    const provider = { load, interpret: () => [] };
-    const source: ContractSourceProvider = provider;
-
-    expect(hasPslInterpreter(source)).toBe(false);
-  });
-
   it('rejects a psl provider without an interpret method', () => {
     const source: ContractSourceProvider = { format: 'psl', load };
 

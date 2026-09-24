@@ -218,7 +218,7 @@ model User {
       summary: 'PSL to Mongo contract interpretation failed',
       diagnostics: [
         {
-          code: 'PSL_ENUM_MEMBER_ATTRIBUTE_UNSUPPORTED',
+          code: 'PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE',
           message:
             'enum "Role": member "USER" carries @map, but an enum member takes no attributes',
           sourceId: './schema.prisma',

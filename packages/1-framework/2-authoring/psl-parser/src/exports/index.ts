@@ -133,3 +133,4 @@ export type {
   TopLevelScope,
 } from '../symbol-table';
 export { buildSymbolTable } from '../symbol-table';
+export { isPslIdentifier } from '../tokenizer';

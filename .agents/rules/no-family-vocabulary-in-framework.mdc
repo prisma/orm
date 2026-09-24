@@ -1,5 +1,5 @@
 ---
-description: The framework domain (packages/1-framework) carries no family- or target-specific vocabulary — types, fields, hooks, or strategy values. Enforced by the no-family-vocabulary Biome plugin plus lint:framework-vocabulary.
+description: The framework domain (packages/1-framework) carries no family- or target-specific vocabulary — types, fields, hooks, or strategy values — and no name of a Prisma version before 8. Enforced by the no-family-vocabulary Biome plugin plus lint:framework-vocabulary.
 globs: ["packages/1-framework/**"]
 alwaysApply: false
 ---
@@ -10,11 +10,15 @@ alwaysApply: false
 
 **The test for every new framework export, field, hook, or member:** *would Mongo populate or consume this meaningfully?* If not, it belongs in the family layer (e.g. `@internal/sql-contract`), behind a structural interface + type predicate at the boundary.
 
+The framework also must not know which Prisma version wrote a document. It reads every PSL document the same way, and each family or target reader decides what it accepts. Code that exists for an earlier version's schema belongs in the package that reads that schema (e.g. `@internal/sql-contract-prisma7`).
+
 ## How it is enforced
 
-The [`no-family-vocabulary` Biome plugin](../../biome-plugins/no-family-vocabulary.grit) matches syntax nodes — identifiers, string literals, template chunks, import paths — carrying family/target terms (`table`, `column`, `postgres`, `nativeType`, `primaryKey`, …). It emits `info` diagnostics; `pnpm lint:framework-vocabulary` is the ratchet that counts them, deduplicated by file and line, against the `threshold` in `scripts/lint-framework-vocabulary.config.json`. The count may only shrink, and the threshold must be lowered whenever it does.
+The [`no-family-vocabulary` Biome plugin](../../biome-plugins/no-family-vocabulary.grit) matches syntax nodes — identifiers, string literals, template chunks, import paths — carrying family/target terms (`table`, `column`, `postgres`, `nativeType`, `primaryKey`, …) or the name of a Prisma version before 8 (`prisma7`, `Prisma 6`, `prisma@5.22.0`, …). `Prisma 8` is never flagged. It emits `info` diagnostics; `pnpm lint:framework-vocabulary` is the ratchet that counts them, deduplicated by file and line, against the `threshold` in `scripts/lint-framework-vocabulary.config.json`. The count may only shrink, and the threshold must be lowered whenever it does.
 
 **Comments and JSDoc are deliberately not counted.** Prose that documents family-blind code correctly ("family-parameterized (SQL, Mongo, …)") is good documentation, and the previous line-scanning checker taxed it — the majority of what it flagged was prose, not surface. A leak that matters is a real type, field, identifier, string, or import path, and the plugin only sees those.
+
+Test files and `test/` directories are not scanned. Outside them there are two exemptions, and no others: a framework-neutral compound listed in the plugin's `not` guards (`SymbolTable`, `MigrationLogTable`, the formatter's alignment columns), and a line suppression. The plugin has no path exemptions; do not add one.
 
 Suppress a genuinely family-blind site at the line, with a reason:
 

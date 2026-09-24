@@ -145,7 +145,7 @@ model Post {
     if (result.ok) return;
     expect(result.failure.diagnostics).toEqual([
       expect.objectContaining({
-        code: 'PSL_ENUM_MEMBER_ATTRIBUTE_UNSUPPORTED',
+        code: 'PSL_UNSUPPORTED_ENUM_MEMBER_ATTRIBUTE',
         message:
           'enum "Priority": member "Low" carries @map, but an enum member takes no attributes',
         span: expect.objectContaining({ start: expect.objectContaining({ line: 4 }) }),

@@ -17,16 +17,6 @@ export interface ParseResult {
   readonly sources: PslSources;
 }
 
-export type PslGrammar = 'psl' | 'prisma7';
-
-export interface ParseOptions {
-  /**
-   * `prisma7` also reads field lines in a `view` body. Defaults to `psl`, which reads a `view`
-   * block as plain `key = value` entries.
-   */
-  readonly grammar?: PslGrammar;
-}
-
 const TRIVIA_KINDS: ReadonlySet<TokenKind> = new Set<TokenKind>([
   'Whitespace',
   'Newline',
@@ -43,7 +33,7 @@ export interface DiagnosticMark {
 }
 
 /**
- * The fault-tolerant parser substrate the grammars drive. Trivia is flushed
+ * The fault-tolerant parser substrate the parse functions below drive. Trivia is flushed
  * into the enclosing open node, so every child node spans exactly its first
  * through last significant token.
  */
@@ -525,19 +515,19 @@ type MemberParser = (cursor: Cursor) => void;
  * Parses a full PSL document. Never throws — malformed input yields diagnostics
  * and a recovered tree, not an exception.
  */
-export function parse(source: string, filename: string, options: ParseOptions = {}): ParseResult {
+export function parse(source: string, filename: string): ParseResult {
   const cursor = new Cursor(filename, source);
-  const green = parseDocument(cursor, options.grammar ?? 'psl');
+  const green = parseDocument(cursor);
   const root = createSyntaxTree(green);
   const document = DocumentAst.cast(root) ?? new DocumentAst(root);
   const sources = new PslSources([[document.syntax, cursor.sourceFile]]);
   return { document, diagnostics: cursor.diagnostics, sources };
 }
 
-function parseDocument(cursor: Cursor, grammar: PslGrammar): GreenNode {
+function parseDocument(cursor: Cursor): GreenNode {
   cursor.startNode('Document');
   while (cursor.peekKind() !== 'Eof') {
-    parseDeclaration(cursor, false, grammar);
+    parseDeclaration(cursor, false);
   }
   cursor.flushTrivia(); // attach trailing trivia so the round-trip stays lossless
   return cursor.finishNode();
@@ -560,7 +550,7 @@ function keywordIs(cursor: Cursor, keyword: string): boolean {
  * Recovery runs via the `if (!node)` tail rather than as a `??` arm, because it
  * appends raw tokens to the open parent instead of returning a child node.
  */
-function parseDeclaration(cursor: Cursor, insideNamespace: boolean, grammar: PslGrammar): void {
+function parseDeclaration(cursor: Cursor, insideNamespace: boolean): void {
   const name = cursor.peekKind(1) === 'Ident' ? cursor.peekToken(1).text : '';
   if (insideNamespace && keywordIs(cursor, 'namespace')) {
     cursor.diagnostic(
@@ -584,10 +574,10 @@ function parseDeclaration(cursor: Cursor, insideNamespace: boolean, grammar: Psl
 
   const node =
     parseModel(cursor) ??
-    parseNamespace(cursor, grammar) ??
+    parseNamespace(cursor) ??
     parseCompositeType(cursor) ??
     parseTypesBlock(cursor) ??
-    parseGenericBlock(cursor, grammar);
+    parseGenericBlock(cursor);
   if (!node) {
     parseUnsupportedTopLevel(cursor);
   }
@@ -638,15 +628,8 @@ export function parseModel(cursor: Cursor): GreenNode | undefined {
  * {` with no name) routed to its dedicated parser. The generic keyword set is
  * open, so a bare identifier with no brace (e.g. `oops`) is read as an unfinished
  * custom declaration rather than unsupported content.
- *
- * With the `prisma7` grammar, a `view` block stays a generic block (so interpreters keep rejecting
- * the keyword), but its body is read like a model body, so the field lines parse as
- * `FieldDeclaration` nodes with spans instead of mangled entries.
  */
-export function parseGenericBlock(
-  cursor: Cursor,
-  grammar: PslGrammar = 'psl',
-): GreenNode | undefined {
+export function parseGenericBlock(cursor: Cursor): GreenNode | undefined {
   if (cursor.peekKind() !== 'Ident') return undefined;
   const keyword = cursor.peekToken().text;
   if (RESERVED_BLOCK_KEYWORDS.has(keyword)) return undefined;
@@ -657,7 +640,7 @@ export function parseGenericBlock(
     parseIdentifier(cursor);
   }
   if (cursor.peekKind() === 'LBrace') {
-    parseBlockBody(cursor, genericBlockMemberParser(keyword, grammar));
+    parseBlockBody(cursor, genericBlockMemberParser(keyword));
   } else {
     cursor.diagnostic(
       'PSL_INVALID_DECLARATION',
@@ -669,9 +652,9 @@ export function parseGenericBlock(
   return cursor.finishNode();
 }
 
-export function parseNamespace(cursor: Cursor, grammar: PslGrammar = 'psl'): GreenNode | undefined {
+export function parseNamespace(cursor: Cursor): GreenNode | undefined {
   if (!keywordIs(cursor, 'namespace')) return undefined;
-  return parseBlock(cursor, 'Namespace', true, (inner) => parseDeclaration(inner, true, grammar));
+  return parseBlock(cursor, 'Namespace', true, (inner) => parseDeclaration(inner, true));
 }
 
 export function parseCompositeType(cursor: Cursor): GreenNode | undefined {
@@ -744,13 +727,13 @@ function parseNamedTypeMember(cursor: Cursor): void {
 }
 
 /**
- * An `enum` member may carry `@` attributes in every grammar (`USER @map("user")`); whether one
- * is allowed is the interpreter's decision. With the `prisma7` grammar, a `view` body is read like
- * a model body. Every other generic block reads plain `key = value` entries.
+ * A `view` body is read like a model body. Every other generic block reads `key = value` entries
+ * and bare keys, and in an `enum` block those may carry `@` attributes (`USER @map("user")`). Each
+ * interpreter decides whether it accepts the block and its members.
  */
-function genericBlockMemberParser(keyword: string, grammar: PslGrammar): MemberParser {
+function genericBlockMemberParser(keyword: string): MemberParser {
+  if (keyword === 'view') return parseModelMember;
   if (keyword === 'enum') return parseEnumMember;
-  if (grammar === 'prisma7' && keyword === 'view') return parseModelMember;
   return parseKeyValueMember;
 }
 
