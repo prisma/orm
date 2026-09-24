@@ -50,7 +50,13 @@ const codecLookup: CodecLookup = {
   renderOutputTypeFor: () => undefined,
 };
 
-function interpret(schema: string, options?: { readonly composedExtensions?: readonly string[] }) {
+function interpret(
+  schema: string,
+  options?: {
+    readonly composedExtensions?: readonly string[];
+    readonly authoringContributions?: AuthoringContributions;
+  },
+) {
   const { document, sources } = parse(schema, 'schema.prisma');
   const { symbolTable } = buildSymbolTable({
     documents: [document],
@@ -64,13 +70,16 @@ function interpret(schema: string, options?: { readonly composedExtensions?: rea
     scalarTypeCodecIds,
     controlMutationDefaults: { dataTypeEntries: {}, defaultFunctionRegistry: new Map() },
     codecLookup,
-    authoringContributions,
+    authoringContributions: options?.authoringContributions ?? authoringContributions,
     ...(options?.composedExtensions ? { composedExtensions: options.composedExtensions } : {}),
   });
 }
 
-function diagnosticsOf(schema: string): readonly ContractSourceDiagnostic[] {
-  const result = interpret(schema);
+function diagnosticsOf(
+  schema: string,
+  options?: Parameters<typeof interpret>[1],
+): readonly ContractSourceDiagnostic[] {
+  const result = interpret(schema, options);
   if (result.ok) throw new Error('Expected interpretation to fail');
   return result.failure.diagnostics;
 }
@@ -235,4 +244,51 @@ describe('Mongo PSL temporal preset misuse', () => {
 `),
     ).toEqual([expect.objectContaining({ code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT' })]);
   });
+
+  it('rejects a preset on a composite-type field with PSL_UNSUPPORTED_FIELD_TYPE', () => {
+    expect(
+      diagnosticsOf(`type Audit {
+  createdAt temporal.createdAt()
+}
+
+model Post {
+  id    ObjectId @id @map("_id")
+  audit Audit
+}
+`),
+    ).toEqual([
+      expect.objectContaining({
+        code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+        message: expect.stringContaining('not on fields of a composite type'),
+      }),
+    ]);
+  });
+
+  it.each([
+    ['a storage default', { default: { kind: 'function', expression: 'now()' } }],
+    ['id semantics', { id: true }],
+    ['a unique constraint', { unique: true }],
+  ] as const)(
+    'rejects a preset that contributes %s with PSL_UNSUPPORTED_FIELD_TYPE',
+    (contribution, output) => {
+      const contributions: AuthoringContributions = {
+        field: { custom: { stamp: { kind: 'fieldPreset', output: { ...mongoDate, ...output } } } },
+      };
+      expect(
+        diagnosticsOf(
+          `model Post {
+  id    ObjectId      @id @map("_id")
+  stamp custom.stamp()
+}
+`,
+          { authoringContributions: contributions },
+        ),
+      ).toEqual([
+        expect.objectContaining({
+          code: 'PSL_UNSUPPORTED_FIELD_TYPE',
+          message: expect.stringContaining(`contributes ${contribution}`),
+        }),
+      ]);
+    },
+  );
 });

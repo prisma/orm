@@ -188,4 +188,36 @@ describe('Mongo TS temporal preset misuse', () => {
       defineContract({ family: mongoFamilyPack, target: collidingTarget }, () => ({ models: {} })),
     ).toThrow(expect.objectContaining({ code: 'CONTRACT.PACK_CONTRIBUTION_INVALID' }));
   });
+
+  it.each([
+    ['default', { default: { kind: 'function', expression: 'now()' } }],
+    ['id', { id: true }],
+    ['unique', { unique: true }],
+  ] as const)('refuses a pack preset that contributes %s', (contribution, output) => {
+    const target = {
+      ...mongoTargetPack,
+      authoring: {
+        field: { custom: { stamp: { kind: 'fieldPreset', output: { ...mongoDate, ...output } } } },
+      },
+    } as const satisfies TargetPackRef<'mongo', 'mongo'>;
+    expect(() =>
+      defineContract({ family: mongoFamilyPack, target }, ({ field, model }) => ({
+        models: {
+          Post: model('Post', {
+            collection: 'posts',
+            fields: { _id: field.objectId(), stamp: field.custom.stamp() },
+          }),
+        },
+      })),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.PACK_CONTRIBUTION_INVALID',
+        meta: expect.objectContaining({
+          helperPath: 'custom.stamp',
+          reason: 'preset-contribution-unsupported',
+          contribution: [contribution],
+        }),
+      }),
+    );
+  });
 });
