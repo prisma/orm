@@ -1,11 +1,6 @@
-import {
-  createMongoRunnerDeps,
-  introspectSchema,
-  MongoControlAdapterImpl,
-} from '@internal/adapter-mongo/control';
-import { MongoDriverImpl } from '@internal/driver-mongo';
+import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
-import type { ControlFamilyInstance, MigrationPlan } from '@internal/framework-components/control';
+import type { MigrationPlan } from '@internal/framework-components/control';
 import {
   type AggregateMigrationEdgeRef,
   buildFabricatedMigrationEdge,
@@ -106,20 +101,9 @@ function serializePlan(plan: MigrationPlan): MigrationPlan {
   };
 }
 
-function fakeFamily(): ControlFamilyInstance<'mongo', MongoSchemaIR> {
-  return {
-    familyId: 'mongo' as const,
-    introspect: async () => introspectSchema(db),
-  } as unknown as ControlFamilyInstance<'mongo', MongoSchemaIR>;
-}
-
 function makeRunner() {
   return new MongoMigrationRunner(
-    createMongoRunnerDeps(
-      new MongoControlDriver(db, client),
-      MongoDriverImpl.fromDb(db),
-      fakeFamily(),
-    ),
+    controlAdapter.createRunnerDependencies(new MongoControlDriver(db, client)),
   );
 }
 

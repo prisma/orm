@@ -23,6 +23,7 @@ import { blindCast } from '@internal/utils/casts';
 import type { Document } from 'mongodb';
 import { createMongoAdapter } from '../mongo-adapter';
 import { describeReceivedValue, mongoAdapterError } from './errors';
+import { MongoInspectionExecutor } from './inspection-executor';
 import { introspectSchema } from './introspect-schema';
 import {
   MONGO_LEDGER_COLLECTION,
@@ -30,8 +31,7 @@ import {
   parseMongoMarkerDocSafely,
 } from './marker-ledger';
 import { MARKER_LEDGER_COLLECTION, type MarkerLedgerDocShape } from './marker-ledger-collection';
-import { isMongoControlDriver } from './mongo-control-driver';
-import { bindRunnerDeps, extractDb, requireMongoControlDriver } from './runner-deps';
+import { extractDb, isMongoControlDriver, requireMongoControlDriver } from './mongo-control-driver';
 
 /**
  * Mongo control adapter for control-plane operations like introspection
@@ -307,6 +307,20 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
   createRunnerDependencies(
     driver: ControlDriverInstance<'mongo', 'mongo'>,
   ): MongoRunnerDependencies {
-    return bindRunnerDeps(driver, requireMongoControlDriver(driver), this);
+    const controlDriver = requireMongoControlDriver(driver);
+    return {
+      inspectionExecutor: new MongoInspectionExecutor(controlDriver.db),
+      adapter: this.#adapter,
+      driver: controlDriver,
+      executeDdl: (command) => this.executeDdl(controlDriver, command),
+      markerOps: {
+        readMarker: (space) => this.readMarker(controlDriver, space),
+        initMarker: (space, destination) => this.initMarker(controlDriver, space, destination),
+        updateMarker: (space, expectedFrom, destination) =>
+          this.updateMarker(controlDriver, space, expectedFrom, destination),
+        writeLedgerEntry: (space, entry) => this.writeLedgerEntry(controlDriver, space, entry),
+      },
+      introspectSchema: () => this.introspectSchema(controlDriver),
+    };
   }
 }

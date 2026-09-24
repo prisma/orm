@@ -1,8 +1,7 @@
-import { createMongoRunnerDeps, extractDb } from '@internal/adapter-mongo/control';
+import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import type { JsonValue } from '@internal/contract/types';
-import { MongoDriverImpl } from '@internal/driver-mongo';
 import mongoControlDriver from '@internal/driver-mongo/control';
-import { contractToMongoSchemaIR, createMongoFamilyInstance } from '@internal/family-mongo/control';
+import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import type { MongoContract } from '@internal/mongo-contract';
@@ -24,13 +23,6 @@ import { buildFabricatedMigrationEdges } from './fabricated-migration-edges';
 const ALL_POLICY = {
   allowedOperationClasses: ['additive', 'widening', 'destructive'] as const,
 };
-
-function makeFamily(): ReturnType<typeof createMongoFamilyInstance> {
-  // ControlStack arg is unused by the mongo factory; an empty object suffices for these integration tests.
-  return createMongoFamilyInstance(
-    {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
-  );
-}
 
 const bsonTypesByCodecId: Record<string, string> = {
   'mongo/string@1': 'string',
@@ -117,11 +109,7 @@ async function planAndApply(
   const controlDriver = await mongoControlDriver.create(replSetUri);
   try {
     const runner = new MongoMigrationRunner(
-      createMongoRunnerDeps(
-        controlDriver,
-        MongoDriverImpl.fromDb(extractDb(controlDriver)),
-        makeFamily(),
-      ),
+      new MongoControlAdapterImpl().createRunnerDependencies(controlDriver),
     );
     const plan = {
       targetId: 'mongo',

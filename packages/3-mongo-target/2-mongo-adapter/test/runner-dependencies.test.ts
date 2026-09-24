@@ -1,8 +1,10 @@
 import type { ControlDriverInstance } from '@internal/framework-components/control';
+import { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import { isStructuredError } from '@internal/utils/structured-error';
 import { describe, expect, it, vi } from 'vitest';
+import { MongoInspectionExecutor } from '../src/core/inspection-executor';
 import { MongoControlAdapterImpl } from '../src/core/mongo-control-adapter';
-import { extractDb } from '../src/core/runner-deps';
+import { extractDb } from '../src/core/mongo-control-driver';
 
 function fakeControlDriver() {
   return {
@@ -67,6 +69,21 @@ describe('MongoControlAdapterImpl.createRunnerDependencies', () => {
     await adapter.createRunnerDependencies(driver).markerOps.readMarker('app');
 
     expect(readMarker).toHaveBeenCalledWith(driver, 'app');
+  });
+
+  it('routes introspection through the control adapter with the control driver', async () => {
+    const adapter = new MongoControlAdapterImpl();
+    const schema = new MongoSchemaIR([]);
+    const introspectSchema = vi.spyOn(adapter, 'introspectSchema').mockResolvedValue(schema);
+    const driver = fakeControlDriver();
+
+    expect(await adapter.createRunnerDependencies(driver).introspectSchema()).toBe(schema);
+    expect(introspectSchema).toHaveBeenCalledWith(driver);
+  });
+
+  it('builds the inspection executor over the control driver db', () => {
+    const deps = new MongoControlAdapterImpl().createRunnerDependencies(fakeControlDriver());
+    expect(deps.inspectionExecutor).toBeInstanceOf(MongoInspectionExecutor);
   });
 
   it('throws CONFIG.VALIDATION_FAILED when the value is not a Mongo control driver', () => {

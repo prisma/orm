@@ -1,13 +1,7 @@
-import mongoAdapterDescriptor, {
-  createMongoRunnerDeps,
-  introspectSchema,
-  MongoControlAdapterImpl,
-} from '@internal/adapter-mongo/control';
-import { MongoDriverImpl } from '@internal/driver-mongo';
+import mongoAdapterDescriptor, { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
 import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
 import {
-  type ControlFamilyInstance,
   createControlStack,
   type MigrationPlan,
   type MigrationPlanOperation,
@@ -154,24 +148,9 @@ function serializePlan(plan: MigrationPlan): MigrationPlan {
   };
 }
 
-function fakeFamily(): ControlFamilyInstance<'mongo', MongoSchemaIR> {
-  // The runner only invokes `family.introspect`; the rest of the
-  // `ControlFamilyInstance` surface is unused at runtime in these tests, so
-  // the cast keeps the test free of family-mongo (which would create a
-  // package-layering loop into family-mongo from the adapter tests).
-  return {
-    familyId: 'mongo' as const,
-    introspect: async () => introspectSchema(db),
-  } as unknown as ControlFamilyInstance<'mongo', MongoSchemaIR>;
-}
-
 function makeRunner() {
   return new MongoMigrationRunner(
-    createMongoRunnerDeps(
-      new MongoControlDriver(db, client),
-      MongoDriverImpl.fromDb(db),
-      fakeFamily(),
-    ),
+    controlAdapter.createRunnerDependencies(new MongoControlDriver(db, client)),
   );
 }
 

@@ -5,8 +5,7 @@ import type { MongoControlDriverInstance } from '@internal/mongo-lowering';
 export { MongoInspectionExecutor } from '../core/inspection-executor';
 export { introspectSchema } from '../core/introspect-schema';
 export { MongoControlAdapterImpl } from '../core/mongo-control-adapter';
-export { isMongoControlDriver } from '../core/mongo-control-driver';
-export { createMongoRunnerDeps, extractDb } from '../core/runner-deps';
+export { extractDb, isMongoControlDriver } from '../core/mongo-control-driver';
 export { createMongoAdapter } from '../mongo-adapter';
 export type { MongoControlDriverInstance };
 

@@ -1,4 +1,4 @@
-import { createMongoRunnerDeps, MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
+import { MongoControlAdapterImpl } from '@internal/adapter-mongo/control';
 import {
   createPostgresBuiltinCodecLookup,
   PostgresControlAdapter,
@@ -7,9 +7,7 @@ import {
   createSqliteBuiltinCodecLookup,
   SqliteControlAdapter,
 } from '@internal/adapter-sqlite/control';
-import { MongoDriverImpl } from '@internal/driver-mongo';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
-import { createMongoFamilyInstance } from '@internal/family-mongo/control';
 import { INIT_ADDITIVE_POLICY } from '@internal/family-sql/control';
 import {
   type AggregateMigrationEdgeRef,
@@ -52,12 +50,6 @@ import {
 } from '../../../../packages/3-targets/6-adapters/sqlite/test/migrations/fixtures/runner-fixtures';
 
 const controlAdapter = new MongoControlAdapterImpl();
-
-function makeMongoFamily(): ReturnType<typeof createMongoFamilyInstance> {
-  return createMongoFamilyInstance(
-    {} as unknown as Parameters<typeof createMongoFamilyInstance>[0],
-  );
-}
 
 function multiEdgePlanPg() {
   const destHash = pgContract.storage.storageHash;
@@ -281,11 +273,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
       ),
     };
     const mongoRunner = new MongoMigrationRunner(
-      createMongoRunnerDeps(
-        new MongoControlDriver(mongoDb, mongoClient),
-        MongoDriverImpl.fromDb(mongoDb),
-        makeMongoFamily(),
-      ),
+      controlAdapter.createRunnerDependencies(new MongoControlDriver(mongoDb, mongoClient)),
     );
     const mongoResult = await mongoRunner.execute({
       plan: mongoPlan,
@@ -451,11 +439,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
       ),
     };
     const mongoRunner = new MongoMigrationRunner(
-      createMongoRunnerDeps(
-        new MongoControlDriver(mongoDb, mongoClient),
-        MongoDriverImpl.fromDb(mongoDb),
-        makeMongoFamily(),
-      ),
+      controlAdapter.createRunnerDependencies(new MongoControlDriver(mongoDb, mongoClient)),
     );
     const mongoResult = await mongoRunner.execute({
       plan: mongoPlan,
@@ -594,11 +578,7 @@ describe('LedgerEntryRecord.operationCount parity across targets', {
       }),
     ];
     const mongoRunner = new MongoMigrationRunner(
-      createMongoRunnerDeps(
-        new MongoControlDriver(mongoDb, mongoClient),
-        MongoDriverImpl.fromDb(mongoDb),
-        makeMongoFamily(),
-      ),
+      controlAdapter.createRunnerDependencies(new MongoControlDriver(mongoDb, mongoClient)),
     );
     const mongoResult = await mongoRunner.execute({
       plan: mongoPlan,
