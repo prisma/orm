@@ -534,13 +534,19 @@ export function resolveModelTableName(
   return table;
 }
 
-export function resolvePrimaryKeyColumn(
+export function resolvePrimaryKeyColumns(
   contract: Contract<SqlStorage>,
   namespaceId: string,
   tableName: string,
-): string {
-  const resolved = resolveTableForContract(contract, namespaceId, tableName);
-  return resolved?.table.primaryKey?.columns[0] ?? 'id';
+): readonly string[] {
+  const columns =
+    resolveTableForContract(contract, namespaceId, tableName)?.table.primaryKey?.columns ?? [];
+  if (columns.length === 0) {
+    throw new InternalError(
+      `Table "${tableName}" in namespace "${namespaceId}" has no primary key to join its multi-table variants on`,
+    );
+  }
+  return columns;
 }
 
 export function resolveRowIdentityColumns(

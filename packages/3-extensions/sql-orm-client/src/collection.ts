@@ -43,7 +43,7 @@ import {
   resolveInsertConflictColumns,
   resolveModelTableName,
   resolvePolymorphismInfo,
-  resolvePrimaryKeyColumn,
+  resolvePrimaryKeyColumns,
   resolveRowIdentityColumns,
   resolveUpsertConflictColumns,
 } from './collection-contract';
@@ -248,7 +248,7 @@ interface MtiCreateContext {
   variant: MtiVariantInfo;
   baseFieldToColumn: Record<string, string>;
   variantFieldToColumn: Record<string, string>;
-  pkColumn: string;
+  pkColumns: readonly string[];
 }
 
 class CollectionImpl<
@@ -1693,14 +1693,14 @@ class CollectionImpl<
       this.namespaceId,
       variant.modelName,
     );
-    const pkColumn = resolvePrimaryKeyColumn(this.contract, this.namespaceId, this.tableName);
+    const pkColumns = resolvePrimaryKeyColumns(this.contract, this.namespaceId, this.tableName);
 
     return {
       polyInfo,
       variant,
       baseFieldToColumn,
       variantFieldToColumn,
-      pkColumn,
+      pkColumns,
     };
   }
 
@@ -1708,7 +1708,7 @@ class CollectionImpl<
     data: readonly Record<string, unknown>[],
     mtiCtx: MtiCreateContext,
   ): AsyncIterableResult<Row> {
-    const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, pkColumn } = mtiCtx;
+    const { polyInfo, variant, baseFieldToColumn, variantFieldToColumn, pkColumns } = mtiCtx;
     const contract = this.contract;
     const collectionCtx = this.ctx;
     const runtime = collectionCtx.runtime;
@@ -1771,8 +1771,9 @@ class CollectionImpl<
             );
           }
 
-          const pkValue = baseCreated[pkColumn];
-          variantRow[pkColumn] = pkValue;
+          for (const pkColumn of pkColumns) {
+            variantRow[pkColumn] = baseCreated[pkColumn];
+          }
           applyCreateDefaults(
             collectionCtx,
             namespaceId,
@@ -1809,7 +1810,7 @@ class CollectionImpl<
 
           const prefixedVariant: Record<string, unknown> = {};
           for (const [col, val] of Object.entries(variantCreated)) {
-            if (col === pkColumn) continue;
+            if (pkColumns.includes(col)) continue;
             prefixedVariant[`${variant.table}__${col}`] = val;
           }
 
