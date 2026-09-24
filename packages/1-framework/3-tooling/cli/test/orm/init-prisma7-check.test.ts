@@ -294,6 +294,53 @@ describe('the Prisma 7 check before init changes the project', () => {
     timeouts.coldTransformImport,
   );
 
+  it.each([
+    [
+      'loading the target package throws',
+      'CLI.UNEXPECTED',
+      async (): Promise<ImportFromProject> => async () => {
+        throw new Error('module exploded');
+      },
+    ],
+    [
+      'the source throws',
+      'CONTRACT.SOURCE_LOAD_FAILED',
+      () =>
+        targetConfigWith((schemaPath) => ({
+          source: {
+            inputs: [schemaPath],
+            load: async () => {
+              throw new Error('source exploded');
+            },
+          },
+        })),
+    ],
+  ])(
+    'names the packages it installed when %s',
+    async (_case, code, loader) => {
+      copyFixture();
+      loadTargetConfig = await loader();
+
+      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+      expect(envelopeOf(run)).toMatchObject({
+        error: {
+          code,
+          nextActions: expect.arrayContaining([
+            expect.objectContaining({
+              label: expect.stringMatching(
+                /^init added @prisma\/orm-postgres and dotenv to package\.json before checking; remove them with/,
+              ),
+            }),
+          ]),
+          meta: expect.objectContaining({ packagesAdded: ['@prisma/orm-postgres', 'dotenv'] }),
+        },
+      });
+      expectProjectUnchangedApartFromTheCheckInstall();
+    },
+    timeouts.coldTransformImport,
+  );
+
   it(
     'keeps the install warnings when the install before the check fails',
     async () => {

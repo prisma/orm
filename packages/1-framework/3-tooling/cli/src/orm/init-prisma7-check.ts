@@ -4,7 +4,6 @@ import { pathToFileURL } from 'node:url';
 import { DEFAULT_CONTRACT_SOURCE_DIR } from '@internal/config/config-types';
 import { buildLoadedConfig, requireConfigSections } from '@internal/config-loader';
 import { ifDefined } from '@internal/utils/defined';
-import { isStructuredError } from '@internal/utils/structured-error';
 import type { PackageOperations } from '@prisma/cli-engine';
 import { CliStructuredError } from '@prisma/cli-engine/protocol';
 import { join } from 'pathe';
@@ -78,12 +77,10 @@ export class Prisma7CheckInstallFailed extends Error {
 
 /**
  * Adds the check's undo instruction to an error raised after the check installed packages, such
- * as the engine's own consent or cancellation errors, which init cannot word itself.
+ * as the engine's own consent or cancellation errors, which init cannot word itself. An error with
+ * no structured code becomes `CLI.UNEXPECTED`, as it would at the handler boundary.
  */
-export function withPackagesAddedAction(error: unknown, added: PackagesAdded): unknown {
-  if (!(error instanceof Error) || !(CliStructuredError.is(error) || isStructuredError(error))) {
-    return error;
-  }
+export function withPackagesAddedAction(error: unknown, added: PackagesAdded): CliStructuredError {
   const engineError = normalizeError(error);
   return new CliStructuredError(engineError.code, engineError.message, {
     severity: engineError.severity,
@@ -146,9 +143,16 @@ export function createPrisma7SourceCheck(ctx: {
             };
     }
 
-    const module = await ctx.importFromProject(
-      ctx.cwd,
-      targetEntrypoint(target, 'config', resolveImportSpecifier),
+    const undoable = async <T>(step: () => T | Promise<T>): Promise<T> => {
+      try {
+        return await step();
+      } catch (error) {
+        throw added === undefined ? error : withPackagesAddedAction(error, added);
+      }
+    };
+
+    const module = await undoable(() =>
+      ctx.importFromProject(ctx.cwd, targetEntrypoint(target, 'config', resolveImportSpecifier)),
     );
     if (module === undefined) {
       if (!ctx.install) {
@@ -170,16 +174,19 @@ export function createPrisma7SourceCheck(ctx: {
       return { outcome: 'no-source', packageName, installed, added, warnings };
     }
 
-    const section: unknown = defineConfig({
-      contract: prisma7Schema(schemaPath),
-      output: DEFAULT_CONTRACT_SOURCE_DIR,
+    const config = await undoable(() => {
+      const section: unknown = defineConfig({
+        contract: prisma7Schema(schemaPath),
+        output: DEFAULT_CONTRACT_SOURCE_DIR,
+      });
+      const loaded = buildLoadedConfig(isRecord(section) ? section : {}, ctx.cwd);
+      const required = requireConfigSections(loaded, ['family', 'target', 'adapter', 'contract']);
+      if (!required.ok) {
+        throw required.failure;
+      }
+      return required.value;
     });
-    const loaded = buildLoadedConfig(isRecord(section) ? section : {}, ctx.cwd);
-    const config = requireConfigSections(loaded, ['family', 'target', 'adapter', 'contract']);
-    if (!config.ok) {
-      throw config.failure;
-    }
-    const result = await loadContractSource(config.value);
+    const result = await undoable(() => loadContractSource(config));
     if (!result.ok) {
       throw errorInitPrisma7SchemaRefused({
         schemaPath,
