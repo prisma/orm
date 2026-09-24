@@ -264,35 +264,22 @@ function localColumnsForRowInclude(include: IncludeExpr): readonly string[] {
   return include.through?.parentLocalColumns ?? include.localColumns;
 }
 
-/**
- * Correlate a child row back to its parent across every column of the
- * relation's key. Composite foreign keys contribute one equality per
- * column, ANDed together — mirroring the relation-filter join in
- * `model-accessor.ts`. Correlating on a prefix of the key would match
- * every child sharing that prefix.
- */
 function buildIncludeJoinExpr(
   include: IncludeExpr,
   childTableRef: string,
   parentLocalRefs: readonly ColumnRef[],
 ): AnyExpression {
-  const joinExprs: AnyExpression[] = [];
-
-  if (parentLocalRefs.length !== include.targetColumns.length) {
-    throw new InternalError(`Include '${include.relationName}' has incomplete join metadata`);
-  }
-
-  for (let i = 0; i < parentLocalRefs.length; i++) {
+  invariant(
+    parentLocalRefs.length === include.targetColumns.length,
+    `Include '${include.relationName}' has mismatched join column counts: ${parentLocalRefs.length} local, ${include.targetColumns.length} target`,
+  );
+  const joinExprs = include.targetColumns.map((targetColumn, i) => {
     const parentLocalRef = parentLocalRefs[i];
-    const targetColumn = include.targetColumns[i];
-    if (parentLocalRef === undefined || !targetColumn) {
-      throw new InternalError(`Include '${include.relationName}' has incomplete join metadata`);
-    }
-    joinExprs.push(BinaryExpr.eq(ColumnRef.of(childTableRef, targetColumn), parentLocalRef));
-  }
-
-  const firstExpr = joinExprs[0];
-  assertDefined(firstExpr, `Include '${include.relationName}' has no parent-local column ref`);
+    assertDefined(parentLocalRef, `Include '${include.relationName}': no local column at ${i}`);
+    return BinaryExpr.eq(ColumnRef.of(childTableRef, targetColumn), parentLocalRef);
+  });
+  const [firstExpr] = joinExprs;
+  assertDefined(firstExpr, `Include '${include.relationName}' has no join columns`);
   return joinExprs.length === 1 ? firstExpr : AndExpr.of(joinExprs);
 }
 

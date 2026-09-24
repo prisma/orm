@@ -132,6 +132,6 @@ describe('include over a composite foreign key', () => {
 
     expect(() =>
       compile('orders', { ...state, includes: [{ ...include, targetColumns: ['tenant_id'] }] }),
-    ).toThrow("Include 'customer' has incomplete join metadata");
+    ).toThrow("Include 'customer' has mismatched join column counts: 2 local, 1 target");
   });
 });

@@ -334,51 +334,30 @@ export function resolveIncludeRelation(
       { meta: { model: baseModelName, relation: relationName } },
     );
   }
-  const localFields = relation.on.localFields;
-  const targetFields = relation.on.targetFields;
-  const localColumns: string[] = [];
-  const targetColumns: string[] = [];
-
-  if (localFields.length !== targetFields.length) {
+  const { localFields, targetFields } = relation.on;
+  if (localFields.length === 0 || localFields.length !== targetFields.length) {
     throw new InternalError(
-      `Relation '${relationName}' on model '${declaringModelName}' has incomplete join metadata (missing localFields or targetFields)`,
+      `Relation '${relationName}' on model '${declaringModelName}' has incomplete join metadata: ${localFields.length} local field(s), ${targetFields.length} target field(s)`,
     );
   }
-
-  for (let i = 0; i < localFields.length; i++) {
-    const localField = localFields[i];
-    const targetField = targetFields[i];
-    if (!localField || !targetField) {
-      throw new InternalError(
-        `Relation '${relationName}' on model '${declaringModelName}' has incomplete join metadata (missing localFields or targetFields)`,
-      );
-    }
-    localColumns.push(resolveFieldToColumn(contract, namespaceId, declaringModelName, localField));
-    targetColumns.push(
-      resolveFieldToColumn(contract, relation.toNamespace, relation.to, targetField),
-    );
-  }
-
-  if (localColumns.length === 0) {
-    throw new InternalError(
-      `Relation '${relationName}' on model '${declaringModelName}' has incomplete join metadata (missing localFields or targetFields)`,
-    );
-  }
+  const localColumns = localFields.map((field) =>
+    resolveFieldToColumn(contract, namespaceId, declaringModelName, field),
+  );
+  const targetColumns = targetFields.map((field) =>
+    resolveFieldToColumn(contract, relation.toNamespace, relation.to, field),
+  );
 
   const relatedTableName = resolveModelTableName(contract, relation.toNamespace, relation.to);
 
   let through: IncludeThroughDescriptor | undefined;
   if (relation.through !== undefined) {
-    const parentLocalColumns = relation.on.localFields.map((field) =>
-      resolveFieldToColumn(contract, namespaceId, declaringModelName, field),
-    );
     through = {
       table: relation.through.table,
       namespaceId: relation.through.namespaceId,
       parentColumns: relation.through.parentColumns,
       childColumns: relation.through.childColumns,
       targetColumns: relation.through.targetColumns,
-      parentLocalColumns,
+      parentLocalColumns: localColumns,
     };
   }
 
