@@ -267,7 +267,10 @@ withTempDir(({ createTempDir }) => {
       const ctx = setupPrisma7Project(createTempDir, NO_DATABASE, {
         copyFrom: join(PRISMA7_FIXTURES, 'implicit-many-to-many-names/schema.prisma'),
       });
-      writeFileSync(join(ctx.testDir, 'contract.prisma'), 'model User {\n  id Int @id\n}\n');
+      writeFileSync(
+        join(ctx.testDir, 'contract.prisma'),
+        '// use prisma-8\nmodel User {\n  id Int @id\n}\n',
+      );
       const onPsl = onPrintedContract(ctx, NO_DATABASE);
 
       const print = await runContractPrint(onPsl, ['--output', 'printed.prisma', '--json']);
