@@ -22,7 +22,7 @@
     "@internal/utils": "workspace:8.0.0-rc.11",
     "arktype": "catalog:",
     "pathe": "^2.0.3",
-    "prettier": "^3.9.6"
+    "prettier": "^3.9.8"
   },
   "devDependencies": {
     "@repo/test-utils": "workspace:8.0.0-rc.11",
