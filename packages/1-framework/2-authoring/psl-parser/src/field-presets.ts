@@ -75,17 +75,7 @@ export function instantiatePslFieldPreset(input: {
 
   try {
     validateAuthoringHelperArguments(helperPath, input.descriptor.args, args);
-    const instantiated = instantiateAuthoringFieldPreset(input.descriptor, args);
-    return {
-      ...instantiated,
-      descriptor: {
-        codecId: instantiated.descriptor.codecId,
-        nativeType: instantiated.descriptor.nativeType,
-        ...(instantiated.descriptor.typeParams !== undefined
-          ? { typeParams: instantiated.descriptor.typeParams }
-          : {}),
-      },
-    };
+    return instantiateAuthoringFieldPreset(input.descriptor, args);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     input.diagnostics.push({
