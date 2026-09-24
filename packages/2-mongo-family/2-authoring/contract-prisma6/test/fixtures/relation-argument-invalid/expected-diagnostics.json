@@ -1,0 +1,20 @@
+[
+  {
+    "code": "PSL_INVALID_ATTRIBUTE_ARGUMENT",
+    "file": "schema.prisma",
+    "line": 17,
+    "message": "Relation field \"Post.author\": @relation fields and references must name the same number of scalar fields of \"Post\" and \"User\"."
+  },
+  {
+    "code": "PSL_INVALID_ATTRIBUTE_ARGUMENT",
+    "file": "schema.prisma",
+    "line": 23,
+    "message": "Relation field \"Comment.author\": @relation fields must be a list of field names."
+  },
+  {
+    "code": "PSL_INVALID_ATTRIBUTE_ARGUMENT",
+    "file": "schema.prisma",
+    "line": 29,
+    "message": "Relation field \"Like.user\": @relation argument \"relationMode\" is not supported."
+  }
+]

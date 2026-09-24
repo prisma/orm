@@ -11,4 +11,5 @@ model Post {
   code      String   @default(cuid())
   stamp     Int      @default(now())
   other     String   @default(auto()) @db.ObjectId
+  legacy    String   @default(dbgenerated("legacy()"))
 }

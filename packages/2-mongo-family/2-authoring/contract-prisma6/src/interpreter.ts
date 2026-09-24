@@ -957,7 +957,9 @@ function readRelationArguments(
         diagnostics.push(
           prisma6Diagnostic(
             'PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED',
-            `${label}: @relation argument "${key}" is not supported; Prisma 8 enforces no referential actions on MongoDB. Remove "${key}" and handle related documents in application code.`,
+            key === 'map'
+              ? `${label}: @relation argument "map" is not supported; it names a foreign key constraint, and MongoDB has none. Remove "map".`
+              : `${label}: @relation argument "${key}" is not supported; Prisma 8 enforces no referential actions on MongoDB. Remove "${key}" and handle related documents in application code.`,
             sourceId,
             arg.span,
           ),

@@ -34,5 +34,11 @@
     "file": "schema.prisma",
     "line": 13,
     "message": "Field \"Post.other\": @default(auto()) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. Remove the default and set the value when you create documents."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "Field \"Post.legacy\": @default(dbgenerated(\"legacy()\")) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. Remove the default and set the value when you create documents."
   }
 ]
