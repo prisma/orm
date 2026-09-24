@@ -47,9 +47,7 @@ Current scope is SQL target-specific: callers pass scalar descriptors and target
 
 Unsupported PSL constructs in v1 (strict errors):
 
-- **Scalar and storage-oriented lists are rejected**:
-  - Scalar lists like `String[]`
-  - Enum lists and named-type lists
+- **Scalar lists need the target's `scalarList` capability.** `String[]`, `Int[]` and enum lists such as `Role[]` lower to native array columns when the adapter reports `scalarList` (Postgres). On a target that does not (SQLite) they are `PSL_SCALAR_LIST_UNSUPPORTED_TARGET`.
 - **Relation navigation lists are supported** when they can be matched to an FK-side relation:
   - Example: `User.posts Post[]` + `Post.user User @relation(fields: [userId], references: [id])`
   - Matching may use `@relation("Name")` or `@relation(name: "Name")` when multiple candidates exist
