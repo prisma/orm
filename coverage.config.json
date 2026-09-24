@@ -73,15 +73,6 @@
       "assignee": null,
       "linear": "TML-2552",
       "notes": "Add direct unit tests for migration-check (command-level argument parsing, exit-code mapping, and one happy-path / one PN-code-per-failure-mode assertion) so per-package coverage recovers. Tracked alongside the residual internal-renames work in TML-2552. Renewed 2026-08-17: expired 2026-08-14 and turned the Coverage check red on every open PR; the underlying coverage situation is unchanged and the recovery above still applies (tracked on the entry's Linear issue)."
-    },
-    {
-      "package": "2-mongo-family/7-runtime",
-      "reason": "The runtime tests that build a real Mongo stack or run against mongod moved to test/integration/test/mongo/runtime, so @internal/mongo-runtime no longer lists the Mongo family, target and adapter as dev dependencies; that cycle blocked the family from depending on the runtime package, which SQL's family does. The moved tests cover mongo-execution-stack.ts and the rest of mongo-runtime.ts end to end, but they run under the integration vitest config, so the per-package coverage report no longer sees them (mongo-execution-stack.ts 0%, mongo-runtime.ts 95.5% statements).",
-      "addedDate": "2026-09-24",
-      "expiryDays": 90,
-      "assignee": null,
-      "linear": null,
-      "notes": "Recovery: unit tests inside the package that use local target and adapter doubles for createMongoExecutionContext (codec aggregation, generator registration, applyMutationDefaults) and the uncovered runtime branches, or coverage scopes that count test/integration/test/mongo/runtime toward this package. Mirrors the 3-extensions/sql-orm-client entry."
     }
   ],
   "excludedPackages": ["1-framework/3-tooling/eslint-plugin"]

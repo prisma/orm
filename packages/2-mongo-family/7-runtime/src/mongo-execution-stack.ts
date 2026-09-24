@@ -1,4 +1,5 @@
 import type {
+  ContractExecutionSection,
   ExecutionMutationDefault,
   ExecutionMutationDefaultValue,
 } from '@internal/contract/types';
@@ -23,6 +24,8 @@ import type {
   MongoMutationDefaultsOptions,
 } from '@internal/mongo-contract';
 import type { MongoAdapter } from '@internal/mongo-lowering';
+import { assertDefined } from '@internal/utils/assertions';
+import { blindCast } from '@internal/utils/casts';
 
 /**
  * Scope across which a generator's value is constant: `'field'` one value per defaulted field, `'row'` one value per document of one call, `'query'` one value per ORM operation (through the caller's `defaultValueCache`).
@@ -184,26 +187,13 @@ export function createMongoExecutionContext<
   });
 }
 
-function hasExecutionDefaults(value: unknown): value is {
-  readonly execution: {
-    readonly mutations: { readonly defaults: readonly ExecutionMutationDefault[] };
-  };
-} {
-  if (typeof value !== 'object' || value === null || !('execution' in value)) return false;
-  const execution = value.execution;
-  return (
-    typeof execution === 'object' &&
-    execution !== null &&
-    'mutations' in execution &&
-    typeof execution.mutations === 'object' &&
-    execution.mutations !== null &&
-    'defaults' in execution.mutations &&
-    Array.isArray(execution.mutations.defaults)
-  );
-}
-
 function executionDefaultsOf(contract: unknown): readonly ExecutionMutationDefault[] {
-  return hasExecutionDefaults(contract) ? contract.execution.mutations.defaults : [];
+  return (
+    blindCast<
+      { readonly execution?: ContractExecutionSection } | null | undefined,
+      'the execution context receives a validated contract, whose execution section (when present) has the framework shape'
+    >(contract)?.execution?.mutations.defaults ?? []
+  );
 }
 
 function collectMutationDefaultGenerators(
@@ -287,13 +277,10 @@ function generateScoped(
   queryCache: Map<string, unknown> | undefined,
 ): unknown {
   const generator = generators.get(spec.id);
-  if (!generator) {
-    throw runtimeError(
-      'RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING',
-      `Contract references mutation default generator '${spec.id}' but no runtime component provides it.`,
-      { id: spec.id },
-    );
-  }
+  assertDefined(
+    generator,
+    `mutation default generator '${spec.id}' is registered: createMongoExecutionContext checks every generator the contract names`,
+  );
   const cache =
     generator.stability === 'row'
       ? rowCache
