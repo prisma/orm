@@ -30,7 +30,7 @@ function diagnosticCodes(schema: string): readonly string[] {
     scalarTypeCodecIds,
     controlMutationDefaults: {
       defaultFunctionRegistry: new Map(),
-      defaultLiteralTagRegistry: new Map(),
+      dataTypeEntries: {},
     },
   });
   if (result.ok) throw new Error('expected interpretation to fail');

@@ -451,7 +451,8 @@ namespace scoped {
         expect.arrayContaining([
           expect.objectContaining({
             code: 'PSL_UNRESOLVED_REFERENCE',
-            message: expect.stringContaining('Cannot find entity'), }),
+            message: expect.stringContaining('Cannot find entity'),
+          }),
         ]),
       );
     });
