@@ -27,7 +27,7 @@ export function assertDistinctOnOrderable(orderBy: readonly OrderByItem[] | unde
     if (item.expr.kind !== 'column-ref') {
       throw ormError(
         'ORM.ARGUMENT_INVALID',
-        `distinctOn() cannot follow orderBy item ${position}: it orders by an expression rather than a column, and relation orders, relation counts and operation results are not distinct-on-able. Order by the model's own columns before distinctOn().`,
+        `distinctOn() cannot be combined with orderBy item ${position}: it orders by an expression rather than a column, and relation orders, relation counts and operation results are not distinct-on-able. Order by the model's own columns when using distinctOn().`,
         { meta: { method: 'distinctOn', position } },
       );
     }

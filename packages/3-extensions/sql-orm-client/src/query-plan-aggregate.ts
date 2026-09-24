@@ -20,6 +20,7 @@ import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
 import type { SqlAggregateDescriptorRegistry } from '@internal/sql-relational-core/query-lane-context';
 import { plainAggregateExpr, resolveAggregate } from './aggregate-codecs';
 import { assertDistinctOnCapability, resolvePolymorphismInfo } from './collection-contract';
+import { assertDistinctOnOrderable } from './order-by-guards';
 import { ormError } from './orm-errors';
 import { buildOrmQueryPlan, deriveParamsFromAst } from './query-plan-meta';
 import { buildAggregateInput, buildMtiJoins, buildStateWhere } from './query-plan-source';
@@ -232,6 +233,7 @@ export function compileAggregate(
 
   if (state.distinctOn !== undefined && state.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
+    assertDistinctOnOrderable(state.orderBy);
   }
 
   const hasPagination = state.limit !== undefined || state.offset !== undefined;
@@ -327,6 +329,7 @@ export function compileGroupedAggregate(
 
   if (preGroupState.distinctOn !== undefined && preGroupState.distinctOn.length > 0) {
     assertDistinctOnCapability(contract, 'distinctOn');
+    assertDistinctOnOrderable(preGroupState.orderBy);
   }
 
   const projection: ProjectionItem[] = [

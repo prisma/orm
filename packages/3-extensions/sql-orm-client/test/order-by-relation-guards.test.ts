@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { compileSelect } from '../src/query-plan-select';
+import { compileSelect, compileSelectWithIncludes } from '../src/query-plan-select';
 import { baseContract, createCollectionFor } from './collection-fixtures';
+import { getTestAggregates } from './helpers';
 
 describe('cursor() after an order it cannot key on', () => {
   it('rejects a relation order and names its position', () => {
@@ -84,6 +85,40 @@ describe('distinctOn() after a relation order', () => {
       expect.objectContaining({
         code: 'ORM.ARGUMENT_INVALID',
         message: expect.stringContaining('orderBy item 1'),
+      }),
+    );
+  });
+
+  it('refuses to build DISTINCT ON when a relation order follows distinctOn()', () => {
+    const { collection } = createCollectionFor('Post');
+    const state = collection
+      .orderBy((post) => post.title.asc())
+      .distinctOn('title')
+      .orderBy((post) => post.author.name.asc()).state;
+
+    expect(() => compileSelect(baseContract, 'public', 'posts', state)).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: expect.stringContaining('orderBy item 2'),
+      }),
+    );
+  });
+
+  it('refuses to build DISTINCT ON for an include when a relation order follows distinctOn()', () => {
+    const { collection } = createCollectionFor('User');
+    const state = collection.include('posts', (posts) =>
+      posts
+        .orderBy((post) => post.title.asc())
+        .distinctOn('title')
+        .orderBy((post) => post.comments.count().desc()),
+    ).state;
+
+    expect(() =>
+      compileSelectWithIncludes(baseContract, getTestAggregates(), 'public', 'users', state),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'ORM.ARGUMENT_INVALID',
+        message: expect.stringContaining('orderBy item 2'),
       }),
     );
   });

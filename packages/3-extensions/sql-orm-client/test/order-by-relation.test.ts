@@ -153,6 +153,22 @@ describe('orderBy a to-many relation count', () => {
     );
   });
 
+  it('numbers the count predicate parameter after the WHERE parameters', () => {
+    const { collection } = createCollectionFor('User');
+    const plan = planOf(
+      'users',
+      collection
+        .where((user) => user.name.eq('a'))
+        .orderBy((user) => user.posts.count((post) => post.views.gt(10)).desc())
+        .select('id').state,
+    );
+
+    expect(plan.params).toEqual(['a', 10]);
+    expect(sqlOf(plan)).toMatchInlineSnapshot(
+      `"SELECT "users"."id" AS "id" FROM "public"."users" WHERE "users"."name" = $1 ORDER BY (SELECT COUNT(*) AS "count" FROM "public"."posts" WHERE ("posts"."user_id" = "users"."id" AND "posts"."views" > $2)) DESC"`,
+    );
+  });
+
   it('counts an N:M relation through the junction table', () => {
     const { collection } = createCollectionFor('User');
     const plan = planOf(
