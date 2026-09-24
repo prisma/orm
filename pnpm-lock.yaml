@@ -166,6 +166,9 @@ importers:
       '@codingame/monaco-vscode-theme-service-override':
         specifier: ^25.1.2
         version: 25.1.2
+      '@internal/utils':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../../packages/1-framework/0-foundation/utils
       '@prisma/orm-postgres':
         specifier: workspace:8.0.0-rc.11
         version: link:../../packages/9-public/@prisma/orm-postgres

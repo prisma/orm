@@ -22,6 +22,7 @@ import getKeybindingsServiceOverride from '@codingame/monaco-vscode-keybindings-
 import type { ILogger } from '@codingame/monaco-vscode-log-service-override';
 import '@codingame/monaco-vscode-theme-defaults-default-extension';
 import getThemeServiceOverride from '@codingame/monaco-vscode-theme-service-override';
+import { InternalError } from '@internal/utils/internal-error';
 import { EditorApp, type EditorAppConfig } from 'monaco-languageclient/editorApp';
 import { type LanguageClientConfig, LanguageClientWrapper } from 'monaco-languageclient/lcwrapper';
 import {
@@ -156,7 +157,7 @@ interface Tab {
 async function main(): Promise<void> {
   const runtimeConfig = await loadRuntimeConfig();
   if (runtimeConfig.members.length === 0) {
-    throw new Error('Playground runtime config carries no scratch-project members');
+    throw new InternalError('Playground runtime config carries no scratch-project members');
   }
 
   const htmlContainer = document.getElementById('editor');
@@ -171,7 +172,7 @@ async function main(): Promise<void> {
 
   const tabStrip = document.getElementById('tab-strip');
   if (tabStrip === null) {
-    throw new Error('#tab-strip mount point not found');
+    throw new InternalError('#tab-strip mount point not found');
   }
 
   const fileSystemProvider = new RegisteredFileSystemProvider(false);
@@ -196,7 +197,7 @@ async function main(): Promise<void> {
 
   const firstTab = tabs[0];
   if (firstTab === undefined) {
-    throw new Error('Playground runtime config carries no scratch-project members');
+    throw new InternalError('Playground runtime config carries no scratch-project members');
   }
 
   const vscodeApiConfig: MonacoVscodeApiConfig = {

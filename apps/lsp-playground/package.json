@@ -24,6 +24,7 @@
     "@codingame/monaco-vscode-textmate-service-override": "^25.1.2",
     "@codingame/monaco-vscode-theme-defaults-default-extension": "^25.1.2",
     "@codingame/monaco-vscode-theme-service-override": "^25.1.2",
+    "@internal/utils": "workspace:8.0.0-rc.11",
     "@prisma/orm-postgres": "workspace:8.0.0-rc.11",
     "monaco-editor": "^0.56.0",
     "monaco-languageclient": "^10.7.0",
