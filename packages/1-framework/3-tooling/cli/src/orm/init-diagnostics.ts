@@ -44,11 +44,16 @@ export function installFailedFinding(
     why: failure.why ?? failure.message,
     nextActions: [
       ...failure.nextActions,
-      runCommandAction('Emit the contract once the dependencies are installed', EMIT_COMMAND),
+      filesWritten.length === 0
+        ? chooseAction(RERUN_AFTER_INSTALL)
+        : runCommandAction('Emit the contract once the dependencies are installed', EMIT_COMMAND),
     ],
     meta: { filesWritten, install: failure.meta ?? {} },
   });
 }
+
+/** Init stopped before writing anything, so the install is followed by init itself. */
+export const RERUN_AFTER_INSTALL = 'Run `prisma orm init` again once the dependencies install';
 
 /** The first emit failed against the freshly written scaffold. */
 export function emitFailedFinding(cause: string, filesWritten: readonly string[]): Diagnostic {

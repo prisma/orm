@@ -1,0 +1,16 @@
+{
+  "name": "prisma7-project",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate": "prisma migrate dev",
+    "studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^7.4.0"
+  },
+  "devDependencies": {
+    "prisma": "^7.4.0"
+  }
+}

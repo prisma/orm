@@ -2,15 +2,16 @@ import { rmSync } from 'node:fs';
 import { timeouts } from '@repo/test-utils';
 import { basename } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { resolveInitInputs } from '../../src/orm/init-inputs';
 import { createTestProjectDir } from '../utils/test-project-dir';
 import {
   flags,
   PRISMA7_CONFIG,
   PRISMA8_CONFIG,
   projectFiles,
+  resolveInputs,
   SIDE_BY_SIDE_QUESTION,
   scriptedPrompt,
+  stubCheck,
 } from './init-prisma7-fixtures';
 
 let projectDir: string;
@@ -48,7 +49,7 @@ describe(
         const question = `${SIDE_BY_SIDE_QUESTION.slice(0, -1)}, and rename prisma.config.ts to prisma7.config.ts?`;
         const { prompt, calls } = scriptedPrompt({ [question]: true });
 
-        const inputs = await resolveInitInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
+        const inputs = await resolveInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
 
         expect(calls.filter((call) => call.kind === 'consent')).toEqual([
           { kind: 'consent', question, opts: { token: basename(projectDir) } },
@@ -65,7 +66,7 @@ describe(
         const { prompt } = scriptedPrompt({ [SIDE_BY_SIDE_QUESTION]: false });
 
         await expect(
-          resolveInitInputs({ cwd: projectDir, flags: prisma7Flags(), prompt }),
+          resolveInputs({ cwd: projectDir, flags: prisma7Flags(), prompt }),
         ).rejects.toMatchObject({ code: 'CLI.INIT_USER_ABORTED' });
       });
 
@@ -80,7 +81,7 @@ describe(
           'prisma.config.mts is a Prisma 7 config. Rename it to prisma7.config.mts so Prisma 8 can write its own?': true,
         });
 
-        const inputs = await resolveInitInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
+        const inputs = await resolveInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
 
         expect(calls.filter((call) => call.kind === 'consent')).toHaveLength(1);
         expect(inputs.sideBySide).toEqual({
@@ -98,7 +99,7 @@ describe(
         });
         const { prompt, calls } = scriptedPrompt();
 
-        const inputs = await resolveInitInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
+        const inputs = await resolveInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
 
         expect(calls.filter((call) => call.kind === 'consent')).toEqual([]);
         expect(inputs.sideBySide).toBeNull();
@@ -117,7 +118,7 @@ describe(
           'Re-initializing replaces prisma.config.ts, src/prisma/db.ts and prisma-8.md with a fresh scaffold, losing anything you wrote in them.';
         const { prompt, calls } = scriptedPrompt({ [question]: true });
 
-        const inputs = await resolveInitInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
+        const inputs = await resolveInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
 
         expect(calls.filter((call) => call.kind === 'consent')).toEqual([
           { kind: 'consent', question, opts: { token: basename(projectDir) } },
@@ -132,12 +133,82 @@ describe(
           'prisma.config.ts is a Prisma 7 config. Rename it to prisma7.config.ts so Prisma 8 can write its own?';
         const { prompt, calls } = scriptedPrompt({ [question]: true });
 
-        const inputs = await resolveInitInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
+        const inputs = await resolveInputs({ cwd: projectDir, flags: prisma7Flags(), prompt });
 
         expect(
           calls.filter((call) => call.kind === 'consent').map((call) => call.question),
         ).toEqual([question]);
         expect(inputs.reinit).toBe(false);
+      });
+    });
+    describe('the check that the target package reads the schema', () => {
+      const prisma7Flags = () => flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' });
+      const ADDED = {
+        packages: ['stub-target-package', 'dotenv'],
+        removeCommand: 'pnpm remove stub-target-package dotenv',
+      };
+
+      it('runs with the target and schema before any consent is asked', async () => {
+        writePrisma7Schema();
+        writeProjectFile('prisma.config.ts', PRISMA7_CONFIG);
+        writeManifest({ name: 'app', devDependencies: { prisma: '^7.3.0' } });
+        const { prompt, calls } = scriptedPrompt();
+        const refusal = new Error('refused');
+        const check = stubCheck();
+
+        await expect(
+          resolveInputs({
+            cwd: projectDir,
+            flags: prisma7Flags(),
+            prompt,
+            checkPrisma7Source: async (request) => {
+              await check(request);
+              throw refusal;
+            },
+          }),
+        ).rejects.toBe(refusal);
+        expect(check.requests).toEqual([
+          { target: 'postgres', schemaPath: 'prisma/schema.prisma' },
+        ]);
+        expect(calls).toEqual([]);
+      });
+
+      it('names the packages it installed when a consent is declined afterwards', async () => {
+        writePrisma7Schema();
+        writeManifest({ name: 'app', devDependencies: { prisma: '^7.3.0' } });
+        const { prompt } = scriptedPrompt({ [SIDE_BY_SIDE_QUESTION]: false });
+
+        await expect(
+          resolveInputs({
+            cwd: projectDir,
+            flags: prisma7Flags(),
+            prompt,
+            checkPrisma7Source: stubCheck({ added: ADDED }),
+          }),
+        ).rejects.toMatchObject({
+          code: 'CLI.INIT_USER_ABORTED',
+          fix: expect.stringContaining(
+            'init added stub-target-package and dotenv to package.json before checking; remove them with `pnpm remove stub-target-package dotenv`.',
+          ),
+          meta: { packagesAdded: ADDED.packages },
+        });
+      });
+
+      it('records what it installed so the install phase skips it', async () => {
+        writePrisma7Schema();
+        const { prompt } = scriptedPrompt();
+
+        const inputs = await resolveInputs({
+          cwd: projectDir,
+          flags: prisma7Flags(),
+          prompt,
+          checkPrisma7Source: stubCheck({ added: ADDED, warnings: ['from the install'] }),
+        });
+
+        expect(inputs).toMatchObject({
+          preinstalled: ADDED.packages,
+          warnings: ['from the install'],
+        });
       });
     });
   },

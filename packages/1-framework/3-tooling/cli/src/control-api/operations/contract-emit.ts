@@ -87,6 +87,15 @@ function formatLocation({ sourceId, line, character }: DiagnosticLocation): stri
     : sourceId;
 }
 
+/** One source diagnostic as a line of text: `<sourceId>:<line>:<column> <code> <message>`. */
+export function formatSourceDiagnostic(raw: unknown): string {
+  if (!isRecord(raw)) return String(raw);
+  const code = typeof raw['code'] === 'string' ? raw['code'] : 'diagnostic';
+  const message = typeof raw['message'] === 'string' ? raw['message'] : '';
+  const location = formatLocation(diagnosticLocation(raw));
+  return [location, code, message].filter((part) => part !== undefined && part !== '').join(' ');
+}
+
 /**
  * The finding the CLI prints under the error, one per source diagnostic. The
  * terminal renderer prints a finding's code and summary and nothing of its

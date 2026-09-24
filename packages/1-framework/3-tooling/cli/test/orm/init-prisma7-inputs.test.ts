@@ -1,13 +1,13 @@
 import { rmSync } from 'node:fs';
 import { timeouts } from '@repo/test-utils';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { resolveInitInputs } from '../../src/orm/init-inputs';
 import { createTestProjectDir } from '../utils/test-project-dir';
 import {
   flags,
   PRISMA7_CONFIG,
   PRISMA7_QUESTION,
   projectFiles,
+  resolveInputs,
   scriptedPrompt,
 } from './init-prisma7-fixtures';
 
@@ -40,7 +40,7 @@ describe(
         const { prompt } = scriptedPrompt();
 
         await expect(
-          resolveInitInputs({
+          resolveInputs({
             cwd: projectDir,
             flags: flags({ ...NO_FLAGS, ...overrides, fromPrisma7Schema: 'prisma/schema.prisma' }),
             prompt,
@@ -57,7 +57,7 @@ describe(
         writePrisma7Schema();
         const { prompt, calls } = scriptedPrompt();
 
-        const inputs = await resolveInitInputs({
+        const inputs = await resolveInputs({
           cwd: projectDir,
           flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
           prompt,
@@ -82,7 +82,7 @@ describe(
         writePrisma7Schema('postgres');
         const { prompt } = scriptedPrompt();
 
-        const inputs = await resolveInitInputs({
+        const inputs = await resolveInputs({
           cwd: projectDir,
           flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
           prompt,
@@ -95,7 +95,7 @@ describe(
         writePrisma7Schema();
         const { prompt } = scriptedPrompt();
 
-        const inputs = await resolveInitInputs({
+        const inputs = await resolveInputs({
           cwd: projectDir,
           flags: flags({
             ...NO_FLAGS,
@@ -114,7 +114,7 @@ describe(
         const { prompt, calls } = scriptedPrompt();
 
         await expect(
-          resolveInitInputs({
+          resolveInputs({
             cwd: projectDir,
             flags: flags({
               ...NO_FLAGS,
@@ -138,7 +138,7 @@ describe(
         );
         const { prompt } = scriptedPrompt();
 
-        const inputs = await resolveInitInputs({
+        const inputs = await resolveInputs({
           cwd: projectDir,
           flags: flags({
             ...NO_FLAGS,
@@ -155,7 +155,7 @@ describe(
         writePrisma7Schema('mongodb');
         const { prompt } = scriptedPrompt();
 
-        const inputs = await resolveInitInputs({
+        const inputs = await resolveInputs({
           cwd: projectDir,
           flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
           prompt,
@@ -172,7 +172,7 @@ describe(
         const { prompt } = scriptedPrompt();
 
         await expect(
-          resolveInitInputs({
+          resolveInputs({
             cwd: projectDir,
             flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
             prompt,
@@ -192,7 +192,7 @@ describe(
         const { prompt } = scriptedPrompt();
 
         await expect(
-          resolveInitInputs({
+          resolveInputs({
             cwd: projectDir,
             flags: flags({
               ...NO_FLAGS,
@@ -216,7 +216,7 @@ describe(
         const { prompt } = scriptedPrompt();
 
         await expect(
-          resolveInitInputs({
+          resolveInputs({
             cwd: projectDir,
             flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
             prompt,
@@ -234,7 +234,7 @@ describe(
         const { prompt } = scriptedPrompt();
 
         await expect(
-          resolveInitInputs({
+          resolveInputs({
             cwd: projectDir,
             flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
             prompt,
@@ -250,7 +250,7 @@ describe(
         writeProjectFile('prisma7.config.ts', "import 'a-package-that-is-not-installed';\n");
         const { prompt } = scriptedPrompt();
 
-        const inputs = await resolveInitInputs({
+        const inputs = await resolveInputs({
           cwd: projectDir,
           flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
           prompt,
@@ -267,7 +267,7 @@ describe(
         const { prompt } = scriptedPrompt();
 
         await expect(
-          resolveInitInputs({
+          resolveInputs({
             cwd: projectDir,
             flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
             prompt,
@@ -281,7 +281,7 @@ describe(
           meta: { path: 'prisma.config.ts', prisma7ConfigPath: 'prisma7.config.ts' },
         });
         await expect(
-          resolveInitInputs({
+          resolveInputs({
             cwd: projectDir,
             flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
             prompt,
@@ -296,7 +296,7 @@ describe(
         const { prompt, calls } = scriptedPrompt();
 
         await expect(
-          resolveInitInputs({
+          resolveInputs({
             cwd: projectDir,
             flags: flags({ ...NO_FLAGS, fromPrisma7Schema: 'prisma/schema.prisma' }),
             prompt,
@@ -317,7 +317,7 @@ describe(
         writePrisma7Schema();
         const { prompt, calls } = scriptedPrompt({ [PRISMA7_QUESTION]: true });
 
-        const inputs = await resolveInitInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt });
+        const inputs = await resolveInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt });
 
         expect(calls[0]).toEqual({ kind: 'confirm', question: PRISMA7_QUESTION, opts: undefined });
         expect(calls.some((call) => call.kind === 'select')).toBe(false);
@@ -333,7 +333,7 @@ describe(
           'Re-initializing replaces prisma.config.ts with a fresh scaffold, losing anything you wrote in it.': true,
         });
 
-        await resolveInitInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt });
+        await resolveInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt });
 
         expect(calls[0]?.question).toBe(
           'prisma.config.ts is a Prisma 7 config. Use the schema it declares (db/schema.prisma) as the Prisma 8 contract source?',
@@ -348,7 +348,7 @@ describe(
           'How do you want to write your schema?': 'typescript',
         });
 
-        const inputs = await resolveInitInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt });
+        const inputs = await resolveInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt });
 
         expect(calls.map((call) => call.kind)).toEqual(['confirm', 'select', 'select', 'text']);
         expect(inputs).toMatchObject({
@@ -369,7 +369,7 @@ describe(
         const { prompt, calls } = scriptedPrompt();
 
         await expect(
-          resolveInitInputs({ cwd: projectDir, flags: flags({ target: 'postgres' }), prompt }),
+          resolveInputs({ cwd: projectDir, flags: flags({ target: 'postgres' }), prompt }),
         ).rejects.toMatchObject({
           code: 'CLI.INIT_MISSING_FLAGS',
           meta: { missingFlags: ['authoring'] },
@@ -385,7 +385,7 @@ describe(
         const { prompt } = scriptedPrompt();
 
         await expect(
-          resolveInitInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt }),
+          resolveInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt }),
         ).rejects.toMatchObject({
           code: 'CLI.INIT_MISSING_FLAGS',
           why: expect.stringContaining('`--from-prisma7-schema prisma/schema.prisma`'),
@@ -400,7 +400,7 @@ describe(
         writePrisma7Schema();
         const { prompt, calls } = scriptedPrompt();
 
-        await resolveInitInputs({
+        await resolveInputs({
           cwd: projectDir,
           flags: flags({ target: 'postgres', authoring: 'psl' }),
           prompt,
@@ -416,7 +416,7 @@ describe(
           'How do you want to write your schema?': 'psl',
         });
 
-        await resolveInitInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt });
+        await resolveInputs({ cwd: projectDir, flags: flags(NO_FLAGS), prompt });
 
         expect(calls[0]?.kind).toBe('select');
       });

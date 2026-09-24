@@ -134,6 +134,11 @@ export function buildNextSteps(options: {
   return steps;
 }
 
+/** The install that precedes the Prisma 7 check failed, so nothing was written. */
+export const NEXT_STEPS_BEFORE_SCAFFOLD: readonly string[] = [
+  '1. Install the project dependencies with your package manager. The install this run attempted failed before anything was written.',
+  '2. Run `prisma orm init` again.',
+];
 export const DB_SIGN_STEP =
   'Adopt your existing database: `prisma db sign` verifies it against the contract and records the signing marker and the `db` ref. It makes no change to the database schema.';
 export const PRISMA7_ROUTES_STEP =

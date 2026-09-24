@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import type { MountedTree, PackageManagerRunner } from '@prisma/cli-engine';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { timeouts } from '@repo/test-utils';
@@ -6,23 +6,27 @@ import { basename, dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
+import { importFromProject } from '../../src/orm/init-prisma7-check';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
 const emit = vi.fn();
 const commands: MountedTree = {
   ...BIN_COMMANDS,
-  'orm init': createInitCommand({ emitScaffoldedContract: emit }),
+  'orm init': createInitCommand({ emitScaffoldedContract: emit, importFromProject }),
 };
 
 let projectDir: string;
-let installExitCode: number;
+let installExitCodes: number[];
 
-const runner: PackageManagerRunner = async () => ({ exitCode: installExitCode, stderr: '' });
+const runner: PackageManagerRunner = async () => ({
+  exitCode: installExitCodes.shift() ?? 0,
+  stderr: '',
+});
 
 beforeEach(() => {
   projectDir = createTestProjectDir('orm-init-prisma7-output');
-  installExitCode = 0;
+  installExitCodes = [];
   emit.mockReset().mockResolvedValue(undefined);
 });
 
@@ -188,10 +192,10 @@ describe('the Prisma 7 result document', () => {
   );
 
   it(
-    'puts the failed install first and the emit after it',
+    'puts a failed install first and the emit after it when the check had passed',
     async () => {
       copyFixture();
-      installExitCode = 1;
+      installExitCodes = [0, 1];
 
       const run = await harness().run(prisma7Argv(), { cwd: projectDir });
 
@@ -201,6 +205,36 @@ describe('the Prisma 7 result document', () => {
       expect(steps[1]).toMatch(/install this run attempted failed.*@prisma\/prisma7@7/);
       expect(steps[2]).toBe('3. Emit the contract: `prisma contract emit`');
       expect(steps[3]).toContain('prisma db sign');
+    },
+    timeouts.coldTransformImport,
+  );
+
+  it(
+    'writes nothing when the install before the check fails',
+    async () => {
+      copyFixture();
+      installExitCodes = [1];
+
+      const run = await harness().run(prisma7Argv(), { cwd: projectDir });
+
+      expect(run.exitCode).toBe(4);
+      expect(run.presented?.data).toMatchObject({
+        filesWritten: [],
+        filesRenamed: [],
+        packagesInstalled: { status: 'failed', deps: [], devDeps: [] },
+        nextSteps: [
+          '1. Install the project dependencies with your package manager. The install this run attempted failed before anything was written.',
+          '2. Run `prisma orm init` again.',
+        ],
+      });
+      expect(run.presented?.diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'CLI.INIT_INSTALL_FAILED',
+          meta: expect.objectContaining({ filesWritten: [] }),
+        }),
+      ]);
+      expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(false);
+      expect(existsSync(join(projectDir, 'src/prisma'))).toBe(false);
     },
     timeouts.coldTransformImport,
   );

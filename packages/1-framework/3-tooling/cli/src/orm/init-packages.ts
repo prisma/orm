@@ -110,21 +110,24 @@ export async function installProjectDependencies(ctx: {
   readonly catalogWarnings: readonly string[];
 }): Promise<InstallOutcome> {
   const pair = async (manager?: PackageManagerId): Promise<CliStructuredError | undefined> => {
-    const runtimeDeps = await ctx.packages.install({
-      packages: ctx.deps,
-      cwd: ctx.cwd,
-      ...ifDefined('manager', manager),
-    });
-    if (!runtimeDeps.ok) {
-      return runtimeDeps.failure;
+    for (const [packages, dev] of [
+      [ctx.deps, false],
+      [ctx.devDeps, true],
+    ] as const) {
+      if (packages.length === 0) {
+        continue;
+      }
+      const installed = await ctx.packages.install({
+        packages,
+        cwd: ctx.cwd,
+        ...(dev ? { dev } : {}),
+        ...ifDefined('manager', manager),
+      });
+      if (!installed.ok) {
+        return installed.failure;
+      }
     }
-    const developmentDeps = await ctx.packages.install({
-      packages: ctx.devDeps,
-      dev: true,
-      cwd: ctx.cwd,
-      ...ifDefined('manager', manager),
-    });
-    return developmentDeps.ok ? undefined : developmentDeps.failure;
+    return undefined;
   };
 
   const failure = await pair();

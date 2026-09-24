@@ -18,9 +18,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
 import { emitScaffoldedContract } from '../../src/orm/init-emit';
+import { importFromProject } from '../../src/orm/init-prisma7-check';
 import { createTestProjectDir, fixtureAppDir } from '../utils/test-project-dir';
 
 const FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project');
+const VIEW_FIXTURE = join(fixtureAppDir, 'fixtures/prisma7-project-view');
 const CLI_PACKAGE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const CLI_PACKAGE_MANIFEST = join(CLI_PACKAGE_DIR, 'package.json');
 const CLI_BIN = join(CLI_PACKAGE_DIR, 'dist/bin.mjs');
@@ -35,14 +37,20 @@ const commands: MountedTree = {
   'orm init': createInitCommand({
     emitScaffoldedContract: (ctx) =>
       emitScaffoldedContract(ctx, { resolveFromBaseDir: () => CLI_PACKAGE_MANIFEST }),
+    importFromProject,
   }),
 };
-const runner: PackageManagerRunner = async () => ({ exitCode: 0, stderr: '' });
-
 let projectDir: string;
+let installs: (readonly string[])[];
+
+const runner: PackageManagerRunner = async (request) => {
+  installs.push([...request.args]);
+  return { exitCode: 0, stderr: '' };
+};
 
 beforeEach(() => {
   projectDir = createTestProjectDir('orm-init-prisma7-e2e');
+  installs = [];
 });
 
 afterEach(() => {
@@ -69,8 +77,8 @@ function readProjectFile(relative: string): string {
   return readFileSync(join(projectDir, relative), 'utf-8');
 }
 
-function copyFixture(): void {
-  cpSync(FIXTURE, projectDir, { recursive: true });
+function copyFixture(fixture = FIXTURE): void {
+  cpSync(fixture, projectDir, { recursive: true });
   renameSync(join(projectDir, 'package.json.fixture'), join(projectDir, 'package.json'));
   writeProjectFile(
     'node_modules/prisma/package.json',
@@ -204,5 +212,46 @@ describe('init on the Prisma 7 fixture, end to end', () => {
       });
     },
     timeouts.spinUpPpgDev * 2,
+  );
+
+  it(
+    'refuses a schema with a view before changing the project',
+    async () => {
+      copyFixture(VIEW_FIXTURE);
+      const fixtureFile = (relative: string) => readFileSync(join(VIEW_FIXTURE, relative), 'utf-8');
+
+      const init = await harness().run(
+        [
+          'orm',
+          'init',
+          '--from-prisma7-schema',
+          'prisma/schema.prisma',
+          '--confirm',
+          basename(projectDir),
+        ],
+        { cwd: projectDir },
+      );
+
+      expect(init.exitCode).toBe(2);
+      expect(envelopeOf(init)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'CLI.INIT_PRISMA7_SCHEMA_REFUSED',
+          why: expect.stringContaining(
+            'prisma/schema.prisma:26:1 PSL.PRISMA7_VIEW_UNSUPPORTED View "UserInfo" is not supported',
+          ),
+          meta: {
+            diagnostics: [expect.objectContaining({ code: 'PSL.PRISMA7_VIEW_UNSUPPORTED' })],
+            packagesAdded: ['@prisma/orm-postgres', 'dotenv'],
+          },
+        },
+      });
+      expect(readProjectFile('prisma.config.ts')).toBe(fixtureFile('prisma.config.ts'));
+      expect(readProjectFile('package.json')).toBe(fixtureFile('package.json.fixture'));
+      expect(existsSync(join(projectDir, 'prisma7.config.ts'))).toBe(false);
+      expect(existsSync(join(projectDir, 'src/prisma'))).toBe(false);
+      expect(installs).toEqual([['add', '@prisma/orm-postgres', 'dotenv']]);
+    },
+    timeouts.coldTransformImport,
   );
 });

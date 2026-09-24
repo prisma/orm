@@ -6,6 +6,7 @@ import { basename, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
 import { createInitCommand } from '../../src/orm/init';
+import { importFromProject } from '../../src/orm/init-prisma7-check';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const emit = vi.fn();
@@ -13,7 +14,7 @@ const emit = vi.fn();
 /** The production tree, with `init` rebuilt around the injected fake emit. */
 const commands: MountedTree = {
   ...BIN_COMMANDS,
-  'orm init': createInitCommand({ emitScaffoldedContract: emit }),
+  'orm init': createInitCommand({ emitScaffoldedContract: emit, importFromProject }),
 };
 const groups = BIN_GROUPS;
 
@@ -370,7 +371,7 @@ describe('init installs', () => {
     }
 
     it(
-      'adds @prisma/prisma7 and moves @prisma/client to 7 beside prisma@latest',
+      'installs the target package for the check first, then @prisma/client@7, @prisma/prisma7, and prisma@latest',
       async () => {
         writePrisma7Project({
           name: 'app',
@@ -382,7 +383,8 @@ describe('init installs', () => {
 
         expect(run.exitCode).toBe(0);
         expect(calls.map((call) => call.args)).toEqual([
-          ['add', '@prisma/orm-postgres', 'dotenv', '@prisma/client@7'],
+          ['add', '@prisma/orm-postgres', 'dotenv'],
+          ['add', '@prisma/client@7'],
           ['add', '-D', 'prisma@latest', '@types/node', '@prisma/prisma7@7'],
           ['add', '-D', '@prisma/cli-engine@latest'],
         ]);

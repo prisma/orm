@@ -11,24 +11,31 @@ import {
   type InitOutput,
   InitOutputSchema,
   type InstallStatus,
+  NEXT_STEPS_BEFORE_SCAFFOLD,
 } from '../commands/init/output';
 import { versionMajor } from '../commands/init/prisma7-detect';
 import { type ProbeOutcome, probeServerVersion } from '../commands/init/probe-db';
-import { targetPackageName } from '../commands/init/templates/code-templates';
+import { type TargetId, targetPackageName } from '../commands/init/templates/code-templates';
 import { MIN_SERVER_VERSION } from '../commands/init/templates/env';
 import { chooseAction } from '../utils/next-actions';
 import { defineOrmCommand } from './define-command';
 import { buildInitNextActions, initPresentations } from './init-blocks';
 import { EMIT_COMMAND, emitFailedFinding, installFailedFinding } from './init-diagnostics';
 import { emitScaffoldedContract } from './init-emit';
-import { resolveInitInputs } from './init-inputs';
+import { type ResolvedInitInputs, resolveInitInputs } from './init-inputs';
 import { engineDevDependencySpec, installProjectDependencies } from './init-packages';
+import {
+  createPrisma7SourceCheck,
+  type ImportFromProject,
+  importFromProject,
+  Prisma7CheckInstallFailed,
+} from './init-prisma7-check';
 import { resolveScaffoldPackageManager, scaffoldProject } from './init-scaffold';
 import { normalizeError } from './normalize-error';
 
-/** The scaffold is on disk from here on, so each of these is a finding. */
+/** Each of these is a finding on a completed run, not an error. */
 const INIT_EXIT_CODES = {
-  4: 'scaffold written; dependency install failed',
+  4: 'dependency install failed',
   5: 'scaffold written and installed; contract emit failed',
 } as const;
 
@@ -55,12 +62,17 @@ function probeWarning(
   }
 }
 
+function outputTarget(target: TargetId): InitOutput['target'] {
+  return target === 'mongo' ? 'mongodb' : 'postgres';
+}
+
 function causeMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
 export interface InitCommandDependencies {
   readonly emitScaffoldedContract: typeof emitScaffoldedContract;
+  readonly importFromProject: ImportFromProject;
 }
 
 export const createInitCommand = (injected: InitCommandDependencies) =>
@@ -129,16 +141,59 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         ctx.report({ kind: 'message', severity: 'warn', text });
       };
 
-      const inputs = await resolveInitInputs({
-        cwd: ctx.cwd,
-        flags: args.flags,
-        prompt: ctx.prompt,
-      });
+      const packageManager = await resolveScaffoldPackageManager({ cwd: ctx.cwd, env: ctx.env });
+      let inputs: ResolvedInitInputs;
+      try {
+        inputs = await resolveInitInputs({
+          cwd: ctx.cwd,
+          flags: args.flags,
+          prompt: ctx.prompt,
+          checkPrisma7Source: createPrisma7SourceCheck({
+            cwd: ctx.cwd,
+            packages: ctx.packages,
+            packageManager,
+            install: !args.flags.skipInstall,
+            importFromProject: injected.importFromProject,
+          }),
+        });
+      } catch (error) {
+        if (!(error instanceof Prisma7CheckInstallFailed)) {
+          throw error;
+        }
+        const document: InitOutput = {
+          ok: true,
+          target: outputTarget(error.target),
+          authoring: 'prisma7',
+          schemaPath: error.schemaPath,
+          filesWritten: [],
+          filesDeleted: [],
+          filesRenamed: [],
+          packagesInstalled: { status: 'failed', deps: [], devDeps: [] },
+          contractEmitted: false,
+          prisma7: {
+            schemaPath: error.schemaPath,
+            configRenamedTo: null,
+            scriptsRewritten: [],
+            packagesMoved: [],
+          },
+          nextSteps: [...NEXT_STEPS_BEFORE_SCAFFOLD],
+          warnings,
+        };
+        return ok(
+          ctx.present(
+            {
+              data: document,
+              exitCode: 4,
+              diagnostics: [installFailedFinding(error.failure, [])],
+            },
+            initPresentations({ document, complete: false, nextActions: [] }),
+          ),
+        );
+      }
       for (const warning of inputs.warnings) {
         warn(warning);
       }
 
-      const packageManager = await resolveScaffoldPackageManager({ cwd: ctx.cwd, env: ctx.env });
       const scaffold = scaffoldProject({ cwd: ctx.cwd, inputs, packageManager });
       for (const warning of scaffold.warnings) {
         warn(warning);
@@ -162,6 +217,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         'dotenv',
         ...(moveClient ? ['@prisma/client@7'] : []),
       ];
+      const depsToInstall = deps.filter((dep) => !inputs.preinstalled.includes(dep));
       // The CLI the scaffolded scripts run is `prisma`, the unified CLI's
       // published name, whose v8 line publishes under the `latest` dist-tag (the
       // standalone shim is no longer published). It is the package that
@@ -195,7 +251,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         const installed = packagesInstalled === 'installed';
         const document: InitOutput = {
           ok: true,
-          target: inputs.target === 'mongo' ? 'mongodb' : 'postgres',
+          target: outputTarget(inputs.target),
           authoring: adoptsPrisma7 ? 'prisma7' : inputs.authoring,
           schemaPath: inputs.schemaPath,
           filesWritten: scaffold.filesWritten,
@@ -216,7 +272,7 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
               }
             : null,
           nextSteps: buildNextSteps({
-            target: inputs.target === 'mongo' ? 'mongodb' : 'postgres',
+            target: outputTarget(inputs.target),
             packagesInstalled,
             contractEmitted,
             emitCommand: EMIT_COMMAND,
@@ -264,10 +320,12 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
         const outcome = await installProjectDependencies({
           packages: ctx.packages,
           cwd: ctx.cwd,
-          deps,
+          deps: depsToInstall,
           devDeps,
           catalogWarnings:
-            packageManager === 'pnpm' ? buildCatalogWarnings(ctx.cwd, [...deps, ...devDeps]) : [],
+            packageManager === 'pnpm'
+              ? buildCatalogWarnings(ctx.cwd, [...depsToInstall, ...devDeps])
+              : [],
         });
         for (const warning of outcome.warnings) {
           warn(warning);
@@ -340,4 +398,4 @@ export const createInitCommand = (injected: InitCommandDependencies) =>
     },
   });
 
-export const initCommand = createInitCommand({ emitScaffoldedContract });
+export const initCommand = createInitCommand({ emitScaffoldedContract, importFromProject });

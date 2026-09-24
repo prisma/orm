@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import type { PromptSurface } from '@prisma/cli-engine';
 import { dirname, join } from 'pathe';
-import type { InitFlagValues } from '../../src/orm/init-inputs';
+import { type InitFlagValues, resolveInitInputs } from '../../src/orm/init-inputs';
+import type { CheckPrisma7Source, Prisma7SourceCheck } from '../../src/orm/init-prisma7-check';
 
 export function flags(overrides: Partial<InitFlagValues> = {}): InitFlagValues {
   return {
@@ -89,4 +90,35 @@ export function projectFiles(projectDir: () => string) {
       write('package.json', `${JSON.stringify(manifest, null, 2)}\n`);
     },
   };
+}
+
+export const STUB_PACKAGE = 'stub-target-package';
+
+/** A check that reports `outcome` and records each request it receives. */
+export function stubCheck(
+  outcome: Partial<Prisma7SourceCheck> = {},
+): CheckPrisma7Source & { readonly requests: Parameters<CheckPrisma7Source>[0][] } {
+  const requests: Parameters<CheckPrisma7Source>[0][] = [];
+  const check = async (request: Parameters<CheckPrisma7Source>[0]) => {
+    requests.push(request);
+    return {
+      outcome: 'readable' as const,
+      packageName: STUB_PACKAGE,
+      added: undefined,
+      warnings: [],
+      ...outcome,
+    };
+  };
+  return Object.assign(check, { requests });
+}
+
+type ResolveContext = Parameters<typeof resolveInitInputs>[0];
+
+/** Input resolution with a check that reads every schema, unless the test supplies its own. */
+export function resolveInputs(
+  ctx: Omit<ResolveContext, 'checkPrisma7Source'> & {
+    readonly checkPrisma7Source?: CheckPrisma7Source;
+  },
+) {
+  return resolveInitInputs({ checkPrisma7Source: stubCheck(), ...ctx });
 }
