@@ -125,8 +125,6 @@ jobs:
         run: pnpm lint:consumer-internal-imports
       - name: Lint the legacy product name
         run: pnpm lint:legacy-name
-      - name: Lint the removed graph-tip concept
-        run: pnpm lint:graph-tip
       - name: Lint vitest timeout budgets
         run: pnpm lint:vitest-timeouts
 
