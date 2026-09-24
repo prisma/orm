@@ -29,7 +29,7 @@ const EMPTY_PROJECT_CONFIG: ProjectConfigFields = {
  * shape, etc. Telemetry is non-blocking and best-effort; an empty
  * result is the only downside of an unloadable or invalid config.
  *
- * Both `c12` and `@internal/config-loader` are imported
+ * Both `c12` and the config loader are imported
  * lazily so the detached sender's cold-start cost is paid only when
  * telemetry actually fires, not on every fork even when gates
  * short-circuit before reaching this code path.
