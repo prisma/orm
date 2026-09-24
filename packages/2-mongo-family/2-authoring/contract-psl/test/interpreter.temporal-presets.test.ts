@@ -172,16 +172,18 @@ describe('Mongo PSL temporal preset misuse', () => {
     ).toEqual([expect.objectContaining({ code: 'PSL_PRESET_NOT_LIST' })]);
   });
 
-  it('rejects a preset combined with @id with PSL_PRESET_AND_ID_CONFLICT', () => {
-    expect(
-      diagnosticsOf(`model Post {
+  it('rejects a preset combined with @id with PSL_PRESET_AND_ID_CONFLICT at the @id attribute', () => {
+    const schema = `model Post {
   id        ObjectId             @id @map("_id")
   createdAt temporal.createdAt() @id
 }
-`),
-    ).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'PSL_PRESET_AND_ID_CONFLICT' })]),
-    );
+`;
+    const idOffset = schema.lastIndexOf('@id');
+    const conflict = diagnosticsOf(schema).find((d) => d.code === 'PSL_PRESET_AND_ID_CONFLICT');
+    expect(conflict?.span).toMatchObject({
+      start: { offset: idOffset, line: 3 },
+      end: { offset: idOffset + '@id'.length, line: 3 },
+    });
   });
 
   it('rejects a misspelled preset with PSL_UNKNOWN_FIELD_PRESET', () => {

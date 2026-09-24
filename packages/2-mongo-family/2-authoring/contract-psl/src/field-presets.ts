@@ -17,7 +17,7 @@ import {
 } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import { ifDefined } from '@internal/utils/defined';
-import { findFieldAttributeNode } from './mongo-attribute-specs';
+import { getAttribute } from './psl-helpers';
 
 export interface FieldPresetContext {
   readonly authoringContributions: AuthoringContributions | undefined;
@@ -135,12 +135,12 @@ export function resolveFieldPreset(input: {
     return INVALID;
   }
 
-  const idAttribute = findFieldAttributeNode(field, 'id');
+  const idAttribute = getAttribute(field.attributes, 'id');
   if (idAttribute && !instantiated.id) {
     diagnostics.push({
       code: 'PSL_PRESET_AND_ID_CONFLICT',
       message: `${entityLabel} uses a field-preset call and cannot also declare @id. Use a preset that contributes id semantics, or drop @id.`,
-      ...source.at(field.span),
+      ...source.at(idAttribute.span),
     });
     return INVALID;
   }
