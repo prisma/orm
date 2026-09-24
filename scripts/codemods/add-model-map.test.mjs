@@ -453,11 +453,11 @@ describe('addModelMaps', () => {
     strictEqual(addModelMaps(input), expected);
   });
 
-  it('is byte-identical to the copies shipped in the pending upgrade fragments', () => {
+  it('is byte-identical to the copies archived from the upgrade fragments', () => {
     const repoCopy = readFileSync(`${here}add-model-map.mjs`, 'utf8');
     for (const audience of ['app', 'extension']) {
       const fragmentCopy = readFileSync(
-        `${here}../../upgrade-instructions/pending/psl-verbatim-table-names/${audience}/scripts/add-model-map.mjs`,
+        `${here}../../upgrade-instructions/releases/8.0.0-rc.11-to-8.0.0-rc.12/sources/psl-verbatim-table-names/${audience}/scripts/add-model-map.mjs`,
         'utf8',
       );
       strictEqual(fragmentCopy, repoCopy, audience);
