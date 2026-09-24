@@ -163,6 +163,28 @@ describe('Mongo TS temporal preset misuse', () => {
     );
   });
 
+  it('refuses execution defaults on a value-object field', () => {
+    expect(() =>
+      defineContract(scaffold, ({ field, model, valueObject }) => ({
+        valueObjects: {
+          Audit: valueObject('Audit', { fields: { createdAt: field.temporal.createdAt() } }),
+        },
+        models: {
+          Post: model('Post', { collection: 'posts', fields: { _id: field.objectId() } }),
+        },
+      })),
+    ).toThrow(
+      expect.objectContaining({
+        code: 'CONTRACT.DEFAULT_INVALID',
+        meta: expect.objectContaining({
+          modelName: 'Audit',
+          fieldName: 'createdAt',
+          reason: 'executionDefaults-on-value-object',
+        }),
+      }),
+    );
+  });
+
   it('refuses a preset argument outside its option values', () => {
     expect(() =>
       defineContract(scaffold, ({ field, model }) => ({

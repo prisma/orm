@@ -11,6 +11,7 @@ import {
   type ControlPolicy,
   type CrossReference,
   crossRef,
+  type ExecutionHashBase,
   type ExecutionMutationDefault,
   type ExecutionMutationDefaultPhases,
   type JsonValue,
@@ -129,6 +130,7 @@ type StringListInput = string | readonly string[];
 type Present<T> = Exclude<T, undefined>;
 type EmptyObject = Record<never, never>;
 type Simplify<T> = { [K in keyof T]: T[K] } & EmptyObject;
+type Flatten<T> = { [K in keyof T]: T[K] };
 type StrictShape<Actual, Shape> = Actual &
   Shape &
   Record<Exclude<keyof Actual, keyof Shape>, never>;
@@ -182,20 +184,21 @@ export interface FieldBuilder<
   Nullable extends boolean = boolean,
   Many extends boolean = boolean,
   Handle extends EnumTypeHandle | undefined = EnumTypeHandle | undefined,
+  ExecutionDefaults extends ExecutionMutationDefaultPhases | undefined = undefined,
 > {
   readonly __kind: 'field';
   readonly __type: Type;
   readonly __nullable: Nullable;
   readonly __many: Many;
   readonly __enumHandle: Handle;
-  readonly __executionDefaults?: ExecutionMutationDefaultPhases;
-  optional(): FieldBuilder<Type, true, Many, Handle>;
-  many(): FieldBuilder<Type, Nullable, true, Handle>;
+  readonly __executionDefaults?: ExecutionDefaults;
+  optional(): FieldBuilder<Type, true, Many, Handle, ExecutionDefaults>;
+  many(): FieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>;
 }
 
 export interface ValueObjectBuilder<
   Name extends string = string,
-  Fields extends Record<string, FieldBuilder> = Record<string, FieldBuilder>,
+  Fields extends Record<string, AnyFieldBuilder> = Record<string, AnyFieldBuilder>,
 > {
   readonly __kind: 'valueObject';
   readonly __name: Name;
@@ -239,7 +242,7 @@ export interface RelationBuilder<
 
 export interface ModelBuilder<
   Name extends string = string,
-  Fields extends Record<string, FieldBuilder> = Record<string, FieldBuilder>,
+  Fields extends Record<string, AnyFieldBuilder> = Record<string, AnyFieldBuilder>,
   Relations extends Record<string, RelationBuilder> = Record<string, RelationBuilder>,
   Collection extends string | undefined = string | undefined,
   Owner extends string | undefined = string | undefined,
@@ -276,7 +279,8 @@ type AnyFieldBuilder = FieldBuilder<
   ContractFieldType,
   boolean,
   boolean,
-  EnumTypeHandle | undefined
+  EnumTypeHandle | undefined,
+  ExecutionMutationDefaultPhases | undefined
 >;
 type AnyReferenceRelationBuilder = RelationBuilder<string, '1:1' | '1:N' | 'N:1', RelationOn>;
 type AnyEmbedRelationBuilder = RelationBuilder<string, '1:1' | '1:N', undefined>;
@@ -695,8 +699,45 @@ type MongoContractBaseFromDefinition<Definition> = Simplify<{
   readonly meta: Record<string, never>;
   readonly defaultControlPolicy?: ControlPolicy;
   readonly enumAccessors?: BuiltEnumAccessors<Definition>;
-  readonly execution?: ContractExecutionSection;
+  readonly execution?: ExecutionSectionFromDefinition<Definition>;
 }>;
+
+type ModelExecutionDefaults<TBuilder> =
+  ExtractModelCollection<TBuilder> extends infer Entry extends string
+    ? {
+        [FieldName in keyof ExtractModelFields<TBuilder> &
+          string]: ExtractModelFields<TBuilder>[FieldName] extends {
+          readonly __executionDefaults?: infer Phases extends ExecutionMutationDefaultPhases;
+        }
+          ? keyof Phases extends never
+            ? never
+            : {
+                readonly ref: {
+                  readonly namespace: typeof UNBOUND_NAMESPACE_ID;
+                  readonly entry: Entry;
+                  readonly field: FieldName;
+                };
+              } & Phases
+          : never;
+      }[keyof ExtractModelFields<TBuilder> & string]
+    : never;
+
+type ExecutionDefaultsFromDefinition<Definition> = {
+  [ModelKey in keyof DefinitionModels<Definition>]: ModelExecutionDefaults<
+    DefinitionModels<Definition>[ModelKey]
+  >;
+}[keyof DefinitionModels<Definition>];
+
+type ExecutionSectionFromDefinition<Definition> = [
+  ExecutionDefaultsFromDefinition<Definition>,
+] extends [never]
+  ? ContractExecutionSection
+  : {
+      readonly executionHash: ExecutionHashBase<string>;
+      readonly mutations: {
+        readonly defaults: ReadonlyArray<Flatten<ExecutionDefaultsFromDefinition<Definition>>>;
+      };
+    };
 
 type CodecTypesFromDefinition<Definition> = MongoCodecTypes &
   MergeExtensionCodecTypesSafe<DefinitionExtensions<Definition>>;
@@ -857,8 +898,50 @@ export type FieldBuilderFromPresetDescriptor<
       : string;
   },
   ResolveTemplateValue<Descriptor['output']['nullable'], Args> extends true ? true : false,
-  false
+  false,
+  EnumTypeHandle | undefined,
+  PresetExecutionDefaults<Descriptor, Args>
 >;
+
+/**
+ * A phase template is either a generator value or a `select` over one option argument, which yields no phase when the argument is absent or names no case. Inference can widen an argument to "the option or undefined" (`timestamp(undefined, 'now')` infers `['now'?, 'now'?]`), so the result can be "the phase or undefined"; such a phase becomes an optional key.
+ */
+type ResolvePhaseTemplate<Template, Args extends readonly unknown[]> = Template extends {
+  readonly kind: 'select';
+  readonly index: infer Index extends number;
+  readonly cases: infer Cases;
+}
+  ? Args[Index] extends infer Arg
+    ? Arg extends keyof Cases
+      ? Cases[Arg]
+      : undefined
+    : never
+  : Template;
+
+type PresetExecutionDefaults<
+  Descriptor extends AuthoringFieldPresetDescriptor,
+  Args extends readonly unknown[],
+> = Descriptor['output'] extends { readonly executionDefaults: infer Phases }
+  ? Flatten<
+      {
+        readonly [Phase in keyof Phases as undefined extends ResolvePhaseTemplate<
+          Phases[Phase],
+          Args
+        >
+          ? never
+          : Phase]: ResolvePhaseTemplate<Phases[Phase], Args>;
+      } & {
+        readonly [Phase in keyof Phases as ResolvePhaseTemplate<
+          Phases[Phase],
+          Args
+        > extends undefined
+          ? never
+          : undefined extends ResolvePhaseTemplate<Phases[Phase], Args>
+            ? Phase
+            : never]?: Exclude<ResolvePhaseTemplate<Phases[Phase], Args>, undefined>;
+      }
+    >
+  : undefined;
 
 type FieldPresetHelper<Descriptor extends AuthoringFieldPresetDescriptor> = Descriptor extends {
   readonly args: infer Args extends readonly AuthoringArgumentDescriptor[];
@@ -1050,11 +1133,12 @@ function createFieldBuilder<
   Nullable extends boolean,
   Many extends boolean,
   Handle extends EnumTypeHandle | undefined = undefined,
+  ExecutionDefaults extends ExecutionMutationDefaultPhases | undefined = undefined,
 >(
   spec: FieldBuilderSpec<Type, Nullable, Many>,
   enumHandle?: Handle,
-  executionDefaults?: ExecutionMutationDefaultPhases,
-): FieldBuilder<Type, Nullable, Many, Handle> {
+  executionDefaults?: ExecutionDefaults,
+): FieldBuilder<Type, Nullable, Many, Handle, ExecutionDefaults> {
   return {
     __kind: 'field',
     ...ifDefined('__executionDefaults', executionDefaults),
@@ -1066,14 +1150,14 @@ function createFieldBuilder<
       'optional param widens to Handle | undefined; Handle defaults to undefined when no enum handle is passed'
     >(enumHandle),
     optional() {
-      return createFieldBuilder<Type, true, Many, Handle>(
+      return createFieldBuilder<Type, true, Many, Handle, ExecutionDefaults>(
         { type: spec.type, nullable: true, many: spec.many },
         enumHandle,
         executionDefaults,
       );
     },
     many() {
-      return createFieldBuilder<Type, Nullable, true, Handle>(
+      return createFieldBuilder<Type, Nullable, true, Handle, ExecutionDefaults>(
         { type: spec.type, nullable: spec.nullable, many: true },
         enumHandle,
         executionDefaults,
@@ -2119,6 +2203,28 @@ function executionDefaultError(
   });
 }
 
+function hasExecutionDefaults(fieldBuilder: AnyFieldBuilder): boolean {
+  const phases = fieldBuilder.__executionDefaults;
+  return phases?.onCreate !== undefined || phases?.onUpdate !== undefined;
+}
+
+function assertNoValueObjectExecutionDefaults(
+  valueObjects: Record<string, AnyValueObjectBuilder> | undefined,
+): void {
+  for (const valueObjectBuilder of Object.values(valueObjects ?? {})) {
+    for (const [fieldName, fieldBuilder] of Object.entries(valueObjectBuilder.__fields)) {
+      if (hasExecutionDefaults(fieldBuilder)) {
+        throw executionDefaultError(
+          valueObjectBuilder.__name,
+          fieldName,
+          'executionDefaults-on-value-object',
+          'has executionDefaults, but it belongs to a value object. Generated values are only supported on model fields.',
+        );
+      }
+    }
+  }
+}
+
 function buildExecutionDefaults(
   models: Record<string, AnyModelBuilder> | undefined,
 ): ExecutionMutationDefault[] {
@@ -2126,7 +2232,7 @@ function buildExecutionDefaults(
   for (const modelBuilder of Object.values(models ?? {})) {
     for (const [fieldName, fieldBuilder] of Object.entries(modelBuilder.__fields)) {
       const phases = fieldBuilder.__executionDefaults;
-      if (!phases?.onCreate && !phases?.onUpdate) continue;
+      if (!phases || !hasExecutionDefaults(fieldBuilder)) continue;
       const modelName = modelBuilder.__name;
       if (fieldBuilder.__nullable) {
         throw executionDefaultError(
@@ -2187,6 +2293,7 @@ function buildContractFromDefinition<
   // at `hash({})`.
   const capabilities: Record<string, Record<string, boolean>> = {};
   const collections = buildCollections(definition.models);
+  assertNoValueObjectExecutionDefaults(definition.valueObjects);
   const execution = buildMongoExecutionSection(buildExecutionDefaults(definition.models));
 
   // Resolve the target's codecs by id from the pack the contract binds, then encode each enum's
