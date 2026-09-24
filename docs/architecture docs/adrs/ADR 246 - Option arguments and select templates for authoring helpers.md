@@ -197,7 +197,7 @@ Two factories exist because the codecs differ in whether they take parameters: `
 
 `temporal.createdAt()` and `temporal.updatedAt()` are the behavioral spellings. `createdAt` is a **storage** default (`now()` rendered into DDL) — a different mechanism from execution defaults, and deliberately not expressible through `onCreate: now`. `updatedAt` is shorthand for `temporal.timestamptz(onCreate: now, onUpdate: now)`.
 
-That shorthand relationship is **a claim about two separately authored descriptors that share no code.** `temporalAuthoringPresets` and `temporalCodecPresetWithPrecision` ([timestamp-now-generator.ts](../../../packages/2-sql/9-family/src/core/timestamp-now-generator.ts)) construct their outputs independently; nothing structural forces them to agree. They are held equal by tests, and by nothing else:
+That shorthand relationship is **a claim about two separately authored descriptors that share no code.** `temporalAuthoringPresets` ([temporal-presets.ts](../../../packages/1-framework/1-core/framework-components/src/shared/temporal-presets.ts)) and `temporalCodecPresetWithPrecision` ([timestamp-now-generator.ts](../../../packages/2-sql/9-family/src/core/timestamp-now-generator.ts)) construct their outputs independently; nothing structural forces them to agree. They are held equal by tests, and by nothing else:
 
 - `it('updatedAt() is byte-identical to timestamptz(onCreate: now, onUpdate: now)')` in [interpreter.defaults.test.ts](../../../packages/2-sql/2-authoring/contract-psl/test/interpreter.defaults.test.ts)
 - `describe('temporal.updatedAt() three-way byte-identity')` in [ts-psl-parity.test.ts](../../../packages/2-sql/2-authoring/contract-psl/test/ts-psl-parity.test.ts), covering PSL-full ≡ PSL-convenience ≡ TS-full
