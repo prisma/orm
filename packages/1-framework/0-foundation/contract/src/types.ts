@@ -183,7 +183,7 @@ export type ExecutionMutationDefault = {
 
 /**
  * `ExecutionMutationDefault` minus its `ref` — the per-field phases value
- * authoring layers attach to a column before the column ref is known.
+ * authoring layers attach to a field before its ref is known.
  */
 export type ExecutionMutationDefaultPhases = Omit<ExecutionMutationDefault, 'ref'>;
 
