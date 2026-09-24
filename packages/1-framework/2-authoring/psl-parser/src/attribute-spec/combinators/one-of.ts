@@ -1,8 +1,9 @@
 import { blindCast } from '@internal/utils/casts';
-import { notOk, ok, or, type Result } from '@internal/utils/result';
+import { notOk, or, type Result } from '@internal/utils/result';
 import type { PslDiagnostic } from '../../diagnostic';
 import type {
   AnyArgType,
+  ArgType,
   ContextForRequirement,
   CtxOf,
   OneOfArgType,
@@ -22,27 +23,16 @@ export function oneOf<Alts extends readonly [AnyArgType, ...AnyArgType[]]>(
     label,
     alternatives: alts,
     parse: (arg, ctx): Result<OutOf<Alts[number]>, readonly PslDiagnostic[]> => {
-      const attempt = (alt: Alts[number]): Result<unknown, readonly PslDiagnostic[]> => {
-        const parse = blindCast<
-          (arg: Parameters<typeof alt.parse>[0], ctx: ParseContext) => ReturnType<typeof alt.parse>,
-          'ParseContext is computed as the strongest context required by all alternatives, so it is assignable to every alternative parse context even though TypeScript cannot express that relationship while iterating the heterogeneous tuple.'
-        >(alt.parse);
-        return parse(arg, ctx);
-      };
-      const matched = (value: unknown): Result<OutOf<Alts[number]>, readonly PslDiagnostic[]> =>
-        ok(
-          blindCast<
-            OutOf<Alts[number]>,
-            'The matched value comes from an alternative whose output type is a member of the union, but iterating the tuple widens each element to ArgType<unknown>, erasing that relationship.'
-          >(value),
-        );
-
-      const [head, ...tail] = alts;
-      let rejection = attempt(head);
-      if (rejection.ok) return matched(rejection.value);
+      type Alternative = ArgType<OutOf<Alts[number]>, ParseContext>;
+      const [head, ...tail] = blindCast<
+        readonly [Alternative, ...Alternative[]],
+        'ParseContext is the strongest context every alternative requires and each alternative output is a member of the union, but iterating a heterogeneous tuple erases both relationships.'
+      >(alts);
+      let rejection = head.parse(arg, ctx);
+      if (rejection.ok) return rejection;
       for (const alt of tail) {
-        const result = attempt(alt);
-        if (result.ok) return matched(result.value);
+        const result = alt.parse(arg, ctx);
+        if (result.ok) return result;
         rejection = or(rejection, result);
       }
       if (!rejection.ok && rejection.failure.length === 0) return notOk([]);
