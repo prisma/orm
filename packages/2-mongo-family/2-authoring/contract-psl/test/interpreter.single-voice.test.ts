@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { interpretPslDocumentToMongoContract } from '../src/interpreter';
 
 function symbolTableInput(schema: string): {
-  document: DocumentAst;
+  documents: readonly DocumentAst[];
   symbolTable: SymbolTable;
   sources: PslSources;
 } {
@@ -15,7 +15,7 @@ function symbolTableInput(schema: string): {
     sources,
     pslBlockDescriptors: {},
   });
-  return { document, symbolTable, sources };
+  return { documents: [document], symbolTable, sources };
 }
 
 const scalarTypeCodecIds: ReadonlyMap<string, string> = new Map([
