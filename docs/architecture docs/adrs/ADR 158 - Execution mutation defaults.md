@@ -164,7 +164,7 @@ The database marker verifies only what the database must satisfy:
 }
 ```
 
-Note: the exact JSON layout for defaults can be an array (as shown) or a map keyed by table/column. The requirement is that defaults are addressable by `(namespace, entry, field)`.
+Note: the exact JSON layout for defaults can be an array (as shown) or a map keyed by entry and field. The requirement is that defaults are addressable by `(namespace, entry, field)`.
 
 ## Diagram (contract branches and verification)
 
