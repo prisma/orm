@@ -45,8 +45,8 @@ Parallel: 1 and 2 are independent (2 branches off `main`). Stack: 3 after both. 
 | 1 | `mongo-target-owns-codecs` | #30396, CI green, awaiting review |
 | 2 | `execution-ref-neutral-names` | #30399, CI green, awaiting review |
 | 3 | `mongo-execution-defaults` | #30403, stacked on 1 |
-| 5 | `mongo-prisma6-source` | in progress, stacked on 3 |
-| 4 | | not started |
+| 5 | `mongo-prisma6-source` | #30405, stacked on 3 |
+| 4 | `mongo-generator-runtime-hoist` | in progress, stacked on 5 |
 
 ## Dependencies
 
