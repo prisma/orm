@@ -1,5 +1,5 @@
-import { InternalError } from '@internal/utils/internal-error';
 import { fixedBlock } from '@internal/psl-parser';
+import { InternalError } from '@internal/utils/internal-error';
 import { describe, expect, it } from 'vitest';
 import { createTestSqlNamespace } from '../../../1-core/contract/test/test-support';
 import {
