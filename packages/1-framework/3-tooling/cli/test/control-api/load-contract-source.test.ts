@@ -1,10 +1,13 @@
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import type * as configLoader from '@internal/config-loader';
+import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadContractSource } from '../../src/control-api/operations/contract-emit';
+import {
+  executeContractEmit,
+  loadContractSource,
+} from '../../src/control-api/operations/contract-emit';
 
 const VIEW_DIAGNOSTIC = {
   code: 'PSL.PRISMA7_VIEW_UNSUPPORTED',
@@ -81,6 +84,19 @@ describe('loadContractSource', () => {
 
     await expect(loadContractSource(config)).rejects.toMatchObject({
       code: 'CONTRACT.SOURCE_LOAD_FAILED',
+    });
+  });
+});
+
+describe('executeContractEmit', () => {
+  it('reports a missing output path before a missing source provider', async () => {
+    const config = {
+      family: { id: 'family:test', version: '0.0.1', familyId: 'test-family', emission: {} },
+      contract: {},
+    } as unknown as configLoader.PrismaNextConfig;
+
+    await expect(executeContractEmit({ config, cwd: tmpdir() })).rejects.toMatchObject({
+      why: expect.stringContaining('must have output path'),
     });
   });
 });

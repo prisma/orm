@@ -247,18 +247,21 @@ function sourceFailureError(failure: ContractSourceFailure) {
 
 type ContractSourceConfig = NonNullable<PrismaNextConfig['contract']>;
 
-function requireContractSource(config: PrismaNextConfig): ContractSourceConfig {
+function requireContractConfig(config: PrismaNextConfig): ContractSourceConfig {
   if (!config.contract) {
     throw errorContractConfigMissing({
       why: 'Config.contract is required for emit. Define it in your config: contract: { source: ..., output: ... }',
     });
   }
-  if (typeof config.contract.source?.load !== 'function') {
+  return config.contract;
+}
+
+function requireSourceProvider(contractConfig: ContractSourceConfig): void {
+  if (typeof contractConfig.source?.load !== 'function') {
     throw errorContractConfigMissing({
       why: 'Contract config must include a valid source provider object',
     });
   }
-  return config.contract;
 }
 
 async function resolveContractSource(
@@ -313,7 +316,8 @@ export async function loadContractSource(
   config: PrismaNextConfig,
   options: { readonly signal?: AbortSignal } = {},
 ): Promise<Result<unknown, ContractSourceFailure>> {
-  const contractConfig = requireContractSource(config);
+  const contractConfig = requireContractConfig(config);
+  requireSourceProvider(contractConfig);
   return resolveContractSource(
     contractConfig,
     createControlStack(config),
@@ -353,7 +357,7 @@ export async function executeContractEmit(
     onProgress,
   } = options;
   const unlessAborted = abortable(signal);
-  const contractConfig = requireContractSource(config);
+  const contractConfig = requireContractConfig(config);
 
   const effectiveOutput =
     outputPath !== undefined ? join(outputPath, 'contract.json') : contractConfig.output;
@@ -363,6 +367,8 @@ export async function executeContractEmit(
       why: 'Contract config must have output path. This should not happen if defineConfig() was used.',
     });
   }
+
+  requireSourceProvider(contractConfig);
 
   let outputPaths: ReturnType<typeof getEmittedArtifactPaths>;
   try {
