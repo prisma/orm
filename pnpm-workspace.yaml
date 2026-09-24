@@ -15,7 +15,7 @@ allowBuilds:
 blockExoticSubdeps: true
 
 catalog:
-  '@prisma/dev': 0.25.1
+  '@prisma/dev': 0.25.2
   '@types/node': 26.1.2
   '@types/pg': 8.20.4
   ajv: ^8.20.0
