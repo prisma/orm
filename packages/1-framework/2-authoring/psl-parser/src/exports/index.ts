@@ -132,11 +132,10 @@ export {
 export type {
   DeclarationFor,
   EntityDeclaration,
-  EntityLookup,
   EntitySelector,
   ResolvedEntityReference,
 } from '../entity-reference';
-export { lookupEntityReference, lookupEntityReferenceInSymbols } from '../entity-reference';
+export { lookupEntityReferenceInSymbols } from '../entity-reference';
 export { findBlockDescriptor, validateExtensionBlockFromSymbol } from '../extension-block';
 export {
   keywordPslSpan,
