@@ -24,6 +24,7 @@ The current implementation supports:
 - Mongo collection index authoring via model-local `indexes`
 - Mongo collection option authoring via model-local `collectionOptions`
 - base Mongo codec helpers such as `field.objectId()`, `field.string()`, `field.double()`, `field.int32()`, `field.bool()`, `field.date()`, `field.int64()`, `field.decimal128()`, `field.binary()`, `field.json()`, and `field.vector()`
+- field presets contributed by the packs, such as `field.temporal.createdAt()` and `field.temporal.updatedAt()` from the Mongo target, available on the `field` helper of the callback overload (`defineContract({ family, target }, ({ field, model }) => ...)`); a field with generated values cannot be optional, a list, on a model without a collection, or on a value object
 
 This first slice does not yet cover union or dict authoring, or Mongo validator authoring.
 

@@ -881,7 +881,7 @@ Two runtime stack contributors (target pack, extension packs) register a codec w
 
 ### RUNTIME.DUPLICATE_MUTATION_DEFAULT_GENERATOR
 
-Two runtime stack contributors register a mutation default generator with the same id while the SQL context collects them. Payload: `id`, `existingOwner`, `incomingOwner`.
+Two runtime stack contributors register a mutation default generator with the same id while the SQL context or the Mongo execution context collects them. Payload: `id`, `existingOwner`, `incomingOwner`.
 
 ### RUNTIME.ENCODE_FAILED
 
@@ -935,7 +935,7 @@ Statistics execution was requested for a Mongo command that does not expose affe
 
 ### RUNTIME.MUTATION_DEFAULT_GENERATOR_MISSING
 
-The contract declares column defaults produced by a mutation default generator (e.g. a nanoid/uuid generator) that no runtime component provides, detected up front when the SQL context validates generator coverage, or at mutation time when a generator-kind default spec is resolved. Payload: `ids` (validation pass) or `id` (resolution).
+The contract declares column or field defaults produced by a mutation default generator (e.g. a nanoid/uuid generator, or `timestampNow` behind `temporal.createdAt()`) that no runtime component provides, detected up front when the SQL context or the Mongo execution context validates generator coverage, or at mutation time when a generator-kind default spec is resolved. Payload: `ids` (validation pass) or `id` (resolution).
 
 ### RUNTIME.NAMESPACE_UNKNOWN
 

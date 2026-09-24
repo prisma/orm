@@ -185,6 +185,8 @@ For Mongo, swap every `@internal/postgres/*` import for `@internal/mongo/*`. The
 
 Mongo scalar types, as PSL name / TS builder / application type: `String` / `field.string()` / `string`; `Int` / `field.int32()` / `number`; `Float` / `field.double()` / `number`; `Boolean` / `field.bool()` / `boolean`; `DateTime` / `field.date()` / `Date`; `ObjectId` / `field.objectId()` / `string`; `Int64` / `field.int64()` / `bigint`; `Decimal128` / `field.decimal128()` / decimal text as a `string`; `Binary` / `field.binary()` / `Uint8Array`; `Json` / `field.json()` / any JSON value. The collection validator checks each field's BSON type, except `Json`, which admits any value.
 
+Mongo timestamps the ORM fills: in PSL, type the field `temporal.createdAt()` (set on create), `temporal.updatedAt()` (set on create and on every update with a non-empty payload), or `temporal.timestamp(onCreate: now, onUpdate: now)` with either option; in TS, use `field.temporal.createdAt()` and the rest inside the callback overload. They store a BSON date read back as `Date`, one value per ORM operation, and an explicit value in the write wins. The fields are optional on create. A preset field cannot be optional (`?`), a list, `@id`, or a field of a composite type.
+
 ## Workflow — Add an extension-typed scalar (pgvector)
 
 The concept: an extension contributes a namespace (`pgvector.*`) plus two descriptor flavours — a *control* descriptor for the config and a *pack* descriptor for the TS builder. Register the control descriptor in `ormConfig`'s `extensions` (array form). If you're authoring with the TS builder, also register the pack descriptor in `defineContract.extensions` (record form). Then reference the namespaced constructor from the contract.
