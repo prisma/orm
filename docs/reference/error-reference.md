@@ -1026,10 +1026,6 @@ A prepared statement failed again after the PostgreSQL driver discarded a stale 
 
 A migration reference (directory name or hash prefix) passed to a CLI command matches migrations in more than one contract space, so the command cannot tell which one you mean. Re-run with `--space <id>` to pick a space. Payload: `ref`, `spaceIds`.
 
-### MIGRATION.AMBIGUOUS_TARGET
-
-The on-disk migration history has diverged into multiple branch tips (typically two developers planned migrations from the same starting point), so commands that auto-resolve a target cannot choose one. Fix by targeting a branch with `ref set`, deleting one of the conflicting migration directories, or passing `--from <hash>`. Payload: `branchTips`, and when divergence context is known `divergencePoint`, `branches`.
-
 ### MIGRATION.BUNDLE_NOT_FOUND_FOR_GRAPH_NODE
 
 A hash resolves to a node in the migration graph, but no on-disk migration package has that hash as its destination (`to`), so there is no bundle to read for it. Hit when resolving a ref or hash to a migration bundle (e.g. `migration show`, contract-at resolution). Payload: `hash`, `explicitLabel` (when the user supplied a named reference).
@@ -1196,7 +1192,7 @@ A migration package on disk is corrupt: the `migrationHash` stored in `migration
 
 ### MIGRATION.HASH_NOT_IN_GRAPH
 
-A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`, sometimes `graphTipHash`; none at the `migration new` sites.
+A contract hash the user supplied (or that a ref resolved to) is not a node in the on-disk migration graph, raised during plan resolution (`migration plan --from`), `ref set`, and `migration new --from` (including `--from` on an empty migrations directory, where there is no migration target it could name). The envelope lists the reachable hashes and suggests a valid one or running `migration plan` to introduce it. Payload: `hash`/`resolvedHash`, `reachableHashes` or `reachableRefs`; none at the `migration new` sites.
 
 ### MIGRATION.INVALID_DEFAULT_EXPORT
 
@@ -1260,7 +1256,7 @@ While finalizing an apply, the compare-and-swap update of the database's contrac
 
 ### MIGRATION.MARKER_MISMATCH
 
-The live database marker's contract hash is not reachable anywhere in the on-disk migration graph: the database and the local migration history have diverged. The fix depends on which side is canonical: `migration plan --from <tip>` (catch the graph up), `ref set db <markerHash>` (fix a drifted local ref), or investigate out-of-band migration. Payload: `markerHash`, `reachableHashes`, `graphTip` (when the graph has a tip).
+The live database marker's contract hash is not reachable anywhere in the on-disk migration graph: the database and the local migration history have diverged. The fix depends on which side is canonical: `migration plan` (catch the graph up), `ref set db <markerHash>` (fix a drifted local ref), or investigate out-of-band migration. Payload: `markerHash`, `reachableHashes`.
 
 ### MIGRATION.MARKER_NOT_IN_HISTORY
 
@@ -1278,10 +1274,6 @@ A diagnostic in `migration status`: the active ref requires data invariants that
 
 `migration new` found the from and to contract hashes identical: there is nothing to migrate. Change the contract and re-run `prisma contract emit` first, or pass `--from <hash>` explicitly to author a data-only migration on the current contract hash. Payload: none.
 
-### MIGRATION.NO_INITIAL_MIGRATION
-
-While reconstructing the migration graph, no migration starts from the empty contract state, so the history has no entry point. Usually indicates corrupted `migration.json` files. Payload: `nodes` (known hashes).
-
 ### MIGRATION.NO_INVARIANT_PATH
 
 The target (or named ref) requires data invariants, and no path through the migration graph from the current state covers all of them. Add a migration on the path that runs a `dataTransform` with each missing `invariantId`, or retarget the ref. Payload: `required`, `missing`, `structuralPath` (edges: `dirName`, `migrationHash`, `from`, `to`, `invariants`), `refName` (when applicable). Also raised per space by `migrate` in show/plan mode when a space's path requires invariants not available on disk; that site's meta is `spaceId`, `missing`.
@@ -1289,10 +1281,6 @@ The target (or named ref) requires data invariants, and no path through the migr
 ### MIGRATION.NO_MIGRATIONS
 
 `migration show` was given a non-path reference but the app space has no migration packages at all, so there is nothing to resolve against. Create a migration with `prisma migration plan` first. Payload: none.
-
-### MIGRATION.NO_TARGET
-
-The migration history contains cycles (e.g. after a rollback migration C1→C2→C1) and no target can be resolved automatically. Pass `--from <hash>` to specify the planning origin explicitly. Payload: `reachableHashes`.
 
 ### MIGRATION.OPERATION_UNSUPPORTED
 
@@ -1316,7 +1304,7 @@ An authored migration's `operations` getter returned something other than an arr
 
 ### MIGRATION.PLAN_ORIGIN_UNKNOWN
 
-`migration plan` was run without `--from` and without a `db` ref while migrations already exist on disk. Planning would silently fall back to an empty-database origin and produce a migration that recreates everything the existing history already creates, so the command refuses. Set the `db` ref (`migration ref set db <contract>` or `db update`), pass `--from <contract>`, or pass `--from @empty` to deliberately plan from an empty database. Payload: `reachableRefs`, `graphTipHash` (when the graph has a tip).
+`migration plan` or `migration new` was run without `--from` and without a `db` ref while migrations already exist on disk. Planning would silently fall back to an empty-database origin and produce a migration that recreates everything the existing history already creates, so the command refuses. Set the `db` ref (`migration ref set db <contract>` or `db update`), pass `--from <contract>`, or (for `migration plan`) pass `--from @empty` to deliberately plan from an empty database. Payload: `reachableRefs`.
 
 ### MIGRATION.POLICY_VIOLATION
 

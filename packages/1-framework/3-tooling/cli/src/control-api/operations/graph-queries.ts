@@ -3,11 +3,7 @@
  */
 
 import type { MigrationGraph } from '@internal/migration-tools/graph';
-import {
-  findLatestMigration,
-  findPath,
-  isGraphNode,
-} from '@internal/migration-tools/migration-graph';
+import { findPath, isGraphNode } from '@internal/migration-tools/migration-graph';
 import { type CliStructuredError, errorMarkerMismatch } from '../../utils/cli-errors';
 
 /** True when the on-disk graph contains a path fromHash → toHash. */
@@ -26,9 +22,5 @@ export function refuseMarkerOutsideGraph(args: {
   if (isGraphNode(args.markerHash, args.graph)) {
     return null;
   }
-  return errorMarkerMismatch(
-    args.markerHash,
-    [...args.graph.nodes].sort(),
-    findLatestMigration(args.graph)?.to ?? null,
-  );
+  return errorMarkerMismatch(args.markerHash, [...args.graph.nodes].sort());
 }

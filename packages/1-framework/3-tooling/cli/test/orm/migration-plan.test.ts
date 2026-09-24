@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { computeMigrationHash } from '@internal/migration-tools/hash';
+import { writeRef } from '@internal/migration-tools/refs';
 import { notOk } from '@internal/utils/result';
 import { createTestCli } from '@prisma/cli-engine/testing';
 import { basename, join } from 'pathe';
@@ -215,7 +216,7 @@ describe('migration plan', () => {
     });
   });
 
-  it('warns when the default origin ref is not the latest migration', async () => {
+  it('warns when the default origin ref already has outgoing edges', async () => {
     const HASH_MID = `abba${'4'.repeat(60)}`;
     const project = await createOfflineProject({ storageHash: HASH_TO });
     await seedMigrationPackage({
@@ -252,13 +253,86 @@ describe('migration plan', () => {
     });
   });
 
-  it('does not warn when the default origin ref sits at the latest migration', async () => {
+  it('does not warn when the default origin ref has no outgoing edges', async () => {
     const project = await plannableProject();
 
     const run = await harness(project).run(['migration', 'plan'], { cwd: project.dir });
 
     expect(run.exitCode).toBe(0);
     expect(run.presented?.data).not.toHaveProperty('warnings');
+  });
+
+  describe('forked graph', () => {
+    const HASH_OTHER = `dead${'2'.repeat(60)}`;
+
+    /** Two migrations planned off the empty database: HASH_FROM and HASH_OTHER are both tips. */
+    async function forkedProject(): Promise<OfflineProject> {
+      const project = await createOfflineProject({ storageHash: HASH_TO });
+      await seedMigrationPackage({
+        appMigrationsDir: project.appMigrationsDir,
+        dirName: '20260101T0000_left',
+        from: null,
+        to: HASH_FROM,
+      });
+      await seedMigrationPackage({
+        appMigrationsDir: project.appMigrationsDir,
+        dirName: '20260102T0000_right',
+        from: null,
+        to: HASH_OTHER,
+      });
+      await seedContractSnapshot({ migrationsDir: project.migrationsDir, storageHash: HASH_FROM });
+      return project;
+    }
+
+    it('plans from an explicit ref and writes the edge from that tip', async () => {
+      const project = await forkedProject();
+      await writeRef(join(project.appMigrationsDir, 'refs'), 'topic', {
+        hash: HASH_FROM,
+        invariants: [],
+      });
+
+      const run = await harness(project).run(
+        ['migration', 'plan', '--from', 'topic', '--name', 'delta'],
+        { cwd: project.dir },
+      );
+      const dirs = await plannedDirs(project);
+      const planned = dirs.find((dir) => dir.endsWith('_delta'));
+
+      expect(run.exitCode).toBe(0);
+      expect(planned).toBeDefined();
+      expect(
+        JSON.parse(
+          await readFile(join(project.appMigrationsDir, planned ?? '', 'migration.json'), 'utf-8'),
+        ),
+      ).toMatchObject({ from: HASH_FROM, to: HASH_TO });
+    });
+
+    it('plans from the db ref without warning when that tip has no outgoing edges', async () => {
+      const project = await forkedProject();
+      await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_FROM });
+
+      const run = await harness(project).run(['migration', 'plan', '--name', 'delta'], {
+        cwd: project.dir,
+      });
+
+      expect(run.exitCode).toBe(0);
+      expect(run.presented?.data).toMatchObject({ from: HASH_FROM, to: HASH_TO });
+      expect(run.presented?.data).not.toHaveProperty('warnings');
+    });
+
+    it('refuses with PLAN_ORIGIN_UNKNOWN when neither --from nor a db ref is given', async () => {
+      const project = await forkedProject();
+
+      const run = await harness(project).run(['migration', 'plan', '--name', 'delta', '--json'], {
+        cwd: project.dir,
+      });
+
+      expect(run.exitCode).toBe(2);
+      expect(run.json.at(-1)).toMatchObject({
+        kind: 'result',
+        envelope: { ok: false, error: { code: 'MIGRATION.PLAN_ORIGIN_UNKNOWN' } },
+      });
+    });
   });
 
   describe('auto-baseline consent', () => {

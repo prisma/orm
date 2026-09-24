@@ -17,14 +17,15 @@ Topic branch with a planned migration. Meanwhile, `main` advanced with a differe
 The 5-step diamond-convergence procedure:
 
 - [ ] **1.** Rebase the topic branch onto `main` (likely already done).
-- [ ] **2.** Identify the exact topic-branch migration directory under `migrations/` (e.g. `migrations/20241112-add-tags/`), verify the path exists and is scoped to that directory, then delete only that directory (`rm -rf migrations/<dir>`). No unscoped `rm -rf`.
-- [ ] **3.** Run `contract emit` then `migration plan --name <slug>` to re-plan from the post-merge contract head.
-- [ ] **4.** Open the old migration from git history; port any custom data-transform logic into the new `migration.ts`.
-- [ ] **5.** Self-emit (`node migrations/<dir>/migration.ts`).
+- [ ] **2.** Identify the topic-branch migration directory under `migrations/` (e.g. `migrations/app/20241112-add-tags/`) and treat it as the stale plan. Leave it on disk: it is still an edge any database that already applied it needs. No `rm -rf`.
+- [ ] **3.** Run `contract emit` then `migration plan --from <main's head ref or hash> --name <slug>` to plan a fresh edge from the post-merge origin. The graph now has two edges off the old parent; that is a legal shape.
+- [ ] **4.** Open the stale topic-branch `migration.ts`; port any custom data-transform logic into the new one.
+- [ ] **5.** Self-emit (`node migrations/app/<dir>/migration.ts`).
 
 ## Success criteria
 
-- [ ] New migration chains cleanly from `main`'s head.
+- [ ] New migration chains from `main`'s head.
 - [ ] Custom data transforms (if any) preserved.
-- [ ] `migration status` reports a clean chain.
+- [ ] `db migrate --show` finds a path from the marker to the new head.
+- [ ] Agent did NOT delete the topic-branch migration directory.
 - [ ] Agent did NOT attempt to manually rewrite `migration.json` hashes.

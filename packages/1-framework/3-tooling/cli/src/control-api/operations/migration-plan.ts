@@ -465,13 +465,13 @@ async function executeMigrationPlanCommandInner(
   }
 
   const warnings: string[] = [];
-  const warnBehindTip = (behind: {
+  const warnForks = (forks: {
     readonly refName: string;
     readonly refHash: string;
-    readonly tipHash: string;
+    readonly outgoingTo: readonly string[];
   }): void => {
     warnings.push(
-      `The default origin ref '${behind.refName}' points at ${behind.refHash}, which is not the latest migration (${behind.tipHash}). Planning from it forks the migration graph; pass --from to choose the origin explicitly.`,
+      `The default origin ref '${forks.refName}' points at ${forks.refHash}, which already has a migration leading to ${forks.outgoingTo.join(', ')}. Planning from it forks the migration graph; pass --from to choose the origin explicitly.`,
     );
   };
 
@@ -482,16 +482,16 @@ async function executeMigrationPlanCommandInner(
     case 'graph-node':
       fromHash = resolutionResult.value.fromHash;
       fromContract = resolutionResult.value.fromContract;
-      if (resolutionResult.value.defaultOriginBehindTip !== undefined) {
-        warnBehindTip(resolutionResult.value.defaultOriginBehindTip);
+      if (resolutionResult.value.defaultOriginForks !== undefined) {
+        warnForks(resolutionResult.value.defaultOriginForks);
       }
       break;
     case 'ref':
       fromHash = resolutionResult.value.fromHash;
       fromContract = resolutionResult.value.fromContract;
       fromContractInStore = true;
-      if (resolutionResult.value.defaultOriginBehindTip !== undefined) {
-        warnBehindTip(resolutionResult.value.defaultOriginBehindTip);
+      if (resolutionResult.value.defaultOriginForks !== undefined) {
+        warnForks(resolutionResult.value.defaultOriginForks);
       }
       break;
     case 'auto-baseline':

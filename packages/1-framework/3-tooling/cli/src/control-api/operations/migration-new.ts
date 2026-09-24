@@ -15,7 +15,6 @@ import {
 import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
-import { findLatestMigration } from '@internal/migration-tools/migration-graph';
 import { writeMigrationTs } from '@internal/migration-tools/migration-ts';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok, type Result } from '@internal/utils/result';
@@ -36,6 +35,7 @@ import { createProjectSpecifierResolver } from '../../utils/project-import-root'
 import { snapshotVerifierFor } from '../../utils/snapshot-content-verification';
 import type { ControlClient } from '../types';
 import { refusePackageCorruptionOnAggregate } from './contract-space-aggregate-loader';
+import { resolveDefaultOriginHash } from './plan-resolution';
 import { renderSnapshotDeclarations } from './snapshot-declarations';
 
 export interface MigrationNewOptions {
@@ -131,7 +131,6 @@ export async function executeMigrationNewCommand(
   }
 
   const packages = aggregate.app.packages;
-  const graph = aggregate.app.graph();
 
   let fromHash: string | null = null;
 
@@ -169,11 +168,12 @@ export async function executeMigrationNewCommand(
       );
     }
     fromHash = matchedHashes[0] ?? null;
-  } else if (packages.length > 0) {
-    const latestMigration = findLatestMigration(graph);
-    if (latestMigration) {
-      fromHash = latestMigration.to;
+  } else {
+    const origin = resolveDefaultOriginHash(aggregate.app);
+    if (!origin.ok) {
+      return notOk(origin.failure);
     }
+    fromHash = origin.value.fromHash;
   }
 
   if (fromHash === toStorageHash && !options.from) {

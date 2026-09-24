@@ -1,6 +1,5 @@
 import { ifDefined } from '@internal/utils/defined';
 import { EMPTY_CONTRACT_HASH } from './constants';
-import { errorAmbiguousTarget, errorNoInitialMigration, errorNoTarget } from './errors';
 import type { MigrationEdge, MigrationGraph } from './graph';
 import { bfs } from './graph-ops';
 import type { OnDiskMigrationPackage } from './package';
@@ -246,7 +245,7 @@ export interface PathDecision {
  * - `ok` — a path covering `required` exists; `decision` carries the
  *   selection metadata and per-edge invariants.
  * - `unreachable` — `from`→`to` has no structural path. Mapped by callers
- *   to the existing no-path / `NO_TARGET` diagnostic.
+ *   to the no-path diagnostic (`MIGRATION.PATH_UNREACHABLE`).
  * - `unsatisfiable` — `from`→`to` is structurally reachable but no path
  *   covers every required invariant. `structuralPath` is the
  *   `findPath(graph, from, to)` result, included so callers don't have to
@@ -433,110 +432,6 @@ function invariantViableAlternativesAtStep(
   return outgoing.filter((e) =>
     [...required].every((id) => coverageBeforeTakingEdge.has(id) || e.invariants.includes(id)),
   );
-}
-
-/**
- * Walk ancestors of each branch tip back to find the last node
- * that appears on all paths. Returns `fromHash` if no shared ancestor is found.
- */
-function findDivergencePoint(
-  graph: MigrationGraph,
-  fromHash: string,
-  leaves: readonly string[],
-): string {
-  const ancestorSets = leaves.map((leaf) => {
-    const ancestors = new Set<string>();
-    for (const step of bfs([leaf], (n) => reverseNeighbours(graph, n))) {
-      ancestors.add(step.state);
-    }
-    return ancestors;
-  });
-
-  const commonAncestors = [...(ancestorSets[0] ?? [])].filter((node) =>
-    ancestorSets.every((s) => s.has(node)),
-  );
-
-  let deepest = fromHash;
-  let deepestDepth = -1;
-  for (const ancestor of commonAncestors) {
-    const path = findPath(graph, fromHash, ancestor);
-    const depth = path ? path.length : 0;
-    if (depth > deepestDepth) {
-      deepestDepth = depth;
-      deepest = ancestor;
-    }
-  }
-  return deepest;
-}
-
-/**
- * Find all branch tips (nodes with no outgoing edges) reachable from
- * `fromHash` via forward edges.
- */
-export function findReachableLeaves(graph: MigrationGraph, fromHash: string): readonly string[] {
-  const leaves: string[] = [];
-  for (const step of bfs([fromHash], (n) => forwardNeighbours(graph, n))) {
-    if (!graph.forwardChain.get(step.state)?.length) {
-      leaves.push(step.state);
-    }
-  }
-  return leaves;
-}
-
-/**
- * Find the target contract hash of the migration graph reachable from
- * EMPTY_CONTRACT_HASH. Returns `null` for a graph that has no target
- * state (either empty, or containing only the root with no outgoing
- * edges). Throws NO_INITIAL_MIGRATION if the graph has nodes but none
- * originate from the empty hash, and AMBIGUOUS_TARGET if multiple
- * branch tips exist.
- */
-export function findLeaf(graph: MigrationGraph): string | null {
-  if (graph.nodes.size === 0) {
-    return null;
-  }
-
-  if (!graph.nodes.has(EMPTY_CONTRACT_HASH)) {
-    throw errorNoInitialMigration([...graph.nodes]);
-  }
-
-  const leaves = findReachableLeaves(graph, EMPTY_CONTRACT_HASH);
-
-  if (leaves.length === 0) {
-    const reachable = [...graph.nodes].filter((n) => n !== EMPTY_CONTRACT_HASH);
-    if (reachable.length > 0) {
-      throw errorNoTarget(reachable);
-    }
-    return null;
-  }
-
-  if (leaves.length > 1) {
-    const divergencePoint = findDivergencePoint(graph, EMPTY_CONTRACT_HASH, leaves);
-    const branches = leaves.map((tip) => {
-      const path = findPath(graph, divergencePoint, tip);
-      return {
-        tip,
-        edges: (path ?? []).map((e) => ({ dirName: e.dirName, from: e.from, to: e.to })),
-      };
-    });
-    throw errorAmbiguousTarget(leaves, { divergencePoint, branches });
-  }
-
-  // biome-ignore lint/style/noNonNullAssertion: leaves.length is neither 0 nor >1 per the branches above, so exactly one leaf remains
-  return leaves[0]!;
-}
-
-/**
- * Find the latest migration entry by traversing from EMPTY_CONTRACT_HASH
- * to the single target. Returns null for an empty graph.
- * Throws AMBIGUOUS_TARGET if the graph has multiple branch tips.
- */
-export function findLatestMigration(graph: MigrationGraph): MigrationEdge | null {
-  const leafHash = findLeaf(graph);
-  if (leafHash === null) return null;
-
-  const path = findPath(graph, EMPTY_CONTRACT_HASH, leafHash);
-  return path?.at(-1) ?? null;
 }
 
 export function detectCycles(graph: MigrationGraph): readonly string[][] {

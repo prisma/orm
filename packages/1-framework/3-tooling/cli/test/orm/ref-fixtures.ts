@@ -140,6 +140,23 @@ export async function seedRefProject(migrationsDirName = 'migrations'): Promise<
   return { dir, initialDirName, secondDirName };
 }
 
+/** A project whose graph forks at the empty database: one edge to {@link HASH_A}, one to {@link HASH_B}. */
+export async function seedForkedRefProject(): Promise<string> {
+  const dir = await emptyProject();
+  const migrationsDir = join(dir, 'migrations');
+  await writeSeededMigration(
+    migrationsDir,
+    { from: null, to: HASH_A, slug: 'left', at: new Date(2025, 0, 1, 10, 0) },
+    { withSnapshot: true },
+  );
+  await writeSeededMigration(
+    migrationsDir,
+    { from: null, to: HASH_B, slug: 'right', at: new Date(2025, 0, 2, 10, 0) },
+    { withSnapshot: true },
+  );
+  return dir;
+}
+
 /** A project whose only migration never had its contract snapshot written. */
 export async function seedProjectMissingSnapshot(): Promise<string> {
   const dir = await emptyProject();

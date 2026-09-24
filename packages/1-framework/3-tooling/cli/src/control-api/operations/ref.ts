@@ -9,7 +9,7 @@ import {
   readContractSnapshotJson,
 } from '@internal/migration-tools/contract-snapshot-store';
 import { MigrationToolsError } from '@internal/migration-tools/errors';
-import { findLatestMigration, isGraphNode } from '@internal/migration-tools/migration-graph';
+import { isGraphNode } from '@internal/migration-tools/migration-graph';
 import { parseContractRef } from '@internal/migration-tools/ref-resolution';
 import type { RefEntry } from '@internal/migration-tools/refs';
 import {
@@ -114,8 +114,7 @@ export async function executeRefSetCommand(
       return notOk(errorRefSetEmptySentinel(resolvedHash));
     }
     if (!isGraphNode(resolvedHash, graph)) {
-      const graphTip = findLatestMigration(graph)?.to ?? null;
-      return notOk(errorRefSetHashNotInGraph(resolvedHash, [...graph.nodes].sort(), graphTip));
+      return notOk(errorRefSetHashNotInGraph(resolvedHash, [...graph.nodes].sort()));
     }
 
     const matchingBundle = bundles.find((bundle) => bundle.metadata.to === resolvedHash);

@@ -154,23 +154,16 @@ describe('errorPathUnreachable', () => {
 describe('errorRefSetHashNotInGraph', () => {
   const resolvedHash = `${'x'.repeat(64)}`;
   const reachableHashes = [`${'a'.repeat(64)}`, `${'b'.repeat(64)}`];
-  const graphTip = reachableHashes[1]!;
 
-  it('emits MIGRATION.HASH_NOT_IN_GRAPH with reachable hashes and graph tip', () => {
-    const envelope = errorRefSetHashNotInGraph(
-      resolvedHash,
-      reachableHashes,
-      graphTip,
-    ).toEnvelope();
+  it('emits MIGRATION.HASH_NOT_IN_GRAPH with the reachable hashes', () => {
+    const envelope = errorRefSetHashNotInGraph(resolvedHash, reachableHashes).toEnvelope();
     expect(envelope.code).toBe('MIGRATION.HASH_NOT_IN_GRAPH');
-    expect(envelope.meta?.['resolvedHash']).toBe(resolvedHash);
-    expect(envelope.meta?.['reachableHashes']).toEqual(reachableHashes);
-    expect(envelope.meta?.['graphTipHash']).toBe(graphTip);
-    expect(envelope.fix).toContain(graphTip);
+    expect(envelope.meta).toEqual({ resolvedHash, reachableHashes });
+    expect(envelope.fix).toBe('Set the ref to a hash that appears in the migration graph.');
   });
 
   it('describes an empty migration graph in the why line', () => {
-    const envelope = errorRefSetHashNotInGraph(resolvedHash, [], null).toEnvelope();
+    const envelope = errorRefSetHashNotInGraph(resolvedHash, []).toEnvelope();
     expect(envelope.why).toContain('empty');
     expect(envelope.fix).toContain('migration plan');
   });
@@ -185,16 +178,11 @@ describe('errorRefSetEmptySentinel', () => {
 });
 
 describe('typed next actions on the CLI factories', () => {
-  it('spells the ref-set remediation as a runnable command', () => {
-    const error = errorRefSetHashNotInGraph('x'.repeat(64), ['a'.repeat(64)], 'a'.repeat(64));
+  it('offers the ref-set remediation as a choice over the graph nodes', () => {
+    const error = errorRefSetHashNotInGraph('x'.repeat(64), ['a'.repeat(64)]);
 
     expect(error.nextActions).toEqual([
-      { kind: 'user-choice', label: `Set the ref to a graph-node hash such as ${'a'.repeat(64)}` },
-      {
-        kind: 'run-command',
-        label: 'Extend the migration graph',
-        command: '{bin} migration plan',
-      },
+      { kind: 'user-choice', label: 'Set the ref to a hash that appears in the migration graph' },
     ]);
   });
 
@@ -213,15 +201,14 @@ describe('typed next actions on the CLI factories', () => {
 
   it('turns each marker-mismatch remedy into its own action', () => {
     const markerHash = 'c'.repeat(64);
-    const graphTip = 'd'.repeat(64);
 
-    const error = errorMarkerMismatch(markerHash, [graphTip], graphTip);
+    const error = errorMarkerMismatch(markerHash, ['d'.repeat(64)]);
 
     expect(error.nextActions).toEqual([
       {
         kind: 'run-command',
         label: 'Catch the on-disk graph up to the live marker',
-        command: `{bin} migration plan --from ${graphTip}`,
+        command: '{bin} migration plan',
       },
       {
         kind: 'run-command',
