@@ -253,8 +253,8 @@ describe('compileSelectWithIncludes', () => {
     expectSelectAst(plan.ast);
 
     expect(plan.ast.orderBy).toEqual([
-      new OrderByItem(ColumnRef.of('posts', 'id'), 'asc'),
-      new OrderByItem(opExpr, 'desc'),
+      new OrderByItem(ColumnRef.of('posts', 'id'), 'asc', undefined),
+      new OrderByItem(opExpr, 'desc', undefined),
     ]);
 
     expect(plan.ast.where).toEqual(
@@ -579,7 +579,11 @@ describe('compileSelectWithIncludes', () => {
       expectDerivedTableSource(innerSelect.from);
       expect(innerSelect.from.alias).toBe('posts__scalar_distinct');
       expect(innerSelect.orderBy).toEqual([
-        new OrderByItem(ColumnRef.of('posts__scalar_distinct', 'posts__order_0'), 'desc'),
+        new OrderByItem(
+          ColumnRef.of('posts__scalar_distinct', 'posts__order_0'),
+          'desc',
+          undefined,
+        ),
       ]);
     });
 

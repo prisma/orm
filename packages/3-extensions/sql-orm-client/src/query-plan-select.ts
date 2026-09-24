@@ -244,7 +244,11 @@ function buildIncludeOrderArtifacts(
     if (!orderItem) {
       throw new InternalError(`Missing include order metadata at index ${index}`);
     }
-    return new OrderByItem(ColumnRef.of(rowAlias, projection.alias), orderItem.dir);
+    return new OrderByItem(
+      ColumnRef.of(rowAlias, projection.alias),
+      orderItem.dir,
+      orderItem.nulls,
+    );
   });
 
   return {
@@ -709,6 +713,7 @@ function buildIncludeChildRowsSelect(
             new OrderByItem(
               ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
               item.dir,
+              item.nulls,
             ),
         ),
       );
@@ -869,6 +874,7 @@ function buildDistinctNonLeafChildRowsSelect(options: {
           new OrderByItem(
             ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
             item.dir,
+            item.nulls,
           ),
       ),
     );
@@ -1147,6 +1153,7 @@ function buildIncludeChildScalarSelect(
             new OrderByItem(
               ColumnRef.of(rankedAlias, `${include.relationName}__order_${index}`),
               item.dir,
+              item.nulls,
             ),
         ),
       );

@@ -8,6 +8,7 @@ import { type CodecRef, frozenCodecRef } from './codec-types';
 import type { AnyJsonValueProjection } from './json-value-projection';
 
 export type Direction = 'asc' | 'desc';
+export type OrderByNulls = 'first' | 'last';
 
 export type BinaryOp =
   | 'eq'
@@ -1094,33 +1095,37 @@ export class OrderByItem extends AstNode {
   readonly kind = 'order-by-item' as const;
   readonly expr: AnyExpression;
   readonly dir: Direction;
+  readonly nulls: OrderByNulls | undefined;
 
-  constructor(expr: AnyExpression, dir: Direction) {
+  constructor(expr: AnyExpression, dir: Direction, nulls: OrderByNulls | undefined) {
     super();
     this.expr = expr;
     this.dir = dir;
+    this.nulls = nulls;
     this.freeze();
   }
 
-  static asc(expr: AnyExpression): OrderByItem {
-    return new OrderByItem(expr, 'asc');
+  static asc(expr: AnyExpression, options?: { readonly nulls?: OrderByNulls }): OrderByItem {
+    return new OrderByItem(expr, 'asc', options?.nulls);
   }
 
-  static desc(expr: AnyExpression): OrderByItem {
-    return new OrderByItem(expr, 'desc');
+  static desc(expr: AnyExpression, options?: { readonly nulls?: OrderByNulls }): OrderByItem {
+    return new OrderByItem(expr, 'desc', options?.nulls);
   }
 
   rewrite(rewriter: ExpressionRewriter): OrderByItem {
-    return new OrderByItem(this.expr.rewrite(rewriter), this.dir);
+    return new OrderByItem(this.expr.rewrite(rewriter), this.dir, this.nulls);
   }
 
   /**
-   * A new frozen item with the sort direction flipped and `expr` unchanged.
-   * Integrations that own pagination (e.g. backward cursor pagination) use
-   * this to reverse a user's sort order without reaching into the AST.
+   * A new frozen item with the sort direction and null placement flipped and `expr` unchanged. Integrations that own pagination (e.g. backward cursor pagination) use this to reverse a user's sort order without reaching into the AST.
    */
   reverse(): OrderByItem {
-    return new OrderByItem(this.expr, this.dir === 'asc' ? 'desc' : 'asc');
+    return new OrderByItem(
+      this.expr,
+      this.dir === 'asc' ? 'desc' : 'asc',
+      this.nulls === undefined ? undefined : this.nulls === 'first' ? 'last' : 'first',
+    );
   }
 }
 
