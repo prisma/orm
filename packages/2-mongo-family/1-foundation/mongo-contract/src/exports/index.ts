@@ -5,6 +5,7 @@ export type {
   ShapeSpec,
 } from '@internal/framework-components/runtime';
 export { RelationKeys } from '@internal/framework-components/runtime';
+export { buildMongoExecutionSection } from '../build-execution-section';
 export {
   createMongoContractSchema,
   createMongoNamespaceEnvelopeSchema,
