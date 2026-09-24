@@ -218,6 +218,35 @@ describe('ORM upsert applies both halves', () => {
 });
 
 describe('mongoOrm', () => {
+  it('refuses a contract with execution defaults when mutationDefaults is missing', () => {
+    const { executor } = recordingExecutor();
+    const withDefaults = {
+      ...contract,
+      execution: {
+        executionHash: 'test',
+        mutations: {
+          defaults: [
+            {
+              ref: { namespace: '__unbound__', entry: 'users', field: 'loginCount' },
+              onCreate: { kind: 'generator', id: 'timestampNow' },
+            },
+          ],
+        },
+      },
+    } as unknown as Contract;
+    expect(() => mongoOrm({ contract: withDefaults, executor })).toThrow(
+      expect.objectContaining({
+        code: 'ORM.MUTATION_DEFAULTS_MISSING',
+        message: expect.stringContaining('mutationDefaults: context'),
+      }),
+    );
+  });
+
+  it('builds a contract without execution defaults without mutationDefaults', () => {
+    const { executor } = recordingExecutor();
+    expect(() => mongoOrm({ contract, executor })).not.toThrow();
+  });
+
   it('passes mutationDefaults to every root collection', async () => {
     const { executor, plans } = recordingExecutor([{ insertedId: 'id-1' }]);
     const orm = mongoOrm({ contract, executor, mutationDefaults: fakeMutationDefaults() });

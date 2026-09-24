@@ -737,6 +737,10 @@ The Mongo ORM client was asked to operate on a model name that is not in the con
 
 `create()` or `createAndCount()` was called with zero rows; at least one row of data is required. Payload: `method`, `namespaceId`, `tableName`.
 
+### ORM.MUTATION_DEFAULTS_MISSING
+
+`mongoOrm()` was built over a contract with execution defaults (fields such as `temporal.createdAt()` that the ORM fills on write) without `mutationDefaults`, so those fields would never be written. Pass the execution context, `mongoOrm({ contract, executor, mutationDefaults: context })`, or create the client with `mongo()`. Payload: `fields` (`<collection>.<field>` for each default).
+
 ### ORM.MUTATION_ROW_MISSING
 
 A mutation that expected the database to return a row got none: `create()`/`upsert()` read-back, MTI base or variant INSERT, or a nested create. The Prisma-classic analogue of P2025. Payload: `operation`, `model`, `tableName`, `phase`.
