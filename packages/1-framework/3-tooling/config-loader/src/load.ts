@@ -99,7 +99,13 @@ function collectArtifactCollisionDiagnostics(
   return [];
 }
 
-function buildLoadedConfig(rawConfig: Record<string, unknown>, configDir: string): LoadedConfig {
+/**
+ * Validates a raw `orm` section and resolves its paths against `configDir`, the way a loaded config file is. A caller that builds the section in memory gets the same diagnostics as one that wrote it to `prisma.config.ts`.
+ */
+export function buildLoadedConfig(
+  rawConfig: Record<string, unknown>,
+  configDir: string,
+): LoadedConfig {
   const issues = collectConfigIssues(rawConfig);
   const diagnostics = issues.map((issue) =>
     errorConfigValidation(issue.field, { why: issue.message, section: issue.section }),
