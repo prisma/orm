@@ -62,7 +62,7 @@ writes the same contract as Prisma 8 PSL. The user switches `contract:` to that 
 
 ## Transitional-shape constraints
 
-None. Each slice lands a complete, usable surface: slice 1 ships the Postgres source end to end, slice 2 the Mongo source, slice 3 the converter.
+None. Each slice lands a complete, usable surface: slice 1 ships the Postgres source end to end, slice 3 the converter. The Mongo source moved to `projects/mongo-defaults-codecs-prisma6-source/slices/05-prisma6-mongo-source/spec.md`.
 
 ## Contract impact
 
@@ -95,7 +95,7 @@ Each is resolved by a test inside the slice that depends on it, before the depen
 2. `now()` default equality against Prisma 7's `CURRENT_TIMESTAMP` (slice 1).
 3. Contract validator acceptance of a column default together with execution generators, and of generators on nullable columns (slice 1).
 4. The version at which the implicit junction gained a primary key (slice 1). Resolved: Prisma 6.0.0; 7.10.0 emits `_AToB_AB_pkey`.
-5. Whether Mongo verify compares index names (slice 2).
+5. Whether Mongo verify compares index names (resolved by `projects/mongo-defaults-codecs-prisma6-source/slices/05-prisma6-mongo-source/spec.md`: it does not).
 6. The exact Prisma 7 Postgres native type table (slice 1). Resolved: `test/integration/test/fixtures/prisma7-source/reference/migration.sql`.
 7. Whether lenient `db verify` tolerates an extra table, an extra column, and an extra foreign key, which `@ignore` and `@@ignore` rely on because Prisma 7 still creates that schema (slice 1).
 
@@ -112,7 +112,7 @@ Recorded so they are not lost; each becomes its own project when scheduled.
 - `Bytes` and `DateTime` literal defaults are carried as the SQL literal of the default Postgres stores (`'\x68656c6c6f'`, `'2024-01-01 00:00:00'`), not the text Prisma 7 writes, in the raw-expression form the schema IR already models, because their codec JSON forms are not what introspection reads back. Verification is exact; the cost is that the converter (slice 3) prints them as `dbgenerated("...")` rather than `@default("...")`.
 - **Cross-namespace and cross-contract-space enum references: a feature to build.** Any user contract whose column is typed by a Supabase enum (for example a `public` table using `auth.factor_type`) needs it, and Prisma 7 `multiSchema` schemas do the same across schemas. The parser and AST already carry the qualifier (`space:ns.Name` on `PslField.typeContractSpaceId`/`typeNamespaceId`, printer round-trips it), but the SQL interpreter consumes it only for `@relation` (`psl-field-resolution.ts:455`, `interpreter.ts:1228-1240`) and resolves types by bare name (`psl-column-resolution.ts:803-809`, `interpreter.ts:585`). ADR 226 defines cross-space ownership and the `@relation` spelling only. Needs an ADR extending ADR 226 to enum and entity type references, then the interpreter change; until then the Prisma 7 source reports `PSL.PRISMA7_ENUM_NAMESPACE_MISMATCH`.
 - Partial indexes (`@@index(where: raw(...))` with the `partialIndexes` preview feature). The Prisma 7 source reports a hard error; mapping them is new capability with its own Prisma 7 evidence.
-- Not deferred, assigned to slice 2: the Mongo PSL interpreter silently ignores unknown top-level blocks (`view` included); slice 2 adds the diagnostic.
+- Not deferred, assigned to `projects/mongo-defaults-codecs-prisma6-source/slices/05-prisma6-mongo-source/spec.md`: the Mongo PSL interpreter silently ignores unknown top-level blocks (`view` included); that slice adds the diagnostic.
 
 ### Found outside this project's scope
 
@@ -155,4 +155,4 @@ Found by the adoption example (slice 4). Each is outside this project's scope an
 
 - The public upgrade guides: [PostgreSQL, 7 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/postgresql) and [MongoDB, 6 to 8](https://www.prisma.io/docs/guides/upgrade-prisma-orm/mongodb). The Postgres guide's phase 2 (`contract infer` plus hand edits) is what the Prisma 7 source replaces; its phase 4 is the cutover routine slice 3 must fit.
 - `design-notes.md` for alternatives considered.
-- `slices/01-postgres-source/spec.md`, `slices/02-mongo-source/spec.md`, `slices/03-contract-to-psl-and-convert/spec.md`.
+- `slices/01-postgres-source/spec.md`, `slices/03-contract-to-psl-and-convert/spec.md`, and for the Mongo source `projects/mongo-defaults-codecs-prisma6-source/slices/05-prisma6-mongo-source/spec.md`.
