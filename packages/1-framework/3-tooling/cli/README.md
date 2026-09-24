@@ -93,7 +93,7 @@ Before any consent question or file change, init checks that Prisma 8 can read t
 
 The second question is the consent token; `--confirm <dir>` answers it non-interactively. Under it init:
 
-- renames the Prisma 7 config to `prisma7.config.<same extension>` and points its `prisma/config` import at `@prisma/prisma7/config`;
+- renames the Prisma 7 config to `prisma7.config.<same extension>` and points its `prisma/config` import at `@prisma/prisma7/config`; a config that does not import `prisma/config` is renamed with its imports unchanged, and init warns that any other import of the Prisma 7 config helper must be pointed at `@prisma/prisma7/config` by hand;
 - rewrites every `package.json` script that invokes `prisma` to invoke `prisma7` (scripts init adds keep `prisma`);
 - installs `@prisma/prisma7@7` as a development dependency alongside `prisma@latest`, and `@prisma/client@7` when the project declares a client below the 7 line.
 
