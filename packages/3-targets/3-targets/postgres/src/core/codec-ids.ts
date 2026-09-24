@@ -39,3 +39,4 @@ export const PG_JSONB_CODEC_ID = 'pg/jsonb@1' as const;
 export const PG_BYTEA_CODEC_ID = 'pg/bytea@1' as const;
 export const PG_UUID_CODEC_ID = 'pg/uuid@1' as const;
 export const PG_INET_CODEC_ID = 'pg/inet@1' as const;
+export const PG_TSQUERY_CODEC_ID = 'pg/tsquery@1' as const;

@@ -74,6 +74,7 @@
     "./default-normalizer": "./dist/default-normalizer.mjs",
     "./diff-database-schema": "./dist/diff-database-schema.mjs",
     "./errors": "./dist/errors.mjs",
+    "./full-text": "./dist/full-text.mjs",
     "./issue-planner": "./dist/issue-planner.mjs",
     "./migration": "./dist/migration.mjs",
     "./native-type-normalizer": "./dist/native-type-normalizer.mjs",

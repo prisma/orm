@@ -1,4 +1,5 @@
 import type { ComparisonMethods, ModelAccessor } from '@internal/sql-orm-client';
+import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import { describe, expectTypeOf, test } from 'vitest';
 import type { Contract } from './fixtures/generated/contract';
 
@@ -177,10 +178,21 @@ describe('full-text search operations on text fields', () => {
     expectTypeOf<HeadlineResult>().toHaveProperty('like');
   });
 
+  test('the query is a tsquery expression from a parser, or a raw tsquery string', () => {
+    const title = null as unknown as PostAccessor['title'];
+    title.fullTextMatches(websearchToTsquery('alice'));
+    title.fullTextRank(websearchToTsquery('alice', { language: 'german' }), { language: 'german' });
+    title.fullTextHeadline('ali:*');
+    // @ts-expect-error a number is neither a tsquery expression nor tsquery text
+    title.fullTextMatches(42);
+  });
+
   test('the language argument is one of the configurations Postgres ships with', () => {
     const title = null as unknown as PostAccessor['title'];
     title.fullTextMatches('alice', { language: 'german' });
     // @ts-expect-error 'klingon' is not a PostgreSQL text-search configuration
     title.fullTextMatches('alice', { language: 'klingon' });
+    // @ts-expect-error the parser checks its language the same way
+    websearchToTsquery('alice', { language: 'klingon' });
   });
 });

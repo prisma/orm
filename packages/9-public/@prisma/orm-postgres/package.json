@@ -143,6 +143,7 @@
     "./target/default-normalizer": "./dist/target__default-normalizer.mjs",
     "./target/diff-database-schema": "./dist/target__diff-database-schema.mjs",
     "./target/errors": "./dist/target__errors.mjs",
+    "./target/full-text": "./dist/target__full-text.mjs",
     "./target/issue-planner": "./dist/target__issue-planner.mjs",
     "./target/migration": "./dist/target__migration.mjs",
     "./target/native-type-normalizer": "./dist/target__native-type-normalizer.mjs",

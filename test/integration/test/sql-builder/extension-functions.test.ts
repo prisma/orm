@@ -93,8 +93,10 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
         .public.comments.select('id')
         .where((f, fns) =>
           language === undefined
-            ? fns.fullTextMatches(f.body, query)
-            : fns.fullTextMatches(f.body, query, { language }),
+            ? fns.fullTextMatches(f.body, fns.websearchToTsquery(query))
+            : fns.fullTextMatches(f.body, fns.websearchToTsquery(query, { language }), {
+                language,
+              }),
         )
         .build(),
     );
@@ -117,12 +119,45 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
     expect(await idsMatching('alice', 'german')).toEqual([101, 102, 106]);
   });
 
+  it('a raw string is tsquery syntax, so a word:* prefix matches every word it starts', async () => {
+    const rows = await runtime().query(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, 'manu:*'))
+        .build(),
+    );
+    expect(rows.map((row) => row.id)).toEqual([106]);
+  });
+
+  it('toTsquery takes operator syntax', async () => {
+    const rows = await runtime().query(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, fns.toTsquery('alice & !manuscript')))
+        .build(),
+    );
+    expect(rows.map((row) => row.id).sort((a, b) => a - b)).toEqual([101, 102]);
+  });
+
+  it('a malformed raw query fails at execution with the Postgres error', async () => {
+    await expect(
+      runtime().query(
+        db()
+          .public.comments.select('id')
+          .where((f, fns) => fns.fullTextMatches(f.body, 'alice &'))
+          .build(),
+      ),
+    ).rejects.toThrow(/tsquery/);
+  });
+
   it('fullTextRank ranks the row with more occurrences first', async () => {
     const rows = await runtime().query(
       db()
         .public.comments.select('id')
-        .where((f, fns) => fns.fullTextMatches(f.body, 'alice'))
-        .orderBy((f, fns) => fns.fullTextRank(f.body, 'alice'), { direction: 'desc' })
+        .where((f, fns) => fns.fullTextMatches(f.body, fns.websearchToTsquery('alice')))
+        .orderBy((f, fns) => fns.fullTextRank(f.body, fns.websearchToTsquery('alice')), {
+          direction: 'desc',
+        })
         .build(),
     );
     expect(rows.map((row) => row.id)[0]).toBe(102);
@@ -134,7 +169,10 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
         db()
           .public.comments.select('id')
           .select('snippet', (f, fns) =>
-            fns.fullTextHeadline(f.body, 'alice', { startSel: '<mark>', stopSel: '</mark>' }),
+            fns.fullTextHeadline(f.body, fns.websearchToTsquery('alice'), {
+              startSel: '<mark>',
+              stopSel: '</mark>',
+            }),
           )
           .where((f, fns) => fns.eq(f.id, 101))
           .build(),
@@ -147,8 +185,10 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
     const rows = await runtime().query(
       db()
         .public.comments.select('id')
-        .select('rank', (f, fns) => fns.fullTextRank(f.body, 'alice', { normalization: 32 }))
-        .where((f, fns) => fns.fullTextMatches(f.body, 'alice'))
+        .select('rank', (f, fns) =>
+          fns.fullTextRank(f.body, fns.websearchToTsquery('alice'), { normalization: 32 }),
+        )
+        .where((f, fns) => fns.fullTextMatches(f.body, fns.websearchToTsquery('alice')))
         .build(),
     );
 
@@ -164,7 +204,9 @@ describe('integration: full-text search', { timeout: timeouts.databaseOperation 
       .query(
         db()
           .public.comments.select('id')
-          .select('snippet', (f, fns) => fns.fullTextHeadline(f.body, 'alice'))
+          .select('snippet', (f, fns) =>
+            fns.fullTextHeadline(f.body, fns.websearchToTsquery('alice')),
+          )
           .where((f, fns) => fns.eq(f.id, 101))
           .build(),
       )

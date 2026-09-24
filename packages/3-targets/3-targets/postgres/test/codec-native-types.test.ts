@@ -41,6 +41,7 @@ const DDL_TYPES: Readonly<Record<string, string>> = {
   'pg/json@1': 'json',
   'pg/jsonb@1': 'jsonb',
   'pg/text-array@1': 'text[]',
+  'pg/tsquery@1': 'tsquery',
 };
 
 const NEEDS_PARAMS = new Set(['pg/enum@1']);

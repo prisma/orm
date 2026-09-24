@@ -22,12 +22,14 @@ import {
 } from '@internal/adapter-postgres/control';
 import { Collection } from '@internal/sql-orm-client';
 import type { SqlQueryPlan } from '@internal/sql-relational-core/plan';
+import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import { CreateIndexCall } from '@internal/target-postgres/op-factory-call';
 import { blindCast } from '@internal/utils/casts';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { setupIntegrationTest, timeouts } from './setup';
 
 const QUERY = 'zebra';
+const PREFIX_QUERY = 'zeb:*';
 
 /** Every `Index Name` anywhere in an EXPLAIN plan tree. */
 function indexNames(node: unknown): readonly string[] {
@@ -144,7 +146,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     const lowered = loweredOf(
       db()
         .public.comments.select('id')
-        .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
+        .where((f, fns) => fns.fullTextMatches(f.body, fns.websearchToTsquery(QUERY)))
         .build(),
     );
 
@@ -156,11 +158,24 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     expect(lowered.params).toEqual([QUERY]);
   });
 
+  it('lowers a raw string to a bound tsquery parameter over the same index expression', () => {
+    const lowered = loweredOf(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, PREFIX_QUERY))
+        .build(),
+    );
+
+    expect(lowered.sql).toContain(`to_tsvector('english', "body") @@ $1`);
+    expect(lowered.sql).not.toContain('to_tsquery');
+    expect(lowered.params).toEqual([PREFIX_QUERY]);
+  });
+
   it('uses the index for the SQL builder predicate', async () => {
     const lowered = loweredOf(
       db()
         .public.comments.select('id')
-        .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
+        .where((f, fns) => fns.fullTextMatches(f.body, fns.websearchToTsquery(QUERY)))
         .build(),
     );
 
@@ -168,12 +183,34 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     expect(indexNames(plan)).toContain(indexNamed('comments_body_search'));
   });
 
+  it('uses the index for a raw prefix query', async () => {
+    const lowered = loweredOf(
+      db()
+        .public.comments.select('id')
+        .where((f, fns) => fns.fullTextMatches(f.body, PREFIX_QUERY))
+        .build(),
+    );
+
+    const plan = await explain(lowered.sql, lowered.params);
+    expect(indexNames(plan)).toContain(indexNamed('comments_body_search'));
+    expect(
+      await runtime().query(
+        db()
+          .public.comments.select('id')
+          .where((f, fns) => fns.fullTextMatches(f.body, PREFIX_QUERY))
+          .build(),
+      ),
+    ).toHaveLength(6);
+  });
+
   it('uses the index when the same predicate is ordered by rank and limited', async () => {
     const lowered = loweredOf(
       db()
         .public.comments.select('id')
-        .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
-        .orderBy((f, fns) => fns.fullTextRank(f.body, QUERY), { direction: 'desc' })
+        .where((f, fns) => fns.fullTextMatches(f.body, fns.websearchToTsquery(QUERY)))
+        .orderBy((f, fns) => fns.fullTextRank(f.body, fns.websearchToTsquery(QUERY)), {
+          direction: 'desc',
+        })
         .limit(10)
         .build(),
     );
@@ -201,8 +238,8 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     });
     await comments
       .select('id')
-      .where((row) => row.body.fullTextMatches(QUERY))
-      .orderBy((row) => row.body.fullTextRank(QUERY).desc())
+      .where((row) => row.body.fullTextMatches(websearchToTsquery(QUERY)))
+      .orderBy((row) => row.body.fullTextRank(websearchToTsquery(QUERY)).desc())
       .all();
 
     const plan = captured[0];
@@ -219,7 +256,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     const lowered = loweredOf(
       db()
         .public.comments.select('id')
-        .where((f, fns) => fns.fullTextMatches(f.subject, QUERY))
+        .where((f, fns) => fns.fullTextMatches(f.subject, fns.websearchToTsquery(QUERY)))
         .build(),
     );
 
@@ -242,7 +279,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
     const lowered = loweredOf(
       db()
         .public.comments.select('id')
-        .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
+        .where((f, fns) => fns.fullTextMatches(f.body, fns.websearchToTsquery(QUERY)))
         .where((f, fns) => fns.eq(f.post_id, 1))
         .build(),
     );
@@ -256,7 +293,11 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
       const lowered = loweredOf(
         db()
           .public.comments.select('id')
-          .where((f, fns) => fns.fullTextMatches(f.body, QUERY, { language: 'german' }))
+          .where((f, fns) =>
+            fns.fullTextMatches(f.body, fns.websearchToTsquery(QUERY, { language: 'german' }), {
+              language: 'german',
+            }),
+          )
           .build(),
       );
 
@@ -269,7 +310,7 @@ describe('full-text index usage', { timeout: timeouts.databaseOperation }, () =>
       const lowered = loweredOf(
         db()
           .public.comments.select('id')
-          .where((f, fns) => fns.fullTextMatches(f.body, QUERY))
+          .where((f, fns) => fns.fullTextMatches(f.body, fns.websearchToTsquery(QUERY)))
           .build(),
       );
 

@@ -59,6 +59,7 @@ export const pgEnum: DataType = dataType('pg/enum', {});
 export const pgInt2: DataType = dataType('pg/int2', {});
 export const pgBool: DataType = dataType('pg/bool', {});
 export const pgJson: DataType = dataType('pg/json', {});
+export const pgTsquery: DataType = dataType('pg/tsquery', {});
 
 export const pgInt4: DataType = dataType('pg/int4', { casts: { [pgInt2.id]: unchanged } });
 
@@ -124,6 +125,7 @@ export const postgresDataTypes: readonly DataType[] = [
   pgInt2,
   pgBool,
   pgJson,
+  pgTsquery,
   pgInt4,
   pgInt8,
   pgNumeric,

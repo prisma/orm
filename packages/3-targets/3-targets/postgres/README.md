@@ -119,13 +119,21 @@ Pack refs are pure JSON-friendly objects that make TypeScript contract authoring
 
 This package contributes the built-in Postgres query operations — `ilike`, and the three full-text search operations below — through `queryOperations` on its runtime descriptor, with their types on `./operation-types`. Emitted `contract.d.ts` files import them from there.
 
-`fullTextMatches` is a predicate, `fullTextRank` scores a row for ordering, and `fullTextHeadline` returns the matched text with `<b>` around the matching words. All three take the search string as a bound parameter and lower to `websearch_to_tsquery`, so a user can type `"an exact phrase"` and `-excluded` and get what those mean in a search box.
+`fullTextMatches` is a predicate, `fullTextRank` scores a row for ordering, and `fullTextHeadline` returns the matched text with `<b>` around the matching words. All three take a `tsquery` as their first argument: an expression from one of the four parser helpers on `./full-text` (`websearchToTsquery`, `toTsquery`, `plaintoTsquery`, `phrasetoTsquery`, each taking text and `{ language? }`, binding the text as a parameter and lowering to the Postgres function of the same name), or a raw string, which binds as a `pg/tsquery@1` parameter and is read by Postgres as `tsquery` syntax. Postgres applies no language configuration to a raw string, so it is neither lowercased nor stemmed: it is compared against the stems in the vector exactly as written. The caller lowercases and, for a prefix match, passes the beginning of the stemmed word, `` fullTextMatches(`${term}:*`) ``: `rep:*` finds "report" and "reports", while `Rep:*` and `reports` find nothing. `toTsquery` is the parser to use for operator syntax with stemming. Malformed raw input fails at execution with the Postgres error. The same four parsers are registered as self-less query operations, so the SQL builder's `fns` exposes them by name; the ORM reaches them through the import.
 
-Each takes an options object as its second argument. `language` is common to all three and defaults to `english`; `fullTextRank` adds `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (which selects `ts_rank_cd`); `fullTextHeadline` adds `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`, which become `ts_headline`'s fourth argument:
+Each takes an options object as its second argument. `language` is common to all three, defaults to `english`, and is the configuration of the column-side `to_tsvector` the index covers (the parser's `language` governs the query side); `fullTextRank` adds `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (which selects `ts_rank_cd`); `fullTextHeadline` adds `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`, which become `ts_headline`'s fourth argument:
 
 ```typescript
-row.text.fullTextRank(query, { language: 'german', normalization: 32, coverDensity: true });
-row.text.fullTextHeadline(query, { startSel: '<mark>', stopSel: '</mark>', maxWords: 20 });
+row.text.fullTextRank(websearchToTsquery(query, { language: 'german' }), {
+  language: 'german',
+  normalization: 32,
+  coverDensity: true,
+});
+row.text.fullTextHeadline(websearchToTsquery(query), {
+  startSel: '<mark>',
+  stopSel: '</mark>',
+  maxWords: 20,
+});
 ```
 
 Postgres takes no parameter in any of those positions, so every option is written into the SQL as a literal and is therefore checked first: an unknown configuration, a normalization outside 0 to 63, a word count that is not a positive integer, a `minWords` above `maxWords`, or a marker carrying `ts_headline`'s own `"` `,` `=` delimiters all raise `RUNTIME.ARGUMENT_INVALID` before a statement is built.
@@ -133,10 +141,16 @@ Postgres takes no parameter in any of those positions, so every option is writte
 Through the ORM:
 
 ```typescript
+import { websearchToTsquery } from '@internal/target-postgres/full-text';
+
 const hits = await db.orm.public.Message.select('id', 'text')
-  .where((row) => row.text.fullTextMatches(query))
-  .orderBy((row) => row.text.fullTextRank(query).desc())
+  .where((row) => row.text.fullTextMatches(websearchToTsquery(query)))
+  .orderBy((row) => row.text.fullTextRank(websearchToTsquery(query)).desc())
   .limit(20)
+  .all();
+
+const suggestions = await db.orm.public.Message.select('id', 'text')
+  .where((row) => row.text.fullTextMatches(`${term}:*`))
   .all();
 ```
 
@@ -145,8 +159,8 @@ Through the SQL builder:
 ```typescript
 const snippets = db.sql.public.message
   .select('id')
-  .select('snippet', (f, fns) => fns.fullTextHeadline(f.text, query))
-  .where((f, fns) => fns.fullTextMatches(f.text, query))
+  .select('snippet', (f, fns) => fns.fullTextHeadline(f.text, fns.websearchToTsquery(query)))
+  .where((f, fns) => fns.fullTextMatches(f.text, fns.toTsquery("'zebra' & !'graze'")))
   .build();
 ```
 

@@ -22,6 +22,7 @@ import {
   pgTimestamp,
   pgTimestamptz,
   pgTimetz,
+  pgTsquery,
   pgUuid,
   pgVarbit,
   pgVarchar,
@@ -56,6 +57,7 @@ describe('the data types this target registers', () => {
       'pg/timestamp',
       'pg/timestamptz',
       'pg/timetz',
+      'pg/tsquery',
       'pg/uuid',
       'pg/varbit',
       'pg/varchar',
@@ -88,6 +90,7 @@ describe('the data types this target registers', () => {
     ['pg/time', pgTime, ['pg/text']],
     ['pg/timestamp', pgTimestamp, ['pg/text']],
     ['pg/timestamptz', pgTimestamptz, ['pg/text']],
+    ['pg/tsquery', pgTsquery, []],
   ])('%s casts from exactly the types the design names', (_id, type, sources) => {
     expect(sourcesOf(type)).toEqual(sources);
   });

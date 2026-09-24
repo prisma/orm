@@ -1,3 +1,4 @@
+import { websearchToTsquery } from '@internal/target-postgres/full-text';
 import { describe, expect, it } from 'vitest';
 import { createPostsCollection, timeouts, withCollectionRuntime } from './integration-helpers';
 import { seedPosts, seedUsers } from './runtime-helpers';
@@ -100,7 +101,7 @@ describe('integration/full-text-search operations', () => {
 
         const results = await createPostsCollection(runtime)
           .select('id', 'title')
-          .where((p) => p.title.fullTextMatches('alice'))
+          .where((p) => p.title.fullTextMatches(websearchToTsquery('alice')))
           .orderBy((p) => p.id.asc())
           .all();
 
@@ -121,13 +122,34 @@ describe('integration/full-text-search operations', () => {
 
         const results = await createPostsCollection(runtime)
           .select('id', 'title')
-          .where((p) => p.title.fullTextMatches('alice'))
-          .orderBy((p) => p.title.fullTextRank('alice').desc())
+          .where((p) => p.title.fullTextMatches(websearchToTsquery('alice')))
+          .orderBy((p) => p.title.fullTextRank(websearchToTsquery('alice')).desc())
           .all();
 
         expect(results).toEqual([
           { id: 2, title: 'alice met alice and alice again' },
           { id: 1, title: 'alice wrote the report' },
+        ]);
+      });
+    },
+    timeouts.spinUpPpgDev,
+  );
+
+  it(
+    'a raw string is tsquery syntax, so a word:* prefix matches every word it starts',
+    async () => {
+      await withCollectionRuntime(async (runtime) => {
+        await seedSearchablePosts(runtime);
+
+        const results = await createPostsCollection(runtime)
+          .select('id', 'title')
+          .where((p) => p.title.fullTextMatches('rep:*'))
+          .orderBy((p) => p.id.asc())
+          .all();
+
+        expect(results).toEqual([
+          { id: 1, title: 'alice wrote the report' },
+          { id: 3, title: 'bob wrote the report' },
         ]);
       });
     },

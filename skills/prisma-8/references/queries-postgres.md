@@ -62,24 +62,34 @@ db.orm.public.User.where({ kind: 'admin' });
 
 Operators on the field proxy include `.eq`, `.neq`, `.lt`, `.lte`, `.gt`, `.gte`, `.like`, `.ilike`, `.in([...])`, `.isNull()`, `.isNotNull()`. Extensions add target-specific operators on extension-typed columns (`pgvector`'s `.cosineDistance(...)`, `postgis`'s `.within(...)` / `.intersectsBbox(...)` / `.distanceSphere(...)`).
 
-**Full-text search** is built into the Postgres target, on any text column: `.fullTextMatches(q)` is the predicate, `.fullTextRank(q)` scores a row so you can order by relevance, and `.fullTextHeadline(q)` returns the text with `<b>` around the matches. The search string is a bound parameter lowered to `websearch_to_tsquery`, so `"an exact phrase"` and `-excluded` work the way a user expects from a search box. Each takes an options object as its second argument. `language` defaults to `'english'` and only accepts the configurations a stock PostgreSQL server ships with (`'simple'`, `'german'`, `'french'`, …); `fullTextRank` also takes `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (for `ts_rank_cd`); `fullTextHeadline` also takes `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`. Every one of them is written into the SQL as a literal, so anything invalid throws `RUNTIME.ARGUMENT_INVALID` when the query is built.
+**Full-text search** is built into the Postgres target, on any text column: `.fullTextMatches(q)` is the predicate, `.fullTextRank(q)` scores a row so you can order by relevance, and `.fullTextHeadline(q)` returns the text with `<b>` around the matches. The argument `q` is a `tsquery`: either an expression from one of the four Postgres parsers, or a raw string in Postgres `tsquery` syntax. The parsers live in `@prisma/orm-postgres/target/full-text` for the ORM and are `fns` members in the SQL builder; each takes the text (a string or a text column) and `{ language? }`, and binds the text as a parameter. `websearchToTsquery` is the one for a search box: `"an exact phrase"`, `-excluded` and `or` work and it never errors. `toTsquery` takes operator syntax (`'zebra' & !'graze'`, `zeb:*`) and errors on malformed input; `plaintoTsquery` requires every word; `phrasetoTsquery` requires the words in order. A raw string skips the parser: it binds as a `tsquery` parameter and Postgres reads it as `tsquery` syntax, and applies no language configuration to it, so it is neither lowercased nor stemmed; it is compared against the stems in the vector exactly as written. `fullTextMatches('reports')` finds nothing in a text containing "reports", because the vector holds the stem `report`. The caller lowercases and, for a prefix match, passes the beginning of the stemmed word: `rep:*` finds "report" and "reports", while `Rep:*` and `reports` find nothing. That is how to get a typeahead prefix match without a parser, `` fullTextMatches(`${term}:*`) ``, or to pass a query an in-app DSL built. If you want operators and stemming, `toTsquery` is the parser that normalizes operator syntax. Malformed raw input fails at execution with the Postgres error; nothing validates or rewrites it first.
+
+Each operation takes an options object as its second argument. `language` (default `'english'`) is the configuration for the column's `to_tsvector`, the expression the index covers; the parser's own `language` governs the query side, and the two normally match. It only accepts the configurations a stock PostgreSQL server ships with (`'simple'`, `'german'`, `'french'`, …); `fullTextRank` also takes `normalization` (the `ts_rank` bitmask, 0 to 63) and `coverDensity` (for `ts_rank_cd`); `fullTextHeadline` also takes `startSel`, `stopSel`, `maxWords`, `minWords` and `highlightAll`. Every one of them is written into the SQL as a literal, so anything invalid throws `RUNTIME.ARGUMENT_INVALID` when the query is built.
 
 ```typescript
-// ORM: filter by the query, order by relevance.
+import { websearchToTsquery } from '@prisma/orm-postgres/target/full-text';
+
+// ORM: filter by the search-box query, order by relevance.
 const hits = await db.orm.public.Message
   .select('id', 'text')
-  .where((m) => m.text.fullTextMatches(query))
-  .orderBy((m) => m.text.fullTextRank(query).desc())
+  .where((m) => m.text.fullTextMatches(websearchToTsquery(query)))
+  .orderBy((m) => m.text.fullTextRank(websearchToTsquery(query)).desc())
   .limit(20)
   .all();
 
-// SQL builder: the same predicate, plus a snippet with your own markers.
+// ORM: typeahead, a raw prefix query.
+const suggestions = await db.orm.public.Message
+  .select('id', 'text')
+  .where((m) => m.text.fullTextMatches(`${term}:*`))
+  .all();
+
+// SQL builder: the parsers are fns; a snippet with your own markers.
 const snippets = db.sql.public.message
   .select('id')
   .select('snippet', (f, fns) =>
-    fns.fullTextHeadline(f.text, query, { startSel: '<mark>', stopSel: '</mark>', maxWords: 20 }),
+    fns.fullTextHeadline(f.text, fns.websearchToTsquery(query), { startSel: '<mark>', stopSel: '</mark>', maxWords: 20 }),
   )
-  .where((f, fns) => fns.fullTextMatches(f.text, query))
+  .where((f, fns) => fns.fullTextMatches(f.text, fns.toTsquery("'zebra' & !'graze'")))
   .build();
 ```
 

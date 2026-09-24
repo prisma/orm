@@ -101,6 +101,7 @@ import {
   PG_TEXT_ARRAY_CODEC_ID,
   PG_TEXT_CODEC_ID,
   PG_TIMETZ_CODEC_ID,
+  PG_TSQUERY_CODEC_ID,
   PG_UNBOUNDED_INT_CODEC_ID,
   PG_UUID_CODEC_ID,
   PG_VARBIT_CODEC_ID,
@@ -125,6 +126,7 @@ import {
   pgText,
   pgTextArray,
   pgTimetz,
+  pgTsquery,
   pgUuid,
   pgVarbit,
   pgVarchar,
@@ -1372,6 +1374,52 @@ export const pgInetColumn = () =>
 pgInetColumn satisfies ColumnHelperFor<PgInetDescriptor>;
 pgInetColumn satisfies ColumnHelperForStrict<PgInetDescriptor>;
 
+const PG_TSQUERY_NATIVE_TYPE = 'tsquery';
+
+export class PgTsqueryCodec extends CodecImpl<
+  typeof PG_TSQUERY_CODEC_ID,
+  readonly ['equality', 'order'],
+  string,
+  string
+> {
+  async encode(value: string, _ctx: CodecCallContext): Promise<string> {
+    return value;
+  }
+  async decode(wire: string, _ctx: CodecCallContext): Promise<string> {
+    return wire;
+  }
+  encodeJson(value: string): JsonValue {
+    return value;
+  }
+  decodeJson(json: JsonValue): string {
+    return blindCast<string, 'tsquery values serialize to JSON as their wire string form'>(json);
+  }
+}
+
+/**
+ * The type of a full-text query: what the parsers in `full-text` return and what a raw string
+ * passed to `fullTextMatches`, `fullTextRank` or `fullTextHeadline` binds as. It has no column
+ * helper, because a contract cannot author a `tsquery` column.
+ */
+export class PgTsqueryDescriptor extends PostgresCodecDescriptor<void> {
+  protected override nativeType(): string {
+    return PG_TSQUERY_NATIVE_TYPE;
+  }
+  protected override jsonProjection(expression: ProjectionExpr): ProjectionExpr {
+    return expression;
+  }
+  override readonly dataType = pgTsquery.id;
+  override readonly codecId = PG_TSQUERY_CODEC_ID;
+  override readonly traits = ['equality', 'order'] as const;
+  override readonly targetTypes = ['tsquery'] as const;
+  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override factory(): (ctx: CodecInstanceContext) => PgTsqueryCodec {
+    return () => new PgTsqueryCodec(this);
+  }
+}
+
+export const pgTsqueryDescriptor = new PgTsqueryDescriptor();
+
 /**
  * An application value is a {@link PgInterval} — the three fields PostgreSQL
  * actually stores, `{ months, days, micros }` — and its canonical JSON is the
@@ -1719,4 +1767,5 @@ export const codecDescriptors = definePostgresCodecs([
   pgJsonDescriptor,
   pgJsonbDescriptor,
   pgTextArrayDescriptor,
+  pgTsqueryDescriptor,
 ]);

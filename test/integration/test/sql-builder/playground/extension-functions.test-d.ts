@@ -49,10 +49,33 @@ test('ilike returns boolean expression', () => {
 
 test('fullTextMatches returns a non-nullable boolean expression', () => {
   db.public.users.select('id').where((f, fns) => {
-    const result = fns.fullTextMatches(f.name, 'alice');
+    const result = fns.fullTextMatches(f.name, fns.websearchToTsquery('alice'));
     expectTypeOf(result).toEqualTypeOf<Expression<{ codecId: 'pg/bool@1'; nullable: false }>>();
     return result;
   });
+});
+
+test('the parsers are fns returning a non-nullable tsquery expression', () => {
+  db.public.users.select('id').where((f, fns) => {
+    type Tsquery = Expression<{ codecId: 'pg/tsquery@1'; nullable: false }>;
+    expectTypeOf(fns.websearchToTsquery('alice')).toEqualTypeOf<Tsquery>();
+    expectTypeOf(fns.toTsquery("'alice' & !'bob'")).toEqualTypeOf<Tsquery>();
+    expectTypeOf(fns.plaintoTsquery('alice bob')).toEqualTypeOf<Tsquery>();
+    expectTypeOf(fns.phrasetoTsquery(f.name, { language: 'german' })).toEqualTypeOf<Tsquery>();
+    return fns.fullTextMatches(f.name, fns.toTsquery('ali:*'));
+  });
+});
+
+test('the query is a parser expression or raw tsquery text, never another type', () => {
+  db.public.users.select('id').where((f, fns) => fns.fullTextMatches(f.name, 'ali:*'));
+  db.public.users
+    .select('id')
+    // @ts-expect-error a number is neither a tsquery expression nor tsquery text
+    .where((f, fns) => fns.fullTextMatches(f.name, 42));
+  db.public.users
+    .select('id')
+    // @ts-expect-error a text column is not a tsquery; parse it first
+    .where((f, fns) => fns.fullTextMatches(f.name, f.name));
 });
 
 test('fullTextRank returns a non-nullable float4 expression', () => {
