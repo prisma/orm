@@ -62,7 +62,11 @@ import {
   type ResolvedAttribute,
   type SymbolTable,
 } from '@internal/psl-parser';
-import { fkRelationPairKey, type InvalidFkPairing } from '@internal/psl-parser/interpret';
+import {
+  fkRelationPairKey,
+  type InvalidFkPairing,
+  reportUncomposedNamespace,
+} from '@internal/psl-parser/interpret';
 import type { DocumentAst, PslSources } from '@internal/psl-parser/syntax';
 import { isAuthoredIndexInput } from '@internal/sql-contract/index-naming';
 import type {
@@ -92,11 +96,7 @@ import { contractError } from './contract-errors';
 import type { DataTypeSupport } from './data-type-default';
 import { getAttribute, getNamedArgument, mapFieldNamesToColumns } from './psl-attribute-parsing';
 import type { ColumnDescriptor } from './psl-column-resolution';
-import {
-  getAuthoringEntity,
-  reportUncomposedNamespace,
-  resolveFieldTypeDescriptor,
-} from './psl-column-resolution';
+import { getAuthoringEntity, resolveFieldTypeDescriptor } from './psl-column-resolution';
 import {
   buildModelMappings,
   collectResolvedFields,

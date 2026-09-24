@@ -1,10 +1,11 @@
 import type { ContractSourceDiagnostic } from '@internal/config/config-types';
 import type { AuthoringArgumentDescriptor } from '@internal/framework-components/authoring';
-import type { PslSpan, ResolvedAttributeArg } from '@internal/psl-parser';
-import { createPslDiagnosticCollector, diagnosticSource } from '@internal/psl-parser';
-import { parse } from '@internal/psl-parser/syntax';
+import type { PslSpan } from '@internal/framework-components/psl-ast';
 import { describe, expect, it } from 'vitest';
-import { mapPslHelperArgs } from '../src/psl-authoring-arguments';
+import { mapPslHelperArgs } from '../src/authoring-arguments';
+import { createPslDiagnosticCollector, diagnosticSource } from '../src/diagnostic';
+import { parse } from '../src/parse';
+import type { ResolvedAttributeArg } from '../src/resolve';
 
 const SPAN: PslSpan = {
   start: { offset: 0, line: 1, column: 1 },

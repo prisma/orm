@@ -76,7 +76,7 @@ export interface AuthoringOption {
 
 Both declarative surfaces reference it: `AuthoringArgumentDescriptor` ([framework-authoring.ts](../../../packages/1-framework/1-core/framework-components/src/shared/framework-authoring.ts)) includes it as a member of its union, and `PslBlockParamOption` ([psl-extension-block.ts](../../../packages/1-framework/1-core/framework-components/src/shared/psl-extension-block.ts)) extends it with the block-parameter presence flag. One type for one idea — a helper argument and a block parameter that both mean "one of these tokens" cannot drift apart, because there is nothing to drift.
 
-**PSL spells an option as a bare token** (`onUpdate: now`), following `@relation(onDelete: Cascade)` — the established spelling for an enumerated attribute argument. Bare identifiers are ordinary argument expressions in the PSL grammar, so the parser's only job is to accept the identifier text ([psl-authoring-arguments.ts](../../../packages/2-sql/2-authoring/contract-psl/src/psl-authoring-arguments.ts)):
+**PSL spells an option as a bare token** (`onUpdate: now`), following `@relation(onDelete: Cascade)` — the established spelling for an enumerated attribute argument. Bare identifiers are ordinary argument expressions in the PSL grammar, so the parser's only job is to accept the identifier text ([authoring-arguments.ts](../../../packages/1-framework/2-authoring/psl-parser/src/authoring-arguments.ts)):
 
 ```ts
 case 'option': {

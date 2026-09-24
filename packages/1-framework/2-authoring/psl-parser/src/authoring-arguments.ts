@@ -1,11 +1,16 @@
 import type { AuthoringArgumentDescriptor } from '@internal/framework-components/authoring';
-import type {
-  DiagnosticSource,
-  PslDiagnosticCollector,
-  PslSpan,
-  ResolvedAttributeArg,
-} from '@internal/psl-parser';
-import { unquoteStringLiteral } from './psl-attribute-parsing';
+import type { PslSpan } from '@internal/framework-components/psl-ast';
+import type { DiagnosticSource, PslDiagnosticCollector } from './diagnostic';
+import type { ResolvedAttributeArg } from './resolve';
+
+function unquoteStringLiteral(value: string): string {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(['"])(.*)\1$/);
+  if (!match) {
+    return trimmed;
+  }
+  return match[2] ?? '';
+}
 
 const INVALID_AUTHORING_ARGUMENT = Symbol('invalidAuthoringArgument');
 

@@ -10,6 +10,7 @@ import {
   consumeInvalidFkPairing,
   fkRelationPairKey,
   type InvalidFkPairing,
+  reportUncomposedNamespace,
   requiredOneToOneBackrelationDiagnostic,
 } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
@@ -18,7 +19,6 @@ import type { RelationNode } from '@internal/sql-contract-ts/contract-builder';
 import { assertDefined, invariant } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 
-import { reportUncomposedNamespace } from './psl-column-resolution';
 import {
   findFieldAttributeNode,
   interpretFieldAttribute,

@@ -6,12 +6,12 @@ import type {
   PslDiagnosticCollector,
 } from '@internal/psl-parser';
 import { diagnosticSource } from '@internal/psl-parser';
+import { reportUncomposedNamespace } from '@internal/psl-parser/interpret';
 import type { StorageTypeInstance } from '@internal/sql-contract/types';
 import { formatDbAttributeMigrationMessage } from './psl-attribute-parsing';
 import {
   type ColumnDescriptor,
   instantiatePslTypeConstructor,
-  reportUncomposedNamespace,
   resolvePslTypeConstructorDescriptor,
   toNamedTypeFieldDescriptor,
 } from './psl-column-resolution';

@@ -7,7 +7,6 @@ import type {
   AuthoringContributions,
   AuthoringEntityTypeDescriptor,
   AuthoringEntityTypeNamespace,
-  AuthoringFieldPresetDescriptor,
   AuthoringTypeConstructorDescriptor,
   AuthoringTypeNamespace,
 } from '@internal/framework-components/authoring';
@@ -15,7 +14,6 @@ import {
   checkUncomposedNamespace,
   getAuthoringFieldPreset,
   hasRegisteredFieldNamespace,
-  instantiateAuthoringFieldPreset,
   instantiateAuthoringTypeConstructor,
   isAuthoringEntityTypeDescriptor,
   isAuthoringTypeConstructorDescriptor,
@@ -44,6 +42,12 @@ import {
   diagnosticSource,
   type PslDiagnosticCollector,
 } from '@internal/psl-parser';
+import {
+  instantiatePslFieldPreset,
+  mapPslHelperArgs,
+  reportUncomposedNamespace,
+  reportUnknownFieldPreset,
+} from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import type { AuthoredColumnDefault } from '@internal/sql-contract-ts/contract-builder';
 import { InternalError } from '@internal/utils/internal-error';
@@ -61,7 +65,6 @@ import {
   lowerDefaultFunctionWithRegistry,
 } from './default-function-registry';
 
-import { mapPslHelperArgs } from './psl-authoring-arguments';
 import {
   fieldSpecContext,
   findFieldAttributeNode,
@@ -141,45 +144,6 @@ export function getAuthoringEntity(
   }
 
   return current !== undefined && isAuthoringEntityTypeDescriptor(current) ? current : undefined;
-}
-
-/**
- * Pushes the canonical `PSL_EXTENSION_NAMESPACE_NOT_COMPOSED` diagnostic for a subject (attribute, model attribute, or type constructor) that references an extension namespace which is not composed in the current contract.
- *
- * The `data` payload carries the missing namespace so machine consumers (agents, IDE extensions, CLI auto-fix) don't have to parse the prose.
- */
-export function reportUncomposedNamespace(input: {
-  readonly subjectLabel: string;
-  readonly namespace: string;
-  readonly source: DiagnosticSource;
-  readonly span: PslSpan;
-  readonly diagnostics: PslDiagnosticCollector;
-}): void {
-  input.diagnostics.push({
-    code: 'PSL_EXTENSION_NAMESPACE_NOT_COMPOSED',
-    message: `${input.subjectLabel} uses unrecognized namespace "${input.namespace}". Add extension pack "${input.namespace}" to extensions in prisma.config.ts.`,
-    ...input.source.at(input.span),
-    data: { namespace: input.namespace, suggestedPack: input.namespace },
-  });
-}
-
-/**
- * Pushes the canonical `PSL_UNKNOWN_FIELD_PRESET` diagnostic when a typoed preset name is referenced inside a registered field-preset namespace. The `data` payload exposes the namespace and full helper path so machine consumers (agents, IDE extensions) don't have to parse the prose.
- */
-export function reportUnknownFieldPreset(input: {
-  readonly entityLabel: string;
-  readonly namespace: string;
-  readonly helperPath: string;
-  readonly source: DiagnosticSource;
-  readonly span: PslSpan;
-  readonly diagnostics: PslDiagnosticCollector;
-}): void {
-  input.diagnostics.push({
-    code: 'PSL_UNKNOWN_FIELD_PRESET',
-    message: `${input.entityLabel} references unknown field preset "${input.helperPath}". Check the spelling against the available presets in the "${input.namespace}" namespace.`,
-    ...input.source.at(input.span),
-    data: { namespace: input.namespace, helperPath: input.helperPath },
-  });
 }
 
 export function instantiatePslTypeConstructor(input: {
@@ -281,71 +245,6 @@ export function resolvePslTypeConstructorDescriptor(input: {
     code: input.unsupportedCode,
     message: input.unsupportedMessage,
   });
-}
-
-/**
- * Instantiates a field-preset call against its descriptor, coercing PSL AST arguments into the descriptor's typed argument shape and returning the preset's full set of contract contributions.
- *
- * Symmetric with `instantiatePslTypeConstructor` but richer: a field preset can contribute `default`, `executionDefaults`, `id`, `unique`, and `nullable` in addition to the storage-type triple. PSL → typed-args coercion happens here (via `mapPslHelperArgs`) so that `instantiateAuthoringFieldPreset` itself stays typed-input-only and TS keeps its zero-runtime-validation cost.
- */
-export function instantiateFieldPreset(input: {
-  readonly call: ResolvedTypeConstructorCall;
-  readonly descriptor: AuthoringFieldPresetDescriptor;
-  readonly diagnostics: PslDiagnosticCollector;
-  readonly source: DiagnosticSource;
-  readonly entityLabel: string;
-}):
-  | {
-      readonly descriptor: ColumnDescriptor;
-      readonly nullable: boolean;
-      readonly default?: ColumnDefault;
-      readonly executionDefaults?: ExecutionMutationDefaultPhases;
-      readonly id: boolean;
-      readonly unique: boolean;
-    }
-  | undefined {
-  const helperPath = input.call.path.join('.');
-  const args = mapPslHelperArgs({
-    args: input.call.args,
-    descriptors: input.descriptor.args ?? [],
-    helperLabel: `preset "${helperPath}"`,
-    span: input.call.span,
-    diagnostics: input.diagnostics,
-    source: input.source,
-    entityLabel: input.entityLabel,
-  });
-  if (!args) {
-    return undefined;
-  }
-
-  try {
-    validateAuthoringHelperArguments(helperPath, input.descriptor.args, args);
-    const instantiated = instantiateAuthoringFieldPreset(input.descriptor, args);
-    return {
-      descriptor: {
-        codecId: instantiated.descriptor.codecId,
-        nativeType: instantiated.descriptor.nativeType,
-        ...(instantiated.descriptor.typeParams !== undefined
-          ? { typeParams: instantiated.descriptor.typeParams }
-          : {}),
-      },
-      nullable: instantiated.nullable,
-      ...(instantiated.default !== undefined ? { default: instantiated.default } : {}),
-      ...(instantiated.executionDefaults !== undefined
-        ? { executionDefaults: instantiated.executionDefaults }
-        : {}),
-      id: instantiated.id,
-      unique: instantiated.unique,
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    input.diagnostics.push({
-      code: 'PSL_INVALID_ATTRIBUTE_ARGUMENT',
-      message: `${input.entityLabel} preset "${helperPath}" ${message}`,
-      ...input.source.at(input.call.span),
-    });
-    return undefined;
-  }
 }
 
 /**
@@ -547,7 +446,7 @@ export function resolveFieldTypeDescriptor(input: {
       input.field.typeConstructor.path,
     );
     if (presetDescriptor) {
-      const instantiated = instantiateFieldPreset({
+      const instantiated = instantiatePslFieldPreset({
         call: input.field.typeConstructor,
         descriptor: presetDescriptor,
         diagnostics: input.diagnostics,

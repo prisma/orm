@@ -17,6 +17,7 @@ import type {
   SymbolTable,
 } from '@internal/psl-parser';
 import { diagnosticSource, type PslDiagnosticCollector } from '@internal/psl-parser';
+import { reportUncomposedNamespace } from '@internal/psl-parser/interpret';
 import type { PslSources } from '@internal/psl-parser/syntax';
 import type {
   AuthoredColumnDefault,
@@ -30,11 +31,7 @@ import type { DataTypeSupport } from './data-type-default';
 import { defaultTableName } from './default-table-name';
 import { formatDbAttributeMigrationMessage, getAttribute } from './psl-attribute-parsing';
 import type { ColumnDescriptor, FieldPresetContributions } from './psl-column-resolution';
-import {
-  lowerDefaultForField,
-  reportUncomposedNamespace,
-  resolveFieldTypeDescriptor,
-} from './psl-column-resolution';
+import { lowerDefaultForField, resolveFieldTypeDescriptor } from './psl-column-resolution';
 import {
   fieldSpecContext,
   findFieldAttributeNode,
