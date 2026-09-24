@@ -1,19 +1,25 @@
-import type { PrismaNextConfig } from '@internal/config/config-types';
-import { createControlStack } from '@internal/framework-components/control';
+import type {
+  ContractSourceDiagnostics,
+  ContractSourceProvider,
+} from '@internal/config/config-types';
+import type { Contract } from '@internal/contract/types';
+import type { CliStructuredError } from '@internal/errors/control';
+import type { ControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
 import { ifDefined } from '@internal/utils/defined';
+import type { Result } from '@internal/utils/result';
+import { notOk, ok } from '@internal/utils/result';
 import type { Diagnostic } from '@internal/utils/structured-error';
 import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import { errorRuntime } from '../../utils/cli-errors';
 
-type ContractConfig = NonNullable<PrismaNextConfig['contract']>;
-
-export type ControlStack = ReturnType<typeof createControlStack>;
-
-/** The contract the configured source produced, and the stack it was loaded against. */
-export interface LoadedContractSource {
-  readonly stack: ControlStack;
-  readonly contract: unknown;
+/**
+ * Why the configured source produced no contract: the error to report, and
+ * the diagnostics the source returned, when it returned any.
+ */
+export interface ContractSourceLoadFailure {
+  readonly error: CliStructuredError;
+  readonly sourceDiagnostics?: ContractSourceDiagnostics;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -102,10 +108,6 @@ function sourceDiagnosticsToFindings(diagnostics: readonly unknown[]): Diagnosti
   return findings;
 }
 
-type ValidatedProviderResult =
-  | { readonly ok: true; readonly value: unknown }
-  | { readonly ok: false; readonly error: ReturnType<typeof errorRuntime> };
-
 function diagnosticLocationSuffix(diagnostic: Record<string, unknown>): string {
   const formatted = formatLocation(diagnosticLocation(diagnostic));
   return formatted === undefined ? '' : ` (${formatted})`;
@@ -124,62 +126,70 @@ function mapDiagnosticsToIssues(
   return issues;
 }
 
-function validateProviderResult(providerResult: unknown): ValidatedProviderResult {
-  if (!isRecord(providerResult) || typeof providerResult['ok'] !== 'boolean') {
-    return {
-      ok: false,
-      error: failedToResolveContractSource(
+type ContractSourceLoadResult = Result<Contract, ContractSourceLoadFailure>;
+
+function failedWith(error: CliStructuredError): ContractSourceLoadResult {
+  return notOk({ error });
+}
+
+/**
+ * Checks the shape of what `load` returned. A source may be plain JavaScript,
+ * so its declared type is not trusted.
+ */
+function validateProviderResult(
+  providerResult: Result<Contract, ContractSourceDiagnostics>,
+): ContractSourceLoadResult {
+  const raw: unknown = providerResult;
+  if (!isRecord(raw) || typeof raw['ok'] !== 'boolean') {
+    return failedWith(
+      failedToResolveContractSource(
         'Contract source provider returned malformed result shape.',
         'Ensure contract.source.load resolves to ok(Contract) or notOk({ summary, diagnostics }).',
       ),
-    };
+    );
   }
 
-  if (providerResult['ok']) {
-    const value = providerResult['value'];
+  if (providerResult.ok) {
+    const value: unknown = providerResult.value;
     if (value === undefined || value === null) {
-      return {
-        ok: false,
-        error: failedToResolveContractSource(
+      return failedWith(
+        failedToResolveContractSource(
           'Contract source provider returned malformed success result: missing value.',
           'Ensure contract.source.load success payload is ok(Contract).',
         ),
-      };
+      );
     }
-    return { ok: true, value };
+    return ok(providerResult.value);
   }
 
-  const failure = providerResult['failure'];
+  const failure: unknown = providerResult.failure;
   if (
     !isRecord(failure) ||
     typeof failure['summary'] !== 'string' ||
     !Array.isArray(failure['diagnostics'])
   ) {
-    return {
-      ok: false,
-      error: failedToResolveContractSource(
+    return failedWith(
+      failedToResolveContractSource(
         'Contract source provider returned malformed failure result: expected summary and diagnostics.',
         'Ensure contract.source.load failure payload is notOk({ summary, diagnostics, meta? }).',
       ),
-    };
+    );
   }
   if (
     failure['diagnostics'].some(
       (diagnostic: unknown) => !isRecord(diagnostic) || typeof diagnostic['sourceId'] !== 'string',
     )
   ) {
-    return {
-      ok: false,
-      error: failedToResolveContractSource(
+    return failedWith(
+      failedToResolveContractSource(
         'Contract source provider returned malformed failure result: each diagnostic must include a string sourceId.',
         'Include the source filename in each diagnostic returned by contract.source.load.',
       ),
-    };
+    );
   }
-  return {
-    ok: false,
+  return notOk({
     error: failedToResolveContractSource(
-      String(failure['summary']),
+      failure['summary'],
       'Edit the source where each finding points, then run the command again.',
       {
         diagnostics: failure['diagnostics'],
@@ -189,28 +199,26 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
       undefined,
       sourceDiagnosticsToFindings(failure['diagnostics']),
     ),
-  };
+    sourceDiagnostics: providerResult.failure,
+  });
 }
 
 /**
- * Builds the control stack, asks the configured contract source for the
- * contract, and turns every failure into `CONTRACT.SOURCE_LOAD_FAILED`. Shared
- * by `contract emit` and `contract print` so both report a bad source the
- * same way.
+ * Asks the configured contract source for the contract, with a source context
+ * built from `stack`, and turns every failure into `CONTRACT.SOURCE_LOAD_FAILED`.
+ * Every command that loads a contract source goes through here, so each
+ * reports a bad source the same way.
  *
- * @throws {CliStructuredError} `CONTRACT.SOURCE_LOAD_FAILED` when the source
- * cannot produce a contract
  * @throws {DOMException} `AbortError` if cancelled via `signal`
  */
 export async function loadContractSource(inputs: {
-  readonly config: PrismaNextConfig;
-  readonly contractConfig: ContractConfig;
+  readonly stack: ControlStack;
+  readonly source: ContractSourceProvider;
   readonly signal?: AbortSignal;
-}): Promise<LoadedContractSource> {
-  const { config, contractConfig } = inputs;
+}): Promise<ContractSourceLoadResult> {
+  const { stack, source } = inputs;
   const signal = inputs.signal ?? new AbortController().signal;
   const unlessAborted = abortable(signal);
-  const stack = createControlStack(config);
 
   const sourceContext = {
     composedExtensions: stack.extensions.map((p) => p.id),
@@ -219,28 +227,26 @@ export async function loadContractSource(inputs: {
     codecLookup: stack.codecLookup,
     controlMutationDefaults: stack.controlMutationDefaults,
     dataTypeLookup: stack.dataTypeLookup,
-    resolvedInputs: contractConfig.source.inputs ?? [],
+    resolvedInputs: source.inputs ?? [],
     capabilities: stack.capabilities,
   };
 
-  let providerResult: Awaited<ReturnType<typeof contractConfig.source.load>>;
+  let providerResult: Result<Contract, ContractSourceDiagnostics>;
   try {
-    providerResult = await unlessAborted(contractConfig.source.load(sourceContext));
+    providerResult = await unlessAborted(source.load(sourceContext));
   } catch (error) {
     if (signal.aborted || (isRecord(error) && error['name'] === 'AbortError')) {
       throw error;
     }
-    throw failedToResolveContractSource(
-      error instanceof Error ? error.message : String(error),
-      'Ensure contract.source.load resolves to ok(Contract) or returns structured diagnostics.',
-      undefined,
-      error,
+    return failedWith(
+      failedToResolveContractSource(
+        error instanceof Error ? error.message : String(error),
+        'Ensure contract.source.load resolves to ok(Contract) or returns structured diagnostics.',
+        undefined,
+        error,
+      ),
     );
   }
 
-  const validated = validateProviderResult(providerResult);
-  if (!validated.ok) {
-    throw validated.error;
-  }
-  return { stack, contract: validated.value };
+  return validateProviderResult(providerResult);
 }

@@ -21,7 +21,6 @@ import {
   hasMigrations,
   hasOperationPreview,
   hasPslContractInfer,
-  hasPslContractPrint,
   hasSchemaView,
 } from '@internal/framework-components/control';
 import {
@@ -41,6 +40,7 @@ import { enrichContract } from './contract-enrichment';
 import { executeDbInit } from './operations/db-init';
 import { executeDbUpdate } from './operations/db-update';
 import { type ExecuteDbVerifyResult, executeDbVerify } from './operations/db-verify';
+import { loadContractSource } from './operations/load-contract-source';
 import { executeMigrate } from './operations/migrate';
 
 import type { RenderContractDtsOptions, RenderContractDtsResult } from './render-contract-dts';
@@ -607,14 +607,6 @@ class ControlClientImpl implements ControlClient {
     return undefined;
   }
 
-  printPslContract(contract: unknown): PslDocumentAst | undefined {
-    this.init();
-    if (this.familyInstance && hasPslContractPrint(this.familyInstance)) {
-      return this.familyInstance.printPslContract(contract);
-    }
-    return undefined;
-  }
-
   getPslBlockDescriptors(): AuthoringPslBlockDescriptorNamespace {
     this.init();
     return this.stack!.authoringContributions.pslBlockDescriptors;
@@ -639,7 +631,6 @@ class ControlClientImpl implements ControlClient {
       throw new InternalError('Family instance was not initialized. This is a bug.');
     }
 
-    let contractRaw: unknown;
     onProgress?.({
       action: 'emit',
       kind: 'spanStart',
@@ -647,57 +638,24 @@ class ControlClientImpl implements ControlClient {
       label: 'Resolving contract source...',
     });
 
-    try {
-      const stack = this.stack!;
-      const sourceContext = {
-        composedExtensions: stack.extensions.map((p) => p.id),
-        composedExtensionContracts: stack.extensionContracts,
-        authoringContributions: stack.authoringContributions,
-        codecLookup: stack.codecLookup,
-        controlMutationDefaults: stack.controlMutationDefaults,
-        dataTypeLookup: stack.dataTypeLookup,
-        resolvedInputs: contractConfig.source.inputs ?? [],
-        capabilities: stack.capabilities,
-      };
-      const providerResult = await contractConfig.source.load(sourceContext);
-      if (!providerResult.ok) {
-        onProgress?.({
-          action: 'emit',
-          kind: 'spanEnd',
-          spanId: 'resolveSource',
-          outcome: 'error',
-        });
-
-        return notOk({
-          code: 'CONTRACT_SOURCE_INVALID',
-          summary: providerResult.failure.summary,
-          why: providerResult.failure.summary,
-          meta: providerResult.failure.meta,
-          diagnostics: providerResult.failure,
-        });
-      }
-      contractRaw = providerResult.value;
-
-      onProgress?.({
-        action: 'emit',
-        kind: 'spanEnd',
-        spanId: 'resolveSource',
-        outcome: 'ok',
-      });
-    } catch (error) {
-      onProgress?.({
-        action: 'emit',
-        kind: 'spanEnd',
-        spanId: 'resolveSource',
-        outcome: 'error',
-      });
-
-      const message = error instanceof Error ? error.message : String(error);
+    const loaded = await loadContractSource({
+      stack: this.stack!,
+      source: contractConfig.source,
+    });
+    onProgress?.({
+      action: 'emit',
+      kind: 'spanEnd',
+      spanId: 'resolveSource',
+      outcome: loaded.ok ? 'ok' : 'error',
+    });
+    if (!loaded.ok) {
+      const { error, sourceDiagnostics } = loaded.failure;
       return notOk({
         code: 'CONTRACT_SOURCE_INVALID',
-        summary: 'Failed to resolve contract source',
-        why: message,
-        meta: undefined,
+        summary: sourceDiagnostics?.summary ?? error.message,
+        why: error.why,
+        meta: sourceDiagnostics?.meta,
+        ...ifDefined('diagnostics', sourceDiagnostics),
       });
     }
 
@@ -710,20 +668,7 @@ class ControlClientImpl implements ControlClient {
     });
 
     try {
-      // Blind cast: `contractRaw` is the unverified provider
-      // payload — `enrichContract` only adds capability + extension
-      // metadata onto whatever shape it receives. The structural
-      // check happens immediately afterwards via
-      // `familyInstance.deserializeContract`, which is the
-      // seam-of-record and the only thing that may surface
-      // structural errors to the caller.
-      const enrichedIR = enrichContract(
-        blindCast<
-          Contract,
-          'Provider payload is enriched before target serialization and family validation'
-        >(contractRaw),
-        this.frameworkComponents ?? [],
-      );
+      const enrichedIR = enrichContract(loaded.value, this.frameworkComponents ?? []);
       const rawContractJson = this.options.target.contractSerializer.serializeContract(enrichedIR);
 
       let deserializedContract: Contract;

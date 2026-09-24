@@ -1,103 +1,21 @@
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { ok } from '@internal/utils/result';
 import { structuredError } from '@internal/utils/structured-error';
-import type { ErroredEnvelope, MountedTree, StreamEvent } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { BIN_GROUPS } from '../../src/orm/cli';
-import { createContractPrintCommand } from '../../src/orm/contract/print';
-import { createTestProjectDir } from '../utils/test-project-dir';
+import { describe, expect, it } from 'vitest';
+import {
+  erroredEnvelope,
+  harness,
+  mocks,
+  ormConfig,
+  PSL,
+  projectDir,
+  useContractPrintDoubles,
+  VALIDATED_CONTRACT,
+} from './contract-print-support';
 
-const PSL = 'model User {\n  id Int @id\n}\n';
-
-/**
- * The command is mounted from the factory with a control-client double and a
- * printer double injected, so no module mocking is involved and the doubles
- * are scoped to this file.
- */
-const mocks = {
-  printPslContract: vi.fn(),
-  getPslBlockDescriptors: vi.fn(),
-  close: vi.fn(),
-  printPsl: vi.fn(),
-  load: vi.fn(),
-};
-
-const commands: MountedTree = {
-  'contract print': createContractPrintCommand({
-    createControlClient: () => ({
-      printPslContract: mocks.printPslContract,
-      getPslBlockDescriptors: mocks.getPslBlockDescriptors,
-      close: mocks.close,
-    }),
-    printPsl: mocks.printPsl,
-  }),
-};
-const groups = BIN_GROUPS;
-
-const dirs: string[] = [];
-
-async function projectDir(): Promise<string> {
-  const dir = createTestProjectDir('orm-print');
-  dirs.push(dir);
-  return dir;
-}
-
-afterEach(async () => {
-  for (const dir of dirs.splice(0)) {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-beforeEach(() => {
-  mocks.printPslContract.mockReset().mockReturnValue({ kind: 'psl-document' });
-  mocks.getPslBlockDescriptors.mockReset().mockReturnValue({});
-  mocks.close.mockReset().mockResolvedValue(undefined);
-  mocks.printPsl.mockReset().mockReturnValue(PSL);
-  mocks.load.mockReset().mockResolvedValue(ok({ roots: {}, domain: {} }));
-});
-
-const DESCRIPTOR = {
-  familyId: 'sql',
-  targetId: 'postgres',
-  version: '1.0.0',
-  create: () => ({}),
-};
-
-function ormConfig(dir: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    family: {
-      kind: 'family',
-      id: 'sql',
-      familyId: 'sql',
-      version: '1.0.0',
-      emission: {},
-      create: () => ({}),
-    },
-    target: { ...DESCRIPTOR, kind: 'target', id: 'postgres' },
-    adapter: { ...DESCRIPTOR, kind: 'adapter', id: 'pg' },
-    driver: { ...DESCRIPTOR, kind: 'driver', id: 'pg-driver' },
-    contract: {
-      source: { format: 'psl', inputs: ['./prisma/schema.prisma'], load: mocks.load },
-      output: join(dir, 'generated', 'contract.json'),
-    },
-    ...overrides,
-  };
-}
-
-function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups, config: { orm: config } });
-}
-
-function erroredEnvelope(run: { readonly json: readonly StreamEvent[] }): ErroredEnvelope {
-  const terminal = run.json.at(-1);
-  if (terminal === undefined || terminal.kind !== 'result' || terminal.envelope.ok) {
-    throw new Error('the run did not settle as an errored envelope');
-  }
-  return terminal.envelope;
-}
+useContractPrintDoubles();
 
 describe('contract print', () => {
   it('settles as a completed envelope carrying the written path and the schema it read', async () => {
@@ -116,7 +34,7 @@ describe('contract print', () => {
     });
   });
 
-  it('opens the written file with a header naming the source it printed', async () => {
+  it('describes the written file as printed from the source it read', async () => {
     const dir = await projectDir();
 
     await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
@@ -124,11 +42,25 @@ describe('contract print', () => {
     expect(mocks.printPsl).toHaveBeenCalledWith(
       { kind: 'psl-document' },
       expect.objectContaining({
-        headerComment:
-          '// use prisma-8\n// Printed from prisma/schema.prisma by `prisma contract print`.',
+        description: 'Printed from prisma/schema.prisma by `prisma contract print`.',
       }),
     );
     expect(await readFile(join(dir, 'generated', 'contract.prisma'), 'utf-8')).toBe(PSL);
+  });
+
+  it('loads the source, creates the family instance and renders the text with one control stack', async () => {
+    const dir = await projectDir();
+
+    await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
+
+    const [stack] = mocks.createFamilyInstance.mock.calls[0] ?? [];
+    const [sourceContext] = mocks.load.mock.calls[0] ?? [];
+    const [, printOptions] = mocks.printPsl.mock.calls[0] ?? [];
+    expect(sourceContext.codecLookup).toBe(stack.codecLookup);
+    expect(sourceContext.authoringContributions).toBe(stack.authoringContributions);
+    expect(printOptions.codecLookup).toBe(stack.codecLookup);
+    expect(printOptions.pslBlockDescriptors).toBe(stack.authoringContributions.pslBlockDescriptors);
+    expect(mocks.printPslContract).toHaveBeenCalledWith(VALIDATED_CONTRACT);
   });
 
   it('publishes through a staged rename, leaving no temporary file behind', async () => {
@@ -139,11 +71,12 @@ describe('contract print', () => {
     expect(await readdir(join(dir, 'generated'))).toEqual(['contract.prisma']);
   });
 
-  it('writes nothing when the run is cancelled while the client is closing', async () => {
+  it('writes nothing when the run is cancelled while the source loads', async () => {
     const dir = await projectDir();
     const controller = new AbortController();
-    mocks.close.mockImplementation(async () => {
+    mocks.load.mockImplementation(async () => {
       controller.abort();
+      return ok({ roots: {}, domain: {} });
     });
 
     const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], {
@@ -220,61 +153,64 @@ describe('contract print', () => {
     expect(run.stdout).toBe('');
   });
 
-  it('names the default control policy the config must set, because a PSL file cannot carry it', async () => {
+  it('warns that the config must set the default control policy, because a PSL file cannot carry it', async () => {
     const dir = await projectDir();
-    mocks.load.mockResolvedValue(ok({ roots: {}, domain: {}, defaultControlPolicy: 'external' }));
+    mocks.printPslContract.mockReturnValue({
+      document: { kind: 'psl-document' },
+      sourceSettings: { defaultControlPolicy: 'external' },
+    });
 
     const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
     expect(run.exitCode).toBe(0);
+    expect(run.events).toContainEqual({
+      kind: 'message',
+      severity: 'warn',
+      text: "The contract's default control policy is 'external', and a PSL file cannot carry it. Set defaultControlPolicy: 'external' on the PSL source in prisma.config.ts. Without it, the emitted contract has no default control policy, and everything that sets no control policy of its own is treated as managed.",
+    });
     expect(run.presented?.data).toMatchObject({ defaultControlPolicy: 'external' });
     expect(run.presented?.presentation.next).toEqual([
       {
         kind: 'user-choice',
         label:
-          "Point contract in prisma.config.ts at generated/contract.prisma, with defaultControlPolicy 'external' on its source",
+          "Point contract in prisma.config.ts at generated/contract.prisma, through a PSL source that sets defaultControlPolicy: 'external'",
       },
       { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
     ]);
   });
 
-  it('refuses to write over the schema it reads and leaves that file untouched', async () => {
+  it('prints no warning when the contract has no default control policy', async () => {
     const dir = await projectDir();
-    const schema = 'model User {\n  id Int @id\n}\n';
-    await mkdir(join(dir, 'prisma'), { recursive: true });
-    await writeFile(join(dir, 'prisma', 'schema.prisma'), schema, 'utf-8');
 
-    const run = await harness(ormConfig(dir)).run(
-      ['contract', 'print', '--output', 'prisma/schema.prisma', '--json'],
-      { cwd: dir },
-    );
+    const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
-    expect(run.exitCode).toBe(2);
-    expect(erroredEnvelope(run).error).toMatchObject({
-      code: 'CONTRACT.PRINT_OUTPUT_IS_SOURCE',
-      meta: { output: 'prisma/schema.prisma', source: 'prisma/schema.prisma' },
-    });
-    expect(await readFile(join(dir, 'prisma', 'schema.prisma'), 'utf-8')).toBe(schema);
-    expect(mocks.load).not.toHaveBeenCalled();
+    expect(run.events).not.toContainEqual(expect.objectContaining({ severity: 'warn' }));
   });
 
-  it('refuses an output path inside a directory the contract source reads', async () => {
+  it('says where contract emit writes after the switch when the printed file names other emitted files', async () => {
     const dir = await projectDir();
     const config = ormConfig(dir, {
       contract: {
-        source: { format: 'psl', inputs: ['./prisma'], load: mocks.load },
-        output: join(dir, 'generated', 'contract.json'),
+        source: { format: 'psl', inputs: ['./prisma/schema.prisma'], load: mocks.load },
+        output: join(dir, 'prisma', 'schema.json'),
       },
     });
 
-    const run = await harness(config).run(
-      ['contract', 'print', '--output', 'prisma/nested/contract.prisma', '--json'],
-      { cwd: dir },
-    );
+    const run = await harness(config).run(['contract', 'print', '--json'], { cwd: dir });
 
-    expect(run.exitCode).toBe(2);
-    expect(erroredEnvelope(run).error).toMatchObject({ code: 'CONTRACT.PRINT_OUTPUT_IS_SOURCE' });
-    expect(await readdir(dir)).not.toContain('prisma');
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.presentation.next).toEqual([
+      {
+        kind: 'user-choice',
+        label: 'Point contract in prisma.config.ts at prisma/contract.prisma',
+      },
+      {
+        kind: 'user-choice',
+        label:
+          "With contract: './prisma/contract.prisma' and no output in prisma.config.ts, contract emit writes prisma/contract.json and prisma/contract.d.ts, not prisma/schema.json and prisma/schema.d.ts",
+      },
+      { kind: 'run-command', label: 'Emit the printed contract', command: '{bin} contract emit' },
+    ]);
   });
 
   it('prints a PSL source the same way as any other source', async () => {
@@ -293,8 +229,7 @@ describe('contract print', () => {
     expect(mocks.printPsl).toHaveBeenCalledWith(
       { kind: 'psl-document' },
       expect.objectContaining({
-        headerComment:
-          '// use prisma-8\n// Printed from contract.prisma by `prisma contract print`.',
+        description: 'Printed from contract.prisma by `prisma contract print`.',
       }),
     );
     expect(await readFile(join(dir, 'generated', 'contract.prisma'), 'utf-8')).toBe(PSL);
@@ -319,13 +254,13 @@ describe('contract print', () => {
 
   it('errors when the family cannot print the contract as PSL', async () => {
     const dir = await projectDir();
-    mocks.printPslContract.mockReturnValue(undefined);
+    mocks.createFamilyInstance.mockReturnValue({ deserializeContract: mocks.deserializeContract });
 
     const run = await harness(ormConfig(dir)).run(['contract', 'print', '--json'], { cwd: dir });
 
     expect(run.exitCode).toBe(2);
     expect(erroredEnvelope(run).error).toMatchObject({ code: 'CONTRACT.PRINT_UNSUPPORTED' });
-    expect(mocks.close).toHaveBeenCalled();
+    expect(await readdir(dir)).not.toContain('generated');
   });
 
   it('writes no file at the output path when the target refuses part of the contract', async () => {

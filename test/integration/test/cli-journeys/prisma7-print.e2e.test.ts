@@ -8,7 +8,9 @@
  * generated for the full `supported` schema. The command is not tied to
  * Prisma 7: a PSL source prints too. Two things are refused with exit 2 and no
  * file written: a Prisma 7 schema Prisma 8 cannot read, and an output path
- * that is the schema being read.
+ * that is the schema being read. A contract with a default control policy
+ * prints with a warning, and the config the READMEs show for the printed file
+ * emits it with the same policy.
  */
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { withClient } from '@repo/test-utils';
@@ -29,6 +31,42 @@ import {
 
 const PRISMA7_FIXTURES = join(__dirname, '../fixtures/prisma7-source');
 const JOURNEY_FIXTURES = join(__dirname, '../fixtures/cli/cli-e2e-test-app/fixtures/cli-journeys');
+const REPO_ROOT = join(__dirname, '../../../..');
+const READMES_WITH_POLICY_CONFIG = [
+  join(REPO_ROOT, 'packages/1-framework/3-tooling/cli/README.md'),
+  join(REPO_ROOT, 'packages/3-extensions/postgres/README.md'),
+];
+
+/** The published import paths the READMEs use, and the workspace packages that back them. */
+const PUBLISHED_TO_WORKSPACE: ReadonlyArray<readonly [string, string]> = [
+  ["'prisma/config'", "'@prisma/cli-engine'"],
+  ["'@prisma/orm-family-sql/contract-psl/provider'", "'@internal/sql-contract-psl/provider'"],
+  ["'@prisma/orm-postgres/config'", "'@internal/postgres/config'"],
+  ["'@prisma/orm-postgres/target/", "'@internal/target-postgres/"],
+];
+
+/** The \`prisma.config.ts\` block in a README that sets \`defaultControlPolicy\`. */
+function policyConfigIn(readmePath: string): string {
+  const blocks = [...readFileSync(readmePath, 'utf-8').matchAll(/```typescript\n([\s\S]*?)```/g)];
+  const block = blocks
+    .map((match) => match[1] ?? '')
+    .find((text) => text.includes('defaultControlPolicy'));
+  if (block === undefined) {
+    throw new Error(`${readmePath} shows no config that sets defaultControlPolicy`);
+  }
+  return block;
+}
+
+function withWorkspaceImports(config: string): string {
+  return PUBLISHED_TO_WORKSPACE.reduce(
+    (text, [published, workspace]) => text.replaceAll(published, workspace),
+    config,
+  );
+}
+
+function emittedContractJson(testDir: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(testDir, 'prisma', 'contract.json'), 'utf-8'));
+}
 
 const PRISMA7_DDL = readFileSync(join(PRISMA7_FIXTURES, 'supported/migration.sql'), 'utf-8');
 
@@ -168,6 +206,60 @@ withTempDir(({ createTempDir }) => {
       },
       timeouts.spinUpPpgDev,
     );
+  });
+
+  describe('Journey: printing a contract with a default control policy', () => {
+    it('warns about the policy, and the README config emits the printed file with it', async () => {
+      const [cliReadme, ...otherReadmes] = READMES_WITH_POLICY_CONFIG.map(policyConfigIn);
+      for (const readme of otherReadmes) {
+        expect(readme).toBe(cliReadme);
+      }
+      const testDir = createTempDir();
+      writeProjectManifest(testDir);
+      mkdirSync(join(testDir, 'prisma'), { recursive: true });
+      copyFileSync(
+        join(JOURNEY_FIXTURES, 'contract-default-policy.ts'),
+        join(testDir, 'prisma', 'contract.ts'),
+      );
+      const typeScriptConfig = writeConfig(testDir, 'prisma.config.default-policy.ts', NO_DATABASE);
+      writeFileSync(
+        join(testDir, 'prisma.config.policy-psl.ts'),
+        withWorkspaceImports(cliReadme ?? ''),
+        'utf-8',
+      );
+      const onTypeScript: JourneyContext = {
+        testDir,
+        configPath: typeScriptConfig,
+        outputDir: testDir,
+      };
+      const onPrinted: JourneyContext = {
+        ...onTypeScript,
+        configPath: join(testDir, 'prisma.config.policy-psl.ts'),
+      };
+
+      const typeScriptEmit = await runContractEmit(onTypeScript, ['--json']);
+      expect(typeScriptEmit.exitCode, output(typeScriptEmit)).toBe(0);
+      expect(emittedContractJson(testDir)).toMatchObject({ defaultControlPolicy: 'external' });
+
+      const print = await runContractPrint(onTypeScript, ['--json']);
+      expect(print.exitCode, output(print)).toBe(0);
+      expect(print.presented?.data).toMatchObject({
+        psl: { path: 'prisma/contract.prisma' },
+        defaultControlPolicy: 'external',
+      });
+      expect(print.events).toContainEqual(
+        expect.objectContaining({
+          kind: 'message',
+          severity: 'warn',
+          text: expect.stringContaining("Set defaultControlPolicy: 'external'"),
+        }),
+      );
+
+      const printedEmit = await runContractEmit(onPrinted, ['--json']);
+      expect(printedEmit.exitCode, output(printedEmit)).toBe(0);
+      expect(storageHashOf(printedEmit)).toBe(storageHashOf(typeScriptEmit));
+      expect(emittedContractJson(testDir)).toMatchObject({ defaultControlPolicy: 'external' });
+    });
   });
 
   describe('Journey: contract print on other sources, and what it refuses', () => {

@@ -180,7 +180,7 @@ describe('config finalization at the command boundary', () => {
       config: {
         orm: {
           contract: {
-            source: { load: async () => ({ ok: true, value: {} }) },
+            source: { format: 'typescript', load: async () => ({ ok: true, value: {} }) },
             output: './src/prisma/contract.json',
           },
           migrations: { dir: './migrations' },

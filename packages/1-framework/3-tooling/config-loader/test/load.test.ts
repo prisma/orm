@@ -48,6 +48,7 @@ const config = {
   },
   contract: {
     source: {
+      format: 'psl',
       inputs: ['./schema.prisma'],
       load: async () => ({ ok: true, value: { targetFamily: 'sql' } }),
     },
@@ -251,6 +252,7 @@ describe('loadConfig', () => {
       const noContractSource = VALID_CONFIG_SOURCE.replace(
         `  contract: {
     source: {
+      format: 'psl',
       inputs: ['./schema.prisma'],
       load: async () => ({ ok: true, value: { targetFamily: 'sql' } }),
     },

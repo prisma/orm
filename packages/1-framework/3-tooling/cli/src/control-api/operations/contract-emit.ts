@@ -1,26 +1,24 @@
 import { mkdir } from 'node:fs/promises';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
+import { type ControlStack, createControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
-import { blindCast } from '@internal/utils/casts';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
 import { dirname, join } from 'pathe';
 import { errorContractConfigMissing } from '../../utils/cli-errors';
 import { queueEmitByOutput } from '../../utils/emit-queue';
-import { assertFrameworkComponentsCompatible } from '../../utils/framework-components';
 import { createProjectSpecifierResolver } from '../../utils/project-import-root';
 import { publishContractArtifactPair } from '../../utils/publish-contract-artifact-pair';
 import { validateContractDeps } from '../../utils/validate-contract-deps';
-import { enrichContract } from '../contract-enrichment';
 import type {
   ContractEmitOptions,
   ContractEmitResult,
   ControlActionName,
   OnControlProgress,
 } from '../types';
-import type { LoadedContractSource } from './load-contract-source';
 import { loadContractSource } from './load-contract-source';
+import { validateLoadedContract } from './validate-loaded-contract';
 
 const EMIT_ACTION: ControlActionName = 'emit';
 
@@ -110,39 +108,24 @@ export async function executeContractEmit(
 
   return queueEmitByOutput(outputJsonPath, async () => {
     startSpan(onProgress, 'resolveSource', 'Resolving contract source...');
-    let loadedSource: LoadedContractSource;
+    let stack: ControlStack;
+    let contract: Contract;
     try {
-      loadedSource = await loadContractSource({ config, contractConfig, signal });
+      stack = createControlStack(config);
+      const loaded = await loadContractSource({ stack, source: contractConfig.source, signal });
+      if (!loaded.ok) throw loaded.failure.error;
+      contract = loaded.value;
     } catch (error) {
       endSpan(onProgress, 'resolveSource', 'error');
       throw error;
     }
     endSpan(onProgress, 'resolveSource', 'ok');
-    const { stack } = loadedSource;
 
     startSpan(onProgress, 'emit', 'Emitting contract...');
     let emitResult: Awaited<ReturnType<typeof emit>>;
     try {
       const familyInstance = config.family.create(stack);
-      const rawComponents = [config.target, config.adapter, ...(config.extensions ?? [])];
-      const frameworkComponents = assertFrameworkComponentsCompatible(
-        config.family.familyId,
-        config.target.targetId,
-        rawComponents,
-      );
-      // Blind cast: `loadContractSource` returns the provider's value as
-      // `unknown` and checks only that it is present. The cast defers the
-      // structural check by one statement so `enrichContract` can decorate
-      // first; the serialize→deserialize round-trip below checks the shape.
-      const enrichedIR = enrichContract(
-        blindCast<
-          Contract,
-          'Provider payload is enriched before target serialization and family validation'
-        >(loadedSource.contract),
-        frameworkComponents,
-      );
-      const rawContractJson = config.target.contractSerializer.serializeContract(enrichedIR);
-      const deserializedContract = familyInstance.deserializeContract(rawContractJson);
+      const deserializedContract = validateLoadedContract({ config, familyInstance, contract });
       // Each target's descriptor ships a `contractSerializer` SPI; the
       // framework canonicalizer threads its `serializeContract` so the
       // on-disk JSON envelope is constructed by target-owned code

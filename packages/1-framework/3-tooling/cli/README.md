@@ -372,14 +372,40 @@ The written file opens with two comment lines: the `// use prisma-8` marker, and
 // Printed from prisma/schema.prisma by `prisma contract print`.
 ```
 
-The written file reads back as the identical contract. Where PSL has no form for part of the contract, the command refuses, names that part, and writes nothing. It exits `2` in three cases:
+The written file reads back as the identical contract. Where PSL has no form for part of the contract, the command refuses, names that part, and writes nothing. It exits `2` and writes nothing in these cases:
 - `CONTRACT.PRINT_UNSUPPORTED`: part of the contract cannot be written as PSL that reads back the same. The full list of cases is under that code in `docs/reference/error-reference.md`. A column type an extension contributes, such as pgvector's `Vector`, prints only when that extension is in the config.
 - `CONTRACT.SOURCE_LOAD_FAILED`: the source cannot be read, reported exactly as `contract emit` reports it.
-- `CONTRACT.PRINT_OUTPUT_IS_SOURCE`: the `--output` path is a source file the config reads, or sits inside a directory of source files. Pick another path.
+- The loaded contract fails the structure check `contract emit` applies, as a hand-written TypeScript contract can. The command runs the same check before it prints, so it reports the same error as `contract emit`.
+- `CONTRACT.PRINT_OUTPUT_IS_SOURCE`: the output path is a source file the config reads, or sits inside a directory of source files. Pick another path.
+- `CONTRACT.PRINT_OUTPUT_IS_PROJECT_FILE`: the output path is `prisma.config.ts` in the invocation directory, or one of the files `contract emit` writes (`contract.json` and `contract.d.ts`, or whatever `contract.output` names). Pick another path.
 
-A PSL file cannot carry the contract's default control policy. When the contract has one, the result names it (`defaultControlPolicy` in the JSON result, and in the next step), and the config must set it on the PSL source.
+These checks compare the files the paths name, not the text of the paths: a path through a symbolic link, or one that differs only in case on a volume that ignores case (the macOS default), counts as the same file.
 
-To switch to the written file, point `contract` in `prisma.config.ts` at it and run `prisma contract emit`. For a project leaving a Prisma 7 schema, that is the first step of the cutover; the rest takes migration ownership of the database Prisma 7 built:
+A PSL file cannot carry the contract's default control policy. When the contract has one, the command prints a warning, names it in the JSON result (`defaultControlPolicy`) and in the next step, and the config must set it on the new PSL source. Without it, the emitted contract has no default control policy, and everything that sets no control policy of its own is treated as managed. The facade `defineConfig` has no option for it, so build the PSL source with `prismaContract`, which comes from `@prisma/orm-family-sql` (add that package to the project's dependencies). For Postgres, with the default output path of a Prisma 7 cutover:
+
+```typescript
+// prisma.config.ts
+import { definePrismaConfig } from 'prisma/config';
+import { prismaContract } from '@prisma/orm-family-sql/contract-psl/provider';
+import { defineConfig as ormConfig } from '@prisma/orm-postgres/config';
+import { PG_INT_CODEC_ID, PG_TEXT_CODEC_ID } from '@prisma/orm-postgres/target/codec-ids';
+import postgresPack from '@prisma/orm-postgres/target/pack';
+import { postgresCreateNamespace } from '@prisma/orm-postgres/target/types';
+
+export default definePrismaConfig({
+  orm: ormConfig({
+    contract: prismaContract('./prisma/contract.prisma', {
+      target: postgresPack,
+      createNamespace: postgresCreateNamespace,
+      enumInferenceCodecs: { text: PG_TEXT_CODEC_ID, int: PG_INT_CODEC_ID },
+      defaultControlPolicy: 'external',
+    }),
+    db: { connection: process.env['DATABASE_URL']! },
+  }),
+});
+```
+
+To switch to the written file, point `contract` in `prisma.config.ts` at it and run `prisma contract emit`. Without an explicit `output`, the facade names the emitted files after the contract path it is given, so switching `contract: './prisma/schema.prisma'` to `contract: './prisma/contract.prisma'` moves `schema.json` and `schema.d.ts` to `contract.json` and `contract.d.ts` and leaves the old files on disk; when the printed file would move them, the next step names both pairs of files. For a project leaving a Prisma 7 schema, the switch is the first step of the cutover; the rest takes migration ownership of the database Prisma 7 built:
 
 ```bash
 prisma contract emit

@@ -230,11 +230,11 @@ function validateContract(config: Record<string, unknown>, issues: IssueCollecto
   }
 
   const format = Object.hasOwn(source, 'format') ? source['format'] : undefined;
-  if (format !== undefined && typeof format !== 'string') {
+  if (format !== 'psl' && format !== 'typescript') {
     issues.add(
       'contract',
       'contract.source.format',
-      'Config.contract.source.format must be a string when provided',
+      "Config.contract.source.format must be 'psl' or 'typescript'",
     );
   }
 

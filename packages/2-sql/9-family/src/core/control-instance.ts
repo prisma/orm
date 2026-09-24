@@ -11,7 +11,9 @@ import type {
   MigrationPlanOperation,
   OperationPreview,
   OperationPreviewCapable,
+  PrintedPslContract,
   PslContractInferCapable,
+  PslContractPrintCapable,
   SchemaDiffIssue,
   SchemaViewCapable,
   SignDatabaseResult,
@@ -207,6 +209,7 @@ export interface SqlControlFamilyInstance
   extends ControlFamilyInstance<'sql', SqlSchemaIRNode>,
     SchemaViewCapable<SqlSchemaIRNode>,
     PslContractInferCapable<SqlSchemaIRNode>,
+    PslContractPrintCapable<Contract<SqlStorage>>,
     OperationPreviewCapable,
     SqlFamilyInstanceState {
   /**
@@ -276,8 +279,6 @@ export interface SqlControlFamilyInstance
   }): Promise<SqlSchemaIRNode>;
 
   inferPslContract(schemaIR: SqlSchemaIRNode): PslDocumentAst;
-
-  printPslContract(contract: Contract<SqlStorage>): PslDocumentAst;
 
   lowerAst(
     ast: AnyQueryAst | DdlNode,
@@ -586,8 +587,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
     SqlControlTargetDescriptor<TTargetId, unknown>,
     'reading the optional target-descriptor inferPslContract hook'
   >(target).inferPslContract;
-  // Contract→PSL printing is also target logic (it owns the dialect type and
-  // default maps), so it is read off the descriptor the same way. Absent for
+  // Contract→PSL printing is read off the descriptor the same way. Absent for
   // targets without `contract print`.
   const targetPrintPslContract = blindCast<
     SqlControlTargetDescriptor<TTargetId, unknown>,
@@ -1024,7 +1024,7 @@ export function createSqlFamilyInstance<TTargetId extends string>(
       return targetInferPslContract(schemaIR, describedContracts);
     },
 
-    printPslContract(contract: Contract<SqlStorage>): PslDocumentAst {
+    printPslContract(contract: Contract<SqlStorage>): PrintedPslContract {
       if (!targetPrintPslContract) {
         throw sqlFamilyError(
           'CONTRACT.PRINT_UNSUPPORTED',
@@ -1036,9 +1036,14 @@ export function createSqlFamilyInstance<TTargetId extends string>(
           },
         );
       }
-      return targetPrintPslContract(contract, {
-        authoringTypes: stack.authoringContributions.type,
-      });
+      return {
+        document: targetPrintPslContract(contract, {
+          authoringContributions: stack.authoringContributions,
+          codecLookup: stack.codecLookup,
+          dataTypeLookup: stack.dataTypeLookup,
+        }),
+        sourceSettings: ifDefined('defaultControlPolicy', contract.defaultControlPolicy),
+      };
     },
 
     lowerAst(

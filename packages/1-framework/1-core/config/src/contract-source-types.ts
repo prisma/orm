@@ -51,10 +51,9 @@ export interface ContractSourceContext {
 }
 
 /**
- * The language a contract source's inputs are written in. Tooling that reads
- * the inputs itself, such as `contract format` and the language server, checks
- * this instead of guessing from file extensions. A source that declares no
- * format is a TypeScript source.
+ * The language a contract source's inputs are written in. Every source states
+ * one. Tooling that reads the inputs itself, such as `contract format` and the
+ * language server, checks this instead of guessing from file extensions.
  */
 export type ContractSourceFormat = 'psl' | 'typescript';
 
@@ -70,7 +69,7 @@ export interface PslContractSourceProvider extends ContractSourceProviderBase {
 }
 
 export interface TypeScriptContractSourceProvider extends ContractSourceProviderBase {
-  readonly format?: 'typescript';
+  readonly format: 'typescript';
 }
 
 export type ContractSourceProvider = PslContractSourceProvider | TypeScriptContractSourceProvider;

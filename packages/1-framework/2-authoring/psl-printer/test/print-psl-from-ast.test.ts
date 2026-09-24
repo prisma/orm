@@ -400,16 +400,13 @@ describe('printPslFromAst', () => {
       return printed.split('\n\n')[0] ?? '';
     }
 
-    it('describes an inferred contract when the caller names none', () => {
-      expect(headerOf(printPslFromAst(headerAst))).toBe(
-        '// use prisma-8\n// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
-      );
+    it('opens with only the prisma-8 marker when the caller names no description', () => {
+      expect(headerOf(printPslFromAst(headerAst))).toBe('// use prisma-8');
     });
 
-    it('opens with the header the caller names', () => {
+    it('opens with the prisma-8 marker, then the description the caller names', () => {
       const printed = printPslFromAst(headerAst, {
-        headerComment:
-          '// use prisma-8\n// Printed from prisma/schema.prisma by `prisma contract print`.',
+        description: 'Printed from prisma/schema.prisma by `prisma contract print`.',
       });
 
       expect(headerOf(printed)).toBe(

@@ -1,3 +1,4 @@
+import type { Contract, ControlPolicy } from '@internal/contract/types';
 import type { ControlTargetDescriptor } from './control-descriptors';
 import type { ControlFamilyInstance } from './control-instances';
 import type { MigrationPlanOperation, TargetMigrationsCapability } from './control-migration-types';
@@ -54,11 +55,26 @@ export function hasPslContractInfer<TFamilyId extends string, TSchemaIR>(
 }
 
 /**
+ * Settings a PSL contract source takes from the config, because a PSL file
+ * cannot carry them. Emitting the printed file produces the same contract only
+ * when the config sets each of them on the new source.
+ */
+export interface PslSourceSettings {
+  readonly defaultControlPolicy?: ControlPolicy;
+}
+
+/** A contract printed as a PSL document, and the settings its PSL source must carry. */
+export interface PrintedPslContract {
+  readonly document: PslDocumentAst;
+  readonly sourceSettings: PslSourceSettings;
+}
+
+/**
  * Capability declaring that a family can print a contract as a PSL document
  * AST. Consumed by `prisma contract print`.
  */
-export interface PslContractPrintCapable<TContract = unknown> {
-  printPslContract(contract: TContract): PslDocumentAst;
+export interface PslContractPrintCapable<TContract = Contract> {
+  printPslContract(contract: TContract): PrintedPslContract;
 }
 
 export function hasPslContractPrint<TFamilyId extends string, TSchemaIR>(

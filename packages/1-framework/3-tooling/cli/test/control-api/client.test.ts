@@ -614,6 +614,34 @@ describe('ControlClient progress emission', () => {
       }
     });
 
+    it('rejects a malformed source result with the check contract emit runs', async () => {
+      const { mockFamily, mockTarget, mockAdapter } = createMockComponents();
+      const client = createControlClient({
+        family: mockFamily,
+        target: mockTarget,
+        adapter: mockAdapter,
+      });
+
+      const result = await client.emit({
+        contractConfig: {
+          source: createSourceProvider(
+            async () => ({}) as unknown as Awaited<ReturnType<ContractSourceProvider['load']>>,
+          ),
+          output: '/tmp/contract.json',
+        },
+      });
+
+      await client.close();
+
+      expect(result.ok).toBe(false);
+      expect(result.ok ? undefined : result.failure).toEqual({
+        code: 'CONTRACT_SOURCE_INVALID',
+        summary: 'Failed to resolve contract source',
+        why: 'Contract source provider returned malformed result shape.',
+        meta: undefined,
+      });
+    });
+
     it('emits error outcome when emit throws', async () => {
       const events: ControlProgressEvent[] = [];
       const { mockFamily, mockTarget, mockAdapter } = createMockComponents();

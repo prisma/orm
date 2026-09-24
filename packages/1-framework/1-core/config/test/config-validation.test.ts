@@ -5,6 +5,7 @@ import { collectConfigIssues } from '../src/config-validation';
 
 function createSourceProvider(overrides: Record<string, unknown> = {}) {
   return {
+    format: 'typescript',
     load: async () => ok({ targetFamily: 'sql' } as Contract),
     ...overrides,
   };
@@ -298,12 +299,12 @@ describe('collectConfigIssues', () => {
     ).toEqual([]);
   });
 
-  it('accepts a provider with an unknown format string and extra keys', () => {
+  it('accepts a provider with a psl format and extra keys', () => {
     const issues = collectConfigIssues(
       createValidRawConfig({
         contract: {
           source: createSourceProvider({
-            format: 'made-up-format',
+            format: 'psl',
             inputs: ['./schema.prisma'],
             interpret: () => [],
           }),
@@ -311,6 +312,19 @@ describe('collectConfigIssues', () => {
       }),
     );
     expect(issues).toEqual([]);
+  });
+
+  it.each([
+    ['a format the framework does not have', createSourceProvider({ format: 'made-up-format' })],
+    ['no format', { load: createSourceProvider().load }],
+  ])('rejects a provider with %s', (_label, source) => {
+    expect(collectConfigIssues(createValidRawConfig({ contract: { source } }))).toEqual([
+      expect.objectContaining({
+        section: 'contract',
+        field: 'contract.source.format',
+        message: "Config.contract.source.format must be 'psl' or 'typescript'",
+      }),
+    ]);
   });
 
   it('collects migrations issues under the migrations section', () => {

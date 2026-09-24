@@ -124,7 +124,7 @@ test('accepts contract source providers with declared inputs', () => {
   };
 
   const result = defineConfig(config);
-  expectTypeOf(result.contract!.source.format).toEqualTypeOf<ContractSourceFormat | undefined>();
+  expectTypeOf(result.contract!.source.format).toEqualTypeOf<ContractSourceFormat>();
   expectTypeOf(result.contract!.source.inputs).toEqualTypeOf<readonly string[] | undefined>();
   expectTypeOf(result.contract!.source.load).toEqualTypeOf<ContractSourceProvider['load']>();
 });
@@ -151,11 +151,10 @@ test('a contract source is PSL or TypeScript, and nothing else', () => {
   >();
   expectTypeOf<ContractSourceFormat>().toEqualTypeOf<'psl' | 'typescript'>();
   expectTypeOf<PslContractSourceProvider['format']>().toEqualTypeOf<'psl'>();
-  expectTypeOf<TypeScriptContractSourceProvider['format']>().toEqualTypeOf<
-    'typescript' | undefined
-  >();
+  expectTypeOf<TypeScriptContractSourceProvider['format']>().toEqualTypeOf<'typescript'>();
+  // @ts-expect-error every contract source states its format
   const untagged: ContractSourceProvider = { inputs: [], load: async () => ok({} as never) };
-  expectTypeOf(untagged).toExtend<TypeScriptContractSourceProvider>();
+  void untagged;
   // @ts-expect-error a source format the framework does not have
   const other: ContractSourceProvider = { format: 'other', inputs: [], load: async () => ok({}) };
   void other;

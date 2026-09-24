@@ -12,6 +12,7 @@ export default definePrismaConfig({
     adapter: postgresAdapter,
     contract: {
       source: {
+        format: 'typescript',
         load: async () => ({ ok: true, value: contract }),
       },
       output: 'contract.json',

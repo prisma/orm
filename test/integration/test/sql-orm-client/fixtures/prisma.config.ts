@@ -15,6 +15,7 @@ export default definePrismaConfig({
     extensions: [pgvector],
     contract: {
       source: {
+        format: 'typescript',
         load: async () => ok(contract),
       },
       output: 'generated/contract.json',

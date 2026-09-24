@@ -32,10 +32,11 @@ function mockConfigWithContract(contractOverrides: Record<string, unknown>) {
 }
 
 function createSourceProvider(load: () => Promise<unknown>): {
+  readonly format: 'typescript';
   readonly inputs?: readonly string[];
   load: () => Promise<unknown>;
 } {
-  return { load };
+  return { format: 'typescript', load };
 }
 
 function createMockContract(): Contract {

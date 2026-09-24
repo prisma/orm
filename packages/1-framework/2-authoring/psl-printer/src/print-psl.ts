@@ -31,14 +31,14 @@ export interface PrintPslOptions {
    */
   readonly codecLookup?: CodecLookup;
   /**
-   * The comment block the printed file opens with, written as PSL comment
-   * lines. When absent the printer writes the `contract infer` header.
+   * One line saying where the file came from. The printed file opens with the
+   * `// use prisma-8` marker, then this line as a comment.
    */
-  readonly headerComment?: string;
+  readonly description?: string;
 }
 
 export function printPslFromAst(ast: PslDocumentAst, options: PrintPslOptions = {}): string {
-  const doc = astDocumentToPrintDocument(ast, options.headerComment);
+  const doc = astDocumentToPrintDocument(ast, options.description);
   return serializePrintDocument(doc, {
     ...ifDefined('pslBlockDescriptors', options.pslBlockDescriptors),
     ...ifDefined('codecLookup', options.codecLookup),

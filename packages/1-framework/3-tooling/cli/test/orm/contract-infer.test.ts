@@ -122,6 +122,20 @@ describe('contract infer', () => {
     });
   });
 
+  it('describes the written file as inferred from the database', async () => {
+    const dir = await projectDir();
+
+    await harness(ormConfig(dir)).run(['contract', 'infer', '--json'], { cwd: dir });
+
+    expect(mocks.printPsl).toHaveBeenCalledWith(
+      { kind: 'psl-document' },
+      expect.objectContaining({
+        description:
+          'Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.',
+      }),
+    );
+  });
+
   it('writes the printed PSL beside the emitted contract', async () => {
     const dir = await projectDir();
 

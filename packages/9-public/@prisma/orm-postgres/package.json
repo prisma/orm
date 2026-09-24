@@ -86,6 +86,7 @@
     "./family/ir": "./dist/family__ir.mjs",
     "./family/migration": "./dist/family__migration.mjs",
     "./family/pack": "./dist/family__pack.mjs",
+    "./family/psl-ast": "./dist/family__psl-ast.mjs",
     "./family/psl-infer": "./dist/family__psl-infer.mjs",
     "./family/runtime": "./dist/family__runtime.mjs",
     "./family/verify": "./dist/family__verify.mjs",

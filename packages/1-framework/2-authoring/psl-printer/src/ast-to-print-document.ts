@@ -18,17 +18,15 @@ import type { PrintDocument, PrintNamespaceSection } from './print-document';
 import { escapePslString } from './serialize-print-document';
 import type { PrinterField, PrinterModel, PrinterNamedType } from './types';
 
-// `contract infer` produces a starting-point PSL contract from a live database
-// schema; the user is expected to edit it (rename models/fields, tighten types,
-// add `@id` where introspection couldn't infer one, etc.) and then run
-// `contract emit` to produce the canonical artifacts. The header invites that
-// workflow rather than warning against it.
-const DEFAULT_AST_PRINT_HEADER =
-  '// use prisma-8\n// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.';
+const PRISMA_8_MARKER = '// use prisma-8';
+
+function headerCommentFor(description: string | undefined): string {
+  return description === undefined ? PRISMA_8_MARKER : `${PRISMA_8_MARKER}\n// ${description}`;
+}
 
 export function astDocumentToPrintDocument(
   ast: PslDocumentAst,
-  headerComment: string = DEFAULT_AST_PRINT_HEADER,
+  description?: string,
 ): PrintDocument {
   // FK dependencies are resolved across the whole document — a model in one
   // namespace can reference a model in another, and the topo-sort needs to
@@ -110,7 +108,7 @@ export function astDocumentToPrintDocument(
   });
 
   return {
-    headerComment,
+    headerComment: headerCommentFor(description),
     namedTypes,
     namespaces: namespaceSections,
   };
