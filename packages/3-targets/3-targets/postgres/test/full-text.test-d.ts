@@ -73,6 +73,24 @@ test('a parser takes a string or any textual column, and nothing else', () => {
   websearchToTsquery(42);
   // @ts-expect-error a tsquery is already parsed
   websearchToTsquery(column<'pg/tsquery@1'>());
+  // @ts-expect-error Postgres has no text-search function over a native enum type
+  websearchToTsquery(column<'pg/enum@1'>());
   // @ts-expect-error a nullable text column may hold no text to parse
   websearchToTsquery(null as unknown as Expression<{ codecId: 'pg/text@1'; nullable: true }>);
+});
+
+test('ilike and the search operations take a textual column and refuse a native enum', () => {
+  type Ops = QueryOperationTypes<CodecTypes>;
+  type SelfOf<Name extends 'ilike' | 'fullTextMatches' | 'fullTextRank' | 'fullTextHeadline'> =
+    Parameters<Ops[Name]['impl']>[0];
+  type NativeEnumColumn = Expression<{ codecId: 'pg/enum@1'; nullable: false }>;
+
+  expectTypeOf<TextColumn>().toExtend<SelfOf<'ilike'>>();
+  expectTypeOf<TextColumn>().toExtend<SelfOf<'fullTextMatches'>>();
+  expectTypeOf<TextColumn>().toExtend<SelfOf<'fullTextRank'>>();
+  expectTypeOf<TextColumn>().toExtend<SelfOf<'fullTextHeadline'>>();
+  expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'ilike'>>();
+  expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextMatches'>>();
+  expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextRank'>>();
+  expectTypeOf<NativeEnumColumn>().not.toExtend<SelfOf<'fullTextHeadline'>>();
 });

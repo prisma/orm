@@ -107,7 +107,7 @@ describe('prisma7Contract', () => {
     writeFileSync(join(dir, 'b.prisma'), 'model B {\n  id Int\n}\n');
     writeFileSync(join(dir, 'c.prisma'), 'model C {\n  id Int\n}\n');
 
-    // `dir` stands in for the absolute path finalizeConfig would have
+    // `dir` stands in for the absolute path the orm config schema would have
     // produced from a relative schema path resolved against the config
     // directory — expandContractInputs only ever sees already-absolute
     // patterns in production.

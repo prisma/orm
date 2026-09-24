@@ -42,8 +42,8 @@ export interface MigrationNewOptions {
   readonly config: PrismaNextConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** `--config` as the user wrote it, used only to locate project paths and for display. */
-  readonly configPath?: string;
+  /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */
+  readonly projectDir?: string;
   readonly name?: string;
   readonly from?: string;
   /** Renders the declarations of the destination snapshot from its `contract.json`. */
@@ -64,7 +64,6 @@ export async function executeMigrationNewCommand(
   const config = options.config;
   const cwd = options.cwd;
   const { migrationsDir, appMigrationsDir, appMigrationsRelative } = resolveMigrationPaths(
-    options.configPath,
     config,
     cwd,
   );
@@ -233,7 +232,7 @@ export async function executeMigrationNewCommand(
     // Before any write: an unreadable or contradictory project manifest fails
     // the command outright rather than after a half-scaffolded migration
     // directory is already on disk.
-    const resolveSpecifier = createProjectSpecifierResolver(options.configPath);
+    const resolveSpecifier = createProjectSpecifierResolver(options.projectDir);
     const declarations = await renderSnapshotDeclarations({
       client: options.client,
       contractJson: parsedContract,

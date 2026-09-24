@@ -6,6 +6,7 @@
  * anything this attribute does not cover.
  */
 
+import type { CodecLookup } from '@internal/framework-components/codec';
 import { createDataTypeLookup } from '@internal/framework-components/codec';
 import { assembleAuthoringContributions } from '@internal/framework-components/control';
 import { buildSymbolTable } from '@internal/psl-parser';
@@ -19,6 +20,8 @@ import {
   postgresAuthoringPslBlockDescriptors,
   postgresAuthoringTypes,
 } from '../src/core/authoring';
+import { PG_ENUM_CODEC_ID } from '../src/core/codec-ids';
+import { pgEnumDescriptor } from '../src/core/codecs';
 import { postgresIndexTypes } from '../src/core/index-types';
 import { type PostgresSchema, postgresCreateNamespace } from '../src/core/postgres-schema';
 
@@ -54,6 +57,14 @@ const scalarTypeDescriptors = new Map<string, { codecId: string; nativeType: str
   ['Varchar', { codecId: 'sql/varchar@1', nativeType: 'character varying' }],
 ]);
 
+// `pg.enum(Ref)` resolves its column through the enum codec's descriptor.
+const codecLookup: CodecLookup = {
+  get: () => undefined,
+  targetTypesFor: () => undefined,
+  renderOutputTypeFor: () => undefined,
+  descriptorFor: (id) => (id === PG_ENUM_CODEC_ID ? pgEnumDescriptor : undefined),
+};
+
 function interpret(source: string) {
   const { document, sources } = parse(source, 'psl-full-text-index.test.psl');
   const { symbolTable, diagnostics } = buildSymbolTable({
@@ -74,6 +85,7 @@ function interpret(source: string) {
     composedExtensionContracts: new Map(),
     createNamespace: postgresCreateNamespace,
     capabilities: { sql: { scalarList: true } },
+    codecLookup,
   });
 }
 
@@ -177,6 +189,29 @@ model Message {
       ]),
     );
     expect(diagnostics[0]?.message).toContain('pg/int4@1');
+  });
+
+  it('rejects a native enum field, which Postgres has no to_tsvector for', () => {
+    const diagnostics = diagnosticsOf(`
+native_enum Mood {
+  happy = "happy"
+  sad   = "sad"
+}
+
+model Message {
+  id   Int          @id
+  mood pg.enum(Mood)
+  @@fullTextIndex([mood], name: "message_mood_search")
+}
+`);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'PSL_FULL_TEXT_INDEX_TEXT_FIELD',
+        message: expect.stringContaining('Message.mood'),
+      }),
+    ]);
+    expect(diagnostics[0]?.message).toContain('pg/enum@1');
   });
 
   it('rejects a relation field', () => {

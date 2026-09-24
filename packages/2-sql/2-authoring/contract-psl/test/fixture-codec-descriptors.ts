@@ -6,12 +6,11 @@
  */
 
 import type { JsonValue } from '@internal/contract/types';
-import {
-  type AnyCodecDescriptor,
-  type CodecLookup,
-  type CodecTrait,
-  type DataTypeId,
-  voidParamsSchema,
+import type {
+  AnyCodecDescriptor,
+  CodecLookup,
+  CodecTrait,
+  DataTypeId,
 } from '@internal/framework-components/codec';
 import { blindCast } from '@internal/utils/casts';
 import {
@@ -194,7 +193,7 @@ function fixtureDescriptor(codecId: string): AnyCodecDescriptor | undefined {
     dataType: dataTypeByCodecId[codecId] ?? pgText.id,
     traits: codec.traits,
     targetTypes: targetTypesByCodecId[codecId] ?? [],
-    paramsSchema: parameterized ? vectorParamsSchema : voidParamsSchema,
+    paramsSchema: parameterized ? vectorParamsSchema : undefined,
     isParameterized: parameterized,
     factory: (params: unknown) => () => ({
       id: codecId,

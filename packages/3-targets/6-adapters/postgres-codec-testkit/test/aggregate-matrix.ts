@@ -7,7 +7,9 @@
  * PostgreSQL; the resolution suite asks the same registry the same questions
  * without one. Keeping the fixtures here is what lets both ask about the same
  * codecs — a codec added to the target shows up in both suites at once, and the
- * coverage test that enforces it lives beside the data it enforces.
+ * coverage test that enforces it lives beside the data it enforces. The
+ * textual-trait suite reuses the fixtures to build a column of each codec's
+ * native type.
  */
 
 import type { JsonValue } from '@internal/contract/types';

@@ -18,7 +18,6 @@ import {
   type ColumnHelperFor,
   type ColumnHelperForStrict,
   column,
-  voidParamsSchema,
 } from '@internal/framework-components/codec';
 import {
   CaseExpr,
@@ -282,7 +281,7 @@ export class SqliteTextDescriptor extends SqliteCodecDescriptor<void> {
   override readonly codecId = SQLITE_TEXT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'textual'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteTextCodec {
     return () => new SqliteTextCodec(this);
   }
@@ -338,7 +337,7 @@ export class SqliteIntegerDescriptor extends SqliteCodecDescriptor<void> {
   override readonly codecId = SQLITE_INTEGER_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['integer'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteIntegerCodec {
     return () => new SqliteIntegerCodec(this);
   }
@@ -389,7 +388,7 @@ export class SqliteRealDescriptor extends SqliteCodecDescriptor<void> {
   override readonly codecId = SQLITE_REAL_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['real'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteRealCodec {
     return () => new SqliteRealCodec(this);
   }
@@ -438,7 +437,7 @@ export class SqliteBlobDescriptor extends SqliteCodecDescriptor<void> {
   override readonly codecId = SQLITE_BLOB_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['blob'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteBlobCodec {
     return () => new SqliteBlobCodec(this);
   }
@@ -499,7 +498,7 @@ export class SqliteDatetimeDescriptor extends SqliteCodecDescriptor<void> {
   override readonly codecId = SQLITE_DATETIME_CODEC_ID;
   override readonly traits = ['equality', 'order'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteDatetimeCodec {
     return () => new SqliteDatetimeCodec(this);
   }
@@ -541,7 +540,7 @@ export class SqliteJsonDescriptor extends SqliteCodecDescriptor<void> {
   override readonly codecId = SQLITE_JSON_CODEC_ID;
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteJsonCodec {
     return () => new SqliteJsonCodec(this);
   }
@@ -613,7 +612,7 @@ export class SqliteBigintDescriptor extends SqliteCodecDescriptor<void> {
   override readonly codecId = SQLITE_BIGINT_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = ['integer'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => SqliteBigintCodec {
     return () => new SqliteBigintCodec(this);
   }
@@ -684,7 +683,7 @@ export class SqliteBigintNumberDescriptor extends SqliteCodecDescriptor<void> {
   override readonly codecId = SQLITE_BIGINT_NUMBER_CODEC_ID;
   override readonly traits = ['equality', 'order', 'numeric'] as const;
   override readonly targetTypes = [] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override renderValueLiteral(value: JsonValue): string | undefined {
     return decimalTextNumberLiteral(value);
   }

@@ -1,7 +1,7 @@
 import type { Contract } from '@internal/contract/types';
 import { coreHash, profileHash } from '@internal/contract/types';
 import type { CodecDescriptor } from '@internal/framework-components/codec';
-import { dataTypeId, voidParamsSchema } from '@internal/framework-components/codec';
+import { dataTypeId } from '@internal/framework-components/codec';
 import { UNBOUND_NAMESPACE_ID } from '@internal/framework-components/ir';
 import { SqlStorage } from '@internal/sql-contract/types';
 import type { Codec, SqlCodecInstanceContext } from '@internal/sql-relational-core/ast';
@@ -97,7 +97,7 @@ describe('createExecutionContext — column codec integrity', () => {
       dataType: dataTypeId('test/scalar'),
       traits: [],
       targetTypes: ['scalar'],
-      paramsSchema: voidParamsSchema,
+      paramsSchema: undefined,
       isParameterized: false,
       factory: ((_params: undefined) => (_ctx: SqlCodecInstanceContext) =>
         makeCodec()) as unknown as CodecDescriptor<void>['factory'],

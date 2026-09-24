@@ -23,7 +23,6 @@ import {
   CodecImpl,
   type CodecInstanceContext,
   dataTypeId,
-  voidParamsSchema,
 } from '@internal/framework-components/codec';
 import {
   assembleAuthoringContributions,
@@ -46,7 +45,6 @@ import {
   validateExtensionBlockFromSymbol,
 } from '@internal/psl-parser';
 import { type PslSources, parse } from '@internal/psl-parser/syntax';
-import type { StandardSchemaV1 } from '@standard-schema/spec';
 import { describe, expect, it } from 'vitest';
 import { printPslFromAst } from '../src/print-psl';
 import {
@@ -87,7 +85,7 @@ class FixturePolicyTextDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = FIXTURE_POLICY_CODEC_ID as typeof FIXTURE_POLICY_CODEC_ID;
   override readonly traits = ['textual'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => FixturePolicyTextCodec {
     return () => new FixturePolicyTextCodec(this);
   }

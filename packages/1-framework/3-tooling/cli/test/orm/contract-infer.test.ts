@@ -1,12 +1,12 @@
 import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { CliStructuredError } from '@internal/errors/control';
 import type { ErroredEnvelope, MountedTree, StreamEvent } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import { createContractInferCommand } from '../../src/orm/contract/infer';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const PSL = 'model User {\n  id Int @id\n}\n';
@@ -91,7 +91,7 @@ function ormConfig(dir: string, overrides: Record<string, unknown> = {}): Record
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups, config: { orm: config } });
+  return createOrmTestCli({ commands, groups, orm: config });
 }
 
 function erroredEnvelope(run: { readonly json: readonly StreamEvent[] }): ErroredEnvelope {

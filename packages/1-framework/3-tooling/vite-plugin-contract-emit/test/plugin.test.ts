@@ -37,6 +37,7 @@ vi.mock('@internal/emitter', () => ({
 vi.mock('pathe', async () => {
   const path = await vi.importActual<typeof import('node:path')>('node:path');
   return {
+    dirname: path.dirname,
     extname: path.extname,
     resolve: path.resolve,
   };
@@ -255,7 +256,7 @@ describe('prismaVitePlugin', () => {
 
       expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
         expect.objectContaining({
-          configPath: '/project/prisma.config.ts',
+          projectDir: '/project',
         }),
       );
     });
@@ -274,7 +275,7 @@ describe('prismaVitePlugin', () => {
 
       expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
         expect.objectContaining({
-          configPath: '/absolute/prisma.config.ts',
+          projectDir: '/absolute',
         }),
       );
     });
@@ -425,7 +426,7 @@ describe('prismaVitePlugin', () => {
 
       expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
         expect.objectContaining({
-          configPath: expect.stringContaining('prisma.config.ts'),
+          projectDir: expect.any(String),
         }),
       );
     });
@@ -546,7 +547,7 @@ describe('prismaVitePlugin', () => {
       );
       expect(mockedExecuteContractEmit).toHaveBeenCalledWith(
         expect.objectContaining({
-          configPath: '/project/prisma.config.ts',
+          projectDir: '/project',
         }),
       );
       expect(consoleErrorSpy).not.toHaveBeenCalledWith(

@@ -5,10 +5,11 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { writeRef } from '@internal/migration-tools/refs';
 import { notOk } from '@internal/utils/result';
 import { createTestCli } from '@prisma/cli-engine/testing';
-import { basename, join } from 'pathe';
+import { basename, dirname, join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
 import { errorUnfilledPlaceholder } from '../../src/utils/cli-errors';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   ADDITIVE_OP,
   contractJson,
@@ -40,14 +41,12 @@ function harness(
     readonly overrides?: Record<string, unknown>;
   } = {},
 ) {
-  return createTestCli({
+  return createOrmTestCli({
     commands: OFFLINE_COMMANDS,
     groups: BIN_GROUPS,
-    config: {
-      orm: {
-        ...offlineConfig({ project, ...(options.script ? { script: options.script } : {}) }),
-        ...options.overrides,
-      },
+    orm: {
+      ...offlineConfig({ project, ...(options.script ? { script: options.script } : {}) }),
+      ...options.overrides,
     },
   });
 }
@@ -83,6 +82,65 @@ async function upToDateProject(): Promise<OfflineProject> {
   await seedDbRef({ appMigrationsDir: project.appMigrationsDir, storageHash: HASH_TO });
   return project;
 }
+
+describe('migration plan --config naming a file in a subdirectory', () => {
+  it('reads the contract from and plans into the config file directory', async () => {
+    const project = await plannableProject();
+    const cli = createTestCli({
+      commands: OFFLINE_COMMANDS,
+      groups: BIN_GROUPS,
+      // The engine's own loader: the file's sections exactly as written.
+      loadConfig: async (configPath) => ({
+        files: [
+          {
+            path: join(
+              project.dir,
+              configPath === undefined ? 'prisma.config.ts' : basename(configPath),
+            ),
+            sections: {
+              orm: {
+                ...offlineConfig({ project }),
+                contract: {
+                  source: {
+                    format: 'typescript',
+                    inputs: [],
+                    load: async () => contractJson('unused'),
+                  },
+                  output: './output/contract.json',
+                },
+                migrations: { dir: './migrations' },
+              },
+            },
+          },
+        ],
+        diagnostics: [],
+      }),
+    });
+
+    const run = await cli.run(
+      [
+        'migration',
+        'plan',
+        '--name',
+        'add-users',
+        '--config',
+        join(basename(project.dir), 'prisma.config.ts'),
+      ],
+      { cwd: dirname(project.dir) },
+    );
+    const dirs = await plannedDirs(project);
+
+    expect(run.exitCode).toBe(0);
+    expect(run.presented?.data).toMatchObject({
+      ok: true,
+      noOp: false,
+      from: HASH_FROM,
+      to: HASH_TO,
+    });
+    expect(dirs).toHaveLength(2);
+    expect(dirs.at(-1)).toMatch(/_add_users$/);
+  });
+});
 
 describe('migration plan', () => {
   it('settles as a completed envelope carrying the plan document', async () => {

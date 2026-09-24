@@ -7,12 +7,12 @@ import { writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { notOk, ok } from '@internal/utils/result';
 import type { EngineEvent, StreamEvent } from '@prisma/cli-engine';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 const mocks = {
@@ -178,7 +178,7 @@ beforeEach(() => {
 });
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({ commands, groups: BIN_GROUPS, config: { orm: config } });
+  return createOrmTestCli({ commands, groups: BIN_GROUPS, orm: config });
 }
 
 function envelopeOf(json: readonly StreamEvent[]): unknown {

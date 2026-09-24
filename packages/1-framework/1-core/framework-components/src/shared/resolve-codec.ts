@@ -26,22 +26,43 @@ export function resolveCodecDescriptorOrThrow(
   return descriptor;
 }
 
+function isAbsentOrEmpty(typeParams: CodecRef['typeParams']): boolean {
+  return (
+    typeParams === undefined ||
+    (typeof typeParams === 'object' &&
+      typeParams !== null &&
+      !Array.isArray(typeParams) &&
+      Object.keys(typeParams).length === 0)
+  );
+}
+
 /**
  * Validates `ref.typeParams` against `descriptor.paramsSchema`.
  *
- * Parameterized codecs that omit `typeParams` have it normalized to `{}` before
- * validation (mirrors `ast-codec-resolver.ts` semantics). Throws
- * `RUNTIME.TYPE_PARAMS_INVALID` when the validator returns a `Promise` or
- * reports issues.
+ * A codec without a `paramsSchema` takes no params: it accepts absent or empty
+ * `typeParams` (a bare native-type alias carries `{}`) and rejects anything else.
+ * A parameterized codec whose ref omits `typeParams` validates `{}` (mirrors
+ * `ast-codec-resolver.ts` semantics). Throws `RUNTIME.TYPE_PARAMS_INVALID` when
+ * params are given to a codec without params, or when the validator returns a
+ * `Promise` or reports issues.
  */
 export function validateCodecTypeParams(descriptor: AnyCodecDescriptor, ref: CodecRef): unknown {
-  const normalized =
-    descriptor.isParameterized && ref.typeParams === undefined ? { ...ref, typeParams: {} } : ref;
+  const schema = descriptor.paramsSchema;
+  if (schema === undefined) {
+    if (!isAbsentOrEmpty(ref.typeParams)) {
+      throw runtimeError(
+        'RUNTIME.TYPE_PARAMS_INVALID',
+        `Invalid typeParams for codec '${ref.codecId}': unexpected typeParams for non-parameterized codec`,
+        { codecId: ref.codecId, typeParams: ref.typeParams },
+      );
+    }
+    return undefined;
+  }
 
   const result = blindCast<
     { value: unknown } | { issues: ReadonlyArray<{ message: string }> } | Promise<unknown>,
     'Standard Schema validate returns unknown; the spec guarantees this union shape'
-  >(descriptor.paramsSchema['~standard'].validate(normalized.typeParams));
+  >(schema['~standard'].validate(ref.typeParams ?? {}));
 
   if (result instanceof Promise) {
     throw runtimeError(

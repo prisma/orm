@@ -2,10 +2,10 @@ import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { contractSnapshotDir } from '@internal/migration-tools/contract-snapshot-store';
 import { notOk } from '@internal/utils/result';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import {
   contractJson,
   createOfflineProject,
@@ -46,10 +46,10 @@ beforeEach(resetRenderContractDtsMock);
 afterEach(removeOfflineProjects);
 
 function harness(project: OfflineProject, overrides: Record<string, unknown> = {}) {
-  return createTestCli({
+  return createOrmTestCli({
     commands: OFFLINE_COMMANDS,
     groups: BIN_GROUPS,
-    config: { orm: { ...offlineConfig({ project }), ...overrides } },
+    orm: { ...offlineConfig({ project }), ...overrides },
   });
 }
 

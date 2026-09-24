@@ -68,8 +68,8 @@ export interface MigrationPlanOptions {
   readonly config: PrismaNextConfig;
   /** Directory the command was invoked from. */
   readonly cwd: string;
-  /** `--config` as the user wrote it, used only to locate project paths and for display. */
-  readonly configPath?: string;
+  /** The project's directory, normally the validated config's `baseDir`; locates the project manifest. */
+  readonly projectDir?: string;
   readonly name?: string;
   readonly from?: string;
   readonly to?: string;
@@ -373,7 +373,7 @@ async function executeMigrationPlanCommandInner(
   const config = options.config;
   const cwd = options.cwd;
   const { configPath, migrationsDir, appMigrationsDir, appMigrationsRelative } =
-    resolveMigrationPaths(options.configPath, config, cwd);
+    resolveMigrationPaths(config, cwd);
 
   const contractPathAbsolute = resolveContractPath(config);
   const contractPath = relative(cwd, contractPathAbsolute);
@@ -521,7 +521,7 @@ async function executeMigrationPlanCommandInner(
   // Before the seed phase, which is the first thing here that writes: an
   // unreadable or contradictory project manifest fails the command outright
   // rather than after artifacts are already on disk.
-  const resolveImportSpecifier = createProjectSpecifierResolver(options.configPath);
+  const resolveImportSpecifier = createProjectSpecifierResolver(options.projectDir);
 
   // Likewise the destination snapshot's declarations: rendered now, written
   // with the planned package later. A plan whose source already is the

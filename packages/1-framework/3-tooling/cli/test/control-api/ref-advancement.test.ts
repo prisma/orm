@@ -146,13 +146,11 @@ describe('preflightRefAdvancement', () => {
   const contractJson = sampleContractIR().contract as Record<string, unknown>;
   let projectDir: string;
   let contractJsonPath: string;
-  let configPath: string;
 
   beforeEach(() => {
     projectDir = createTestProjectDir('preflight-ref-advancement');
     writeProjectManifest(projectDir);
     contractJsonPath = join(projectDir, 'output', 'contract.json');
-    configPath = join(projectDir, 'prisma.config.ts');
   });
 
   afterEach(async () => {
@@ -171,7 +169,7 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      configPath,
+      projectDir,
       client,
     });
 
@@ -189,7 +187,7 @@ describe('preflightRefAdvancement', () => {
       name: 'Invalid Name',
       contractJson,
       contractJsonPath,
-      configPath,
+      projectDir,
       client,
     });
 
@@ -213,7 +211,7 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      configPath,
+      projectDir,
       client,
     });
 
@@ -240,7 +238,7 @@ describe('preflightRefAdvancement', () => {
       name: 'db',
       contractJson,
       contractJsonPath,
-      configPath,
+      projectDir,
       client,
     });
 

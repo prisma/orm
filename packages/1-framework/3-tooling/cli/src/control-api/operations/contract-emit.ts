@@ -352,7 +352,7 @@ export async function executeContractEmit(
 ): Promise<ContractEmitResult> {
   const {
     config,
-    configPath,
+    projectDir,
     outputPath,
     signal = new AbortController().signal,
     onProgress,
@@ -443,9 +443,11 @@ export async function executeContractEmit(
           // Which package names the generated files may import is decided by
           // the nearest manifest above the file being written — the package
           // that will import it, and the same directory `validateContractDeps`
-          // resolves against below. A caller holding the config file's path
-          // may name it instead.
-          resolveImportSpecifier: createProjectSpecifierResolver(configPath ?? outputJsonPath),
+          // resolves against below. A caller that knows the project directory
+          // names it instead.
+          resolveImportSpecifier: createProjectSpecifierResolver(
+            projectDir ?? dirname(outputJsonPath),
+          ),
           ...ifDefined('shouldPreserveEmpty', contractSerializer.shouldPreserveEmpty),
           ...ifDefined('sortStorage', contractSerializer.sortStorage),
           ...ifDefined('supportsNamespaces', config.target.supportsNamespaces),

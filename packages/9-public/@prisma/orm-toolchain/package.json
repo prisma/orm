@@ -49,7 +49,7 @@
     "typescript": "catalog:"
   },
   "peerDependencies": {
-    "@prisma/cli-engine": "0.4.0",
+    "@prisma/cli-engine": "0.6.1",
     "typescript": ">=5.9",
     "vite": "^7.0.0 || ^8.0.0"
   },

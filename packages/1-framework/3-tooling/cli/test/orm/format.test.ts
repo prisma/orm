@@ -1,9 +1,9 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import stripAnsi from 'strip-ansi';
 import { afterEach, describe, expect, it } from 'vitest';
 import { BIN_COMMANDS, BIN_GROUPS } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir } from '../utils/test-project-dir';
 
 const MESSY_PSL = 'model    User{id Int @id\nname String}\n';
@@ -67,10 +67,10 @@ function pslConfigMulti(inputPaths: readonly string[]): Record<string, unknown> 
 }
 
 function harness(config: Record<string, unknown>) {
-  return createTestCli({
+  return createOrmTestCli({
     commands: BIN_COMMANDS,
     groups: BIN_GROUPS,
-    config: { orm: config },
+    orm: config,
   });
 }
 

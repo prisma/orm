@@ -108,54 +108,39 @@ describe('sanitizeErrorMessage', () => {
 });
 
 describe('resolveMigrationPaths', () => {
-  describe('a relative --config naming a project other than the invocation directory', () => {
-    it('resolves the config path against cwd, not the process working directory', () => {
-      const paths = resolveMigrationPaths('../app/prisma.config.ts', {}, '/work/scratch');
-
-      expect(paths.migrationsDir).toBe('/work/app/migrations');
-      expect(paths.configPath).toBe('../app/prisma.config.ts');
-    });
-
-    it('anchors an explicit migrations dir on the config file directory', () => {
+  describe('a validated config', () => {
+    it('uses the absolute migrations dir the config carries, whatever cwd is', () => {
       const paths = resolveMigrationPaths(
-        '../app/prisma.config.ts',
-        { migrations: { dir: 'db' } },
+        { baseDir: '/work/app', migrations: { dir: '/work/app/db' } },
         '/work/scratch',
       );
 
-      expect(paths.migrationsDir).toBe('/work/app/db');
-    });
-  });
-
-  describe('an absolute --config', () => {
-    it('is unaffected by cwd', () => {
-      const paths = resolveMigrationPaths('/app/prisma.config.ts', {}, '/tmp');
-
-      expect(paths.migrationsDir).toBe('/app/migrations');
-    });
-  });
-
-  describe('no --config', () => {
-    it('anchors everything on cwd', () => {
-      const paths = resolveMigrationPaths(undefined, {}, '/work/app');
-
       expect(paths).toMatchObject({
         configPath: 'prisma.config.ts',
+        migrationsDir: '/work/app/db',
+        migrationsRelative: '../app/db',
+      });
+    });
+
+    it('defaults the migrations dir under baseDir when the config names none', () => {
+      expect(resolveMigrationPaths({ baseDir: '/work/app' }, '/tmp').migrationsDir).toBe(
+        '/work/app/migrations',
+      );
+    });
+  });
+
+  describe('a raw config from a programmatic caller', () => {
+    it('anchors a relative migrations dir on cwd when the config carries no baseDir', () => {
+      expect(resolveMigrationPaths({ migrations: { dir: 'db' } }, '/work/app').migrationsDir).toBe(
+        '/work/app/db',
+      );
+    });
+
+    it('anchors the default on cwd', () => {
+      expect(resolveMigrationPaths({}, '/work/app')).toMatchObject({
         migrationsDir: '/work/app/migrations',
         migrationsRelative: 'migrations',
       });
-    });
-  });
-
-  describe('a migrations dir the config loader already made absolute', () => {
-    it('leaves it alone', () => {
-      const paths = resolveMigrationPaths(
-        undefined,
-        { migrations: { dir: '/app/migrations' } },
-        '/tmp',
-      );
-
-      expect(paths.migrationsDir).toBe('/app/migrations');
     });
   });
 });

@@ -4,8 +4,8 @@ import { glob, isDynamicPattern } from 'tinyglobby';
 /**
  * Expands a finalized contract source input list into its member file set:
  * absolute, deduped by canonical path, sorted. `patterns` must already be
- * absolute (`finalizeConfig` resolves each entry against the config
- * directory but does not expand it).
+ * absolute (the `orm` config schema resolves each entry against the config
+ * file that wrote it but does not expand it).
  *
  * A wildcard-free entry (per tinyglobby's own magic-character check) passes
  * through verbatim — no globbing, no existence check, no directory

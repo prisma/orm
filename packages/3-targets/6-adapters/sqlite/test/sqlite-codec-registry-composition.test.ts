@@ -8,7 +8,6 @@ import {
   type CodecInstanceContext,
   dataType,
   dataTypeId,
-  voidParamsSchema,
 } from '@internal/framework-components/codec';
 import type { ControlExtensionDescriptor } from '@internal/framework-components/control';
 import { createControlStack } from '@internal/framework-components/control';
@@ -94,7 +93,7 @@ class TestGenericDescriptor extends CodecDescriptorImpl<void> {
   override readonly dataType = dataTypeId('demo/fixture');
   override readonly traits = ['equality'] as const;
   override readonly targetTypes = ['text'] as const;
-  override readonly paramsSchema = voidParamsSchema;
+  override readonly paramsSchema = undefined;
 
   constructor(
     override readonly codecId: string,

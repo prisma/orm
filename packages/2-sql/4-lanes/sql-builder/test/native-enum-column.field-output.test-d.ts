@@ -18,7 +18,7 @@ type NativeEnumCodecTypes = {
   'pg/enum@1': {
     output: string;
     input: string;
-    traits: 'equality' | 'order' | 'textual';
+    traits: 'equality' | 'order';
   };
 };
 

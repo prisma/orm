@@ -5,11 +5,11 @@ import { computeMigrationHash } from '@internal/migration-tools/hash';
 import { formatMigrationDirName, writeMigrationPackage } from '@internal/migration-tools/io';
 import type { MigrationMetadata } from '@internal/migration-tools/metadata';
 import { ok } from '@internal/utils/result';
-import { createTestCli } from '@prisma/cli-engine/testing';
 import { join } from 'pathe';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlClient } from '../../src/control-api/types';
 import { BIN_GROUPS, createBinCommands } from '../../src/orm/cli';
+import { createOrmTestCli } from '../helpers/orm-test-cli';
 import { createTestProjectDir, writeProjectManifest } from '../utils/test-project-dir';
 
 /**
@@ -135,7 +135,7 @@ function ormConfig(cwd: string): Record<string, unknown> {
 }
 
 function harness(cwd: string) {
-  return createTestCli({ commands, groups: BIN_GROUPS, config: { orm: ormConfig(cwd) } });
+  return createOrmTestCli({ commands, groups: BIN_GROUPS, orm: ormConfig(cwd) });
 }
 
 describe('db update --to bundle resolution', () => {

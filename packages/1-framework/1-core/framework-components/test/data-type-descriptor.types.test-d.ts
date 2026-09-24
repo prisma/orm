@@ -18,7 +18,6 @@ import {
   type CodecTrait,
   type DataTypeId,
   dataTypeId,
-  voidParamsSchema,
 } from '../src/exports/codec';
 
 const demoInt = dataTypeId('demo/int');
@@ -42,8 +41,7 @@ abstract class DemoDescriptorBody<P> extends CodecDescriptorTemplateImpl<P> {
   override readonly codecId = 'demo/int@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
   override readonly targetTypes: readonly string[] = ['int'];
-  override readonly paramsSchema: StandardSchemaV1<P> =
-    voidParamsSchema as unknown as StandardSchemaV1<P>;
+  override readonly paramsSchema: StandardSchemaV1<P> | undefined = undefined;
   override factory(): (ctx: CodecInstanceContext) => Codec {
     return () => new DemoCodec(this);
   }
@@ -54,7 +52,7 @@ class DemoDescriptor extends CodecDescriptorImpl<void> {
   override readonly codecId = 'demo/int@1' as const;
   override readonly traits: readonly CodecTrait[] = ['equality'];
   override readonly targetTypes: readonly string[] = ['int'];
-  override readonly paramsSchema: StandardSchemaV1<void> = voidParamsSchema;
+  override readonly paramsSchema = undefined;
   override factory(): (ctx: CodecInstanceContext) => Codec {
     return () => new DemoCodec(this);
   }
@@ -77,7 +75,7 @@ test('a descriptor without a data type does not type-check', () => {
     codecId: 'demo/int@1',
     traits: ['equality'] as readonly CodecTrait[],
     targetTypes: ['int'] as readonly string[],
-    paramsSchema: voidParamsSchema,
+    paramsSchema: undefined,
     isParameterized: false,
     factory: () => () => new DemoCodec(new DemoDescriptor()),
   };

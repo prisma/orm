@@ -2,7 +2,7 @@ import type { ContractEmitResult } from '@internal/cli/control-api';
 import { disposeEmitQueue, executeContractEmit } from '@internal/cli/control-api';
 import { expandContractInputs, loadConfigForSections } from '@internal/config-loader';
 import { getEmittedArtifactPaths } from '@internal/emitter';
-import { extname, resolve } from 'pathe';
+import { dirname, extname, resolve } from 'pathe';
 import type { Plugin, ViteDevServer } from 'vite';
 import type { PrismaVitePluginOptions } from './types';
 
@@ -129,7 +129,7 @@ export function prismaVitePlugin(
       const result = await executeContractEmit({
         config: configResult.value,
         cwd: process.cwd(),
-        configPath: absoluteConfigPath,
+        projectDir: dirname(absoluteConfigPath),
         signal,
       });
 

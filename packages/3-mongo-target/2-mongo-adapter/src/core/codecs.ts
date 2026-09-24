@@ -1,5 +1,5 @@
 import type { CodecDescriptor, CodecTrait, DataTypeId } from '@internal/framework-components/codec';
-import { renderTsLiteral, voidParamsSchema } from '@internal/framework-components/codec';
+import { renderTsLiteral } from '@internal/framework-components/codec';
 import {
   type MongoCodec,
   type MongoCodecRegistry,
@@ -118,7 +118,7 @@ function descriptorFor<Id extends string>(
     dataType: metadata.dataType,
     traits: metadata.traits,
     targetTypes: metadata.targetTypes,
-    paramsSchema: voidParamsSchema as CodecDescriptor['paramsSchema'],
+    paramsSchema: undefined as CodecDescriptor['paramsSchema'],
     isParameterized: false,
     factory: (() => () => codec) as CodecDescriptor['factory'],
     ...ifDefined('renderOutputType', renderOutputType),

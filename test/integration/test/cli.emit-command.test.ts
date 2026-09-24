@@ -179,7 +179,7 @@ describe('emit command', () => {
         error: { code: 'CLI.CONFIG_SECTION_INVALID', summary: expect.any(String) },
       });
       expect(envelope?.diagnostics).toEqual(
-        expect.arrayContaining([expect.objectContaining({ code: 'CONFIG.VALIDATION_FAILED' })]),
+        expect.arrayContaining([expect.objectContaining({ code: 'CLI.CONFIG_FIELD_INVALID' })]),
       );
     } finally {
       documentSetup.cleanup();
