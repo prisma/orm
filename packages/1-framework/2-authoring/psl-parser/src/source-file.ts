@@ -1,6 +1,5 @@
 import type { PslSpan } from '@internal/framework-components/psl-ast';
 import { InternalError } from '@internal/utils/internal-error';
-import type { DocumentAst } from './syntax/ast/declarations';
 import type { SyntaxNode } from './syntax/red';
 
 const CARRIAGE_RETURN = 13;
@@ -143,19 +142,16 @@ export class PslSources {
   }
 
   /**
-   * Unites the per-document `PslSources` registries `parse()` returns for each
-   * member of a multi-file schema into the one registry `buildSymbolTable` and
+   * A new registry uniting this one with `others` — e.g. the per-document
+   * `PslSources` registries `parse()` returns for each member of a
+   * multi-file schema, united into the one registry `buildSymbolTable` and
    * the interpreters expect.
    */
-  static merge(
-    parsed: readonly { readonly document: DocumentAst; readonly sources: PslSources }[],
-  ): PslSources {
-    return new PslSources(
-      parsed.map(
-        ({ document, sources }) =>
-          [document.syntax, sources.sourceFileFor(document.syntax)] as const,
-      ),
-    );
+  merge(...others: readonly PslSources[]): PslSources {
+    return new PslSources([
+      ...this.#sourcesByRoot,
+      ...others.flatMap((other) => [...other.#sourcesByRoot]),
+    ]);
   }
 
   sourceFileNamed(filename: string): SourceFile {

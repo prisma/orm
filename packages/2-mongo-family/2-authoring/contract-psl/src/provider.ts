@@ -5,7 +5,8 @@ import { collectScalarTypeConstructors } from '@internal/framework-components/au
 import { buildSymbolTable, isPrismaNextSchema, mapPslDiagnostics } from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
-import { PslSources, parse } from '@internal/psl-parser/syntax';
+import { parse } from '@internal/psl-parser/syntax';
+import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk } from '@internal/utils/result';
 
@@ -99,7 +100,9 @@ export function mongoContract(schemaPath: string, options?: MongoContractOptions
 
       const parsed = members.map(({ path, text }) => parse(text, path));
       const documents = parsed.map(({ document }) => document);
-      const sources = PslSources.merge(parsed);
+      const [firstSources, ...restSources] = parsed.map(({ sources }) => sources);
+      assertDefined(firstSources, 'mongoContract requires at least one parsed schema file');
+      const sources = firstSources.merge(...restSources);
       const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
         documents,
         sources,

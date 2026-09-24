@@ -41,4 +41,32 @@ describe('PslSources', () => {
       'No SourceFile registered for PSL syntax root',
     );
   });
+
+  describe('merge', () => {
+    it('unites this registry with others, addressable by either document', () => {
+      const first = parse('model User { id Int }', 'a.prisma');
+      const second = parse('model Post { id Int }', 'b.prisma');
+
+      const merged = first.sources.merge(second.sources);
+
+      expect(merged.sourceFileFor(first.document.syntax).filename).toBe('a.prisma');
+      expect(merged.sourceFileFor(second.document.syntax).filename).toBe('b.prisma');
+      expect(merged.sourceFileNamed('a.prisma').filename).toBe('a.prisma');
+      expect(merged.sourceFileNamed('b.prisma').filename).toBe('b.prisma');
+    });
+
+    it('returns this registry unchanged in content when merging with nothing', () => {
+      const { result } = firstModel('model User {\n  id Int\n}');
+
+      const merged = result.sources.merge();
+
+      expect(merged.sourceFileFor(result.document.syntax).filename).toBe('test.psl');
+    });
+
+    it('produces an empty registry when merging two empty registries', () => {
+      const merged = new PslSources([]).merge(new PslSources([]));
+
+      expect(() => merged.sourceFileNamed('anything.prisma')).toThrow();
+    });
+  });
 });

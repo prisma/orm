@@ -6,9 +6,10 @@ import type { ExtensionPackRef, TargetPackRef } from '@internal/framework-compon
 import { buildSymbolTable, isPrismaNextSchema, mapPslDiagnostics } from '@internal/psl-parser';
 import type { PslInterpretCapable } from '@internal/psl-parser/interpret';
 import { withSeedDiagnostics } from '@internal/psl-parser/interpret';
-import { PslSources, parse } from '@internal/psl-parser/syntax';
+import { parse } from '@internal/psl-parser/syntax';
 import type { SqlNamespaceBase, SqlNamespaceInput } from '@internal/sql-contract/types';
 import { applySqlSpecifierControlPolicy } from '@internal/sql-contract-ts/contract-builder';
+import { assertDefined } from '@internal/utils/assertions';
 import { ifDefined } from '@internal/utils/defined';
 import { notOk, ok } from '@internal/utils/result';
 import { basename, extname } from 'pathe';
@@ -157,7 +158,9 @@ export function prismaContract(schemaPath: string, options: PrismaContractOption
 
       const parsed = members.map(({ path, text }) => parse(text, path));
       const documents = parsed.map(({ document }) => document);
-      const sources = PslSources.merge(parsed);
+      const [firstSources, ...restSources] = parsed.map(({ sources }) => sources);
+      assertDefined(firstSources, 'prismaContract requires at least one parsed schema file');
+      const sources = firstSources.merge(...restSources);
       const { symbolTable, diagnostics: symbolTableDiagnostics } = buildSymbolTable({
         documents,
         sources,
