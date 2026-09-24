@@ -1,10 +1,12 @@
 import { mkdir } from 'node:fs/promises';
+import type { PrismaNextConfig } from '@internal/config/config-types';
 import type { Contract } from '@internal/contract/types';
 import { emit, getEmittedArtifactPaths } from '@internal/emitter';
-import { createControlStack } from '@internal/framework-components/control';
+import { type ControlStack, createControlStack } from '@internal/framework-components/control';
 import { abortable } from '@internal/utils/abortable';
 import { ifDefined } from '@internal/utils/defined';
 import type { JsonObject } from '@internal/utils/json';
+import { notOk, ok, type Result } from '@internal/utils/result';
 import type { Diagnostic } from '@internal/utils/structured-error';
 import { isStructuredErrorCode } from '@internal/utils/structured-error';
 import { dirname, join } from 'pathe';
@@ -128,9 +130,17 @@ function sourceDiagnosticsToFindings(diagnostics: readonly unknown[]): Diagnosti
   return findings;
 }
 
+/** What a contract source reported when it could not produce a contract. */
+export interface ContractSourceFailure {
+  readonly summary: string;
+  readonly diagnostics: readonly unknown[];
+  readonly meta: unknown;
+}
+
 type ValidatedProviderResult =
-  | { readonly ok: true; readonly value: unknown }
-  | { readonly ok: false; readonly error: ReturnType<typeof errorRuntime> };
+  | { readonly kind: 'ok'; readonly value: unknown }
+  | { readonly kind: 'failed'; readonly failure: ContractSourceFailure }
+  | { readonly kind: 'malformed'; readonly error: ReturnType<typeof errorRuntime> };
 
 function diagnosticLocationSuffix(diagnostic: Record<string, unknown>): string {
   const formatted = formatLocation(diagnosticLocation(diagnostic));
@@ -153,7 +163,7 @@ function mapDiagnosticsToIssues(
 function validateProviderResult(providerResult: unknown): ValidatedProviderResult {
   if (!isRecord(providerResult) || typeof providerResult['ok'] !== 'boolean') {
     return {
-      ok: false,
+      kind: 'malformed',
       error: failedToResolveContractSource(
         'Contract source provider returned malformed result shape.',
         'Ensure contract.source.load resolves to ok(Contract) or notOk({ summary, diagnostics }).',
@@ -164,14 +174,14 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
   if (providerResult['ok']) {
     if (!('value' in providerResult)) {
       return {
-        ok: false,
+        kind: 'malformed',
         error: failedToResolveContractSource(
           'Contract source provider returned malformed success result: missing value.',
           'Ensure contract.source.load success payload is ok(Contract).',
         ),
       };
     }
-    return { ok: true, value: providerResult['value'] };
+    return { kind: 'ok', value: providerResult['value'] };
   }
 
   const failure = providerResult['failure'];
@@ -181,7 +191,7 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
     !Array.isArray(failure['diagnostics'])
   ) {
     return {
-      ok: false,
+      kind: 'malformed',
       error: failedToResolveContractSource(
         'Contract source provider returned malformed failure result: expected summary and diagnostics.',
         'Ensure contract.source.load failure payload is notOk({ summary, diagnostics, meta? }).',
@@ -189,19 +199,102 @@ function validateProviderResult(providerResult: unknown): ValidatedProviderResul
     };
   }
   return {
-    ok: false,
-    error: failedToResolveContractSource(
-      String(failure['summary']),
-      'Edit the schema where each finding points, then run contract emit again.',
-      {
-        diagnostics: failure['diagnostics'],
-        issues: mapDiagnosticsToIssues(failure['diagnostics']),
-        ...ifDefined('providerMeta', failure['meta']),
-      },
-      undefined,
-      sourceDiagnosticsToFindings(failure['diagnostics']),
-    ),
+    kind: 'failed',
+    failure: {
+      summary: failure['summary'],
+      diagnostics: failure['diagnostics'],
+      meta: failure['meta'],
+    },
   };
+}
+
+function sourceFailureError(failure: ContractSourceFailure) {
+  return failedToResolveContractSource(
+    failure.summary,
+    'Edit the schema where each finding points, then run contract emit again.',
+    {
+      diagnostics: failure.diagnostics,
+      issues: mapDiagnosticsToIssues(failure.diagnostics),
+      ...ifDefined('providerMeta', failure.meta),
+    },
+    undefined,
+    sourceDiagnosticsToFindings(failure.diagnostics),
+  );
+}
+
+type ContractSourceConfig = NonNullable<PrismaNextConfig['contract']>;
+
+function requireContractSource(config: PrismaNextConfig): ContractSourceConfig {
+  if (!config.contract) {
+    throw errorContractConfigMissing({
+      why: 'Config.contract is required for emit. Define it in your config: contract: { source: ..., output: ... }',
+    });
+  }
+  if (typeof config.contract.source?.load !== 'function') {
+    throw errorContractConfigMissing({
+      why: 'Contract config must include a valid source provider object',
+    });
+  }
+  return config.contract;
+}
+
+async function resolveContractSource(
+  contractConfig: ContractSourceConfig,
+  stack: ControlStack,
+  signal: AbortSignal,
+): Promise<Result<unknown, ContractSourceFailure>> {
+  const sourceContext = {
+    composedExtensions: stack.extensions.map((p) => p.id),
+    composedExtensionContracts: stack.extensionContracts,
+    authoringContributions: stack.authoringContributions,
+    codecLookup: stack.codecLookup,
+    controlMutationDefaults: stack.controlMutationDefaults,
+    resolvedInputs: contractConfig.source.inputs ?? [],
+    capabilities: stack.capabilities,
+  };
+
+  let providerResult: Awaited<ReturnType<typeof contractConfig.source.load>>;
+  try {
+    providerResult = await abortable(signal)(contractConfig.source.load(sourceContext));
+  } catch (error) {
+    if (signal.aborted || (isRecord(error) && error['name'] === 'AbortError')) {
+      throw error;
+    }
+    throw failedToResolveContractSource(
+      error instanceof Error ? error.message : String(error),
+      'Ensure contract.source.load resolves to ok(Contract) or returns structured diagnostics.',
+      undefined,
+      error,
+    );
+  }
+
+  const validated = validateProviderResult(providerResult);
+  switch (validated.kind) {
+    case 'malformed':
+      throw validated.error;
+    case 'failed':
+      return notOk(validated.failure);
+    case 'ok':
+      return ok(validated.value);
+  }
+}
+
+/**
+ * Runs the config's contract source the way `executeContractEmit` does and
+ * stops there: nothing is emitted or written. A source that reports
+ * diagnostics is a `notOk`; a malformed or throwing source raises the same
+ * error emit raises.
+ */
+export async function loadContractSource(
+  config: PrismaNextConfig,
+  options: { readonly signal?: AbortSignal } = {},
+): Promise<Result<unknown, ContractSourceFailure>> {
+  const contractConfig = requireContractSource(config);
+  return resolveContractSource(
+    contractConfig,
+    createControlStack(config),
+    options.signal ?? new AbortController().signal,
+  );
 }
 
 /**
@@ -236,14 +329,7 @@ export async function executeContractEmit(
     onProgress,
   } = options;
   const unlessAborted = abortable(signal);
-
-  if (!config.contract) {
-    throw errorContractConfigMissing({
-      why: 'Config.contract is required for emit. Define it in your config: contract: { source: ..., output: ... }',
-    });
-  }
-
-  const contractConfig = config.contract;
+  const contractConfig = requireContractSource(config);
 
   const effectiveOutput =
     outputPath !== undefined ? join(outputPath, 'contract.json') : contractConfig.output;
@@ -251,12 +337,6 @@ export async function executeContractEmit(
   if (!effectiveOutput) {
     throw errorContractConfigMissing({
       why: 'Contract config must have output path. This should not happen if defineConfig() was used.',
-    });
-  }
-
-  if (typeof contractConfig.source?.load !== 'function') {
-    throw errorContractConfigMissing({
-      why: 'Contract config must include a valid source provider object',
     });
   }
 
@@ -273,37 +353,17 @@ export async function executeContractEmit(
   return queueEmitByOutput(outputJsonPath, async () => {
     const stack = createControlStack(config);
 
-    const sourceContext = {
-      composedExtensions: stack.extensions.map((p) => p.id),
-      composedExtensionContracts: stack.extensionContracts,
-      authoringContributions: stack.authoringContributions,
-      codecLookup: stack.codecLookup,
-      controlMutationDefaults: stack.controlMutationDefaults,
-      resolvedInputs: contractConfig.source.inputs ?? [],
-      capabilities: stack.capabilities,
-    };
-
     startSpan(onProgress, 'resolveSource', 'Resolving contract source...');
-    let providerResult: Awaited<ReturnType<typeof contractConfig.source.load>>;
+    let resolved: Result<unknown, ContractSourceFailure>;
     try {
-      providerResult = await unlessAborted(contractConfig.source.load(sourceContext));
+      resolved = await resolveContractSource(contractConfig, stack, signal);
     } catch (error) {
       endSpan(onProgress, 'resolveSource', 'error');
-      if (signal.aborted || (isRecord(error) && error['name'] === 'AbortError')) {
-        throw error;
-      }
-      throw failedToResolveContractSource(
-        error instanceof Error ? error.message : String(error),
-        'Ensure contract.source.load resolves to ok(Contract) or returns structured diagnostics.',
-        undefined,
-        error,
-      );
+      throw error;
     }
-
-    const validatedContract = validateProviderResult(providerResult);
-    if (!validatedContract.ok) {
+    if (!resolved.ok) {
       endSpan(onProgress, 'resolveSource', 'error');
-      throw validatedContract.error;
+      throw sourceFailureError(resolved.failure);
     }
     endSpan(onProgress, 'resolveSource', 'ok');
 
@@ -318,16 +378,13 @@ export async function executeContractEmit(
         rawComponents,
       );
       // Blind cast: `validateProviderResult` upstream has already
-      // pinned `validatedContract.value` to the provider's loose
+      // pinned `resolved.value` to the provider's loose
       // `Contract` envelope, but the local `Contract` type at this
       // call site is the precise structural interface. The cast just
       // defers the structural check by one statement so `enrichContract`
       // can decorate first; the subsequent serialize→deserialize round-trip
       // re-narrows the envelope into the precise type.
-      const enrichedIR = enrichContract(
-        validatedContract.value as unknown as Contract,
-        frameworkComponents,
-      );
+      const enrichedIR = enrichContract(resolved.value as unknown as Contract, frameworkComponents);
       const rawContractJson = config.target.contractSerializer.serializeContract(enrichedIR);
       const deserializedContract = familyInstance.deserializeContract(rawContractJson);
       // Each target's descriptor ships a `contractSerializer` SPI; the
