@@ -27,7 +27,6 @@
     "@internal/sql-contract-ts": "workspace:8.0.0-rc.12",
     "@internal/sql-operations": "workspace:8.0.0-rc.12",
     "@internal/sql-relational-core": "workspace:8.0.0-rc.12",
-    "@internal/sql-runtime": "workspace:8.0.0-rc.12",
     "@internal/sql-schema-ir": "workspace:8.0.0-rc.12",
     "@internal/utils": "workspace:8.0.0-rc.12",
     "arktype": "^2.2.2",
