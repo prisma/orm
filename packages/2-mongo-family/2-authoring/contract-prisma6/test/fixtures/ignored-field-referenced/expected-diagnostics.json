@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_IGNORED_FIELD_REFERENCED",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Field \"Post.title\" is marked @ignore, but @@index on model \"Post\" uses it. Remove @ignore from \"Post.title\", or remove @@index on model \"Post\"."
+  }
+]

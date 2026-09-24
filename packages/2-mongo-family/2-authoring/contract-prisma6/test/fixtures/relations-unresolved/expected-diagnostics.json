@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL_ORPHANED_BACKRELATION",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Backrelation list field \"User.posts\" has no matching FK-side relation on model \"Post\". Add @relation(fields: [...], references: [...]) on the FK-side relation."
+  }
+]

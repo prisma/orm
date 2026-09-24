@@ -1,0 +1,22 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Post {
+  id       String    @id @default(auto()) @map("_id") @db.ObjectId
+  tags     String[]
+  scores   Int[]
+  refs     String[]  @db.ObjectId
+  roles    Role[]
+  address  Address[]
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+type Address {
+  street String
+}

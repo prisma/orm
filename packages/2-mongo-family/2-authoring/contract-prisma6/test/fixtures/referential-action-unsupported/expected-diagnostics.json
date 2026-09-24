@@ -1,0 +1,8 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_REFERENTIAL_ACTION_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 14,
+    "message": "Relation field \"Post.author\": @relation argument \"onDelete\" is not supported; Prisma 8 enforces no referential actions on MongoDB. Remove \"onDelete\" and handle related documents in application code."
+  }
+]

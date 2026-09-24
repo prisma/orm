@@ -1,0 +1,222 @@
+{
+  "targetFamily": "mongo",
+  "target": "mongo",
+  "roots": {
+    "User": {
+      "namespace": "__unbound__",
+      "model": "User"
+    },
+    "Post": {
+      "namespace": "__unbound__",
+      "model": "Post"
+    },
+    "Profile": {
+      "namespace": "__unbound__",
+      "model": "Profile"
+    }
+  },
+  "domain": {
+    "namespaces": {
+      "__unbound__": {
+        "models": {
+          "User": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "email": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/string@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "posts": {
+                "to": {
+                  "namespace": "__unbound__",
+                  "model": "Post"
+                },
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": ["_id"],
+                  "targetFields": ["authorId"]
+                }
+              },
+              "profile": {
+                "to": {
+                  "namespace": "__unbound__",
+                  "model": "Profile"
+                },
+                "cardinality": "1:1",
+                "nullable": true,
+                "on": {
+                  "localFields": ["_id"],
+                  "targetFields": ["userId"]
+                }
+              },
+              "written": {
+                "to": {
+                  "namespace": "__unbound__",
+                  "model": "Post"
+                },
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": ["_id"],
+                  "targetFields": ["coauthor_id"]
+                }
+              }
+            },
+            "storage": {
+              "collection": "User"
+            }
+          },
+          "Post": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "authorId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "coauthor_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": true
+              }
+            },
+            "relations": {
+              "author": {
+                "to": {
+                  "namespace": "__unbound__",
+                  "model": "User"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["authorId"],
+                  "targetFields": ["_id"]
+                }
+              },
+              "coauthor": {
+                "to": {
+                  "namespace": "__unbound__",
+                  "model": "User"
+                },
+                "cardinality": "N:1",
+                "nullable": true,
+                "on": {
+                  "localFields": ["coauthor_id"],
+                  "targetFields": ["_id"]
+                }
+              }
+            },
+            "storage": {
+              "collection": "Post"
+            }
+          },
+          "Profile": {
+            "fields": {
+              "_id": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              },
+              "userId": {
+                "type": {
+                  "kind": "scalar",
+                  "codecId": "mongo/objectId@1"
+                },
+                "nullable": false
+              }
+            },
+            "relations": {
+              "user": {
+                "to": {
+                  "namespace": "__unbound__",
+                  "model": "User"
+                },
+                "cardinality": "N:1",
+                "nullable": false,
+                "on": {
+                  "localFields": ["userId"],
+                  "targetFields": ["_id"]
+                }
+              }
+            },
+            "storage": {
+              "collection": "Profile"
+            }
+          }
+        }
+      }
+    }
+  },
+  "extensions": {},
+  "capabilities": {},
+  "profileHash": "251b3ce23f6c9f561892e7c1af9d2cc941a13d64ba1aa7226b90036b09568cc3",
+  "meta": {},
+  "storage": {
+    "storageHash": "7e2f23ac6ee6027cc787d4ea8ec7e40d7cc950ec891a4e0edec81e7f73315f4b",
+    "namespaces": {
+      "__unbound__": {
+        "id": "__unbound__",
+        "kind": "mongo-database",
+        "entries": {
+          "collection": {
+            "User": {
+              "kind": "mongo-collection",
+              "indexes": [
+                {
+                  "kind": "mongo-index",
+                  "keys": [
+                    {
+                      "field": "email",
+                      "direction": 1
+                    }
+                  ],
+                  "unique": true
+                }
+              ]
+            },
+            "Post": {
+              "kind": "mongo-collection"
+            },
+            "Profile": {
+              "kind": "mongo-collection",
+              "indexes": [
+                {
+                  "kind": "mongo-index",
+                  "keys": [
+                    {
+                      "field": "userId",
+                      "direction": 1
+                    }
+                  ],
+                  "unique": true
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+[
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 8,
+    "message": "Field \"Post.title\": @default(\"untitled\") is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. Remove the default and set the value when you create documents."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 9,
+    "message": "Field \"Post.count\": @default(0) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. Remove the default and set the value when you create documents."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 10,
+    "message": "Field \"Post.token\": @default(uuid()) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. Remove the default and set the value when you create documents."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 11,
+    "message": "Field \"Post.code\": @default(cuid()) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. Remove the default and set the value when you create documents."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 12,
+    "message": "Field \"Post.stamp\": @default(now()) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. Remove the default and set the value when you create documents."
+  },
+  {
+    "code": "PSL.PRISMA6_MONGO_DEFAULT_UNSUPPORTED",
+    "file": "schema.prisma",
+    "line": 13,
+    "message": "Field \"Post.other\": @default(auto()) is not supported. MongoDB has no stored defaults, and Prisma 8 fills only `now()` on DateTime fields. Remove the default and set the value when you create documents."
+  }
+]

@@ -1842,6 +1842,70 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
 
+  packages/2-mongo-family/2-authoring/contract-prisma6:
+    dependencies:
+      '@internal/config':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../1-framework/1-core/config
+      '@internal/contract':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../1-framework/0-foundation/contract
+      '@internal/contract-authoring':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../1-framework/2-authoring/contract
+      '@internal/framework-components':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../1-framework/1-core/framework-components
+      '@internal/mongo-contract':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../1-foundation/mongo-contract
+      '@internal/psl-parser':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../1-framework/2-authoring/psl-parser
+      '@internal/utils':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../1-framework/0-foundation/utils
+      pathe:
+        specifier: ^2.0.3
+        version: 2.0.3
+    devDependencies:
+      '@internal/adapter-mongo':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../3-mongo-target/2-mongo-adapter
+      '@internal/driver-mongo':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../3-mongo-target/3-mongo-driver
+      '@internal/family-mongo':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../9-family
+      '@internal/mongo-contract-psl':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../contract-psl
+      '@internal/target-mongo':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../3-mongo-target/1-mongo-target
+      '@repo/test-utils':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../../test/utils
+      '@repo/tsconfig':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../0-config/tsconfig
+      '@repo/tsdown':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../0-config/tsdown
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.1.2
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.22.14(tsx@4.23.12)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0-rc.2(@types/node@26.1.2)(@vitest/coverage-v8@5.0.0-rc.2)(jsdom@29.1.1(@noble/hashes@2.2.0))(vite@8.1.4(@types/node@26.1.2)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.12)(yaml@2.9.0))
+
   packages/2-mongo-family/2-authoring/contract-psl:
     dependencies:
       '@internal/config':
