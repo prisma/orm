@@ -24,6 +24,7 @@
     "@internal/family-mongo": "workspace:8.0.0-rc.12",
     "@internal/framework-components": "workspace:8.0.0-rc.12",
     "@internal/mongo-contract": "workspace:8.0.0-rc.12",
+    "@internal/mongo-contract-prisma6": "workspace:8.0.0-rc.12",
     "@internal/mongo-contract-psl": "workspace:8.0.0-rc.12",
     "@internal/mongo-contract-ts": "workspace:8.0.0-rc.12",
     "@internal/mongo-orm": "workspace:8.0.0-rc.12",
