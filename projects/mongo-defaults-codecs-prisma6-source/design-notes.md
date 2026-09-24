@@ -23,6 +23,8 @@ The contract carries an `execution` section listing, per field, a generator to r
 8. **Remaining reader hard errors** (referential actions, `@@schema`, `view`, `@@id`, `@map` on composite fields) stay hard errors, with the expectation that each flips to a mapping when the Mongo family gains the capability. `@@schema` is expected to remain an error.
 9. **Index names are not set by the reader.** Mongo verify and the planner match by key shape and options only.
 
+10. **`Json` fields get an empty validator schema.** Found in slice 1 D3: the collection validator is closed, so omitting a field rejects writes. `{}` is the one schema that admits any BSON value. Canonicalisation keeps that empty object. The original assumption (omit the field) is recorded as falsified.
+
 ## Alternatives considered
 
 - **Adding Prisma 6 attributes to Prisma 8 Mongo authoring.** Rejected outright. It diverges Mongo from Postgres and imports a frozen dialect into Prisma 8.

@@ -42,7 +42,7 @@ Application types: `Int64` is `bigint`, `Decimal128` is canonical decimal text (
 | `mongo/int64@1` | `Long` | `bigint` | decimal text (`"123"`); safe-integer `number` accepted on the way in, as `pg/int8@1` | `long` | equality, order, numeric |
 | `mongo/decimal128@1` | `Decimal128` | `string` (canonical decimal text) | same string | `decimal` | equality, order, numeric |
 | `mongo/binary@1` | `Binary` | `Uint8Array` | unwrapped base64 | `binData` | equality |
-| `mongo/json@1` | any BSON value | `JsonValue` | identity | none (any BSON value; the validator omits the field) | none |
+| `mongo/json@1` | any BSON value | `JsonValue` | identity | none; the validator gives the field the empty schema `{}` (see edge cases) | none |
 
 PSL names: `Int64`, `Decimal128`, `Binary`, `Json`. TS: `field.int64()`, `field.decimal128()`, `field.binary()`, `field.json()`. `renderValueLiteral` for `int64` renders `123n`. Decode of a wrong wire type throws `RUNTIME.DECODE_FAILED` with the target's error factory, so the codecs no longer depend on the adapter's `mongoAdapterError`.
 
@@ -60,7 +60,7 @@ Out: generators, `execution` section, `temporal.*` (slice 2); consolidating dupl
 
 - `test/integration/test/mongo/interpreter.enum.test.ts` and `packages/3-extensions/mongo/src/config/define-config.ts` import codec ids from the adapter; they move to the target import.
 - `packages/2-mongo-family/3-tooling/emitter/test/import-roots.test.ts:60` asserts the published import root `@prisma/orm-target-mongo/adapter/codec-types`; it becomes the target root.
-- `derive-json-schema.ts` leaves a field out of the validator when `targetTypes[0]` is undefined; that is the intended behaviour for `Json`.
+- Amended during D3: the collection validator is closed (`additionalProperties: false`), so a field left out of `properties` rejects every write. A codec the lookup knows that declares no BSON type therefore gets the empty schema `{}` (array of `{}` for lists), which admits any value, and Mongo canonicalisation keeps that empty object under `properties` and as `items`. An unknown codec id is still left out. No existing contract had such a schema, so no hash moves.
 - Decimal128 canonical text: `Decimal128.toString()` may print exponents for some values; the JSON form must match the Postgres numeric convention (no exponent) so a PSL default literal compares equal after a round trip. Test both `1E+3` style inputs and plain decimals.
 
 ## Slice Definition of Done
