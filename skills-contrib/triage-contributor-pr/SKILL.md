@@ -53,18 +53,19 @@ jq -r '[.[] | select((.isCrossRepository | not) and (.author.is_bot | not)) | .a
   done
 ```
 
-`admin` and `write` are team. `read` or `none` is external, unless the account is an agent that belongs to a team member. Such accounts say so in their bio (for example "Belongs to @<maintainer>"); confirm the named maintainer has `admin` or `write`, then treat the agent as team. If a fork author looks like an agent account, check its bio the same way: a team member's agent is team even when it opens a PR from a fork. `gh pr list` does not expose `authorAssociation`, so do not reach for it.
+`admin` and `write` are team. `read` or `none` is external. The exception is an agent account that belongs to a team member, but a bio saying so (for example "Belongs to @<maintainer>") is written by the account's owner and proves nothing. Keep such an account external and ask the maintainer to confirm it; treat it as team only once they confirm it belongs to a team member with `admin` or `write`. The same applies to a fork author that looks like an agent account. `gh pr list` does not expose `authorAssociation`, so do not reach for it.
 
-Set `EXTRA` to the same-repo authors you found to be external, lowercased. Set `AUTHORS` from whoever the maintainer named, lowercased, or leave it as `[]` to triage the whole external queue. Never leave a list from a previous run in place, and never treat the example list as the scope.
+Set `EXTRA` to the same-repo authors you found to be external, and `TEAM` to fork authors the maintainer confirmed as team agents, both lowercased. Set `AUTHORS` from whoever the maintainer named, lowercased, or leave it as `[]` to triage the whole external queue. Never leave a list from a previous run in place, and never treat the example list as the scope.
 
 ```bash
 AUTHORS='["snowingfox","wehamed"]'   # or '[]' for every external contributor
 EXTRA='[]'                           # same-repo authors found external above
+TEAM='[]'                            # fork authors confirmed as team agents
 
-jq -r --argjson authors "$AUTHORS" --argjson extra "$EXTRA" '.[]
+jq -r --argjson authors "$AUTHORS" --argjson extra "$EXTRA" --argjson team "$TEAM" '.[]
     | (.author.login | ascii_downcase) as $login
     | select($authors == [] or ($login | IN($authors[])))
-    | select($authors != [] or .isCrossRepository or ($login | IN($extra[])))
+    | select($authors != [] or ((.isCrossRepository or ($login | IN($extra[]))) and ($login | IN($team[]) | not)))
     | "\(.number)\t\(.author.login)\t\(.baseRefName)\t\(.updatedAt)\t\(.title)"' wip/pr-triage/queue.json
 ```
 

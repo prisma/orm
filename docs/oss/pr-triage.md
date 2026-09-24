@@ -10,7 +10,7 @@ Two facts shape everything below. First, **our CI does not run on a fork PR unti
 
 A PR is external when its author does not hold `admin` or `write` permission on `prisma/orm`. Most external PRs come from forks, but not all of them: former staff keep branches they pushed while they had write access, so their PRs come from the repository itself and still need triage.
 
-An agent account that belongs to a team member is team, whatever its own permission and whether or not it works from a fork. Such accounts say so in their profile bio (for example "Belongs to @<maintainer>"); confirm the named maintainer holds `admin` or `write`.
+An agent account that belongs to a team member is team, whatever its own permission and whether or not it works from a fork. Its profile bio usually says so (for example "Belongs to @<maintainer>"), but the account's owner writes the bio, so it is a lead, not evidence. Treat the account as external until a maintainer confirms it belongs to a team member who holds `admin` or `write`.
 
 ## Step 0 — Is it safe to run CI?
 
