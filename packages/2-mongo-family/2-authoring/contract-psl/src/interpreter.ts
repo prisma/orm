@@ -25,6 +25,7 @@ import type {
 import {
   instantiateAuthoringEntityType,
   isAuthoringEntityTypeDescriptor,
+  isAuthoringPslBlockDescriptor,
 } from '@internal/framework-components/authoring';
 import type { CodecLookup } from '@internal/framework-components/codec';
 import type { ControlDefaultRegistries } from '@internal/framework-components/control';
@@ -57,6 +58,7 @@ import {
   createPslDiagnosticCollector,
   type DiagnosticSource,
   diagnosticSource,
+  keywordPslSpan,
   nodePslSpan,
   type PslDiagnostic,
   type PslDiagnosticCollector,
@@ -1159,6 +1161,23 @@ export function interpretPslDocumentToMongoContract(
         sources,
         diagnostics,
       }),
+    });
+  }
+
+  const legitimateBlockKeywords = new Set([
+    'enum',
+    ...Object.entries(input.authoringContributions?.pslBlockDescriptors ?? {})
+      .filter(([, descriptor]) => isAuthoringPslBlockDescriptor(descriptor))
+      .map(([keyword]) => keyword),
+  ]);
+  for (const block of Object.values(topLevel.blocks)) {
+    if (legitimateBlockKeywords.has(block.keyword)) continue;
+    diagnostics.push({
+      code: 'PSL_UNSUPPORTED_TOP_LEVEL_BLOCK',
+      message: `Unsupported top-level block "${block.keyword}"`,
+      ...diagnosticSource(sources, block.node.syntax).at(
+        keywordPslSpan(block.node.syntax, block.keyword, sources),
+      ),
     });
   }
 
