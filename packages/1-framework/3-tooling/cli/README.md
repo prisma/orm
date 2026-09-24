@@ -99,6 +99,16 @@ The second question is the consent token; `--confirm <dir>` answers it non-inter
 
 It then writes `prisma.config.ts` with `contract: prisma7Schema("<schema path>")` and `output: "src/prisma"`, `src/prisma/db.ts`, and a `prisma-8.md` that describes the transition loop; no starter schema is written and `prisma/` stays byte-identical. The next steps are the transition routine: set `DATABASE_URL`, `prisma db sign`, move routes one at a time, and re-run `prisma contract emit` then `prisma db sign` after each `prisma7 migrate dev`.
 
+**Design constraints on the Prisma 7 path:**
+
+- There is no separate upgrade command. Init already installs, scaffolds, and emits. A command that automated the whole upgrade guide could not find its inputs reliably in arbitrary projects (computed config values, multi-file schemas, monorepos, CI files that call `prisma migrate`), and the Prisma 7 contract source removes the need for a schema converter.
+- From a Prisma 7 config init reads only `schema`. The new config connects with `process.env['DATABASE_URL']!`: copying the Prisma 7 `datasource.url` expression would need a TypeScript rewrite of user code, and matching its resolved value back to an environment variable assumes the URL came from one.
+- Init's files go under `src/prisma/`, where a fresh init puts them, so an upgraded project is shaped like a new one. `prisma/` belongs to Prisma 7.
+- The side-by-side edits are the only edits init makes to files it did not write, all under one consent. Renaming the config alone would leave scripts calling a `prisma` binary that is now Prisma 8, and `@prisma/client` moves with the Prisma 7 CLI because Prisma 7 requires both at the same version.
+- `package.json#type` and `tsconfig.json` are handled as on a fresh init; see [TypeScript module settings for Prisma 8 projects](../../../../docs/reference/typescript-module-settings.md).
+- There is no cutover step. The next steps list only what the user runs right after init.
+- The schema check runs the target package's source inside the init process, so it uses the control stack of the CLI that invoked init, not the project's installed `prisma`. Published releases pin the two to the same version; an older CLI running against a newer target package can refuse a valid schema.
+
 **Exit codes:**
 - `0`: set up (and, unless skipped, installed and emitted)
 - `2`: precondition — an invalid flag, a refusal on the Prisma 7 path (`CLI.INIT_FLAG_CONFLICT`, `CLI.INIT_PRISMA7_SCHEMA_INVALID`, `CLI.INIT_PRISMA7_CONFIG_COLLISION`, `CLI.INIT_PRISMA7_CONFIG_UNREADABLE`, `CLI.INIT_PRISMA7_TARGET_MISMATCH`, `CLI.INIT_PRISMA7_PROVIDER_UNSUPPORTED`, `CLI.INIT_PRISMA7_SCHEMA_REFUSED`, `CLI.INIT_PRISMA7_SOURCE_UNAVAILABLE`), a consent not granted, or a write that failed; nothing is written before a refusal, and the schema check's install is the only change before one
