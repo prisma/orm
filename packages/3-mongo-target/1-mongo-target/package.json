@@ -19,7 +19,6 @@
     "@internal/adapter-mongo": "workspace:8.0.0-rc.11",
     "@internal/cli": "workspace:8.0.0-rc.11",
     "@internal/contract": "workspace:8.0.0-rc.11",
-    "@internal/driver-mongo": "workspace:8.0.0-rc.11",
     "@internal/errors": "workspace:8.0.0-rc.11",
     "@internal/family-mongo": "workspace:8.0.0-rc.11",
     "@internal/framework-components": "workspace:8.0.0-rc.11",
@@ -36,6 +35,7 @@
     "arktype": "catalog:"
   },
   "devDependencies": {
+    "@internal/driver-mongo": "workspace:8.0.0-rc.11",
     "mongodb": "catalog:",
     "@internal/mongo-contract-psl": "workspace:8.0.0-rc.11",
     "@internal/mongo-wire": "workspace:8.0.0-rc.11",

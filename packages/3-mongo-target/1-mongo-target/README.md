@@ -14,7 +14,7 @@ MongoDB target pack for Prisma 8.
 - `./pack`: pure target pack ref used by `@internal/family-mongo` and `@internal/mongo-contract-ts`
 - `./codec-types`: base Mongo codec type map
 - `./migration`: factory functions (the `Migration` base class is in `@internal/family-mongo/migration`)
-- `./control`: `MongoMigrationRunner` and `createMongoRunnerDeps` for runtime migration execution
+- `./control`: `mongoTargetDescriptor` and `MongoMigrationRunner` for migration execution; the runner gets its database dependencies from the family instance (`MongoControlFamilyInstance.createRunnerDependencies`), which delegates to the control adapter on the stack
 - `./schema-verify`: pure `verifyMongoSchema(...)` (no DB I/O); composes `contractToMongoSchemaIR` and `diffMongoSchemas` so the runner's post-apply verify step and `MongoFamilyInstance.schemaVerify` agree on "matches the contract" by construction
 
 ## Usage

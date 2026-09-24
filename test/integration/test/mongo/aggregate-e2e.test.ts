@@ -146,9 +146,7 @@ function createInstance() {
 
 function makeRunner() {
   if (!hasMigrations(mongoTargetDescriptor)) throw new Error('expected migrations capability');
-  return mongoTargetDescriptor.migrations.createRunner(
-    createMongoFamilyInstance({} as unknown as Parameters<typeof createMongoFamilyInstance>[0]),
-  );
+  return mongoTargetDescriptor.migrations.createRunner(createInstance());
 }
 
 describe('Mongo contract-space aggregate e2e', {

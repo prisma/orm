@@ -1,14 +1,12 @@
-import type { ContractMarkerRecord } from '@internal/contract/types';
-import type { MongoControlAdapter } from '@internal/family-mongo/control-adapter';
+import type {
+  MongoControlAdapter,
+  MongoRunnerDependencies,
+} from '@internal/family-mongo/control-adapter';
 import type {
   ControlDriverInstance,
   ControlFamilyInstance,
 } from '@internal/framework-components/control';
-import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
-import type {
-  AnyMongoDdlCommand,
-  MongoInspectionCommandVisitor,
-} from '@internal/mongo-query-ast/control';
+import type { MongoControlDriverInstance, MongoDriver } from '@internal/mongo-lowering';
 import type { MongoSchemaIR } from '@internal/mongo-schema-ir';
 import type { Db } from 'mongodb';
 import { createMongoAdapter } from '../mongo-adapter';
@@ -17,7 +15,9 @@ import { MongoInspectionExecutor } from './inspection-executor';
 import { MongoControlAdapterImpl } from './mongo-control-adapter';
 import { isMongoControlDriver } from './mongo-control-driver';
 
-export function extractDb(driver: ControlDriverInstance<'mongo', 'mongo'>): Db {
+export function requireMongoControlDriver(
+  driver: ControlDriverInstance<'mongo', 'mongo'>,
+): MongoControlDriverInstance {
   if (!isMongoControlDriver(driver)) {
     throw mongoAdapterError(
       'CONFIG.VALIDATION_FAILED',
@@ -26,54 +26,11 @@ export function extractDb(driver: ControlDriverInstance<'mongo', 'mongo'>): Db {
       { meta: { received: describeReceivedValue(driver) } },
     );
   }
-  return driver.db;
+  return driver;
 }
 
-/**
- * Marker / ledger operations the Mongo runner depends on. Every method
- * takes a `space` parameter so each loaded contract space addresses its
- * own marker row independently — see ADR 212 for the per-space
- * mechanism.
- */
-export interface MarkerOperations {
-  readMarker(space: string): Promise<ContractMarkerRecord | null>;
-  initMarker(
-    space: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
-  ): Promise<void>;
-  updateMarker(
-    space: string,
-    expectedFrom: string,
-    destination: {
-      readonly storageHash: string;
-      readonly profileHash: string;
-      readonly invariants?: readonly string[];
-    },
-  ): Promise<boolean>;
-  writeLedgerEntry(
-    space: string,
-    entry: {
-      readonly edgeId: string;
-      readonly from: string;
-      readonly to: string;
-      readonly migrationName: string;
-      readonly migrationHash: string;
-      readonly operations: readonly unknown[];
-    },
-  ): Promise<void>;
-}
-
-export interface MongoRunnerDependencies {
-  readonly inspectionExecutor: MongoInspectionCommandVisitor<Promise<Record<string, unknown>[]>>;
-  readonly adapter: MongoAdapter;
-  readonly driver: MongoDriver;
-  readonly executeDdl: (command: AnyMongoDdlCommand) => Promise<void>;
-  readonly markerOps: MarkerOperations;
-  readonly introspectSchema: () => Promise<MongoSchemaIR>;
+export function extractDb(driver: ControlDriverInstance<'mongo', 'mongo'>): Db {
+  return requireMongoControlDriver(driver).db;
 }
 
 /**
@@ -95,6 +52,14 @@ export function createMongoRunnerDeps(
   // should drop the parameter outright.
   _family: ControlFamilyInstance<'mongo', MongoSchemaIR>,
   controlAdapter: MongoControlAdapter<'mongo'> = new MongoControlAdapterImpl(),
+): MongoRunnerDependencies {
+  return bindRunnerDeps(controlDriver, driver, controlAdapter);
+}
+
+export function bindRunnerDeps(
+  controlDriver: ControlDriverInstance<'mongo', 'mongo'>,
+  driver: MongoDriver,
+  controlAdapter: MongoControlAdapter<'mongo'>,
 ): MongoRunnerDependencies {
   const adapter = createMongoAdapter();
   return {

@@ -6,12 +6,7 @@ export { MongoInspectionExecutor } from '../core/inspection-executor';
 export { introspectSchema } from '../core/introspect-schema';
 export { MongoControlAdapterImpl } from '../core/mongo-control-adapter';
 export { isMongoControlDriver } from '../core/mongo-control-driver';
-export {
-  createMongoRunnerDeps,
-  extractDb,
-  type MarkerOperations,
-  type MongoRunnerDependencies,
-} from '../core/runner-deps';
+export { createMongoRunnerDeps, extractDb } from '../core/runner-deps';
 export { createMongoAdapter } from '../mongo-adapter';
 export type { MongoControlDriverInstance };
 

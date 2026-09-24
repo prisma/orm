@@ -1,16 +1,13 @@
-import {
-  createMongoRunnerDeps,
-  extractDb,
-  type MongoRunnerDependencies,
-} from '@internal/adapter-mongo/control';
 import type { Contract } from '@internal/contract/types';
-import { MongoDriverImpl } from '@internal/driver-mongo';
 import type {
   MongoControlFamilyInstance,
   MongoControlTargetDescriptor,
 } from '@internal/family-mongo/control';
 import { contractToMongoSchemaIR } from '@internal/family-mongo/control';
-import type { MongoControlAdapter } from '@internal/family-mongo/control-adapter';
+import type {
+  MongoControlAdapter,
+  MongoRunnerDependencies,
+} from '@internal/family-mongo/control-adapter';
 import type {
   MigrationRunner,
   MigrationRunnerPerSpaceSuccessValue,
@@ -59,11 +56,7 @@ export const mongoTargetDescriptor: MongoControlTargetDescriptor<MongoTargetCont
           readonly destinationContract: unknown;
         },
       ) => {
-        cachedDeps ??= createMongoRunnerDeps(
-          driver,
-          MongoDriverImpl.fromDb(extractDb(driver)),
-          family,
-        );
+        cachedDeps ??= family.createRunnerDependencies({ driver });
         // The framework `MigrationRunner` interface types `destinationContract`
         // as `unknown`; the Mongo runner narrows to `MongoContract`. Validation
         // happens upstream — `migrate` calls

@@ -1,15 +1,16 @@
-import {
+import mongoAdapterDescriptor, {
   createMongoRunnerDeps,
   introspectSchema,
   MongoControlAdapterImpl,
 } from '@internal/adapter-mongo/control';
 import { MongoDriverImpl } from '@internal/driver-mongo';
 import { MongoControlDriver } from '@internal/driver-mongo/control';
-import type { MongoControlFamilyInstance } from '@internal/family-mongo/control';
-import type {
-  ControlFamilyInstance,
-  MigrationPlan,
-  MigrationPlanOperation,
+import { mongoFamilyDescriptor } from '@internal/family-mongo/control';
+import {
+  type ControlFamilyInstance,
+  createControlStack,
+  type MigrationPlan,
+  type MigrationPlanOperation,
 } from '@internal/framework-components/control';
 import {
   type AggregateMigrationEdgeRef,
@@ -928,9 +929,14 @@ describe('MongoMigrationRunner - E2E round-trip', () => {
 
 describe('mongoTargetDescriptor migrations.createRunner — per-edge ledger', () => {
   it('threads migrationEdges through createRunner().execute() into per-edge ledger docs', async () => {
-    const runner = mongoTargetDescriptor.migrations.createRunner(
-      fakeFamily() as MongoControlFamilyInstance,
+    const family = mongoFamilyDescriptor.create(
+      createControlStack({
+        family: mongoFamilyDescriptor,
+        target: mongoTargetDescriptor,
+        adapter: mongoAdapterDescriptor,
+      }),
     );
+    const runner = mongoTargetDescriptor.migrations.createRunner(family);
     const driver = new MongoControlDriver(db, client);
     const space = 'ledger-wrapper-test';
     const destHash = 'wrapper-dest';

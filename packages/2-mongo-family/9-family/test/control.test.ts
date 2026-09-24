@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   MongoControlAdapter,
   MongoControlAdapterDescriptor,
+  MongoRunnerDependencies,
 } from '../src/core/control-adapter';
 import { mongoFamilyDescriptor } from '../src/core/control-descriptor';
 import { createMongoFamilyInstance } from '../src/core/control-instance';
@@ -168,6 +169,44 @@ describe('createMongoFamilyInstance', () => {
       expect(e.code).toBe('MIGRATION.MARKER_CAS_FAILURE');
       expect(e.message).toBe('CAS conflict: marker was modified by another process during sign');
     }
+  });
+
+  it('createRunnerDependencies() returns the dependencies the adapter builds for the driver', () => {
+    const runnerDeps = {} as MongoRunnerDependencies;
+    const driversSeen: unknown[] = [];
+    const stack = createControlStack({
+      family: mongoFamilyDescriptor,
+      target: stubMongoTargetDescriptor,
+      adapter: stubAdapterDescriptor({
+        createRunnerDependencies: (driver) => {
+          driversSeen.push(driver);
+          return runnerDeps;
+        },
+      }),
+    });
+    const instance = createMongoFamilyInstance(stack);
+    const driver = { targetId: 'mongo' } as Parameters<
+      typeof instance.createRunnerDependencies
+    >[0]['driver'];
+
+    expect(instance.createRunnerDependencies({ driver })).toBe(runnerDeps);
+    expect(driversSeen).toEqual([driver]);
+  });
+
+  it('createRunnerDependencies() with a non-mongo driver raises CONTRACT.TARGET_MISMATCH', () => {
+    const stack = createControlStack({
+      family: mongoFamilyDescriptor,
+      target: stubMongoTargetDescriptor,
+      adapter: stubAdapterDescriptor({}),
+    });
+    const instance = createMongoFamilyInstance(stack);
+    const driver = { targetId: 'postgres' } as Parameters<
+      typeof instance.createRunnerDependencies
+    >[0]['driver'];
+
+    expect(() => instance.createRunnerDependencies({ driver })).toThrow(
+      expect.objectContaining({ code: 'CONTRACT.TARGET_MISMATCH' }),
+    );
   });
 });
 

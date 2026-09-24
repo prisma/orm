@@ -1,6 +1,9 @@
-import type { MarkerOperations, MongoRunnerDependencies } from '@internal/adapter-mongo/control';
 import type { ContractMarkerRecord } from '@internal/contract/types';
 import { errorRunnerFailed } from '@internal/errors/execution';
+import type {
+  MarkerOperations,
+  MongoRunnerDependencies,
+} from '@internal/family-mongo/control-adapter';
 import { verifyMongoSchema } from '@internal/family-mongo/schema-verify';
 import type { TargetBoundComponentDescriptor } from '@internal/framework-components/components';
 import {
@@ -32,8 +35,6 @@ import { FilterEvaluator } from './filter-evaluator';
 import { deserializeMongoOps } from './mongo-ops-serializer';
 
 const READ_ONLY_CHECK_COMMAND_KINDS: ReadonlySet<string> = new Set(['aggregate', 'rawAggregate']);
-
-export type { MarkerOperations, MongoRunnerDependencies };
 
 export interface MongoMigrationRunnerExecuteOptions {
   readonly plan: MigrationPlan;

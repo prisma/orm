@@ -1,6 +1,9 @@
 import type { ContractMarkerRecord, LedgerEntryRecord } from '@internal/contract/types';
 import { withMarkerReadErrorHandling } from '@internal/errors/execution';
-import type { MongoControlAdapter } from '@internal/family-mongo/control-adapter';
+import type {
+  MongoControlAdapter,
+  MongoRunnerDependencies,
+} from '@internal/family-mongo/control-adapter';
 import type { ControlDriverInstance } from '@internal/framework-components/control';
 import { ledgerOriginFromStored } from '@internal/migration-tools/ledger-origin';
 import type { MongoAdapter, MongoDriver } from '@internal/mongo-lowering';
@@ -28,7 +31,7 @@ import {
 } from './marker-ledger';
 import { MARKER_LEDGER_COLLECTION, type MarkerLedgerDocShape } from './marker-ledger-collection';
 import { isMongoControlDriver } from './mongo-control-driver';
-import { extractDb } from './runner-deps';
+import { bindRunnerDeps, extractDb, requireMongoControlDriver } from './runner-deps';
 
 /**
  * Mongo control adapter for control-plane operations like introspection
@@ -299,5 +302,11 @@ export class MongoControlAdapterImpl implements MongoControlAdapter<'mongo'> {
 
   async introspectSchema(driver: ControlDriverInstance<'mongo', 'mongo'>): Promise<MongoSchemaIR> {
     return introspectSchema(extractDb(driver));
+  }
+
+  createRunnerDependencies(
+    driver: ControlDriverInstance<'mongo', 'mongo'>,
+  ): MongoRunnerDependencies {
+    return bindRunnerDeps(driver, requireMongoControlDriver(driver), this);
   }
 }

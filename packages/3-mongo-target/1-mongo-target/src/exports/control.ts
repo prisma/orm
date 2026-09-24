@@ -7,7 +7,6 @@ export {
 } from '../core/mongo-ops-serializer';
 export type { PlanCallsResult } from '../core/mongo-planner';
 export { MongoMigrationPlanner } from '../core/mongo-planner';
-export type { MarkerOperations, MongoRunnerDependencies } from '../core/mongo-runner';
 export {
   MongoMigrationRunner,
   type MongoMigrationRunnerExecuteOptions,

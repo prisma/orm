@@ -2292,6 +2292,9 @@ importers:
       '@internal/mongo-emitter':
         specifier: workspace:8.0.0-rc.11
         version: link:../3-tooling/emitter
+      '@internal/mongo-lowering':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../6-transport/mongo-lowering
       '@internal/mongo-query-ast':
         specifier: workspace:8.0.0-rc.11
         version: link:../4-query/query-ast
@@ -3718,9 +3721,6 @@ importers:
       '@internal/contract':
         specifier: workspace:8.0.0-rc.11
         version: link:../../1-framework/0-foundation/contract
-      '@internal/driver-mongo':
-        specifier: workspace:8.0.0-rc.11
-        version: link:../3-mongo-driver
       '@internal/errors':
         specifier: workspace:8.0.0-rc.11
         version: link:../../1-framework/1-core/errors
@@ -3764,6 +3764,9 @@ importers:
         specifier: 'catalog:'
         version: 2.2.3
     devDependencies:
+      '@internal/driver-mongo':
+        specifier: workspace:8.0.0-rc.11
+        version: link:../3-mongo-driver
       '@internal/mongo-contract-psl':
         specifier: workspace:8.0.0-rc.11
         version: link:../../2-mongo-family/2-authoring/contract-psl
