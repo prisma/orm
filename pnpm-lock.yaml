@@ -4814,6 +4814,9 @@ importers:
       '@internal/mongo-contract':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../2-mongo-family/1-foundation/mongo-contract
+      '@internal/mongo-contract-prisma6':
+        specifier: workspace:8.0.0-rc.12
+        version: link:../../../2-mongo-family/2-authoring/contract-prisma6
       '@internal/mongo-contract-psl':
         specifier: workspace:8.0.0-rc.12
         version: link:../../../2-mongo-family/2-authoring/contract-psl
