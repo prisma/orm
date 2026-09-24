@@ -554,7 +554,7 @@ describe('buildSymbolTable() — resolved named-type binding shape', () => {
   });
 });
 
-describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
+describe('buildSymbolTable() — collected blocks and their envelopes', () => {
   const ENUM_DESCRIPTORS: AuthoringPslBlockDescriptorNamespace = {
     enum: {
       kind: 'pslBlock',
@@ -584,20 +584,22 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
     },
   };
 
-  it('resolves an enum block with the descriptor discriminator and source entries', () => {
+  it('publishes an enum envelope carrying the descriptor discriminator and decoded values', () => {
     const result = build(
       ['enum Role {', '  Admin', '  User = "u"', '}'].join('\n'),
       ENUM_DESCRIPTORS,
     );
-    const block = result.symbolTable.topLevel.blocks['Role']?.block;
+    const symbol = result.symbolTable.topLevel.blocks['Role'];
+    const envelope = symbol === undefined ? undefined : result.parsedBlocks.get(symbol);
 
-    expect(block?.kind).toBe('enum');
-    expect(block?.name).toBe('Role');
-    expect(block?.parameters['Admin']?.expression).toBeUndefined();
-    expect(block?.parameters['User']?.expression).toBe('"u"');
+    expect(envelope?.kind).toBe('enum');
+    expect(envelope?.name).toBe('Role');
+    expect(envelope !== undefined && Object.hasOwn(envelope.values, 'Admin')).toBe(true);
+    expect(envelope?.values['Admin']).toBeUndefined();
+    expect(envelope?.values['User']).toBe('u');
   });
 
-  it('retains ordered expression text without descriptor-driven classification', () => {
+  it('keeps a failing block as a symbol with untouched syntax, never as text', () => {
     const result = build(
       [
         'model Post {',
@@ -611,63 +613,74 @@ describe('buildSymbolTable() — resolved block (BlockSymbol.block)', () => {
       ].join('\n'),
       POLICY_DESCRIPTORS,
     );
-    const block = result.symbolTable.topLevel.blocks['ReadPosts']?.block;
+    const symbol = result.symbolTable.topLevel.blocks['ReadPosts'];
 
-    expect(block?.kind).toBe('fixture-policy-select');
-    expect(block?.name).toBe('ReadPosts');
-    expect(Object.keys(block?.parameters ?? {})).toEqual(['target', 'as', 'using']);
-    expect(block?.parameters['target']?.expression).toBe('Post');
-    expect(block?.parameters['as']?.expression).toBe('permissive');
-    expect(block?.parameters['using']?.expression).toBe('"true"');
+    expect(result.diagnostics.map((d) => d.code)).toContain('PSL_EXTENSION_UNKNOWN_PARAMETER');
+    expect(symbol === undefined ? undefined : result.parsedBlocks.get(symbol)).toBeUndefined();
+    expect(symbol?.keyword).toBe('policy_select');
+    expect(symbol?.name).toBe('ReadPosts');
+    expect([...(symbol?.node.entries() ?? [])].map((entry) => entry.key()?.name())).toEqual([
+      'target',
+      'as',
+      'using',
+    ]);
   });
 
-  it('resolves an unknown-keyword block descriptor-free (kind = keyword, source entries)', () => {
+  it('collects an unknown-keyword block as a symbol only — no envelope, no conversion', () => {
     const result = build(['mystery Thing {', '  on = read', '  flag', '}'].join('\n'));
-    const block = result.symbolTable.topLevel.blocks['Thing']?.block;
+    const symbol = result.symbolTable.topLevel.blocks['Thing'];
 
-    expect(block?.kind).toBe('mystery');
-    expect(block?.name).toBe('Thing');
-    expect(block?.parameters['on']?.expression).toBe('read');
-    expect(block?.parameters['flag']).toBeDefined();
-    expect(block?.parameters['flag']?.expression).toBeUndefined();
+    expect(symbol?.keyword).toBe('mystery');
+    expect(symbol?.name).toBe('Thing');
+    expect(result.parsedBlocks.size).toBe(0);
+    const entries = [...(symbol?.node.entries() ?? [])];
+    expect(entries.map((entry) => entry.key()?.name())).toEqual(['on', 'flag']);
+    expect(entries[0]?.value()).toBeDefined();
+    expect(entries[1]?.value()).toBeUndefined();
   });
 
-  it('flags a duplicate block member with PSL_EXTENSION_DUPLICATE_PARAMETER (first-wins)', () => {
+  it('flags a duplicate block member with PSL_EXTENSION_DUPLICATE_PARAMETER and publishes no envelope', () => {
     const result = build(['enum Role {', '  Admin', '  Admin', '}'].join('\n'), ENUM_DESCRIPTORS);
-    const block = result.symbolTable.topLevel.blocks['Role']?.block;
+    const symbol = result.symbolTable.topLevel.blocks['Role'];
 
     expect(result.diagnostics.map((d) => d.code)).toContain('PSL_EXTENSION_DUPLICATE_PARAMETER');
-    expect(Object.keys(block?.parameters ?? {})).toEqual(['Admin']);
+    expect(symbol === undefined ? undefined : result.parsedBlocks.get(symbol)).toBeUndefined();
+    expect([...(symbol?.node.entries() ?? [])].map((entry) => entry.key()?.name())).toEqual([
+      'Admin',
+      'Admin',
+    ]);
   });
 
-  it('keeps prototype-named members as own source entries', () => {
+  it('keeps prototype-named members as own envelope values', () => {
     const result = build(
       ['enum Role {', '  __proto__ = "evil"', '  constructor', '}'].join('\n'),
       ENUM_DESCRIPTORS,
     );
-    const block = result.symbolTable.topLevel.blocks['Role']?.block;
+    const symbol = result.symbolTable.topLevel.blocks['Role'];
+    const envelope = symbol === undefined ? undefined : result.parsedBlocks.get(symbol);
 
     expect(result.diagnostics).toEqual([]);
-    expect(block).toBeDefined();
-    if (block === undefined) return;
-    expect(Object.getPrototypeOf(block.parameters)).toBeNull();
-    expect(Object.hasOwn(block.parameters, '__proto__')).toBe(true);
-    expect(ownEntry(block.parameters, '__proto__')).toMatchObject({ expression: '"evil"' });
-    expect(Object.hasOwn(block.parameters, 'constructor')).toBe(true);
-    expect(block.parameters['constructor']?.expression).toBeUndefined();
-    expect(Object.keys(block.parameters)).toEqual(['__proto__', 'constructor']);
+    expect(envelope).toBeDefined();
+    if (envelope === undefined) return;
+    expect(Object.getPrototypeOf(envelope.values)).toBeNull();
+    expect(Object.hasOwn(envelope.values, '__proto__')).toBe(true);
+    expect(ownEntry(envelope.values, '__proto__')).toBe('evil');
+    expect(Object.hasOwn(envelope.values, 'constructor')).toBe(true);
+    expect(envelope.values['constructor']).toBeUndefined();
+    expect(Object.keys(envelope.values)).toEqual(['__proto__', 'constructor']);
   });
 
-  it('resolves namespace-nested blocks too', () => {
+  it('publishes envelopes for namespace-nested blocks too', () => {
     const result = build(
       ['namespace ns {', '  enum Role {', '    Admin', '  }', '}'].join('\n'),
       ENUM_DESCRIPTORS,
     );
-    const block = result.symbolTable.topLevel.namespaces['ns']?.blocks['Role']?.block;
+    const symbol = result.symbolTable.topLevel.namespaces['ns']?.blocks['Role'];
+    const envelope = symbol === undefined ? undefined : result.parsedBlocks.get(symbol);
 
-    expect(block?.kind).toBe('enum');
-    expect(block?.parameters['Admin']).toBeDefined();
-    expect(block?.parameters['Admin']?.expression).toBeUndefined();
+    expect(envelope?.kind).toBe('enum');
+    expect(envelope !== undefined && Object.hasOwn(envelope.values, 'Admin')).toBe(true);
+    expect(envelope?.values['Admin']).toBeUndefined();
   });
 });
 
@@ -704,10 +717,12 @@ describe('buildSymbolTable() — N:1 keywords sharing one discriminator', () => 
 
     expect(round?.keyword).toBe('shape_circle');
     expect(boxy?.keyword).toBe('shape_square');
-    expect(round?.block.kind).toBe('shape');
-    expect(boxy?.block.kind).toBe('shape');
-    expect(round?.block.keyword).toBe('shape_circle');
-    expect(boxy?.block.keyword).toBe('shape_square');
+    const roundEnvelope = round === undefined ? undefined : result.parsedBlocks.get(round);
+    const boxyEnvelope = boxy === undefined ? undefined : result.parsedBlocks.get(boxy);
+    expect(roundEnvelope?.kind).toBe('shape');
+    expect(boxyEnvelope?.kind).toBe('shape');
+    expect(roundEnvelope?.keyword).toBe('shape_circle');
+    expect(boxyEnvelope?.keyword).toBe('shape_square');
   });
 });
 

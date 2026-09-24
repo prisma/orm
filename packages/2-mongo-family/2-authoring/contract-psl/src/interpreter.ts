@@ -1056,7 +1056,7 @@ function processEnumDeclarations(input: {
       const source = diagnosticSource(input.sources, enumSymbol.node.syntax);
       input.diagnostics.push({
         code: 'PSL_ENUM_MISSING_FACTORY',
-        message: `enum "${enumSymbol.block.name}" requires an "enum" entityType factory in the active authoring contributions`,
+        message: `enum "${enumSymbol.name}" requires an "enum" entityType factory in the active authoring contributions`,
         ...source.at(enumSymbol.span),
       });
     }

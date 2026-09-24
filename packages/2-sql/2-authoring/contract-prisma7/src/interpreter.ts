@@ -169,8 +169,8 @@ function parameterSpan(source: SourceBlock, key: string): PslSpan {
 
 /**
  * Prisma 7's dialect reads its blocks structurally, so it owns duplicate-key
- * reporting for them: the shared reconstruction is provenance-only and the
- * shared block interpreter never sees these unregistered blocks. First
+ * reporting for them: the parser collects unregistered blocks as symbols
+ * without interpreting them, so no shared pass sees these entries. First
  * occurrence wins, matching the shared grammar's convention.
  */
 function reportDuplicateBlockEntries(

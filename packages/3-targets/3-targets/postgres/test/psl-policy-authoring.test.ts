@@ -92,13 +92,13 @@ namespace public {
     expect(diagnostics).toEqual([]);
   });
 
-  it('places the parsed block in the public namespace entries under postgres-rls-policy', () => {
-    const { symbolTable } = buildInput();
+  it('places the parsed block in the public namespace with a policy envelope', () => {
+    const { symbolTable, parsedBlocks } = buildInput();
     const publicNs = symbolTable.topLevel.namespaces['public'];
     expect(publicNs).toBeDefined();
-    const blocks = Object.values(publicNs!.blocks).map((b) => b.block);
+    const blocks = Object.values(publicNs!.blocks);
     expect(blocks).toHaveLength(1);
-    expect(blocks[0]).toMatchObject({ kind: 'policy', name: 'p_read' });
+    expect(parsedBlocks.get(blocks[0]!)).toMatchObject({ kind: 'policy', name: 'p_read' });
   });
 
   it('lowers the block to a PostgresRlsPolicy with the expected fields', () => {

@@ -186,7 +186,11 @@ describe('runPipeline — shared block validation in the parse-plus-symbol pipel
     expect(block).toBeDefined();
     if (block === undefined) return;
     expect(result.parsedBlocks.has(block)).toBe(false);
-    expect(block.block.parameters['using']?.expression).toBe('42');
+    expect(block.keyword).toBe('guard');
+    expect([...block.node.entries()].map((entry) => entry.key()?.name())).toEqual([
+      'target',
+      'using',
+    ]);
   });
 
   it('recovers from a half-typed invalid block without throwing', () => {
